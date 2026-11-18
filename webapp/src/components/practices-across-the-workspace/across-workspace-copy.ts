@@ -85,8 +85,12 @@ export const GROUPS_LOAD_ERROR = "We could not load the practice groups";
 /** The window's figures failed; the bars, which read no window, stay. */
 export const FIGURES_LOAD_ERROR = "We could not load your figures";
 
+/** What a count of one or two developers reads as: the server sends none, so a small team stays unnamed. */
+export const FEWER_THAN_THREE = "Fewer than 3 developers";
+
 /** Digits always: a count of developers sits beside other figures, never in running prose. */
-const developers = (n: number) => count(n, "developer", "developers", true);
+const developers = (n: number | null) =>
+	n === null ? FEWER_THAN_THREE : count(n, "developer", "developers", true);
 
 export const tileCohortText = (tiles: PracticesAcrossWorkspaceTiles) =>
 	`${developers(tiles.developersWithAStandingInWindow)} with a standing`;
@@ -100,7 +104,7 @@ export const FIGURES_PLAIN: readonly InfoLine[] = [
 	{ term: "Left:", text: "lower than most.", second: { term: "Right:", text: "higher." } },
 	{ term: "Better:", text: "fewer needing attention, more going well." },
 	{ term: "Open feedback:", text: "open now, not in the period." },
-	{ term: "No band:", text: "nobody has a standing yet." },
+	{ term: "No band:", text: "fewer than 3 developers have a standing." },
 ];
 
 /**
@@ -114,6 +118,19 @@ export const NONE_YET_SEGMENT = {
 	icon: CircleDashedIcon,
 	colorClass: NEUTRAL_GREY,
 } as const;
+
+/** Under the empty track of a split that counts fewer than 3: the server sends no count of them. */
+export const TOO_FEW_TO_SPLIT = `${FEWER_THAN_THREE} have a standing here, so the split stays hidden`;
+
+/**
+ * Under a split the server sends as a total only: a part of 1 or 2, or everyone in one part, would
+ * tell members where someone stands. Which of the two it is stays unsaid, since saying it would tell.
+ */
+export const SPREAD_HIDDEN = "Their split stays hidden to protect small counts";
+
+/** Whether the server sent this split as its total only. */
+export const spreadHidden = (split: WorkspaceSplit): boolean =>
+	split.developers !== null && split.developers > 0 && split.noneYet === null;
 
 /** The answer the legend's (i) leads with, in the words of `docs/user/practices-across-the-workspace.mdx` § The bars. */
 export function barsLead(scope: StandingScope): string {
@@ -129,7 +146,7 @@ export const BARS_LINES: readonly InfoLine[] = [
 		second: { term: "Gray:", text: "no standing, not okay." },
 	},
 	{ term: "You:", text: "somewhere in your part." },
-	{ term: "Small counts:", text: "others may tell where you are." },
+	{ term: "Hatched:", text: "split hidden, so no part shows fewer than 3." },
 ];
 
 /** Under the empty track of a split that counts nobody: no developer has a standing yet. */
@@ -149,12 +166,18 @@ export function splitDescription(
 	if (split.developers === 0) {
 		return `${NOBODY_YET}.`;
 	}
+	if (split.developers === null) {
+		return `${TOO_FEW_TO_SPLIT}.`;
+	}
+	if (spreadHidden(split)) {
+		return `${splitTotalText(split)} in this workspace. ${SPREAD_HIDDEN}.`;
+	}
 	const whole = `${splitTotalText(split)} in this workspace`;
 	const parts = split.parts.map(
 		(part) =>
-			`${part.developers} ${definitionFor(PRACTICE_GROUP_STANDING_DEFS, part.standing, UNKNOWN_STANDING_DEF).label}`,
+			`${part.developers ?? 0} ${definitionFor(PRACTICE_GROUP_STANDING_DEFS, part.standing, UNKNOWN_STANDING_DEF).label}`,
 	);
-	const noneYet = `${split.noneYet} ${NONE_YET_SEGMENT.inSentence}`;
+	const noneYet = `${split.noneYet ?? 0} ${NONE_YET_SEGMENT.inSentence}`;
 	const counts = `${whole}: ${[...parts, noneYet].join(", ")}.`;
 	if (yourStanding === undefined) {
 		return counts;

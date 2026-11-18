@@ -7,20 +7,23 @@ import static de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding.NO_OPPORT
 import static de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding.STRENGTH;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.WorkspaceSplits.Verdict;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceRangeDTO;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitDTO;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitPartDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("unit")
 class WorkspaceSplitsTest {
+
+    private static final int MOST_VALUE = 12;
 
     private static List<PracticeStanding> developers(int needs, int mixed, int well, int none) {
         List<PracticeStanding> standings = new ArrayList<>();
@@ -32,15 +35,8 @@ class WorkspaceSplitsTest {
     }
 
     @Test
-    void shouldCountEveryPartInProfileOrderWhenAPartIsSmall() {
-        assertThat(WorkspaceSplits.split(developers(1, 0, 6, 4)))
-                .isEqualTo(new WorkspaceSplitDTO(
-                        List.of(
-                                new WorkspaceSplitPartDTO(Verdict.DEVELOPING, 1),
-                                new WorkspaceSplitPartDTO(Verdict.MIXED, 0),
-                                new WorkspaceSplitPartDTO(Verdict.STRENGTH, 6)),
-                        4,
-                        11));
+    void shouldCountEveryVerdictAndNoneYet() {
+        assertThat(WorkspaceSplits.split(developers(1, 0, 6, 4))).isEqualTo(new WorkspaceSplits.Split(1, 0, 6, 4));
     }
 
     @Test
@@ -52,26 +48,53 @@ class WorkspaceSplitsTest {
     }
 
     @Test
-    void shouldShowAllPartsWhenNobodyOrOneDeveloperIsCounted() {
-        assertThat(WorkspaceSplits.split(List.of()))
-                .isEqualTo(new WorkspaceSplitDTO(
-                        List.of(
-                                new WorkspaceSplitPartDTO(Verdict.DEVELOPING, 0),
-                                new WorkspaceSplitPartDTO(Verdict.MIXED, 0),
-                                new WorkspaceSplitPartDTO(Verdict.STRENGTH, 0)),
-                        0,
-                        0));
-        assertThat(WorkspaceSplits.split(List.of(MIXED)).parts())
-                .extracting(WorkspaceSplitPartDTO::developers)
-                .containsExactly(0, 1, 0);
+    void shouldShowAMiddleHalfOnlyForThreeDevelopersOrMore() {
+        assertThat(WorkspaceSplits.middleHalf(List.of())).isNull();
+        assertThat(WorkspaceSplits.middleHalf(List.of(5))).isNull();
+        assertThat(WorkspaceSplits.middleHalf(List.of(2, 6))).isNull();
+        assertThat(WorkspaceSplits.middleHalf(List.of(2, 4, 6))).isEqualTo(new WorkspaceRangeDTO(3, 5));
+        assertThat(WorkspaceSplits.middleHalf(List.of(1, 2, 3, 4, 5, 6))).isEqualTo(new WorkspaceRangeDTO(2, 5));
     }
 
     @Test
-    void shouldShowAMiddleHalfForOneOrTwoDevelopersAndNotForNobody() {
-        assertThat(WorkspaceSplits.middleHalf(List.of())).isNull();
-        assertThat(WorkspaceSplits.middleHalf(List.of(5))).isEqualTo(new WorkspaceRangeDTO(5, 5));
-        assertThat(WorkspaceSplits.middleHalf(List.of(2, 6))).isEqualTo(new WorkspaceRangeDTO(3, 5));
-        assertThat(WorkspaceSplits.middleHalf(List.of(1, 2, 3, 4, 5, 6))).isEqualTo(new WorkspaceRangeDTO(2, 5));
+    void shouldWithholdARangeWhoseEndsMeet() {
+        assertThat(WorkspaceSplits.middleHalf(List.of(0, 0, 0))).isNull();
+        assertThat(WorkspaceSplits.middleHalf(List.of(3, 4, 4))).isNull();
+    }
+
+    /**
+     * Every set of 3 to 5 other values from 0 to {@value #MOST_VALUE}, grouped by the range shown: each range fits at
+     * least two sets, so no range tells a member every other developer's value. Ranges near the top are left out,
+     * because the loop's own ceiling, not the data, would pin them.
+     */
+    @Test
+    void shouldLeaveNoRangeThatFixesEveryOtherValue() {
+        for (int others = SmallCounts.MINIMUM; others <= 5; others++) {
+            Map<WorkspaceRangeDTO, Set<List<Integer>>> setsByRange = new HashMap<>();
+            collect(others, 0, new ArrayList<>(), setsByRange);
+            int counted = others;
+            setsByRange.forEach((range, sets) -> {
+                if (range.high() <= MOST_VALUE / 2) {
+                    assertThat(sets).as("%d others, range %s", counted, range).hasSizeGreaterThanOrEqualTo(2);
+                }
+            });
+        }
+    }
+
+    private static void collect(
+            int left, int from, List<Integer> values, Map<WorkspaceRangeDTO, Set<List<Integer>>> setsByRange) {
+        if (left == 0) {
+            var range = WorkspaceSplits.middleHalf(values);
+            if (range != null) {
+                setsByRange.computeIfAbsent(range, key -> new HashSet<>()).add(List.copyOf(values));
+            }
+            return;
+        }
+        for (int value = from; value <= MOST_VALUE; value++) {
+            values.add(value);
+            collect(left - 1, value, values, setsByRange);
+            values.removeLast();
+        }
     }
 
     @Test

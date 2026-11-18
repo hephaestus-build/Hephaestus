@@ -83,7 +83,8 @@ This ADR states at 1.0 who sees what, as rules. Rule 9 records a product decisio
 22. **Practices across the workspace counts developers and never names one.** Members read it. Each counted developer counts once, at their Practice profile standing. Hidden members, members who left, inactive accounts and suppressed people are not counted.
     Enforced by: `WorkspaceOverviewWireTest#shouldCarryOnlyCountsAndTheReadersOwnStandingWhenSerialized` and `PracticesAcrossWorkspaceServiceTest#shouldCountEachDeveloperOnceAtTheirProfileStandingWhenOneHasMuchMoreWork`.
 23. **No count is too small to show.** Every split shows all its parts. Only the 25th and 75th percentiles leave the server, never a minimum, maximum or average. The **You** bracket spans the reader's part. Tiles read 7, 30 or 90 days, or all time. [Small counts](../user/practices-across-the-workspace.mdx#small-counts) tells the reader when a count can reveal one developer.
-    Enforced by: `WorkspaceSplitsTest#shouldShowAllPartsWhenNobodyOrOneDeveloperIsCounted` and `#shouldInterpolateAQuartileWhenItFallsBetweenTwoValues`, and `PracticesAcrossWorkspaceIntegrationTest#shouldCountOnlyTheLastSevenDaysWhenTheTilesAskForThatWindow`.
+    Replaced on 2026-11-15 by [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md): a count of fewer than 3 is hidden.
+    Enforced by: `WorkspaceSplitsTest#shouldInterpolateAQuartileWhenItFallsBetweenTwoValues` (since [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md), `SmallCountsTest` enforces what a split shows), and `PracticesAcrossWorkspaceIntegrationTest#shouldCountOnlyTheLastSevenDaysWhenTheTilesAskForThatWindow`.
 24. **Practice data never sorts people and never reaches a public page.**
     Not enforced. The public and people DTOs have no practice field. Review of either DTO catches a new one.
 

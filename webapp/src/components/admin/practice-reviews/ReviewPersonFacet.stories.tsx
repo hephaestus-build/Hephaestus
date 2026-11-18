@@ -17,6 +17,7 @@ function peopleFrom(
 			secondary: account.identities[0]?.login ?? undefined,
 		})),
 		capped: members.length >= MEMBER_PAGE_SIZE,
+		named: true,
 		isLoading: false,
 		isError: false,
 		...rest,
@@ -117,7 +118,7 @@ export const MorePeopleThanTheFacetCanList: Story = {
 };
 
 export const WhileThePeopleLoad: Story = {
-	args: { people: { options: [], capped: false, isLoading: true, isError: false } },
+	args: { people: { options: [], capped: false, isLoading: true, isError: false, named: true } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("combobox", { name: "Developer" })).toBeDisabled();
 	},
@@ -128,7 +129,7 @@ export const WhileThePeopleLoad: Story = {
  * in this workspace" after a 500 would send the reader looking for a membership problem.
  */
 export const ThePeopleCouldNotBeLoaded: Story = {
-	args: { people: { options: [], capped: false, isLoading: false, isError: true } },
+	args: { people: { options: [], capped: false, isLoading: false, isError: true, named: true } },
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Developer" }));
 		await screen.findByText("We could not load people");
@@ -136,7 +137,7 @@ export const ThePeopleCouldNotBeLoaded: Story = {
 };
 
 export const NobodyInThisWorkspace: Story = {
-	args: { people: { options: [], capped: false, isLoading: false, isError: false } },
+	args: { people: { options: [], capped: false, isLoading: false, isError: false, named: true } },
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Developer" }));
 		await screen.findByText("No people in this workspace");

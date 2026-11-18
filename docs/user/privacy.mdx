@@ -16,15 +16,25 @@ If the notice or the contact is missing, ask the organization that runs your ins
 
 | Your data | Other members | Workspace admins | Instance admins | Anyone |
 | --- | --- | --- | --- | --- |
-| Practice profile and its feedback | No | That feedback exists and its delivery state, not its text | Read-only view, with a recorded reason | No |
-| Practice observations | Only inside unnamed counts | Yes | Yes | No |
+| Practice profile and its feedback | No | That feedback exists and its delivery state, not its text. They see whom it is about only if the workspace turned on **Per-person results for admins**. | Read-only view, with a recorded reason | No |
+| Practice observations | Only inside unnamed counts | With your name only if the workspace turned on **Per-person results for admins**. Otherwise with no name, but each result still shows the work it is about. | Read-only view, with a recorded reason. In a workspace that they open as an admin, the same as workspace admins. | No |
 | Your answers to feedback | No | Your current answer and the reason for a current **Disagree**. Not your rating or other notes. | Read-only view, with a recorded reason | No |
 | Your conversation with Hephaestus | No | No | Read-only view, with a recorded reason | No |
 | Activity: your work in workspace repositories | Yes | Yes | Yes | Only if you choose to show on a public activity page |
 | Feedback posted on GitHub or GitLab | Everyone who can see that work | The same | The same | The same |
 
 - **Other members** see Activity for every workspace repository. Hephaestus does not check whether each member can open the repository on GitHub or GitLab.
-- **[Practices across the workspace](./practices-across-the-workspace)** shows your observations to other members only inside counts that name nobody. It shows every count, also a count of one, so members can sometimes tell how your work went. [Small counts](./practices-across-the-workspace#small-counts) lists when.
+- **[Practices across the workspace](./practices-across-the-workspace)** shows your observations to other members only inside counts that name nobody. It does not show a count of 1 or 2 developers: a bar with such a part shows only its total. Members can still sometimes tell how your work went. [Small counts](./practices-across-the-workspace#small-counts) says when.
+- **Per-person results for admins** is a workspace setting. It is off for a new workspace.
+  While it is off, workspace admins see practice results, problems and feedback with no names, and cannot filter them by person.
+  Each result still shows the work it is about, and GitHub or GitLab shows who wrote that work.
+  Feedback on the work still names you, because Hephaestus posts it to you on your work and an admin approves it.
+  A workspace owner can turn the setting on, and the change is recorded.
+  It then applies to earlier results too.
+  Any workspace admin can turn it off.
+  Your [Practice profile](./practice-profile) says, under **How to read this page**, whether the setting is on in your workspace.
+  [Set up your workspace](./workspace#choose-whether-admins-see-results-per-person) gives the steps.
+  A workspace that ran practice reviews before this setting existed keeps it on.
 - **Instance admins** read your private data only through **View as user**, also before your first sign-in. Each view records a reason. The view cannot act for you. Workspace admins do not have this access.
 - **Instance admins who are not members** can open any workspace as a workspace admin, never as its owner. Hephaestus records that they did. Instance admins also read your product feedback reports.
 - **Your instance operator** can reach stored data to run the instance and to answer privacy requests.

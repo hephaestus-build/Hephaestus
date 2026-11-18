@@ -19,7 +19,13 @@ import tools.jackson.databind.json.JsonMapper;
 class WorkspaceOverviewWireTest extends BaseUnitTest {
     @Test
     void shouldCarryOnlyCountsAndTheReadersOwnStandingWhenSerialized() {
-        var split = WorkspaceSplits.split(List.of(PracticeStanding.DEVELOPING, PracticeStanding.STRENGTH));
+        var split = SmallCounts.shown(WorkspaceSplits.split(List.of(
+                PracticeStanding.DEVELOPING,
+                PracticeStanding.DEVELOPING,
+                PracticeStanding.DEVELOPING,
+                PracticeStanding.STRENGTH,
+                PracticeStanding.STRENGTH,
+                PracticeStanding.STRENGTH)));
         var practice = new WorkspacePracticeSplitDTO(
                 "practice", "Practice", PracticeStanding.STRENGTH, StandingBasis.EARLIER_REVIEWS, split);
         var group = new WorkspaceGroupSplitDTO(
@@ -35,7 +41,7 @@ class WorkspaceOverviewWireTest extends BaseUnitTest {
                 new WorkspaceTileDTO(1, new WorkspaceRangeDTO(0, 2)), true, List.of(group));
         var tree = new JsonMapper().valueToTree(dto);
         assertThat(tree.path("groups").path(0).path("split").path("developers").asInt())
-                .isEqualTo(2);
+                .isEqualTo(6);
         assertThat(tree.path("includesEarlierReviews").asBoolean()).isTrue();
         assertThat(tree.toString())
                 .doesNotContain("developerId", "accountId", "login", "feedbackBody", "toWorkOn", "summary");

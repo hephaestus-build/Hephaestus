@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.practices.review.PerPersonResults;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.ReviewResultQueryService;
@@ -90,6 +91,9 @@ class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcClient jdbc;
 
+    @Autowired
+    private PerPersonResults perPerson;
+
     @BeforeEach
     void clean() {
         databaseTestUtils.cleanDatabase();
@@ -162,6 +166,32 @@ class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldNameNoDeveloperOnPrivateFeedbackWhilePerPersonResultsAreOff() {
+        var scenario = data.scenario();
+        authenticate(scenario);
+        long ws = scenario.workspace().getId();
+        var result = data.result(scenario, ResultOutcome.NOT_MET, AT);
+        var onWork = feedback(result, FeedbackDestination.ON_WORK, "Feedback on the work");
+        var page = feedback(result, FeedbackDestination.PRACTICE_PAGE, "Private page text");
+        var conversation = feedback(result, FeedbackDestination.CONVERSATION, "Private conversation text");
+        jdbc.sql("UPDATE workspace SET per_person_results_for_admins = false WHERE id = :ws")
+                .param("ws", ws)
+                .update();
+        var policy = mock(ResultVisibilityPolicy.class);
+        when(policy.permitsHistory(eq(ws), anyCollection(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
+                .thenReturn(Set.of(result.getId()));
+
+        var byId = query(policy).list(ws, ALL, PageRequest.of(0, 32)).getContent().stream()
+                .collect(Collectors.toMap(row -> row.id(), row -> row));
+
+        assertThat(Objects.requireNonNull(byId.get(onWork)).developer())
+                .as("approving feedback on the work authorizes a comment to that person")
+                .isNotNull();
+        assertThat(Objects.requireNonNull(byId.get(page)).developer()).isNull();
+        assertThat(Objects.requireNonNull(byId.get(conversation)).developer()).isNull();
+    }
+
+    @Test
     void shouldKeepVisibleFeedbackReadsBoundedAsThePageGrows() {
         var scenario = data.scenario();
         authenticate(scenario);
@@ -212,7 +242,8 @@ class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
     // Substitute only the policy without adding a Spring context for this visibility matrix.
     private FeedbackListReadQuery query(ResultVisibilityPolicy policy) {
         var snapshots = new FeedbackBasisRead(basisRows, results, views, policy, resultPresentation);
-        return new FeedbackListReadQuery(queries, snapshots, references, copies, responses, visibility, mapper);
+        return new FeedbackListReadQuery(
+                queries, snapshots, references, copies, responses, visibility, mapper, perPerson);
     }
 
     private void authenticate(ReviewIntegrationData.Scenario scenario) {

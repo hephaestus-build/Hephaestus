@@ -48,13 +48,11 @@ export const AllTime: Story = {
 	},
 };
 
-/** One developer counted: the middle half is their value, still drawn. */
+/** One developer counted: fewer than 3, so no tile has a typical range. */
 export const OneDeveloper: Story = {
 	args: { tiles: ONE_DEVELOPER_TILES },
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByRole("img", { name: "Your value: 4. Typical range here: 4." }),
-		).toBeVisible();
+		await expect(canvas.getByRole("img", { name: "Your value: 4." })).toBeVisible();
 	},
 };
 
@@ -62,7 +60,11 @@ export const OneDeveloper: Story = {
 export const NobodyYet: Story = {
 	args: { tiles: NOBODY_TILES },
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByText("No developer is counted here yet.")).toHaveLength(3);
+		await expect(
+			canvas.getAllByText(
+				"Fewer than 3 developers are counted here, so there is no typical range.",
+			),
+		).toHaveLength(3);
 		await expect(canvas.getAllByRole("img", { name: "Your value: 0." })).toHaveLength(3);
 	},
 };

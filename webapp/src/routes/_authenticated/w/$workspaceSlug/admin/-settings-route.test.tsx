@@ -1011,6 +1011,74 @@ function publishSwitch(): HTMLElement {
 	return screen.getByRole("switch", { name: "Publish the page" });
 }
 
+describe("per-person results for admins", () => {
+	let changes: unknown[] = [];
+
+	function servePerPersonResults(enabled: boolean, canTurnOn: boolean) {
+		changes = [];
+		server.use(
+			http.get("*/workspaces/acme/per-person-results", () =>
+				HttpResponse.json({ enabled, canTurnOn }),
+			),
+			http.patch<PathParams, { enabled: boolean }>(
+				"*/workspaces/acme/per-person-results",
+				async ({ request }) => {
+					const body = await request.json();
+					changes.push(body);
+					return HttpResponse.json({ enabled: body.enabled, canTurnOn });
+				},
+			),
+		);
+	}
+
+	it("asks an owner first, and turns it on only once confirmed", async () => {
+		const user = userEvent.setup();
+		servePerPersonResults(false, true);
+		renderSettingsRoute(true);
+
+		await user.click(
+			await screen.findByRole(
+				"switch",
+				{ name: "Per-person results for admins" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		const dialog = await screen.findByRole("alertdialog");
+		expect(changes).toStrictEqual([]);
+		await user.click(within(dialog).getByRole("button", { name: "Show per person" }));
+
+		await waitFor(() => expect(changes).toStrictEqual([{ enabled: true }]));
+		await screen.findByText("Admins now see practice results per person");
+		// The page stays inert until the dialog has closed.
+		await waitFor(() =>
+			expect(
+				screen
+					.getByRole("switch", { name: "Per-person results for admins" })
+					.getAttribute("aria-checked"),
+			).toBe("true"),
+		);
+	});
+
+	it("turns it off in one step for an admin who is not an owner", async () => {
+		const user = userEvent.setup();
+		servePerPersonResults(true, false);
+		renderSettingsRoute(true);
+
+		await user.click(
+			await screen.findByRole(
+				"switch",
+				{ name: "Per-person results for admins" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+
+		await waitFor(() => expect(changes).toStrictEqual([{ enabled: false }]));
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+		await screen.findByText("Admins now see practice results with no names");
+		screen.getByText("Only a workspace owner can turn this on.");
+	});
+});
+
 describe("workspace settings lifetime", () => {
 	it("keeps a completed public-page write with its workspace after switching to another", async () => {
 		const user = userEvent.setup();

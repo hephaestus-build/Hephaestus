@@ -28,7 +28,8 @@ const TITLE_BOX = "flex min-h-5 items-center @max-[16rem]:min-h-10";
  * One figure, the reader's own first and the workspace's middle half after, as Apple Health's
  * highlights set a value against "your typical range": the range in words, then as a band on a
  * track from nought with the reader's value pinned on it. The track shows no minimum and no
- * maximum, so no end of it points at one developer. One or two developers still get their band.
+ * maximum, so no end of it points at one developer. Fewer than 3 developers get no band: the
+ * server sends none, since a range of one or two gives their values away.
  */
 export function WorkspaceTile({
 	title,
@@ -53,7 +54,7 @@ export function WorkspaceTile({
 					<>
 						<p className="text-sm text-muted-foreground">
 							{middle === undefined ? (
-								"No developer is counted here yet."
+								"Fewer than 3 developers are counted here, so there is no typical range."
 							) : (
 								<>
 									Typical range:{" "}

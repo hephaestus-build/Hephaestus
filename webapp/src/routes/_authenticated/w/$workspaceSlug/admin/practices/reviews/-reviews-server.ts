@@ -173,7 +173,7 @@ function filterFeedback(rows: readonly ReviewFeedback[], url: URL) {
 			(fromResult === undefined || fromResult.has(row.id)) &&
 			withinDates(url, row.createdAt) &&
 			inPracticeScope(url, feedbackPracticeSlugs(row.id)) &&
-			equals(url, "developerId", row.developer.accountId) &&
+			equals(url, "developerId", row.developer?.accountId) &&
 			matches(values(url, "destination"), row.destination) &&
 			matches(values(url, "state"), row.state) &&
 			equals(url, "location", row.location) &&

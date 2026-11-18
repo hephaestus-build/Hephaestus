@@ -37,6 +37,7 @@ const PEOPLE: ReviewPeople = {
 		secondary: account.identities[0]?.login ?? undefined,
 	})),
 	capped: false,
+	named: true,
 	isLoading: false,
 	isError: false,
 };
@@ -79,7 +80,7 @@ function feedbackPage(
 			selects(query.destination, row.destination) &&
 			(query.location === undefined || row.location === query.location) &&
 			selects(query.stopReason, row.stopReason) &&
-			(query.developerId === undefined || row.developer.accountId === query.developerId),
+			(query.developerId === undefined || row.developer?.accountId === query.developerId),
 		REVIEW_PAGE_SIZE,
 	);
 }
@@ -126,7 +127,7 @@ const meta = {
 									status: "ready",
 									counts: locationCounts(
 										(args.feedback.status === "ready" ? args.feedback.rows : []).filter(
-											(row) => row.developer.accountId === search.developerId,
+											(row) => row.developer?.accountId === search.developerId,
 										),
 									),
 								}
@@ -176,6 +177,26 @@ export const Default: Story = {
  * a fenced code block. The row previews no text at all, so none of it reaches the list: the note is
  * read on its sheet.
  */
+/**
+ * While the workspace shows admins results without names, feedback on a practice page or in a
+ * conversation names nobody. Feedback on the work keeps its developer: it is posted to them there.
+ */
+export const WithoutNames: Story = {
+	args: {
+		people: { ...PEOPLE, named: false },
+		feedback: pool(
+			reviewFeedback.map((row) =>
+				row.destination === "ON_WORK" ? row : { ...row, developer: null },
+			),
+		),
+	},
+	play: async ({ canvas }) => {
+		await canvas.findByText("21 pieces of feedback.");
+		await expect(canvas.queryByRole("combobox", { name: "Developer" })).toBeNull();
+		await expect(canvas.getAllByText("Not shown").length).toBeGreaterThan(0);
+	},
+};
+
 export const LongFeedbackReadsAsProse: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {

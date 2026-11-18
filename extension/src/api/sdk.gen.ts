@@ -496,6 +496,8 @@ import type {
 	GetPasskeyVerificationOptionsData,
 	GetPasskeyVerificationOptionsErrors,
 	GetPasskeyVerificationOptionsResponses,
+	GetPerPersonResultsData,
+	GetPerPersonResultsResponses,
 	GetPracticeData,
 	GetPracticeDefinitionOptionsData,
 	GetPracticeDefinitionOptionsErrors,
@@ -1036,6 +1038,9 @@ import type {
 	UpdatePasskeyProtectionData,
 	UpdatePasskeyProtectionErrors,
 	UpdatePasskeyProtectionResponses,
+	UpdatePerPersonResultsData,
+	UpdatePerPersonResultsErrors,
+	UpdatePerPersonResultsResponses,
 	UpdatePracticeData,
 	UpdatePracticeErrors,
 	UpdatePracticeGroupData,
@@ -5474,6 +5479,40 @@ export const updateWorkspacePasskeyPolicy = <ThrowOnError extends boolean = fals
 	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/passkey-policy",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * Whether workspace admins see practice results per person
+ */
+export const getPerPersonResults = <ThrowOnError extends boolean = false>(
+	options: Options<GetPerPersonResultsData, ThrowOnError>,
+): RequestResult<GetPerPersonResultsResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).get<GetPerPersonResultsResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/per-person-results",
+		...options,
+	});
+
+/**
+ * Turn per-person results for admins on or off
+ *
+ * Only a workspace owner turns it on. Any workspace admin turns it off.
+ */
+export const updatePerPersonResults = <ThrowOnError extends boolean = false>(
+	options: Options<UpdatePerPersonResultsData, ThrowOnError>,
+): RequestResult<UpdatePerPersonResultsResponses, UpdatePerPersonResultsErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdatePerPersonResultsResponses,
+		UpdatePerPersonResultsErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/per-person-results",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

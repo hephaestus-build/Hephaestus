@@ -452,6 +452,10 @@ export {
 	getPasskeyStatusQueryKey,
 } from "./react-query/getPasskeyStatus.gen.js";
 export { getPasskeyVerificationOptionsMutation } from "./react-query/getPasskeyVerificationOptions.gen.js";
+export {
+	getPerPersonResultsOptions,
+	getPerPersonResultsQueryKey,
+} from "./react-query/getPerPersonResults.gen.js";
 export { getPracticeOptions, getPracticeQueryKey } from "./react-query/getPractice.gen.js";
 export {
 	getPracticeDefinitionOptionsOptions,
@@ -930,6 +934,7 @@ export { updateMemberOnboardingSettingsMutation } from "./react-query/updateMemb
 export { updateNotificationPreferencesMutation } from "./react-query/updateNotificationPreferences.gen.js";
 export { updateOutlineCollectionStateMutation } from "./react-query/updateOutlineCollectionState.gen.js";
 export { updatePasskeyProtectionMutation } from "./react-query/updatePasskeyProtection.gen.js";
+export { updatePerPersonResultsMutation } from "./react-query/updatePerPersonResults.gen.js";
 export { updatePracticeMutation } from "./react-query/updatePractice.gen.js";
 export { updatePracticeGroupMutation } from "./react-query/updatePracticeGroup.gen.js";
 export { updatePracticeReviewSettingsMutation } from "./react-query/updatePracticeReviewSettings.gen.js";

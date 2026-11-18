@@ -13,6 +13,7 @@ import type {
 	FeatureFlags,
 	OffsetPageDtoFeedbackItem,
 	PasskeyStatus,
+	PerPersonResults,
 	ProductFeedbackSharing,
 	WorkspacePasskeyPolicy,
 	WorkspaceProviders,
@@ -78,6 +79,10 @@ export const handlers = [
 	// MCP clients are off by default, so the endpoint does not exist.
 	http.get("*/workspaces/:workspaceSlug/mcp-grants", () =>
 		HttpResponse.json({ status: 404, title: "Not Found" }, { status: 404 }),
+	),
+	// On, as in every workspace that ran practice reviews before the setting existed.
+	http.get("*/workspaces/:workspaceSlug/per-person-results", () =>
+		HttpResponse.json({ enabled: true, canTurnOn: true } satisfies Wire<PerPersonResults>),
 	),
 	http.get("*/workspaces/:workspaceSlug/onboarding/me", () =>
 		HttpResponse.json(workspaceOnboarding()),

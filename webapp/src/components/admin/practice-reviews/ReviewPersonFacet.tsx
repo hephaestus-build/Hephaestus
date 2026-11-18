@@ -30,6 +30,11 @@ export interface PersonOption {
 
 export interface ReviewPeople extends FacetSource<PersonOption> {
 	capped: boolean;
+	/**
+	 * Whether the workspace shows admins practice results per person. Off, the lists name nobody and
+	 * offer no filter by person.
+	 */
+	named: boolean;
 }
 
 export interface ReviewPersonFacetProps {

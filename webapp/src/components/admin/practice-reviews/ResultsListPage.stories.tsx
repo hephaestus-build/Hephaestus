@@ -30,6 +30,7 @@ const PEOPLE: ReviewPeople = {
 		secondary: account.identities[0]?.login ?? undefined,
 	})),
 	capped: false,
+	named: true,
 	isLoading: false,
 	isError: false,
 };
@@ -156,6 +157,23 @@ export const Default: Story = {
 		canvas.getByText("The controller delegates before it does anything else");
 		canvas.getByText("The thread ends without naming what was chosen");
 		canvas.getByText("The runbook opens with the one step that cannot be undone");
+	},
+};
+
+/**
+ * While the workspace shows admins results without names, the server names no developer, so the
+ * Developer column and the filter by person are gone.
+ */
+export const WithoutNames: Story = {
+	args: {
+		people: { ...PEOPLE, named: false },
+		results: pool(reviewResults.map((result) => ({ ...result, developer: null }))),
+	},
+	play: async ({ canvas }) => {
+		await canvas.findByText("16 observations.");
+		await expect(canvas.queryByRole("combobox", { name: "Developer" })).toBeNull();
+		await expect(canvas.queryAllByRole("columnheader", { name: "Developer" })).toHaveLength(0);
+		await expect(canvas.queryByText("Unavailable developer")).toBeNull();
 	},
 };
 

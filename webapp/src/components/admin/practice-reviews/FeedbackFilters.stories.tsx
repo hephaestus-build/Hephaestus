@@ -26,6 +26,7 @@ const PEOPLE: ReviewPeople = {
 		secondary: account.identities[0]?.login ?? undefined,
 	})),
 	capped: false,
+	named: true,
 	isLoading: false,
 	isError: false,
 };
