@@ -4539,6 +4539,7 @@ export const zPracticeVersion = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	reviewChanged: z.boolean(),
 	reviewDigest: z.string(),
+	sourceCommit: z.string().nullable(),
 });
 
 export const zPractice = z.object({
