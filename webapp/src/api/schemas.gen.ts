@@ -9691,6 +9691,11 @@ export const PracticeVersionSchema = {
 		reviewDigest: {
 			type: "string",
 		},
+		sourceCommit: {
+			type: ["string", "null"],
+			description:
+				"The commit of the practice repository that this version was read at; null for a version edited in Hephaestus",
+		},
 	},
 	required: [
 		"changed",
@@ -9702,6 +9707,7 @@ export const PracticeVersionSchema = {
 		"number",
 		"reviewChanged",
 		"reviewDigest",
+		"sourceCommit",
 	],
 } as const;
 
