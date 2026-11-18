@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,9 +20,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.stream.IntStream;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -130,23 +137,112 @@ class ActionExecutorTest extends BaseUnitTest {
         assertThat(result).isEqualTo(new ActionResult.Reread(ActionExecutor.backoff(2)));
     }
 
+    /** On one replica, a draft that waits for its model holds one slot, and the next run claims another kind's action. */
     @Test
-    void shouldStopWaitingForAProviderThatHoldsTheCallPastTheWait() throws InterruptedException {
+    void shouldRunAnotherKindsActionWhileADraftAttemptStillWaits() throws Exception {
+        var draftWaits = new CountDownLatch(1);
+        var executor = executor(
+                attempt -> {
+                    if (attempt.kind() == ActionKind.DRAFT_REPORT) awaitQuietly(draftWaits);
+                    return new ActionResult.Done(null);
+                },
+                ActionExecutor.LEASE);
+        when(store.claim(anyInt(), any(), any()))
+                .thenReturn(List.of(claim(ActionKind.DRAFT_REPORT)))
+                .thenReturn(List.of(claim(ActionKind.FILE_ISSUE)));
+
+        var draft = executor.startDue();
+        var filing = executor.startDue();
+
+        assertThat(filing)
+                .singleElement()
+                .satisfies(
+                        attempt -> assertThat(attempt.get(5, TimeUnit.SECONDS)).isEqualTo(new ActionResult.Done(null)));
+        assertThat(draft)
+                .singleElement()
+                .satisfies(attempt -> assertThat(attempt).isNotDone());
+        verify(store).claim(eq(ActionExecutor.SLOTS - 1), any(), any());
+        draftWaits.countDown();
+        assertThat(executor.awaitIdle(Duration.ofSeconds(5))).isTrue();
+    }
+
+    @Test
+    void shouldNeverRunMoreAttemptsAtOnceThanItHasSlots() {
         var release = new CountDownLatch(1);
-        var executor = executor(attempt -> {
-            try {
-                release.await();
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-            }
-            return new ActionResult.Done(null);
-        });
-        long started = System.nanoTime();
+        var running = new AtomicInteger();
+        var most = new AtomicInteger();
+        var executor = executor(
+                attempt -> {
+                    most.accumulateAndGet(running.incrementAndGet(), Math::max);
+                    awaitQuietly(release);
+                    running.decrementAndGet();
+                    return new ActionResult.Done(null);
+                },
+                ActionExecutor.LEASE);
+        when(store.claim(anyInt(), any(), any())).thenAnswer(call -> claims(call.getArgument(0)));
 
-        executor.runBatch(List.of(claim(false)), Duration.ofMillis(200));
+        assertThat(executor.startDue()).hasSize(ActionExecutor.SLOTS);
+        assertThat(executor.startDue()).isEmpty();
+        Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> running.get() == ActionExecutor.SLOTS);
+        assertThat(executor.startDue()).isEmpty();
 
-        assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(5));
         release.countDown();
+        assertThat(executor.awaitIdle(Duration.ofSeconds(5))).isTrue();
+        assertThat(most.get()).isEqualTo(ActionExecutor.SLOTS);
+        verify(store, times(1)).claim(anyInt(), any(), any());
+    }
+
+    /**
+     * A provider that holds a call past the lease keeps its thread, but not its slot: the reaper owns its action. The
+     * slot comes back once, so the capacity stays {@link ActionExecutor#SLOTS} after the late attempts end.
+     */
+    @Test
+    void shouldFreeTheSlotOfAnAttemptWhoseLeaseRanOutExactlyOnce() {
+        var release = new CountDownLatch(1);
+        var hanging = new AtomicInteger();
+        var executor = executor(
+                attempt -> {
+                    hanging.incrementAndGet();
+                    awaitQuietly(release);
+                    hanging.decrementAndGet();
+                    return new ActionResult.Done(null);
+                },
+                Duration.ofMillis(200));
+        var limits = new CopyOnWriteArrayList<Integer>();
+        when(store.claim(anyInt(), any(), any())).thenAnswer(call -> {
+            limits.add(call.getArgument(0));
+            return claims(call.getArgument(0));
+        });
+        assertThat(executor.startDue()).hasSize(ActionExecutor.SLOTS);
+
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(5))
+                .until(() -> !executor.startDue().isEmpty());
+
+        assertThat(hanging.get()).as("the late calls still run").isGreaterThanOrEqualTo(ActionExecutor.SLOTS);
+        release.countDown();
+        Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> hanging.get() == 0);
+        assertThat(executor.awaitIdle(Duration.ofSeconds(5))).isTrue();
+        executor.startDue();
+        assertThat(limits.getLast()).isEqualTo(ActionExecutor.SLOTS);
+    }
+
+    /** Spring pauses an inactive test context through the lifecycle and resumes it: the executor claims again. */
+    @Test
+    void shouldClaimAgainWhenStartedAfterAStop() throws Exception {
+        var executor = executor(attempt -> new ActionResult.Done(null));
+        when(store.claim(anyInt(), any(), any())).thenReturn(List.of(claim(ActionKind.FILE_ISSUE)));
+
+        executor.stop();
+        assertThat(executor.startDue()).isEmpty();
+        verify(store, never()).claim(anyInt(), any(), any());
+        executor.start();
+        var resumed = executor.startDue();
+
+        assertThat(resumed)
+                .singleElement()
+                .satisfies(
+                        attempt -> assertThat(attempt.get(5, TimeUnit.SECONDS)).isEqualTo(new ActionResult.Done(null)));
     }
 
     @Test
@@ -213,8 +309,29 @@ class ActionExecutorTest extends BaseUnitTest {
     }
 
     private ActionExecutor executor(Function<ActionAttempt, ActionResult> execute) {
+        return executor(execute, ActionExecutor.LEASE);
+    }
+
+    private ActionExecutor executor(Function<ActionAttempt, ActionResult> execute, Duration lease) {
         when(store.settle(any(), anyLong(), any(), any())).thenReturn(Optional.empty());
-        return new ActionExecutor(store, JsonMapper.builder().build(), adapters(execute), new SimpleMeterRegistry());
+        return new ActionExecutor(
+                store, JsonMapper.builder().build(), adapters(execute), new SimpleMeterRegistry(), lease);
+    }
+
+    private static List<ActionStore.Claim> claims(int count) {
+        return IntStream.range(0, count).mapToObj(n -> claim(ActionKind.EMAIL)).toList();
+    }
+
+    private static ActionStore.Claim claim(ActionKind kind) {
+        return new ActionStore.Claim(UUID.randomUUID(), null, kind, "key", "{}", 1, 7L, false, null, null);
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static List<ActionAdapter> adapters(Function<ActionAttempt, ActionResult> execute) {

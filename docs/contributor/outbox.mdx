@@ -81,6 +81,13 @@ The unique index `ux_agent_action_lane_executing` allows one executing action pe
 Every time is the database clock, so replicas with different clocks agree on a lease.
 There is no leader.
 
+Each replica runs up to `ActionExecutor.SLOTS` attempts at once, one per slot.
+Every second it claims only as many due actions as it has free slots, so a slow attempt never holds back the others.
+An attempt frees its slot when it ends or when its lease runs out, whichever comes first.
+An attempt that outlives its lease keeps its thread and logs `action.attempt.outlived`.
+A graceful shutdown waits for the attempts in flight for at most one shutdown phase (`SHUTDOWN_TIMEOUT`, 20 seconds by default).
+The lease recovers an attempt that the shutdown cuts.
+
 Every write after a claim names the claim's epoch.
 A write that names an older epoch changes nothing.
 
