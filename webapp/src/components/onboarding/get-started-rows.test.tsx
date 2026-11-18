@@ -14,7 +14,7 @@ import {
 } from "@/stories/practice-profile-story-mock-data";
 import { minutesBefore } from "@/stories/story-clock";
 
-import { getStartedSetupOpen, reviewFromOverview } from "./get-started-open";
+import { reviewFromOverview } from "./get-started-open";
 import { getStartedState } from "./get-started-rows";
 
 const LINKS = {
@@ -80,20 +80,6 @@ function listFor(
 const reviewStatus = (overview: Overview, onboarding?: WorkspaceOnboarding) =>
 	listFor(overview, onboarding).setup.find((row) => row.id === "first-review")?.status;
 
-const BLOCKERS = [
-	null,
-	"WORKSPACE_INACTIVE",
-	"REVIEWS_OFF",
-	"PERSON_ERASED",
-	"NO_AI",
-	"OUTSIDE_REVIEW_SCOPE",
-	"NOT_ELIGIBLE",
-	"CHOICE_REQUIRED",
-	"NO_MODEL",
-	"NO_PRACTICE",
-	"ON_REQUEST_ONLY",
-] as const;
-
 const GITLAB = {
 	available: true,
 	connectionId: 3,
@@ -102,29 +88,6 @@ const GITLAB = {
 	providerType: "GITLAB",
 	required: true,
 };
-
-/** Every first-run state, with the choice and the account step open or done. */
-const AGREEMENT_CASES = BLOCKERS.flatMap((blocker) =>
-	[false, true].flatMap((reviewed) =>
-		[false, true].flatMap((running) =>
-			[false, true].map((setupDone) => {
-				const name = [
-					blocker ?? "no blocker",
-					reviewed ? "reviewed" : "not reviewed",
-					running ? "running" : "idle",
-					setupDone ? "setup done" : "setup open",
-				].join(", ");
-				const onboarding: WorkspaceOnboarding = {
-					...workspaceOnboarding(),
-					aiChoiceRequired: true,
-					aiChoice: setupDone ? "CLOUD" : undefined,
-					links: [{ ...GITLAB, linked: setupDone }],
-				};
-				return [name, overviewOf(blocker, { reviewed, running }), onboarding] as const;
-			}),
-		),
-	),
-);
 
 describe("Get started's rows", () => {
 	it("marks the first review done only once a review has recorded something", () => {
@@ -187,14 +150,4 @@ describe("Get started's rows", () => {
 		});
 		expect(refused.learn).toStrictEqual([]);
 	});
-
-	it.each(AGREEMENT_CASES)(
-		"agrees with the sidebar's pointer on whether a step is open: %s",
-		(_name, overview, onboarding) => {
-			const { setup } = listFor(overview, onboarding);
-			expect(getStartedSetupOpen({ onboarding, review: reviewFromOverview(overview) })).toBe(
-				setup.some((row) => row.status !== "done"),
-			);
-		},
-	);
 });

@@ -2,9 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { beforeAll, expect, it, vi } from "vitest";
 
-import { tourRecordKey } from "@/components/tour/tour-start";
 import { toast } from "@/lib/toast";
-import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { OVERVIEW_FIXTURE } from "@/stories/practice-profile-story-mock-data";
@@ -50,11 +48,10 @@ it("says that the tour could not load, and leaves the page usable", async () => 
 	screen.getByRole("heading", { level: 1, name: "Practice profile" });
 });
 
-it("keeps a first visit's offer owed when the tour could not load, so the reader is offered it again", async () => {
-	localStorage.clear();
+it("says so when a chapter that the address asked for could not load, and lets go of the address", async () => {
 	const failure = vi.spyOn(toast, "error");
 	servePracticeProfile();
-	renderRouteAtWithRouter("/w/acme/practice-profile");
+	const { router } = renderRouteAtWithRouter("/w/acme/practice-profile?tour=your-profile");
 
 	await waitFor(
 		() =>
@@ -63,6 +60,6 @@ it("keeps a first visit's offer owed when the tour could not load, so the reader
 			),
 		ROUTE_RENDER_WAIT,
 	);
-	// The offer counts once the tour is on screen, and this one never was.
-	expect(localStorage.getItem(tourRecordKey("offered", String(currentUser.id)))).toBeNull();
+	await waitFor(() => expect(router.state.location.search.tour).toBeUndefined());
+	screen.getByRole("heading", { level: 1, name: "Practice profile" });
 });

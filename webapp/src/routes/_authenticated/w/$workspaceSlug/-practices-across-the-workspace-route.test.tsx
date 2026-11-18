@@ -5,8 +5,10 @@ import { HttpResponse, http } from "msw";
 import { beforeAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
+import { writeGetStartedRecord } from "@/components/onboarding/get-started-record";
 import { EARLIER_REVIEWS_COUNTED } from "@/components/practice-vocabulary/standing-basis-defs";
 import { FIGURES_LOAD_ERROR } from "@/components/practices-across-the-workspace/across-workspace-copy";
+import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import {
@@ -35,6 +37,8 @@ const TILES = "*/workspaces/:workspaceSlug/practices/tiles";
 let requests: { url: URL }[] = [];
 
 beforeEach(() => {
+	// A reader who finished Get started: the reads below are this page's own, and the corner makes none.
+	writeGetStartedRecord(String(currentUser.id), "acme", "finished");
 	requests = [];
 	server.events.on("request:start", ({ request }) => {
 		requests.push({ url: new URL(request.url) });

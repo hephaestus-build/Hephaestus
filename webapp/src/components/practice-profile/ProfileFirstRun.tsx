@@ -240,7 +240,8 @@ export function firstRunContent(
 					) : (
 						itemName(item)
 					)}
-					. {firstReviewSentences(activeReview)} Its result appears on this page when it finishes.
+					. {firstReviewSentences(activeReview)} Its result appears on your Practice profile when it
+					finishes.
 				</>
 			),
 			notes: approval === undefined ? undefined : <p>{approval}</p>,
@@ -301,8 +302,8 @@ export function firstRunContent(
 					)}
 					<p>
 						Whether it runs also depends on the repository and on each practice. Its result appears
-						beside the title. When reviews find the same problem in two pieces of your work, a
-						feedback card appears on this page.
+						beside the title of your Practice profile. When reviews find the same problem in two
+						pieces of your work, a feedback card appears there.
 					</p>
 					{approval !== undefined && <p>{approval}</p>}
 				</>

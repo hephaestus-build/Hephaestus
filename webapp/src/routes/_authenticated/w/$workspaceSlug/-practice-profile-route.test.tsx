@@ -16,7 +16,10 @@ import type {
 	WorkspaceOnboarding,
 } from "@/api/types.gen";
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
-import { forgetSectionFold } from "@/components/layout/section-folds";
+import {
+	getStartedRecordKey,
+	writeGetStartedRecord,
+} from "@/components/onboarding/get-started-record";
 import { reviewRangeStart } from "@/components/practice-profile/practice-profile-search";
 import { tourRecordKey } from "@/components/tour/tour-start";
 import { formatDayTime } from "@/lib/dates";
@@ -43,7 +46,7 @@ import {
 	profileReviews,
 } from "@/stories/profile-reviews-story-mock-data";
 import { STORY_NOW } from "@/stories/story-clock";
-import { deferred, pending } from "@/test/async";
+import { nextFrame, pending } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, loadRouteCode } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
@@ -51,8 +54,6 @@ import { storeUserView } from "@/test/user-view";
 // Mounting the real route pulls in the whole app shell and its lazy modules.
 
 const PAGE = "/w/acme/practice-profile";
-/** Where this browser remembers that the Practice profile offered its tour. */
-const TOUR_OFFERED = tourRecordKey("offered", String(currentUser.id));
 const TOUR_PROGRESS = tourRecordKey("progress", String(currentUser.id));
 
 beforeAll(
@@ -188,6 +189,9 @@ function reviewReads(open: ProfileReviewDetail = openProfileReviewDetail) {
 
 beforeEach(() => {
 	vi.stubGlobal("IntersectionObserver", ObserverStub);
+	// A returning reader, who finished Get started here: the cases about the page meet no card over
+	// it. The cases about Get started start from no record.
+	writeGetStartedRecord(String(currentUser.id), "acme", "finished");
 	server.use(
 		// The surface exists only where practices review the work, and the shared fixture has them
 		// off, so every case below has to say that this workspace reviews.
@@ -337,99 +341,15 @@ describe("practice profile route", () => {
 		expect(practicePage).not.toHaveBeenCalled();
 	});
 
-	it("offers the guided tour once on a first visit, and points at Take the tour after Not now", async () => {
+	it("opens no tour by itself on a first visit", async () => {
 		localStorage.clear();
-		await renderProfile();
-		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
-		expect(dialog.textContent).toMatch(/“Take the tour” brings it back/u);
-		fireEvent.click(within(dialog).getByRole("button", { name: "Not now" }));
-		await waitFor(() => expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull());
-		const start = screen.getByRole("button", { name: "Take the tour" });
-		await waitFor(() => expect(document.activeElement).toBe(start));
-
-		// The browser remembers the offer: the next visit opens on the page.
-		cleanup();
 		await renderProfile();
 		await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("link", { name: /^Latest review/u }, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
-	});
-
-	it("points at Take the tour after Not now, even when a link held focus before the offer", async () => {
-		localStorage.clear();
-		const overview = deferred();
-		server.use(
-			http.get("*/workspaces/:workspaceSlug/practice-profile/overview", async () => {
-				await overview.promise;
-				return HttpResponse.json(OVERVIEW_FIXTURE);
-			}),
+		expect(Object.keys(localStorage).filter((key) => key.includes("guided-tour"))).toStrictEqual(
+			[],
 		);
-		renderRouteAtWithRouter(PAGE);
-		// The reader arrived from the sidebar, so a link still has focus when the page loads.
-		const [link] = await screen.findAllByRole("link", {}, ROUTE_RENDER_WAIT);
-		link?.focus();
-		overview.resolve();
-		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
-		fireEvent.click(within(dialog).getByRole("button", { name: "Not now" }));
-		const start = await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT);
-		await waitFor(() => expect(document.activeElement).toBe(start));
-	});
-
-	it("waits with the first visit's offer while the question about public activity is open", async () => {
-		localStorage.clear();
-		server.use(
-			http.get("*/workspaces", () =>
-				HttpResponse.json([
-					workspaceListItem("acme", { practicesEnabled: true, publishesPublicActivity: true }),
-				]),
-			),
-			http.get("*/user/public-activity/workspaces/:slug/onboarding", () =>
-				HttpResponse.json({ seen: false, visible: false }),
-			),
-		);
-		await renderProfile();
-		await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT);
-		// The browser remembers the offer once the tour is on screen: an unset record is what proves
-		// that no offer opened.
-		expect(localStorage.getItem(TOUR_OFFERED)).toBeNull();
-		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
-	});
-
-	it("offers the tour once the question about public activity is answered", async () => {
-		localStorage.clear();
-		server.use(
-			http.get("*/workspaces", () =>
-				HttpResponse.json([
-					workspaceListItem("acme", { practicesEnabled: true, publishesPublicActivity: true }),
-				]),
-			),
-			http.get("*/user/public-activity/workspaces/:slug/onboarding", () =>
-				HttpResponse.json({ seen: true, visible: false }),
-			),
-		);
-		await renderProfile();
-		await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
-		expect(localStorage.getItem(TOUR_OFFERED)).toBe("1");
-	});
-
-	it("does not offer the tour to a first visit that a link opened on a level", async () => {
-		localStorage.clear();
-		// The level hides the page's own heading, so the level is waited for itself.
-		renderRouteAtWithRouter(
-			`${PAGE}?detail=${encodeURIComponent(JSON.stringify(["practice-groups:all"]))}`,
-		);
-		await screen.findByRole("table", { name: "All practice groups" }, ROUTE_RENDER_WAIT);
-		expect(localStorage.getItem(TOUR_OFFERED)).toBeNull();
-		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
-	});
-
-	it("waits with the first visit's offer until the page has loaded", async () => {
-		localStorage.clear();
-		server.use(
-			http.get("*/workspaces/:workspaceSlug/practice-profile/overview", async () => pending()),
-		);
-		await renderProfile();
-		expect(localStorage.getItem(TOUR_OFFERED)).toBeNull();
-		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
 	});
 
 	it("keeps another account's tour records on a shared browser out of the reader's tour", async () => {
@@ -439,17 +359,17 @@ describe("practice profile route", () => {
 			done: ["how-it-works"],
 		});
 		// Another account on this browser, and a record from before records named their account.
-		localStorage.setItem(tourRecordKey("offered", "7"), "1");
 		localStorage.setItem(tourRecordKey("progress", "7"), finished);
-		localStorage.setItem("hephaestus:guided-tour:practice-profile:offered", "1");
 		localStorage.setItem("hephaestus:guided-tour:practice-profile", finished);
 		await renderProfile();
-		// The reader's own first visit is still owed: neither record counts as theirs.
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT),
+		);
+		// Neither record counts as the reader's: the tour starts afresh for them.
 		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
 		within(dialog).getByRole("button", { name: /How it works.*Start here/u });
 		expect(within(dialog).queryByText(/Continue at step/u)).toBeNull();
 		expect(within(dialog).queryByText("Done")).toBeNull();
-		expect(localStorage.getItem(TOUR_OFFERED)).toBe("1");
 	});
 
 	it("opens the guided tour when asked, and a link in it hands over to the real level", async () => {
@@ -2044,31 +1964,93 @@ const GITLAB_LINK = {
 	required: true,
 };
 
-const getStarted = async () =>
-	screen.findByRole("region", { name: "Get started" }, ROUTE_RENDER_WAIT);
+/** The reader's Get started record in this browser, for the acme workspace. */
+const GET_STARTED_RECORD = getStartedRecordKey(String(currentUser.id), "acme");
+
+/** The Get started card, once it is open. */
+const getStartedCard = async () =>
+	screen.findByRole("dialog", { name: "Get started" }, ROUTE_RENDER_WAIT);
+
+/** The pill in the corner, by the count it names. */
+const getStartedPill = async (count: string) =>
+	screen.findByRole("button", { name: `Get started ${count} done` }, ROUTE_RENDER_WAIT);
+
+/** Presses Next until the chapter's last step, where the primary button is no longer Next. */
+async function clickThroughChapter(dialog: HTMLElement) {
+	const next = within(dialog).queryByRole("button", { name: "Next" });
+	if (next !== null) {
+		fireEvent.click(next);
+		await clickThroughChapter(dialog);
+	}
+}
+
+/** Opens the card from the pill, as a reader does. */
+async function openGetStarted(count: string) {
+	fireEvent.click(await getStartedPill(count));
+	return getStartedCard();
+}
 
 describe("Get started", () => {
-	// The reader's choice to hide the list lasts in this browser, so no case inherits another's.
-	afterEach(() => forgetSectionFold(`get-started:${String(currentUser.id)}:acme`));
+	// Every case starts as a first visit to the corner; a case that needs a later one writes the record.
+	beforeEach(() => localStorage.removeItem(GET_STARTED_RECORD));
 
-	it("lists a new member's real setup, and a review that waits for a step above offers no second way", async () => {
+	it("opens the card once on a first visit, without taking focus, and opens no tour", async () => {
 		server.use(
 			dayOneOverview({ ...READY_REVIEW_READINESS, blocker: "CHOICE_REQUIRED" }),
 			onboardingAnswers({ enabled: true, aiChoiceRequired: true, links: [GITLAB_LINK] }),
 		);
 		await renderProfile();
-		const list = await getStarted();
-		within(list).getByText("0 of 3 done");
-		const choose = within(list).getByRole("link", { name: "Choose your AI" });
+		const card = await getStartedCard();
+		// Base UI moves focus a frame after the open, so the check waits past it.
+		await nextFrame();
+		await nextFrame();
+		expect(card.contains(document.activeElement)).toBe(false);
+		await screen.findByText(
+			"Get started opened in the corner. 0 of 3 steps are done.",
+			undefined,
+			ROUTE_RENDER_WAIT,
+		);
+		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
+		expect(localStorage.getItem(GET_STARTED_RECORD)).toBe("open");
+		within(card).getByText("0 of 3 done");
+		const choose = within(card).getByRole("link", { name: "Choose your AI" });
 		const href = new URL(String(choose.getAttribute("href")), "https://app.invalid");
 		expect(href.pathname).toBe("/w/acme/onboarding");
 		expect(href.searchParams.get("returnTo")).toBe("/w/acme/practice-profile");
-		within(list).getByRole("link", { name: "Connect GitLab" });
+		within(card).getByRole("link", { name: "Connect GitLab" });
 		// The review cannot start before the choice, and the choice has one way on, above it.
-		within(list).getByText("Cannot start yet");
-		expect(within(list).getAllByRole("link", { name: /Choose your AI/u })).toHaveLength(1);
-		// The list says the first-run state, so the empty feedback list does not say it again.
-		expect(screen.getAllByText("Choose your AI to get reviews")).toHaveLength(1);
+		within(card).getByText("Cannot start yet");
+		expect(within(card).getAllByRole("link", { name: /Choose your AI/u })).toHaveLength(1);
+		// The page keeps its own first-run words: the card is not part of it.
+		await screen.findByText("Choose your AI to get reviews", { selector: "main *" });
+
+		// The next visit shows the pill and opens nothing.
+		cleanup();
+		await renderProfile();
+		await getStartedPill("0 of 3");
+		expect(screen.queryByRole("dialog", { name: "Get started" })).toBeNull();
+	});
+
+	it("does not open the card over a level that a link opened", async () => {
+		server.use(dayOneOverview(READY_REVIEW_READINESS));
+		renderRouteAtWithRouter(
+			`${PAGE}?detail=${encodeURIComponent(JSON.stringify(["practice-groups:all"]))}`,
+		);
+		await screen.findByRole("table", { name: "All practice groups" }, ROUTE_RENDER_WAIT);
+		await getStartedPill("0 of 1");
+		expect(screen.queryByRole("dialog", { name: "Get started" })).toBeNull();
+		expect(localStorage.getItem(GET_STARTED_RECORD)).toBeNull();
+	});
+
+	it("records the card as seen when the reader opens it before it opened by itself", async () => {
+		server.use(dayOneOverview(READY_REVIEW_READINESS));
+		renderRouteAtWithRouter(
+			`${PAGE}?detail=${encodeURIComponent(JSON.stringify(["practice-groups:all"]))}`,
+		);
+		await screen.findByRole("table", { name: "All practice groups" }, ROUTE_RENDER_WAIT);
+		expect(localStorage.getItem(GET_STARTED_RECORD)).toBeNull();
+		await openGetStarted("0 of 1");
+		expect(localStorage.getItem(GET_STARTED_RECORD)).toBe("open");
 	});
 
 	it.each([
@@ -2082,10 +2064,10 @@ describe("Get started", () => {
 				onboardingAnswers({ enabled: true, links: [GITLAB_LINK] }),
 			);
 			await renderProfile();
-			const list = await getStarted();
-			within(list).getByRole("link", { name: "Connect GitLab" });
+			const card = await getStartedCard();
+			within(card).getByRole("link", { name: "Connect GitLab" });
 			// A decision is no step, so the list has no first-review step and the page says the reason.
-			expect(within(list).queryByText("Your first practice review")).toBeNull();
+			expect(within(card).queryByText("Your first practice review")).toBeNull();
 			await screen.findByText(reason, undefined, ROUTE_RENDER_WAIT);
 		},
 	);
@@ -2098,6 +2080,8 @@ describe("Get started", () => {
 			],
 			["beta", { ...OVERVIEW_FIXTURE, reviewReadiness: READY_REVIEW_READINESS }],
 		]);
+		localStorage.setItem(GET_STARTED_RECORD, "open");
+		localStorage.setItem(getStartedRecordKey(String(currentUser.id), "beta"), "open");
 		server.use(
 			http.get("*/workspaces", () =>
 				HttpResponse.json([
@@ -2111,21 +2095,18 @@ describe("Get started", () => {
 			onboardingAnswers({ enabled: true, links: [GITLAB_LINK] }),
 		);
 		const router = await renderProfile();
-		within(await getStarted()).getByText("0 of 2 done");
+		await getStartedPill("0 of 2");
 
 		await router.navigate({
 			to: "/w/$workspaceSlug/practice-profile",
 			params: { workspaceSlug: "beta" },
 		});
 		// Beta's first review is done, and acme's was not: that is no news about this workspace.
-		await waitFor(
-			() => within(screen.getByRole("region", { name: "Get started" })).getByText("1 of 2 done"),
-			ROUTE_RENDER_WAIT,
-		);
+		await getStartedPill("1 of 2");
 		expect(screen.queryByText(/^Done: /u)).toBeNull();
 	});
 
-	it("marks a step done only from the server's facts, and goes once every step is done", async () => {
+	it("marks a step done only from the server's facts, and stays away while nothing is open", async () => {
 		server.use(
 			onboardingAnswers({
 				enabled: true,
@@ -2136,102 +2117,160 @@ describe("Get started", () => {
 		);
 		await renderProfile();
 		await openReviewsChip();
-		expect(screen.queryByRole("region", { name: "Get started" })).toBeNull();
-		expect(screen.queryByRole("link", { name: "Get started" })).toBeNull();
+		expect(screen.queryByRole("button", { name: /^Get started/u })).toBeNull();
+		// Nothing was ever open, so nothing is recorded: a step that opens later still shows the list.
+		expect(localStorage.getItem(GET_STARTED_RECORD)).toBeNull();
 
 		cleanup();
 		server.use(dayOneOverview(READY_REVIEW_READINESS));
 		await renderProfile();
-		const list = await getStarted();
-		within(list).getByText("2 of 3 done");
-		within(list).getByText("You chose In-house.");
-		// The sidebar points at the list while it has a step open.
-		const pointer = screen.getByRole("link", { name: "Get started" });
-		expect(pointer.getAttribute("href")).toBe("/w/acme/practice-profile#get-started");
+		const card = await getStartedCard();
+		within(card).getByText("2 of 3 done");
+		within(card).getByText("You chose In-house.");
+		await getStartedPill("2 of 3");
 	});
 
-	it("starts a tour chapter in place, and marks only the chapters this account finished here", async () => {
+	it("leaves the corner for good once every step is done and the reader closes it", async () => {
+		localStorage.setItem(GET_STARTED_RECORD, "open");
+		await renderProfile();
+		const card = await openGetStarted("1 of 1");
+		within(card).getByText(/^Every step is done\./u);
+		fireEvent.click(within(card).getByRole("button", { name: "Close" }));
+		await waitFor(() => expect(screen.queryByRole("button", { name: /^Get started/u })).toBeNull());
+		expect(localStorage.getItem(GET_STARTED_RECORD)).toBe("finished");
+		expect(document.activeElement).toBe(screen.getByRole("main"));
+	});
+
+	it("offers Undo after Hide, which brings the pill back", async () => {
+		localStorage.setItem(GET_STARTED_RECORD, "open");
+		server.use(dayOneOverview(READY_REVIEW_READINESS));
+		await renderProfile();
+		const card = await openGetStarted("0 of 1");
+		fireEvent.click(within(card).getByRole("button", { name: "Hide this list" }));
+		fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
+		await getStartedPill("0 of 1");
+		expect(localStorage.getItem(GET_STARTED_RECORD)).toBe("open");
+	});
+
+	it("keeps the list when the reader presses on the page with every step done", async () => {
+		localStorage.setItem(GET_STARTED_RECORD, "open");
+		await renderProfile();
+		await openGetStarted("1 of 1");
+		const heading = screen.getByRole("heading", { level: 1, name: "Practice profile" });
+		fireEvent.pointerDown(heading);
+		fireEvent.mouseDown(heading);
+		fireEvent.click(heading);
+		await waitFor(() => expect(screen.queryByRole("dialog", { name: "Get started" })).toBeNull());
+		expect(localStorage.getItem(GET_STARTED_RECORD)).toBe("open");
+		await getStartedPill("1 of 1");
+	});
+
+	it("hides on request, and the account menu shows it again with focus in it", async () => {
+		localStorage.setItem(GET_STARTED_RECORD, "open");
+		server.use(dayOneOverview(READY_REVIEW_READINESS));
+		await renderProfile();
+		const card = await openGetStarted("0 of 1");
+		fireEvent.click(within(card).getByRole("button", { name: "Hide this list" }));
+		await waitFor(() => expect(screen.queryByRole("button", { name: /^Get started/u })).toBeNull());
+		expect(localStorage.getItem(GET_STARTED_RECORD)).toBe("hidden");
+		await screen.findByText(/Get started is hidden\./u);
+
+		// Hidden lasts: the next visit shows no pill.
+		cleanup();
+		await renderProfile();
+		await screen.findByText("No review of your work yet", undefined, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("button", { name: /^Get started/u })).toBeNull();
+
+		const user = userEvent.setup();
+		await user.click(screen.getByRole("button", { name: /^Account/u }));
+		await user.click(await screen.findByRole("menuitem", { name: "Get started" }));
+		const again = await getStartedCard();
+		await waitFor(() => expect(again.contains(document.activeElement)).toBe(true));
+		expect(localStorage.getItem(GET_STARTED_RECORD)).toBe("open");
+		await getStartedPill("0 of 1");
+	});
+
+	it("opens a chapter from a step, ends with it, and opens the card again with the step marked", async () => {
 		localStorage.setItem(TOUR_PROGRESS, JSON.stringify({ place: null, done: ["your-profile"] }));
 		localStorage.setItem(
 			tourRecordKey("progress", "7"),
 			JSON.stringify({ place: null, done: ["how-it-works"] }),
 		);
+		localStorage.setItem(GET_STARTED_RECORD, "open");
 		server.use(dayOneOverview(READY_REVIEW_READINESS));
-		await renderProfile();
-		const list = await getStarted();
-		const read = within(list).getByRole("button", { name: "Learn to read a feedback card" });
+		const router = await renderProfile();
+		const card = await openGetStarted("0 of 1");
+		const read = within(card).getByRole("link", { name: "Learn to read a feedback card" });
 		expect(read.closest("li")?.textContent).toMatch(/Finished/u);
-		const how = within(list).getByRole("button", { name: "See how your work becomes feedback" });
+		const how = within(card).getByRole("link", { name: "See how your work becomes feedback" });
 		expect(how.closest("li")?.textContent).not.toMatch(/Finished/u);
+		expect(new URL(String(how.getAttribute("href")), "https://app.invalid").search).toBe(
+			"?tour=how-it-works",
+		);
 
-		how.focus();
 		fireEvent.click(how);
 		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
 		await within(dialog).findByRole("heading", { name: "From your work to your profile" });
-		fireEvent.click(within(dialog).getByRole("button", { name: "Close the tour" }));
-		await waitFor(() => expect(document.activeElement).toBe(how));
+		expect(router.state.location.search.tour).toBe("how-it-works");
+		// Through the chapter to its last step, which ends the tour rather than leading on.
+		await clickThroughChapter(dialog);
+		expect(within(dialog).queryByRole("button", { name: /^Next chapter/u })).toBeNull();
+		fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+
+		await waitFor(() => expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull());
+		await waitFor(() => expect(router.state.location.search.tour).toBeUndefined());
+		const again = await getStartedCard();
+		const marked = within(again).getByRole("link", { name: "See how your work becomes feedback" });
+		expect(marked.closest("li")?.textContent).toMatch(/Finished/u);
+		await nextFrame();
+		await nextFrame();
+		expect(again.contains(document.activeElement)).toBe(false);
 	});
 
-	it("marks a chapter finished as soon as the tour finishes it", async () => {
-		localStorage.setItem(
-			TOUR_PROGRESS,
-			JSON.stringify({ place: { chapter: "your-profile", step: "rate" }, done: [] }),
-		);
-		server.use(dayOneOverview(READY_REVIEW_READINESS));
-		await renderProfile();
-		const list = await getStarted();
-		const read = within(list).getByRole("button", { name: "Learn to read a feedback card" });
-		expect(read.closest("li")?.textContent).not.toMatch(/Finished/u);
-
-		// The tour's own list continues where this account stopped, on the chapter's last step.
-		fireEvent.click(screen.getByRole("button", { name: "Take the tour" }));
+	it("opens the chapter that the address names, and the address lets go of it when the tour closes", async () => {
+		const router = await renderProfile(`${PAGE}?tour=your-profile`);
 		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
-		fireEvent.click(await within(dialog).findByRole("button", { name: /Your profile.*Continue/u }));
-		fireEvent.click(await within(dialog).findByRole("button", { name: /^Next chapter/u }));
+		expect(within(dialog).queryByRole("button", { name: /How it works.*Start here/u })).toBeNull();
 		fireEvent.click(within(dialog).getByRole("button", { name: "Close the tour" }));
 		await waitFor(() => expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull());
-		expect(read.closest("li")?.textContent).toMatch(/Finished/u);
+		await waitFor(() => expect(router.state.location.search.tour).toBeUndefined());
+		// The tour does not open again from the same address.
+		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
 	});
 
-	it("leaves no list and no pointer for a review that only an admin can unblock", async () => {
+	it("leads from a step on another page to the chapter on the Practice profile", async () => {
+		localStorage.setItem(GET_STARTED_RECORD, "open");
+		server.use(dayOneOverview(READY_REVIEW_READINESS));
+		const { router } = renderRouteAtWithRouter("/w/acme/activity");
+		const card = await openGetStarted("0 of 1");
+		fireEvent.click(within(card).getByRole("link", { name: "Learn to read a feedback card" }));
+		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
+		expect(router.state.location.pathname).toBe(PAGE);
+		expect(router.state.location.search.tour).toBe("your-profile");
+		expect(within(dialog).queryByRole("button", { name: /How it works.*Start here/u })).toBeNull();
+	});
+
+	it("leaves no pill for a review that only an admin can unblock", async () => {
 		server.use(dayOneOverview({ ...READY_REVIEW_READINESS, blocker: "REVIEWS_OFF" }));
 		await renderProfile();
 		await screen.findByText("Practice reviews are off here", undefined, ROUTE_RENDER_WAIT);
-		expect(screen.queryByRole("region", { name: "Get started" })).toBeNull();
-		expect(screen.queryByRole("link", { name: "Get started" })).toBeNull();
-	});
-
-	it("keeps the reader's choice to hide it, and gives the reason back to the page while hidden", async () => {
-		server.use(dayOneOverview(READY_REVIEW_READINESS));
-		await renderProfile();
-		const list = await getStarted();
-		const fold = within(list).getByRole("button", { name: "Get started" });
-		expect(fold.getAttribute("aria-expanded")).toBe("true");
-		// The list says the first-run state, so the empty feedback list does not say it again.
-		expect(screen.getAllByText("No review of your work yet")).toHaveLength(1);
-		fireEvent.click(fold);
-		expect(fold.getAttribute("aria-expanded")).toBe("false");
-		// Hidden, the list keeps its words out of sight, and the page says them again.
-		await waitFor(() => expect(screen.getAllByText("No review of your work yet")).toHaveLength(2));
-
-		cleanup();
-		await renderProfile();
-		const again = within(await getStarted()).getByRole("button", { name: "Get started" });
-		expect(again.getAttribute("aria-expanded")).toBe("false");
-		within(await getStarted()).getByText("0 of 1 done");
+		expect(screen.queryByRole("button", { name: /^Get started/u })).toBeNull();
 	});
 
 	it("offers Ask Hephaestus only where Hephaestus can answer", async () => {
+		localStorage.setItem(GET_STARTED_RECORD, "open");
 		server.use(dayOneOverview(READY_REVIEW_READINESS));
 		await renderProfile();
-		const ask = within(await getStarted()).getByRole("link", { name: "Ask Hephaestus a question" });
+		const ask = within(await openGetStarted("0 of 1")).getByRole("link", {
+			name: "Ask Hephaestus a question",
+		});
 		expect(ask.getAttribute("href")).toBe("/w/acme/conversation");
 
 		cleanup();
 		server.use(onboardingAnswers({ conversationRefusal: "UNAVAILABLE" }));
 		await renderProfile();
-		const list = await getStarted();
-		expect(within(list).queryByRole("link", { name: "Ask Hephaestus a question" })).toBeNull();
+		const card = await openGetStarted("0 of 1");
+		expect(within(card).queryByRole("link", { name: "Ask Hephaestus a question" })).toBeNull();
 	});
 
 	it("never shows in a user view, which reads someone else's page", async () => {
@@ -2240,7 +2279,8 @@ describe("Get started", () => {
 			server.use(dayOneOverview(READY_REVIEW_READINESS));
 			await renderProfile();
 			await screen.findByText("No review of your work yet", undefined, ROUTE_RENDER_WAIT);
-			expect(screen.queryByRole("region", { name: "Get started" })).toBeNull();
+			expect(screen.queryByRole("button", { name: /^Get started/u })).toBeNull();
+			expect(localStorage.getItem(GET_STARTED_RECORD)).toBeNull();
 		} finally {
 			clearUserView();
 		}

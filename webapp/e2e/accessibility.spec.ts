@@ -4,11 +4,7 @@ import { AxeBuilder } from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
 
 import { expect, test as base } from "./fixtures";
-import {
-	asFirstTourVisit,
-	asReturningTourReader,
-	tourOfferRecords,
-} from "./screenshots/tour-offer.ts";
+import { asFirstVisit, asReturningReader } from "./screenshots/first-visit.ts";
 
 /**
  * The integrated half of the accessibility evaluation in
@@ -105,19 +101,18 @@ const publicTest = base.extend({
 const signedInTest = base.extend({
 	colorScheme: "light",
 	storageState: async ({ adminSession }, use) => use(adminSession),
-	// A returning reader: the practice profile has offered its tour already, so a scan or a Tab walk
-	// meets the page itself.
+	// A returning reader, who finished Get started, so a scan or a Tab walk meets the page itself.
 	context: async ({ context }, use) => {
-		await asReturningTourReader(context);
+		await asReturningReader(context);
 		await use(context);
 	},
 });
-/** A reader on their first visit, to whom the practice profile offers its tour. */
+/** A reader on their first visit, with no Get started record in this browser. */
 const firstVisitTest = base.extend({
 	colorScheme: "light",
 	storageState: async ({ adminSession }, use) => use(adminSession),
 	context: async ({ context }, use) => {
-		await asFirstTourVisit(context);
+		await asFirstVisit(context);
 		await use(context);
 	},
 });
@@ -371,19 +366,23 @@ base.describe("keyboard", () => {
 	);
 
 	firstVisitTest(
-		"the first visit's tour holds focus, passes axe, and points at Take the tour on Escape",
+		"a first visit opens no tour by itself, and the tour holds focus, passes axe, and gives it back on Escape",
 		async ({ page }) => {
 			await open(page, "/w/e2e/practice-profile");
+			const start = page.getByRole("button", { name: "Take the tour" });
+			await expect(start).toBeVisible();
 			const tour = page.getByRole("dialog", { name: "Guided tour" });
+			await expect(tour).toHaveCount(0);
+
+			await start.focus();
+			await page.keyboard.press("Enter");
 			await expect(tour).toBeVisible();
 			await expect(tour.getByRole("button", { name: /How it works/u })).toBeFocused();
 			expect(await axeViolations(page, { overlay: true })).toEqual([]);
 
 			await page.keyboard.press("Escape");
 			await expect(tour).toBeHidden();
-			await expect(page.getByRole("button", { name: "Take the tour" })).toBeFocused();
-			// The browser remembers the offer for this account, so it does not open by itself again.
-			expect(await tourOfferRecords(page)).toHaveLength(1);
+			await expect(start).toBeFocused();
 		},
 	);
 

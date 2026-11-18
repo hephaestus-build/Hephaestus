@@ -17,6 +17,7 @@ import {
 	OWN_REVIEW_STATUS_DEFS,
 	type ReviewStatus,
 } from "@/components/practice-vocabulary/review-status-defs";
+import { TOUR_CHAPTER_IDS } from "@/components/tour/tour-start";
 import { multiValue, narrowToEnum, nonEmpty } from "@/lib/search-params";
 
 const SORT_DIRECTIONS = ["asc", "desc"] as const satisfies readonly SortDirection[];
@@ -238,9 +239,14 @@ const practiceProfileFilterSchema = z.object({
 export const PRACTICE_PROFILE_SEARCH_DEFAULTS = practiceProfileFilterSchema.parse({});
 
 /** The page's own params and the detail drawer's `detail` stack: the route's whole search. */
-export const practiceProfileSearchSchema = practiceProfileFilterSchema.extend(
-	detailStackSchema(PRACTICE_PROFILE_LEVEL_KINDS).shape,
-);
+export const practiceProfileSearchSchema = practiceProfileFilterSchema.extend({
+	...detailStackSchema(PRACTICE_PROFILE_LEVEL_KINDS).shape,
+	/**
+	 * The tour chapter that a step of Get started asked for, from any page. It opens the tour on that
+	 * chapter and leaves the address when the tour closes, so Back returns to the page before.
+	 */
+	tour: z.enum(TOUR_CHAPTER_IDS).optional().catch(undefined),
+});
 
 export type PracticeProfileSearch = z.infer<typeof practiceProfileSearchSchema>;
 

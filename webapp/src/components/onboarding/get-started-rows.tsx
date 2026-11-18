@@ -32,7 +32,7 @@ export interface GetStartedFacts {
 export interface GetStartedLinks {
 	/** The page where the reader makes their AI choice and connects accounts. */
 	setup: ReactElement;
-	/** Starts a tour chapter in place; absent where the page has no tour. */
+	/** Opens a tour chapter on the Practice profile; absent where the workspace has no practices. */
 	startChapter?: (chapter: TourChapterId) => ReactElement;
 	conversation: ReactElement;
 }
@@ -148,7 +148,7 @@ function reviewRow({ review, onboarding }: GetStartedFacts): GetStartedSetupRow[
 				id: "first-review",
 				title,
 				status,
-				summary: "Hephaestus has reviewed your work. The result is beside the page title.",
+				summary: "Hephaestus has reviewed your work. The result is on your Practice profile.",
 			},
 		];
 	}
@@ -178,10 +178,7 @@ export interface GetStartedInputs {
 	workspaceName: string;
 	/** The member onboarding read, which the workspace layout already holds, and its state. */
 	onboarding: { state: LoadState; data: WorkspaceOnboarding | undefined };
-	/**
-	 * Where practices are on: the overview's state and facts, and what the first-run state says
-	 * (`firstRunContent`), which the page that shows the first-run state already holds.
-	 */
+	/** Where practices are on: the overview's state and facts, and what the first-run state says (`firstRunContent`). */
 	review?: {
 		state: LoadState;
 		facts: GetStartedReview | undefined;
@@ -192,10 +189,9 @@ export interface GetStartedInputs {
 }
 
 /**
- * Get started from reads the page already makes: the member onboarding read and the overview. It
- * never reads the feedback cards, because reading them delivers them. A failed read shows nothing:
- * the list is optional guidance, and an alert for it would greet every member, though most of them
- * never see the list.
+ * Get started from two reads: the member onboarding read and the overview. It never reads the
+ * feedback cards, because reading them delivers them. A failed read says so in the card, with a
+ * retry; the corner decides whether the pill shows at all.
  */
 export function getStartedState({
 	onboarding,
@@ -204,6 +200,9 @@ export function getStartedState({
 	...facts
 }: GetStartedInputs): GetStartedState {
 	const state = combinePanelStates([onboarding.state, review?.state ?? { status: "ready" }]);
+	if (state.status === "error") {
+		return { status: "error", onRetry: state.onRetry };
+	}
 	if (state.status !== "ready" || onboarding.data === undefined) {
 		return { status: "loading" };
 	}

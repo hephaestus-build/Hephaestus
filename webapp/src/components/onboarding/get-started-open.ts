@@ -8,12 +8,8 @@ import { openRequiredLinks } from "@/lib/onboarding-links";
 
 /**
  * The rules that decide Get started's setup steps, from the raw facts, apart from the list's words.
- * The sidebar's pointer loads with every page, so it reads these rules alone and the app's first
- * load stays small. `get-started-rows` builds the list from the same rules.
+ * `get-started-rows` builds the list from them.
  */
-
-/** The section's id, so the sidebar's pointer can link to it. */
-export const GET_STARTED_ID = "get-started";
 
 /** The member onboarding facts that the setup steps read. */
 export type GetStartedOnboarding = Pick<
@@ -75,38 +71,6 @@ export function reviewStepStatus(
 	}
 }
 
-/** Whether Get started still has a setup step open. */
-export function getStartedSetupOpen({
-	onboarding,
-	review,
-}: {
-	onboarding: GetStartedOnboarding;
-	review: GetStartedReview | undefined;
-}): boolean {
-	const reviewStatus = review === undefined ? undefined : reviewStepStatus(review, onboarding);
-	return (
-		choiceStep(onboarding) === "open" ||
-		openRequiredLinks(onboarding.links).length > 0 ||
-		(reviewStatus !== undefined && reviewStatus !== "done")
-	);
-}
-
-/**
- * Whether the list's first-review step says what the page's first-run state says: the step shows
- * and is not done. A decision leaves no step, so the page keeps saying why no review runs, also
- * while a setup step keeps the list open.
- */
-export function getStartedSaysFirstRun(
-	onboarding: GetStartedOnboarding | undefined,
-	review: GetStartedReview | undefined,
-): boolean {
-	if (onboarding === undefined || review === undefined) {
-		return false;
-	}
-	const status = reviewStepStatus(review, onboarding);
-	return status !== undefined && status !== "done";
-}
-
 /** The overview's facts about the first review, as the setup steps read them. */
 export function reviewFromOverview(
 	overview: Pick<PracticeProfileOverview, "latestReview" | "activeReview" | "reviewReadiness">,
@@ -118,26 +82,4 @@ export function reviewFromOverview(
 				reviewRunning: overview.activeReview !== null,
 				blocker: overview.reviewReadiness.blocker,
 			};
-}
-
-/**
- * Where the browser keeps the reader's choice to hide the list: one record per account and
- * workspace, so a second person on a shared browser starts from their own. No account, no record.
- */
-export function getStartedFoldKey(
-	accountId: string | undefined,
-	workspaceSlug: string,
-): string | undefined {
-	return accountId === undefined ? undefined : `get-started:${accountId}:${workspaceSlug}`;
-}
-
-/**
- * Whether the route should show Get started: the member onboarding read is in, and a setup step is
- * open. Once shown, a route keeps the list mounted, so the step that closes it is still announced.
- */
-export function getStartedApplies(
-	onboarding: GetStartedOnboarding | undefined,
-	review: GetStartedReview | undefined,
-): boolean {
-	return onboarding !== undefined && getStartedSetupOpen({ onboarding, review });
 }

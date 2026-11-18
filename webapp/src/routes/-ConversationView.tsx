@@ -137,8 +137,8 @@ export function MainConversation({
 	const workspaceName = useWorkspaceName(workspaceSlug);
 	const state = useConversationTimeline(workspaceSlug, readOnly);
 	const actions = useConversationActions(workspaceSlug);
-	// Reading the conversation here, on the conversation page or in the Hephaestus panel, clears the launcher's dot,
-	// for answers in its threads too. A user view reads another member's conversation, not the reader's.
+	// Reading the conversation here, on the conversation page or in the Hephaestus panel, clears the
+	// header button's dot, for answers in its threads too. A user view reads another member's conversation, not the reader's.
 	useMarkConversationRead(workspaceSlug, !readOnly);
 	const stoppable = stoppableTurn(state);
 	const draftKey = `${workspaceSlug}:main`;

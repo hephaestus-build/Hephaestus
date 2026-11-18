@@ -1,7 +1,25 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { GetStarted, type GetStartedSetupRow, type GetStartedState } from "./GetStarted";
+import {
+	GetStarted as GetStartedCorner,
+	type GetStartedProps,
+	type GetStartedSetupRow,
+	type GetStartedState,
+} from "./GetStarted";
+
+/** The corner, closed, as the route renders it. */
+function GetStarted({ state }: Pick<GetStartedProps, "state">) {
+	return (
+		<GetStartedCorner
+			state={state}
+			open={false}
+			opening="reader"
+			onOpenChange={vi.fn()}
+			onHide={vi.fn()}
+		/>
+	);
+}
 
 const row = (id: string, status: GetStartedSetupRow["status"]): GetStartedSetupRow => ({
 	id,
@@ -34,14 +52,13 @@ describe("GetStarted", () => {
 		);
 		expect(screen.getByRole("status").textContent).toBe("");
 
-		// The last step turns done: the list goes, and its status line says why.
+		// The last step turns done, and the status line says so.
 		view.rerender(
 			<GetStarted state={ready([row("ai-choice", "done"), row("first-review", "done")])} />,
 		);
 		expect(screen.getByRole("status").textContent).toBe(
 			"Done: Your first practice review. Every step is done.",
 		);
-		expect(screen.queryByRole("region", { name: "Get started" })).toBeNull();
 	});
 
 	it("says nothing for a list that loads already done", () => {

@@ -49,6 +49,7 @@ import {
 	TREND_DEFS,
 	WorkScene,
 } from "./tour-scenes";
+import type { TOUR_CHAPTER_IDS } from "./tour-start";
 import { EXAMPLE_CAPTION, type ExampleView } from "./TourExampleLayer";
 
 /** A part of a real component that a step lights. The component names it with `data-tour-slot`. */
@@ -119,11 +120,7 @@ export interface TourChapter {
 	steps: TourStep[];
 }
 
-export type TourChapterId =
-	| "how-it-works"
-	| "your-profile"
-	| "going-deeper"
-	| "across-the-workspace";
+export type TourChapterId = (typeof TOUR_CHAPTER_IDS)[number];
 
 /** What the chapters read about the reader, all of it from the route that shows the page. */
 export interface TourFacts {

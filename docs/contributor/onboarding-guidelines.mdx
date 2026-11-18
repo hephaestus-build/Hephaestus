@@ -37,7 +37,7 @@ Three facts shape onboarding in Hephaestus.
    Apple also says to give a clear reason for a permission that the app needs to function.
 2. **Do not interrupt on load.** Do not open a modal dialog when a page loads.
    Show information and optional decisions in the page, near the thing that they are about.
-   The one exception is the first-visit offer of [the guided tour](#the-guided-tour), which states its own limits.
+   The one exception is the first-visit open of [Get started](#get-started), which is non-modal and states its own limits.
    Apple says: "Avoid showing an alert when your app starts" ([HIG Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts)).
    GOV.UK has no modal component.
 3. **Teach in the place of use.** Put an explanation next to the thing that it explains, at the moment that it applies.
@@ -45,8 +45,7 @@ Three facts shape onboarding in Hephaestus.
 4. **Derive guidance from state.** Choose the text from the person's real state, such as "no review yet" or "No AI".
    Guidance that follows state changes by itself.
    It needs no "seen" record, no dismissal, and no export or erasure entry.
-   The guided tour's first-visit offer is the one record of this kind. [The guided tour](#the-guided-tour) says why.
-   Hiding Get started is not such a record: its heading stays, and the facts decide whether the list shows.
+   Get started's record in the browser is the one record of this kind. [Get started](#get-started) says why.
 5. **Never invent a claim about someone's work.** Do not show sample feedback, a demo profile, or an invented review as the reader's own.
    Show an example only when it is clearly an example and is not about the reader.
    A practice's own guidance in its Guide tab is such an example.
@@ -92,7 +91,7 @@ A pull request that adds or changes one of these screens adds a story for it.
 | Member, first feedback                        | The card, which explains itself                                                                                                       | The card's next step                                                                       | The card counts what resolves it.                                                      |
 | Ask Hephaestus, no review yet                 | What it can answer now, such as questions about the practices and the person's recent work                                            | Select an example question about the practices. It fills the composer and does not send.   | Answers that use observations or feedback wait for the first review.                   |
 
-While [Get started](#get-started) shows, its first-review step carries the words of the member rows above, so the empty feedback list does not say them twice.
+[Get started](#get-started)'s first-review step carries the words of the member rows above, so the two cannot disagree.
 
 The server owns each fact that a screen states.
 For example, the reason that no review can run comes from the review gate and the AI rule that admit a review.
@@ -110,7 +109,7 @@ It does not state a time that the server did not measure.
 | Notice in the page                           | The person must know or decide something, but not now                      | `Alert` as a region named by its title, first in the main content, one at a time                                    |
 | Setup list from real facts                   | An admin setting blocks value for members, or a member has steps before their first review | One row for each fact, with its status and a link to the page that changes it: `WorkspaceSetupSummary` for admins, [Get started](#get-started) for members |
 | Example questions                            | The person sees an empty conversation                                      | The conversation greeting. A question fills the composer.                                                           |
-| Guided tour                                  | A person wants the chain from work to feedback, or the levels under a page | `PracticeProfileTour`, offered once on a first visit, and started from the page or from an offer that follows state |
+| Guided tour                                  | A person wants the chain from work to feedback, or the levels under a page | `PracticeProfileTour`, started from the page, from a step of Get started, or from an offer that follows state       |
 
 A legend starts closed when the page shows the meaning that the reader needs.
 After the reader opens or closes it, it stays in that state until the reader changes it ([NN/g accordions](https://www.nngroup.com/articles/accordions-complex-content/)).
@@ -119,14 +118,14 @@ After the reader opens or closes it, it stays in that state until the reader cha
 
 | Pattern                                                                                  | Reason                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A tour that opens by itself more than once, or over a page that a link opened for a task | It blocks the person who came to act on feedback. See [the guided tour](#the-guided-tour).                                                                                                                                                                                                                                                                                                                                 |
+| A tour that opens by itself                                                              | It dims and blocks the page for a person who came to act on feedback. [Get started](#get-started) is the one first-visit open.                                                                                                                                                                                                                                                                                             |
 | A modal dialog for information or for an optional decision on load                       | Apple: "Avoid showing an alert when your app starts". GOV.UK has no modal component.                                                                                                                                                                                                                                                                                                                                       |
 | Sample feedback or a demo profile on the reader's own page                               | Rule 5                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | A mascot or a narrator                                                                   | Microsoft turned off its Office assistant by default in 2001 ([Microsoft](http://web.archive.org/web/20250401114434/https://news.microsoft.com/2001/04/11/farewell-clippy-whats-happening-to-the-infamous-office-assistant-in-office-xp/)). An assistant must be easy to call and easy to dismiss ([Amershi et al., CHI 2019](https://www.microsoft.com/en-us/research/publication/guidelines-for-human-ai-interaction/)). |
 | A beacon, a hotspot, or motion that loops to get attention                               | It pulls attention from the task. This ban is stricter than [WCAG 2.2.2](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html), which also allows a control to stop the motion.                                                                                                                                                                                                                                |
-| A "seen" flag in browser storage that decides whether guidance appears                   | The guidance comes back on each device. Use state, or the server. The tour's first-visit offer is the one exception, because it is an offer and costs one press to close.                                                                                                                                                                                                                                                  |
+| A "seen" flag in browser storage that decides whether guidance appears                   | The guidance comes back on each device. Use state, or the server. Get started's record is the one exception, because it decides only whether an offer shows, and a lost record costs one press.                                                                                                                                                                                                                         |
 | A tour library                                                                           | Some need an AGPL-3.0 or a paid license, such as [Shepherd.js](https://github.com/shipshapecode/shepherd) and [Intro.js](https://introjs.com/docs/getting-started/license). The tour's own spotlight is a few hundred lines that the stories test.                                                                                                                                                                         |
-| A checklist launcher that floats in a corner over every page                             | On a phone, it covers content and focused controls. See [Focus Not Obscured](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html) and [Get started](#get-started).                                                                                                                                                                                                                         |
+| A corner launcher that covers the page's end or focused controls                         | On a phone, it covers content and focused controls. The page needs room under it. See [Focus Not Obscured](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html) and [Get started](#get-started).                                                                                                                                                                                              |
 | A step that a press ticks, or progress drawn as a ring or a percentage                   | A tick that did not happen breaks rule 5's promise. Progress that lags behind what people expect lowers completion ([Conrad et al. 2010](https://pmc.ncbi.nlm.nih.gov/articles/PMC2910434)), and a first review can take days.                                                                                                                                                                                                                                          |
 | A target found by a selector or by text                                                  | A change to the words or the markup moves it silently. A component names its part with `data-tour-slot`, and a story fails on a lost part.                                                                                                                                                                                                                                                                                 |
 | A "What's new" dialog or a welcome dialog                                                | The release notes own changes. A welcome dialog interrupts on load.                                                                                                                                                                                                                                                                                                                                                        |
@@ -135,13 +134,16 @@ After the reader opens or closes it, it stays in that state until the reader cha
 
 Get started is the [setup list from real facts](#patterns-that-we-use) for a member.
 It lists the steps between the member and their first practice review, then ways to learn the page.
-It lives on the Practice profile, the home page where practices are on.
-A workspace without practices has no first review to lead to, so Activity has no list.
-Its setup questions come before the first page, and **Your AI choice** stays in the sidebar.
+A pill in the bottom-right corner of the workspace pages shows it, for example **Get started 1 of 3**.
+The pill opens the list in a card.
+Ask Hephaestus is a button in the header, so the corner is free for the list.
 
-While the list has a step open, a **Get started** row under **You** in the sidebar points to it.
-That row is the one way back to the list from any other page.
-
+- **Where it shows.** On the workspace pages, except the conversation, admin, settings, and legal pages.
+  Only for a member, and never in a user view, because the list is about the person who reads it.
+- **How long it shows.** The pill shows while a setup step is open.
+  After it first shows, it stays until the reader hides it.
+  It also goes when every setup step is done and the reader closes the card.
+  A member who has nothing to set up never sees it.
 - **Each setup step is a server fact.** There are three kinds of rows.
   The AI choice shows where the workspace asks for it.
   Each required account that the workspace offers has a row.
@@ -157,24 +159,40 @@ That row is the one way back to the list from any other page.
   A setting that only a workspace admin changes, such as practice reviews turned off, also leaves no step.
   Otherwise the list would wait for it on every page and never end.
   In both cases, the page's first-run state explains the reason, and an admin sees the link.
-  It does so also while a setup step keeps the list open.
 - **No step reads feedback.** Reading the cards delivers them, so "read your first feedback" is not a step. The card explains itself (see [Screens without data](#screens-without-data)).
-- **It ends.** The list goes when every setup step is done. Only its status line stays, to announce that ([Primer feature onboarding](https://primer.style/design/ui-patterns/feature-onboarding): "a beginning, middle, and end").
+- **It ends.** When every setup step is done, the card says so and offers **Close**.
+  Onboarding has "a beginning, middle, and end" ([Primer feature onboarding](https://primer.style/design/ui-patterns/feature-onboarding)).
+  After the reader closes it, the pill goes, and focus goes to the main content.
   Learn steps never hold it open.
   A finished tour chapter shows **Finished** from the browser's record for this account.
   That record can miss a chapter, but it never claims one.
-- **The reader can hide it.** Its heading is a disclosure button, and the browser keeps the choice for this account and workspace. The heading and the count stay, so the list is never gone by a press.
-- **It opens nothing.** The guided tour's first-visit offer stays the one thing that opens on a first visit. A learn step starts a tour chapter in place, and focus returns to the step when the tour closes.
-- **Ask Hephaestus stays where it is.** The list adds a learn step that links to the conversation page, only where Hephaestus can answer the member.
+- **The reader can hide it, and undo that.** **Hide this list** takes the pill away. A toast offers **Undo**.
+  **Get started** in the account menu shows the list again, also after it ended.
+- **It is the one thing that opens on a first visit.** The first time the pill shows for an account in a workspace, the card opens once by itself.
+  The card is non-modal. It does not take focus, and a polite status says that it opened.
+  One press, Escape, or a press outside closes it.
+  The open has limits, because people come to do a task (rule 2):
+  - It never opens over a level, a card, or a tour chapter that a link opened.
+  - It never opens on the AI choice page.
+  - It waits while an earlier first-visit question is open, such as whether to appear on the public activity page.
+  - A user view never opens it.
+- **It never covers the page's end.** While the pill shows, the page has room under its last row.
+  When the browser scrolls focus into view, it keeps that room free (`scroll-padding-bottom`).
+  See [WCAG 2.4.11](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html).
+  On a phone, the pill shows its icon and count.
+  The card is the screen's width less a 16 px gutter.
+- **A learn step starts a tour chapter.** It goes to the Practice profile with the chapter in the address (`?tour=how-it-works`), so Back works from any page.
+  The chapter ends on its last step, and the card opens again with the step marked.
+  The address lets go of the chapter when the tour closes.
+- **Memory stays in the browser.** One record for each account and workspace says whether the list has shown, was hidden, or ended.
+  The record decides only whether the offer shows, never what is true.
+  A lost record costs one more first-visit open, which costs one press. A server record would add a column, an export entry, and an erasure entry for that.
 
-A corner launcher was the first proposal, after the start card in [#3402](https://github.com/hephaestus-build/Hephaestus/pull/3402).
-The team rejected it for these reasons:
-
-- It covers content and focused controls on a phone.
-- It would move Ask Hephaestus out of a place that members know, for a list that lives for days.
-- Design systems place a setup list on the home page ([Shopify setup guide](https://shopify.dev/docs/api/app-home/patterns/compositions/setup-guide), [GitHub new user dashboard](https://github.blog/changelog/2025-06-12-new-user-dashboard-refresh)). The corner is vendor practice.
-
-The start card's shape stays: sections, a status on each step, and a return to the list when a chapter ends.
+The maintainers chose the corner over a list in the Practice profile.
+The corner reaches every workspace page, and the list leaves it when it ends.
+The design removes the costs of a corner.
+The page keeps room under the pill, the card is non-modal, and nothing in it loops for attention.
+The start card in [#3402](https://github.com/hephaestus-build/Hephaestus/pull/3402) gave the shape: sections, a status on each step, and a return to the list when a chapter ends.
 
 ## The guided tour
 
@@ -204,18 +222,12 @@ The research gives a direction for each point, not a limit.
   A change to a story must not change what the product teaches.
   This is firm: see rule 5.
 - **The chain ends on the reader's real state.** The last step of How it works shows where the reader stands now, from the server's own words.
-- **The start follows the moment.** On a first visit, the page offers the tour once, on its list of chapters.
-  The maintainers judged that waiting for the person to find the tour was too conservative.
-  Most people never start a tour that they do not see.
-  The offer has limits, because people come to do a task (rule 2):
-  - It opens only after the page has loaded, and never over a level or a card that a link opened. A person who follows a link to act on feedback goes straight to it.
-  - It waits while an earlier first-visit question is open, such as whether to appear on the public activity page. That question decides how the person's work is shown, so it comes first.
-  - It opens on the list of chapters, which says what the tour is. One press, or Escape, closes it with **Not now**.
-  - After it closes, focus goes to **Take the tour**, so the person sees where the tour comes back from.
-  - It opens once for each account in each browser and never again after that. A user view never opens it.
-
-  The record of the offer stays in the browser. On a new device the offer comes back once, which costs one press. A server record would add an export entry and an erasure entry for that.
-  Offers that follow state stay as well: the first-run state offers How it works, and a page with a single open card offers Your profile.
+- **The start follows the moment.** The tour never opens by itself.
+  A dialog that dims and blocks the page is not a first-visit offer (rule 2).
+  [Get started](#get-started) is the one first-visit open, and its learn steps start the tour's chapters.
+  **Take the tour** under the page title lists every chapter and continues a stopped one.
+  Offers that follow state stay as well.
+  The first-run state offers How it works, and a page with a single open card offers Your profile.
 
 - **Length follows the questions.** Each chapter answers one question that a person has at a known moment.
   An example is "How does my work become feedback?".
@@ -226,11 +238,11 @@ The research gives a direction for each point, not a limit.
   Thus, the person chooses a chapter, sees the chapters at all times in the guide, and can leave and continue.
 - **One voice.** The guide speaks as the product, with no named narrator and no "I" (rule 11).
 - **A real link hands over.** Where the reader can act on their own data, a link closes the tour and opens the real level.
-- **Memory can stay in the browser when nothing returns because of it.** The tour stores a place to continue, the finished chapters, and the first-visit offer.
+- **Memory can stay in the browser when nothing returns because of it.** The tour stores a place to continue and the finished chapters.
   Each record names the account that it belongs to, because people share browsers, for example on lab computers.
   A record of another account never counts: it would mark chapters as finished that this person never took.
   A record from before records named their account is ignored, not moved into an account.
-  A lost record costs a checkmark, or one more offer.
+  A lost record costs a checkmark.
 
 These parts are firm, because they are not matters of taste:
 
@@ -264,8 +276,8 @@ Before you add guidance, an empty state, or a first-run step, check these points
 2. The server owns each fact that the text states.
 3. No text claims a time that the server did not measure.
 4. No example is about the reader's own work.
-5. Nothing modal opens on load, except an offer that states its limits, as [the guided tour](#the-guided-tour) does.
-   A step in a list such as [Get started](#get-started) is done only when the server says so.
+5. Nothing modal opens on load. Only [Get started](#get-started) opens once on a first visit, and it is non-modal and states its limits.
+   A step in a list such as Get started is done only when the server says so.
 6. A fact that the person must keep also appears in a place that stays.
 7. The keyboard, screen-reader, and reduced-motion paths work.
 
