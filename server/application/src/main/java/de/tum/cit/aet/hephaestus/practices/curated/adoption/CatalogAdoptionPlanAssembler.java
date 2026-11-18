@@ -110,8 +110,8 @@ class CatalogAdoptionPlanAssembler {
         Practice existing = drafts.find(ctx.id(), plan.slug()).orElseThrow();
         // The folder in the practice repository owns the group of a practice edited there.
         if (existing.getEditedIn() == PracticeEditedIn.REPOSITORY
-                && (existing.getGroup() == null || !slug.equals(existing.getGroup().getSlug())))
-            return CatalogGroupPracticeAction.BLOCKED;
+                && (existing.getGroup() == null
+                        || !slug.equals(existing.getGroup().getSlug()))) return CatalogGroupPracticeAction.BLOCKED;
         return existing.getGroup() == null
                 ? CatalogGroupPracticeAction.MOVE_TO_GROUP
                 : slug.equals(existing.getGroup().getSlug())
