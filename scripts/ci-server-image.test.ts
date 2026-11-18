@@ -45,6 +45,14 @@ void test("a merge group that changes the server image starts that image and its
 		assert.match(String(job.if), condition);
 	}
 
+	// The startup time is a ratio against main's image on the same runner, so the job passes that image.
+	assert.ok(Array.isArray(job.steps), "Server-image.steps");
+	const startup = job.steps
+		.map((step) => record(step, "step"))
+		.find((step) => String(step.run).includes("scripts/server-image-startup.ts"));
+	assert.match(String(record(startup?.env, "startup env").BASE_SERVER_IMAGE), /\/server:main$/u);
+	assert.match(String(startup?.run), /"\$SERVER_IMAGE" "\$POSTGRES_IMAGE" "\$BASE_SERVER_IMAGE"$/u);
+
 	// A merge group aliases nothing, so the job needs this group's own PostgreSQL image.
 	const docker = record(record(jobs.Docker, "Docker").with, "Docker.with");
 	for (const expression of [docker.postgres_image_changed, docker.postgres]) {
