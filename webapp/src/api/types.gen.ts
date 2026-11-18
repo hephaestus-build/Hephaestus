@@ -3441,7 +3441,7 @@ export type McpConsentRequest = {
 	 */
 	loopbackRedirect: boolean;
 	/**
-	 * The account confirms with a passkey before it approves; the client then keeps its access until it is revoked or goes unused for 90 days
+	 * The workspace's admin passkey policy asks the account to confirm with a passkey before it approves
 	 */
 	passkeyRequired: boolean;
 	redirectHost: string;
