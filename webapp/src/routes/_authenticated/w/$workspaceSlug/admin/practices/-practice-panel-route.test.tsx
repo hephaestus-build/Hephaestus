@@ -8,8 +8,10 @@ import type { PracticeReleaseProposal } from "@/api/types.gen";
 import { definitionOf } from "@/components/admin/practice-editor/fixtures";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import type { Wire } from "@/lib/dates";
+import { problemType } from "@/lib/problem-detail";
 import { stringifySearch } from "@/lib/router-search";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt, loadRouteCode } from "@/test/router-harness";
 
 import {
@@ -285,5 +287,206 @@ describe("editing a workspace practice", () => {
 		);
 		await screen.findByDisplayValue("Their name");
 		expect(screen.queryByRole("alert")).toBeNull();
+	});
+});
+
+describe("a practice edited in the practice repository", () => {
+	const definition = definitionOf({ name: "Explain the change" });
+	const sourceCommit = "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39";
+	const inRepository = wirePractice({
+		slug: "explain-the-change",
+		definition,
+		editedIn: "REPOSITORY",
+		sourceCommit,
+	});
+	// Edit in Hephaestus keeps the current version, so only where it is edited changes.
+	const editable = wirePractice({ slug: "explain-the-change", definition, sourceCommit });
+	const editedInUrl =
+		"*/workspaces/:workspaceSlug/practice-repository/practices/:practiceSlug/edited-in";
+
+	beforeEach(() => {
+		server.use(
+			...practicesHandlers([inRepository]),
+			http.get("*/workspaces/:workspaceSlug/practice-repository", () =>
+				HttpResponse.json({
+					repositoryItemId: "7",
+					nameWithOwner: "acme/practices",
+					defaultBranch: "main",
+					directory: ".hephaestus/practices",
+				}),
+			),
+		);
+	});
+
+	it("shows it read-only, then makes it editable here after the admin confirms", async () => {
+		const sent: { practiceSlug: unknown; body: unknown }[] = [];
+		const answer = deferred();
+		server.use(
+			http.put(editedInUrl, async ({ params, request }) => {
+				sent.push({ practiceSlug: params.practiceSlug, body: await request.json() });
+				await answer.promise;
+				server.use(...practicesHandlers([editable]));
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+
+		renderRouteAt(at("practice", "explain-the-change"));
+		await screen.findByText("Edited in acme/practices", {}, ROUTE_RENDER_WAIT);
+		screen.getByText("4f2a9c1");
+		expect(screen.queryByRole("link", { name: "Edit practice" })).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: "Edit in Hephaestus" }));
+		const dialog = await screen.findByRole("alertdialog", {
+			name: "Edit “Explain the change” in Hephaestus?",
+		});
+		expect(sent).toStrictEqual([]);
+		fireEvent.click(within(dialog).getByRole("button", { name: "Edit in Hephaestus" }));
+
+		await waitFor(
+			() =>
+				expect(sent).toStrictEqual([
+					{ practiceSlug: "explain-the-change", body: { editedIn: "HEPHAESTUS" } },
+				]),
+			ROUTE_RENDER_WAIT,
+		);
+		// The request runs with the dialog open and busy, so the outcome cannot hide behind it.
+		await within(dialog).findByRole("button", { name: "Making it editable…" });
+		expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveProperty("disabled", true);
+		answer.resolve();
+
+		// The practice reloads as edited here, which closes the dialog onto the editor's link.
+		const edit = await screen.findByRole("link", { name: "Edit practice" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByText("Edited in acme/practices")).toBeNull();
+		// jest-dom's `toHaveFocus` is not registered in this project, so the focus is compared directly.
+		await waitFor(async () => expect(document.activeElement).toBe(edit), ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+	});
+
+	it("ends the request with the dialog, so a practice that moves back later does not reopen it", async () => {
+		server.use(
+			http.put(editedInUrl, () => {
+				server.use(...practicesHandlers([editable]));
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+
+		renderRouteAt(at("practice", "explain-the-change"));
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Edit in Hephaestus" }, ROUTE_RENDER_WAIT),
+		);
+		const dialog = await screen.findByRole("alertdialog");
+		fireEvent.click(within(dialog).getByRole("button", { name: "Edit in Hephaestus" }));
+		const edit = await screen.findByRole("link", { name: "Edit practice" }, ROUTE_RENDER_WAIT);
+		await waitFor(async () => expect(document.activeElement).toBe(edit), ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+
+		// Someone moves it back to the repository; the reader closes the practice and opens it again.
+		server.use(...practicesHandlers([inRepository]));
+		fireEvent.keyDown(document.body, { key: "Escape" });
+		await waitFor(async () => expect(screen.queryByRole("dialog")).toBeNull(), ROUTE_RENDER_WAIT);
+		fireEvent.click(
+			await screen.findByRole("link", { name: "Explain the change" }, ROUTE_RENDER_WAIT),
+		);
+
+		await screen.findByText("Edited in acme/practices", {}, ROUTE_RENDER_WAIT);
+		// The same level as before, but the request ended: nothing reopens its confirmation.
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+		screen.getByRole("button", { name: "Edit in Hephaestus" });
+	});
+
+	it("keeps a refusal in the dialog, in the server's words, and the practice read-only", async () => {
+		let requests = 0;
+		server.use(
+			http.put(editedInUrl, () => {
+				requests += 1;
+				return HttpResponse.json(
+					{
+						title: "Conflict",
+						status: 409,
+						detail: "The practice repository is being read. Try again in a moment.",
+					},
+					{ status: 409 },
+				);
+			}),
+		);
+
+		renderRouteAt(at("practice", "explain-the-change"));
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Edit in Hephaestus" }, ROUTE_RENDER_WAIT),
+		);
+		const dialog = await screen.findByRole("alertdialog");
+		fireEvent.click(within(dialog).getByRole("button", { name: "Edit in Hephaestus" }));
+
+		const refusal = await within(dialog).findByRole("alert", {}, ROUTE_RENDER_WAIT);
+		expect(refusal.textContent).toContain("We could not make it editable");
+		expect(refusal.textContent).toContain(
+			"The practice repository is being read. Try again in a moment.",
+		);
+		expect(requests).toBe(1);
+		// The dialog stays, ready to try again, over a practice that is still read-only.
+		within(dialog).getByRole("button", { name: "Edit in Hephaestus" });
+		screen.getByText("Edited in acme/practices");
+	});
+
+	it("asks an admin who has not signed in recently to confirm access, and keeps it read-only", async () => {
+		let requests = 0;
+		server.use(
+			http.put(editedInUrl, () => {
+				requests += 1;
+				return HttpResponse.json(
+					{
+						title: "Confirm access",
+						status: 403,
+						detail: "This action requires a recent sign-in. Sign in again to confirm access.",
+						type: problemType("step-up-required"),
+						maxAgeSeconds: 300,
+					},
+					{ status: 403 },
+				);
+			}),
+		);
+
+		renderRouteAt(at("practice", "explain-the-change"));
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Edit in Hephaestus" }, ROUTE_RENDER_WAIT),
+		);
+		const dialog = await screen.findByRole("alertdialog");
+		fireEvent.click(within(dialog).getByRole("button", { name: "Edit in Hephaestus" }));
+
+		await screen.findByRole("dialog", { name: "Confirm access" }, ROUTE_RENDER_WAIT);
+		expect(requests).toBe(1);
+		screen.getByText("Edited in acme/practices");
+	});
+
+	it("opens no editor for it, even from the editor's address", async () => {
+		renderRouteAt(at("practice-edit", "explain-the-change"));
+		await screen.findByText("Edited in acme/practices", {}, ROUTE_RENDER_WAIT);
+		// The level names the practice and where it is edited, not an editor it does not have.
+		screen.getByRole("heading", { name: "Explain the change" });
+		expect(screen.queryByText(/Update this practice’s review rules/u)).toBeNull();
+		expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+		expect(screen.queryByRole("textbox", { name: /Name/u })).toBeNull();
+	});
+
+	it("opens the editor there after Edit in Hephaestus, with focus at its top", async () => {
+		server.use(
+			http.put(editedInUrl, () => {
+				server.use(...practicesHandlers([editable]));
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		renderRouteAt(at("practice-edit", "explain-the-change"));
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Edit in Hephaestus" }, ROUTE_RENDER_WAIT),
+		);
+		const dialog = await screen.findByRole("alertdialog");
+		fireEvent.click(within(dialog).getByRole("button", { name: "Edit in Hephaestus" }));
+
+		await screen.findByRole("button", { name: "Save changes" }, ROUTE_RENDER_WAIT);
+		// The reload closes the dialog onto the editor's title, at the top of the form.
+		const title = screen.getByRole("heading", { name: "Edit practice" });
+		await waitFor(async () => expect(document.activeElement).toBe(title), ROUTE_RENDER_WAIT);
+		// The change is announced in the toaster's polite region.
+		await screen.findByText("You can edit this practice in Hephaestus again");
 	});
 });

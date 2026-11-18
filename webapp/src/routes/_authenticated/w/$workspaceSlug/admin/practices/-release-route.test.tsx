@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeAll, beforeEach, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { getPracticeGuidanceOptions } from "@/api/@tanstack/react-query.gen";
 import type { PracticeReleaseProposal } from "@/api/types.gen";
@@ -235,3 +235,77 @@ it.each(decisions)(
 		expect(screen.queryByText("We could not decline the update")).toBeNull();
 	},
 );
+
+describe("an update to a practice edited in the practice repository", () => {
+	const inRepository = wirePractice({
+		slug: proposal.practiceSlug,
+		definition: proposal.current,
+		versionId: "801",
+		editedIn: "REPOSITORY",
+	});
+	const unavailable = /edited in the practice repository, so you cannot accept an update here/u;
+
+	it("offers Decline but not Accept", async () => {
+		let declines = 0;
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practices", () => HttpResponse.json([inRepository])),
+			http.delete("*/workspaces/:workspaceSlug/practices/releases/:slug", () => {
+				declines += 1;
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		renderRouteAt("/w/acme/admin/practices/releases");
+
+		const choices = await screen.findByRole(
+			"radiogroup",
+			{ name: "Use a version for Review criteria" },
+			ROUTE_RENDER_WAIT,
+		);
+		fireEvent.click(within(choices).getByRole("radio", { name: "Proposed" }));
+		const accept = screen.getByRole("button", { name: "Accept selected fields" });
+		expect(accept.getAttribute("aria-disabled")).toBe("true");
+		screen.getByText(unavailable);
+
+		fireEvent.click(screen.getByRole("button", { name: "Decline this update" }));
+		await waitFor(() => expect(declines).toBe(1), ROUTE_RENDER_WAIT);
+	});
+
+	it("reloads after a conflict, so a practice moved there meanwhile is shown as it now is", async () => {
+		let accepts = 0;
+		server.use(
+			http.put("*/workspaces/:workspaceSlug/practices/releases/:slug", () => {
+				accepts += 1;
+				server.use(
+					http.get("*/workspaces/:workspaceSlug/practices", () =>
+						HttpResponse.json([inRepository]),
+					),
+				);
+				return HttpResponse.json(
+					{
+						title: "Conflict",
+						status: 409,
+						detail:
+							"This practice is edited in the practice repository. Change its folder there, or choose Edit in Hephaestus first.",
+					},
+					{ status: 409 },
+				);
+			}),
+		);
+		renderRouteAt("/w/acme/admin/practices/releases");
+
+		const choices = await screen.findByRole(
+			"radiogroup",
+			{ name: "Use a version for Review criteria" },
+			ROUTE_RENDER_WAIT,
+		);
+		fireEvent.click(within(choices).getByRole("radio", { name: "Proposed" }));
+		fireEvent.click(screen.getByRole("button", { name: "Accept selected fields" }));
+
+		await screen.findByText(unavailable, undefined, ROUTE_RENDER_WAIT);
+		expect(accepts).toBe(1);
+		expect(
+			screen.getByRole("button", { name: "Accept selected fields" }).getAttribute("aria-disabled"),
+		).toBe("true");
+		await screen.findByText("We could not accept the update");
+	});
+});

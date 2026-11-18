@@ -45,6 +45,8 @@ export interface PracticeReleaseReviewProps {
 	 * render this review, and each has its own source of updates and its own way back to it.
 	 */
 	declineNote: string;
+	/** Why this update cannot be accepted here, when it cannot. Declining stays available. */
+	acceptUnavailable?: string;
 	onAccept: (choices: Choices) => void;
 	onDecline: () => void;
 }
@@ -53,6 +55,7 @@ export function PracticeReleaseReview({
 	proposal,
 	pending,
 	declineNote,
+	acceptUnavailable,
 	onAccept,
 	onDecline,
 }: PracticeReleaseReviewProps) {
@@ -73,7 +76,7 @@ export function PracticeReleaseReview({
 	const [confirmingAccept, setConfirmingAccept] = useState(false);
 	const accept = () => onAccept(Object.fromEntries(choices));
 	const submit = () => {
-		if (!ready) {
+		if (!ready || acceptUnavailable !== undefined) {
 			return;
 		}
 		if (unsavedDraft) {
@@ -173,11 +176,21 @@ export function PracticeReleaseReview({
 					))}
 				</TableBody>
 			</Table>
+			{acceptUnavailable !== undefined && (
+				<p id={`${id}-accept-unavailable`} className="text-sm text-muted-foreground">
+					{acceptUnavailable}
+				</p>
+			)}
 			<div className="flex flex-wrap gap-2">
 				<Button
 					pending={pending === "accept"}
 					type="button"
-					disabled={!ready || pending !== null}
+					disabled={!ready || pending !== null || acceptUnavailable !== undefined}
+					// Focusable, so a keyboard reader reaches the button and hears why it is unavailable.
+					focusableWhenDisabled={acceptUnavailable !== undefined}
+					aria-describedby={
+						acceptUnavailable === undefined ? undefined : `${id}-accept-unavailable`
+					}
 					onClick={submit}
 				>
 					{pending === "accept" ? "Accepting selected fields…" : "Accept selected fields"}
