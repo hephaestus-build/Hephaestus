@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.repository;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
-import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
+import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.dto.ChangePracticeEditedInRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeRepositoryDTO;
@@ -23,7 +23,11 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 
-/** The workspace's practice repository, and where each practice is edited: workspace admins only (ADR 0118). */
+/**
+ * The workspace's practice repository, and where each practice is edited: workspace admins only (ADR 0118). Each change
+ * needs a recent sign-in. A stale session could otherwise point the workspace at a repository its holder can merge
+ * into and move practices there, so that the criteria and scripts of reviews come from that repository.
+ */
 @ConditionalOnServerRole
 @WorkspaceScopedController
 @RequestMapping("/practice-repository")
@@ -44,6 +48,7 @@ public class PracticeRepositoryController {
     }
 
     @PutMapping
+    @RequiresRecentSignIn(refusal = "PRACTICE_REPOSITORY_CHANGE")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_REPOSITORY")
     @Operation(
             operationId = "setPracticeRepository",
@@ -55,9 +60,8 @@ public class PracticeRepositoryController {
         return repositories.set(ctx, request);
     }
 
-    @RecentSignInExempt(
-            reason = "unsetting deletes nothing: every practice keeps its versions, and setting it again restores it")
     @DeleteMapping
+    @RequiresRecentSignIn(refusal = "PRACTICE_REPOSITORY_CHANGE")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_REPOSITORY")
     @Operation(
             operationId = "unsetPracticeRepository",
@@ -70,6 +74,7 @@ public class PracticeRepositoryController {
     }
 
     @PutMapping("/practices/{practiceSlug}/edited-in")
+    @RequiresRecentSignIn(refusal = "PRACTICE_REPOSITORY_CHANGE")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_DEFINITION")
     @Operation(
             operationId = "changePracticeEditedIn",
