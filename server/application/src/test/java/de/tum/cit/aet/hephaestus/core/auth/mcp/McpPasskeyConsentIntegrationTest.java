@@ -31,6 +31,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -69,7 +70,10 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
     private JdbcTemplate jdbc;
 
     @Autowired
-    private McpClientGrantCleanupJob cleanupJob;
+    private McpClientGrantRepository grantRepository;
+
+    @Autowired
+    private TransactionTemplate transactions;
 
     @Autowired
     private ClientSessionPruner sessionPruner;
@@ -211,7 +215,7 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
 
         // The session pruner runs first in the hour and deletes the lapsed session row before the grant cleanup.
         sessionPruner.prune();
-        cleanupJob.cleanup();
+        expireStale();
 
         assertThat(grantColumn(grant, "status")).isEqualTo("EXPIRED");
         flow.callTool(tokens.accessToken(), workspace.getWorkspaceSlug(), GET_REVIEW_SETTINGS)
@@ -253,7 +257,7 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                 grant);
         // The session pruner runs first in the hour and deletes the lapsed session row before the grant cleanup.
         sessionPruner.prune();
-        cleanupJob.cleanup();
+        expireStale();
 
         assertThat(grantColumn(grant, "status")).isEqualTo("EXPIRED");
         assertThat(flow.tokenError(flow.token(flow.refreshForm(tokens.refreshToken()))))
@@ -463,6 +467,16 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
 
     private static String text(JsonNode result) {
         return result.path("content").path(0).path("text").asString("");
+    }
+
+    /**
+     * What the hourly grant cleanup runs. The job itself holds a scheduler lock for at least a minute, so a second
+     * test in that minute would be skipped; the expiry query is the behavior under test.
+     */
+    private void expireStale() {
+        Instant now = Instant.now();
+        transactions.executeWithoutResult(
+                status -> grantRepository.expireStale(now, now.minus(McpClientGrantCleanupJob.CODE_TTL)));
     }
 
     /** The reason that the grant's revocation event records. */
