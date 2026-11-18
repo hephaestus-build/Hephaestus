@@ -407,6 +407,17 @@ export const policyDirectory = (platform: string) =>
 	path.join("tmp/platform-policy", platform.replace("/", "-"));
 
 /**
+ * The scans that could not run, each with its own error, or `undefined`. The message is what an issue and a
+ * person read first, so it names the cause, not only the image.
+ */
+export function unavailableScans(outcomes: readonly ScanOutcome[]): string | undefined {
+	const failed = outcomes.flatMap((outcome) =>
+		outcome.error === undefined ? [] : [`${outcome.image} (${outcome.platform}): ${outcome.error}`],
+	);
+	return failed.length === 0 ? undefined : `Platform scans unavailable: ${failed.join("; ")}`;
+}
+
+/**
  * The release vulnerability policy on both platforms of every platform image. The one-host installer
  * ships these images, so a fixable HIGH or CRITICAL passes only through a named exception
  * (scripts/write-platform-exceptions.ts).
@@ -422,11 +433,9 @@ async function enforcePlatformPolicy(subjects: readonly Subject[]): Promise<void
 			})),
 		);
 	}
-	const failed = outcomes
-		.filter((outcome) => outcome.error !== undefined)
-		.map((outcome) => `${outcome.image} (${outcome.platform})`);
-	if (failed.length > 0) {
-		throw new Error(`Platform scans unavailable: ${failed.join(", ")}`);
+	const unavailable = unavailableScans(outcomes);
+	if (unavailable !== undefined) {
+		throw new Error(unavailable);
 	}
 	const refused = outcomes
 		.filter((outcome) => !outcome.passed)
