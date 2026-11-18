@@ -164,6 +164,7 @@ const meta = {
 		onSetPracticeFeedbackMode: fn(),
 		onClearPracticeFeedbackMode: fn(),
 		onBulkSetFeedbackMode: fn(),
+		onBulkSetReviewer: fn(),
 	},
 	decorators: [withWidePage],
 	tags: ["autodocs"],
@@ -395,6 +396,63 @@ export const BulkSet: Story = {
 			],
 			"APPROVE_FIRST",
 		);
+	},
+};
+
+const SELECTED_HYGIENE = [
+	"pull-request-hygiene-states-the-motivation",
+	"pull-request-hygiene-links-the-issue-it-closes",
+];
+
+export const BulkReviewedByNobody: Story = {
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/u }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: /Select all 2 practices in Pull request hygiene/u }),
+		);
+		await userEvent.click(canvas.getByRole("button", { name: "Change selected practices" }));
+		const menu = within(await screen.findByRole("menu"));
+		await userEvent.click(await menu.findByRole("menuitem", { name: "Nobody" }));
+		await expect(args.onBulkSetReviewer).toHaveBeenCalledWith(SELECTED_HYGIENE, { by: "NOBODY" });
+	},
+};
+
+export const BulkReviewedByPeopleAsksForAReason: Story = {
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/u }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: /Select all 2 practices in Pull request hygiene/u }),
+		);
+		await userEvent.click(canvas.getByRole("button", { name: "Change selected practices" }));
+		const menu = within(await screen.findByRole("menu"));
+		await userEvent.click(await menu.findByRole("menuitem", { name: "People" }));
+
+		const dialog = within(await screen.findByRole("alertdialog"));
+		const confirm = dialog.getByRole("button", { name: "Let people review them" });
+		await expect(confirm).toBeDisabled();
+		await userEvent.type(dialog.getByLabelText("Why do people review them?"), "Mentors review these in class.");
+		await userEvent.click(confirm);
+		await expect(args.onBulkSetReviewer).toHaveBeenCalledWith(SELECTED_HYGIENE, {
+			by: "PEOPLE",
+			reason: "Mentors review these in class.",
+		});
+	},
+};
+
+export const BulkReviewedByPeopleCancelled: Story = {
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("button", { name: /Pull request hygiene/u }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: /Select all 2 practices in Pull request hygiene/u }),
+		);
+		await userEvent.click(canvas.getByRole("button", { name: "Change selected practices" }));
+		const menu = within(await screen.findByRole("menu"));
+		await userEvent.click(await menu.findByRole("menuitem", { name: "People" }));
+		const dialog = within(await screen.findByRole("alertdialog"));
+		await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+		await expect(args.onBulkSetReviewer).not.toHaveBeenCalled();
 	},
 };
 

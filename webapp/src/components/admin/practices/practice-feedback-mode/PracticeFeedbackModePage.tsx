@@ -8,7 +8,10 @@ import type {
 	PracticeReviewSettings,
 } from "@/api/types.gen";
 import { WorkspacePracticeDetailHoverCard } from "@/components/admin/practice-editor/WorkspacePracticeDetailHoverCard";
-import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
+import {
+	currentDefinition,
+	REVIEWED_BY_LABELS,
+} from "@/components/admin/practices/practice-definition-fields";
 import { practiceSetupLevel } from "@/components/admin/practices/practice-search";
 import { PracticeTreeSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import {
@@ -50,7 +53,8 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
-import { Field, FieldTitle } from "@/components/ui/field";
+import { Field, FieldDescription, FieldLabel, FieldTitle } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
 	Item,
 	ItemActions,
@@ -72,6 +76,8 @@ import {
 	feedbackModeSourceSentence,
 	WORKSPACE_DEFAULT_SOURCE,
 } from "@/lib/practice-feedback-mode";
+import type { BulkReviewer } from "@/hooks/use-practice-feedback-mode-mutations";
+
 import { FeedbackModeLadder } from "./FeedbackModeLadder";
 import {
 	countOverrides,
@@ -133,7 +139,12 @@ export interface PracticeFeedbackModePageProps {
 	onClearPracticeFeedbackMode: (practiceSlug: string) => void;
 	/** `null` makes every selected practice inherit again. */
 	onBulkSetFeedbackMode: (practiceSlugs: string[], feedbackMode: FeedbackMode | null) => void;
+	/** Each selected practice keeps its reads, script and scan, unused unless Hephaestus reviews it. */
+	onBulkSetReviewer: (practiceSlugs: string[], reviewer: BulkReviewer) => void;
 }
+
+const REVIEWER_ORDER = ["HEPHAESTUS", "PEOPLE", "NOBODY"] as const satisfies readonly BulkReviewer["by"][];
+const MAX_REASON_LENGTH = 500;
 
 export function PracticeFeedbackModePage({
 	workspaceSlug,
@@ -151,8 +162,11 @@ export function PracticeFeedbackModePage({
 	onSetPracticeFeedbackMode,
 	onClearPracticeFeedbackMode,
 	onBulkSetFeedbackMode,
+	onBulkSetReviewer,
 }: PracticeFeedbackModePageProps) {
 	const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+	// People need a reason, which every selected practice records; the dialog asks for it before the change.
+	const [peopleReason, setPeopleReason] = useState<{ slugs: string[]; reason: string } | null>(null);
 	const [openGroups, setOpenGroups] = useState<string[]>([]);
 	const [automaticPromotion, setAutomaticPromotion] = useState<AutomaticPromotion | null>(null);
 
@@ -183,6 +197,56 @@ export function PracticeFeedbackModePage({
 
 	return (
 		<div className="space-y-6">
+			<AlertDialog
+				open={peopleReason !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setPeopleReason(null);
+					}
+				}}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Let people review these practices?</AlertDialogTitle>
+						<AlertDialogDescription>
+							No automated review runs for {peopleReason?.slugs.length ?? 0}{" "}
+							{peopleReason?.slugs.length === 1 ? "practice" : "practices"}. Each keeps its read
+							sources and practice script, unused, so Hephaestus can review it again later.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<Field>
+						<FieldLabel htmlFor="bulk-people-reason">Why do people review them?</FieldLabel>
+						<Input
+							id="bulk-people-reason"
+							value={peopleReason?.reason ?? ""}
+							maxLength={MAX_REASON_LENGTH}
+							onChange={(event) =>
+								setPeopleReason((current) =>
+									current === null ? current : { ...current, reason: event.target.value },
+								)
+							}
+						/>
+						<FieldDescription>Every selected practice records this reason.</FieldDescription>
+					</Field>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={peopleReason === null || peopleReason.reason.trim() === ""}
+							onClick={() => {
+								if (peopleReason !== null) {
+									onBulkSetReviewer(peopleReason.slugs, {
+										by: "PEOPLE",
+										reason: peopleReason.reason,
+									});
+								}
+								setPeopleReason(null);
+							}}
+						>
+							Let people review them
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 			<AlertDialog
 				open={automaticPromotion !== null}
 				onOpenChange={(open) => {
@@ -265,6 +329,13 @@ export function PracticeFeedbackModePage({
 									return;
 								}
 								onBulkSetFeedbackMode(actionable, feedbackMode);
+							}}
+							onSetReviewer={(by) => {
+								if (by === "PEOPLE") {
+									setPeopleReason({ slugs: actionable, reason: "" });
+									return;
+								}
+								onBulkSetReviewer(actionable, { by });
 							}}
 							onClear={() => setSelected(new Set())}
 						/>
@@ -471,11 +542,13 @@ function BulkActionBar({
 	count,
 	bulk,
 	onSet,
+	onSetReviewer,
 	onClear,
 }: {
 	count: number;
 	bulk: { done: number; total: number } | null;
 	onSet: (feedbackMode: FeedbackMode | null) => void;
+	onSetReviewer: (by: BulkReviewer["by"]) => void;
 	onClear: () => void;
 }) {
 	if (count === 0 && bulk === null) {
@@ -518,6 +591,15 @@ function BulkActionBar({
 							<DropdownMenuItem onClick={() => onSet(null)}>
 								Use the inherited feedback mode
 							</DropdownMenuItem>
+							<DropdownMenuSeparator />
+							<DropdownMenuGroup>
+								<DropdownMenuLabel>Reviewed by</DropdownMenuLabel>
+								{REVIEWER_ORDER.map((by) => (
+									<DropdownMenuItem key={by} onClick={() => onSetReviewer(by)}>
+										{REVIEWED_BY_LABELS[by]}
+									</DropdownMenuItem>
+								))}
+							</DropdownMenuGroup>
 						</DropdownMenuContent>
 					</DropdownMenu>
 					<Button size="sm" variant="outline" disabled={bulk !== null} onClick={onClear}>

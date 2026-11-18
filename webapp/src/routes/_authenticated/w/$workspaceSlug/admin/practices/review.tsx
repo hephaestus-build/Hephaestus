@@ -266,6 +266,13 @@ function FeedbackModeSection({
 			onBulkSetFeedbackMode={(practiceSlugs, feedbackMode) => {
 				void feedbackModes.setManyPracticeFeedbackModes(practiceSlugs, feedbackMode);
 			}}
+			onBulkSetReviewer={(practiceSlugs, reviewer) => {
+				const chosen = new Set(practiceSlugs);
+				void feedbackModes.setManyReviewers(
+					(practicesQuery.data ?? []).filter((practice) => chosen.has(practice.slug)),
+					reviewer,
+				);
+			}}
 		/>
 	);
 }
