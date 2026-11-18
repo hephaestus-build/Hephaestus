@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.dto;
 
+import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -20,6 +21,13 @@ public record PracticeDTO(
         int position,
         FeedbackModeAssignmentDTO feedbackMode,
         CatalogOriginDTO catalogOrigin,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Where the practice is edited. A practice edited in the practice repository is read-only"
+                        + " here, except for its feedback mode and position")
+        PracticeEditedIn editedIn,
+
         Instant createdAt,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED, nullable = true) @Nullable

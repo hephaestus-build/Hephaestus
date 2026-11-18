@@ -29,6 +29,7 @@ class PracticeDefinitionSnapshotTest extends BaseUnitTest {
                 .containsExactlyInAnyOrder(
                         "slug",
                         "state",
+                        "editedIn",
                         "kind",
                         "versionId",
                         "reviewDigest",
