@@ -80,7 +80,7 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     void generatedPathsHaveAReset() {
         var monitor = new RepositoryToMonitor();
         monitor.setId(8L);
-        monitor.setNameWithOwner("owner/repo", "main");
+        monitor.setNameWithOwner("owner/repo");
         when(indexed.repositories(1)).thenReturn(Map.of(2L, new MonitoredRepositoryRef(2, 8, "owner/repo", "main")));
         monitor.setGeneratedPaths(List.of("dist/**"));
         when(monitors.findByWorkspaceId(1L)).thenReturn(List.of(monitor));
@@ -93,7 +93,7 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
         var monitor = new RepositoryToMonitor();
         monitor.setNativeId(1L);
         monitor.setId(8L);
-        monitor.setNameWithOwner("owner/repo", "main");
+        monitor.setNameWithOwner("owner/repo");
         when(indexed.repositories(1)).thenReturn(Map.of(2L, new MonitoredRepositoryRef(2, 8, "owner/repo", "main")));
         when(monitors.findByWorkspaceId(1L)).thenReturn(List.of(monitor));
         service.patchGeneratedPaths(
