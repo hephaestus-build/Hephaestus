@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { test } from "node:test";
 
 import {
@@ -79,17 +80,49 @@ const VERSIONED: VersionCommit = {
 	},
 };
 
-/** A queue that records every call in order and knows what is queued; each hook replaces one answer. */
+/** The queue's entries in order, as GitHub keeps them: a jump goes to the front, anything else to the back. */
+class OrderedQueue {
+	readonly ids: string[] = QUEUED.map((queued) => queued.id);
+	readonly known = new Map([...QUEUED, READY].map((known) => [known.id, known]));
+
+	entries(): QueueEntry[] {
+		return this.ids.flatMap((id) => this.known.get(id) ?? []);
+	}
+
+	numbers(): number[] {
+		return this.entries().map((queued) => queued.number);
+	}
+
+	remove(id: string): void {
+		const index = this.ids.indexOf(id);
+		if (index !== -1) {
+			this.ids.splice(index, 1);
+		}
+	}
+
+	add(added: QueueEntry, front: boolean): number {
+		this.remove(added.id);
+		this.known.set(added.id, added);
+		if (front) {
+			this.ids.unshift(added.id);
+		} else {
+			this.ids.push(added.id);
+		}
+		return this.ids.indexOf(added.id) + 1;
+	}
+}
+
+/** A queue that records every call in order and keeps the queue's order; each hook replaces one answer. */
 function fakeQueue(
 	overrides:
 		| Partial<QueueApi>
-		| ((state: { calls: string[]; inQueue: Set<string> }) => Partial<QueueApi>) = {},
+		| ((state: { calls: string[]; queue: OrderedQueue }) => Partial<QueueApi>) = {},
 ) {
 	const calls: string[] = [];
-	const inQueue = new Set(QUEUED.map((queued) => queued.id));
+	const queue = new OrderedQueue();
 	const api: QueueApi = {
 		versionPullRequest: async () => READY,
-		queued: async () => QUEUED.filter((queued) => inQueue.has(queued.id)),
+		queued: async () => queue.entries(),
 		changesVersion: async () => false,
 		unconsumed: async () => [],
 		approveRuns: async (pullRequest) => {
@@ -102,22 +135,32 @@ function fakeQueue(
 		},
 		dequeue: async (pullRequest) => {
 			calls.push(`dequeue #${pullRequest.number}`);
-			inQueue.delete(pullRequest.id);
+			queue.remove(pullRequest.id);
 		},
 		enqueue: async (pullRequest, jump) => {
 			calls.push(`enqueue #${pullRequest.number}${jump ? " jump" : ""}`);
-			inQueue.add(pullRequest.id);
-			return jump ? 1 : 2;
+			return queue.add(pullRequest, jump);
 		},
 		saveHeld: async (entries) => {
 			calls.push(`save ${entries.map((held) => `#${held.number}`).join(",")}`);
 		},
-		...(typeof overrides === "function" ? overrides({ calls, inQueue }) : overrides),
+		...(typeof overrides === "function" ? overrides({ calls, queue }) : overrides),
 	};
-	return { api, calls, inQueue };
+	return { api, calls, queue };
 }
 
-const options = { hold: true, timeoutMs: 60 * 60_000, pollMs: 30_000, log: () => undefined };
+/** A clock that only the fake sleep moves, so no test waits on real time. */
+let clock = 0;
+const options = {
+	hold: true,
+	timeoutMs: 60 * 60_000,
+	pollMs: 30_000,
+	log: () => undefined,
+	now: () => clock,
+	sleep: async (milliseconds: number) => {
+		clock += milliseconds;
+	},
+};
 
 void test("records the held list before any dequeue, then queues them behind the Version PR in order", async () => {
 	const { api, calls } = fakeQueue();
@@ -138,13 +181,13 @@ void test("approves a versioned head itself, right after that head's waiting run
 	const { api, calls } = fakeQueue({
 		versionPullRequest: async () => ({ ...READY, approved: false, checks: "pending" }),
 	});
-	let clock = 0;
+	let elapsed = 0;
 	await assert.rejects(
 		queueVersionPullRequest(api, {
 			...options,
-			now: () => clock,
+			now: () => elapsed,
 			sleep: async (milliseconds) => {
-				clock += milliseconds;
+				elapsed += milliseconds;
 			},
 		}),
 		/CI Status Gate has not passed/u,
@@ -154,20 +197,22 @@ void test("approves a versioned head itself, right after that head's waiting run
 });
 
 void test("never approves a head that is not the bot's version commit, and puts the queue back", async () => {
+	// The start check passes; the head that maintenance pushed later carries more.
+	const moved: VersionPullRequest = { ...READY, approved: false, headRefOid: "c".repeat(40) };
 	let reads = 0;
 	const { api, calls } = fakeQueue({
-		versionPullRequest: async () => ({ ...READY, approved: false }),
-		versionCommit: async () => {
-			// The start check passes; the head that maintenance pushed later carries more.
+		versionPullRequest: async () => {
 			reads += 1;
-			return reads === 1
-				? VERSIONED
-				: { ...VERSIONED, changes: [...VERSIONED.changes, { status: "M", path: "server/x.java" }] };
+			return reads === 1 ? READY : moved;
 		},
+		versionCommit: async (pullRequest) =>
+			pullRequest.headRefOid === moved.headRefOid
+				? { ...VERSIONED, changes: [...VERSIONED.changes, { status: "M", path: "server/x.java" }] }
+				: VERSIONED,
 	});
 	await assert.rejects(
 		queueVersionPullRequest(api, options),
-		/not a Version PR to approve: .*M server\/x\.java/u,
+		/not a Version PR to queue or approve: .*M server\/x\.java/u,
 	);
 	assert.equal(
 		calls.some((call) => call.startsWith("approve #")),
@@ -254,15 +299,27 @@ void test("package.json may change its version alone, and k3s.mdx its version li
 });
 
 void test("a moved head that is not a version commit gets neither its runs nor itself approved", async () => {
+	const moved: VersionPullRequest = {
+		...READY,
+		approved: false,
+		checks: "pending",
+		headRefOid: "d".repeat(40),
+	};
 	let reads = 0;
 	const { api, calls } = fakeQueue({
-		versionPullRequest: async () => ({ ...READY, approved: false, checks: "pending" }),
-		versionCommit: async () => {
+		versionPullRequest: async () => {
 			reads += 1;
-			return reads === 1 ? VERSIONED : { ...VERSIONED, committer: "a-writer" };
+			return reads === 1 ? READY : moved;
 		},
+		versionCommit: async (pullRequest) =>
+			pullRequest.headRefOid === moved.headRefOid
+				? { ...VERSIONED, committer: "a-writer" }
+				: VERSIONED,
 	});
-	await assert.rejects(queueVersionPullRequest(api, options), /not a Version PR to approve/u);
+	await assert.rejects(
+		queueVersionPullRequest(api, options),
+		/not a Version PR to queue or approve/u,
+	);
 	assert.equal(
 		calls.some((call) => call.startsWith("approve")),
 		false,
@@ -279,7 +336,7 @@ void test("waits while the Version PR is stale or unapproved, and approves only 
 		{ ...READY, approved: false },
 	];
 	const stale = [[".changeset/later.md"], [], [], []];
-	let clock = 0;
+	let elapsed = 0;
 	const approved: string[] = [];
 	const { api, calls } = fakeQueue({
 		versionPullRequest: async () => states.shift() ?? READY,
@@ -291,9 +348,9 @@ void test("waits while the Version PR is stale or unapproved, and approves only 
 	});
 	await queueVersionPullRequest(api, {
 		...options,
-		now: () => clock,
+		now: () => elapsed,
 		sleep: async (milliseconds) => {
-			clock += milliseconds;
+			elapsed += milliseconds;
 		},
 	});
 	assert.deepEqual(approved, [READY.headRefOid]);
@@ -330,14 +387,14 @@ void test("an error or an interrupt during the wait queues the held pull request
 });
 
 void test("gives up at the timeout, names the reason and queues the held pull requests again", async () => {
-	let clock = 0;
+	let elapsed = 0;
 	const { api, calls } = fakeQueue({ unconsumed: async () => [".changeset/later.md"] });
 	await assert.rejects(
 		queueVersionPullRequest(api, {
 			...options,
-			now: () => clock,
+			now: () => elapsed,
 			sleep: async (milliseconds) => {
-				clock += milliseconds;
+				elapsed += milliseconds;
 			},
 		}),
 		/gave up after 60 min: main merged 1 changesets .*later\.md/u,
@@ -379,7 +436,10 @@ void test("refuses before holding anything when the head is not a version commit
 	const foreign = fakeQueue({
 		versionCommit: async () => ({ ...VERSIONED, commitAuthor: "someone" }),
 	});
-	await assert.rejects(queueVersionPullRequest(foreign.api, options), /not a Version PR to queue/u);
+	await assert.rejects(
+		queueVersionPullRequest(foreign.api, options),
+		/not a Version PR to queue or approve/u,
+	);
 	assert.deepEqual(foreign.calls, []);
 
 	const versioned = fakeQueue({ changesVersion: async (pullRequest) => pullRequest.number === 12 });
@@ -416,11 +476,11 @@ void test("reads back the held list that a killed run left", () => {
 	assert.throws(() => parseHeld("{}"));
 });
 
-void test("a dequeue cut off in flight is still queued again", async () => {
-	const { api, calls, inQueue } = fakeQueue((state) => ({
+void test("a dequeue cut off in flight is still queued again, and the old order holds", async () => {
+	const { api, calls, queue } = fakeQueue((state) => ({
 		dequeue: async (pullRequest) => {
 			state.calls.push(`dequeue #${pullRequest.number}`);
-			state.inQueue.delete(pullRequest.id);
+			state.queue.remove(pullRequest.id);
 			if (pullRequest.number === 12) {
 				// GitHub applied the dequeue, but the answer never arrived.
 				throw new Error("socket hang up");
@@ -428,8 +488,9 @@ void test("a dequeue cut off in flight is still queued again", async () => {
 		},
 	}));
 	await assert.rejects(queueVersionPullRequest(api, options), /socket hang up/u);
-	assert.deepEqual(calls.slice(-2), ["enqueue #11", "enqueue #12"]);
-	assert.equal(inQueue.has("PR_13"), true);
+	// #13 was never dequeued, so it goes out and back in behind #11 and #12.
+	assert.deepEqual(queue.numbers(), [11, 12, 13]);
+	assert.deepEqual(calls.slice(-4), ["dequeue #13", "enqueue #11", "enqueue #12", "enqueue #13"]);
 });
 
 void test("a Version PR left behind others is named when its dequeue fails", async () => {
@@ -536,4 +597,102 @@ void test("the command line takes a positive timeout and refuses anything else",
 	assert.throws(() => parseArguments(["--timeout-minutes", "0"]), /positive number/u);
 	assert.throws(() => parseArguments(["--timeout-minutes", "--hold"]), /needs a value/u);
 	assert.throws(() => parseArguments(["--fast", "1"]), /not an option/u);
+});
+
+void test("the queue ends with the Version PR at the front and the held pull requests behind it in order", async () => {
+	const { api, queue } = fakeQueue();
+	await queueVersionPullRequest(api, options);
+	assert.deepEqual(queue.numbers(), [4719, 11, 12, 13]);
+});
+
+void test("a run that GitHub reports as completed and waiting for approval is approved", () => {
+	const head = READY.headRefOid;
+	const waiting = {
+		id: 7,
+		head_sha: head,
+		head_branch: "changeset-release/main",
+		event: "pull_request",
+		status: "completed",
+		conclusion: "action_required",
+		head_repository: { full_name: "owner/repo" },
+	};
+	assert.deepEqual(
+		ownWaitingRuns([waiting, { ...waiting, id: 8, conclusion: "success" }], head, "owner/repo").map(
+			(run) => run.id,
+		),
+		[7],
+	);
+});
+
+void test("an approved, green head that is not a version commit is never queued", async () => {
+	const foreign: VersionPullRequest = { ...READY, headRefOid: "b".repeat(40) };
+	let reads = 0;
+	const { api, calls } = fakeQueue({
+		versionPullRequest: async () => {
+			reads += 1;
+			return reads === 1 ? READY : foreign;
+		},
+		versionCommit: async (pullRequest) =>
+			pullRequest.headRefOid === foreign.headRefOid
+				? { ...VERSIONED, changes: [...VERSIONED.changes, { status: "M", path: "server/x.java" }] }
+				: VERSIONED,
+	});
+	await assert.rejects(queueVersionPullRequest(api, options), /M server\/x\.java/u);
+	assert.equal(calls.includes("enqueue #4719 jump"), false);
+});
+
+/** A queue where the jump applies but its answer is lost; `landsAtFront` says whether GitHub honoured it. */
+const lostJump = (landsAtFront: boolean) =>
+	fakeQueue((state) => ({
+		enqueue: async (pullRequest, jump) => {
+			state.calls.push(`enqueue #${pullRequest.number}${jump ? " jump" : ""}`);
+			const position = state.queue.add(pullRequest, jump && landsAtFront);
+			if (jump) {
+				throw new Error("502 Bad Gateway");
+			}
+			return position;
+		},
+	}));
+
+void test("a jump whose answer was lost is kept at the front, or taken out from behind others", async () => {
+	const front = lostJump(true);
+	await queueVersionPullRequest(front.api, options);
+	assert.deepEqual(front.queue.numbers(), [4719, 11, 12, 13]);
+
+	// Without a hold the others stay queued, so a jump that GitHub did not honour lands behind them.
+	const back = lostJump(false);
+	await assert.rejects(
+		queueVersionPullRequest(back.api, { ...options, hold: false, timeoutMs: 0 }),
+		/position 4, not at the front/u,
+	);
+	assert.deepEqual(back.queue.numbers(), [11, 12, 13]);
+});
+
+void test("a stalled forward call is cancelled, and the queue is put back through calls that are not", async () => {
+	const controller = new AbortController();
+	const forward = fakeQueue({
+		unconsumed: async () => {
+			const aborted = once(controller.signal, "abort");
+			controller.abort();
+			await aborted;
+			throw new Error("git fetch was cancelled");
+		},
+	});
+	const restoring = fakeQueue();
+	for (const held of QUEUED) {
+		restoring.queue.remove(held.id);
+	}
+	await assert.rejects(
+		queueVersionPullRequest(forward.api, {
+			...options,
+			signal: controller.signal,
+			restore: restoring.api,
+		}),
+		/cancelled/u,
+	);
+	assert.deepEqual(restoring.queue.numbers(), [11, 12, 13]);
+	assert.equal(
+		forward.calls.some((call) => call === "enqueue #11"),
+		false,
+	);
 });

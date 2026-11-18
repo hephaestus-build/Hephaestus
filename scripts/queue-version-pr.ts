@@ -108,6 +108,8 @@ export interface QueueOptions {
 	readonly now?: () => number;
 	readonly sleep?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 	readonly log?: (line: string) => void;
+	/** The queue that puts the held pull requests back, through calls that are never cancelled. */
+	readonly restore?: QueueApi;
 }
 
 /** The changesets that `git diff --name-status -z` reports as added: notes the Version PR did not consume. */
@@ -257,7 +259,8 @@ export function ownWaitingRuns(
 			run.head_sha === head &&
 			run.head_branch === VERSION_BRANCH &&
 			run.event === "pull_request" &&
-			run.status === "action_required" &&
+			// GitHub reports a run that waits for approval as completed, with that conclusion.
+			(run.status === "action_required" || run.conclusion === "action_required") &&
 			isRecord(run.head_repository) &&
 			run.head_repository.full_name === repository,
 	);
@@ -283,20 +286,32 @@ async function pause(milliseconds: number, signal?: AbortSignal): Promise<void> 
 }
 
 /** Approves the head's waiting runs and the head itself; the approvals do not wait for the checks. */
+/** Throws unless the head is one that versioning made; each commit is read once. */
+async function verifyHead(
+	api: QueueApi,
+	pullRequest: VersionPullRequest,
+	verified: Set<string>,
+): Promise<void> {
+	const head = pullRequest.headRefOid;
+	if (verified.has(head)) {
+		return;
+	}
+	const reason = unreviewable(await api.versionCommit(pullRequest));
+	if (reason !== undefined) {
+		throw new Error(
+			`#${pullRequest.number} at ${head} is not a Version PR to queue or approve: ${reason}`,
+		);
+	}
+	verified.add(head);
+}
+
+/** Approves a verified head's waiting runs, then the head itself; neither waits for the checks. */
 async function approveHead(
 	api: QueueApi,
 	pullRequest: VersionPullRequest,
 	log: (line: string) => void,
 ): Promise<void> {
-	if (pullRequest.checks !== "pending" && pullRequest.approved) {
-		return;
-	}
 	const head = pullRequest.headRefOid;
-	// Read the head before approving anything: its runs get the repository's secrets once approved.
-	const reason = unreviewable(await api.versionCommit(pullRequest));
-	if (reason !== undefined) {
-		throw new Error(`#${pullRequest.number} at ${head} is not a Version PR to approve: ${reason}`);
-	}
 	if (pullRequest.checks === "pending") {
 		const runs = await api.approveRuns(pullRequest);
 		if (runs > 0) {
@@ -314,6 +329,7 @@ async function approveHead(
 async function blocker(
 	api: QueueApi,
 	pullRequest: VersionPullRequest,
+	verified: Set<string>,
 	log: (line: string) => void,
 ): Promise<string | undefined> {
 	const head = pullRequest.headRefOid;
@@ -324,38 +340,31 @@ async function blocker(
 	if (pullRequest.checks === "failure") {
 		throw new Error(`${STATUS_GATE} failed for #${pullRequest.number} at ${head}`);
 	}
+	// Every head before it is approved or queued: an approval or green checks say nothing about content.
+	await verifyHead(api, pullRequest, verified);
 	await approveHead(api, pullRequest, log);
 	return pullRequest.checks === "success"
 		? undefined
 		: `${STATUS_GATE} has not passed for ${head.slice(0, 10)} yet`;
 }
 
-/**
- * Queues the Version PR at the front. Returns false when its head moved before the jump, so the wait
- * goes on; throws when GitHub refused. The entry never stays behind other pull requests.
- */
-async function jump(api: QueueApi, pullRequest: VersionPullRequest): Promise<boolean> {
-	let position: unknown;
+/** Where the entry stands in the queue: 1 at the front, `undefined` when it is not queued or unknown. */
+async function positionOf(api: QueueApi, entry: QueueEntry): Promise<number | undefined> {
 	try {
-		position = await api.enqueue(pullRequest, true);
-	} catch (error) {
-		let current = pullRequest;
-		try {
-			current = await api.versionPullRequest();
-		} catch {
-			// The refusal below says more than a failed re-read.
-		}
-		if (current.headRefOid !== pullRequest.headRefOid) {
-			return false;
-		}
-		throw new Error(
-			`GitHub refused to queue #${pullRequest.number} at the front (${message(error)}); run this as a maintainer, and never queue it at the back`,
-			{ cause: error },
-		);
+		const queued = await api.queued();
+		const index = queued.findIndex((candidate) => candidate.id === entry.id);
+		return index === -1 ? undefined : index + 1;
+	} catch {
+		return undefined;
 	}
-	if (isAtFront(position)) {
-		return true;
-	}
+}
+
+/** Takes the Version PR out of a place behind other pull requests, and says what happened. */
+async function leaveBack(
+	api: QueueApi,
+	pullRequest: QueueEntry,
+	position: unknown,
+): Promise<never> {
 	// Behind other pull requests, it could merge after changesets that it did not consume.
 	try {
 		await api.dequeue(pullRequest);
@@ -371,28 +380,75 @@ async function jump(api: QueueApi, pullRequest: VersionPullRequest): Promise<boo
 }
 
 /**
- * Queues the held pull requests in their old order, skipping any that are queued already, such as one
- * whose dequeue was cut off; returns those that GitHub refused.
+ * Queues the Version PR at the front. Returns false when its head moved before the jump, so the wait
+ * goes on; throws when GitHub refused. The entry never stays behind other pull requests, even when
+ * GitHub applied a jump whose answer was lost.
  */
-export async function requeue(
+async function jump(api: QueueApi, pullRequest: VersionPullRequest): Promise<boolean> {
+	let position: unknown;
+	try {
+		position = await api.enqueue(pullRequest, true);
+	} catch (error) {
+		const landed = await positionOf(api, pullRequest);
+		if (landed === 1) {
+			return true;
+		}
+		if (landed !== undefined) {
+			return leaveBack(api, pullRequest, landed);
+		}
+		let current = pullRequest;
+		try {
+			current = await api.versionPullRequest();
+		} catch {
+			// The refusal below says more than a failed re-read.
+		}
+		if (current.headRefOid !== pullRequest.headRefOid) {
+			return false;
+		}
+		throw new Error(
+			`GitHub refused to queue #${pullRequest.number} at the front (${message(error)}); run this as a maintainer, and never queue it at the back`,
+			{ cause: error },
+		);
+	}
+	return isAtFront(position) ? true : leaveBack(api, pullRequest, position);
+}
+
+/**
+ * Puts the held pull requests back in their old order and returns those that GitHub refused. Held
+ * pull requests that are still queued ahead of the first one that is not stay where they are; any
+ * still queued behind it go out and back in, so the old order holds after a partial hold.
+ */
+export async function restore(
 	api: QueueApi,
 	held: readonly QueueEntry[],
 	log: (line: string) => void,
 ): Promise<string[]> {
-	const queued = new Set<string>();
+	let queued = new Set<string>();
 	try {
-		for (const entry of await api.queued()) {
-			queued.add(entry.id);
-		}
+		const entries = await api.queued();
+		queued = new Set(entries.map((entry) => entry.id));
 	} catch {
 		// Unknown: every held pull request is queued again, and GitHub names those still queued.
 	}
+	const first = held.findIndex((entry) => !queued.has(entry.id));
+	if (first === -1) {
+		return [];
+	}
 	const refused: string[] = [];
-	for (const entry of held) {
-		if (queued.has(entry.id)) {
-			log(`#${entry.number} is still queued.`);
+	const back: QueueEntry[] = [];
+	for (const entry of held.slice(first)) {
+		if (!queued.has(entry.id)) {
+			back.push(entry);
 			continue;
 		}
+		try {
+			await api.dequeue(entry);
+			back.push(entry);
+		} catch (error) {
+			log(`#${entry.number} stays queued, ahead of its old place (${message(error)}).`);
+		}
+	}
+	for (const entry of back) {
 		try {
 			await api.enqueue(entry, false);
 			log(`Queued #${entry.number} again.`);
@@ -404,14 +460,9 @@ export async function requeue(
 }
 
 /** The checks before anything changes: the head, an earlier queue entry, a version change ahead. */
-async function preflight(api: QueueApi): Promise<QueueEntry[]> {
+async function preflight(api: QueueApi, verified: Set<string>): Promise<QueueEntry[]> {
 	const start = await api.versionPullRequest();
-	const startReason = unreviewable(await api.versionCommit(start));
-	if (startReason !== undefined) {
-		throw new Error(
-			`#${start.number} at ${start.headRefOid} is not a Version PR to queue: ${startReason}`,
-		);
-	}
+	await verifyHead(api, start, verified);
 	const queued = await api.queued();
 	if (queued.some((entry) => entry.id === start.id)) {
 		throw new Error(`Version PR #${start.number} is already queued`);
@@ -427,7 +478,11 @@ async function preflight(api: QueueApi): Promise<QueueEntry[]> {
 }
 
 /** Waits until the Version PR is fresh, approved and green, then queues it at the front. */
-async function waitAndJump(api: QueueApi, options: QueueOptions): Promise<void> {
+async function waitAndJump(
+	api: QueueApi,
+	options: QueueOptions,
+	verified: Set<string>,
+): Promise<void> {
 	const log = options.log ?? console.log;
 	const now = options.now ?? Date.now;
 	const sleep = options.sleep ?? pause;
@@ -435,7 +490,7 @@ async function waitAndJump(api: QueueApi, options: QueueOptions): Promise<void> 
 	for (;;) {
 		options.signal?.throwIfAborted();
 		const pullRequest = await api.versionPullRequest();
-		const reason = await blocker(api, pullRequest, log);
+		const reason = await blocker(api, pullRequest, verified, log);
 		if (reason === undefined && (await jump(api, pullRequest))) {
 			log(`Queued Version PR #${pullRequest.number} at the front of the merge queue.`);
 			return;
@@ -455,27 +510,26 @@ async function waitAndJump(api: QueueApi, options: QueueOptions): Promise<void> 
 
 export async function queueVersionPullRequest(api: QueueApi, options: QueueOptions): Promise<void> {
 	const log = options.log ?? console.log;
-	const queued = await preflight(api);
+	const verified = new Set<string>();
+	const queued = await preflight(api, verified);
 	const held = options.hold ? queued : [];
 	if (held.length > 0) {
 		// Recorded before the first dequeue, so even a killed run leaves the list behind.
 		await api.saveHeld(held);
 	}
 	let failure: unknown;
-	const taken: QueueEntry[] = [];
 	try {
 		for (const entry of held) {
 			options.signal?.throwIfAborted();
-			// Counted before the call: a dequeue cut off in flight may still have reached GitHub.
-			taken.push(entry);
 			await api.dequeue(entry);
 			log(`Held #${entry.number}.`);
 		}
-		await waitAndJump(api, options);
+		await waitAndJump(api, options, verified);
 	} catch (error) {
 		failure = error;
 	}
-	const refused = taken.length > 0 ? await requeue(api, taken, log) : [];
+	// Through its own queue: the forward calls may be cancelled, and putting the queue back must not be.
+	const refused = held.length > 0 ? await restore(options.restore ?? api, held, log) : [];
 	if (refused.length > 0) {
 		const lost = `could not queue again: ${refused.join("; ")}`;
 		throw new Error(failure === undefined ? lost : `${message(failure)}; ${lost}`, {
@@ -488,21 +542,18 @@ export async function queueVersionPullRequest(api: QueueApi, options: QueueOptio
 }
 
 /** `main` and the exact head: maintenance may move the branch between the listing and the fetch. */
-async function fetchMainAnd(head: string): Promise<void> {
-	await output("git", [
-		"fetch",
-		"--no-tags",
-		"--quiet",
-		"origin",
-		"+refs/heads/main:refs/remotes/origin/main",
-		head,
-	]);
+async function fetchMainAnd(head: string, signal?: AbortSignal): Promise<void> {
+	await output(
+		"git",
+		["fetch", "--no-tags", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main", head],
+		{ signal },
+	);
 }
 
 /** A file at a revision, or "" where the revision has none. */
-async function showFile(revision: string, file: string): Promise<string> {
+async function showFile(revision: string, file: string, signal?: AbortSignal): Promise<string> {
 	try {
-		return await output("git", ["show", `${revision}:${file}`]);
+		return await output("git", ["show", `${revision}:${file}`], { signal });
 	} catch {
 		return "";
 	}
@@ -517,17 +568,22 @@ async function exists(file: string): Promise<boolean> {
 	}
 }
 
-async function graphqlRequest(query: string, fields: Record<string, string>): Promise<unknown> {
+async function graphqlRequest(
+	query: string,
+	fields: Record<string, string>,
+	signal?: AbortSignal,
+): Promise<unknown> {
 	const args = ["api", "graphql", "-f", `query=${query}`];
 	for (const [key, value] of Object.entries(fields)) {
 		args.push("-f", `${key}=${value}`);
 	}
-	return parseJson(await output("gh", args));
+	return parseJson(await output("gh", args, { signal }));
 }
 
 /** The repository's queue, through the maintainer's `gh` login and the local clone. */
-async function githubQueue(heldFile: string): Promise<QueueApi> {
-	const viewed = await output("gh", [
+async function githubQueue(heldFile: string, signal?: AbortSignal): Promise<QueueApi> {
+	const call = async (command: string, args: string[]) => output(command, args, { signal });
+	const viewed = await call("gh", [
 		"repo",
 		"view",
 		"--json",
@@ -538,7 +594,7 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 	const repository = viewed.trim();
 	const [owner = "", name = ""] = repository.split("/");
 	const versionAt = async (ref: string) => {
-		const content = await output("gh", [
+		const content = await call("gh", [
 			"api",
 			`repos/${repository}/contents/package.json?ref=${ref}`,
 			"--jq",
@@ -551,7 +607,7 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 		return asString(manifest.version, "package.json version");
 	};
 	const gate = async (head: string) => {
-		const runs = await output("gh", [
+		const runs = await call("gh", [
 			"api",
 			`repos/${repository}/commits/${head}/check-runs?check_name=${encodeURIComponent(STATUS_GATE)}`,
 			"--jq",
@@ -563,7 +619,7 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 	};
 	return {
 		versionPullRequest: async () => {
-			const listed = await output("gh", [
+			const listed = await call("gh", [
 				"pr",
 				"list",
 				"--repo",
@@ -597,6 +653,7 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 			const response = await graphqlRequest(
 				'query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { mergeQueue(branch: "main") { entries(first: 100) { nodes { position pullRequest { id number headRefOid } } } } } }',
 				{ owner, name },
+				signal,
 			);
 			return asArray(
 				at(response, ["data", "repository", "mergeQueue", "entries", "nodes"], "merge queue"),
@@ -615,7 +672,7 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 		},
 		changesVersion: async (entry) => {
 			// Against the commit it branched from: an older branch still carries the older version.
-			const base = await output("gh", [
+			const base = await call("gh", [
 				"api",
 				`repos/${repository}/compare/main...${entry.headRefOid}`,
 				"--jq",
@@ -624,10 +681,10 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 			return (await versionAt(entry.headRefOid)) !== (await versionAt(base.trim()));
 		},
 		unconsumed: async (head) => {
-			await fetchMainAnd(head);
+			await fetchMainAnd(head, signal);
 			// The Version PR is one commit on the main commit it versions.
-			const parent = await output("git", ["rev-parse", `${head}^`]);
-			const changed = await output("git", [
+			const parent = await call("git", ["rev-parse", `${head}^`]);
+			const changed = await call("git", [
 				"diff",
 				"--name-status",
 				"-z",
@@ -640,7 +697,7 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 			return addedChangesets(changed);
 		},
 		approveRuns: async (pullRequest) => {
-			const listed = await output("gh", [
+			const listed = await call("gh", [
 				"api",
 				`repos/${repository}/actions/runs?head_sha=${pullRequest.headRefOid}&status=action_required&per_page=100`,
 				"--jq",
@@ -652,7 +709,7 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 				repository,
 			);
 			for (const run of runs) {
-				await output("gh", [
+				await call("gh", [
 					"api",
 					"--method",
 					"POST",
@@ -662,7 +719,7 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 			return runs.length;
 		},
 		versionCommit: async (pullRequest) => {
-			const author = await output("gh", [
+			const author = await call("gh", [
 				"api",
 				`repos/${repository}/pulls/${String(pullRequest.number)}`,
 				"--jq",
@@ -670,13 +727,13 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 			]);
 			const commit = asRecord(
 				parseJson(
-					await output("gh", ["api", `repos/${repository}/commits/${pullRequest.headRefOid}`]),
+					await call("gh", ["api", `repos/${repository}/commits/${pullRequest.headRefOid}`]),
 				),
 				"head commit",
 			);
 			const head = pullRequest.headRefOid;
-			await fetchMainAnd(head);
-			const changed = await output("git", [
+			await fetchMainAnd(head, signal);
+			const changed = await call("git", [
 				"diff",
 				"--name-status",
 				"-z",
@@ -684,12 +741,12 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 				`${head}^`,
 				head,
 			]);
-			const parents = await output("git", ["rev-list", "--parents", "--max-count=1", head]);
+			const parents = await call("git", ["rev-list", "--parents", "--max-count=1", head]);
 			const contents: Record<string, { before: string; after: string }> = {};
 			for (const file of IN_PLACE) {
 				contents[file] = {
-					before: await showFile(`${head}^`, file),
-					after: await showFile(head, file),
+					before: await showFile(`${head}^`, file, signal),
+					after: await showFile(head, file, signal),
 				};
 			}
 			return {
@@ -699,13 +756,15 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 				verification: String(at(commit, ["commit", "verification", "reason"], "verification")),
 				onMain:
 					parents.trim().split(" ").length === 2 &&
-					(await succeeds("git", ["merge-base", "--is-ancestor", `${head}^`, "origin/main"])),
+					(await succeeds("git", ["merge-base", "--is-ancestor", `${head}^`, "origin/main"], {
+						signal,
+					})),
 				changes: parseChanges(changed),
 				contents,
 			};
 		},
 		approve: async (pullRequest) => {
-			await output("gh", [
+			await call("gh", [
 				"api",
 				"--method",
 				"POST",
@@ -721,9 +780,8 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 		dequeue: async (entry) => {
 			await graphqlRequest(
 				"mutation($id: ID!) { dequeuePullRequest(input: { id: $id }) { clientMutationId } }",
-				{
-					id: entry.id,
-				},
+				{ id: entry.id },
+				signal,
 			);
 		},
 		enqueue: async (entry, front) => {
@@ -731,10 +789,12 @@ async function githubQueue(heldFile: string): Promise<QueueApi> {
 				? await graphqlRequest(
 						"mutation($id: ID!, $head: GitObjectID!) { enqueuePullRequest(input: { pullRequestId: $id, expectedHeadOid: $head, jump: true }) { mergeQueueEntry { position } } }",
 						{ id: entry.id, head: entry.headRefOid },
+						signal,
 					)
 				: await graphqlRequest(
 						"mutation($id: ID!) { enqueuePullRequest(input: { pullRequestId: $id }) { mergeQueueEntry { position } } }",
 						{ id: entry.id },
+						signal,
 					);
 			return at(
 				response,
@@ -791,15 +851,19 @@ export function parseArguments(args: readonly string[]): {
 	return parsed;
 }
 
+/** Margin for one stalled `git` or `gh` call past the deadline before it is cancelled. */
+const STALL_MS = 5 * 60_000;
+
 async function main(
 	heldFile: string,
 	parsed: ReturnType<typeof parseArguments>,
 	signal: AbortSignal,
 ) {
-	const api = await githubQueue(heldFile);
+	// Putting the queue back never shares a cancelled signal with the calls it recovers from.
+	const restoring = await githubQueue(heldFile);
 	if (parsed.resume !== undefined) {
-		const refused = await requeue(
-			api,
+		const refused = await restore(
+			restoring,
 			parseHeld(await readFile(parsed.resume, "utf8")),
 			console.log,
 		);
@@ -808,12 +872,16 @@ async function main(
 		}
 		return;
 	}
-	await queueVersionPullRequest(api, {
+	// Without a hold, the queue keeps moving: one attempt, no wait.
+	const timeoutMs = parsed.hold ? parsed.timeoutMinutes * 60_000 : 0;
+	// An interrupt or the deadline also cancels a `git` or `gh` call that stalls in flight.
+	const forward = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs + STALL_MS)]);
+	await queueVersionPullRequest(await githubQueue(heldFile, forward), {
 		hold: parsed.hold,
-		// Without a hold, the queue keeps moving: one attempt, no wait.
-		timeoutMs: parsed.hold ? parsed.timeoutMinutes * 60_000 : 0,
+		timeoutMs,
 		pollMs: 30_000,
-		signal,
+		signal: forward,
+		restore: restoring,
 	});
 }
 
