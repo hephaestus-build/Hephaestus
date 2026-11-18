@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.jwt;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
+import de.tum.cit.aet.hephaestus.core.webapp.WebAppRequests;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import org.jspecify.annotations.Nullable;
@@ -21,10 +22,13 @@ public class CookieBearerTokenResolver implements BearerTokenResolver {
     /**
      * Public endpoints that never read the caller's identity. Resolving a credential there only lets a
      * revoked one, such as an old session cookie the browser still holds for this host, answer 401 in
-     * place of the sign-in it was meant to replace. The dev sign-ins take their account from the request,
-     * and authorization still decides whether they are reachable at all.
+     * place of the sign-in it was meant to replace. The web app's page and files are among them: they
+     * must load to show that sign-in, and a cold load would otherwise check the cookie once per file.
+     * The dev sign-ins take their account from the request, and authorization still decides whether
+     * they are reachable at all.
      */
     private static final RequestMatcher IDENTITY_FREE = new OrRequestMatcher(
+            WebAppRequests.MATCHER,
             ApiPath.matchers().matcher(HttpMethod.GET, "/identity-providers"),
             ApiPath.matchers().matcher(HttpMethod.POST, "/auth/dev-login"),
             ApiPath.matchers().matcher(HttpMethod.GET, "/auth/dev-login/client"));

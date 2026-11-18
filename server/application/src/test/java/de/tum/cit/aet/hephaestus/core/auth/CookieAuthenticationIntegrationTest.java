@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import java.net.URI;
@@ -21,6 +22,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -54,6 +56,9 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager txManager;
+
+    @Autowired
+    private ApplicationContext context;
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
@@ -182,6 +187,26 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldServeTheWebAppWhenBrowserPresentsRevokedCredentials() {
+        IssuedAccount issued = issueRealTokenForNewAccount("Revoked Web App");
+        new TransactionTemplate(txManager)
+                .executeWithoutResult(status -> issuedJwtRepository.revokeAllForAccount(
+                        issued.accountId(), Instant.now(), IssuedJwt.RevokedReason.SIGN_OUT_EVERYWHERE));
+
+        // The page and its files must load, or the browser cannot show the sign-in that replaces the cookie.
+        for (String path : new String[] {"/", "/w/acme/practices", "/assets/index-abc123.js"}) {
+            webTestClient
+                    .get()
+                    .uri(ApiWebTestClient.root(context, path))
+                    .header(HttpHeaders.COOKIE, cookieName + "=" + issued.token())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+        }
     }
 
     @Test
