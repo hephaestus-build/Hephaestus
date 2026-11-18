@@ -198,3 +198,57 @@ await scanAll([{ image: "server", reference: "registry.example/server:main", rep
 		assert.match(await readFile(path.join(directory, "arguments"), "utf8"), /--no-annotations/u);
 	},
 );
+
+// A platform image such as k3s has no JVM. Its scan still catalogs the image with Syft, which every job that
+// scans images installs (ci-contract-release.test.ts), and needs no Grype.
+void test(
+	"a platform image without a JVM passes its scan with Syft and without Grype",
+	{ skip: process.platform === "win32" && "Linux image scans use POSIX executable stubs" },
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "platform-scan-"));
+		const bin = path.join(directory, "bin");
+		await mkdir(bin);
+		const stub = async (name: string, script: string) =>
+			writeFile(path.join(bin, name), `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+		await stub(
+			"docker",
+			`printf '%s' '${JSON.stringify({ manifests: [{ digest: DIGEST, platform: { os: "linux", architecture: "amd64" } }] })}'`,
+		);
+		await stub(
+			"trivy",
+			`while [ "$#" -gt 0 ]; do [ "$1" = --output ] && printf '{"SchemaVersion":2,"Results":[]}' > "$2"; shift; done`,
+		);
+		await stub(
+			"syft",
+			`printf x >> '${directory}/syft'
+for argument; do case "$argument" in syft-json=*) printf '{"artifacts":[]}' > "\${argument#syft-json=}";; esac; done`,
+		);
+		await stub("grype", `printf x >> '${directory}/grype'; exit 1`);
+		// The policy evaluator, which the scan starts as a node process.
+		await stub("node", `printf '%s' '{"status":"pass"}' > "$8"`);
+		const child = spawnSync(
+			process.execPath,
+			[
+				"--input-type=module",
+				"-e",
+				`
+import { scanAll } from ${JSON.stringify(new URL("lib/image-scan.ts", import.meta.url).href)};
+const outcomes = await scanAll([{ image: "k3s", reference: "docker.io/rancher/k3s:v1", repository: "docker.io/rancher/k3s" }], ${JSON.stringify(directory)}, { continueOnError: true });
+process.stdout.write(JSON.stringify(outcomes));
+`,
+			],
+			{ encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` } },
+		);
+		assert.equal(child.status, 0, child.stderr);
+		assert.deepEqual(JSON.parse(child.stdout), [
+			{ image: "k3s", passed: true, platform: "linux/amd64" },
+		]);
+		assert.equal(await readFile(path.join(directory, "syft"), "utf8"), "x");
+		await assert.rejects(readFile(path.join(directory, "grype"), "utf8"), /ENOENT/u);
+		const report = await readFile(
+			path.join(directory, `${reportStem("k3s", PLATFORM)}.json`),
+			"utf8",
+		);
+		assert.deepEqual(JSON.parse(report), { SchemaVersion: 2, Results: [] });
+	},
+);

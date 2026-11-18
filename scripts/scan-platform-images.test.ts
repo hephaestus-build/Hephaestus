@@ -12,6 +12,7 @@ import {
 	renderedSubjects,
 	runningBundledSubjects,
 	sarifForCategory,
+	unavailableScans,
 	verifyAgentSandbox,
 	verifyGvisorSums,
 	verifyIndexDigest,
@@ -199,4 +200,18 @@ void test("the gVisor pin must name the checksums that its release publishes", (
 	verifyGvisorSums(sums, gvisorTemplate(a, b));
 	assert.throws(() => verifyGvisorSums(sums, gvisorTemplate(b, a)), /not those of its release/u);
 	assert.throws(() => verifyGvisorSums(sums, "no pin"), /no gVisor pin/u);
+});
+
+void test("an unavailable platform scan names its own error", () => {
+	assert.equal(
+		unavailableScans([
+			{ image: "k3s", platform: "linux/amd64", passed: false, error: "spawn syft ENOENT" },
+			{ image: "platform-traefik", platform: "linux/amd64", passed: true },
+		]),
+		"Platform scans unavailable: k3s (linux/amd64): spawn syft ENOENT",
+	);
+	assert.equal(
+		unavailableScans([{ image: "k3s", platform: "linux/arm64", passed: false }]),
+		undefined,
+	);
 });

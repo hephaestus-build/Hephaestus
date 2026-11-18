@@ -4,7 +4,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
-import { isMap, isScalar, isSeq, visit } from "yaml";
+import { isMap, isScalar, isSeq, parse, visit } from "yaml";
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
 import {
 	assertNeeds,
@@ -299,17 +299,47 @@ void describe("ci-contract: release", () => {
 		// the advisory snapshot job does not.
 		const cicd = await readFile(".github/workflows/cicd.yml", "utf8");
 		const rescan = await readFile(".github/workflows/rescan-images.yml", "utf8");
-		const evaluatorJobs: [string, string][] = [
-			[".github/workflows/reusable-docker-build.yml", job(reusable, "build")],
-			[".github/workflows/cicd.yml", job(cicd, "upstream-images")],
-			[".github/workflows/rescan-images.yml main", job(rescan, "main")],
-			[".github/workflows/rescan-images.yml release", job(rescan, "release")],
-		];
-		for (const [file, section] of evaluatorJobs) {
-			assert.match(
-				section,
-				/setup-release-security-tools\n(?:\s+if: .*\n)?\s+with:\n\s+install-syft: "true"/u,
-				file,
+		// Every image scan also catalogs the image's JVM with Syft (lib/jvm-runtime.ts), so every job that
+		// scans an image installs Syft, whichever script it runs. The jobs are derived, not listed: the
+		// scheduled platform rescan once ran without Syft and failed every platform image.
+		const scansImages =
+			/node scripts\/(?:check-release-vulnerabilities|scan-main-images|scan-upstream-images|rescan-release-images|scan-deployed-images|generate-release-evidence)\.ts|node scripts\/scan-platform-images\.ts(?! --check-pins)/u;
+		const scanning: string[] = [];
+		for (const [file, source] of await workflowSources()) {
+			const jobs = asRecord(asRecord(parse(source), file).jobs, `${file} jobs`);
+			for (const [name, value] of Object.entries(jobs)) {
+				const jobSteps = asArray(asRecord(value, name).steps ?? [], `${file}#${name} steps`).map(
+					(entry) => asRecord(entry, "step"),
+				);
+				if (
+					!jobSteps.some((entry) => typeof entry.run === "string" && scansImages.test(entry.run))
+				) {
+					continue;
+				}
+				scanning.push(`${file}#${name}`);
+				const setup = jobSteps.find(
+					(entry) => entry.uses === "./.github/actions/setup-release-security-tools",
+				);
+				assert.ok(setup, `${file}#${name} scans images without the release security tools`);
+				const withInputs = setup.with === undefined ? {} : asRecord(setup.with, "with");
+				assert.notEqual(
+					withInputs["install-syft"],
+					"false",
+					`${file}#${name} scans images without Syft`,
+				);
+			}
+		}
+		for (const expected of [
+			".github/workflows/reusable-docker-build.yml#build",
+			".github/workflows/cicd.yml#upstream-images",
+			".github/workflows/rescan-images.yml#main",
+			".github/workflows/rescan-images.yml#release",
+			".github/workflows/rescan-images.yml#deployed",
+			".github/workflows/rescan-images.yml#dependencies-and-platform",
+		]) {
+			assert.ok(
+				scanning.includes(expected),
+				`${expected} no longer scans images: update this contract`,
 			);
 		}
 		assert.match(
