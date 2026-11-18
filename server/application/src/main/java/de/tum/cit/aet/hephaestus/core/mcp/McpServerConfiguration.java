@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.core.mcp;
 
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpAuthorizationService;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpCallGrant;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpGrantGuard;
-import de.tum.cit.aet.hephaestus.core.auth.spi.McpClientGrants;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -78,7 +78,7 @@ class McpServerConfiguration {
             List<McpTool> tools,
             ApplicationContext applicationContext,
             MeterRegistry meterRegistry,
-            McpClientGrants grants) {
+            McpAuthorizationService grants) {
         McpRefusals refusals = new McpRefusals(applicationContext);
         McpToolMetrics metrics = new McpToolMetrics(meterRegistry, tools);
         Runnable recordUse =
@@ -117,11 +117,10 @@ class McpServerConfiguration {
             return error(
                     "This client may only read this workspace. Ask an admin to connect it again and allow changes.");
         }
+        McpSchema.CallToolResult result;
         try {
-            McpSchema.CallToolResult result = tool.call(request.arguments() == null ? Map.of() : request.arguments());
+            result = tool.call(request.arguments() == null ? Map.of() : request.arguments());
             metrics.record(name, McpToolMetrics.Outcome.OK);
-            recordUse.run();
-            return result;
         } catch (AccessDeniedException refused) {
             metrics.record(name, McpToolMetrics.Outcome.REFUSED);
             return error("Your role in this workspace does not allow this tool.");
@@ -140,6 +139,13 @@ class McpServerConfiguration {
             }
             return failed(name, failed, metrics);
         }
+        // The tool's work is done and committed; a failure to record the use must not report it as refused.
+        try {
+            recordUse.run();
+        } catch (RuntimeException unrecorded) {
+            log.warn("mcp: could not record the use of the grant after tool {}", name, unrecorded);
+        }
+        return result;
     }
 
     /** A server error's message may name internals, so the client gets none of it. */

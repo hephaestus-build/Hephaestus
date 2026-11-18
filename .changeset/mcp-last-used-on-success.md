@@ -1,5 +1,4 @@
 ---
-"hephaestus": patch
 ---
 
-Workspace settings now count only an MCP client's successful calls as its last use. A client whose calls the admin passkey policy or its own role refuses no longer looks recently used.
+No release note of its own: this refines the MCP client's "last used" time that `mcp-consent-with-passkey.md` introduces in the same release, and that note already describes the refined rule.
