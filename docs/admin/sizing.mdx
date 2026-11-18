@@ -235,9 +235,12 @@ If the JVM refuses the AOT cache, it loads each class into Metaspace, and the st
 At the maximum, the server stops with `OutOfMemoryError: Metaspace`.
 `HephaestusMetaspaceNearLimit` warns when Metaspace grows slowly toward the maximum ([Alert rules](./alert-rules)).
 
-A file operation that blocks holds its carrier thread, so the scheduler adds a carrier.
-The JVM adds at most 256 such carriers.
 A socket call that blocks does not pin its carrier.
+An ordinary file read or write holds its carrier and adds no carrier.
+A synchronous, direct or `force` file operation lets the scheduler compensate. It can reactivate an idle carrier or add a carrier.
+The JVM allows 256 carriers in total, or one for each CPU if the CPUs are more.
+At that limit, such an operation holds its carrier and gets no replacement.
+
 `jvm_threads_live_threads` shows the count. If it comes near `server.jvm.threadCount`, raise the value.
 
 The 3 GiB default limit also applies to `small.yaml` and the one host.
