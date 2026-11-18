@@ -348,7 +348,7 @@ public class PracticeService {
     @Transactional
     public void moveAllToHephaestus(WorkspaceContext ctx) {
         lock(ctx);
-        for (Practice practice : practices.findByWorkspaceIdAndEditedIn(ctx.id(), PracticeEditedIn.REPOSITORY)) {
+        for (Practice practice : practices.findEditedIn(ctx.id(), PracticeEditedIn.REPOSITORY)) {
             var before = PracticeDefinitionSnapshot.of(practice, mapper);
             practice.setEditedIn(PracticeEditedIn.HEPHAESTUS);
             practices.save(practice);

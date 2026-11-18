@@ -94,6 +94,10 @@ interface PracticesPrivacyRepository extends Repository<Result, UUID> {
     @Query(value = "DELETE FROM practice_group WHERE workspace_id=:ws", nativeQuery = true)
     int deleteWorkspaceGroups(long ws);
 
+    @Modifying
+    @Query(value = "DELETE FROM workspace_practice_repository WHERE workspace_id=:ws", nativeQuery = true)
+    int deleteWorkspacePracticeRepository(long ws);
+
     @WorkspaceAgnostic("Transaction-local deferral permits deletion of mutually referenced practice/version rows")
     @Modifying
     @Query(value = "SET CONSTRAINTS ALL DEFERRED", nativeQuery = true)
