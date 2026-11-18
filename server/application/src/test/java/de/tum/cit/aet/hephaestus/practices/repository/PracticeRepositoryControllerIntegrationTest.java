@@ -1,17 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryQuery;
-import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryRef;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckouts;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
-import de.tum.cit.aet.hephaestus.practices.PracticeFiles;
+import de.tum.cit.aet.hephaestus.practices.PracticeService;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
@@ -19,37 +12,30 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.util.Map;
 import java.util.Objects;
-import org.jspecify.annotations.Nullable;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-/** The practice repository and moving a practice both ways (ADR 0118): each direction reverses the other. */
+/**
+ * Moving a practice between Hephaestus and the practice repository (ADR 0118): each direction reverses the other, and
+ * unsetting the repository reverses every move. Reading the folder from a checkout is {@link
+ * PracticeRepositoryFoldersTest}'s.
+ */
 class PracticeRepositoryControllerIntegrationTest extends BaseIntegrationTest {
-    private static final long REPOSITORY_ITEM = 4242;
     private static final String COMMIT = "0123456789abcdef0123456789abcdef01234567";
-
-    @MockitoBean
-    MonitoredRepositoryQuery monitored;
-
-    @MockitoBean
-    RepositoryCheckouts checkouts;
 
     @Autowired
     ReviewIntegrationData data;
 
     @Autowired
-    PracticeFiles files;
+    PracticeService practiceService;
 
     @Autowired
     PracticeVersionService versions;
@@ -63,28 +49,18 @@ class PracticeRepositoryControllerIntegrationTest extends BaseIntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
-    @TempDir
-    Path tree;
-
     Scenario scenario;
 
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
         scenario = data.scenario();
-        when(monitored.repositories(anyLong()))
-                .thenReturn(Map.of(
-                        REPOSITORY_ITEM, new MonitoredRepositoryRef(REPOSITORY_ITEM, 1, "acme/practices", "main")));
-        when(checkouts.checkout(anyLong(), eq("acme/practices"), eq("main"), any()))
-                .thenAnswer(call -> checkout());
     }
 
     @Test
-    void shouldMoveAPracticeToTheRepositoryAndBackToHephaestus() throws IOException {
-        setRepository();
-        commit(slug(), folder("Each pull request says why the change is needed."));
-
-        changeEditedIn("REPOSITORY").expectStatus().isNoContent().expectBody(Void.class);
+    void shouldMoveAPracticeToTheRepositoryAndBackToHephaestus() {
+        practiceService.moveToRepository(
+                context(), slug(), document("Each pull request says why the change is needed."), COMMIT);
 
         assertThat(editedIn()).isEqualTo(PracticeEditedIn.REPOSITORY);
         assertThat(jdbc.queryForObject(
@@ -107,47 +83,24 @@ class PracticeRepositoryControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldKeepTheVersionWhenTheFolderHoldsTheCurrentDefinition() throws IOException {
-        setRepository();
+    void shouldKeepTheVersionWhenTheFolderHoldsTheCurrentDefinition() {
         long versionBefore = currentVersionId();
-        commit(slug(), files.write(new CatalogPracticeDocument(kind(), null, currentDefinition())));
 
-        changeEditedIn("REPOSITORY").expectStatus().isNoContent().expectBody(Void.class);
+        practiceService.moveToRepository(
+                context(), slug(), new CatalogPracticeDocument(kind(), null, currentDefinition()), COMMIT);
 
         assertThat(editedIn()).isEqualTo(PracticeEditedIn.REPOSITORY);
         assertThat(currentVersionId()).isEqualTo(versionBefore);
     }
 
-    /** A missing folder would make the first sync treat the practice as removed, so the move is refused. */
     @Test
-    void shouldRefuseTheMoveWhenTheDefaultBranchHasNoFolderForThePractice() {
-        setRepository();
-
-        changeEditedIn("REPOSITORY").expectStatus().isEqualTo(409).expectBody(Void.class);
-
-        assertThat(editedIn()).isEqualTo(PracticeEditedIn.HEPHAESTUS);
-    }
-
-    @Test
-    void shouldRefuseTheMoveWithTheProblemsOfAnInvalidFolder() throws IOException {
-        setRepository();
-        commit(slug(), Map.of("practice.md", "no front matter"));
-
-        changeEditedIn("REPOSITORY")
-                .expectStatus()
-                .isEqualTo(422)
-                .expectBody()
-                .jsonPath("$.problems[0].file")
-                .isEqualTo("practice.md");
-
-        assertThat(editedIn()).isEqualTo(PracticeEditedIn.HEPHAESTUS);
-    }
-
-    @Test
-    void shouldMoveEveryPracticeBackToHephaestusWhenTheRepositoryIsUnset() throws IOException {
-        setRepository();
-        commit(slug(), folder("Each pull request says why the change is needed."));
-        changeEditedIn("REPOSITORY").expectStatus().isNoContent().expectBody(Void.class);
+    void shouldMoveEveryPracticeBackToHephaestusWhenTheRepositoryIsUnset() {
+        jdbc.update(
+                "INSERT INTO workspace_practice_repository (workspace_id, repository_item_id, updated_at)"
+                        + " VALUES (?, 4242, now())",
+                scenario.workspace().getId());
+        practiceService.moveToRepository(
+                context(), slug(), document("Each pull request says why the change is needed."), COMMIT);
 
         http.delete()
                 .uri(root() + "/practice-repository")
@@ -168,6 +121,13 @@ class PracticeRepositoryControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRefuseToMoveAPracticeWhileTheWorkspaceHasNoPracticeRepository() {
+        changeEditedIn("REPOSITORY").expectStatus().isEqualTo(409).expectBody(Void.class);
+
+        assertThat(editedIn()).isEqualTo(PracticeEditedIn.HEPHAESTUS);
+    }
+
+    @Test
     void shouldRefuseARepositoryThatTheWorkspaceDoesNotMonitor() {
         http.put()
                 .uri(root() + "/practice-repository")
@@ -180,22 +140,6 @@ class PracticeRepositoryControllerIntegrationTest extends BaseIntegrationTest {
                 .expectBody(Void.class);
     }
 
-    private void setRepository() {
-        http.put()
-                .uri(root() + "/practice-repository")
-                .headers(h -> h.setBearerAuth(token()))
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("repositoryItemId", String.valueOf(REPOSITORY_ITEM)))
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.nameWithOwner")
-                .isEqualTo("acme/practices")
-                .jsonPath("$.directory")
-                .isEqualTo(PracticeRepositorySetting.DEFAULT_DIRECTORY);
-    }
-
     private WebTestClient.ResponseSpec changeEditedIn(String editedIn) {
         return http.put()
                 .uri(root() + "/practice-repository/practices/" + slug() + "/edited-in")
@@ -205,20 +149,10 @@ class PracticeRepositoryControllerIntegrationTest extends BaseIntegrationTest {
                 .exchange();
     }
 
-    private void commit(String slug, Map<String, String> folder) throws IOException {
-        Path directory =
-                tree.resolve(PracticeRepositorySetting.DEFAULT_DIRECTORY).resolve(slug);
-        for (var file : folder.entrySet()) {
-            Path path = directory.resolve(file.getKey());
-            Files.createDirectories(Objects.requireNonNull(path.getParent()));
-            Files.writeString(path, file.getValue());
-        }
-    }
-
-    /** The scenario's practice, with other criteria, as the folder the practice repository holds. */
-    private Map<String, String> folder(String criteria) {
+    /** The scenario's practice with other criteria, as the folder the practice repository holds. */
+    private CatalogPracticeDocument document(String criteria) {
         var definition = currentDefinition();
-        return files.write(new CatalogPracticeDocument(
+        return new CatalogPracticeDocument(
                 kind(),
                 null,
                 new PracticeDefinition(
@@ -232,34 +166,13 @@ class PracticeRepositoryControllerIntegrationTest extends BaseIntegrationTest {
                         definition.script(),
                         definition.scan(),
                         definition.lineNotes(),
-                        definition.guidance())));
+                        definition.guidance()));
     }
 
-    private RepositoryCheckouts.Checkout checkout() {
-        return new RepositoryCheckouts.Checkout() {
-            @Override
-            public String repository() {
-                return "acme/practices";
-            }
-
-            @Override
-            public String head() {
-                return COMMIT;
-            }
-
-            @Override
-            public @Nullable String base() {
-                return null;
-            }
-
-            @Override
-            public Path directory() {
-                return tree;
-            }
-
-            @Override
-            public void close() {}
-        };
+    private WorkspaceContext context() {
+        var workspace = scenario.workspace();
+        return new WorkspaceContext(
+                workspace.getId(), workspace.getWorkspaceSlug(), workspace.getDisplayName(), null, null, Set.of());
     }
 
     private PracticeDefinition currentDefinition() {
@@ -268,16 +181,12 @@ class PracticeRepositoryControllerIntegrationTest extends BaseIntegrationTest {
 
     private long currentVersionId() {
         return Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT current_version_id FROM practice WHERE id = ?",
-                Long.class,
-                scenario.practice().getId()));
+                "SELECT current_version_id FROM practice WHERE id = ?", Long.class, scenario.practice().getId()));
     }
 
     private PracticeEditedIn editedIn() {
         return PracticeEditedIn.valueOf(Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT edited_in FROM practice WHERE id = ?",
-                String.class,
-                scenario.practice().getId())));
+                "SELECT edited_in FROM practice WHERE id = ?", String.class, scenario.practice().getId())));
     }
 
     private ItemKind kind() {
