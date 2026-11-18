@@ -179,7 +179,7 @@ public class McpClientGrant {
         this.endedAt = now;
     }
 
-    void expire(Instant now) {
+    public void expire(Instant now) {
         this.status = Status.EXPIRED;
         this.endedAt = now;
     }

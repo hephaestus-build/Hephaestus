@@ -276,7 +276,7 @@ public class ClientSessionService {
         if (!now.isBefore(session.getSessionExpiresAt())) {
             if (mcpSession) {
                 // An MCP grant that went unused until its deadline lapsed; it was not revoked.
-                grantRepository.expireBySession(session.getId(), now);
+                grantRepository.findActiveBySession(session.getId()).ifPresent(grant -> grant.expire(now));
             }
             end(session.getId(), IssuedJwt.RevokedReason.LOGOUT, now);
             return Optional.empty();

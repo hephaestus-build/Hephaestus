@@ -156,16 +156,6 @@ public interface McpClientGrantRepository extends JpaRepository<McpClientGrant, 
     @WorkspaceAgnostic("Retention expires MCP client grant rows across all workspaces")
     int expireStale(@Param("now") Instant now, @Param("codeCutoff") Instant codeCutoff);
 
-    /** A grant whose session reached its deadline lapsed: it ends as expired, not revoked. */
-    @Modifying
-    @Query("""
-        UPDATE McpClientGrant g
-           SET g.status = 'EXPIRED', g.endedAt = :now
-         WHERE g.clientSessionId = :sessionId AND g.status = 'ACTIVE'
-        """)
-    @WorkspaceAgnostic("A lapsed session ends without a workspace context, at its refresh")
-    int expireBySession(@Param("sessionId") UUID sessionId, @Param("now") Instant now);
-
     /** Ended grants keep their row for the retention period, so the config history can still name the client. */
     @Modifying
     @Query("DELETE FROM McpClientGrant g WHERE g.endedAt < :cutoff")
