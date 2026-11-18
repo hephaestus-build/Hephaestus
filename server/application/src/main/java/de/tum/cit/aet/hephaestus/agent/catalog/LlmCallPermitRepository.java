@@ -40,7 +40,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             int attempt,
             @Nullable Integer sessionRank) {}
 
-    /** Product feedback is the only call without a workspace. */
+    /** The calls without a workspace in flight: product feedback drafts and instance model probes. */
     @Query(
             value =
                     "SELECT count(*) FROM llm_call_permit WHERE pool_id=:poolId AND state='ACTIVE' AND workspace_id IS NULL",

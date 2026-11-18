@@ -168,6 +168,23 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
         assertThat(review.get(10, TimeUnit.SECONDS).isRevoked()).isFalse();
     }
 
+    /** A draft whose server stopped keeps an ACTIVE row with no renewal; the next draft prunes it and goes on. */
+    @Test
+    void shouldGrantADraftWhenTheDraftInFlightLapsedOnAStoppedServer() {
+        long pool = pool(4);
+        UUID lapsed = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO llm_call_permit
+                  (id,pool_id,worker_id,band,workspace_id,source_id,attempt,state,acquired_at,granted_at,renewed_at,requests,tokens)
+                VALUES (?,?,'stopped-server','BACKGROUND',NULL,?,0,'ACTIVE',clock_timestamp()-interval '10 minutes',
+                  clock_timestamp()-interval '10 minutes',clock_timestamp()-interval '10 minutes',1,0)
+                """, lapsed, pool, UUID.randomUUID());
+
+        assertThat(tryAdmit(first, pool, AgentRunBand.BACKGROUND, null)).isNotNull();
+        assertThat(jdbc.queryForObject("SELECT state FROM llm_call_permit WHERE id=?", String.class, lapsed))
+                .isNotEqualTo("ACTIVE");
+    }
+
     @Test
     void shouldGrantOnlyOneFeedbackCallWhenWorkersAcquireTogether() throws Exception {
         long pool = pool(4);
@@ -206,9 +223,9 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
 
         occupied.close();
 
-        var ended = new ArrayList<LlmCallPermits.@Nullable Permit>();
-        for (var draft : drafts) ended.add(draft.get(10, TimeUnit.SECONDS));
-        assertThat(ended).filteredOn(Objects::nonNull).hasSize(1);
+        var results = new ArrayList<LlmCallPermits.@Nullable Permit>();
+        for (var draft : drafts) results.add(draft.get(10, TimeUnit.SECONDS));
+        assertThat(results).filteredOn(Objects::nonNull).hasSize(1);
         assertThat(waitingDrafts(pool)).isZero();
     }
 

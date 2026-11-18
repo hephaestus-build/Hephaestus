@@ -55,6 +55,12 @@ final class LlmPoolMeters {
     static final List<String> WAIT_REASONS = List.of("none", "capacity", "cooldown");
 
     /**
+     * Why a call without a workspace (a product feedback draft or an instance model probe) got no permit: another one
+     * of its pool was in flight. Only the background band carries such calls.
+     */
+    static final String INSTANCE_CALL_IN_FLIGHT = "instance_call_in_flight";
+
+    /**
      * How a call that reached its provider ended. {@code refused}, {@code length} and {@code completed} are the
      * provider's own stop reason ({@link ModelStopReason}); {@code unanswered} is a served stream without content.
      * The proxy's own refusals never reach a provider: {@code llm_proxy_refused_total} counts them.
@@ -169,6 +175,7 @@ final class LlmPoolMeters {
                 if (!reason.equals("none")) abandonedCounter(slug, band, reason);
             }
         }
+        abandonedCounter(slug, AgentRunBand.BACKGROUND, INSTANCE_CALL_IN_FLIGHT);
         for (String reason : CANCEL_REASONS) cancelledCounter(slug, reason);
         AtomicLong coolingUntil = new AtomicLong(System.nanoTime());
         Gauge.builder(
