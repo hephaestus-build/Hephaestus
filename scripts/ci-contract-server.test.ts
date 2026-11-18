@@ -179,7 +179,7 @@ void describe("ci-contract: server", () => {
 			);
 			assert.equal(
 				caller.getIn(["jobs", "Build", "with", "migrations_changed"]),
-				`\${{ needs.detect-changes.outputs.migrations-changed }}`,
+				`\${{ needs.detect-changes.outputs.rename-only != 'true' && needs.detect-changes.outputs.migrations-changed == 'true' && 'true' || 'false' }}`,
 			);
 			const server = output("server-tests") === "true";
 			const shards = server ? serverShards(caller, queue, only) : [];
