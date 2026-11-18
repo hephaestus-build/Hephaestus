@@ -106,6 +106,19 @@ await test("a release package refuses a later quoted images key, which Helm woul
 	);
 });
 
+/**
+ * A startup probe's window in seconds: the shortest when every check fails at once, the longest when
+ * every check times out, because the kubelet starts no check before the last one ended.
+ */
+function startupWindow(probe: unknown): { shortest: number; longest: number } {
+	const period = Number(get(probe, "periodSeconds"));
+	const failures = Number(get(probe, "failureThreshold"));
+	return {
+		shortest: period * failures,
+		longest: Math.max(period, Number(get(probe, "timeoutSeconds"))) * failures,
+	};
+}
+
 await test("small: a rolling server can finish its drain and start within the upgrade's Helm timeout", () => {
 	const server = workload(rendered([...layersFor("small"), sandboxLayer]), "server");
 	assert.equal(get(server, "spec", "strategy", "type"), "RollingUpdate");
@@ -116,12 +129,11 @@ await test("small: a rolling server can finish its drain and start within the up
 	);
 	const timeout = /--wait-for-jobs --timeout (?<minutes>\d+)m\b/u.exec(installer)?.groups?.minutes;
 	const stop = Number(get(podSpec(server), "terminationGracePeriodSeconds"));
-	const probe = get(container(server), "startupProbe");
-	const start = Number(get(probe, "periodSeconds")) * Number(get(probe, "failureThreshold"));
-	assert.ok(stop + start <= Number(timeout) * 60, `${stop} s to stop, ${start} s to start`);
-	assert.ok(Number(get(server, "spec", "progressDeadlineSeconds")) >= stop + start);
+	const { shortest, longest } = startupWindow(get(container(server), "startupProbe"));
+	assert.ok(stop + longest <= Number(timeout) * 60, `${stop} s to stop, ${longest} s to start`);
+	assert.ok(Number(get(server, "spec", "progressDeadlineSeconds")) >= stop + longest);
 	// The server waits up to 10 minutes for the schema before it serves the probe; the kubelet must not kill it first.
-	assert.ok(start >= 10 * 60 + 60, `${start} s of startup probe for a 10-minute schema wait`);
+	assert.ok(shortest >= 10 * 60 + 60, `${shortest} s of startup probe for a 10-minute schema wait`);
 });
 
 await test("a started server becomes ready within seconds and keeps its 720 s start budget", () => {
@@ -130,10 +142,7 @@ await test("a started server becomes ready within seconds and keeps its 720 s st
 	// The kubelet runs no readiness probe before the startup probe passes, so its period delays every start.
 	assert.equal(get(startup, "periodSeconds"), 2);
 	assert.equal(get(server, "readinessProbe", "periodSeconds"), 5);
-	assert.equal(
-		Number(get(startup, "periodSeconds")) * Number(get(startup, "failureThreshold")),
-		720,
-	);
+	assert.deepEqual(startupWindow(startup), { shortest: 720, longest: 720 });
 });
 
 await test("admin assurance follows the operator's value and defaults to on", () => {
