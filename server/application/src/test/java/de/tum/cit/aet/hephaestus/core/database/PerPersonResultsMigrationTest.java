@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 @Tag("database")
 class PerPersonResultsMigrationTest {
     private static final TestDatabase DATABASE = PostgreSQLTestContainer.createDatabase("per_person_results");
-    private static final String CHANGELOG = "db/changelog/next/20261118043403-per-person-results-for-admins.xml";
+    private static final String CHANGELOG = "db/changelog/next/20261118060834-per-person-results-for-admins.xml";
 
     @Test
     void shouldKeepPerPersonResultsWhereReviewsRanAndRecordWhy() throws Exception {
