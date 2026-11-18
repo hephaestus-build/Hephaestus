@@ -15949,7 +15949,7 @@ export const SetPracticeRepositoryRequestSchema = {
 			description: "A path relative to the repository root; .hephaestus/practices when absent",
 			maxLength: 255,
 			minLength: 0,
-			pattern: "^(?!/)(?!.*(^|/)\\.\\.?(/|$))[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$",
+			pattern: "^(?!/)(?!.*(^|/)(\\.\\.?|\\.git)(/|$))[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$",
 		},
 		repositoryItemId: {
 			type: "string",
