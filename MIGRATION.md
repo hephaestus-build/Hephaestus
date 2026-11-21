@@ -52,6 +52,41 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
+### v1.0.0-rc.12
+
+#### 🔴 Stop every role before the provider-ref columns are dropped
+
+- **When:** in the window
+- **Action:** Do a [stopped schema upgrade](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades): scale the server to zero, run the migration, then start the upgraded server.
+
+The migration drops the columns `git_refs_fingerprint` and `git_refs_read_id` of `repository_to_monitor`.
+A server of the previous release still writes these columns, so it fails while it runs against the migrated schema.
+
+**Operators:** Stop every runtime role before the migration, and start only the upgraded server afterward.
+To roll back, stop every role and restore the verified backup from before the migration before you start the previous version.
+
+#### 🔴 Stop every role before recording reviews whose evidence was too large
+
+- **When:** in the window
+- **Action:** Stop every runtime role before the migration. The previous server cannot read a review with the new stop reason.
+
+A review whose captured evidence is larger than its sandbox holds now closes as Partial with its own stop reason, which says “The work’s evidence was larger than a review can hold.” Before, it said that something the review needs was not ready.
+
+**Operators:** Use [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades). Drain work and stop every runtime role before the migration, then start only the upgraded roles. The previous server cannot read a review with the new stop reason, so do not run old and new servers together during this change. Alerts on `practice_review_ended_total` that leave out `readiness_refused` must also leave out `evidence_too_large`.
+
+To roll back, stop every role and restore the verified backup from before the migration before starting the previous version.
+
+#### 🔴 Stop every role before changing the feedback stop reasons
+
+- **When:** in the window
+- **Action:** Stop every runtime role before the migration. An old server cannot read the new stop reasons.
+
+Feedback that cannot reach the work now records whether the work was removed, is no longer visible, or lost consent. The migration replaces the stop reason `APPROVAL_NO_LONGER_ELIGIBLE` with `ITEM_NOT_VISIBLE` on stored feedback. Old rows do not record whether access or consent was lost, so they all read as lost access.
+
+**Operators:** Apply this change in the stopped window before the 1.0.0 cut. Use [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades). Stop every runtime role before the migration and start only the upgraded roles afterward. An old server cannot read the new stop reasons, so do not run old and new servers together during this change.
+
+To roll back, stop every role and restore the verified backup from before the migration before starting the previous version.
+
 ### v1.0.0-rc.11
 
 #### 🔴 Stop every role before practices stay current on their own sources
