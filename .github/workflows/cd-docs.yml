@@ -138,7 +138,15 @@ jobs:
             echo "::error::The docs build of $TAG wrote neither docs/dist nor docs/build."
             exit 1
           fi
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
+      - uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           name: docs-build-latest
           path: ${{ steps.release-build.outputs.path }}
@@ -172,7 +180,15 @@ jobs:
           DOCS_BASE_URL: "/next/"
           DOCS_CHANNEL: next
           DOCS_RELEASE: ${{ needs.release-ref.outputs.tag }}
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
+      - uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           name: docs-build-next
           path: docs/dist

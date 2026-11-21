@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       actions: read
+      # The annotations that tell a job lost its reports.
+      checks: read
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,7 +35,7 @@ jobs:
         run: vp run report:flakes
       - name: Retain the report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: flake-report-${{ github.run_id }}
           path: tmp/ci-metrics/flakes.json

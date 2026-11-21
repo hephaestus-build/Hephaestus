@@ -176,7 +176,7 @@ jobs:
       # A shard with failing tests still writes its blob, so the report names the failures.
       - name: Upload the web app's test shard
         if: env.QUALITY_LEG == 'webapp-tests' && !cancelled()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: ${{ github.job }}-blob-${{ github.run_attempt }}
           path: webapp/test-results/blobs
@@ -186,8 +186,9 @@ jobs:
       # The log names a file that PMD could not analyze, not why; its XML report keeps the stack trace.
       - name: Retain the PMD report
         if: env.QUALITY_LEG == 'server' && failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: server-pmd-report-${{ github.run_attempt }}
           path: server/application/build/reports/pmd
           retention-days: 14
@@ -265,8 +266,9 @@ jobs:
 
       - name: Retain application test reports
         if: (env.QUALITY_LEG == 'webapp-report' || env.QUALITY_LEG == 'extension') && !cancelled()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: ${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}-unit-reports-${{ github.run_attempt }}
           path: ${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}/test-results
           retention-days: 14
@@ -281,8 +283,9 @@ jobs:
 
       - name: Upload application test metrics
         if: (env.QUALITY_LEG == 'webapp-report' || env.QUALITY_LEG == 'extension') && !cancelled()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: test-metrics-${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}-unit
           path: ci-metrics/${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}-unit.json
           if-no-files-found: ignore
@@ -291,12 +294,13 @@ jobs:
       # The zip a Chrome Web Store submission uploads, from the same build the gates just judged.
       - name: Upload the extension package
         if: env.QUALITY_LEG == 'extension'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: extension-chrome-${{ github.run_attempt }}
           path: extension/.output/*-production-chrome.zip
           include-hidden-files: true
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Save Vite task cache
@@ -668,8 +672,9 @@ jobs:
           fail-on-empty: false
       - name: Retain full Storybook and visual test diagnostics
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: storybook-reports-${{ github.run_attempt }}
           path: |
             webapp/test-results

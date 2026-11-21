@@ -941,8 +941,9 @@ jobs:
 
       - name: Keep the gate result
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: feedback-eval-gate
           path: ${{ runner.temp }}/feedback-eval-gate
           retention-days: 14
@@ -1004,7 +1005,7 @@ jobs:
           install-syft: "false"
       - uses: ./.github/actions/download-trivy-db
         id: database
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: ./.github/actions/upload-artifact-retry
         id: snapshot
         with:
           name: trivy-db-${{ github.run_id }}-${{ github.run_attempt }}
@@ -1065,7 +1066,7 @@ jobs:
       # The gate's exit status alone cannot say which digest carries which finding.
       - name: Upload the vulnerability policy results
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: vulnerability-policy-upstream
           path: |
@@ -1187,7 +1188,7 @@ jobs:
           unzip -p "${jars[0]}" META-INF/MANIFEST.MF | grep '^Main-Class: org.springframework.boot.loader' >/dev/null
           unzip -l "${jars[0]}" | grep -q ' BOOT-INF/classes/web-app/index\.html$'
       - name: Upload the packaged server
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: ${{ env.SERVER_BUILD_ARTIFACT }}
           path: |
@@ -1201,8 +1202,6 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
-          # A re-run of failed jobs keeps this artifact; a re-run of all jobs replaces it.
-          overwrite: true
 
   Build:
     uses: ./.github/workflows/ci-build.yml
@@ -1489,19 +1488,38 @@ jobs:
           docker pull "$APPLICATION_IMAGE"
           node scripts/sandbox-security.ts --image "$IMAGE" --application-image "$APPLICATION_IMAGE" --report "$RUNNER_TEMP/sandbox-security.json"
 
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        if: always()
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Retain sandbox qualification summary
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: sandbox-security-preflight-summary
           path: ${{ runner.temp }}/sandbox-security.json
           if-no-files-found: warn
           retention-days: 7
 
       # An exit status cannot say which subject carries which finding.
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        if: ${{ !cancelled() }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Upload the evidence bundle
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           name: release-evidence-preflight
           path: evidence

@@ -150,10 +150,20 @@ jobs:
           node scripts/sandbox-footprint.ts --stage "$STAGE" --image "$IMAGE" --reviews 2 \
             --label "nightly-$COMMIT" --work sandbox-footprint
       # The report, each container's log and the raw samples: a failure is read from these.
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        if: always() && steps.queue.outputs.run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Keep the report, the logs and the samples
         if: always() && steps.queue.outputs.run == 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: sandbox-footprint
           path: sandbox-footprint/
           if-no-files-found: warn

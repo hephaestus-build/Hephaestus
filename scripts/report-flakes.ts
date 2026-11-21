@@ -13,10 +13,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // The step of a CI job that uploads its `*-reports-<attempt>` artifact. report-flakes.test.ts keeps
 // every such step named this way.
 export const REPORT_STEP = /^Retain\b.*\btest\b/u;
+// The step still succeeds when upload-artifact-retry loses its upload, and the action warns with this title.
+export const LOST_REPORTS = "Reports not retained";
 // The gate fails because another job failed; it never names a flaky test of its own.
 const AGGREGATE_JOBS = new Set(["CI Status Gate"]);
 
 export interface AttemptJob {
+	id: number;
 	name: string;
 	conclusion: string | null;
 	/** An attempt lists every job; one it did not rerun keeps its earlier start. */
@@ -73,7 +76,11 @@ export function attemptJobs(value: unknown): AttemptJob[] {
 	return asArray(value, "jobs").map((entry) => {
 		const job = asRecord(entry, "job");
 		const steps = job.steps === undefined ? [] : asArray(job.steps, "steps");
+		if (typeof job.id !== "number") {
+			throw new TypeError("job.id must be a number");
+		}
 		return {
+			id: job.id,
 			name: asString(job.name, "job.name"),
 			conclusion: job.conclusion === null ? null : asString(job.conclusion, "job.conclusion"),
 			startedAt: job.started_at === null ? null : asString(job.started_at, "job.started_at"),
@@ -161,6 +168,26 @@ export function attributable(
 					rerun?.conclusion === "failure" && rerun.reported && rerun.startedAt !== before?.startedAt
 				);
 			}),
+	);
+}
+
+/** Whether a job's check annotations say that upload-artifact-retry lost its reports. */
+export function lostReports(pages: readonly unknown[]): boolean {
+	return pages
+		.flatMap((page) => asArray(page, "annotations"))
+		.some((annotation) => isRecord(annotation) && annotation.title === LOST_REPORTS);
+}
+
+/** The attempts, with each job whose reports were lost marked as not reported. */
+export function withoutLost(
+	attempts: ReadonlyMap<number, readonly AttemptJob[]>,
+	lost: ReadonlySet<number>,
+): Map<number, AttemptJob[]> {
+	return new Map(
+		[...attempts].map(([attempt, jobs]) => [
+			attempt,
+			jobs.map((job) => (lost.has(job.id) ? { ...job, reported: false } : job)),
+		]),
 	);
 }
 
@@ -345,7 +372,30 @@ async function failedTestsOf(
 		reportArtifacts(artifacts, attempt),
 	);
 	const later = reportArtifacts(artifacts, lastAttempt);
-	if (earlier.length === 0 || !attributable(attempts, flaky, lastAttempt)) {
+	if (earlier.length === 0) {
+		return null;
+	}
+	// A job whose reports were lost cannot have its failed tests subtracted, so it must not count as reported.
+	const checked = [...attempts]
+		.filter(
+			([attempt]) => attempt === lastAttempt || flaky.some((entry) => entry.attempt === attempt),
+		)
+		.flatMap(([, jobs]) => jobs.filter((job) => job.conclusion === "failure" && job.reported));
+	const lost = new Set<number>();
+	try {
+		for (const job of checked) {
+			if (
+				lostReports(await api(`repos/${repository}/check-runs/${job.id}/annotations?per_page=100`))
+			) {
+				lost.add(job.id);
+			}
+		}
+	} catch (error) {
+		// Unread annotations leave this run's tests unknown, not the whole report.
+		process.stderr.write(`Run ${runId}: annotations unreadable (${String(error)})\n`);
+		return null;
+	}
+	if (!attributable(withoutLost(attempts, lost), flaky, lastAttempt)) {
 		return null;
 	}
 	const directory = await mkdtemp(path.join(tmpdir(), "report-flakes-"));

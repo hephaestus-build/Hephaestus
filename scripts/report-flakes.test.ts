@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { glob, readFile } from "node:fs/promises";
 import { test } from "node:test";
 
@@ -10,12 +11,15 @@ import {
 	failedTestCases,
 	flakyJobs,
 	flakyTests,
+	LOST_REPORTS,
+	lostReports,
 	REPORT_STEP,
 	renderFlakes,
 	reportArtifacts,
 	rerunsOf,
 	runOutcomes,
 	completedRuns,
+	withoutLost,
 } from "./report-flakes.ts";
 
 const job = (
@@ -25,6 +29,11 @@ const job = (
 	startedAt = "2026-10-24T10:00:00Z",
 	reported = true,
 ): AttemptJob => ({
+	// A stable ID per job and start, as the API gives one job of one attempt.
+	id: Number.parseInt(
+		createHash("sha256").update(`${name} ${startedAt}`).digest("hex").slice(0, 8),
+		16,
+	),
 	name,
 	conclusion,
 	startedAt,
@@ -110,6 +119,14 @@ void test("tests stay unknown unless every never-passing job ran again in the la
 		[2, [job("A", "success", [], at(11)), job("B", "failure", [], at(11), false)]],
 	]);
 	assert.equal(attributable(unreported, flaky, 2), false);
+	// B's report step succeeded, but upload-artifact-retry lost the upload and said so in an annotation.
+	const lostB = job("B", "failure", [], at(11));
+	const lost = new Map([
+		[1, first],
+		[2, [job("A", "success", [], at(11)), lostB]],
+	]);
+	assert.equal(attributable(lost, flaky, 2), true);
+	assert.equal(attributable(withoutLost(lost, new Set([lostB.id])), flaky, 2), false);
 	// A job that never passed and never left a report adds no tests to the earlier reports.
 	const imageBuild = new Map([
 		[1, [job("A", "failure", [], at(10)), job("Image", "failure", [], at(10), false)]],
@@ -139,7 +156,8 @@ void test("every CI step that uploads attempt reports is recognised as the job's
 				const inputs = node.get("with");
 				if (
 					typeof upload === "string" &&
-					upload.startsWith("actions/upload-artifact@") &&
+					(upload.startsWith("actions/upload-artifact@") ||
+						upload === "./.github/actions/upload-artifact-retry") &&
 					isMap(inputs) &&
 					/-reports-\$\{\{ github\.run_attempt \}\}/u.test(String(inputs.get("name")))
 				) {
@@ -276,4 +294,15 @@ void test("repeated runs of the same commit count once per flaky test and job", 
 	const report = renderFlakes([entry, { ...entry, runId: 2 }], 14);
 	assert.match(report, /\| 1 \| 2026-10-22 \| A > b \| 1, 2 \|/u);
 	assert.match(report, /\| 1 \| 2026-10-22 \| Stories \|/u);
+});
+
+void test("a job's annotations tell that upload-artifact-retry lost its reports", async () => {
+	assert.equal(lostReports([[{ title: "Unrelated", message: "x" }], []]), false);
+	assert.equal(
+		lostReports([[{ title: LOST_REPORTS, message: "server-unit-reports-1 failed to upload" }]]),
+		true,
+	);
+	// The report reads the warning the action writes; a renamed title would hide every lost report.
+	const action = await readFile(".github/actions/upload-artifact-retry/action.yml", "utf8");
+	assert.match(action, new RegExp(`::warning title=${LOST_REPORTS}::`, "u"));
 });

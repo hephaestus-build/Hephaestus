@@ -229,7 +229,7 @@ export async function importClosure(entry: string): Promise<string[]> {
 	return [...seen].toSorted();
 }
 
-/** The `with` map of the first step in a job whose `uses` starts with `action`. */
+/** The `with` map of the first step in a job that uses `action`: a pinned `owner/name` or a local `./` path. */
 export function step(workflow: Document, jobPath: string[], action: string): YAMLMap {
 	const steps = workflow.getIn([...jobPath, "steps"]);
 	assert.ok(isSeq(steps), `${jobPath.join(".")} has no steps`);
@@ -238,7 +238,7 @@ export function step(workflow: Document, jobPath: string[], action: string): YAM
 			continue;
 		}
 		const uses = item.get("uses");
-		if (typeof uses === "string" && uses.startsWith(`${action}@`)) {
+		if (typeof uses === "string" && (uses === action || uses.startsWith(`${action}@`))) {
 			const inputs = item.get("with");
 			assert.ok(isMap(inputs), `${action} declares no inputs`);
 			return inputs;

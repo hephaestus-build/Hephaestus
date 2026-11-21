@@ -228,8 +228,9 @@ jobs:
 
       - name: Retain full database test reports
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: database-test-reports-${{ github.run_attempt }}
           path: server/application/build/test-results/databaseTest
           retention-days: 14

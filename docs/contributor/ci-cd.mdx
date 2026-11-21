@@ -137,6 +137,23 @@ Test checks show totals and failed suites/cases, not an inventory of successful 
 lookup runs only when failure annotations are needed. The complete unit, integration, database and
 Storybook JUnit reports remain downloadable for fourteen days, including successful runs.
 
+Every artifact upload goes through `.github/actions/upload-artifact-retry`, in up to three attempts.
+There are two exceptions.
+OpenSSF Scorecard publishes only from a workflow that runs allowlisted actions, so `scorecard.yml` uploads directly.
+The record job of `pull-request.yml` uploads directly until the action exists on the default branch, where it will check the action out.
+A job that checks out another ref, such as a release tag or a pull request's head, can lack the action.
+It checks out this workflow's own copy at `github.workflow_sha` into `workflow-actions/` and uploads through that copy.
+
+A report is a diagnostic for a person, next to a verdict that the job's own steps decide.
+It sets `required: "false"`. If it still fails to upload, the job keeps the verdict of its tests.
+A warning and the job summary then name the missing reports.
+The flake report reads that warning. It names no failed tests for a run that lost a report it needs.
+
+Every other artifact is required: a later job, a later run or the release reads it, or a report run exists to make it.
+Examples are the packaged server, the image digests, the release evidence and the weekly flake report.
+If it still fails to upload, the job fails with an error that names the artifact.
+`scripts/ci-upload-artifact-retry.test.ts` lists the reports.
+
 Chromatic
 prints warnings/errors alongside the structured visual-coverage summary. Its JUnit report is retained
 with the Storybook reports. Do not publish its debug log or diagnostics file: they can contain

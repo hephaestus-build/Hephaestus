@@ -251,7 +251,8 @@ await test("main reuses immutable verified artifacts without bypassing validatio
 	}
 	assert.ok(steps.items.indexOf(validate) > steps.items.indexOf(download));
 	assert.ok(steps.items.indexOf(upload) > steps.items.indexOf(validate));
-	assert.match(String(upload.get("uses")), /^actions\/upload-artifact@/u);
+	assert.equal(upload.get("uses"), "./.github/actions/upload-artifact-retry");
+	assert.equal(upload.hasIn(["with", "required"]), false);
 	assert.equal(upload.getIn(["with", "name"]), `\${{ env.SERVER_BUILD_ARTIFACT }}`);
 });
 
