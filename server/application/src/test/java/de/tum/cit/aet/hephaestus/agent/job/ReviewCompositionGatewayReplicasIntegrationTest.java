@@ -14,7 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
-import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionClosing;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
@@ -174,7 +174,7 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
         var run = leaseTheComposition();
         var firstCustody = new ReviewAttemptCustody(runs);
         var secondCustody = new ReviewAttemptCustody(runs);
-        var closing = mock(CompositionSessions.class);
+        var closing = mock(CompositionClosing.class);
         var firstClosed = new AtomicInteger();
         var secondClosed = new AtomicInteger();
         var firstKind = composition(firstCustody, closing, firstClosed);
@@ -228,7 +228,7 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
     void shouldAnswerBusyWithoutWithholdingWhileAnotherServerHoldsTheWithholdingLock() throws Exception {
         var run = leaseTheComposition();
         var custody = new ReviewAttemptCustody(runs);
-        var closing = mock(CompositionSessions.class);
+        var closing = mock(CompositionClosing.class);
         var kind = composition(custody, closing, new AtomicInteger());
         Boolean claimed = transactions.execute(status -> kind.claimed(run));
         assertThat(claimed).isTrue();
@@ -323,7 +323,7 @@ class ReviewCompositionGatewayReplicasIntegrationTest extends BaseIntegrationTes
     }
 
     private ReviewComposeSandboxKind composition(
-            ReviewAttemptCustody custody, CompositionSessions closing, AtomicInteger closed) {
+            ReviewAttemptCustody custody, CompositionClosing closing, AtomicInteger closed) {
         var claims = mock(ReviewJobClaimService.class);
         when(claims.claimLeased(fence))
                 .thenReturn(Optional.of(new ReviewJobClaimService.ClaimResult(

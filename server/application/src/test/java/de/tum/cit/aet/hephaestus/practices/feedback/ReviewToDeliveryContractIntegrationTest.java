@@ -13,6 +13,8 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionClosing;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionPlans;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
@@ -1726,17 +1728,14 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             // Every retry was lost before this attempt, which resumes the composition as the last one.
             for (int lost = 0; lost < agentRuns.capacity().reviewRetries(); lost++) RuntimeJobTestData.retry(jdbc, job);
             // The final composition window has expired, so it withholds without a model call.
-            var sessions = new CompositionSessions(
+            var trace = mock(CompositionToolTrace.class);
+            var closing = new CompositionClosing(
                     admission,
-                    continuation,
-                    assignments,
-                    descriptors,
-                    reviewProperties,
                     agentRuns.capacity(),
                     meters,
-                    mapper,
                     mock(FeedbackRepair.class),
-                    mock(CompositionToolTrace.class));
+                    trace,
+                    new CompositionPlans(admission, continuation, assignments, descriptors, mapper, trace));
             // The sandbox's composer loop finds no time left before its first call, so it closes every destination
             // with the deadline; on the last attempt the server withholds them instead of handing them on.
             var identity = new ResultAdmissionService.AdmissionIdentity(
@@ -1744,7 +1743,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             // The restored folder holds the attempt's person-copy receipt, which the withholdings' reads index.
             var restored = continuation.restore(job);
             try {
-                assertThat(sessions.close(
+                assertThat(closing.close(
                                 job,
                                 identity,
                                 Map.of(
@@ -2407,7 +2406,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             "publish_package:true",
                             "publish_package:false");
             // The review on the work is decided, so closing records nothing for it and hands nothing on.
-            assertThat(sessions.close(job, review.identity(), Map.of())).isNull();
+            assertThat(closing().close(job, review.identity(), Map.of())).isNull();
         }
     }
 
@@ -3133,17 +3132,15 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     private CompositionSessions sessions() {
-        return new CompositionSessions(
-                admission,
-                continuation,
-                assignments,
-                descriptors,
-                reviewProperties,
-                agentRuns.capacity(),
-                meters,
-                mapper,
-                repairs,
-                toolTrace);
+        return new CompositionSessions(admission, reviewProperties, mapper, repairs, toolTrace, plans());
+    }
+
+    private CompositionClosing closing() {
+        return new CompositionClosing(admission, agentRuns.capacity(), meters, repairs, toolTrace, plans());
+    }
+
+    private CompositionPlans plans() {
+        return new CompositionPlans(admission, continuation, assignments, descriptors, mapper, toolTrace);
     }
 
     private static CompositionSessions.ToolCall toolCall(

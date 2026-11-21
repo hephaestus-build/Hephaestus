@@ -22,8 +22,9 @@ import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
  * The gateway of one replayed composition, over loopback HTTP: the composition routes of the run, served by
- * {@link CompositionSessions} as the gateway serves them, and the model proxy, which answers with the case's model
- * answers. A composer loop in another process composes against it exactly as against the real gateway.
+ * {@link CompositionSessions} and {@link CompositionClosing} as the gateway serves them, and the model proxy, which
+ * answers with the case's model answers. A composer loop in another process composes against it exactly as against
+ * the real gateway.
  */
 final class ComposerReplayGateway implements AutoCloseable {
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
@@ -31,6 +32,7 @@ final class ComposerReplayGateway implements AutoCloseable {
     private final HttpServer server;
     private final JsonMapper mapper;
     private final CompositionSessions sessions;
+    private final CompositionClosing closing;
     private final ReviewJob job;
     private final ResultAdmissionService.AdmissionIdentity identity;
     private final Instant deadline;
@@ -39,6 +41,7 @@ final class ComposerReplayGateway implements AutoCloseable {
     ComposerReplayGateway(
             JsonMapper mapper,
             CompositionSessions sessions,
+            CompositionClosing closing,
             ReviewJob job,
             ResultAdmissionService.AdmissionIdentity identity,
             Instant deadline,
@@ -51,6 +54,7 @@ final class ComposerReplayGateway implements AutoCloseable {
                         .withContentInclusion(JsonInclude.Include.NON_NULL))
                 .build();
         this.sessions = sessions;
+        this.closing = closing;
         this.job = job;
         this.identity = identity;
         this.deadline = deadline;
@@ -102,7 +106,7 @@ final class ComposerReplayGateway implements AutoCloseable {
                 }
             }
             answer.put("deadline", deadline.toString());
-            answer.put("lastAttempt", sessions.lastAttempt(job));
+            answer.put("lastAttempt", closing.lastAttempt(job));
             send(exchange, 200, answer);
         } else if (route.startsWith("/tools/")) {
             var call = new CompositionSessions.ToolCall(
@@ -128,7 +132,7 @@ final class ComposerReplayGateway implements AutoCloseable {
                         FeedbackDestination.valueOf(entry.getKey()),
                         CompositionStop.valueOf(entry.getValue().asString()));
             });
-            var handedOn = sessions.close(job, identity, stops);
+            var handedOn = closing.close(job, identity, stops);
             var answer = JSON.objectNode();
             if (handedOn != null) answer.put("handedOn", handedOn.name());
             send(exchange, 200, answer);

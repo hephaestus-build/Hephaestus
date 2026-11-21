@@ -201,7 +201,7 @@ class ComposerTurnsTest {
             vocabulary(scenario.feedbackTool(), known);
         }
         var instructions = new TreeMap<String, String>();
-        for (String prompt : PROMPTS) instructions.put(prompt, CompositionSessions.prompt(prompt));
+        for (String prompt : PROMPTS) instructions.put(prompt, ComposerTurns.prompt(prompt));
         instructions.put("ReviewOnWork.WRITE_CONTRACT", ReviewOnWork.WRITE_CONTRACT);
         instructions.put("ReviewOnWork.TOOL_DESCRIPTION", ReviewOnWork.TOOL_DESCRIPTION);
         instructions.put("PrivateFeedback.TOOL_DESCRIPTION", PrivateFeedback.TOOL_DESCRIPTION);
@@ -250,7 +250,7 @@ class ComposerTurnsTest {
         return new Marked(
                 body,
                 history,
-                CompositionSessions.privateTurn(
+                ComposerTurns.privateTurn(
                         new ComposerFiles(inputs), captured, request, state, null, routes, List.of()));
     }
 
@@ -274,18 +274,18 @@ class ComposerTurnsTest {
         var state = Admission.of(response, Map.of("PRACTICE_PAGE", decided, "CONVERSATION", decided));
         byte[] requestBytes = Objects.requireNonNull(inputs.get(SandboxLayout.FEEDBACK_COMPOSITION_PATH));
         var request = PrivateFeedback.Request.of(MAPPER.readTree(requestBytes)).orElseThrow();
-        var files = CompositionSessions.workspace(inputs, requestBytes, state);
+        var files = ComposerTurns.workspace(inputs, requestBytes, state);
         JsonNode folderIndex = files.json(SandboxLayout.MANIFEST_PATH, MAPPER).orElseThrow();
         JsonNode practiceIndex =
                 files.json(ComposerFiles.PRACTICE_INDEX, MAPPER).orElseThrow();
-        var notReached = CompositionSessions.notReached(practiceIndex, state);
+        var notReached = ComposerTurns.notReached(practiceIndex, state);
         var captured = new CapturedWork(files, MAPPER);
 
         String reviewTurn = null;
         JsonNode reviewTool = null;
         var reviewable = ReviewOnWork.publicResults(state.results());
         if (request.open("ON_WORK") && !state.publicReviewed() && !reviewable.isEmpty()) {
-            var turn = CompositionSessions.reviewTurn(
+            var turn = ComposerTurns.reviewTurn(
                     files,
                     captured,
                     folderIndex,
@@ -311,7 +311,7 @@ class ComposerTurnsTest {
                 reviewTool,
                 captured.brief(),
                 PrivateFeedback.turn(files, MAPPER, request, state, review, routes, notReached),
-                PrivateFeedback.toolParameters(CompositionSessions.practiceSlugs(practiceIndex), request));
+                PrivateFeedback.toolParameters(ComposerTurns.practiceSlugs(practiceIndex), request));
     }
 
     /** The tool's structure equals the scenario's file: names, types, required fields and allowed values. */

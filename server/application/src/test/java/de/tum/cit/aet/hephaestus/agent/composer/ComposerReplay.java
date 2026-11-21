@@ -219,6 +219,7 @@ final class ComposerReplay {
             throws IOException, InterruptedException {
         var state = new Server(basis);
         var sessions = state.sessions();
+        var closing = state.closing();
         var calls = JSON.arrayNode();
         var previous = new ArrayList<JsonNode>();
         Function<byte[], ModelSession.Answer> recorded = body -> {
@@ -230,6 +231,7 @@ final class ComposerReplay {
         try (var gateway = new ComposerReplayGateway(
                 MAPPER,
                 sessions,
+                closing,
                 state.job,
                 identity,
                 Instant.now().plus(state.properties.compositionTimeout()),
@@ -446,18 +448,15 @@ final class ComposerReplay {
         }
 
         CompositionSessions sessions() {
-            return new CompositionSessions(
-                    admission,
-                    continuation,
-                    assignments,
-                    items,
-                    properties,
-                    capacity,
-                    new SimpleMeterRegistry(),
-                    MAPPER,
-                    repairs,
-                    trace,
-                    Duration.ZERO);
+            return new CompositionSessions(admission, properties, MAPPER, repairs, trace, plans(), Duration.ZERO);
+        }
+
+        CompositionClosing closing() {
+            return new CompositionClosing(admission, capacity, new SimpleMeterRegistry(), repairs, trace, plans());
+        }
+
+        private CompositionPlans plans() {
+            return new CompositionPlans(admission, continuation, assignments, items, MAPPER, trace);
         }
 
         private PreparedPackage accept(FeedbackPackage request) {

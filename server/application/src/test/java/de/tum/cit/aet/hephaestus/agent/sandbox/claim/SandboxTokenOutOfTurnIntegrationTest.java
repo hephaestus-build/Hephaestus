@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.composer.ComposerTranscript;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionClosing;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.conversation.host.ConversationTurnContexts;
@@ -132,6 +133,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
     private final ReviewComposeSandboxKind composeKind = mock(ReviewComposeSandboxKind.class);
 
     private final CompositionSessions compositionSessions = mock(CompositionSessions.class);
+    private final CompositionClosing compositionClosing = mock(CompositionClosing.class);
     private final ComposerTranscript composerTranscript = mock(ComposerTranscript.class);
     private final ReviewSandboxRuns reviewRuns = mock(ReviewSandboxRuns.class);
     private final ConversationTurnContexts turnContexts = mock(ConversationTurnContexts.class);
@@ -168,7 +170,8 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
             factory.registerSingleton("agentRunController", controller);
             factory.registerSingleton(
                     "compositionController",
-                    new CompositionController(composeKind, compositionSessions, composerTranscript));
+                    new CompositionController(
+                            composeKind, compositionSessions, compositionClosing, composerTranscript));
             factory.registerSingleton("reviewSandboxController", new ReviewSandboxController(reviewRuns, runs));
             factory.registerSingleton(
                     "conversationTurnController",
@@ -374,6 +377,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
         verifyNoInteractions(
                 composeKind,
                 compositionSessions,
+                compositionClosing,
                 composerTranscript,
                 reviewRuns,
                 turnContexts,

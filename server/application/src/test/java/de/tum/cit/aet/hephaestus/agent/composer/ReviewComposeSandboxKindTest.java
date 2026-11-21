@@ -70,7 +70,7 @@ class ReviewComposeSandboxKindTest {
     private final AgentRuns runs = mock(AgentRuns.class);
     private final ReviewAttemptCustody custody = new ReviewAttemptCustody(runs);
     private final ReviewCompositionContinuation continuation = mock(ReviewCompositionContinuation.class);
-    private final CompositionSessions sessions = mock(CompositionSessions.class);
+    private final CompositionClosing closing = mock(CompositionClosing.class);
     private final ReviewJobTerminal terminal = mock(ReviewJobTerminal.class);
     private final ProviderOutages outages = mock(ProviderOutages.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
@@ -87,7 +87,7 @@ class ReviewComposeSandboxKindTest {
                 admission,
                 localCustody,
                 continuation,
-                sessions,
+                closing,
                 terminal,
                 outages,
                 runs,
@@ -155,7 +155,7 @@ class ReviewComposeSandboxKindTest {
         var other = replica(new ReviewAttemptCustody(runs));
         other.prepare(run);
 
-        verify(sessions).withholdOpen(composing.job(), composing.identity(), CompositionStop.BUDGET);
+        verify(closing).withholdOpen(composing.job(), composing.identity(), CompositionStop.BUDGET);
         verify(continuation, never()).restore(any());
         assertThat(kind.attempt(run)).isEmpty();
     }
@@ -171,7 +171,7 @@ class ReviewComposeSandboxKindTest {
             assertThat(failure.getHeaders().getFirst("Retry-After")).isEqualTo("1");
         });
 
-        verify(sessions, never()).withholdOpen(any(), any(), any());
+        verify(closing, never()).withholdOpen(any(), any(), any());
         verifyNoInteractions(outages);
     }
 
@@ -181,12 +181,12 @@ class ReviewComposeSandboxKindTest {
         when(continuation.stageWithoutInputs(composing.job())).thenReturn(restored());
         var other = replica(new ReviewAttemptCustody(runs));
         kind.prepare(run);
-        clearInvocations(locks, sessions);
+        clearInvocations(locks, closing);
 
         other.prepare(run);
 
         verify(locks, never()).call(anyString(), any(), any());
-        verify(sessions, never()).withholdOpen(any(), any(), any());
+        verify(closing, never()).withholdOpen(any(), any(), any());
     }
 
     @Test
@@ -197,13 +197,13 @@ class ReviewComposeSandboxKindTest {
         when(continuation.stageWithoutInputs(composing.job())).thenReturn(restored());
         var other = replica(new ReviewAttemptCustody(runs));
         kind.prepare(run);
-        verify(sessions).withholdOpen(composing.job(), composing.identity(), CompositionStop.INPUTS_GONE);
-        clearInvocations(locks, sessions);
+        verify(closing).withholdOpen(composing.job(), composing.identity(), CompositionStop.INPUTS_GONE);
+        clearInvocations(locks, closing);
 
         other.prepare(run);
 
         verify(locks, never()).call(anyString(), any(), any());
-        verify(sessions, never()).withholdOpen(any(), any(), any());
+        verify(closing, never()).withholdOpen(any(), any(), any());
     }
 
     @Test
@@ -223,7 +223,7 @@ class ReviewComposeSandboxKindTest {
         kind.prepare(run);
 
         verify(continuation, times(1)).restore(composing.job());
-        verify(sessions, never()).withholdOpen(any(), any(), any());
+        verify(closing, never()).withholdOpen(any(), any(), any());
     }
 
     @Test
@@ -235,7 +235,7 @@ class ReviewComposeSandboxKindTest {
 
         kind.prepare(run);
 
-        verify(sessions).withholdOpen(composing.job(), composing.identity(), CompositionStop.INPUTS_ERASED);
+        verify(closing).withholdOpen(composing.job(), composing.identity(), CompositionStop.INPUTS_ERASED);
     }
 
     @Test
@@ -247,7 +247,7 @@ class ReviewComposeSandboxKindTest {
         other.prepare(run);
 
         assertThat(other.attempt(run)).isEmpty();
-        verify(sessions).withholdOpen(composing.job(), composing.identity(), CompositionStop.BUDGET);
+        verify(closing).withholdOpen(composing.job(), composing.identity(), CompositionStop.BUDGET);
         verifyNoInteractions(outages);
     }
 
@@ -262,7 +262,7 @@ class ReviewComposeSandboxKindTest {
 
         verifyNoInteractions(outages);
         verify(continuation, never()).restore(any());
-        verify(sessions, never()).withholdOpen(any(), any(), any());
+        verify(closing, never()).withholdOpen(any(), any(), any());
     }
 
     @Test
