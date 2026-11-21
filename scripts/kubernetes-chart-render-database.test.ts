@@ -741,9 +741,10 @@ const postgresqlSettings = (resources: Resource[]) => {
 await test("every profile's PostgreSQL runs without JIT, in the memory that docs/admin/sizing.mdx derives", () => {
 	const sizing = readFileSync(new URL("../docs/admin/sizing.mdx", import.meta.url), "utf8");
 	const documented = (label: string) => {
-		const match = new RegExp(`^\\| ${label} \\| (\\d+) MiB \\|`, "mu").exec(sizing);
-		assert.ok(match?.[1], `docs/admin/sizing.mdx states "${label}" in MiB`);
-		return Number(match[1]);
+		const mib = new RegExp(`^\\| ${label} \\| (?<mib>\\d+) MiB \\|`, "mu").exec(sizing)?.groups
+			?.mib;
+		assert.ok(mib !== undefined, `docs/admin/sizing.mdx states "${label}" in MiB`);
+		return Number(mib);
 	};
 	const connectionMi = documented("Private memory of each connection");
 	const processesMi = documented("Postmaster and background processes");
@@ -767,13 +768,10 @@ await test("every profile's PostgreSQL runs without JIT, in the memory that docs
 			return value;
 		};
 		const mib = (key: string) => {
-			const [, number, unit] = /^(\d+)(kB|MB|GB)$/u.exec(setting(key)) ?? [];
-			assert.ok(number && unit, `${name}: ${key} in kB, MB or GB`);
-			return unit === "GB"
-				? Number(number) * 1024
-				: unit === "MB"
-					? Number(number)
-					: Math.ceil(Number(number) / 1024);
+			const { count, unit } = /^(?<count>\d+)(?<unit>kB|MB|GB)$/u.exec(setting(key))?.groups ?? {};
+			assert.ok(count !== undefined && unit !== undefined, `${name}: ${key} in kB, MB or GB`);
+			const perMib: Record<string, number> = { GB: 1024, MB: 1, kB: 1 / 1024 };
+			return Math.ceil(Number(count) * (perMib[unit] ?? Number.NaN));
 		};
 		assert.equal(setting("jit"), "off", name);
 		const connections = Number(setting("max_connections"));
