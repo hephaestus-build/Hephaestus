@@ -63,6 +63,7 @@ class KubernetesBackupSchedulesTest {
                 .contains(new BackupSchedules.Schedule(
                         Instant.parse("2026-11-01T02:00:00Z"), Instant.parse("2026-11-20T02:15:42Z")));
         // One GET by name: the Role grants get on these names, not list or watch.
+        assertThat(Objects.requireNonNull(server).getRequestCount()).isEqualTo(1);
         assertThat(Objects.requireNonNull(server).getLastRequest().getPath()).isEqualTo(PATH);
     }
 

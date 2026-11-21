@@ -23,6 +23,11 @@ public class KubernetesBackupScheduleConfiguration {
 
     @Bean(destroyMethod = "close")
     public KubernetesBackupSchedules backupSchedules(BackupScheduleProperties properties) {
+        // Set but empty is not unset: a monitor that reads no schedule would report a missing backup for ever.
+        if (properties.cronJobs().isEmpty() || properties.namespace().isBlank()) {
+            throw new IllegalStateException("hephaestus.database.backup.cron-jobs and hephaestus.database.backup"
+                    + ".namespace must both be set to read the backup schedules");
+        }
         Config config = new ConfigBuilder(Config.autoConfigure(null))
                 .withRequestTimeout((int) REQUEST_TIMEOUT.toMillis())
                 .withConnectionTimeout((int) CONNECTION_TIMEOUT.toMillis())
