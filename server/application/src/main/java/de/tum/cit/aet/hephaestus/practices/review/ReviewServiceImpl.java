@@ -109,6 +109,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final List<CapturedApplicability> applicability;
     private final ItemEventService itemEvents;
     private final ReviewClosure closure;
+    private final OffPracticeMilestones offMilestones;
     private final ReviewRequestTransactions transactions;
     private final ReviewRequestPolicy policy;
     private final PracticeTrialProperties trials;
@@ -526,19 +527,32 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     /**
-     * Of the practices the occasions select, those to measure now. A practice that an earlier review of the item still
-     * measures (queued, or running with an unsettled job) holds the whole window until that review ends, so its
-     * occasions are never lost. A continuing occasion
-     * leaves out every practice whose result is current; a milestone measures them again.
+     * Of the practices the occasions select, those to measure now. Occasions that all continue leave out a practice in
+     * feedback mode Off that reviews at a milestone: it waits for that milestone and never follows a newer head. One
+     * that this version still owes, such as for its checks or a spent deadline, finishes here. A practice that an
+     * earlier review of the item still measures (queued, or running with an unsettled job) holds the whole window until
+     * that review ends, so its occasions are never lost. A continuing occasion leaves out every practice whose result
+     * is current; a milestone measures them again.
      */
     private List<Practice> pending(
             ItemSnapshot pinned,
             Set<ItemEventName> occasions,
-            List<Practice> selected,
+            List<Practice> gated,
             Map<UUID, Currentness> currentness) {
         long workspaceId = pinned.item().workspaceId();
         long itemId = pinned.item().itemId();
-        var selectedIds = selected.stream().map(Practice::getId).collect(Collectors.toSet());
+        var kind = pinned.item().kind();
+        var waiting = new HashSet<Long>();
+        if (offMilestones.continuing(kind, occasions)) {
+            waiting.addAll(offMilestones.waitingForAMilestone(workspaceId, kind, gated));
+            waiting.removeAll(memberships.owedAtVersion(
+                    workspaceId, itemId, pinned.version().value(), ReviewWithholdings.CARRIED));
+        }
+        var selected = gated.stream().filter(p -> !waiting.contains(p.getId())).toList();
+        boolean allOff = selected.isEmpty() && !waiting.isEmpty();
+        // A window of practices that all wait still waits for an earlier review of them, so a queued one is replaced.
+        var selectedIds =
+                (allOff ? gated : selected).stream().map(Practice::getId).collect(Collectors.toSet());
         // Starting a review commits before its job is enqueued, so a running review with no job yet still measures.
         // One that never got a job stops holding the window one cap after it started.
         Instant enqueuedBy = clock.instant().minus(itemEvents.quietWindowCap());
@@ -553,8 +567,12 @@ public class ReviewServiceImpl implements ReviewService {
                     ReviewRequestRejected.Reason.REQUEST_CONFLICT,
                     "An earlier review of this item still measures a selected practice.",
                     ReviewRequestReason.REVIEW_IN_PROGRESS);
-        if (occasions.stream()
-                .anyMatch(name -> itemOptions.occasion(pinned.item().kind(), name) == OccasionKind.MILESTONE))
+        if (allOff)
+            throw new ReviewRequestRejected(
+                    ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
+                    "Every selected practice has feedback mode Off and waits for a milestone of the work.",
+                    ReviewRequestReason.FEEDBACK_MODE_OFF);
+        if (occasions.stream().anyMatch(name -> itemOptions.occasion(kind, name) == OccasionKind.MILESTONE))
             return selected;
         var current = results.findByWorkspaceIdAndItemIdAndEndedAtIsNull(workspaceId, itemId).stream()
                 .filter(result -> currentness.get(result.getId()) == Currentness.CURRENT)

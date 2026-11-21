@@ -2275,6 +2275,252 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     @Test
+    void shouldMeasureAPracticeInFeedbackModeOffAtAMilestoneButNotOnAPushUntilItsFeedbackReachesSomeone() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        long workspace = prepared.item().workspaceId();
+        long delivering = practices
+                .findByWorkspaceIdAndSlug(workspace, "event-test")
+                .orElseThrow()
+                .getId();
+        long off = practiceOn(
+                prepared,
+                "off-on-every-push",
+                List.of(ScmItemEvents.PULL_REQUEST_OPENED, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED),
+                FeedbackMode.OFF);
+
+        // Opened is a milestone: it measures the practice in Off too.
+        publish(prepared);
+        var opened = newestReview(prepared);
+        assertThat(membersOf(workspace, opened.getId())).containsOnlyKeys(delivering, off);
+        cancel(opened.getId());
+
+        // A push measures only the practice whose feedback reaches someone.
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
+        closeWindows(prepared);
+        var pushed = newestReview(prepared);
+        assertThat(pushed.getId()).isNotEqualTo(opened.getId());
+        assertThat(membersOf(workspace, pushed.getId())).containsOnlyKeys(delivering);
+        cancel(pushed.getId());
+
+        // Its feedback reaches someone again: the next push measures it.
+        setFeedbackMode(off, FeedbackMode.APPROVE_FIRST);
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "d".repeat(40), Instant.now().plusSeconds(120)));
+        closeWindows(prepared);
+        var afterChange = newestReview(prepared);
+        assertThat(afterChange.getId()).isNotIn(opened.getId(), pushed.getId());
+        assertThat(membersOf(workspace, afterChange.getId())).containsOnlyKeys(delivering, off);
+    }
+
+    @Test
+    void shouldWithholdAPushWhoseEverySelectedPracticeIsOffAndKeepAnOffPracticeThatReviewsOnNoMilestone() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        long workspace = prepared.item().workspaceId();
+        long opensAndPushes = practices
+                .findByWorkspaceIdAndSlug(workspace, "event-test")
+                .orElseThrow()
+                .getId();
+        setFeedbackMode(opensAndPushes, FeedbackMode.OFF);
+        publish(prepared);
+        var opened = newestReview(prepared);
+        assertThat(membersOf(workspace, opened.getId())).containsOnlyKeys(opensAndPushes);
+        cancel(opened.getId());
+
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
+        closeWindows(prepared);
+        // The push also records the edit of its head; the newest occasion of the window decides for both.
+        assertThat(itemEvents(prepared))
+                .filteredOn(event -> !event.getName().equals(ScmItemEvents.PULL_REQUEST_OPENED.value()))
+                .allSatisfy(event -> assertThat(event.getState()).isEqualTo(ItemEventState.WITHHELD))
+                .extracting(ItemEvent::getReason)
+                .contains(ReviewRequestReason.FEEDBACK_MODE_OFF);
+        assertThat(newestReview(prepared).getId()).isEqualTo(opened.getId());
+
+        // A practice that reviews only on pushes has no milestone to wait for: a push still measures it in Off.
+        long onlyPushes = practiceOn(
+                prepared, "off-only-on-push", List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED), FeedbackMode.OFF);
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "d".repeat(40), Instant.now().plusSeconds(120)));
+        closeWindows(prepared);
+        var next = newestReview(prepared);
+        assertThat(next.getId()).isNotEqualTo(opened.getId());
+        assertThat(membersOf(workspace, next.getId())).containsOnlyKeys(onlyPushes);
+    }
+
+    /**
+     * A push that replaces a queued milestone review replaces only what the review of the push measures. A practice in
+     * feedback mode Off waits for the next milestone, so its own sources moved, and it is never called replaced.
+     */
+    @Test
+    void shouldReplaceOnlyThePracticesThatTheReviewOfANewerPushMeasures() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        long workspace = prepared.item().workspaceId();
+        long delivering = practices
+                .findByWorkspaceIdAndSlug(workspace, "event-test")
+                .orElseThrow()
+                .getId();
+        long off = practiceOn(
+                prepared,
+                "off-on-every-push",
+                List.of(ScmItemEvents.PULL_REQUEST_OPENED, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED),
+                FeedbackMode.OFF);
+        publish(prepared);
+        var stale = newestReview(prepared);
+        assertThat(membersOf(workspace, stale.getId())).containsOnlyKeys(delivering, off);
+
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
+        assertThat(replaced(workspace, stale.getId())).isTrue();
+
+        var members = membersOf(workspace, stale.getId());
+        assertThat(reasonOf(members, delivering)).isEqualTo("REPLACED");
+        assertThat(reasonOf(members, off)).isEqualTo("SOURCES_MOVED");
+        assertThat(jdbc.queryForList(
+                        "SELECT practice_id||':'||status||'/'||reason FROM review_practice WHERE review_id=?",
+                        String.class,
+                        stale.getId()))
+                .containsExactlyInAnyOrder(delivering + ":WITHHELD/REPLACED", off + ":WITHHELD/SOURCES_MOVED");
+        assertThat(reviews.findById(stale.getId()).orElseThrow().getStopReason())
+                .isEqualTo(ReviewStopReason.REPLACED);
+
+        // The review of the push measures the replaced practice, and the one in Off stays owed.
+        closeWindows(prepared);
+        var pushed = newestReview(prepared);
+        assertThat(pushed.getId()).isNotEqualTo(stale.getId());
+        assertThat(membersOf(workspace, pushed.getId())).containsOnlyKeys(delivering);
+        assertThat(jdbc.queryForList(
+                        "SELECT practice_id FROM review_practice WHERE review_id=?", Long.class, pushed.getId()))
+                .containsExactly(delivering);
+
+        // Another push carries it no further. The next milestone measures it.
+        cancel(pushed.getId());
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "d".repeat(40), Instant.now().plusSeconds(120)));
+        closeWindows(prepared);
+        var again = newestReview(prepared);
+        assertThat(membersOf(workspace, again.getId())).containsOnlyKeys(delivering);
+        cancel(again.getId());
+        deliver(
+                prepared,
+                "ready_for_review",
+                pullRequestPayload(prepared, "d".repeat(40), Instant.now().plusSeconds(180)));
+        closeWindows(prepared);
+        var ready = newestReview(prepared);
+        assertThat(ready.getId()).isNotIn(stale.getId(), pushed.getId(), again.getId());
+        assertThat(membersOf(workspace, ready.getId())).containsKey(off);
+    }
+
+    @Test
+    void shouldEndAReviewWhoseEveryPracticeWaitsForAMilestoneWithSourcesMovedWhenAPushReplacesIt() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        long workspace = prepared.item().workspaceId();
+        long off = practices
+                .findByWorkspaceIdAndSlug(workspace, "event-test")
+                .orElseThrow()
+                .getId();
+        setFeedbackMode(off, FeedbackMode.OFF);
+        publish(prepared);
+        var stale = newestReview(prepared);
+
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
+        assertThat(replaced(workspace, stale.getId())).isTrue();
+
+        var ended = reviews.findById(stale.getId()).orElseThrow();
+        assertThat(ended.getStatus()).isEqualTo(ReviewStatus.CANCELLED);
+        assertThat(ended.getStopReason()).isEqualTo(ReviewStopReason.SOURCES_MOVED);
+        assertThat(reasonOf(membersOf(workspace, stale.getId()), off)).isEqualTo("SOURCES_MOVED");
+
+        // The push waited for the review it replaced. Offered again, it measures nothing and starts no review.
+        closeWindows(prepared);
+        assertThat(itemEvents(prepared))
+                .filteredOn(event -> !event.getName().equals(ScmItemEvents.PULL_REQUEST_OPENED.value()))
+                .allSatisfy(event -> assertThat(event.getState()).isEqualTo(ItemEventState.WITHHELD))
+                .extracting(ItemEvent::getReason)
+                .contains(ReviewRequestReason.FEEDBACK_MODE_OFF);
+        assertThat(newestReview(prepared).getId()).isEqualTo(stale.getId());
+    }
+
+    @Test
+    void shouldReplaceEveryPracticeOfAQueuedReviewWhenANewerMilestoneWaits() {
+        var prepared =
+                prepare(IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_READY));
+        long workspace = prepared.item().workspaceId();
+        long delivering = practices
+                .findByWorkspaceIdAndSlug(workspace, "event-test")
+                .orElseThrow()
+                .getId();
+        long off = practiceOn(
+                prepared,
+                "off-when-ready",
+                List.of(ScmItemEvents.PULL_REQUEST_OPENED, ScmItemEvents.PULL_REQUEST_READY),
+                FeedbackMode.OFF);
+        publish(prepared);
+        var stale = newestReview(prepared);
+
+        deliver(
+                prepared,
+                "ready_for_review",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
+        assertThat(replaced(workspace, stale.getId())).isTrue();
+
+        assertThat(reviews.findById(stale.getId()).orElseThrow().getStopReason())
+                .isEqualTo(ReviewStopReason.REPLACED);
+        var members = membersOf(workspace, stale.getId());
+        assertThat(reasonOf(members, delivering)).isEqualTo("REPLACED");
+        assertThat(reasonOf(members, off)).isEqualTo("REPLACED");
+    }
+
+    @Test
+    void shouldFinishAnOffPracticeThatItsVersionOwesOnTheChecksEvent() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false, Map.of(), false, List.of(), ReadNeed.REQUIRED);
+        long workspace = prepared.item().workspaceId();
+        long off = practices
+                .findByWorkspaceIdAndSlug(workspace, "event-test")
+                .orElseThrow()
+                .getId();
+        setFeedbackMode(off, FeedbackMode.OFF);
+        transactions.executeWithoutResult(ignored -> {
+            var pull = pulls.findById(Objects.requireNonNull(prepared.item().sourceId()))
+                    .orElseThrow();
+            pull.observeHeadChecks(Objects.requireNonNull(pull.getHeadRefOid()), CheckState.PENDING, true);
+            pulls.saveAndFlush(pull);
+        });
+        publish(prepared);
+        var opened = newestReview(prepared);
+        assertThat(reasonOf(membersOf(workspace, opened.getId()), off)).isEqualTo("CHECKS_PENDING");
+
+        // The checks event continues, but this version still owes the practice: it finishes the milestone's
+        // measurement.
+        settleChecks(prepared);
+        var checks = occasion(prepared, ScmItemEvents.PULL_REQUEST_CHECKS_COMPLETED);
+        assertThat(checks.getState()).isEqualTo(ItemEventState.STARTED);
+        var measured =
+                reviews.findByWorkspaceIdAndEventId(workspace, checks.getId()).orElseThrow();
+        assertThat(membersOf(workspace, measured.getId())).containsOnlyKeys(off);
+    }
+
+    @Test
     void shouldMeasureAPracticeRefusedAtStartOnTheNextEdgeThatDoesNotSelectIt() {
         var prepared = prepare(
                 IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
@@ -2407,6 +2653,49 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .findByWorkspaceIdAndSlug(workspace, "only-when-opened")
                 .orElseThrow()
                 .getId();
+    }
+
+    /** A practice of the pull request that reviews on {@code events}, with its own feedback mode. */
+    private long practiceOn(Prepared prepared, String slug, List<ItemEventName> events, FeedbackMode mode) {
+        long workspace = prepared.item().workspaceId();
+        var original = DefinitionTestFixtures.definition(
+                ScmItemEvents.PULL_REQUEST, "Describe the work", "Explain the work.", null);
+        var definition = new PracticeDefinition(
+                original.name(),
+                new ReviewOn(events, Map.of()),
+                original.appliesWhen(),
+                AboutRole.AUTHOR,
+                original.reads(),
+                original.reviewedBy(),
+                original.criteria(),
+                original.script(),
+                original.scan(),
+                original.lineNotes(),
+                original.guidance());
+        versions.create(new PracticeVersionService.NewPractice(
+                workspace, slug, ScmItemEvents.PULL_REQUEST, definition, null, 0, memberAccount(workspace)));
+        var practice = practices.findByWorkspaceIdAndSlug(workspace, slug).orElseThrow();
+        practice.setFeedbackMode(mode);
+        return practices.saveAndFlush(practice).getId();
+    }
+
+    private static @Nullable String reasonOf(Map<Long, ReviewItem> members, long practice) {
+        return Objects.requireNonNull(members.get(practice)).getReason();
+    }
+
+    private void setFeedbackMode(long practiceId, FeedbackMode mode) {
+        var practice = practices.findById(practiceId).orElseThrow();
+        practice.setFeedbackMode(mode);
+        practices.saveAndFlush(practice);
+    }
+
+    private void cancel(UUID review) {
+        jdbc.update(
+                "UPDATE review SET status='CANCELLED', stop_reason='CANCELLED', completed_at=now() WHERE id=?", review);
+    }
+
+    private Review newestReview(Prepared prepared) {
+        return itemReviews(prepared).getFirst();
     }
 
     @Test

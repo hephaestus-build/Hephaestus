@@ -5,6 +5,8 @@ import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
+import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompleted;
@@ -17,9 +19,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
@@ -38,6 +42,8 @@ class ReviewClosure {
     private final ProductItemQuery items;
     private final ItemEventService itemEvents;
     private final ReviewRepository reviews;
+    private final PracticeRepository practices;
+    private final OffPracticeMilestones offMilestones;
     private final Clock clock;
 
     void close(Review review, ReviewStatus status, @Nullable ReviewStopReason reason, Instant at) {
@@ -56,6 +62,46 @@ class ReviewClosure {
         if (review.getChecks().has(ReviewServiceImpl.COMMENT_ANSWER))
             events.publishEvent(new CommentRequestedReviewEnded(id, workspace));
         followUp(review);
+    }
+
+    /**
+     * Ends a queued event review that newer occasions of its item replace before it starts. A practice that those
+     * occasions leave out until a milestone is not replaced, since no newer review measures it: its own sources moved,
+     * and the next readiness edge that it is owed at, or the next milestone, selects it again. When that holds for every
+     * practice, nothing replaces the review either.
+     */
+    void replace(Review review, ItemKind kind, Collection<ItemEventName> newer, Instant at) {
+        long workspace = review.getWorkspaceId();
+        var stop = ReviewStopReason.REPLACED;
+        if (offMilestones.continuing(kind, newer)) {
+            var listed =
+                    memberships
+                            .findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspace, review.getId())
+                            .stream()
+                            .filter(member -> member.getState() == ReviewItemState.LISTED)
+                            .toList();
+            var waiting = offMilestones.waitingForAMilestone(
+                    workspace,
+                    kind,
+                    practices.findByWorkspaceIdAndIdIn(
+                            workspace,
+                            listed.stream()
+                                    .map(member -> member.getPracticeId())
+                                    .collect(Collectors.toSet())));
+            for (var member : listed)
+                if (waiting.contains(member.getPracticeId()))
+                    member.withhold(
+                            ReviewStopReason.SOURCES_MOVED.name(),
+                            "A source that this practice reads changed before it started.",
+                            at);
+            for (var assignment : assignments.lockAssignments(workspace, review.getId()))
+                if (assignment.getStatus() == ReviewPracticeStatus.QUEUED
+                        && waiting.contains(assignment.getPracticeId()))
+                    assignment.withhold(ReviewStopReason.SOURCES_MOVED.name());
+            if (!listed.isEmpty() && listed.stream().allMatch(member -> waiting.contains(member.getPracticeId())))
+                stop = ReviewStopReason.SOURCES_MOVED;
+        }
+        close(review, ReviewStatus.CANCELLED, stop, at);
     }
 
     /**

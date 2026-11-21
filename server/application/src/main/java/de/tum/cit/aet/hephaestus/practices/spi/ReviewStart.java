@@ -23,6 +23,8 @@ public interface ReviewStart {
     /**
      * Ends a queued event review whose work has moved: a newer occasion of the item that joins a window waits at another
      * version. Its practices end withheld as {@code REPLACED}, and the next readiness edge of the item selects them again.
+     * When every newer occasion continues, a practice in feedback mode Off that those occasions leave out until a
+     * milestone ends as {@code SOURCES_MOVED} instead, and the review too when that holds for each of its practices.
      * The caller's transaction holds the parent's lock and must cancel the job in the same commit.
      *
      * @return whether the review ended here
