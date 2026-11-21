@@ -147,11 +147,6 @@ class ProductionSchemaContractIntegrationTest {
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT to_regclass('public.idx_activity_event_workspace_occurred')::text", String.class))
                 .isNull();
-    }
-
-    @Test
-    void shouldNotKeepAnActivityIndexThatNoQueryReads() {
-        // Each query that filters on event_type also filters on the workspace or the target.
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT to_regclass('public.idx_activity_event_type_time')::text", String.class))
                 .isNull();
