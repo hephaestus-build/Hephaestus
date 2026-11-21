@@ -83,7 +83,8 @@ class CatalogOriginPresentationTest extends BaseUnitTest {
                 Instant.EPOCH,
                 null,
                 List.of(),
-                false);
+                false,
+                null);
         when(versions.view(version, null, null)).thenReturn(current);
         var dto = new CatalogOriginPresenter(
                         mock(CatalogService.class),

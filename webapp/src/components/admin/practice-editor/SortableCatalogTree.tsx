@@ -57,6 +57,8 @@ export interface SortableCatalogEntry {
 	moveSourceGroupSlug?: string;
 	name: string;
 	slug: string;
+	/** The entry may move up and down inside its group, but never into another one. */
+	groupLocked?: boolean;
 }
 
 /** Restores focus to the row's action trigger after a reorder moves it. */
@@ -112,7 +114,13 @@ export interface SortableCatalogTreeProps<
 type CatalogDndData =
 	| { type: "group"; groupSlug: string; label: string }
 	| { type: "bucket"; groupSlug: string | null; label: string }
-	| { type: "entry"; groupSlug: string | null; entrySlug: string; label: string };
+	| {
+			type: "entry";
+			groupSlug: string | null;
+			entrySlug: string;
+			label: string;
+			groupLocked: boolean;
+	  };
 
 interface ActiveDrag {
 	type: "group" | "entry";
@@ -215,13 +223,22 @@ export function SortableCatalogTree<
 	);
 
 	const collisionDetection: CollisionDetection = (args) => {
-		const activeType = catalogDndData(args.active.data.current)?.type;
+		const active = catalogDndData(args.active.data.current);
+		const activeType = active?.type;
 		const droppableContainers = args.droppableContainers.filter(({ data }) => {
 			const target = catalogDndData(data.current);
 			if (
 				activeType === "entry" &&
 				target &&
 				blockedMoveDestinationSlugs.has(target.groupSlug ?? UNASSIGNED_CATALOG_BUCKET)
+			) {
+				return false;
+			}
+			// An entry whose group is fixed only lands somewhere in its own group.
+			if (
+				active?.type === "entry" &&
+				active.groupLocked &&
+				target?.groupSlug !== active.groupSlug
 			) {
 				return false;
 			}
@@ -258,6 +275,9 @@ export function SortableCatalogTree<
 		}
 		const { groupSlug } = overData;
 		if (blockedMoveDestinationSlugs.has(groupSlug ?? UNASSIGNED_CATALOG_BUCKET)) {
+			return null;
+		}
+		if (activeData.groupLocked && groupSlug !== activeData.groupSlug) {
 			return null;
 		}
 		if (overData.type !== "entry") {
@@ -442,11 +462,13 @@ export function SortableCatalogTree<
 			canMoveTo: (groupSlug) =>
 				groupSlug !== currentGroupSlug &&
 				!movesDisabled &&
+				entry.groupLocked !== true &&
 				!blockedMoveDestinationSlugs.has(groupSlug ?? UNASSIGNED_CATALOG_BUCKET),
 			moveTo: (groupSlug) => {
 				if (
 					groupSlug === currentGroupSlug ||
 					movesDisabled ||
+					entry.groupLocked === true ||
 					blockedMoveDestinationSlugs.has(groupSlug ?? UNASSIGNED_CATALOG_BUCKET)
 				) {
 					return;
@@ -824,6 +846,7 @@ function SortableEntryRow<TEntry extends SortableCatalogEntry>({
 			groupSlug: entry.moveSourceGroupSlug ?? entry.groupSlug ?? null,
 			entrySlug: entry.slug,
 			label: entry.name,
+			groupLocked: entry.groupLocked === true,
 		} satisfies CatalogDndData,
 		disabled: !showReorderHandle || reorderDisabled,
 	});

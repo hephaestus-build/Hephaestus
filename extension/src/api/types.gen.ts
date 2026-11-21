@@ -4792,6 +4792,10 @@ export type PracticeVersion = {
 	number: number;
 	reviewChanged: boolean;
 	reviewDigest: string;
+	/**
+	 * The commit of the practice repository that this version was read at; null for a version edited in Hephaestus
+	 */
+	sourceCommit: string | null;
 };
 
 /**

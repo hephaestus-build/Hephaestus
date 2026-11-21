@@ -152,6 +152,25 @@ export const Declining: Story = {
 	},
 };
 
+/** The caller says why this update cannot be accepted here; declining it still works. */
+export const AcceptUnavailable: Story = {
+	args: {
+		proposal: readyProposal,
+		acceptUnavailable: "This practice is edited in the practice repository.",
+	},
+	play: async ({ args }) => {
+		const accept = screen.getByRole("button", { name: "Accept selected fields" });
+		// Still focusable, so a keyboard reader reaches it and hears the reason.
+		await expect(accept).toHaveAttribute("aria-disabled", "true");
+		await expect(accept).toHaveAccessibleDescription(
+			"This practice is edited in the practice repository.",
+		);
+		await userEvent.click(screen.getByRole("button", { name: "Decline this update" }));
+		await expect(args.onDecline).toHaveBeenCalledOnce();
+		await expect(args.onAccept).not.toHaveBeenCalled();
+	},
+};
+
 export const NarrowComparison: Story = {
 	args: {
 		proposal: {

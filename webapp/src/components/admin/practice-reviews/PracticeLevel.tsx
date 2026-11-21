@@ -3,7 +3,10 @@ import { definitionFor } from "@/components/common/status-def";
 
 import type { Practice, PracticeDefinitionOptions, PracticeVersion } from "@/api/types.gen";
 import { PRACTICE_DEFINITION_FIELDS } from "@/components/admin/practices/practice-definition-fields";
-import { practiceFormLevel } from "@/components/admin/practices/practice-search";
+import {
+	practiceFormLevel,
+	practiceSetupLevel,
+} from "@/components/admin/practices/practice-search";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { WorkspacePracticeDefinition } from "@/components/admin/practices/WorkspacePracticeDefinition";
 import { InlineLink } from "@/components/common/InlineLink";
@@ -91,11 +94,13 @@ export function PracticeLevel({
 							<Link
 								to="/w/$workspaceSlug/admin/practices"
 								params={{ workspaceSlug }}
-								search={{ detail: [detailStackKey(practiceFormLevel(practice.slug))] }}
+								search={{ detail: [detailStackKey(setupLevel(practice))] }}
 							/>
 						}
 					>
-						Edit in Practice setup
+						{practice.editedIn === "REPOSITORY"
+							? "Open in Practice setup"
+							: "Edit in Practice setup"}
 					</InlineLink>
 				)
 			}
@@ -191,6 +196,16 @@ export function PracticeLevel({
 	);
 }
 
+/**
+ * Where the link to Practice setup lands. A practice edited in the practice repository has no editor
+ * there: its read-only level says so and offers Edit in Hephaestus.
+ */
+function setupLevel(practice: Practice) {
+	return practice.editedIn === "REPOSITORY"
+		? practiceSetupLevel(practice.slug)
+		: practiceFormLevel(practice.slug);
+}
+
 function practiceHistory(practice: Practice): SheetEvent[] {
 	const events: SheetEvent[] = [
 		{
@@ -233,6 +248,12 @@ function versionEvent(version: PracticeVersion): SheetEvent {
 				{version.reviewChanged && (
 					<span className="block">
 						What a review checks changed, so earlier observations no longer reflect it.
+					</span>
+				)}
+				{version.sourceCommit !== null && (
+					<span className="block">
+						Read from the practice repository at commit{" "}
+						<code>{version.sourceCommit.slice(0, 7)}</code>.
 					</span>
 				)}
 			</>

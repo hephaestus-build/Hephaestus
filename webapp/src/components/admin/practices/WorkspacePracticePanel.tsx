@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ClipboardCheck, Inbox, Pencil, RotateCcw } from "lucide-react";
+import { useId } from "react";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
 
 import { cn } from "cn";
@@ -10,7 +11,12 @@ import {
 } from "@/components/admin/practices/practice-search";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { canResetToCatalog } from "@/components/admin/practices/WorkspaceCatalogOriginBadge";
+import {
+	type EditInHephaestusControl,
+	WorkspaceEditInHephaestusDialog,
+} from "@/components/admin/practices/WorkspaceEditInHephaestusDialog";
 import { WorkspacePracticeDefinition } from "@/components/admin/practices/WorkspacePracticeDefinition";
+import { WorkspacePracticeEditedInNote } from "@/components/admin/practices/WorkspacePracticeEditedInNote";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
@@ -35,6 +41,8 @@ export interface WorkspacePracticePanelProps {
 	/** Where the level sits, from the drawer. */
 	path: LevelPath;
 	onResetToCatalog: () => void;
+	/** Edit in Hephaestus, for a practice edited in the practice repository. */
+	editInHephaestus: EditInHephaestusControl;
 }
 
 export function WorkspacePracticePanel({
@@ -43,7 +51,10 @@ export function WorkspacePracticePanel({
 	nested,
 	path,
 	onResetToCatalog,
+	editInHephaestus,
 }: WorkspacePracticePanelProps) {
+	const editLinkId = useId();
+
 	if (state.status !== "ready") {
 		return (
 			<>
@@ -70,6 +81,11 @@ export function WorkspacePracticePanel({
 
 	const { practice, definitionOptions, groupName } = state;
 	const definition = currentDefinition(practice);
+	// Its folder in the practice repository holds its definition and group, so nothing here may change
+	// them: the server refuses an edit, a reset and an accepted catalog update for it.
+	const editedInRepository = practice.editedIn === "REPOSITORY";
+	const updateWaiting = practice.catalogOrigin.state === "UPDATE_WAITING";
+	const resettable = !editedInRepository && canResetToCatalog(practice.catalogOrigin);
 
 	return (
 		<>
@@ -83,35 +99,46 @@ export function WorkspacePracticePanel({
 			/>
 
 			<DrawerBody>
-				<WorkspacePracticeDefinition
-					practice={practice}
-					definitionOptions={definitionOptions}
-					groupName={groupName}
-					originActions={
-						canResetToCatalog(practice.catalogOrigin) && (
-							<div className="mt-2 flex flex-wrap gap-2">
-								{practice.catalogOrigin.state === "UPDATE_WAITING" && (
-									<Button
-										size="sm"
-										variant="outline"
-										nativeButton={false}
-										render={
-											<Link
-												to="/w/$workspaceSlug/admin/practices/releases"
-												params={{ workspaceSlug }}
-											/>
-										}
-									>
-										<Inbox /> Catalog updates
-									</Button>
-								)}
-								<Button size="sm" variant="outline" onClick={onResetToCatalog}>
-									<RotateCcw /> Reset to catalog
-								</Button>
-							</div>
-						)
-					}
-				/>
+				<div className="space-y-6">
+					{editedInRepository && (
+						<WorkspacePracticeEditedInNote
+							repositoryName={editInHephaestus.repositoryName}
+							sourceCommit={practice.currentVersion.sourceCommit}
+							onEditInHephaestus={() => editInHephaestus.onConfirmingChange(true)}
+						/>
+					)}
+					<WorkspacePracticeDefinition
+						practice={practice}
+						definitionOptions={definitionOptions}
+						groupName={groupName}
+						originActions={
+							(updateWaiting || resettable) && (
+								<div className="mt-2 flex flex-wrap gap-2">
+									{updateWaiting && (
+										<Button
+											size="sm"
+											variant="outline"
+											nativeButton={false}
+											render={
+												<Link
+													to="/w/$workspaceSlug/admin/practices/releases"
+													params={{ workspaceSlug }}
+												/>
+											}
+										>
+											<Inbox /> Catalog updates
+										</Button>
+									)}
+									{resettable && (
+										<Button size="sm" variant="outline" onClick={onResetToCatalog}>
+											<RotateCcw /> Reset to catalog
+										</Button>
+									)}
+								</div>
+							)
+						}
+					/>
+				</div>
 			</DrawerBody>
 
 			<DrawerFooter>
@@ -123,13 +150,29 @@ export function WorkspacePracticePanel({
 				>
 					<ClipboardCheck /> See review outcomes
 				</Link>
-				<DetailStackLink
-					entry={practiceFormLevel(practice.slug)}
-					className={cn(buttonVariants(), "w-full sm:w-auto")}
-				>
-					<Pencil /> Edit practice
-				</DetailStackLink>
+				{!editedInRepository && (
+					<DetailStackLink
+						id={editLinkId}
+						entry={practiceFormLevel(practice.slug)}
+						className={cn(buttonVariants(), "w-full sm:w-auto")}
+					>
+						<Pencil /> Edit practice
+					</DetailStackLink>
+				)}
 			</DrawerFooter>
+
+			{/* Outside the notice, which leaves when the practice becomes editable: the request ends in
+			    the same render that shows Edit practice, so the dialog's final focus lands there. */}
+			<WorkspaceEditInHephaestusDialog
+				practiceName={definition.name}
+				// A practice that is editable never asks: the hook owns the request, and this only keeps a
+				// confirmation from showing over a practice that is no longer edited in the repository.
+				control={{
+					...editInHephaestus,
+					confirming: editInHephaestus.confirming && editedInRepository,
+				}}
+				finalFocus={() => document.getElementById(editLinkId) ?? true}
+			/>
 		</>
 	);
 }
