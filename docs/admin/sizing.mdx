@@ -168,7 +168,9 @@ The figure of 19 MiB is provisional:
 - The tests also did work that production does not do, such as emptying every table.
 - `RssAnon` counts pages that a backend still shares with the postmaster. It does not count kernel stacks and socket buffers.
 
-Measure an installation with this method before you depend on the figure: compare the container's memory charge with its count of backends.
+To check the figure on your installation, sample the `RssAnon` line of each backend's `/proc/<pid>/status` while the server is busy.
+Compare the mean of the server's backends with 19 MiB.
+If they keep more, set `postgresql.resources.limits.memory` above the derived size. The chart accepts a larger limit.
 
 The chart starts PostgreSQL with `jit = off`.
 JIT compiles a query plan whose estimated cost passes `jit_above_cost`.
@@ -181,7 +183,8 @@ An [external PostgreSQL](./external-database) keeps its own settings. Set `jit =
 
 The bundled image derives some settings from its container limit.
 `postgresql.parameters` adds explicit `-c` arguments after that calculation, so these defaults of `values.yaml` replace it.
-The chart refuses to render without one of the memory settings:
+The chart refuses to render without one of the first seven, which the formula reads.
+The last two keep the image from deriving them from the limit, which follows `max_connections`:
 
 | Setting | Value |
 | --- | --- |
