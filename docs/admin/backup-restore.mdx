@@ -50,6 +50,8 @@ The chart cannot see a backup that you take yourself, for example a volume snaps
    The one-host platform issues `hephaestus-postgresql-backup-tls` and sets this value.
 5. Set `postgresql.backup.enabled=true` and `postgresql.backup.s3` with the bucket, the endpoint host name and the region.
    Set `cidr` and `port` when the endpoint is in a private address range.
+   Without sandboxes, also set `networkPolicy.kubernetesApi`, as [Write the values file](./kubernetes#write-the-values-file) step 5 describes.
+   The server reads the backup CronJobs through the API for `HephaestusBackupStale`.
 6. Optional: if a private CA signs the certificate of the endpoint, add the CA to the PostgreSQL TLS Secret as `s3-ca.crt`.
    Then set `postgresql.backup.s3.privateCa=true`.
 7. Upgrade the release.

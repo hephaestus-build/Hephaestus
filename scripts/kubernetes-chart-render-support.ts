@@ -383,6 +383,22 @@ export const alertRulesOn = {
 		alertRules: { configMap: true, prometheusRule: true, labels: { release: "monitoring" } },
 	},
 };
+/** The bundled PostgreSQL's backups, to an S3 repository. */
+export const backupsOn = {
+	postgresql: {
+		backup: {
+			clientTlsSecret: "hephaestus-postgresql-backup-tls",
+			enabled: true,
+			s3: { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" },
+		},
+	},
+};
+/** The rule groups of a rendered rules file. */
+export const ruleGroups = (rules: unknown) =>
+	list(get(parseAllDocuments(String(rules))[0]?.toJS(), "groups"));
+/** The groups of files/hephaestus-alerts.yml, without the backup group, which renders only with backups. */
+export const ruleGroupsWithoutBackups = () =>
+	ruleGroups(alertRules).filter((group) => get(group, "name") !== "hephaestus-backups");
 export const ruleResources = (resources: Resource[]) =>
 	resources.filter((resource) => componentOf(resource) === "alert-rules");
 

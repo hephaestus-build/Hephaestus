@@ -1145,12 +1145,43 @@ drain. docs/admin/kubernetes.mdx § Sandbox prerequisites.
 {{- end -}}
 
 {{/*
-Refuses to render sandboxes without the Kubernetes API endpoint that the network plugin sees.
+"true" when the server reads the backup CronJobs of the bundled PostgreSQL, for the backup staleness alert. It then
+needs the Kubernetes API, with only the Role of templates/postgresql-backup.yaml.
+*/}}
+{{- define "hephaestus.backupsRead" -}}
+{{- and .Values.postgresql.bundled .Values.postgresql.backup.enabled -}}
+{{- end -}}
+
+{{/*
+The groups of files/hephaestus-alerts.yml that apply to this release, as a JSON list. The server reports the backup
+age only when hephaestus.backupsRead gives it the backup CronJobs, so the group hephaestus-backups renders on the same
+switch.
+*/}}
+{{- define "hephaestus.alertRuleGroups" -}}
+{{- $groups := list -}}
+{{- $backups := include "hephaestus.backupsRead" . -}}
+{{- range (fromYaml (.Files.Get "files/hephaestus-alerts.yml")).groups -}}
+{{- if or (ne .name "hephaestus-backups") (eq $backups "true") -}}
+{{- $groups = append $groups . -}}
+{{- end -}}
+{{- end -}}
+{{- toJson $groups -}}
+{{- end -}}
+
+{{/* The backup CronJobs of templates/postgresql-backup.yaml, as a list. */}}
+{{- define "hephaestus.backupCronJobs" -}}
+{{- $name := include "hephaestus.name" (dict "root" . "component" "postgresql-backup") -}}
+{{- list (printf "%s-full" $name) (printf "%s-diff" $name) | toJson -}}
+{{- end -}}
+
+{{/*
+Refuses to render the sandboxes or the backups without the Kubernetes API endpoint that the network plugin sees: the
+server reaches the API for both.
 */}}
 {{- define "hephaestus.kubernetesApiCheck" -}}
 {{- $api := .Values.networkPolicy.kubernetesApi }}
-{{- $_ := required "networkPolicy.kubernetesApi.cidr is required: state the API endpoint that the network plugin sees" $api.cidr }}
+{{- $_ := required "networkPolicy.kubernetesApi.cidr is required for sandboxes or backups: state the API endpoint that the network plugin sees" $api.cidr }}
 {{- if eq (int $api.port) 0 }}
-{{- fail "networkPolicy.kubernetesApi.port is required: state the API endpoint port that the network plugin sees" }}
+{{- fail "networkPolicy.kubernetesApi.port is required for sandboxes or backups: state the API endpoint port that the network plugin sees" }}
 {{- end }}
 {{- end }}

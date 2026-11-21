@@ -34,6 +34,9 @@ They need these target labels from the scrape configuration:
 - `runtime_role="server"`.
 - A different `instance` on each target.
 
+The rule of the group `hephaestus-backups`, `HephaestusBackupStale`, reads the server's metrics with the same labels.
+The server reports the backup age only with the bundled PostgreSQL's backups on, and the chart renders the group only then.
+
 The rules of the group `hephaestus-postgresql` need `job="postgresql"` on the PostgreSQL exporter target.
 
 `HephaestusMetricsUnavailable` fires only for a target that Prometheus still discovers.
@@ -45,7 +48,7 @@ Each rule needs its exporter, scraped by the same Prometheus:
 
 | Exporter | Metrics | Alerts |
 | --- | --- | --- |
-| [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics/blob/main/docs/metrics/workload/cronjob-metrics.md) | `kube_cronjob_status_last_successful_time`, `kube_cronjob_created`, `kube_cronjob_labels`, `kube_deployment_status_replicas_available`, `kube_deployment_status_replicas_unavailable`, `kube_deployment_spec_replicas`, `kube_deployment_labels`, `kube_pod_container_status_restarts_total` | `HephaestusBackupStale`, `HephaestusServerDown`, `HephaestusServerUnready`, `HephaestusServerRestarting` |
+| [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics/blob/main/docs/metrics/workload/deployment-metrics.md) | `kube_deployment_status_replicas_available`, `kube_deployment_status_replicas_unavailable`, `kube_deployment_spec_replicas`, `kube_deployment_labels`, `kube_pod_container_status_restarts_total` | `HephaestusServerDown`, `HephaestusServerUnready`, `HephaestusServerRestarting` |
 | The kubelet's cAdvisor endpoint, `/metrics/cadvisor` | `container_memory_rss`, `container_spec_memory_limit_bytes`, `container_oom_events_total` | `HephaestusContainerMemoryHigh`, `HephaestusContainerOomKilled` |
 | The kubelet's `/metrics` endpoint, with a storage driver that reports volume statistics | `kubelet_volume_stats_available_bytes`, `kubelet_volume_stats_capacity_bytes` | `HephaestusPostgresVolumeFilling` |
 | [cert-manager](https://cert-manager.io/docs/devops-tips/prometheus-metrics/) | `certmanager_certificate_expiration_timestamp_seconds` | `HephaestusCertificateExpiring` |
@@ -67,12 +70,12 @@ The kube-state-metrics, kubelet and cert-manager rules have no series outside Ku
 The server rules find the release's server Deployment, `<release>-server`, by the chart's labels `app.kubernetes.io/name=hephaestus` and `app.kubernetes.io/component=server`.
 kube-state-metrics exports these labels only when you allow them:
 
-- Start kube-state-metrics with `--metric-labels-allowlist=deployments=[app.kubernetes.io/name,app.kubernetes.io/component],cronjobs=[app.kubernetes.io/name,app.kubernetes.io/component,app.kubernetes.io/instance]`.
-- With kube-prometheus-stack, set the value `kube-state-metrics.metricLabelsAllowlist` to `["deployments=[app.kubernetes.io/name,app.kubernetes.io/component]", "cronjobs=[app.kubernetes.io/name,app.kubernetes.io/component,app.kubernetes.io/instance]"]`.
+- Start kube-state-metrics with `--metric-labels-allowlist=deployments=[app.kubernetes.io/name,app.kubernetes.io/component]`.
+- With kube-prometheus-stack, set the value `kube-state-metrics.metricLabelsAllowlist` to `["deployments=[app.kubernetes.io/name,app.kubernetes.io/component]"]`.
 
 Without these labels, the two server rules find no Deployment and never fire.
 
-The other rules find the release's objects by the names that the chart gives them: `data-<release>-postgresql-0`, and the CronJobs `<release>-postgresql-backup-full` and `<release>-postgresql-backup-diff`.
+The volume rules find the release's volume by the name that the chart gives it: `data-<release>-postgresql-0`.
 Another application in the cluster can use the same names, for example another PostgreSQL chart.
 To limit these rules to the release, add a matcher for its namespace, for example `namespace="hephaestus"`.
 Do the same for `HephaestusCertificateExpiring`, which covers every certificate that cert-manager manages in the cluster.
@@ -82,10 +85,8 @@ Thus, the limit depends on the component:
 
 | Object | Shortened when the release name is longer than |
 | --- | --- |
-| The backup CronJobs (`postgresql-backup`) | 34 characters |
 | The PostgreSQL volume (`postgresql`) | 41 characters |
 
-`HephaestusBackupStale` then finds the backup CronJobs by their labels, which the `cronjobs` part of the allowlist above exports.
 For the volume rules, change their name patterns.
 
 ## Alerts
@@ -173,7 +174,7 @@ For the volume rules, change their name patterns.
 | `HephaestusServerRestarting` | `kube_pod_container_status_restarts_total` of the container named `server`, in every namespace | Three restarts in one hour show repeated instability, mostly a loop: the kubelet's backoff doubles from 10 seconds to 5 minutes. The container name selects the server, because the chart shortens a long release name and drops `-server` from the Pod name. On a shared cluster, add a namespace matcher. A replacement Pod starts its counter at 0, so an eviction or a recreation adds none. The rule needs no wait: its window is the hour. The alert stays up for up to an hour after the last restart |
 | `HephaestusServerDown` | `kube_deployment_status_replicas_available` of the server Deployment, while its desired replicas are above 0 | No available server means that the API is down and every provider delivery fails. The wait covers the start of a replacement pod. A Deployment scaled to 0 for maintenance does not fire. A server that is unavailable for a shorter time than the wait does not fire. `HephaestusWebhookRedeliveriesRequested` can then fire for the GitHub deliveries that it lost, when they reach its threshold. Deliveries of other providers have no such alert |
 | `HephaestusServerUnready` | `kube_deployment_status_replicas_unavailable` of the server Deployment, while another replica is available | The other replicas serve, so this is a warning. The wait is longer than the 10 minutes that a new pod waits for the schema |
-| `HephaestusBackupStale` | The newest successful full or differential backup of a release, or the creation time of CronJobs with no successful backup | A differential backup runs each day. The hours above one day let a full backup run |
+| `HephaestusBackupStale` | The server's age of the newest successful full or differential backup, `database_backup_age_seconds`, for 15 minutes. Before the first success, the age counts from the creation of the backup CronJobs. A failed read or a missing CronJob reports an infinite age ([Backup metrics](./metrics#backup-metrics)) | A differential backup runs each day. The hours above one day let a full backup run |
 | `HephaestusPostgresVolumeFilling` | Free space of the PostgreSQL volume | A failed WAL archive fills the volume. The warning gives time to repair the archive. The critical level comes shortly before PostgreSQL stops. The warning covers only the band above the critical level, so the two never fire together |
 | `HephaestusNodeMetricsUnavailable` | `up` of each target with `job="node"` | Without the target's series, the disk and memory rules cannot fire for its node. Five minutes let a restart of node-exporter or of the host pass |
 | `HephaestusNodeDiskFilling` | Free space of a writable node file system, not the volumes that the kubelet mounts for pods | The kubelet's image garbage collection starts at 85 % use and frees space to 80 %. When the space stays low, eviction comes next. The volume rules cover pod volumes |

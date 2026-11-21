@@ -138,6 +138,7 @@ Silences live only until Alertmanager restarts.
 The stack needs no host path and no cluster-wide access, so it does not run the node and cluster exporters.
 It can scrape a node-exporter that runs outside the release: see [Scrape node-exporter](#scrape-node-exporter).
 The stack does not load the group `hephaestus-kubernetes`: it reads kube-state-metrics, the kubelet's volume statistics and cAdvisor metrics, and cert-manager.
+The group `hephaestus-backups` reads the server's metrics, so the stack evaluates `HephaestusBackupStale` with no further exporter when backups are on.
 The stack also does not load the group `hephaestus-pull-deploy`, even when it scrapes node-exporter.
 `HephaestusDeployMetricsMissing` would then fire on each installation whose hosts do not run the reconciler.
 
@@ -222,14 +223,15 @@ Turn on one of two values, in the release's namespace:
 
 | Value | Renders | For |
 | --- | --- | --- |
-| `observability.alertRules.configMap` | A ConfigMap with the file as it is, under the key `hephaestus-alerts.yml` | A Prometheus or a vmalert that mounts the ConfigMap |
+| `observability.alertRules.configMap` | A ConfigMap with the `groups` of the file, under the key `hephaestus-alerts.yml` | A Prometheus or a vmalert that mounts the ConfigMap |
 | `observability.alertRules.prometheusRule` | A PrometheusRule with the `groups` of the file | The Prometheus Operator. Its CRD must exist |
 
 Both are off by default.
+Both leave out the group `hephaestus-backups` without backups: the server then reports no backup age.
 `observability.alertRules.labels` adds labels to both, so that the rule selector of your Prometheus finds them.
 For kube-prometheus-stack, set the `release` label of your monitoring release, or set its `ruleSelector`.
 Mount the ConfigMap into your Prometheus or vmalert, and let its rule loader read the mounted file.
-Without the chart, load the file as it is from the release that you run: `https://github.com/hephaestus-build/Hephaestus/blob/v<version>/deploy/chart/hephaestus/files/hephaestus-alerts.yml`.
+Without the chart, load the file from the release that you run, without the group `hephaestus-backups` if you run no backups: `https://github.com/hephaestus-build/Hephaestus/blob/v<version>/deploy/chart/hephaestus/files/hephaestus-alerts.yml`.
 
 The rules of the group `hephaestus` read the `job` and `runtime_role` labels that your scrape configuration sets, not labels that the chart controls.
 [Alert response](./production-operations-runbook.mdx#alert-response) gives the response to each alert.

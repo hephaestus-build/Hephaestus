@@ -22,7 +22,7 @@ here, and an absent() rule among them, such as HephaestusDeployMetricsMissing, w
 {{- $unscraped = append $unscraped "hephaestus-node" }}
 {{- end }}
 {{- $groups := list }}
-{{- range (fromYaml (.Files.Get "files/hephaestus-alerts.yml")).groups }}
+{{- range (include "hephaestus.alertRuleGroups" . | fromJsonArray) }}
 {{- if not (has .name $unscraped) }}
 {{- /*
 PostgreSQL's and the kernel's counters survive exporter restarts. MetricsQL must skip their first sample, as Prometheus

@@ -10,9 +10,11 @@ import {
 	alertRules,
 	alertRulesOn,
 	assertDatabaseSetup,
+	backupsOn,
 	chart,
 	componentOf,
 	container,
+	envValue,
 	databaseSetupDirectory,
 	exporterParts,
 	get,
@@ -32,6 +34,8 @@ import {
 	rendered,
 	type Resource,
 	reviews,
+	ruleGroups,
+	ruleGroupsWithoutBackups,
 	ruleResources,
 	stackComponents,
 	stackOn,
@@ -60,7 +64,7 @@ const selectedMetrics = (expr: string) =>
 		.match(/\b[a-zA-Z_:][\w:]*\b(?!\s*\()/gu)
 		?.filter((name) => !["and", "or", "unless", "bool", "offset"].includes(name)) ?? [];
 
-await test("the alert rules render as the tested file, and only when asked", () => {
+await test("the alert rules render as the tested file's groups, and only when asked", () => {
 	assert.deepEqual(ruleResources(rendered(layersFor("small"))), []);
 	const resources = ruleResources(rendered([...layersFor("small"), alertRulesOn]));
 	assert.deepEqual(resources.map(kindOf), ["ConfigMap", "PrometheusRule"]);
@@ -69,10 +73,47 @@ await test("the alert rules render as the tested file, and only when asked", () 
 		assert.equal(get(resource, "metadata", "labels", "release"), "monitoring");
 	}
 	const [configMap, prometheusRule] = resources;
-	assert.equal(get(configMap, "data", "hephaestus-alerts.yml"), alertRules);
 	assert.deepEqual(
-		get(prometheusRule, "spec", "groups"),
-		get(parseAllDocuments(alertRules)[0]?.toJS(), "groups"),
+		ruleGroups(get(configMap, "data", "hephaestus-alerts.yml")),
+		ruleGroupsWithoutBackups(),
+	);
+	assert.deepEqual(get(prometheusRule, "spec", "groups"), ruleGroupsWithoutBackups());
+});
+
+await test("the backup alert renders on the switch that gives the server the backup schedules", () => {
+	// The server registers database_backup_age_seconds only with the backup CronJobs, so a rule without them would read
+	// a metric that no server exports. Every rule destination and the server follow hephaestus.backupsRead together.
+	for (const backups of [false, true]) {
+		const resources = rendered([
+			...layersFor("small"),
+			alertRulesOn,
+			stackOn,
+			...(backups ? [backupsOn] : []),
+		]);
+		const [configMap, prometheusRule] = ruleResources(resources);
+		const vmalert = resources.find(
+			(resource) => kindOf(resource) === "ConfigMap" && componentOf(resource) === "vmalert",
+		);
+		const destinations = {
+			configMap: ruleGroups(get(configMap, "data", "hephaestus-alerts.yml")),
+			prometheusRule: list(get(prometheusRule, "spec", "groups")),
+			stack: ruleGroups(get(vmalert, "data", "hephaestus-alerts.yml")),
+		};
+		for (const [destination, groups] of Object.entries(destinations)) {
+			assert.equal(
+				groups.some((group) => get(group, "name") === "hephaestus-backups"),
+				backups,
+				`${destination} with backups ${backups ? "on" : "off"}`,
+			);
+		}
+		assert.equal(
+			envValue(workload(resources, "server"), "HEPHAESTUS_DATABASE_BACKUP_CRONJOBS") !== undefined,
+			backups,
+		);
+	}
+	assert.ok(
+		ruleGroups(alertRules).some((group) => get(group, "name") === "hephaestus-backups"),
+		"the tested file holds the backup group",
 	);
 });
 
@@ -232,7 +273,7 @@ await test("the monitoring stack scrapes this release, evaluates its rules and n
 	);
 	assert.ok(ruleMap);
 	assert.equal(get(podSpec(vmalert), "volumes", 0, "configMap", "name"), nameOf(ruleMap));
-	const tested = list(get(parseAllDocuments(alertRules)[0]?.toJS(), "groups"));
+	const tested = ruleGroupsWithoutBackups();
 	const loaded = list(
 		get(
 			parseAllDocuments(String(get(ruleMap, "data", "hephaestus-alerts.yml")))[0]?.toJS(),
@@ -351,7 +392,8 @@ const stackFor = (values: Layer) => {
 await test("the monitoring stack loads every shipped alert group whose exporter it scrapes", () => {
 	const nodeExporters = ["192.168.5.21:9100", "192.168.5.22:9101"];
 	const shipped = list(get(parseAllDocuments(alertRules)[0]?.toJS(), "groups"));
-	const scraped = stackFor({ observability: { stack: { nodeExporters } } });
+	// With backups, so that the stack loads every group that reads the server's metrics.
+	const scraped = stackFor({ ...backupsOn, observability: { stack: { nodeExporters } } });
 	for (const group of shipped) {
 		const name = String(get(group, "name"));
 		assert.equal(
@@ -432,7 +474,10 @@ await test("a release package ships the alert rules without their promtool cases
 	const resources = rendered([profile("small"), operator, reviews, alertRulesOn], {
 		source: packaged,
 	});
-	assert.equal(get(ruleResources(resources)[0], "data", "hephaestus-alerts.yml"), alertRules);
+	assert.deepEqual(
+		ruleGroups(get(ruleResources(resources)[0], "data", "hephaestus-alerts.yml")),
+		ruleGroupsWithoutBackups(),
+	);
 });
 
 await test("traces reach an in-cluster collector on the endpoint's port, only while tracing is on", () => {
