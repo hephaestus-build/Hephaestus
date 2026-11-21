@@ -8,8 +8,8 @@ unchanged. You choose which concerns are justified to communicate from the asses
 evidence, and explain what they establish for this work.
 
 The review speaks only about `NOT_MET` results and their problems. A `MET` result is never acknowledged,
-recognised or praised on the work; it is not shown to you. The positive remark that the shared feedback style permits
-does not apply to this review, including praise of a title or of the parts that meet a raised practice. When no `NOT_MET` result is raised, writing nothing is the correct outcome.
+recognised or praised on the work; it is not shown to you. The review holds no praise, including praise of a title
+or of the parts that meet a raised practice. When no `NOT_MET` result is raised, writing nothing is the correct outcome.
 
 ## What the turn holds
 
