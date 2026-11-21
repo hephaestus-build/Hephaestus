@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.Gi
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabProjectHook;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
@@ -80,7 +80,7 @@ public class GitLabWebhookService {
     private final GitLabRouteCredential routeCredential;
     private final WorkspaceLookup workspaceLookup;
     private final ConnectionService connectionService;
-    private final ProviderResourceRepairs repairs;
+    private final ProviderResourceRegistrations registrations;
     private final ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle;
     private final WorkspaceRepositoryMonitors monitors;
     private final IntegrationAttentionService attention;
@@ -92,7 +92,7 @@ public class GitLabWebhookService {
             GitLabRouteCredential routeCredential,
             WorkspaceLookup workspaceLookup,
             ConnectionService connectionService,
-            ProviderResourceRepairs repairs,
+            ProviderResourceRegistrations registrations,
             ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle,
             WorkspaceRepositoryMonitors monitors,
             IntegrationAttentionService attention,
@@ -102,7 +102,7 @@ public class GitLabWebhookService {
         this.routeCredential = routeCredential;
         this.workspaceLookup = workspaceLookup;
         this.connectionService = connectionService;
-        this.repairs = repairs;
+        this.registrations = registrations;
         this.tokenLifecycle = tokenLifecycle;
         this.monitors = monitors;
         this.attention = attention;
@@ -257,7 +257,7 @@ public class GitLabWebhookService {
                 long hookId = stored.get().id();
                 String recorded =
                         ProviderResourceAdapter.fingerprint(stored.get().url());
-                if (!repairs.recordOwnership(scopeId, connectionId, version, cfg -> {
+                if (!registrations.recordOwnership(scopeId, connectionId, version, cfg -> {
                     if (!(cfg instanceof GitLabConfig gitlab))
                         throw new IllegalStateException("Expected GitLab config");
                     // Only the hook that was read, and only while it has no ownership.
@@ -295,12 +295,12 @@ public class GitLabWebhookService {
                 return WebhookSetupResult.skipped(WebhookSetupResult.Reason.ROUTING_KEY_UNKNOWN);
             }
 
-            if (storedWebhookId != null) repairs.retireCurrentHook(scopeId, connectionId);
+            if (storedWebhookId != null) registrations.retireCurrentHook(scopeId, connectionId);
             String marker = UUID.randomUUID().toString();
             webhookUrl += RESOURCE_QUERY + marker;
             String registrationUrl = webhookUrl;
             String ownershipHash = ProviderResourceAdapter.fingerprint(registrationUrl);
-            UUID registration = repairs.beginRegistration(
+            UUID registration = registrations.beginRegistration(
                     scopeId,
                     connectionId,
                     new Resource(
@@ -315,7 +315,7 @@ public class GitLabWebhookService {
                     client, scopeId, groupId, webhookUrl, () -> hookConfig(registrationUrl, issued.token()));
 
             // A superseded creation stays discoverable through its committed registration marker.
-            if (!repairs.completeRegistration(scopeId, connectionId, registration, cfg -> {
+            if (!registrations.completeRegistration(scopeId, connectionId, registration, cfg -> {
                 if (!(cfg instanceof GitLabConfig gitlab)) throw new IllegalStateException("Expected GitLab config");
                 return gitlab.withWebhookOwnership(webhookId, ownershipHash, marker);
             })) {
@@ -426,7 +426,7 @@ public class GitLabWebhookService {
                 .filter(project -> !monitored.contains(project) || gone.contains(project))
                 .collect(Collectors.toSet());
         if (!released.isEmpty()) {
-            repairs.releaseHooks(
+            registrations.releaseHooks(
                     scopeId,
                     connectionId,
                     projectHookResources(stored, origin, released),
@@ -487,7 +487,7 @@ public class GitLabWebhookService {
             String marker) {
         List<WebhookInfo> matching = matching(client.listProjectWebhooks(scopeId, projectId), url);
         String ownershipHash = ProviderResourceAdapter.fingerprint(url);
-        UUID registration = repairs.beginRegistration(
+        UUID registration = registrations.beginRegistration(
                 scopeId,
                 connectionId,
                 new Resource(
@@ -505,7 +505,7 @@ public class GitLabWebhookService {
             }
         }
         long hookId = matching.getFirst().id();
-        if (!repairs.completeRegistration(scopeId, connectionId, registration, cfg -> {
+        if (!registrations.completeRegistration(scopeId, connectionId, registration, cfg -> {
             if (!(cfg instanceof GitLabConfig gitlab)) throw new IllegalStateException("Expected GitLab config");
             return gitlab.withProjectHook(projectId, hookId, ownershipHash, marker);
         })) {
@@ -529,7 +529,7 @@ public class GitLabWebhookService {
                         config.projectHooks().stream()
                                 .map(GitLabProjectHook::projectId)
                                 .collect(Collectors.toSet()));
-        repairs.releaseHooks(scopeId, connectionId, hooks, cfg -> ((GitLabConfig) cfg).withoutWebhooks());
+        registrations.releaseHooks(scopeId, connectionId, hooks, cfg -> ((GitLabConfig) cfg).withoutWebhooks());
     }
 
     private static List<Resource> projectHookResources(GitLabConfig config, String origin, Set<Long> projects) {

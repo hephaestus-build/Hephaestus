@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.T
 import de.tum.cit.aet.hephaestus.integration.core.connection.api.ProviderResourceRepairAdminService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.api.ReleaseProviderResourceRepairRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ConnectionProviderRepairRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairDispatcher;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
@@ -93,6 +94,9 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
 
     @Autowired
     private ProviderResourceRepairs resourceRepairs;
+
+    @Autowired
+    private ProviderResourceRegistrations resourceRegistrations;
 
     @Autowired
     private ProviderResourceRepairDispatcher repairDispatcher;
@@ -223,6 +227,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
                 connectionRepository,
                 credentialConverter,
                 resourceRepairs,
+                resourceRegistrations,
                 repairDispatcher,
                 transactionManager,
                 Clock.systemUTC());
@@ -255,6 +260,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
                         connectionRepository,
                         credentialConverter,
                         resourceRepairs,
+                        resourceRegistrations,
                         repairDispatcher,
                         transactionManager,
                         Clock.systemUTC())

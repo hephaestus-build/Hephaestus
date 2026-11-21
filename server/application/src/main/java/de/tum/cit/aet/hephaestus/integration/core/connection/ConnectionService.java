@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -58,6 +59,7 @@ public class ConnectionService {
     private final SourceProviderNamespaces sourceNamespaces;
     private final Clock clock;
     private final ProviderResourceRepairs resourceRepairs;
+    private final ProviderResourceRegistrations resourceRegistrations;
 
     public ConnectionService(
             ConnectionRepository connectionRepository,
@@ -69,11 +71,13 @@ public class ConnectionService {
             SourceProviderNamespaces sourceNamespaces,
             Clock clock,
             ProviderResourceRepairs resourceRepairs,
+            ProviderResourceRegistrations resourceRegistrations,
             ActiveScmConnections activeScm) {
         this.connectionRepository = connectionRepository;
         this.activeScm = activeScm;
         this.clock = clock;
         this.resourceRepairs = resourceRepairs;
+        this.resourceRegistrations = resourceRegistrations;
         this.sourceNamespaces = sourceNamespaces;
         this.credentialReader = credentialReader;
         this.auditRepository = auditRepository;
@@ -583,7 +587,7 @@ public class ConnectionService {
                 connection,
                 req,
                 locked -> {
-                    resourceRepairs.requestRemoval(locked, false);
+                    resourceRegistrations.requestRemoval(locked, false);
                     erase.run();
                 },
                 /* fenceOnActiveSyncJob */ false, /* retainForTeardown */
@@ -668,7 +672,7 @@ public class ConnectionService {
                     && (connection.getKind() == IntegrationKind.GITLAB
                             || connection.getKind() == IntegrationKind.OUTLINE)
                     && !connection.providerRepairWasCaptured()) {
-                resourceRepairs.requestRemoval(connection, current == IntegrationState.SUSPENDED);
+                resourceRegistrations.requestRemoval(connection, current == IntegrationState.SUSPENDED);
             }
             connection.detachProviderWebhook();
             sourceNamespaces.ensure(connection.getKind(), connection.getConfig());
@@ -689,7 +693,7 @@ public class ConnectionService {
         auditRepository.save(audit);
         if ((req.next() == IntegrationState.UNINSTALLED && retainForTeardown)
                 || req.next() == IntegrationState.SUSPENDED) {
-            resourceRepairs.requestRemoval(connection, req.next() == IntegrationState.SUSPENDED);
+            resourceRegistrations.requestRemoval(connection, req.next() == IntegrationState.SUSPENDED);
         }
         connection.transitionTo(req.next(), req.eventType(), req.detail());
         Instant now = clock.instant();

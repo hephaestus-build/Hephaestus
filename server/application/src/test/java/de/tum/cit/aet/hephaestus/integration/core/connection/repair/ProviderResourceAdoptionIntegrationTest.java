@@ -205,7 +205,7 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
         Context context = context(provider.adapter);
         Connection owner = owner(provider, false, false, IntegrationState.SUSPENDED);
         // The state committed without a wake or an existing fence. The durable sweep discovers it.
-        assertThat(context.repairs().suspendedOutlineHooks())
+        assertThat(context.registrations().suspendedOutlineHooks())
                 .anyMatch(candidate -> candidate.connectionId() == owner.getId());
         provider.deleteUnavailable = true;
         context.dispatcher().reconcile();
@@ -255,7 +255,7 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
                 marker,
                 ProviderResourceAdapter.fingerprint(provider.hookUrl(false)));
         UUID intent = Objects.requireNonNull(context.transactions()
-                .execute(status -> context.repairs()
+                .execute(status -> context.registrations()
                         .beginRegistration(owner.getWorkspace().getId(), owner.getId(), registration)));
         created.add(intent);
         context.transactions().executeWithoutResult(status -> {
@@ -265,7 +265,7 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
             ConnectionFixtures.reachState(current, IntegrationState.UNINSTALLED);
         });
         Boolean adopted = context.transactions()
-                .execute(status -> context.repairs()
+                .execute(status -> context.registrations()
                         .completeRegistration(
                                 owner.getWorkspace().getId(),
                                 owner.getId(),
@@ -655,7 +655,7 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
             Connection current = connections
                     .findByIdAndWorkspaceId(owner.getId(), owner.getWorkspace().getId())
                     .orElseThrow();
-            context.repairs().requestRemoval(current, false);
+            context.registrations().requestRemoval(current, false);
             return references
                     .findByWorkspaceIdAndConnection_Id(owner.getWorkspace().getId(), owner.getId())
                     .stream()
@@ -706,7 +706,6 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
                 connections,
                 credentials,
                 factory.getBeanProvider(ProviderResourceAdapter.class),
-                event -> {},
                 clock);
         ReflectionTestUtils.setField(coordination, "entityManager", Objects.requireNonNull(entities));
         var transactionsAdvice = new TransactionInterceptor();
@@ -715,14 +714,28 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
         var proxy = new ProxyFactory(coordination);
         proxy.addAdvice(transactionsAdvice);
         ProviderResourceRepairs transactionalCoordination = (ProviderResourceRepairs) proxy.getProxy();
+        ProviderResourceRegistrations registrations = new ProviderResourceRegistrations(
+                rows, references, connections, transactionalCoordination, event -> {}, clock);
+        ReflectionTestUtils.setField(registrations, "entityManager", Objects.requireNonNull(entities));
+        var registrationProxy = new ProxyFactory(registrations);
+        registrationProxy.addAdvice(transactionsAdvice);
+        ProviderResourceRegistrations transactionalRegistrations =
+                (ProviderResourceRegistrations) registrationProxy.getProxy();
         ProviderResourceRepairDispatcher dispatcher = new ProviderResourceRepairDispatcher(
-                rows, references, transactionalCoordination, manager, clock, new SimpleMeterRegistry());
+                rows,
+                references,
+                transactionalCoordination,
+                transactionalRegistrations,
+                manager,
+                clock,
+                new SimpleMeterRegistry());
         ReflectionTestUtils.setField(dispatcher, "entityManager", Objects.requireNonNull(entities));
-        return new Context(coordination, dispatcher, new TransactionTemplate(manager), clock);
+        return new Context(coordination, registrations, dispatcher, new TransactionTemplate(manager), clock);
     }
 
     private record Context(
             ProviderResourceRepairs repairs,
+            ProviderResourceRegistrations registrations,
             ProviderResourceRepairDispatcher dispatcher,
             TransactionTemplate transactions,
             TestClock clock) {}

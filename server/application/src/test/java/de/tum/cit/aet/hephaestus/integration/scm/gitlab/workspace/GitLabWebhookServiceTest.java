@@ -25,7 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -98,7 +98,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     private ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle;
 
     @Mock
-    private ProviderResourceRepairs repairs;
+    private ProviderResourceRegistrations repairs;
 
     @Mock
     private WorkspaceRepositoryMonitors monitors;
@@ -627,7 +627,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                     new GitLabRouteCredential(unconfigured),
                     workspaceLookup,
                     connectionService,
-                    mock(ProviderResourceRepairs.class),
+                    mock(ProviderResourceRegistrations.class),
                     tokenLifecycle,
                     monitors,
                     attention,

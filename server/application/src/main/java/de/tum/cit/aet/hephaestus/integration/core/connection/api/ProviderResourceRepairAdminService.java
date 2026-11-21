@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ConnectionProviderRepairRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
@@ -35,6 +36,7 @@ public class ProviderResourceRepairAdminService {
     private final ProviderResourceRepairRepository repairs;
     private final ConnectionProviderRepairRepository references;
     private final ProviderResourceRepairs coordination;
+    private final ProviderResourceRegistrations registrations;
     private final ConfigAuditPort audit;
 
     @PersistenceContext
@@ -44,10 +46,12 @@ public class ProviderResourceRepairAdminService {
             ProviderResourceRepairRepository repairs,
             ConnectionProviderRepairRepository references,
             ProviderResourceRepairs coordination,
+            ProviderResourceRegistrations registrations,
             ConfigAuditPort audit) {
         this.repairs = repairs;
         this.references = references;
         this.coordination = coordination;
+        this.registrations = registrations;
         this.audit = audit;
     }
 
@@ -144,7 +148,7 @@ public class ProviderResourceRepairAdminService {
                     "Confirm and release the old bot-token removal before releasing its bot-user fence.");
         }
         CurrentAccount.requireId();
-        coordination.clearCompletedHook(repair.getId(), resource);
+        registrations.clearCompletedHook(repair.getId(), resource);
         // The audit keeps confirmation and attribution, never a copy of the retained provider identifier.
         var owners = references.findByRepair_Id(repair.getId());
         if (owners.isEmpty()) {

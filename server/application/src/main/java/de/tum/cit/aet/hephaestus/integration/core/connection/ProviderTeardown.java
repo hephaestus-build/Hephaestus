@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.SweepRowFailures;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairDispatcher;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -38,6 +39,7 @@ public class ProviderTeardown {
     private final ConnectionRepository connections;
     private final CredentialBundleConverter converter;
     private final ProviderResourceRepairs repairs;
+    private final ProviderResourceRegistrations registrations;
     private final ProviderResourceRepairDispatcher dispatcher;
     private final TransactionTemplate transactions;
     private final Clock clock;
@@ -46,12 +48,14 @@ public class ProviderTeardown {
             ConnectionRepository connections,
             CredentialBundleConverter converter,
             ProviderResourceRepairs repairs,
+            ProviderResourceRegistrations registrations,
             ProviderResourceRepairDispatcher dispatcher,
             PlatformTransactionManager transactionManager,
             Clock clock) {
         this.connections = connections;
         this.converter = converter;
         this.repairs = repairs;
+        this.registrations = registrations;
         this.dispatcher = dispatcher;
         this.transactions = new TransactionTemplate(transactionManager);
         this.clock = clock;
@@ -135,7 +139,7 @@ public class ProviderTeardown {
 
     private void captureIfNeeded(Connection connection) {
         if (!connection.providerRepairWasCaptured()) {
-            repairs.requestRemoval(connection, false);
+            registrations.requestRemoval(connection, false);
             connection.markProviderRepairCaptured();
         }
     }

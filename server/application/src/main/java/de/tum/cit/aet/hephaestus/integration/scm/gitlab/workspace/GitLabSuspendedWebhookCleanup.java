@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMaintenanceQueries;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -34,6 +35,7 @@ public class GitLabSuspendedWebhookCleanup {
     private final ConnectionCommands connections;
     private final ConnectionMaintenanceQueries maintenanceQueries;
     private final ProviderResourceRepairs repairs;
+    private final ProviderResourceRegistrations registrations;
     private final TransactionTemplate transactions;
 
     @PersistenceContext
@@ -43,10 +45,12 @@ public class GitLabSuspendedWebhookCleanup {
             ConnectionCommands connections,
             ConnectionMaintenanceQueries maintenanceQueries,
             ProviderResourceRepairs repairs,
+            ProviderResourceRegistrations registrations,
             PlatformTransactionManager transactionManager) {
         this.connections = connections;
         this.maintenanceQueries = maintenanceQueries;
         this.repairs = repairs;
+        this.registrations = registrations;
         this.transactions = new TransactionTemplate(transactionManager);
     }
 
@@ -69,7 +73,7 @@ public class GitLabSuspendedWebhookCleanup {
                 if (connection.getKind() != IntegrationKind.GITLAB
                         || connection.getState() != IntegrationState.SUSPENDED
                         || !(connection.getConfig() instanceof GitLabConfig)) return;
-                repairs.requestRemoval(connection, true);
+                registrations.requestRemoval(connection, true);
             });
         } catch (RuntimeException failure) {
             log.warn(

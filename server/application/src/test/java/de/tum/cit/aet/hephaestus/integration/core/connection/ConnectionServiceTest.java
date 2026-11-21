@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionLifecycleEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -135,6 +136,7 @@ class ConnectionServiceTest extends BaseUnitTest {
                 mock(SourceProviderNamespaces.class),
                 Clock.fixed(Instant.parse("2026-11-03T12:00:00Z"), ZoneOffset.UTC),
                 mock(ProviderResourceRepairs.class),
+                mock(ProviderResourceRegistrations.class),
                 new ActiveScmConnections(connectionRepository, mock(CredentialReader.class)));
         // Default: the connection is free. Only the disconnect fence ever asks.
         lenient().when(syncJobService.requestCancelForTeardown(anyLong())).thenReturn(Optional.empty());

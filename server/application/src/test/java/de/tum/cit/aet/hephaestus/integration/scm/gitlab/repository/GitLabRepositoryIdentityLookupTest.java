@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -106,6 +107,7 @@ class GitLabRepositoryIdentityLookupTest extends BaseUnitTest {
                 mock(SourceProviderNamespaces.class),
                 Clock.systemUTC(),
                 mock(ProviderResourceRepairs.class),
+                mock(ProviderResourceRegistrations.class),
                 new ActiveScmConnections(connections, credentials));
     }
 }

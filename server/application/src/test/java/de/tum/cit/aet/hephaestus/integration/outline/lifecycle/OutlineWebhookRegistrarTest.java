@@ -20,7 +20,7 @@ import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -77,14 +77,14 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     private ConnectionQueries connectionQueries;
 
     @Mock
-    private ProviderResourceRepairs repairs;
+    private ProviderResourceRegistrations registrations;
 
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
 
     private OutlineWebhookRegistrar registrar(String externalUrl) {
         return new OutlineWebhookRegistrar(
                 connectionService,
-                repairs,
+                registrations,
                 outlineApiClient,
                 CREDENTIAL,
                 new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create(externalUrl))),
@@ -95,9 +95,11 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
 
     @BeforeEach
     void storeUpdates() {
-        lenient().when(repairs.beginRegistration(anyLong(), anyLong(), any())).thenReturn(UUID.randomUUID());
         lenient()
-                .when(repairs.completeRegistration(anyLong(), anyLong(), any(), any()))
+                .when(registrations.beginRegistration(anyLong(), anyLong(), any()))
+                .thenReturn(UUID.randomUUID());
+        lenient()
+                .when(registrations.completeRegistration(anyLong(), anyLong(), any(), any()))
                 .thenReturn(true);
         // An ACTIVE connection takes the update; the tests that need a disconnected one override this.
         lenient().when(connectionService.updateConfig(anyLong(), any(), any())).thenReturn(Optional.of(connection));
@@ -162,7 +164,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<UnaryOperator<ConnectionConfig>> mutator = ArgumentCaptor.forClass(UnaryOperator.class);
-        verify(repairs).completeRegistration(eq(WORKSPACE_ID), anyLong(), any(), mutator.capture());
+        verify(registrations).completeRegistration(eq(WORKSPACE_ID), anyLong(), any(), mutator.capture());
         ConnectionConfig.OutlineConfig updated =
                 (ConnectionConfig.OutlineConfig) mutator.getValue().apply(config(null, null));
         assertThat(updated.webhookSubscriptionId()).isEqualTo("sub-99");
@@ -176,12 +178,13 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         stubActiveConnection(config(null, null));
         stubToken();
         stubCreateReturning("sub-99");
-        when(repairs.completeRegistration(anyLong(), anyLong(), any(), any())).thenReturn(false);
+        when(registrations.completeRegistration(anyLong(), anyLong(), any(), any()))
+                .thenReturn(false);
 
         registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient, never()).deleteWebhookSubscription(any(), any(), any());
-        verify(repairs).completeRegistration(eq(WORKSPACE_ID), anyLong(), any(), any());
+        verify(registrations).completeRegistration(eq(WORKSPACE_ID), anyLong(), any(), any());
     }
 
     @Test
@@ -189,13 +192,13 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         stubActiveConnection(config(null, null));
         stubToken();
         stubCreateReturning("sub-99");
-        when(repairs.completeRegistration(anyLong(), anyLong(), any(), any()))
+        when(registrations.completeRegistration(anyLong(), anyLong(), any(), any()))
                 .thenThrow(new IllegalStateException("optimistic lock"));
 
         registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient, never()).deleteWebhookSubscription(any(), any(), any());
-        verify(repairs).completeRegistration(eq(WORKSPACE_ID), anyLong(), any(), any());
+        verify(registrations).completeRegistration(eq(WORKSPACE_ID), anyLong(), any(), any());
     }
 
     @Test
@@ -226,7 +229,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     void ensureSubscription_skipsWhenRoutingCredentialsAreMissing() {
         new OutlineWebhookRegistrar(
                         connectionService,
-                        repairs,
+                        registrations,
                         outlineApiClient,
                         credential(""),
                         new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create(API_ORIGIN))),
@@ -276,8 +279,8 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         // The new subscription is stored, then the disabled one is deleted upstream.
         @SuppressWarnings("unchecked")
         ArgumentCaptor<UnaryOperator<ConnectionConfig>> mutator = ArgumentCaptor.forClass(UnaryOperator.class);
-        verify(repairs).retireCurrentHook(eq(WORKSPACE_ID), anyLong());
-        verify(repairs).completeRegistration(eq(WORKSPACE_ID), anyLong(), any(), mutator.capture());
+        verify(registrations).retireCurrentHook(eq(WORKSPACE_ID), anyLong());
+        verify(registrations).completeRegistration(eq(WORKSPACE_ID), anyLong(), any(), mutator.capture());
         verify(outlineApiClient, never()).deleteWebhookSubscription(any(), any(), any());
         ConnectionConfig.OutlineConfig stored =
                 (ConnectionConfig.OutlineConfig) mutator.getValue().apply(config("sub-1", ROUTE));
@@ -308,7 +311,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
 
         registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
-        verify(repairs).retireCurrentHook(eq(WORKSPACE_ID), anyLong());
+        verify(registrations).retireCurrentHook(eq(WORKSPACE_ID), anyLong());
         verify(outlineApiClient, never()).deleteWebhookSubscription(any(), any(), any());
         verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
     }
@@ -324,7 +327,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
 
         registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
-        verify(repairs).retireCurrentHook(eq(WORKSPACE_ID), anyLong());
+        verify(registrations).retireCurrentHook(eq(WORKSPACE_ID), anyLong());
         verify(outlineApiClient, never()).deleteWebhookSubscription(any(), any(), any());
         verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
     }
@@ -339,7 +342,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
 
         registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
-        verify(repairs).retireCurrentHook(eq(WORKSPACE_ID), anyLong());
+        verify(registrations).retireCurrentHook(eq(WORKSPACE_ID), anyLong());
         verify(outlineApiClient, never()).deleteWebhookSubscription(any(), any(), any());
         verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
     }
