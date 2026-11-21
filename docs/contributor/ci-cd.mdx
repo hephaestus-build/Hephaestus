@@ -949,6 +949,7 @@ Only the sandbox container and the model provider are stubbed.
 It runs when the server suites are selected under the tier and path rules above.
 A change to capture, the gateway, the proxy or admission can stop every review while each unit test still passes.
 The stub fixes the model's judgement, its read receipts and its coverage, so the test does not check how the runner derives them.
+The `review` shard also holds the contract tests, which [Integration shards](#integration-shards) describes.
 
 On a selected PR, adapter qualification deliberately exceeds a review container's memory limit through the production sandbox adapter.
 It requires exit code 137 and the recorded `oom_killed` reason, with no `evicted` increment.
@@ -1500,8 +1501,20 @@ A commit from before an image was renamed or added published nothing under that 
 
 ### Integration shards
 
-The `review` shard holds `ReviewEndToEndIntegrationTest`.
-The [tier and path rules](#two-verification-tiers) select it and the numbered shards.
+The `review` shard holds `ReviewEndToEndIntegrationTest` and the contract tests.
+A contract test checks the code against a file that ships beside it, or bounds the statements of one request.
+A test opts in by its name:
+
+- `de.tum.cit.aet.hephaestus.Schema*IntegrationTest` checks the migrated schema, for example its foreign-key indexes and column types.
+- `ScrapeContractIntegrationTest` checks that the server exports every metric that the alert rules read.
+- `*CostIntegrationTest` bounds the SQL statements of one read or request.
+
+Every pull request that selects the server suites runs them.
+In a numbered shard, the merge queue would be the first run to catch a broken contract, and a failure there removes the whole group.
+Most of their cost is the start of the test contexts that they bring.
+
+`reviewShardTests` in `server/application/build.gradle.kts` lists the names, and the numbered shards leave them out.
+The [tier and path rules](#two-verification-tiers) select the `review` shard and the numbered shards.
 
 The numbered shards split every other integration class by the seconds that it took.
 Gradle sorts the classes from the longest to the shortest and puts each class on the shard with the least total so far.
