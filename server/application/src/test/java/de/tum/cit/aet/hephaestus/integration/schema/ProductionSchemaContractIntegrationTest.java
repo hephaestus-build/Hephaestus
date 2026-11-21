@@ -150,6 +150,14 @@ class ProductionSchemaContractIntegrationTest {
     }
 
     @Test
+    void shouldNotKeepAnActivityIndexThatNoQueryReads() {
+        // Each query that filters on event_type also filters on the workspace or the target.
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT to_regclass('public.idx_activity_event_type_time')::text", String.class))
+                .isNull();
+    }
+
+    @Test
     void shouldAcquireAndReleaseSchedulerLocksAgainstTheMigratedSchema() {
         String name = "schema-" + UUID.randomUUID();
         var configuration = new LockConfiguration(Instant.now(), name, Duration.ofMinutes(1), Duration.ZERO);

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795273238731-1" author="hephaestus" runInTransaction="false">
+    <comment>No query leads with event_type: each one that filters on it also filters on the workspace or the target, which idx_activity_event_workspace_covering and idx_activity_event_target serve. Every activity write still updated this index. CONCURRENTLY drops it without blocking writes.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_activity_event_type_time</sql>
+    <rollback>
+      <sql>CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_activity_event_type_time ON activity_event (event_type, occurred_at)</sql>
+    </rollback>
+  </changeSet>
+</databaseChangeLog>
