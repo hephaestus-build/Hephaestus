@@ -103,14 +103,14 @@ erDiagram
         UUID id PK
         TEXT actor
         TIMESTAMPTZ changed_at "NOT NULL"
-        UUID copy_id "NOT NULL"
+        UUID copy_id FK "NOT NULL"
         INTEGER generation "NOT NULL"
         BIGINT item_id UK "NOT NULL"
         BOOLEAN resolved "NOT NULL"
         VARCHAR(16) state "NOT NULL"
         VARCHAR(32) stop_reason
         TEXT thread_ref UK "NOT NULL"
-        BIGINT workspace_id UK "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
     }
 
     Practice {
@@ -403,6 +403,7 @@ erDiagram
     Workspace ||--o{ FeedbackDecision : has
     Feedback ||--o{ FeedbackResponse : has
     Workspace ||--o{ FeedbackResponse : has
+    FeedbackCopy ||--o{ FeedbackThreadResolution : has
     Workspace ||--o{ Practice : has
     PracticeGroup ||--o{ Practice : has
     Workspace ||--o{ PracticeGroup : has
