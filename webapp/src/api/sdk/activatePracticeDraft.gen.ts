@@ -3,7 +3,11 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ActivatePracticeDraftData, ActivatePracticeDraftResponses } from "../types.gen.js";
+import type {
+	ActivatePracticeDraftData,
+	ActivatePracticeDraftErrors,
+	ActivatePracticeDraftResponses,
+} from "../types.gen.js";
 
 /**
  * Put a draft practice in use
@@ -12,8 +16,12 @@ import type { ActivatePracticeDraftData, ActivatePracticeDraftResponses } from "
  */
 export const activatePracticeDraft = <ThrowOnError extends boolean = false>(
 	options: Options<ActivatePracticeDraftData, ThrowOnError>,
-): RequestResult<ActivatePracticeDraftResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<ActivatePracticeDraftResponses, unknown, ThrowOnError>({
+): RequestResult<ActivatePracticeDraftResponses, ActivatePracticeDraftErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		ActivatePracticeDraftResponses,
+		ActivatePracticeDraftErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}/state",
 		...options,

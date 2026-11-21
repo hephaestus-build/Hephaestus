@@ -17902,6 +17902,19 @@ export type ListPracticeDraftsData = {
 	url: "/workspaces/{workspaceSlug}/practice-drafts";
 };
 
+export type ListPracticeDraftsErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type ListPracticeDraftsError = ListPracticeDraftsErrors[keyof ListPracticeDraftsErrors];
+
 export type ListPracticeDraftsResponses = {
 	/**
 	 * OK
@@ -17924,6 +17937,19 @@ export type DeletePracticeDraftData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}";
 };
+
+export type DeletePracticeDraftErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type DeletePracticeDraftError = DeletePracticeDraftErrors[keyof DeletePracticeDraftErrors];
 
 export type DeletePracticeDraftResponses = {
 	/**
@@ -17948,6 +17974,19 @@ export type SavePracticeDraftData = {
 	url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}";
 };
 
+export type SavePracticeDraftErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type SavePracticeDraftError = SavePracticeDraftErrors[keyof SavePracticeDraftErrors];
+
 export type SavePracticeDraftResponses = {
 	/**
 	 * OK
@@ -17970,6 +18009,20 @@ export type ActivatePracticeDraftData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}/state";
 };
+
+export type ActivatePracticeDraftErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type ActivatePracticeDraftError =
+	ActivatePracticeDraftErrors[keyof ActivatePracticeDraftErrors];
 
 export type ActivatePracticeDraftResponses = {
 	/**

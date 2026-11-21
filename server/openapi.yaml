@@ -10540,6 +10540,18 @@ paths:
                 items:
                   $ref: "#/components/schemas/PracticeDraft"
           description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
       summary: List the draft practices
       tags:
       - practice-draft
@@ -10564,6 +10576,18 @@ paths:
       responses:
         "204":
           description: The draft practice is deleted
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
       summary: Delete a draft practice and its trials
       tags:
       - practice-draft
@@ -10601,6 +10625,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeDraft"
           description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
       summary: Save a practice folder to try
       tags:
       - practice-draft
@@ -10632,6 +10668,18 @@ paths:
       responses:
         "204":
           description: The practice is in use
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
       summary: Put a draft practice in use
       tags:
       - practice-draft

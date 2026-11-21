@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { DeletePracticeDraftData, DeletePracticeDraftResponses } from "../types.gen.js";
+import type {
+	DeletePracticeDraftData,
+	DeletePracticeDraftErrors,
+	DeletePracticeDraftResponses,
+} from "../types.gen.js";
 
 /**
  * Delete a draft practice and its trials
  */
 export const deletePracticeDraft = <ThrowOnError extends boolean = false>(
 	options: Options<DeletePracticeDraftData, ThrowOnError>,
-): RequestResult<DeletePracticeDraftResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<DeletePracticeDraftResponses, unknown, ThrowOnError>({
+): RequestResult<DeletePracticeDraftResponses, DeletePracticeDraftErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		DeletePracticeDraftResponses,
+		DeletePracticeDraftErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}",
 		...options,

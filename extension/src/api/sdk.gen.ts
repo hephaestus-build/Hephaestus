@@ -11,24 +11,34 @@ import {
 } from "./client/index.js";
 import type {
 	AcceptCatalogPracticeReleaseData,
+	AcceptCatalogPracticeReleaseErrors,
 	AcceptCatalogPracticeReleaseResponses,
 	AcceptPracticeReleaseData,
+	AcceptPracticeReleaseErrors,
 	AcceptPracticeReleaseResponses,
 	AcknowledgeCatalogGroupData,
+	AcknowledgeCatalogGroupErrors,
 	AcknowledgeCatalogGroupResponses,
 	AcknowledgeCatalogPracticeData,
+	AcknowledgeCatalogPracticeErrors,
 	AcknowledgeCatalogPracticeResponses,
 	ActivatePracticeDraftData,
+	ActivatePracticeDraftErrors,
 	ActivatePracticeDraftResponses,
 	AddLabelToTeamData,
+	AddLabelToTeamErrors,
 	AddLabelToTeamResponses,
 	AddRepositoryToMonitorData,
+	AddRepositoryToMonitorErrors,
 	AddRepositoryToMonitorResponses,
 	AdminCheckReleaseData,
+	AdminCheckReleaseErrors,
 	AdminCheckReleaseResponses,
 	AdminCountAuthEventsData,
+	AdminCountAuthEventsErrors,
 	AdminCountAuthEventsResponses,
 	AdminCountConfigAuditEventsData,
+	AdminCountConfigAuditEventsErrors,
 	AdminCountConfigAuditEventsResponses,
 	AdminCreateLlmCallPoolData,
 	AdminCreateLlmCallPoolErrors,
@@ -40,6 +50,7 @@ import type {
 	AdminCreateLlmModelErrors,
 	AdminCreateLlmModelResponses,
 	AdminCreateLoginProviderData,
+	AdminCreateLoginProviderErrors,
 	AdminCreateLoginProviderResponses,
 	AdminDeleteLlmCallPoolData,
 	AdminDeleteLlmCallPoolErrors,
@@ -51,61 +62,88 @@ import type {
 	AdminDeleteLlmModelErrors,
 	AdminDeleteLlmModelResponses,
 	AdminDeleteLoginProviderData,
+	AdminDeleteLoginProviderErrors,
 	AdminDeleteLoginProviderResponses,
 	AdminErasePersonDataData,
+	AdminErasePersonDataErrors,
 	AdminErasePersonDataResponses,
 	AdminExportAuthEventsData,
+	AdminExportAuthEventsErrors,
 	AdminExportAuthEventsResponses,
 	AdminExportPersonDataData,
+	AdminExportPersonDataErrors,
 	AdminExportPersonDataResponses,
 	AdminGetConfigurationReadinessData,
+	AdminGetConfigurationReadinessErrors,
 	AdminGetConfigurationReadinessResponses,
 	AdminGetInstanceSettingsData,
+	AdminGetInstanceSettingsErrors,
 	AdminGetInstanceSettingsResponses,
 	AdminGetLlmSettingsData,
+	AdminGetLlmSettingsErrors,
 	AdminGetLlmSettingsResponses,
 	AdminGetLlmUsageReportData,
+	AdminGetLlmUsageReportErrors,
 	AdminGetLlmUsageReportResponses,
 	AdminGetPersonDataRequestData,
+	AdminGetPersonDataRequestErrors,
 	AdminGetPersonDataRequestResponses,
 	AdminGetReleaseData,
+	AdminGetReleaseErrors,
 	AdminGetReleaseResponses,
 	AdminListAuthEventsData,
+	AdminListAuthEventsErrors,
 	AdminListAuthEventsResponses,
 	AdminListConfigAuditEventsData,
+	AdminListConfigAuditEventsErrors,
 	AdminListConfigAuditEventsResponses,
 	AdminListLlmCallPoolModelsData,
+	AdminListLlmCallPoolModelsErrors,
 	AdminListLlmCallPoolModelsResponses,
 	AdminListLlmCallPoolsData,
+	AdminListLlmCallPoolsErrors,
 	AdminListLlmCallPoolsResponses,
 	AdminListLlmConnectionsData,
+	AdminListLlmConnectionsErrors,
 	AdminListLlmConnectionsResponses,
 	AdminListLlmModelsData,
+	AdminListLlmModelsErrors,
 	AdminListLlmModelsResponses,
 	AdminListLoginProvidersData,
+	AdminListLoginProvidersErrors,
 	AdminListLoginProvidersResponses,
 	AdminListPersonDataProvidersData,
+	AdminListPersonDataProvidersErrors,
 	AdminListPersonDataProvidersResponses,
 	AdminListProductFeedbackData,
+	AdminListProductFeedbackErrors,
 	AdminListProductFeedbackResponses,
 	AdminListUsersData,
+	AdminListUsersErrors,
 	AdminListUsersResponses,
 	AdminListWorkspacesData,
+	AdminListWorkspacesErrors,
 	AdminListWorkspacesResponses,
 	AdminPreviewPersonDataData,
+	AdminPreviewPersonDataErrors,
 	AdminPreviewPersonDataResponses,
 	AdminProbeLlmConnectionData,
 	AdminProbeLlmConnectionDraftData,
+	AdminProbeLlmConnectionDraftErrors,
 	AdminProbeLlmConnectionDraftResponses,
+	AdminProbeLlmConnectionErrors,
 	AdminProbeLlmConnectionResponses,
 	AdminProbeLlmModelCapabilitiesData,
+	AdminProbeLlmModelCapabilitiesErrors,
 	AdminProbeLlmModelCapabilitiesResponses,
 	AdminRevokeUserSessionsData,
+	AdminRevokeUserSessionsErrors,
 	AdminRevokeUserSessionsResponses,
 	AdminSendTestEmailData,
 	AdminSendTestEmailErrors,
 	AdminSendTestEmailResponses,
 	AdminTriageProductFeedbackData,
+	AdminTriageProductFeedbackErrors,
 	AdminTriageProductFeedbackResponses,
 	AdminUpdateLlmCallPoolData,
 	AdminUpdateLlmCallPoolErrors,
@@ -126,30 +164,40 @@ import type {
 	AdminUpdateLlmModelSharingErrors,
 	AdminUpdateLlmModelSharingResponses,
 	AdminUpdateLlmSettingsData,
+	AdminUpdateLlmSettingsErrors,
 	AdminUpdateLlmSettingsResponses,
 	AdminUpdateLoginProviderData,
+	AdminUpdateLoginProviderErrors,
 	AdminUpdateLoginProviderResponses,
 	AdminUpdateSilentModeData,
 	AdminUpdateSilentModeErrors,
 	AdminUpdateSilentModeResponses,
 	AdminUpdateUserData,
+	AdminUpdateUserErrors,
 	AdminUpdateUserResponses,
 	AdminUpdateUserStatusData,
+	AdminUpdateUserStatusErrors,
 	AdminUpdateUserStatusResponses,
 	AdminUpdateWorkspaceLlmBudgetData,
+	AdminUpdateWorkspaceLlmBudgetErrors,
 	AdminUpdateWorkspaceLlmBudgetResponses,
 	AdoptGitHubInstallationData,
+	AdoptGitHubInstallationErrors,
 	AdoptGitHubInstallationResponses,
 	AdoptGroupData,
+	AdoptGroupErrors,
 	AdoptGroupResponses,
 	AdoptPracticeData,
 	AdoptPracticeErrors,
 	AdoptPracticeResponses,
 	AllowMyProductFeedbackPublicData,
+	AllowMyProductFeedbackPublicErrors,
 	AllowMyProductFeedbackPublicResponses,
 	AnswerPublicActivityOnboardingData,
+	AnswerPublicActivityOnboardingErrors,
 	AnswerPublicActivityOnboardingResponses,
 	ApproveMcpConsentRequestData,
+	ApproveMcpConsentRequestErrors,
 	ApproveMcpConsentRequestResponses,
 	AssignMemberRoleData,
 	AssignMemberRoleErrors,
@@ -158,61 +206,88 @@ import type {
 	AssignModelErrors,
 	AssignModelResponses,
 	AuthorizeMcpClientData,
+	AuthorizeMcpClientErrors,
 	AuthorizeMcpClientResponses,
 	BindPracticeGroupData,
+	BindPracticeGroupErrors,
 	BindPracticeGroupResponses,
 	CallbackGetData,
+	CallbackGetErrors,
 	CallbackGetResponses,
 	CallbackPostData,
+	CallbackPostErrors,
 	CallbackPostResponses,
 	CancelReviewData,
+	CancelReviewErrors,
 	CancelReviewResponses,
 	CheckPracticeFilesData,
+	CheckPracticeFilesErrors,
 	CheckPracticeFilesResponses,
 	CheckResearchRemovalsData,
+	CheckResearchRemovalsErrors,
 	CheckResearchRemovalsResponses,
 	ClaimGitHubInstallationData,
+	ClaimGitHubInstallationErrors,
 	ClaimGitHubInstallationResponses,
 	ClearConversationVoteData,
+	ClearConversationVoteErrors,
 	ClearConversationVoteResponses,
 	ClearOwnFeedbackResponseData,
 	ClearOwnFeedbackResponseErrors,
 	ClearOwnFeedbackResponseResponses,
 	CloseResearchDisclosureData,
+	CloseResearchDisclosureErrors,
 	CloseResearchDisclosureResponses,
 	CompleteFirstLoginConsentData,
+	CompleteFirstLoginConsentErrors,
 	CompleteFirstLoginConsentResponses,
 	ConfirmProductFeedbackCleanupData,
+	ConfirmProductFeedbackCleanupErrors,
 	ConfirmProductFeedbackCleanupResponses,
 	CountReviewFeedbackByLocationData,
+	CountReviewFeedbackByLocationErrors,
 	CountReviewFeedbackByLocationResponses,
 	CountReviewFeedbackByReasonData,
+	CountReviewFeedbackByReasonErrors,
 	CountReviewFeedbackByReasonResponses,
 	CountWorkspaceConfigAuditEventsData,
+	CountWorkspaceConfigAuditEventsErrors,
 	CountWorkspaceConfigAuditEventsResponses,
 	CreateCatalogGroupData,
+	CreateCatalogGroupErrors,
 	CreateCatalogGroupResponses,
 	CreateCatalogPracticeData,
+	CreateCatalogPracticeErrors,
 	CreateCatalogPracticeResponses,
 	CreateFeedbackDecisionData,
+	CreateFeedbackDecisionErrors,
 	CreateFeedbackDecisionResponses,
 	CreatePasskeyRecoveryCodesData,
+	CreatePasskeyRecoveryCodesErrors,
 	CreatePasskeyRecoveryCodesResponses,
 	CreatePracticeData,
+	CreatePracticeErrors,
 	CreatePracticeGroupData,
+	CreatePracticeGroupErrors,
 	CreatePracticeGroupResponses,
 	CreatePracticeResponses,
 	CreateResultMarkData,
+	CreateResultMarkErrors,
 	CreateResultMarkResponses,
 	CreateReviewBatchData,
+	CreateReviewBatchErrors,
 	CreateReviewBatchResponses,
 	CreateReviewScheduleData,
+	CreateReviewScheduleErrors,
 	CreateReviewScheduleResponses,
 	CreateWorkspaceData,
+	CreateWorkspaceErrors,
 	CreateWorkspaceResponses,
 	DeclineGitHubInstallationData,
+	DeclineGitHubInstallationErrors,
 	DeclineGitHubInstallationResponses,
 	DeclinePracticeReleaseData,
+	DeclinePracticeReleaseErrors,
 	DeclinePracticeReleaseResponses,
 	DeleteConversationEntryData,
 	DeleteConversationEntryErrors,
@@ -225,33 +300,48 @@ import type {
 	DeleteOutlineCollectionResponses,
 	DeletePracticeData,
 	DeletePracticeDraftData,
+	DeletePracticeDraftErrors,
 	DeletePracticeDraftResponses,
+	DeletePracticeErrors,
 	DeletePracticeGroupData,
+	DeletePracticeGroupErrors,
 	DeletePracticeGroupResponses,
 	DeletePracticeResponses,
 	DeleteReviewScheduleData,
+	DeleteReviewScheduleErrors,
 	DeleteReviewScheduleResponses,
 	DismissMemberOnboardingData,
+	DismissMemberOnboardingErrors,
 	DismissMemberOnboardingResponses,
 	DownloadDataExportData,
+	DownloadDataExportErrors,
 	DownloadDataExportResponses,
 	DownloadPracticeFilesData,
+	DownloadPracticeFilesErrors,
 	DownloadPracticeFilesResponses,
 	EditMyProductFeedbackDraftData,
+	EditMyProductFeedbackDraftErrors,
 	EditMyProductFeedbackDraftResponses,
 	ExchangeClientSignInData,
 	ExchangeClientSignInErrors,
 	ExchangeClientSignInResponses,
+	ExchangeMcpTokenData,
+	ExchangeMcpTokenErrors,
+	ExchangeMcpTokenResponses,
 	ExportScanSarifData,
+	ExportScanSarifErrors,
 	ExportScanSarifResponses,
 	FileAllSavedProductFeedbackData,
+	FileAllSavedProductFeedbackErrors,
 	FileAllSavedProductFeedbackResponses,
 	FileSavedProductFeedbackData,
+	FileSavedProductFeedbackErrors,
 	FileSavedProductFeedbackResponses,
 	FollowProviderRoleData,
 	FollowProviderRoleErrors,
 	FollowProviderRoleResponses,
 	GetAccountAiChoiceData,
+	GetAccountAiChoiceErrors,
 	GetAccountAiChoiceResponses,
 	GetActivityFacetsData,
 	GetActivityFacetsErrors,
@@ -269,64 +359,91 @@ import type {
 	GetActivityWorkErrors,
 	GetActivityWorkResponses,
 	GetAllTeamsData,
+	GetAllTeamsErrors,
 	GetAllTeamsResponses,
 	GetCatalogGroupData,
+	GetCatalogGroupErrors,
 	GetCatalogGroupResponses,
 	GetCatalogPracticeData,
+	GetCatalogPracticeErrors,
 	GetCatalogPracticeReleaseData,
+	GetCatalogPracticeReleaseErrors,
 	GetCatalogPracticeReleaseResponses,
 	GetCatalogPracticeResponses,
 	GetClientSignInConfigurationData,
 	GetClientSignInConfigurationErrors,
 	GetClientSignInConfigurationResponses,
 	GetConnectionSyncStatusData,
+	GetConnectionSyncStatusErrors,
 	GetConnectionSyncStatusResponses,
 	GetConsentStatusData,
+	GetConsentStatusErrors,
 	GetConsentStatusResponses,
 	GetConversationData,
+	GetConversationErrors,
 	GetConversationResponses,
 	GetConversationThreadData,
 	GetConversationThreadErrors,
 	GetConversationThreadResponses,
 	GetCsrfTokenData,
+	GetCsrfTokenErrors,
 	GetCsrfTokenResponses,
 	GetCurrentUserData,
+	GetCurrentUserErrors,
 	GetCurrentUserResponses,
 	GetDataExportStatusData,
+	GetDataExportStatusErrors,
 	GetDataExportStatusResponses,
 	GetEmailStatusData,
+	GetEmailStatusErrors,
 	GetEmailStatusResponses,
 	GetFeedbackModeRollupData,
+	GetFeedbackModeRollupErrors,
 	GetFeedbackModeRollupResponses,
 	GetGitLabRepositorySelectionData,
+	GetGitLabRepositorySelectionErrors,
 	GetGitLabRepositorySelectionResponses,
 	GetInstanceCatalogData,
+	GetInstanceCatalogErrors,
 	GetInstanceCatalogResponses,
 	GetInstanceDefinitionOptionsData,
+	GetInstanceDefinitionOptionsErrors,
 	GetInstanceDefinitionOptionsResponses,
 	GetIntegrationCatalogData,
+	GetIntegrationCatalogErrors,
 	GetIntegrationCatalogResponses,
 	GetItemFactsData,
+	GetItemFactsErrors,
 	GetItemFactsResponses,
 	GetItemTraceData,
+	GetItemTraceErrors,
 	GetItemTraceResponses,
 	GetJwksData,
+	GetJwksErrors,
 	GetJwksResponses,
 	GetLlmUsageReportData,
+	GetLlmUsageReportErrors,
 	GetLlmUsageReportResponses,
 	GetMcpAuthorizationServerMetadataData,
+	GetMcpAuthorizationServerMetadataErrors,
 	GetMcpAuthorizationServerMetadataResponses,
 	GetMcpConsentRequestData,
+	GetMcpConsentRequestErrors,
 	GetMcpConsentRequestResponses,
 	GetMcpResourceMetadataData,
+	GetMcpResourceMetadataErrors,
 	GetMcpResourceMetadataResponses,
 	GetMemberOnboardingData,
+	GetMemberOnboardingErrors,
 	GetMemberOnboardingLinkOptionsData,
+	GetMemberOnboardingLinkOptionsErrors,
 	GetMemberOnboardingLinkOptionsResponses,
 	GetMemberOnboardingResponses,
 	GetMemberOnboardingSettingsData,
+	GetMemberOnboardingSettingsErrors,
 	GetMemberOnboardingSettingsResponses,
 	GetNotificationPreferencesData,
+	GetNotificationPreferencesErrors,
 	GetNotificationPreferencesResponses,
 	GetOpenWorkData,
 	GetOpenWorkErrors,
@@ -341,125 +458,178 @@ import type {
 	GetOwnActivityWorkErrors,
 	GetOwnActivityWorkResponses,
 	GetOwnDeliveredWorkFeedbackData,
+	GetOwnDeliveredWorkFeedbackErrors,
 	GetOwnDeliveredWorkFeedbackResponses,
 	GetOwnFeedbackResponseData,
 	GetOwnFeedbackResponseErrors,
 	GetOwnFeedbackResponseResponses,
 	GetOwnGroupStandingsData,
+	GetOwnGroupStandingsErrors,
 	GetOwnGroupStandingsResponses,
 	GetOwnItemTraceData,
+	GetOwnItemTraceErrors,
 	GetOwnItemTraceResponses,
 	GetOwnMembershipData,
+	GetOwnMembershipErrors,
 	GetOwnMembershipResponses,
 	GetOwnPracticePageFeedbackData,
+	GetOwnPracticePageFeedbackErrors,
 	GetOwnPracticePageFeedbackResponses,
 	GetOwnPracticeProfileOverviewData,
+	GetOwnPracticeProfileOverviewErrors,
 	GetOwnPracticeProfileOverviewResponses,
 	GetOwnPracticeStandingsData,
+	GetOwnPracticeStandingsErrors,
 	GetOwnPracticeStandingsResponses,
 	GetOwnResultData,
 	GetOwnResultErrors,
 	GetOwnResultResponses,
 	GetOwnReviewData,
+	GetOwnReviewErrors,
 	GetOwnReviewResponses,
 	GetPasskeyRegistrationOptionsData,
+	GetPasskeyRegistrationOptionsErrors,
 	GetPasskeyRegistrationOptionsResponses,
 	GetPasskeyStatusData,
+	GetPasskeyStatusErrors,
 	GetPasskeyStatusResponses,
 	GetPasskeyVerificationOptionsData,
+	GetPasskeyVerificationOptionsErrors,
 	GetPasskeyVerificationOptionsResponses,
 	GetPracticeData,
 	GetPracticeDefinitionOptionsData,
+	GetPracticeDefinitionOptionsErrors,
 	GetPracticeDefinitionOptionsResponses,
+	GetPracticeErrors,
 	GetPracticeGroupData,
+	GetPracticeGroupErrors,
 	GetPracticeGroupResponses,
 	GetPracticeGuidanceData,
+	GetPracticeGuidanceErrors,
 	GetPracticeGuidanceResponses,
 	GetPracticeReleaseData,
+	GetPracticeReleaseErrors,
 	GetPracticeReleaseResponses,
 	GetPracticeResponses,
 	GetPracticeReviewSettingsData,
+	GetPracticeReviewSettingsErrors,
 	GetPracticeReviewSettingsResponses,
 	GetPracticeTrialData,
+	GetPracticeTrialErrors,
 	GetPracticeTrialResponses,
 	GetPracticeWorkspaceOverviewData,
+	GetPracticeWorkspaceOverviewErrors,
 	GetPracticeWorkspaceOverviewResponses,
 	GetPracticeWorkspaceTilesData,
+	GetPracticeWorkspaceTilesErrors,
 	GetPracticeWorkspaceTilesResponses,
 	GetProductFeedbackDestinationsData,
+	GetProductFeedbackDestinationsErrors,
 	GetProductFeedbackDestinationsResponses,
 	GetProductFeedbackSharingData,
+	GetProductFeedbackSharingErrors,
 	GetProductFeedbackSharingResponses,
 	GetProvenanceKeysData,
+	GetProvenanceKeysErrors,
 	GetProvenanceKeysResponses,
 	GetProvidersData,
+	GetProvidersErrors,
 	GetProvidersResponses,
 	GetPublicActivityChoiceData,
+	GetPublicActivityChoiceErrors,
 	GetPublicActivityChoiceResponses,
 	GetPublicActivityData,
+	GetPublicActivityErrors,
 	GetPublicActivityHiddenCountData,
 	GetPublicActivityHiddenCountErrors,
 	GetPublicActivityHiddenCountResponses,
 	GetPublicActivityOnboardingData,
+	GetPublicActivityOnboardingErrors,
 	GetPublicActivityOnboardingResponses,
 	GetPublicActivityPersonData,
+	GetPublicActivityPersonErrors,
 	GetPublicActivityPersonResponses,
 	GetPublicActivityPersonWorkData,
+	GetPublicActivityPersonWorkErrors,
 	GetPublicActivityPersonWorkResponses,
 	GetPublicActivityPolicyData,
+	GetPublicActivityPolicyErrors,
 	GetPublicActivityPolicyResponses,
 	GetPublicActivityResponses,
 	GetRepositoriesToMonitorData,
+	GetRepositoriesToMonitorErrors,
 	GetRepositoriesToMonitorResponses,
 	GetReviewData,
+	GetReviewErrors,
 	GetReviewFeedbackData,
+	GetReviewFeedbackErrors,
 	GetReviewFeedbackResponses,
 	GetReviewLineageData,
+	GetReviewLineageErrors,
 	GetReviewLineageResponses,
 	GetReviewOverviewData,
 	GetReviewOverviewErrors,
 	GetReviewOverviewResponses,
 	GetReviewProblemData,
+	GetReviewProblemErrors,
 	GetReviewProblemResponses,
 	GetReviewQueueData,
+	GetReviewQueueErrors,
 	GetReviewQueueResponses,
 	GetReviewResponses,
 	GetReviewResultData,
+	GetReviewResultErrors,
 	GetReviewResultResponses,
 	GetReviewTimingData,
 	GetReviewTimingErrors,
 	GetReviewTimingResponses,
 	GetScanData,
+	GetScanErrors,
 	GetScanReportData,
+	GetScanReportErrors,
 	GetScanReportResponses,
 	GetScanResponses,
 	GetSlackScopesData,
+	GetSlackScopesErrors,
 	GetSlackScopesResponses,
 	GetSlackUserPreferencesData,
+	GetSlackUserPreferencesErrors,
 	GetSlackUserPreferencesResponses,
 	GetStoppedGitLabProjectsData,
+	GetStoppedGitLabProjectsErrors,
 	GetStoppedGitLabProjectsResponses,
 	GetUserFeaturesData,
+	GetUserFeaturesErrors,
 	GetUserFeaturesResponses,
 	GetUserSettingsData,
+	GetUserSettingsErrors,
 	GetUserSettingsResponses,
 	GetUsersWithTeamsData,
+	GetUsersWithTeamsErrors,
 	GetUsersWithTeamsResponses,
 	GetUserViewUserData,
+	GetUserViewUserErrors,
 	GetUserViewUserResponses,
 	GetWorkspaceData,
+	GetWorkspaceErrors,
 	GetWorkspacePasskeyPolicyData,
+	GetWorkspacePasskeyPolicyErrors,
 	GetWorkspacePasskeyPolicyResponses,
 	GetWorkspacePublicActivitySettingsData,
+	GetWorkspacePublicActivitySettingsErrors,
 	GetWorkspacePublicActivitySettingsResponses,
 	GetWorkspaceResponses,
 	GetWorkspaceSyncProgressData,
+	GetWorkspaceSyncProgressErrors,
 	GetWorkspaceSyncProgressResponses,
 	GitLabPreflightData,
+	GitLabPreflightErrors,
 	GitLabPreflightResponses,
 	InitiateData,
+	InitiateErrors,
 	InitiateResponses,
 	KeepMyProductFeedbackPrivateData,
+	KeepMyProductFeedbackPrivateErrors,
 	KeepMyProductFeedbackPrivateResponses,
 	LeaveWorkspaceData,
 	LeaveWorkspaceErrors,
@@ -468,44 +638,63 @@ import type {
 	ListAdoptablePracticesErrors,
 	ListAdoptablePracticesResponses,
 	ListConnectionProviderRepairsData,
+	ListConnectionProviderRepairsErrors,
 	ListConnectionProviderRepairsResponses,
 	ListConnectionSyncJobsData,
+	ListConnectionSyncJobsErrors,
 	ListConnectionSyncJobsResponses,
 	ListConnectionSyncResourcesData,
+	ListConnectionSyncResourcesErrors,
 	ListConnectionSyncResourcesResponses,
 	ListConsumerDeadLettersData,
+	ListConsumerDeadLettersErrors,
 	ListConsumerDeadLettersResponses,
 	ListConversationEntriesData,
+	ListConversationEntriesErrors,
 	ListConversationEntriesResponses,
 	ListData,
+	ListErrors,
 	ListFeedbackDecisionsData,
+	ListFeedbackDecisionsErrors,
 	ListFeedbackDecisionsResponses,
 	ListGitHubInstallationsData,
+	ListGitHubInstallationsErrors,
 	ListGitHubInstallationsResponses,
 	ListGitLabGroupsData,
+	ListGitLabGroupsErrors,
 	ListGitLabGroupsResponses,
 	ListGitLabProjectsData,
+	ListGitLabProjectsErrors,
 	ListGitLabProjectsResponses,
 	ListGlobalContributorsData,
+	ListGlobalContributorsErrors,
 	ListGlobalContributorsResponses,
 	ListHiddenContributorsData,
 	ListHiddenContributorsErrors,
 	ListHiddenContributorsResponses,
 	ListIdentityProvidersData,
+	ListIdentityProvidersErrors,
 	ListIdentityProvidersResponses,
 	ListInstallationDeadLettersData,
+	ListInstallationDeadLettersErrors,
 	ListInstallationDeadLettersResponses,
 	ListInstanceProviderRepairsData,
+	ListInstanceProviderRepairsErrors,
 	ListInstanceProviderRepairsResponses,
 	ListLinkedIdentitiesData,
+	ListLinkedIdentitiesErrors,
 	ListLinkedIdentitiesResponses,
 	ListMcpClientGrantsData,
+	ListMcpClientGrantsErrors,
 	ListMcpClientGrantsResponses,
 	ListMembershipsData,
+	ListMembershipsErrors,
 	ListMembershipsResponses,
 	ListModelAssignmentsData,
+	ListModelAssignmentsErrors,
 	ListModelAssignmentsResponses,
 	ListMyProductFeedbackData,
+	ListMyProductFeedbackErrors,
 	ListMyProductFeedbackResponses,
 	ListOutlineCollectionCandidatesData,
 	ListOutlineCollectionCandidatesErrors,
@@ -514,99 +703,137 @@ import type {
 	ListOutlineCollectionsErrors,
 	ListOutlineCollectionsResponses,
 	ListOwnGroupReviewsData,
+	ListOwnGroupReviewsErrors,
 	ListOwnGroupReviewsResponses,
 	ListOwnItemReviewsData,
+	ListOwnItemReviewsErrors,
 	ListOwnItemReviewsResponses,
 	ListOwnResultsData,
+	ListOwnResultsErrors,
 	ListOwnResultsResponses,
 	ListOwnReviewsData,
+	ListOwnReviewsErrors,
 	ListOwnReviewsResponses,
 	ListPracticeDraftsData,
+	ListPracticeDraftsErrors,
 	ListPracticeDraftsResponses,
 	ListPracticeGroupsData,
+	ListPracticeGroupsErrors,
 	ListPracticeGroupsResponses,
 	ListPracticeReleasesData,
+	ListPracticeReleasesErrors,
 	ListPracticeReleasesResponses,
 	ListPracticesData,
+	ListPracticesErrors,
 	ListPracticesResponses,
 	ListPracticeVersionsData,
+	ListPracticeVersionsErrors,
 	ListPracticeVersionsResponses,
 	ListProductFeedbackNeedsActionData,
+	ListProductFeedbackNeedsActionErrors,
 	ListProductFeedbackNeedsActionResponses,
 	ListResponses,
 	ListResultMarksData,
+	ListResultMarksErrors,
 	ListResultMarksResponses,
 	ListReviewBatchesData,
+	ListReviewBatchesErrors,
 	ListReviewBatchesResponses,
 	ListReviewedPracticesData,
+	ListReviewedPracticesErrors,
 	ListReviewedPracticesResponses,
 	ListReviewFeedbackChecksData,
+	ListReviewFeedbackChecksErrors,
 	ListReviewFeedbackChecksResponses,
 	ListReviewFeedbackData,
+	ListReviewFeedbackErrors,
 	ListReviewFeedbackResponses,
 	ListReviewItemsData,
+	ListReviewItemsErrors,
 	ListReviewItemsResponses,
 	ListReviewProblemsData,
+	ListReviewProblemsErrors,
 	ListReviewProblemsResponses,
 	ListReviewResultsData,
+	ListReviewResultsErrors,
 	ListReviewResultsResponses,
 	ListReviewSchedulesData,
+	ListReviewSchedulesErrors,
 	ListReviewSchedulesResponses,
 	ListReviewsData,
 	ListReviewsErrors,
 	ListReviewsResponses,
 	ListScanReportItemsData,
+	ListScanReportItemsErrors,
 	ListScanReportItemsResponses,
 	ListScanReportProblemsData,
+	ListScanReportProblemsErrors,
 	ListScanReportProblemsResponses,
 	ListScansData,
+	ListScansErrors,
 	ListScansResponses,
 	ListSessionsData,
+	ListSessionsErrors,
 	ListSessionsResponses,
 	ListSlackChannelCandidatesData,
+	ListSlackChannelCandidatesErrors,
 	ListSlackChannelCandidatesResponses,
 	ListSlackChannelConsentEventsData,
+	ListSlackChannelConsentEventsErrors,
 	ListSlackChannelConsentEventsResponses,
 	ListSlackChannelsData,
+	ListSlackChannelsErrors,
 	ListSlackChannelsResponses,
 	ListUserViewUsersData,
+	ListUserViewUsersErrors,
 	ListUserViewUsersResponses,
 	ListWorkspaceConfigAuditEventsData,
+	ListWorkspaceConfigAuditEventsErrors,
 	ListWorkspaceConfigAuditEventsResponses,
 	ListWorkspacesData,
+	ListWorkspacesErrors,
 	ListWorkspacesResponses,
 	LogoutClientSessionData,
 	LogoutClientSessionErrors,
 	LogoutClientSessionResponses,
 	LogoutData,
+	LogoutErrors,
 	LogoutResponses,
 	MakeMyProductFeedbackPrivateData,
+	MakeMyProductFeedbackPrivateErrors,
 	MakeMyProductFeedbackPrivateResponses,
 	MarkConversationReadData,
+	MarkConversationReadErrors,
 	MarkConversationReadResponses,
-	McpTokenData,
-	McpTokenResponses,
 	MoveCatalogPracticeData,
+	MoveCatalogPracticeErrors,
 	MoveCatalogPracticeResponses,
 	MovePracticeData,
+	MovePracticeErrors,
 	MovePracticeResponses,
 	PreviewGroupAdoptionData,
+	PreviewGroupAdoptionErrors,
 	PreviewGroupAdoptionResponses,
 	PreviewPracticeAdoptionData,
 	PreviewPracticeAdoptionErrors,
 	PreviewPracticeAdoptionResponses,
 	PreviewReviewScopeData,
+	PreviewReviewScopeErrors,
 	PreviewReviewScopeResponses,
 	PurgeWorkspaceData,
 	PurgeWorkspaceErrors,
 	PurgeWorkspaceResponses,
 	ReadData,
+	ReadErrors,
 	ReadResponses,
 	RecheckFeedbackDeliveryData,
+	RecheckFeedbackDeliveryErrors,
 	RecheckFeedbackDeliveryResponses,
 	RecordResearchRemovalsData,
+	RecordResearchRemovalsErrors,
 	RecordResearchRemovalsResponses,
 	RecoverPasskeysData,
+	RecoverPasskeysErrors,
 	RecoverPasskeysResponses,
 	RefreshClientSessionData,
 	RefreshClientSessionErrors,
@@ -615,38 +842,52 @@ import type {
 	RefreshErrors,
 	RefreshResponses,
 	RefuseMcpConsentRequestData,
+	RefuseMcpConsentRequestErrors,
 	RefuseMcpConsentRequestResponses,
 	RegisterOutlineCollectionData,
 	RegisterOutlineCollectionErrors,
 	RegisterOutlineCollectionResponses,
 	RegisterPasskeyData,
+	RegisterPasskeyErrors,
 	RegisterPasskeyResponses,
 	RegisterSlackChannelData,
+	RegisterSlackChannelErrors,
 	RegisterSlackChannelResponses,
 	ReleaseConnectionProviderRepairData,
+	ReleaseConnectionProviderRepairErrors,
 	ReleaseConnectionProviderRepairResponses,
 	ReleaseOrphanProviderRepairData,
+	ReleaseOrphanProviderRepairErrors,
 	ReleaseOrphanProviderRepairResponses,
 	ReleaseResearchDatasetData,
+	ReleaseResearchDatasetErrors,
 	ReleaseResearchDatasetResponses,
 	RemoveLabelFromTeamData,
+	RemoveLabelFromTeamErrors,
 	RemoveLabelFromTeamResponses,
 	RemoveMemberData,
 	RemoveMemberErrors,
 	RemoveMemberResponses,
 	RemoveModelAssignmentData,
+	RemoveModelAssignmentErrors,
 	RemoveModelAssignmentResponses,
 	RemovePasskeyData,
+	RemovePasskeyErrors,
 	RemovePasskeyResponses,
 	RemoveRepositoryToMonitorData,
+	RemoveRepositoryToMonitorErrors,
 	RemoveRepositoryToMonitorResponses,
 	RemoveResultMarkData,
+	RemoveResultMarkErrors,
 	RemoveResultMarkResponses,
 	RemoveStoppedGitLabProjectData,
+	RemoveStoppedGitLabProjectErrors,
 	RemoveStoppedGitLabProjectResponses,
 	ReorderCatalogGroupsData,
+	ReorderCatalogGroupsErrors,
 	ReorderCatalogGroupsResponses,
 	ReorderPracticeGroupsData,
+	ReorderPracticeGroupsErrors,
 	ReorderPracticeGroupsResponses,
 	ReplaceOutlineTokenData,
 	ReplaceOutlineTokenErrors,
@@ -655,8 +896,10 @@ import type {
 	ReplaceOwnFeedbackResponseErrors,
 	ReplaceOwnFeedbackResponseResponses,
 	ReplayConsumerDeadLetterData,
+	ReplayConsumerDeadLetterErrors,
 	ReplayConsumerDeadLetterResponses,
 	ReplayInstallationDeadLetterData,
+	ReplayInstallationDeadLetterErrors,
 	ReplayInstallationDeadLetterResponses,
 	ReportBrowserFaultsData,
 	ReportBrowserFaultsErrors,
@@ -665,59 +908,82 @@ import type {
 	ReportWebVitalsErrors,
 	ReportWebVitalsResponses,
 	RequestDataExportData,
+	RequestDataExportErrors,
 	RequestDataExportResponses,
 	RequestReviewData,
+	RequestReviewErrors,
 	RequestReviewResponses,
 	ResetCatalogGroupData,
+	ResetCatalogGroupErrors,
 	ResetCatalogGroupResponses,
 	ResetCatalogOrderData,
+	ResetCatalogOrderErrors,
 	ResetCatalogOrderResponses,
 	ResetCatalogPracticeData,
+	ResetCatalogPracticeErrors,
 	ResetCatalogPracticeResponses,
 	ResetGroupToCatalogData,
+	ResetGroupToCatalogErrors,
 	ResetGroupToCatalogResponses,
 	ResetPracticeToCatalogData,
+	ResetPracticeToCatalogErrors,
 	ResetPracticeToCatalogResponses,
 	ResolveReviewContextData,
 	ResolveReviewContextErrors,
 	ResolveReviewContextResponses,
 	RetryFeedbackData,
+	RetryFeedbackErrors,
 	RetryFeedbackResponses,
 	RetryProductFeedbackFilingData,
+	RetryProductFeedbackFilingErrors,
 	RetryProductFeedbackFilingResponses,
 	RevokeMcpClientGrantData,
+	RevokeMcpClientGrantErrors,
 	RevokeMcpClientGrantResponses,
 	RevokeOtherSessionsData,
+	RevokeOtherSessionsErrors,
 	RevokeOtherSessionsResponses,
 	RevokeSessionData,
+	RevokeSessionErrors,
 	RevokeSessionResponses,
 	SavePracticeDraftData,
+	SavePracticeDraftErrors,
 	SavePracticeDraftResponses,
 	SetCatalogGroupStatusData,
+	SetCatalogGroupStatusErrors,
 	SetCatalogGroupStatusResponses,
 	SetCatalogPracticeStatusData,
+	SetCatalogPracticeStatusErrors,
 	SetCatalogPracticeStatusResponses,
 	SetConversationVoteData,
 	SetConversationVoteErrors,
 	SetConversationVoteResponses,
 	SetGroupFeedbackModeData,
+	SetGroupFeedbackModeErrors,
 	SetGroupFeedbackModeResponses,
 	SetMemberHiddenData,
+	SetMemberHiddenErrors,
 	SetMemberHiddenResponses,
 	SetPracticeFeedbackModeData,
+	SetPracticeFeedbackModeErrors,
 	SetPracticeFeedbackModeResponses,
 	SetReviewScheduleEnabledData,
+	SetReviewScheduleEnabledErrors,
 	SetReviewScheduleEnabledResponses,
 	StartPracticeTrialData,
+	StartPracticeTrialErrors,
 	StartPracticeTrialResponses,
 	StartScanData,
+	StartScanErrors,
 	StartScanResponses,
 	SubmitConversationTurnData,
 	SubmitConversationTurnErrors,
 	SubmitConversationTurnResponses,
 	SubmitInstanceProductFeedbackData,
+	SubmitInstanceProductFeedbackErrors,
 	SubmitInstanceProductFeedbackResponses,
 	SubmitWorkspaceProductFeedbackData,
+	SubmitWorkspaceProductFeedbackErrors,
 	SubmitWorkspaceProductFeedbackResponses,
 	TriggerSyncJobData,
 	TriggerSyncJobErrors,
@@ -726,30 +992,40 @@ import type {
 	UnlinkIdentityErrors,
 	UnlinkIdentityResponses,
 	UnsubscribeEmailData,
+	UnsubscribeEmailErrors,
 	UnsubscribeEmailResponses,
 	UpdateAccountAiChoiceData,
+	UpdateAccountAiChoiceErrors,
 	UpdateAccountAiChoiceResponses,
 	UpdateActivityAutomationData,
 	UpdateActivityAutomationErrors,
 	UpdateActivityAutomationResponses,
 	UpdateAiChoiceData,
+	UpdateAiChoiceErrors,
 	UpdateAiChoiceResponses,
 	UpdateCatalogGroupData,
+	UpdateCatalogGroupErrors,
 	UpdateCatalogGroupResponses,
 	UpdateCatalogPracticeData,
+	UpdateCatalogPracticeErrors,
 	UpdateCatalogPracticeResponses,
 	UpdateConnectionStatusData,
+	UpdateConnectionStatusErrors,
 	UpdateConnectionStatusResponses,
 	UpdateConnectionSyncJobData,
 	UpdateConnectionSyncJobErrors,
 	UpdateConnectionSyncJobResponses,
 	UpdateConversationTurnStatusData,
+	UpdateConversationTurnStatusErrors,
 	UpdateConversationTurnStatusResponses,
 	UpdateFeaturesData,
+	UpdateFeaturesErrors,
 	UpdateFeaturesResponses,
 	UpdateGitLabRepositorySelectionData,
+	UpdateGitLabRepositorySelectionErrors,
 	UpdateGitLabRepositorySelectionResponses,
 	UpdateMemberOnboardingSettingsData,
+	UpdateMemberOnboardingSettingsErrors,
 	UpdateMemberOnboardingSettingsResponses,
 	UpdateNotificationPreferencesData,
 	UpdateNotificationPreferencesErrors,
@@ -758,53 +1034,76 @@ import type {
 	UpdateOutlineCollectionStateErrors,
 	UpdateOutlineCollectionStateResponses,
 	UpdatePasskeyProtectionData,
+	UpdatePasskeyProtectionErrors,
 	UpdatePasskeyProtectionResponses,
 	UpdatePracticeData,
+	UpdatePracticeErrors,
 	UpdatePracticeGroupData,
+	UpdatePracticeGroupErrors,
 	UpdatePracticeGroupResponses,
 	UpdatePracticeResponses,
 	UpdatePracticeReviewSettingsData,
+	UpdatePracticeReviewSettingsErrors,
 	UpdatePracticeReviewSettingsResponses,
 	UpdateProductFeedbackDestinationsData,
+	UpdateProductFeedbackDestinationsErrors,
 	UpdateProductFeedbackDestinationsResponses,
 	UpdateProductFeedbackSharingData,
+	UpdateProductFeedbackSharingErrors,
 	UpdateProductFeedbackSharingResponses,
 	UpdatePublicActivityChoiceData,
+	UpdatePublicActivityChoiceErrors,
 	UpdatePublicActivityChoiceResponses,
 	UpdatePublicActivityData,
+	UpdatePublicActivityErrors,
 	UpdatePublicActivityObjectionData,
 	UpdatePublicActivityObjectionErrors,
 	UpdatePublicActivityObjectionResponses,
 	UpdatePublicActivityPolicyData,
+	UpdatePublicActivityPolicyErrors,
 	UpdatePublicActivityPolicyResponses,
 	UpdatePublicActivityResponses,
 	UpdateRepositoryVisibilityData,
+	UpdateRepositoryVisibilityErrors,
 	UpdateRepositoryVisibilityResponses,
 	UpdateResearchConsentData,
+	UpdateResearchConsentErrors,
 	UpdateResearchConsentResponses,
 	UpdateReviewBatchStatusData,
+	UpdateReviewBatchStatusErrors,
 	UpdateReviewBatchStatusResponses,
 	UpdateReviewScheduleData,
+	UpdateReviewScheduleErrors,
 	UpdateReviewScheduleResponses,
 	UpdateScanStatusData,
+	UpdateScanStatusErrors,
 	UpdateScanStatusResponses,
 	UpdateSlackChannelConsentData,
+	UpdateSlackChannelConsentErrors,
 	UpdateSlackChannelConsentResponses,
 	UpdateSlackUserPreferencesData,
+	UpdateSlackUserPreferencesErrors,
 	UpdateSlackUserPreferencesResponses,
 	UpdateStatusData,
+	UpdateStatusErrors,
 	UpdateStatusResponses,
 	UpdateTeamVisibilityData,
+	UpdateTeamVisibilityErrors,
 	UpdateTeamVisibilityResponses,
 	UpdateTokenData,
+	UpdateTokenErrors,
 	UpdateTokenResponses,
 	UpdateUserSettingsData,
+	UpdateUserSettingsErrors,
 	UpdateUserSettingsResponses,
 	UpdateWorkspaceLlmBudgetData,
+	UpdateWorkspaceLlmBudgetErrors,
 	UpdateWorkspaceLlmBudgetResponses,
 	UpdateWorkspacePasskeyPolicyData,
+	UpdateWorkspacePasskeyPolicyErrors,
 	UpdateWorkspacePasskeyPolicyResponses,
 	VerifyPasskeyData,
+	VerifyPasskeyErrors,
 	VerifyPasskeyResponses,
 	WorkspaceCreateLlmConnectionData,
 	WorkspaceCreateLlmConnectionErrors,
@@ -819,16 +1118,22 @@ import type {
 	WorkspaceDeleteLlmModelErrors,
 	WorkspaceDeleteLlmModelResponses,
 	WorkspaceGetLlmSettingsData,
+	WorkspaceGetLlmSettingsErrors,
 	WorkspaceGetLlmSettingsResponses,
 	WorkspaceListAvailableLlmModelsData,
+	WorkspaceListAvailableLlmModelsErrors,
 	WorkspaceListAvailableLlmModelsResponses,
 	WorkspaceListLlmConnectionsData,
+	WorkspaceListLlmConnectionsErrors,
 	WorkspaceListLlmConnectionsResponses,
 	WorkspaceListLlmModelsData,
+	WorkspaceListLlmModelsErrors,
 	WorkspaceListLlmModelsResponses,
 	WorkspaceProbeLlmConnectionData,
+	WorkspaceProbeLlmConnectionErrors,
 	WorkspaceProbeLlmConnectionResponses,
 	WorkspaceProbeLlmModelCapabilitiesData,
+	WorkspaceProbeLlmModelCapabilitiesErrors,
 	WorkspaceProbeLlmModelCapabilitiesResponses,
 	WorkspaceUpdateLlmConnectionData,
 	WorkspaceUpdateLlmConnectionErrors,
@@ -861,8 +1166,12 @@ export type Options<
  */
 export const getProvenanceKeys = <ThrowOnError extends boolean = false>(
 	options?: Options<GetProvenanceKeysData, ThrowOnError>,
-): RequestResult<GetProvenanceKeysResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetProvenanceKeysResponses, unknown, ThrowOnError>({
+): RequestResult<GetProvenanceKeysResponses, GetProvenanceKeysErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		GetProvenanceKeysResponses,
+		GetProvenanceKeysErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/.well-known/hephaestus-provenance-keys.json",
 		...options,
@@ -873,8 +1182,8 @@ export const getProvenanceKeys = <ThrowOnError extends boolean = false>(
  */
 export const getJwks = <ThrowOnError extends boolean = false>(
 	options?: Options<GetJwksData, ThrowOnError>,
-): RequestResult<GetJwksResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetJwksResponses, unknown, ThrowOnError>({
+): RequestResult<GetJwksResponses, GetJwksErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetJwksResponses, GetJwksErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/.well-known/jwks.json",
 		...options,
@@ -885,10 +1194,14 @@ export const getJwks = <ThrowOnError extends boolean = false>(
  */
 export const getMcpAuthorizationServerMetadata = <ThrowOnError extends boolean = false>(
 	options?: Options<GetMcpAuthorizationServerMetadataData, ThrowOnError>,
-): RequestResult<GetMcpAuthorizationServerMetadataResponses, unknown, ThrowOnError> =>
+): RequestResult<
+	GetMcpAuthorizationServerMetadataResponses,
+	GetMcpAuthorizationServerMetadataErrors,
+	ThrowOnError
+> =>
 	(options?.client ?? client).get<
 		GetMcpAuthorizationServerMetadataResponses,
-		unknown,
+		GetMcpAuthorizationServerMetadataErrors,
 		ThrowOnError
 	>({
 		security: [{ scheme: "bearer", type: "http" }],
@@ -901,8 +1214,12 @@ export const getMcpAuthorizationServerMetadata = <ThrowOnError extends boolean =
  */
 export const getMcpResourceMetadata = <ThrowOnError extends boolean = false>(
 	options: Options<GetMcpResourceMetadataData, ThrowOnError>,
-): RequestResult<GetMcpResourceMetadataResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetMcpResourceMetadataResponses, unknown, ThrowOnError>({
+): RequestResult<GetMcpResourceMetadataResponses, GetMcpResourceMetadataErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetMcpResourceMetadataResponses,
+		GetMcpResourceMetadataErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/.well-known/oauth-protected-resource/{resourcePath}",
 		...options,
@@ -913,8 +1230,12 @@ export const getMcpResourceMetadata = <ThrowOnError extends boolean = false>(
  */
 export const adminListAuthEvents = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListAuthEventsData, ThrowOnError>,
-): RequestResult<AdminListAuthEventsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListAuthEventsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListAuthEventsResponses, AdminListAuthEventsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListAuthEventsResponses,
+		AdminListAuthEventsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/audit",
 		...options,
@@ -925,8 +1246,12 @@ export const adminListAuthEvents = <ThrowOnError extends boolean = false>(
  */
 export const adminCountAuthEvents = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminCountAuthEventsData, ThrowOnError>,
-): RequestResult<AdminCountAuthEventsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminCountAuthEventsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminCountAuthEventsResponses, AdminCountAuthEventsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminCountAuthEventsResponses,
+		AdminCountAuthEventsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/audit/count",
 		...options,
@@ -937,8 +1262,12 @@ export const adminCountAuthEvents = <ThrowOnError extends boolean = false>(
  */
 export const adminExportAuthEvents = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminExportAuthEventsData, ThrowOnError>,
-): RequestResult<AdminExportAuthEventsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminExportAuthEventsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminExportAuthEventsResponses, AdminExportAuthEventsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminExportAuthEventsResponses,
+		AdminExportAuthEventsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/audit/export",
 		...options,
@@ -949,8 +1278,16 @@ export const adminExportAuthEvents = <ThrowOnError extends boolean = false>(
  */
 export const adminListConfigAuditEvents = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListConfigAuditEventsData, ThrowOnError>,
-): RequestResult<AdminListConfigAuditEventsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListConfigAuditEventsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminListConfigAuditEventsResponses,
+	AdminListConfigAuditEventsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		AdminListConfigAuditEventsResponses,
+		AdminListConfigAuditEventsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/config-audit",
 		...options,
@@ -961,8 +1298,16 @@ export const adminListConfigAuditEvents = <ThrowOnError extends boolean = false>
  */
 export const adminCountConfigAuditEvents = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminCountConfigAuditEventsData, ThrowOnError>,
-): RequestResult<AdminCountConfigAuditEventsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminCountConfigAuditEventsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminCountConfigAuditEventsResponses,
+	AdminCountConfigAuditEventsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		AdminCountConfigAuditEventsResponses,
+		AdminCountConfigAuditEventsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/config-audit/count",
 		...options,
@@ -973,8 +1318,16 @@ export const adminCountConfigAuditEvents = <ThrowOnError extends boolean = false
  */
 export const adminGetConfigurationReadiness = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminGetConfigurationReadinessData, ThrowOnError>,
-): RequestResult<AdminGetConfigurationReadinessResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminGetConfigurationReadinessResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminGetConfigurationReadinessResponses,
+	AdminGetConfigurationReadinessErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		AdminGetConfigurationReadinessResponses,
+		AdminGetConfigurationReadinessErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/configuration-readiness",
 		...options,
@@ -985,8 +1338,8 @@ export const adminGetConfigurationReadiness = <ThrowOnError extends boolean = fa
  */
 export const getEmailStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetEmailStatusData, ThrowOnError>,
-): RequestResult<GetEmailStatusResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetEmailStatusResponses, unknown, ThrowOnError>({
+): RequestResult<GetEmailStatusResponses, GetEmailStatusErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetEmailStatusResponses, GetEmailStatusErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/email/status",
 		...options,
@@ -1019,8 +1372,12 @@ export const adminSendTestEmail = <ThrowOnError extends boolean = false>(
  */
 export const listGitHubInstallations = <ThrowOnError extends boolean = false>(
 	options?: Options<ListGitHubInstallationsData, ThrowOnError>,
-): RequestResult<ListGitHubInstallationsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListGitHubInstallationsResponses, unknown, ThrowOnError>({
+): RequestResult<ListGitHubInstallationsResponses, ListGitHubInstallationsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		ListGitHubInstallationsResponses,
+		ListGitHubInstallationsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/github-installations",
 		...options,
@@ -1031,8 +1388,12 @@ export const listGitHubInstallations = <ThrowOnError extends boolean = false>(
  */
 export const adoptGitHubInstallation = <ThrowOnError extends boolean = false>(
 	options: Options<AdoptGitHubInstallationData, ThrowOnError>,
-): RequestResult<AdoptGitHubInstallationResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdoptGitHubInstallationResponses, unknown, ThrowOnError>({
+): RequestResult<AdoptGitHubInstallationResponses, AdoptGitHubInstallationErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		AdoptGitHubInstallationResponses,
+		AdoptGitHubInstallationErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/github-installations/{installationId}/adopt",
 		...options,
@@ -1043,8 +1404,16 @@ export const adoptGitHubInstallation = <ThrowOnError extends boolean = false>(
  */
 export const declineGitHubInstallation = <ThrowOnError extends boolean = false>(
 	options: Options<DeclineGitHubInstallationData, ThrowOnError>,
-): RequestResult<DeclineGitHubInstallationResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<DeclineGitHubInstallationResponses, unknown, ThrowOnError>({
+): RequestResult<
+	DeclineGitHubInstallationResponses,
+	DeclineGitHubInstallationErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		DeclineGitHubInstallationResponses,
+		DeclineGitHubInstallationErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/github-installations/{installationId}/decline",
 		...options,
@@ -1055,8 +1424,16 @@ export const declineGitHubInstallation = <ThrowOnError extends boolean = false>(
  */
 export const listInstallationDeadLetters = <ThrowOnError extends boolean = false>(
 	options?: Options<ListInstallationDeadLettersData, ThrowOnError>,
-): RequestResult<ListInstallationDeadLettersResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListInstallationDeadLettersResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListInstallationDeadLettersResponses,
+	ListInstallationDeadLettersErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		ListInstallationDeadLettersResponses,
+		ListInstallationDeadLettersErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/integration/dead-letters",
 		...options,
@@ -1067,8 +1444,16 @@ export const listInstallationDeadLetters = <ThrowOnError extends boolean = false
  */
 export const replayInstallationDeadLetter = <ThrowOnError extends boolean = false>(
 	options: Options<ReplayInstallationDeadLetterData, ThrowOnError>,
-): RequestResult<ReplayInstallationDeadLetterResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ReplayInstallationDeadLetterResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ReplayInstallationDeadLetterResponses,
+	ReplayInstallationDeadLetterErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		ReplayInstallationDeadLetterResponses,
+		ReplayInstallationDeadLetterErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/integration/dead-letters/{id}/replays",
 		...options,
@@ -1079,8 +1464,12 @@ export const replayInstallationDeadLetter = <ThrowOnError extends boolean = fals
  */
 export const adminListLlmCallPools = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListLlmCallPoolsData, ThrowOnError>,
-): RequestResult<AdminListLlmCallPoolsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListLlmCallPoolsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListLlmCallPoolsResponses, AdminListLlmCallPoolsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListLlmCallPoolsResponses,
+		AdminListLlmCallPoolsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/call-pools",
 		...options,
@@ -1111,8 +1500,16 @@ export const adminCreateLlmCallPool = <ThrowOnError extends boolean = false>(
  */
 export const adminListLlmCallPoolModels = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListLlmCallPoolModelsData, ThrowOnError>,
-): RequestResult<AdminListLlmCallPoolModelsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListLlmCallPoolModelsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminListLlmCallPoolModelsResponses,
+	AdminListLlmCallPoolModelsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		AdminListLlmCallPoolModelsResponses,
+		AdminListLlmCallPoolModelsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/call-pools/models",
 		...options,
@@ -1183,8 +1580,12 @@ export const adminUpdateLlmCallPoolModels = <ThrowOnError extends boolean = fals
  */
 export const adminListLlmConnections = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListLlmConnectionsData, ThrowOnError>,
-): RequestResult<AdminListLlmConnectionsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListLlmConnectionsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListLlmConnectionsResponses, AdminListLlmConnectionsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListLlmConnectionsResponses,
+		AdminListLlmConnectionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/connections",
 		...options,
@@ -1215,8 +1616,16 @@ export const adminCreateLlmConnection = <ThrowOnError extends boolean = false>(
  */
 export const adminProbeLlmConnectionDraft = <ThrowOnError extends boolean = false>(
 	options: Options<AdminProbeLlmConnectionDraftData, ThrowOnError>,
-): RequestResult<AdminProbeLlmConnectionDraftResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdminProbeLlmConnectionDraftResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminProbeLlmConnectionDraftResponses,
+	AdminProbeLlmConnectionDraftErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		AdminProbeLlmConnectionDraftResponses,
+		AdminProbeLlmConnectionDraftErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/connections/probe",
 		...options,
@@ -1287,8 +1696,12 @@ export const adminUpdateLlmConnection = <ThrowOnError extends boolean = false>(
  */
 export const adminProbeLlmConnection = <ThrowOnError extends boolean = false>(
 	options: Options<AdminProbeLlmConnectionData, ThrowOnError>,
-): RequestResult<AdminProbeLlmConnectionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdminProbeLlmConnectionResponses, unknown, ThrowOnError>({
+): RequestResult<AdminProbeLlmConnectionResponses, AdminProbeLlmConnectionErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		AdminProbeLlmConnectionResponses,
+		AdminProbeLlmConnectionErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/connections/{id}/probe",
 		...options,
@@ -1299,8 +1712,12 @@ export const adminProbeLlmConnection = <ThrowOnError extends boolean = false>(
  */
 export const adminListLlmModels = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListLlmModelsData, ThrowOnError>,
-): RequestResult<AdminListLlmModelsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListLlmModelsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListLlmModelsResponses, AdminListLlmModelsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListLlmModelsResponses,
+		AdminListLlmModelsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/models",
 		...options,
@@ -1347,8 +1764,16 @@ export const adminUpdateLlmModel = <ThrowOnError extends boolean = false>(
  */
 export const adminProbeLlmModelCapabilities = <ThrowOnError extends boolean = false>(
 	options: Options<AdminProbeLlmModelCapabilitiesData, ThrowOnError>,
-): RequestResult<AdminProbeLlmModelCapabilitiesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AdminProbeLlmModelCapabilitiesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminProbeLlmModelCapabilitiesResponses,
+	AdminProbeLlmModelCapabilitiesErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		AdminProbeLlmModelCapabilitiesResponses,
+		AdminProbeLlmModelCapabilitiesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/models/{id}/capabilities",
 		...options,
@@ -1403,8 +1828,12 @@ export const adminUpdateLlmModelSharing = <ThrowOnError extends boolean = false>
  */
 export const adminGetLlmSettings = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminGetLlmSettingsData, ThrowOnError>,
-): RequestResult<AdminGetLlmSettingsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminGetLlmSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminGetLlmSettingsResponses, AdminGetLlmSettingsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminGetLlmSettingsResponses,
+		AdminGetLlmSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/settings",
 		...options,
@@ -1415,8 +1844,12 @@ export const adminGetLlmSettings = <ThrowOnError extends boolean = false>(
  */
 export const adminUpdateLlmSettings = <ThrowOnError extends boolean = false>(
 	options: Options<AdminUpdateLlmSettingsData, ThrowOnError>,
-): RequestResult<AdminUpdateLlmSettingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AdminUpdateLlmSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminUpdateLlmSettingsResponses, AdminUpdateLlmSettingsErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		AdminUpdateLlmSettingsResponses,
+		AdminUpdateLlmSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/settings",
 		...options,
@@ -1431,8 +1864,12 @@ export const adminUpdateLlmSettings = <ThrowOnError extends boolean = false>(
  */
 export const adminGetLlmUsageReport = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminGetLlmUsageReportData, ThrowOnError>,
-): RequestResult<AdminGetLlmUsageReportResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminGetLlmUsageReportResponses, unknown, ThrowOnError>({
+): RequestResult<AdminGetLlmUsageReportResponses, AdminGetLlmUsageReportErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminGetLlmUsageReportResponses,
+		AdminGetLlmUsageReportErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/usage",
 		...options,
@@ -1443,8 +1880,12 @@ export const adminGetLlmUsageReport = <ThrowOnError extends boolean = false>(
  */
 export const adminListLoginProviders = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListLoginProvidersData, ThrowOnError>,
-): RequestResult<AdminListLoginProvidersResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListLoginProvidersResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListLoginProvidersResponses, AdminListLoginProvidersErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListLoginProvidersResponses,
+		AdminListLoginProvidersErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/login-providers",
 		...options,
@@ -1455,8 +1896,12 @@ export const adminListLoginProviders = <ThrowOnError extends boolean = false>(
  */
 export const adminCreateLoginProvider = <ThrowOnError extends boolean = false>(
 	options: Options<AdminCreateLoginProviderData, ThrowOnError>,
-): RequestResult<AdminCreateLoginProviderResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdminCreateLoginProviderResponses, unknown, ThrowOnError>({
+): RequestResult<AdminCreateLoginProviderResponses, AdminCreateLoginProviderErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		AdminCreateLoginProviderResponses,
+		AdminCreateLoginProviderErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/login-providers",
 		...options,
@@ -1471,8 +1916,12 @@ export const adminCreateLoginProvider = <ThrowOnError extends boolean = false>(
  */
 export const adminDeleteLoginProvider = <ThrowOnError extends boolean = false>(
 	options: Options<AdminDeleteLoginProviderData, ThrowOnError>,
-): RequestResult<AdminDeleteLoginProviderResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<AdminDeleteLoginProviderResponses, unknown, ThrowOnError>({
+): RequestResult<AdminDeleteLoginProviderResponses, AdminDeleteLoginProviderErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		AdminDeleteLoginProviderResponses,
+		AdminDeleteLoginProviderErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/login-providers/{registrationId}",
 		...options,
@@ -1483,8 +1932,12 @@ export const adminDeleteLoginProvider = <ThrowOnError extends boolean = false>(
  */
 export const adminUpdateLoginProvider = <ThrowOnError extends boolean = false>(
 	options: Options<AdminUpdateLoginProviderData, ThrowOnError>,
-): RequestResult<AdminUpdateLoginProviderResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<AdminUpdateLoginProviderResponses, unknown, ThrowOnError>({
+): RequestResult<AdminUpdateLoginProviderResponses, AdminUpdateLoginProviderErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		AdminUpdateLoginProviderResponses,
+		AdminUpdateLoginProviderErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/login-providers/{registrationId}",
 		...options,
@@ -1499,8 +1952,12 @@ export const adminUpdateLoginProvider = <ThrowOnError extends boolean = false>(
  */
 export const adminPreviewPersonData = <ThrowOnError extends boolean = false>(
 	options: Options<AdminPreviewPersonDataData, ThrowOnError>,
-): RequestResult<AdminPreviewPersonDataResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdminPreviewPersonDataResponses, unknown, ThrowOnError>({
+): RequestResult<AdminPreviewPersonDataResponses, AdminPreviewPersonDataErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		AdminPreviewPersonDataResponses,
+		AdminPreviewPersonDataErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/person-data/preview",
 		...options,
@@ -1515,8 +1972,16 @@ export const adminPreviewPersonData = <ThrowOnError extends boolean = false>(
  */
 export const adminListPersonDataProviders = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListPersonDataProvidersData, ThrowOnError>,
-): RequestResult<AdminListPersonDataProvidersResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListPersonDataProvidersResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminListPersonDataProvidersResponses,
+	AdminListPersonDataProvidersErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		AdminListPersonDataProvidersResponses,
+		AdminListPersonDataProvidersErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/person-data/providers",
 		...options,
@@ -1527,8 +1992,16 @@ export const adminListPersonDataProviders = <ThrowOnError extends boolean = fals
  */
 export const adminGetPersonDataRequest = <ThrowOnError extends boolean = false>(
 	options: Options<AdminGetPersonDataRequestData, ThrowOnError>,
-): RequestResult<AdminGetPersonDataRequestResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<AdminGetPersonDataRequestResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminGetPersonDataRequestResponses,
+	AdminGetPersonDataRequestErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		AdminGetPersonDataRequestResponses,
+		AdminGetPersonDataRequestErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/person-data/{id}",
 		...options,
@@ -1539,8 +2012,12 @@ export const adminGetPersonDataRequest = <ThrowOnError extends boolean = false>(
  */
 export const adminErasePersonData = <ThrowOnError extends boolean = false>(
 	options: Options<AdminErasePersonDataData, ThrowOnError>,
-): RequestResult<AdminErasePersonDataResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdminErasePersonDataResponses, unknown, ThrowOnError>({
+): RequestResult<AdminErasePersonDataResponses, AdminErasePersonDataErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		AdminErasePersonDataResponses,
+		AdminErasePersonDataErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/person-data/{id}/erase",
 		...options,
@@ -1555,8 +2032,12 @@ export const adminErasePersonData = <ThrowOnError extends boolean = false>(
  */
 export const adminExportPersonData = <ThrowOnError extends boolean = false>(
 	options: Options<AdminExportPersonDataData, ThrowOnError>,
-): RequestResult<AdminExportPersonDataResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdminExportPersonDataResponses, unknown, ThrowOnError>({
+): RequestResult<AdminExportPersonDataResponses, AdminExportPersonDataErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		AdminExportPersonDataResponses,
+		AdminExportPersonDataErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/person-data/{id}/export",
 		...options,
@@ -1564,8 +2045,12 @@ export const adminExportPersonData = <ThrowOnError extends boolean = false>(
 
 export const getInstanceCatalog = <ThrowOnError extends boolean = false>(
 	options?: Options<GetInstanceCatalogData, ThrowOnError>,
-): RequestResult<GetInstanceCatalogResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetInstanceCatalogResponses, unknown, ThrowOnError>({
+): RequestResult<GetInstanceCatalogResponses, GetInstanceCatalogErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		GetInstanceCatalogResponses,
+		GetInstanceCatalogErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog",
 		...options,
@@ -1573,8 +2058,16 @@ export const getInstanceCatalog = <ThrowOnError extends boolean = false>(
 
 export const getInstanceDefinitionOptions = <ThrowOnError extends boolean = false>(
 	options?: Options<GetInstanceDefinitionOptionsData, ThrowOnError>,
-): RequestResult<GetInstanceDefinitionOptionsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetInstanceDefinitionOptionsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetInstanceDefinitionOptionsResponses,
+	GetInstanceDefinitionOptionsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		GetInstanceDefinitionOptionsResponses,
+		GetInstanceDefinitionOptionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/definition-options",
 		...options,
@@ -1582,8 +2075,12 @@ export const getInstanceDefinitionOptions = <ThrowOnError extends boolean = fals
 
 export const createCatalogGroup = <ThrowOnError extends boolean = false>(
 	options: Options<CreateCatalogGroupData, ThrowOnError>,
-): RequestResult<CreateCatalogGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CreateCatalogGroupResponses, unknown, ThrowOnError>({
+): RequestResult<CreateCatalogGroupResponses, CreateCatalogGroupErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CreateCatalogGroupResponses,
+		CreateCatalogGroupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/groups",
 		...options,
@@ -1595,8 +2092,12 @@ export const createCatalogGroup = <ThrowOnError extends boolean = false>(
 
 export const reorderCatalogGroups = <ThrowOnError extends boolean = false>(
 	options: Options<ReorderCatalogGroupsData, ThrowOnError>,
-): RequestResult<ReorderCatalogGroupsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<ReorderCatalogGroupsResponses, unknown, ThrowOnError>({
+): RequestResult<ReorderCatalogGroupsResponses, ReorderCatalogGroupsErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		ReorderCatalogGroupsResponses,
+		ReorderCatalogGroupsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/groups/reorder",
 		...options,
@@ -1608,8 +2109,8 @@ export const reorderCatalogGroups = <ThrowOnError extends boolean = false>(
 
 export const getCatalogGroup = <ThrowOnError extends boolean = false>(
 	options: Options<GetCatalogGroupData, ThrowOnError>,
-): RequestResult<GetCatalogGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetCatalogGroupResponses, unknown, ThrowOnError>({
+): RequestResult<GetCatalogGroupResponses, GetCatalogGroupErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetCatalogGroupResponses, GetCatalogGroupErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/groups/{slug}",
 		...options,
@@ -1617,8 +2118,12 @@ export const getCatalogGroup = <ThrowOnError extends boolean = false>(
 
 export const updateCatalogGroup = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateCatalogGroupData, ThrowOnError>,
-): RequestResult<UpdateCatalogGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateCatalogGroupResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateCatalogGroupResponses, UpdateCatalogGroupErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		UpdateCatalogGroupResponses,
+		UpdateCatalogGroupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/groups/{slug}",
 		...options,
@@ -1630,8 +2135,12 @@ export const updateCatalogGroup = <ThrowOnError extends boolean = false>(
 
 export const resetCatalogGroup = <ThrowOnError extends boolean = false>(
 	options: Options<ResetCatalogGroupData, ThrowOnError>,
-): RequestResult<ResetCatalogGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<ResetCatalogGroupResponses, unknown, ThrowOnError>({
+): RequestResult<ResetCatalogGroupResponses, ResetCatalogGroupErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		ResetCatalogGroupResponses,
+		ResetCatalogGroupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/groups/{slug}/override",
 		...options,
@@ -1639,8 +2148,12 @@ export const resetCatalogGroup = <ThrowOnError extends boolean = false>(
 
 export const acknowledgeCatalogGroup = <ThrowOnError extends boolean = false>(
 	options: Options<AcknowledgeCatalogGroupData, ThrowOnError>,
-): RequestResult<AcknowledgeCatalogGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AcknowledgeCatalogGroupResponses, unknown, ThrowOnError>({
+): RequestResult<AcknowledgeCatalogGroupResponses, AcknowledgeCatalogGroupErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		AcknowledgeCatalogGroupResponses,
+		AcknowledgeCatalogGroupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/groups/{slug}/override/acknowledgement",
 		...options,
@@ -1648,8 +2161,12 @@ export const acknowledgeCatalogGroup = <ThrowOnError extends boolean = false>(
 
 export const setCatalogGroupStatus = <ThrowOnError extends boolean = false>(
 	options: Options<SetCatalogGroupStatusData, ThrowOnError>,
-): RequestResult<SetCatalogGroupStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<SetCatalogGroupStatusResponses, unknown, ThrowOnError>({
+): RequestResult<SetCatalogGroupStatusResponses, SetCatalogGroupStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		SetCatalogGroupStatusResponses,
+		SetCatalogGroupStatusErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/groups/{slug}/status",
 		...options,
@@ -1661,8 +2178,12 @@ export const setCatalogGroupStatus = <ThrowOnError extends boolean = false>(
 
 export const resetCatalogOrder = <ThrowOnError extends boolean = false>(
 	options?: Options<ResetCatalogOrderData, ThrowOnError>,
-): RequestResult<ResetCatalogOrderResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).delete<ResetCatalogOrderResponses, unknown, ThrowOnError>({
+): RequestResult<ResetCatalogOrderResponses, ResetCatalogOrderErrors, ThrowOnError> =>
+	(options?.client ?? client).delete<
+		ResetCatalogOrderResponses,
+		ResetCatalogOrderErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/order",
 		...options,
@@ -1670,8 +2191,12 @@ export const resetCatalogOrder = <ThrowOnError extends boolean = false>(
 
 export const createCatalogPractice = <ThrowOnError extends boolean = false>(
 	options: Options<CreateCatalogPracticeData, ThrowOnError>,
-): RequestResult<CreateCatalogPracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CreateCatalogPracticeResponses, unknown, ThrowOnError>({
+): RequestResult<CreateCatalogPracticeResponses, CreateCatalogPracticeErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CreateCatalogPracticeResponses,
+		CreateCatalogPracticeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices",
 		...options,
@@ -1683,8 +2208,12 @@ export const createCatalogPractice = <ThrowOnError extends boolean = false>(
 
 export const getCatalogPractice = <ThrowOnError extends boolean = false>(
 	options: Options<GetCatalogPracticeData, ThrowOnError>,
-): RequestResult<GetCatalogPracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetCatalogPracticeResponses, unknown, ThrowOnError>({
+): RequestResult<GetCatalogPracticeResponses, GetCatalogPracticeErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetCatalogPracticeResponses,
+		GetCatalogPracticeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}",
 		...options,
@@ -1692,8 +2221,12 @@ export const getCatalogPractice = <ThrowOnError extends boolean = false>(
 
 export const updateCatalogPractice = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateCatalogPracticeData, ThrowOnError>,
-): RequestResult<UpdateCatalogPracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateCatalogPracticeResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateCatalogPracticeResponses, UpdateCatalogPracticeErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		UpdateCatalogPracticeResponses,
+		UpdateCatalogPracticeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}",
 		...options,
@@ -1705,8 +2238,12 @@ export const updateCatalogPractice = <ThrowOnError extends boolean = false>(
 
 export const moveCatalogPractice = <ThrowOnError extends boolean = false>(
 	options: Options<MoveCatalogPracticeData, ThrowOnError>,
-): RequestResult<MoveCatalogPracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<MoveCatalogPracticeResponses, unknown, ThrowOnError>({
+): RequestResult<MoveCatalogPracticeResponses, MoveCatalogPracticeErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		MoveCatalogPracticeResponses,
+		MoveCatalogPracticeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}/group",
 		...options,
@@ -1718,8 +2255,12 @@ export const moveCatalogPractice = <ThrowOnError extends boolean = false>(
 
 export const resetCatalogPractice = <ThrowOnError extends boolean = false>(
 	options: Options<ResetCatalogPracticeData, ThrowOnError>,
-): RequestResult<ResetCatalogPracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<ResetCatalogPracticeResponses, unknown, ThrowOnError>({
+): RequestResult<ResetCatalogPracticeResponses, ResetCatalogPracticeErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		ResetCatalogPracticeResponses,
+		ResetCatalogPracticeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}/override",
 		...options,
@@ -1727,8 +2268,16 @@ export const resetCatalogPractice = <ThrowOnError extends boolean = false>(
 
 export const acknowledgeCatalogPractice = <ThrowOnError extends boolean = false>(
 	options: Options<AcknowledgeCatalogPracticeData, ThrowOnError>,
-): RequestResult<AcknowledgeCatalogPracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AcknowledgeCatalogPracticeResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AcknowledgeCatalogPracticeResponses,
+	AcknowledgeCatalogPracticeErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		AcknowledgeCatalogPracticeResponses,
+		AcknowledgeCatalogPracticeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}/override/acknowledgement",
 		...options,
@@ -1736,8 +2285,16 @@ export const acknowledgeCatalogPractice = <ThrowOnError extends boolean = false>
 
 export const getCatalogPracticeRelease = <ThrowOnError extends boolean = false>(
 	options: Options<GetCatalogPracticeReleaseData, ThrowOnError>,
-): RequestResult<GetCatalogPracticeReleaseResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetCatalogPracticeReleaseResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetCatalogPracticeReleaseResponses,
+	GetCatalogPracticeReleaseErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetCatalogPracticeReleaseResponses,
+		GetCatalogPracticeReleaseErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}/release",
 		...options,
@@ -1745,8 +2302,16 @@ export const getCatalogPracticeRelease = <ThrowOnError extends boolean = false>(
 
 export const acceptCatalogPracticeRelease = <ThrowOnError extends boolean = false>(
 	options: Options<AcceptCatalogPracticeReleaseData, ThrowOnError>,
-): RequestResult<AcceptCatalogPracticeReleaseResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AcceptCatalogPracticeReleaseResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AcceptCatalogPracticeReleaseResponses,
+	AcceptCatalogPracticeReleaseErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		AcceptCatalogPracticeReleaseResponses,
+		AcceptCatalogPracticeReleaseErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}/release",
 		...options,
@@ -1758,8 +2323,12 @@ export const acceptCatalogPracticeRelease = <ThrowOnError extends boolean = fals
 
 export const setCatalogPracticeStatus = <ThrowOnError extends boolean = false>(
 	options: Options<SetCatalogPracticeStatusData, ThrowOnError>,
-): RequestResult<SetCatalogPracticeStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<SetCatalogPracticeStatusResponses, unknown, ThrowOnError>({
+): RequestResult<SetCatalogPracticeStatusResponses, SetCatalogPracticeStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		SetCatalogPracticeStatusResponses,
+		SetCatalogPracticeStatusErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}/status",
 		...options,
@@ -1774,8 +2343,12 @@ export const setCatalogPracticeStatus = <ThrowOnError extends boolean = false>(
  */
 export const adminListProductFeedback = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListProductFeedbackData, ThrowOnError>,
-): RequestResult<AdminListProductFeedbackResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListProductFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListProductFeedbackResponses, AdminListProductFeedbackErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListProductFeedbackResponses,
+		AdminListProductFeedbackErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback",
 		...options,
@@ -1786,8 +2359,16 @@ export const adminListProductFeedback = <ThrowOnError extends boolean = false>(
  */
 export const confirmProductFeedbackCleanup = <ThrowOnError extends boolean = false>(
 	options: Options<ConfirmProductFeedbackCleanupData, ThrowOnError>,
-): RequestResult<ConfirmProductFeedbackCleanupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ConfirmProductFeedbackCleanupResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ConfirmProductFeedbackCleanupResponses,
+	ConfirmProductFeedbackCleanupErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		ConfirmProductFeedbackCleanupResponses,
+		ConfirmProductFeedbackCleanupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/cleanups/{cleanupId}/confirm",
 		...options,
@@ -1798,8 +2379,16 @@ export const confirmProductFeedbackCleanup = <ThrowOnError extends boolean = fal
  */
 export const getProductFeedbackDestinations = <ThrowOnError extends boolean = false>(
 	options?: Options<GetProductFeedbackDestinationsData, ThrowOnError>,
-): RequestResult<GetProductFeedbackDestinationsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetProductFeedbackDestinationsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetProductFeedbackDestinationsResponses,
+	GetProductFeedbackDestinationsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		GetProductFeedbackDestinationsResponses,
+		GetProductFeedbackDestinationsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/destinations",
 		...options,
@@ -1810,26 +2399,40 @@ export const getProductFeedbackDestinations = <ThrowOnError extends boolean = fa
  */
 export const updateProductFeedbackDestinations = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateProductFeedbackDestinationsData, ThrowOnError>,
-): RequestResult<UpdateProductFeedbackDestinationsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateProductFeedbackDestinationsResponses, unknown, ThrowOnError>(
-		{
-			security: [{ scheme: "bearer", type: "http" }],
-			url: "/admin/product-feedback/destinations",
-			...options,
-			headers: {
-				"Content-Type": "application/json",
-				...options.headers,
-			},
+): RequestResult<
+	UpdateProductFeedbackDestinationsResponses,
+	UpdateProductFeedbackDestinationsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		UpdateProductFeedbackDestinationsResponses,
+		UpdateProductFeedbackDestinationsErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/admin/product-feedback/destinations",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
 		},
-	);
+	});
 
 /**
  * Send every report that is saved for admins to GitHub as private issues
  */
 export const fileAllSavedProductFeedback = <ThrowOnError extends boolean = false>(
 	options?: Options<FileAllSavedProductFeedbackData, ThrowOnError>,
-): RequestResult<FileAllSavedProductFeedbackResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<FileAllSavedProductFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<
+	FileAllSavedProductFeedbackResponses,
+	FileAllSavedProductFeedbackErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).post<
+		FileAllSavedProductFeedbackResponses,
+		FileAllSavedProductFeedbackErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/file-saved",
 		...options,
@@ -1840,8 +2443,16 @@ export const fileAllSavedProductFeedback = <ThrowOnError extends boolean = false
  */
 export const listProductFeedbackNeedsAction = <ThrowOnError extends boolean = false>(
 	options?: Options<ListProductFeedbackNeedsActionData, ThrowOnError>,
-): RequestResult<ListProductFeedbackNeedsActionResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListProductFeedbackNeedsActionResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListProductFeedbackNeedsActionResponses,
+	ListProductFeedbackNeedsActionErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		ListProductFeedbackNeedsActionResponses,
+		ListProductFeedbackNeedsActionErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/needs-action",
 		...options,
@@ -1852,8 +2463,16 @@ export const listProductFeedbackNeedsAction = <ThrowOnError extends boolean = fa
  */
 export const adminTriageProductFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<AdminTriageProductFeedbackData, ThrowOnError>,
-): RequestResult<AdminTriageProductFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<AdminTriageProductFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminTriageProductFeedbackResponses,
+	AdminTriageProductFeedbackErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		AdminTriageProductFeedbackResponses,
+		AdminTriageProductFeedbackErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/{feedbackId}",
 		...options,
@@ -1868,8 +2487,12 @@ export const adminTriageProductFeedback = <ThrowOnError extends boolean = false>
  */
 export const fileSavedProductFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<FileSavedProductFeedbackData, ThrowOnError>,
-): RequestResult<FileSavedProductFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<FileSavedProductFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<FileSavedProductFeedbackResponses, FileSavedProductFeedbackErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		FileSavedProductFeedbackResponses,
+		FileSavedProductFeedbackErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/{feedbackId}/file",
 		...options,
@@ -1880,8 +2503,16 @@ export const fileSavedProductFeedback = <ThrowOnError extends boolean = false>(
  */
 export const retryProductFeedbackFiling = <ThrowOnError extends boolean = false>(
 	options: Options<RetryProductFeedbackFilingData, ThrowOnError>,
-): RequestResult<RetryProductFeedbackFilingResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RetryProductFeedbackFilingResponses, unknown, ThrowOnError>({
+): RequestResult<
+	RetryProductFeedbackFilingResponses,
+	RetryProductFeedbackFilingErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		RetryProductFeedbackFilingResponses,
+		RetryProductFeedbackFilingErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/{feedbackId}/retry",
 		...options,
@@ -1889,8 +2520,16 @@ export const retryProductFeedbackFiling = <ThrowOnError extends boolean = false>
 
 export const listInstanceProviderRepairs = <ThrowOnError extends boolean = false>(
 	options?: Options<ListInstanceProviderRepairsData, ThrowOnError>,
-): RequestResult<ListInstanceProviderRepairsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListInstanceProviderRepairsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListInstanceProviderRepairsResponses,
+	ListInstanceProviderRepairsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		ListInstanceProviderRepairsResponses,
+		ListInstanceProviderRepairsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/provider-resource-repairs",
 		...options,
@@ -1898,8 +2537,16 @@ export const listInstanceProviderRepairs = <ThrowOnError extends boolean = false
 
 export const releaseOrphanProviderRepair = <ThrowOnError extends boolean = false>(
 	options: Options<ReleaseOrphanProviderRepairData, ThrowOnError>,
-): RequestResult<ReleaseOrphanProviderRepairResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ReleaseOrphanProviderRepairResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ReleaseOrphanProviderRepairResponses,
+	ReleaseOrphanProviderRepairErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		ReleaseOrphanProviderRepairResponses,
+		ReleaseOrphanProviderRepairErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/provider-resource-repairs/{repairId}/release",
 		...options,
@@ -1914,8 +2561,8 @@ export const releaseOrphanProviderRepair = <ThrowOnError extends boolean = false
  */
 export const adminGetRelease = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminGetReleaseData, ThrowOnError>,
-): RequestResult<AdminGetReleaseResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminGetReleaseResponses, unknown, ThrowOnError>({
+): RequestResult<AdminGetReleaseResponses, AdminGetReleaseErrors, ThrowOnError> =>
+	(options?.client ?? client).get<AdminGetReleaseResponses, AdminGetReleaseErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/release",
 		...options,
@@ -1926,8 +2573,12 @@ export const adminGetRelease = <ThrowOnError extends boolean = false>(
  */
 export const adminCheckRelease = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminCheckReleaseData, ThrowOnError>,
-): RequestResult<AdminCheckReleaseResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<AdminCheckReleaseResponses, unknown, ThrowOnError>({
+): RequestResult<AdminCheckReleaseResponses, AdminCheckReleaseErrors, ThrowOnError> =>
+	(options?.client ?? client).post<
+		AdminCheckReleaseResponses,
+		AdminCheckReleaseErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/release/checks",
 		...options,
@@ -1940,8 +2591,12 @@ export const adminCheckRelease = <ThrowOnError extends boolean = false>(
  */
 export const releaseResearchDataset = <ThrowOnError extends boolean = false>(
 	options: Options<ReleaseResearchDatasetData, ThrowOnError>,
-): RequestResult<ReleaseResearchDatasetResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ReleaseResearchDatasetResponses, unknown, ThrowOnError>({
+): RequestResult<ReleaseResearchDatasetResponses, ReleaseResearchDatasetErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		ReleaseResearchDatasetResponses,
+		ReleaseResearchDatasetErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/research-disclosures",
 		...options,
@@ -1958,8 +2613,12 @@ export const releaseResearchDataset = <ThrowOnError extends boolean = false>(
  */
 export const checkResearchRemovals = <ThrowOnError extends boolean = false>(
 	options?: Options<CheckResearchRemovalsData, ThrowOnError>,
-): RequestResult<CheckResearchRemovalsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<CheckResearchRemovalsResponses, unknown, ThrowOnError>({
+): RequestResult<CheckResearchRemovalsResponses, CheckResearchRemovalsErrors, ThrowOnError> =>
+	(options?.client ?? client).post<
+		CheckResearchRemovalsResponses,
+		CheckResearchRemovalsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/research-disclosures/removal-checks",
 		...options,
@@ -1972,8 +2631,12 @@ export const checkResearchRemovals = <ThrowOnError extends boolean = false>(
  */
 export const closeResearchDisclosure = <ThrowOnError extends boolean = false>(
 	options: Options<CloseResearchDisclosureData, ThrowOnError>,
-): RequestResult<CloseResearchDisclosureResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CloseResearchDisclosureResponses, unknown, ThrowOnError>({
+): RequestResult<CloseResearchDisclosureResponses, CloseResearchDisclosureErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CloseResearchDisclosureResponses,
+		CloseResearchDisclosureErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/research-disclosures/{datasetId}/closure",
 		...options,
@@ -1990,8 +2653,12 @@ export const closeResearchDisclosure = <ThrowOnError extends boolean = false>(
  */
 export const recordResearchRemovals = <ThrowOnError extends boolean = false>(
 	options: Options<RecordResearchRemovalsData, ThrowOnError>,
-): RequestResult<RecordResearchRemovalsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RecordResearchRemovalsResponses, unknown, ThrowOnError>({
+): RequestResult<RecordResearchRemovalsResponses, RecordResearchRemovalsErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		RecordResearchRemovalsResponses,
+		RecordResearchRemovalsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/research-disclosures/{datasetId}/removal-receipts",
 		...options,
@@ -2006,8 +2673,12 @@ export const recordResearchRemovals = <ThrowOnError extends boolean = false>(
  */
 export const adminGetInstanceSettings = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminGetInstanceSettingsData, ThrowOnError>,
-): RequestResult<AdminGetInstanceSettingsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminGetInstanceSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminGetInstanceSettingsResponses, AdminGetInstanceSettingsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminGetInstanceSettingsResponses,
+		AdminGetInstanceSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/settings",
 		...options,
@@ -2018,8 +2689,12 @@ export const adminGetInstanceSettings = <ThrowOnError extends boolean = false>(
  */
 export const getPublicActivityPolicy = <ThrowOnError extends boolean = false>(
 	options?: Options<GetPublicActivityPolicyData, ThrowOnError>,
-): RequestResult<GetPublicActivityPolicyResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetPublicActivityPolicyResponses, unknown, ThrowOnError>({
+): RequestResult<GetPublicActivityPolicyResponses, GetPublicActivityPolicyErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		GetPublicActivityPolicyResponses,
+		GetPublicActivityPolicyErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/settings/public-activity",
 		...options,
@@ -2030,8 +2705,16 @@ export const getPublicActivityPolicy = <ThrowOnError extends boolean = false>(
  */
 export const updatePublicActivityPolicy = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePublicActivityPolicyData, ThrowOnError>,
-): RequestResult<UpdatePublicActivityPolicyResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdatePublicActivityPolicyResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdatePublicActivityPolicyResponses,
+	UpdatePublicActivityPolicyErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		UpdatePublicActivityPolicyResponses,
+		UpdatePublicActivityPolicyErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/settings/public-activity",
 		...options,
@@ -2066,8 +2749,8 @@ export const adminUpdateSilentMode = <ThrowOnError extends boolean = false>(
  */
 export const adminListUsers = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListUsersData, ThrowOnError>,
-): RequestResult<AdminListUsersResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListUsersResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListUsersResponses, AdminListUsersErrors, ThrowOnError> =>
+	(options?.client ?? client).get<AdminListUsersResponses, AdminListUsersErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/users",
 		...options,
@@ -2078,8 +2761,8 @@ export const adminListUsers = <ThrowOnError extends boolean = false>(
  */
 export const adminUpdateUser = <ThrowOnError extends boolean = false>(
 	options: Options<AdminUpdateUserData, ThrowOnError>,
-): RequestResult<AdminUpdateUserResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<AdminUpdateUserResponses, unknown, ThrowOnError>({
+): RequestResult<AdminUpdateUserResponses, AdminUpdateUserErrors, ThrowOnError> =>
+	(options.client ?? client).patch<AdminUpdateUserResponses, AdminUpdateUserErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/users/{id}",
 		...options,
@@ -2094,8 +2777,12 @@ export const adminUpdateUser = <ThrowOnError extends boolean = false>(
  */
 export const adminRevokeUserSessions = <ThrowOnError extends boolean = false>(
 	options: Options<AdminRevokeUserSessionsData, ThrowOnError>,
-): RequestResult<AdminRevokeUserSessionsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<AdminRevokeUserSessionsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminRevokeUserSessionsResponses, AdminRevokeUserSessionsErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		AdminRevokeUserSessionsResponses,
+		AdminRevokeUserSessionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/users/{id}/sessions",
 		...options,
@@ -2106,8 +2793,12 @@ export const adminRevokeUserSessions = <ThrowOnError extends boolean = false>(
  */
 export const adminUpdateUserStatus = <ThrowOnError extends boolean = false>(
 	options: Options<AdminUpdateUserStatusData, ThrowOnError>,
-): RequestResult<AdminUpdateUserStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<AdminUpdateUserStatusResponses, unknown, ThrowOnError>({
+): RequestResult<AdminUpdateUserStatusResponses, AdminUpdateUserStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		AdminUpdateUserStatusResponses,
+		AdminUpdateUserStatusErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/users/{id}/status",
 		...options,
@@ -2122,8 +2813,12 @@ export const adminUpdateUserStatus = <ThrowOnError extends boolean = false>(
  */
 export const adminListWorkspaces = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListWorkspacesData, ThrowOnError>,
-): RequestResult<AdminListWorkspacesResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListWorkspacesResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListWorkspacesResponses, AdminListWorkspacesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListWorkspacesResponses,
+		AdminListWorkspacesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/workspaces",
 		...options,
@@ -2134,8 +2829,16 @@ export const adminListWorkspaces = <ThrowOnError extends boolean = false>(
  */
 export const adminUpdateWorkspaceLlmBudget = <ThrowOnError extends boolean = false>(
 	options: Options<AdminUpdateWorkspaceLlmBudgetData, ThrowOnError>,
-): RequestResult<AdminUpdateWorkspaceLlmBudgetResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AdminUpdateWorkspaceLlmBudgetResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminUpdateWorkspaceLlmBudgetResponses,
+	AdminUpdateWorkspaceLlmBudgetErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		AdminUpdateWorkspaceLlmBudgetResponses,
+		AdminUpdateWorkspaceLlmBudgetErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/workspaces/{workspaceSlug}/llm/budget",
 		...options,
@@ -2234,8 +2937,8 @@ export const exchangeClientSignIn = <ThrowOnError extends boolean = false>(
  */
 export const getCsrfToken = <ThrowOnError extends boolean = false>(
 	options?: Options<GetCsrfTokenData, ThrowOnError>,
-): RequestResult<GetCsrfTokenResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetCsrfTokenResponses, unknown, ThrowOnError>({
+): RequestResult<GetCsrfTokenResponses, GetCsrfTokenErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetCsrfTokenResponses, GetCsrfTokenErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/auth/csrf",
 		...options,
@@ -2248,8 +2951,8 @@ export const getCsrfToken = <ThrowOnError extends boolean = false>(
  */
 export const logout = <ThrowOnError extends boolean = false>(
 	options?: Options<LogoutData, ThrowOnError>,
-): RequestResult<LogoutResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<LogoutResponses, unknown, ThrowOnError>({
+): RequestResult<LogoutResponses, LogoutErrors, ThrowOnError> =>
+	(options?.client ?? client).post<LogoutResponses, LogoutErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/auth/logout",
 		...options,
@@ -2293,19 +2996,24 @@ export const reportBrowserFaults = <ThrowOnError extends boolean = false>(
  */
 export const listGlobalContributors = <ThrowOnError extends boolean = false>(
 	options?: Options<ListGlobalContributorsData, ThrowOnError>,
-): RequestResult<ListGlobalContributorsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListGlobalContributorsResponses, unknown, ThrowOnError>({
-		url: "/contributors",
-		...options,
-	});
+): RequestResult<ListGlobalContributorsResponses, ListGlobalContributorsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		ListGlobalContributorsResponses,
+		ListGlobalContributorsErrors,
+		ThrowOnError
+	>({ url: "/contributors", ...options });
 
 /**
  * Confirm the installation that the signed-in person set up on GitHub
  */
 export const claimGitHubInstallation = <ThrowOnError extends boolean = false>(
 	options: Options<ClaimGitHubInstallationData, ThrowOnError>,
-): RequestResult<ClaimGitHubInstallationResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ClaimGitHubInstallationResponses, unknown, ThrowOnError>({
+): RequestResult<ClaimGitHubInstallationResponses, ClaimGitHubInstallationErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		ClaimGitHubInstallationResponses,
+		ClaimGitHubInstallationErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/github-installations/{installationId}/claim",
 		...options,
@@ -2320,8 +3028,12 @@ export const claimGitHubInstallation = <ThrowOnError extends boolean = false>(
  */
 export const listIdentityProviders = <ThrowOnError extends boolean = false>(
 	options?: Options<ListIdentityProvidersData, ThrowOnError>,
-): RequestResult<ListIdentityProvidersResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListIdentityProvidersResponses, unknown, ThrowOnError>({
+): RequestResult<ListIdentityProvidersResponses, ListIdentityProvidersErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		ListIdentityProvidersResponses,
+		ListIdentityProvidersErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/identity-providers",
 		...options,
@@ -2332,8 +3044,12 @@ export const listIdentityProviders = <ThrowOnError extends boolean = false>(
  */
 export const authorizeMcpClient = <ThrowOnError extends boolean = false>(
 	options?: Options<AuthorizeMcpClientData, ThrowOnError>,
-): RequestResult<AuthorizeMcpClientResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AuthorizeMcpClientResponses, unknown, ThrowOnError>({
+): RequestResult<AuthorizeMcpClientResponses, AuthorizeMcpClientErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AuthorizeMcpClientResponses,
+		AuthorizeMcpClientErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/mcp/oauth/authorize",
 		...options,
@@ -2344,8 +3060,12 @@ export const authorizeMcpClient = <ThrowOnError extends boolean = false>(
  */
 export const refuseMcpConsentRequest = <ThrowOnError extends boolean = false>(
 	options: Options<RefuseMcpConsentRequestData, ThrowOnError>,
-): RequestResult<RefuseMcpConsentRequestResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RefuseMcpConsentRequestResponses, unknown, ThrowOnError>({
+): RequestResult<RefuseMcpConsentRequestResponses, RefuseMcpConsentRequestErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		RefuseMcpConsentRequestResponses,
+		RefuseMcpConsentRequestErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/mcp/oauth/requests/{requestId}",
 		...options,
@@ -2356,8 +3076,12 @@ export const refuseMcpConsentRequest = <ThrowOnError extends boolean = false>(
  */
 export const getMcpConsentRequest = <ThrowOnError extends boolean = false>(
 	options: Options<GetMcpConsentRequestData, ThrowOnError>,
-): RequestResult<GetMcpConsentRequestResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetMcpConsentRequestResponses, unknown, ThrowOnError>({
+): RequestResult<GetMcpConsentRequestResponses, GetMcpConsentRequestErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetMcpConsentRequestResponses,
+		GetMcpConsentRequestErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/mcp/oauth/requests/{requestId}",
 		...options,
@@ -2368,8 +3092,12 @@ export const getMcpConsentRequest = <ThrowOnError extends boolean = false>(
  */
 export const approveMcpConsentRequest = <ThrowOnError extends boolean = false>(
 	options: Options<ApproveMcpConsentRequestData, ThrowOnError>,
-): RequestResult<ApproveMcpConsentRequestResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<ApproveMcpConsentRequestResponses, unknown, ThrowOnError>({
+): RequestResult<ApproveMcpConsentRequestResponses, ApproveMcpConsentRequestErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		ApproveMcpConsentRequestResponses,
+		ApproveMcpConsentRequestErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/mcp/oauth/requests/{requestId}/approval",
 		...options,
@@ -2378,27 +3106,29 @@ export const approveMcpConsentRequest = <ThrowOnError extends boolean = false>(
 /**
  * Exchange a code or rotate a refresh token (RFC 6749 § 3.2)
  */
-export const mcpToken = <ThrowOnError extends boolean = false>(
-	options?: Options<McpTokenData, ThrowOnError>,
-): RequestResult<McpTokenResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<McpTokenResponses, unknown, ThrowOnError>({
-		...urlSearchParamsBodySerializer,
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/mcp/oauth/token",
-		...options,
-		headers: {
-			"Content-Type": "application/x-www-form-urlencoded",
-			...options?.headers,
+export const exchangeMcpToken = <ThrowOnError extends boolean = false>(
+	options?: Options<ExchangeMcpTokenData, ThrowOnError>,
+): RequestResult<ExchangeMcpTokenResponses, ExchangeMcpTokenErrors, ThrowOnError> =>
+	(options?.client ?? client).post<ExchangeMcpTokenResponses, ExchangeMcpTokenErrors, ThrowOnError>(
+		{
+			...urlSearchParamsBodySerializer,
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/mcp/oauth/token",
+			...options,
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+				...options?.headers,
+			},
 		},
-	});
+	);
 
 /**
  * Unsubscribe from one optional email subscription
  */
 export const unsubscribeEmail = <ThrowOnError extends boolean = false>(
 	options: Options<UnsubscribeEmailData, ThrowOnError>,
-): RequestResult<UnsubscribeEmailResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<UnsubscribeEmailResponses, unknown, ThrowOnError>({
+): RequestResult<UnsubscribeEmailResponses, UnsubscribeEmailErrors, ThrowOnError> =>
+	(options.client ?? client).post<UnsubscribeEmailResponses, UnsubscribeEmailErrors, ThrowOnError>({
 		...urlSearchParamsBodySerializer,
 		url: "/notifications/unsubscribe/{token}",
 		...options,
@@ -2410,8 +3140,8 @@ export const unsubscribeEmail = <ThrowOnError extends boolean = false>(
 
 export const callbackGet = <ThrowOnError extends boolean = false>(
 	options: Options<CallbackGetData, ThrowOnError>,
-): RequestResult<CallbackGetResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<CallbackGetResponses, unknown, ThrowOnError>({
+): RequestResult<CallbackGetResponses, CallbackGetErrors, ThrowOnError> =>
+	(options.client ?? client).get<CallbackGetResponses, CallbackGetErrors, ThrowOnError>({
 		querySerializer: { parameters: { allParams: { object: { style: "form" } } } },
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/oauth/callback/{kind}",
@@ -2420,8 +3150,8 @@ export const callbackGet = <ThrowOnError extends boolean = false>(
 
 export const callbackPost = <ThrowOnError extends boolean = false>(
 	options: Options<CallbackPostData, ThrowOnError>,
-): RequestResult<CallbackPostResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CallbackPostResponses, unknown, ThrowOnError>({
+): RequestResult<CallbackPostResponses, CallbackPostErrors, ThrowOnError> =>
+	(options.client ?? client).post<CallbackPostResponses, CallbackPostErrors, ThrowOnError>({
 		querySerializer: { parameters: { allParams: { object: { style: "form" } } } },
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/oauth/callback/{kind}",
@@ -2433,8 +3163,16 @@ export const callbackPost = <ThrowOnError extends boolean = false>(
  */
 export const submitInstanceProductFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<SubmitInstanceProductFeedbackData, ThrowOnError>,
-): RequestResult<SubmitInstanceProductFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<SubmitInstanceProductFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<
+	SubmitInstanceProductFeedbackResponses,
+	SubmitInstanceProductFeedbackErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		SubmitInstanceProductFeedbackResponses,
+		SubmitInstanceProductFeedbackErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback",
 		...options,
@@ -2449,8 +3187,12 @@ export const submitInstanceProductFeedback = <ThrowOnError extends boolean = fal
  */
 export const listMyProductFeedback = <ThrowOnError extends boolean = false>(
 	options?: Options<ListMyProductFeedbackData, ThrowOnError>,
-): RequestResult<ListMyProductFeedbackResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListMyProductFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<ListMyProductFeedbackResponses, ListMyProductFeedbackErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		ListMyProductFeedbackResponses,
+		ListMyProductFeedbackErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback/mine",
 		...options,
@@ -2461,8 +3203,16 @@ export const listMyProductFeedback = <ThrowOnError extends boolean = false>(
  */
 export const getProductFeedbackSharing = <ThrowOnError extends boolean = false>(
 	options?: Options<GetProductFeedbackSharingData, ThrowOnError>,
-): RequestResult<GetProductFeedbackSharingResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetProductFeedbackSharingResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetProductFeedbackSharingResponses,
+	GetProductFeedbackSharingErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		GetProductFeedbackSharingResponses,
+		GetProductFeedbackSharingErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback/sharing",
 		...options,
@@ -2473,8 +3223,16 @@ export const getProductFeedbackSharing = <ThrowOnError extends boolean = false>(
  */
 export const updateProductFeedbackSharing = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateProductFeedbackSharingData, ThrowOnError>,
-): RequestResult<UpdateProductFeedbackSharingResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateProductFeedbackSharingResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdateProductFeedbackSharingResponses,
+	UpdateProductFeedbackSharingErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		UpdateProductFeedbackSharingResponses,
+		UpdateProductFeedbackSharingErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback/sharing",
 		...options,
@@ -2489,8 +3247,16 @@ export const updateProductFeedbackSharing = <ThrowOnError extends boolean = fals
  */
 export const allowMyProductFeedbackPublic = <ThrowOnError extends boolean = false>(
 	options: Options<AllowMyProductFeedbackPublicData, ThrowOnError>,
-): RequestResult<AllowMyProductFeedbackPublicResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AllowMyProductFeedbackPublicResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AllowMyProductFeedbackPublicResponses,
+	AllowMyProductFeedbackPublicErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		AllowMyProductFeedbackPublicResponses,
+		AllowMyProductFeedbackPublicErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback/{feedbackId}/allow-public",
 		...options,
@@ -2505,8 +3271,16 @@ export const allowMyProductFeedbackPublic = <ThrowOnError extends boolean = fals
  */
 export const editMyProductFeedbackDraft = <ThrowOnError extends boolean = false>(
 	options: Options<EditMyProductFeedbackDraftData, ThrowOnError>,
-): RequestResult<EditMyProductFeedbackDraftResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<EditMyProductFeedbackDraftResponses, unknown, ThrowOnError>({
+): RequestResult<
+	EditMyProductFeedbackDraftResponses,
+	EditMyProductFeedbackDraftErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		EditMyProductFeedbackDraftResponses,
+		EditMyProductFeedbackDraftErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback/{feedbackId}/draft",
 		...options,
@@ -2521,8 +3295,16 @@ export const editMyProductFeedbackDraft = <ThrowOnError extends boolean = false>
  */
 export const keepMyProductFeedbackPrivate = <ThrowOnError extends boolean = false>(
 	options: Options<KeepMyProductFeedbackPrivateData, ThrowOnError>,
-): RequestResult<KeepMyProductFeedbackPrivateResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<KeepMyProductFeedbackPrivateResponses, unknown, ThrowOnError>({
+): RequestResult<
+	KeepMyProductFeedbackPrivateResponses,
+	KeepMyProductFeedbackPrivateErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		KeepMyProductFeedbackPrivateResponses,
+		KeepMyProductFeedbackPrivateErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback/{feedbackId}/keep-private",
 		...options,
@@ -2533,8 +3315,16 @@ export const keepMyProductFeedbackPrivate = <ThrowOnError extends boolean = fals
  */
 export const makeMyProductFeedbackPrivate = <ThrowOnError extends boolean = false>(
 	options: Options<MakeMyProductFeedbackPrivateData, ThrowOnError>,
-): RequestResult<MakeMyProductFeedbackPrivateResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<MakeMyProductFeedbackPrivateResponses, unknown, ThrowOnError>({
+): RequestResult<
+	MakeMyProductFeedbackPrivateResponses,
+	MakeMyProductFeedbackPrivateErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		MakeMyProductFeedbackPrivateResponses,
+		MakeMyProductFeedbackPrivateErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback/{feedbackId}/make-private",
 		...options,
@@ -2545,33 +3335,38 @@ export const makeMyProductFeedbackPrivate = <ThrowOnError extends boolean = fals
  */
 export const getPublicActivity = <ThrowOnError extends boolean = false>(
 	options: Options<GetPublicActivityData, ThrowOnError>,
-): RequestResult<GetPublicActivityResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPublicActivityResponses, unknown, ThrowOnError>({
-		url: "/public/workspaces/{slug}/activity",
-		...options,
-	});
+): RequestResult<GetPublicActivityResponses, GetPublicActivityErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetPublicActivityResponses, GetPublicActivityErrors, ThrowOnError>(
+		{ url: "/public/workspaces/{slug}/activity", ...options },
+	);
 
 /**
  * Read a person's published repository contributions
  */
 export const getPublicActivityPerson = <ThrowOnError extends boolean = false>(
 	options: Options<GetPublicActivityPersonData, ThrowOnError>,
-): RequestResult<GetPublicActivityPersonResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPublicActivityPersonResponses, unknown, ThrowOnError>({
-		url: "/public/workspaces/{slug}/activity/people/{login}",
-		...options,
-	});
+): RequestResult<GetPublicActivityPersonResponses, GetPublicActivityPersonErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetPublicActivityPersonResponses,
+		GetPublicActivityPersonErrors,
+		ThrowOnError
+	>({ url: "/public/workspaces/{slug}/activity/people/{login}", ...options });
 
 /**
  * Read a person's published work timeline
  */
 export const getPublicActivityPersonWork = <ThrowOnError extends boolean = false>(
 	options: Options<GetPublicActivityPersonWorkData, ThrowOnError>,
-): RequestResult<GetPublicActivityPersonWorkResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPublicActivityPersonWorkResponses, unknown, ThrowOnError>({
-		url: "/public/workspaces/{slug}/activity/people/{login}/work",
-		...options,
-	});
+): RequestResult<
+	GetPublicActivityPersonWorkResponses,
+	GetPublicActivityPersonWorkErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetPublicActivityPersonWorkResponses,
+		GetPublicActivityPersonWorkErrors,
+		ThrowOnError
+	>({ url: "/public/workspaces/{slug}/activity/people/{login}/work", ...options });
 
 /**
  * Delete the current account (GDPR Art. 17)
@@ -2594,8 +3389,8 @@ export const deleteCurrentUser = <ThrowOnError extends boolean = false>(
  */
 export const getCurrentUser = <ThrowOnError extends boolean = false>(
 	options?: Options<GetCurrentUserData, ThrowOnError>,
-): RequestResult<GetCurrentUserResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetCurrentUserResponses, unknown, ThrowOnError>({
+): RequestResult<GetCurrentUserResponses, GetCurrentUserErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetCurrentUserResponses, GetCurrentUserErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user",
 		...options,
@@ -2606,8 +3401,12 @@ export const getCurrentUser = <ThrowOnError extends boolean = false>(
  */
 export const getAccountAiChoice = <ThrowOnError extends boolean = false>(
 	options?: Options<GetAccountAiChoiceData, ThrowOnError>,
-): RequestResult<GetAccountAiChoiceResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetAccountAiChoiceResponses, unknown, ThrowOnError>({
+): RequestResult<GetAccountAiChoiceResponses, GetAccountAiChoiceErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		GetAccountAiChoiceResponses,
+		GetAccountAiChoiceErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/ai-choice",
 		...options,
@@ -2618,8 +3417,12 @@ export const getAccountAiChoice = <ThrowOnError extends boolean = false>(
  */
 export const updateAccountAiChoice = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateAccountAiChoiceData, ThrowOnError>,
-): RequestResult<UpdateAccountAiChoiceResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateAccountAiChoiceResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateAccountAiChoiceResponses, UpdateAccountAiChoiceErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		UpdateAccountAiChoiceResponses,
+		UpdateAccountAiChoiceErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/ai-choice",
 		...options,
@@ -2634,8 +3437,8 @@ export const updateAccountAiChoice = <ThrowOnError extends boolean = false>(
  */
 export const getConsentStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetConsentStatusData, ThrowOnError>,
-): RequestResult<GetConsentStatusResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetConsentStatusResponses, unknown, ThrowOnError>({
+): RequestResult<GetConsentStatusResponses, GetConsentStatusErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetConsentStatusResponses, GetConsentStatusErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/consent",
 		...options,
@@ -2646,8 +3449,16 @@ export const getConsentStatus = <ThrowOnError extends boolean = false>(
  */
 export const completeFirstLoginConsent = <ThrowOnError extends boolean = false>(
 	options: Options<CompleteFirstLoginConsentData, ThrowOnError>,
-): RequestResult<CompleteFirstLoginConsentResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<CompleteFirstLoginConsentResponses, unknown, ThrowOnError>({
+): RequestResult<
+	CompleteFirstLoginConsentResponses,
+	CompleteFirstLoginConsentErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		CompleteFirstLoginConsentResponses,
+		CompleteFirstLoginConsentErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/consent",
 		...options,
@@ -2662,8 +3473,12 @@ export const completeFirstLoginConsent = <ThrowOnError extends boolean = false>(
  */
 export const updateResearchConsent = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateResearchConsentData, ThrowOnError>,
-): RequestResult<UpdateResearchConsentResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateResearchConsentResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateResearchConsentResponses, UpdateResearchConsentErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		UpdateResearchConsentResponses,
+		UpdateResearchConsentErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/consent/research",
 		...options,
@@ -2678,8 +3493,12 @@ export const updateResearchConsent = <ThrowOnError extends boolean = false>(
  */
 export const requestDataExport = <ThrowOnError extends boolean = false>(
 	options?: Options<RequestDataExportData, ThrowOnError>,
-): RequestResult<RequestDataExportResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<RequestDataExportResponses, unknown, ThrowOnError>({
+): RequestResult<RequestDataExportResponses, RequestDataExportErrors, ThrowOnError> =>
+	(options?.client ?? client).post<
+		RequestDataExportResponses,
+		RequestDataExportErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/exports",
 		...options,
@@ -2690,8 +3509,12 @@ export const requestDataExport = <ThrowOnError extends boolean = false>(
  */
 export const getDataExportStatus = <ThrowOnError extends boolean = false>(
 	options: Options<GetDataExportStatusData, ThrowOnError>,
-): RequestResult<GetDataExportStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetDataExportStatusResponses, unknown, ThrowOnError>({
+): RequestResult<GetDataExportStatusResponses, GetDataExportStatusErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetDataExportStatusResponses,
+		GetDataExportStatusErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/exports/{id}",
 		...options,
@@ -2702,8 +3525,12 @@ export const getDataExportStatus = <ThrowOnError extends boolean = false>(
  */
 export const downloadDataExport = <ThrowOnError extends boolean = false>(
 	options: Options<DownloadDataExportData, ThrowOnError>,
-): RequestResult<DownloadDataExportResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<DownloadDataExportResponses, unknown, ThrowOnError>({
+): RequestResult<DownloadDataExportResponses, DownloadDataExportErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		DownloadDataExportResponses,
+		DownloadDataExportErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/exports/{id}/download",
 		...options,
@@ -2716,8 +3543,8 @@ export const downloadDataExport = <ThrowOnError extends boolean = false>(
  */
 export const getUserFeatures = <ThrowOnError extends boolean = false>(
 	options?: Options<GetUserFeaturesData, ThrowOnError>,
-): RequestResult<GetUserFeaturesResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetUserFeaturesResponses, unknown, ThrowOnError>({
+): RequestResult<GetUserFeaturesResponses, GetUserFeaturesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetUserFeaturesResponses, GetUserFeaturesErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/features",
 		...options,
@@ -2728,8 +3555,12 @@ export const getUserFeatures = <ThrowOnError extends boolean = false>(
  */
 export const listLinkedIdentities = <ThrowOnError extends boolean = false>(
 	options?: Options<ListLinkedIdentitiesData, ThrowOnError>,
-): RequestResult<ListLinkedIdentitiesResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListLinkedIdentitiesResponses, unknown, ThrowOnError>({
+): RequestResult<ListLinkedIdentitiesResponses, ListLinkedIdentitiesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		ListLinkedIdentitiesResponses,
+		ListLinkedIdentitiesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/identities",
 		...options,
@@ -2752,8 +3583,16 @@ export const unlinkIdentity = <ThrowOnError extends boolean = false>(
  */
 export const getNotificationPreferences = <ThrowOnError extends boolean = false>(
 	options?: Options<GetNotificationPreferencesData, ThrowOnError>,
-): RequestResult<GetNotificationPreferencesResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetNotificationPreferencesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetNotificationPreferencesResponses,
+	GetNotificationPreferencesErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		GetNotificationPreferencesResponses,
+		GetNotificationPreferencesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/notification-preferences",
 		...options,
@@ -2788,8 +3627,8 @@ export const updateNotificationPreferences = <ThrowOnError extends boolean = fal
  */
 export const getPasskeyStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetPasskeyStatusData, ThrowOnError>,
-): RequestResult<GetPasskeyStatusResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetPasskeyStatusResponses, unknown, ThrowOnError>({
+): RequestResult<GetPasskeyStatusResponses, GetPasskeyStatusErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetPasskeyStatusResponses, GetPasskeyStatusErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys",
 		...options,
@@ -2800,8 +3639,8 @@ export const getPasskeyStatus = <ThrowOnError extends boolean = false>(
  */
 export const registerPasskey = <ThrowOnError extends boolean = false>(
 	options: Options<RegisterPasskeyData, ThrowOnError>,
-): RequestResult<RegisterPasskeyResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RegisterPasskeyResponses, unknown, ThrowOnError>({
+): RequestResult<RegisterPasskeyResponses, RegisterPasskeyErrors, ThrowOnError> =>
+	(options.client ?? client).post<RegisterPasskeyResponses, RegisterPasskeyErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys",
 		...options,
@@ -2816,8 +3655,12 @@ export const registerPasskey = <ThrowOnError extends boolean = false>(
  */
 export const updatePasskeyProtection = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePasskeyProtectionData, ThrowOnError>,
-): RequestResult<UpdatePasskeyProtectionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdatePasskeyProtectionResponses, unknown, ThrowOnError>({
+): RequestResult<UpdatePasskeyProtectionResponses, UpdatePasskeyProtectionErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdatePasskeyProtectionResponses,
+		UpdatePasskeyProtectionErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/protection",
 		...options,
@@ -2832,8 +3675,8 @@ export const updatePasskeyProtection = <ThrowOnError extends boolean = false>(
  */
 export const recoverPasskeys = <ThrowOnError extends boolean = false>(
 	options: Options<RecoverPasskeysData, ThrowOnError>,
-): RequestResult<RecoverPasskeysResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RecoverPasskeysResponses, unknown, ThrowOnError>({
+): RequestResult<RecoverPasskeysResponses, RecoverPasskeysErrors, ThrowOnError> =>
+	(options.client ?? client).post<RecoverPasskeysResponses, RecoverPasskeysErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/recovery",
 		...options,
@@ -2848,8 +3691,16 @@ export const recoverPasskeys = <ThrowOnError extends boolean = false>(
  */
 export const createPasskeyRecoveryCodes = <ThrowOnError extends boolean = false>(
 	options?: Options<CreatePasskeyRecoveryCodesData, ThrowOnError>,
-): RequestResult<CreatePasskeyRecoveryCodesResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<CreatePasskeyRecoveryCodesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	CreatePasskeyRecoveryCodesResponses,
+	CreatePasskeyRecoveryCodesErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).post<
+		CreatePasskeyRecoveryCodesResponses,
+		CreatePasskeyRecoveryCodesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/recovery-codes",
 		...options,
@@ -2860,8 +3711,16 @@ export const createPasskeyRecoveryCodes = <ThrowOnError extends boolean = false>
  */
 export const getPasskeyRegistrationOptions = <ThrowOnError extends boolean = false>(
 	options?: Options<GetPasskeyRegistrationOptionsData, ThrowOnError>,
-): RequestResult<GetPasskeyRegistrationOptionsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<GetPasskeyRegistrationOptionsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetPasskeyRegistrationOptionsResponses,
+	GetPasskeyRegistrationOptionsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).post<
+		GetPasskeyRegistrationOptionsResponses,
+		GetPasskeyRegistrationOptionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/registration-options",
 		...options,
@@ -2872,8 +3731,8 @@ export const getPasskeyRegistrationOptions = <ThrowOnError extends boolean = fal
  */
 export const verifyPasskey = <ThrowOnError extends boolean = false>(
 	options: Options<VerifyPasskeyData, ThrowOnError>,
-): RequestResult<VerifyPasskeyResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<VerifyPasskeyResponses, unknown, ThrowOnError>({
+): RequestResult<VerifyPasskeyResponses, VerifyPasskeyErrors, ThrowOnError> =>
+	(options.client ?? client).post<VerifyPasskeyResponses, VerifyPasskeyErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/verification",
 		...options,
@@ -2888,8 +3747,16 @@ export const verifyPasskey = <ThrowOnError extends boolean = false>(
  */
 export const getPasskeyVerificationOptions = <ThrowOnError extends boolean = false>(
 	options?: Options<GetPasskeyVerificationOptionsData, ThrowOnError>,
-): RequestResult<GetPasskeyVerificationOptionsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<GetPasskeyVerificationOptionsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetPasskeyVerificationOptionsResponses,
+	GetPasskeyVerificationOptionsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).post<
+		GetPasskeyVerificationOptionsResponses,
+		GetPasskeyVerificationOptionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/verification-options",
 		...options,
@@ -2900,8 +3767,8 @@ export const getPasskeyVerificationOptions = <ThrowOnError extends boolean = fal
  */
 export const removePasskey = <ThrowOnError extends boolean = false>(
 	options: Options<RemovePasskeyData, ThrowOnError>,
-): RequestResult<RemovePasskeyResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RemovePasskeyResponses, unknown, ThrowOnError>({
+): RequestResult<RemovePasskeyResponses, RemovePasskeyErrors, ThrowOnError> =>
+	(options.client ?? client).delete<RemovePasskeyResponses, RemovePasskeyErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/{credentialId}",
 		...options,
@@ -2912,8 +3779,12 @@ export const removePasskey = <ThrowOnError extends boolean = false>(
  */
 export const getPublicActivityChoice = <ThrowOnError extends boolean = false>(
 	options?: Options<GetPublicActivityChoiceData, ThrowOnError>,
-): RequestResult<GetPublicActivityChoiceResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetPublicActivityChoiceResponses, unknown, ThrowOnError>({
+): RequestResult<GetPublicActivityChoiceResponses, GetPublicActivityChoiceErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		GetPublicActivityChoiceResponses,
+		GetPublicActivityChoiceErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/public-activity",
 		...options,
@@ -2924,8 +3795,16 @@ export const getPublicActivityChoice = <ThrowOnError extends boolean = false>(
  */
 export const updatePublicActivityChoice = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePublicActivityChoiceData, ThrowOnError>,
-): RequestResult<UpdatePublicActivityChoiceResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdatePublicActivityChoiceResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdatePublicActivityChoiceResponses,
+	UpdatePublicActivityChoiceErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		UpdatePublicActivityChoiceResponses,
+		UpdatePublicActivityChoiceErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/public-activity",
 		...options,
@@ -2940,8 +3819,16 @@ export const updatePublicActivityChoice = <ThrowOnError extends boolean = false>
  */
 export const getPublicActivityOnboarding = <ThrowOnError extends boolean = false>(
 	options: Options<GetPublicActivityOnboardingData, ThrowOnError>,
-): RequestResult<GetPublicActivityOnboardingResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPublicActivityOnboardingResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetPublicActivityOnboardingResponses,
+	GetPublicActivityOnboardingErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetPublicActivityOnboardingResponses,
+		GetPublicActivityOnboardingErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/public-activity/workspaces/{slug}/onboarding",
 		...options,
@@ -2952,8 +3839,16 @@ export const getPublicActivityOnboarding = <ThrowOnError extends boolean = false
  */
 export const answerPublicActivityOnboarding = <ThrowOnError extends boolean = false>(
 	options: Options<AnswerPublicActivityOnboardingData, ThrowOnError>,
-): RequestResult<AnswerPublicActivityOnboardingResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AnswerPublicActivityOnboardingResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AnswerPublicActivityOnboardingResponses,
+	AnswerPublicActivityOnboardingErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		AnswerPublicActivityOnboardingResponses,
+		AnswerPublicActivityOnboardingErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/public-activity/workspaces/{slug}/onboarding",
 		...options,
@@ -2971,8 +3866,12 @@ export const answerPublicActivityOnboarding = <ThrowOnError extends boolean = fa
  */
 export const revokeOtherSessions = <ThrowOnError extends boolean = false>(
 	options?: Options<RevokeOtherSessionsData, ThrowOnError>,
-): RequestResult<RevokeOtherSessionsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).delete<RevokeOtherSessionsResponses, unknown, ThrowOnError>({
+): RequestResult<RevokeOtherSessionsResponses, RevokeOtherSessionsErrors, ThrowOnError> =>
+	(options?.client ?? client).delete<
+		RevokeOtherSessionsResponses,
+		RevokeOtherSessionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/sessions",
 		...options,
@@ -2983,8 +3882,8 @@ export const revokeOtherSessions = <ThrowOnError extends boolean = false>(
  */
 export const listSessions = <ThrowOnError extends boolean = false>(
 	options?: Options<ListSessionsData, ThrowOnError>,
-): RequestResult<ListSessionsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListSessionsResponses, unknown, ThrowOnError>({
+): RequestResult<ListSessionsResponses, ListSessionsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListSessionsResponses, ListSessionsErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/sessions",
 		...options,
@@ -2997,8 +3896,8 @@ export const listSessions = <ThrowOnError extends boolean = false>(
  */
 export const revokeSession = <ThrowOnError extends boolean = false>(
 	options: Options<RevokeSessionData, ThrowOnError>,
-): RequestResult<RevokeSessionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RevokeSessionResponses, unknown, ThrowOnError>({
+): RequestResult<RevokeSessionResponses, RevokeSessionErrors, ThrowOnError> =>
+	(options.client ?? client).delete<RevokeSessionResponses, RevokeSessionErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/sessions/{jti}",
 		...options,
@@ -3009,8 +3908,8 @@ export const revokeSession = <ThrowOnError extends boolean = false>(
  */
 export const getUserSettings = <ThrowOnError extends boolean = false>(
 	options?: Options<GetUserSettingsData, ThrowOnError>,
-): RequestResult<GetUserSettingsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetUserSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<GetUserSettingsResponses, GetUserSettingsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetUserSettingsResponses, GetUserSettingsErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/settings",
 		...options,
@@ -3021,8 +3920,12 @@ export const getUserSettings = <ThrowOnError extends boolean = false>(
  */
 export const updateUserSettings = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateUserSettingsData, ThrowOnError>,
-): RequestResult<UpdateUserSettingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<UpdateUserSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateUserSettingsResponses, UpdateUserSettingsErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		UpdateUserSettingsResponses,
+		UpdateUserSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/settings",
 		...options,
@@ -3037,8 +3940,12 @@ export const updateUserSettings = <ThrowOnError extends boolean = false>(
  */
 export const getSlackUserPreferences = <ThrowOnError extends boolean = false>(
 	options?: Options<GetSlackUserPreferencesData, ThrowOnError>,
-): RequestResult<GetSlackUserPreferencesResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetSlackUserPreferencesResponses, unknown, ThrowOnError>({
+): RequestResult<GetSlackUserPreferencesResponses, GetSlackUserPreferencesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		GetSlackUserPreferencesResponses,
+		GetSlackUserPreferencesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/slack/preferences",
 		...options,
@@ -3065,8 +3972,8 @@ export const reportWebVitals = <ThrowOnError extends boolean = false>(
  */
 export const listWorkspaces = <ThrowOnError extends boolean = false>(
 	options?: Options<ListWorkspacesData, ThrowOnError>,
-): RequestResult<ListWorkspacesResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListWorkspacesResponses, unknown, ThrowOnError>({
+): RequestResult<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces",
 		...options,
@@ -3077,8 +3984,8 @@ export const listWorkspaces = <ThrowOnError extends boolean = false>(
  */
 export const createWorkspace = <ThrowOnError extends boolean = false>(
 	options: Options<CreateWorkspaceData, ThrowOnError>,
-): RequestResult<CreateWorkspaceResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CreateWorkspaceResponses, unknown, ThrowOnError>({
+): RequestResult<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError> =>
+	(options.client ?? client).post<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces",
 		...options,
@@ -3093,8 +4000,8 @@ export const createWorkspace = <ThrowOnError extends boolean = false>(
  */
 export const listGitLabGroups = <ThrowOnError extends boolean = false>(
 	options: Options<ListGitLabGroupsData, ThrowOnError>,
-): RequestResult<ListGitLabGroupsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ListGitLabGroupsResponses, unknown, ThrowOnError>({
+): RequestResult<ListGitLabGroupsResponses, ListGitLabGroupsErrors, ThrowOnError> =>
+	(options.client ?? client).post<ListGitLabGroupsResponses, ListGitLabGroupsErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/gitlab/groups",
 		...options,
@@ -3109,8 +4016,8 @@ export const listGitLabGroups = <ThrowOnError extends boolean = false>(
  */
 export const gitLabPreflight = <ThrowOnError extends boolean = false>(
 	options: Options<GitLabPreflightData, ThrowOnError>,
-): RequestResult<GitLabPreflightResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<GitLabPreflightResponses, unknown, ThrowOnError>({
+): RequestResult<GitLabPreflightResponses, GitLabPreflightErrors, ThrowOnError> =>
+	(options.client ?? client).post<GitLabPreflightResponses, GitLabPreflightErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/gitlab/preflight",
 		...options,
@@ -3125,8 +4032,12 @@ export const gitLabPreflight = <ThrowOnError extends boolean = false>(
  */
 export const listGitLabProjects = <ThrowOnError extends boolean = false>(
 	options: Options<ListGitLabProjectsData, ThrowOnError>,
-): RequestResult<ListGitLabProjectsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ListGitLabProjectsResponses, unknown, ThrowOnError>({
+): RequestResult<ListGitLabProjectsResponses, ListGitLabProjectsErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		ListGitLabProjectsResponses,
+		ListGitLabProjectsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/gitlab/projects",
 		...options,
@@ -3143,8 +4054,8 @@ export const listGitLabProjects = <ThrowOnError extends boolean = false>(
  */
 export const getProviders = <ThrowOnError extends boolean = false>(
 	options?: Options<GetProvidersData, ThrowOnError>,
-): RequestResult<GetProvidersResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetProvidersResponses, unknown, ThrowOnError>({
+): RequestResult<GetProvidersResponses, GetProvidersErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetProvidersResponses, GetProvidersErrors, ThrowOnError>({
 		url: "/workspaces/providers",
 		...options,
 	});
@@ -3166,8 +4077,8 @@ export const purgeWorkspace = <ThrowOnError extends boolean = false>(
  */
 export const getWorkspace = <ThrowOnError extends boolean = false>(
 	options: Options<GetWorkspaceData, ThrowOnError>,
-): RequestResult<GetWorkspaceResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetWorkspaceResponses, unknown, ThrowOnError>({
+): RequestResult<GetWorkspaceResponses, GetWorkspaceErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetWorkspaceResponses, GetWorkspaceErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}",
 		...options,
@@ -3366,8 +4277,16 @@ export const getActivityWork = <ThrowOnError extends boolean = false>(
  */
 export const listWorkspaceConfigAuditEvents = <ThrowOnError extends boolean = false>(
 	options: Options<ListWorkspaceConfigAuditEventsData, ThrowOnError>,
-): RequestResult<ListWorkspaceConfigAuditEventsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListWorkspaceConfigAuditEventsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListWorkspaceConfigAuditEventsResponses,
+	ListWorkspaceConfigAuditEventsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		ListWorkspaceConfigAuditEventsResponses,
+		ListWorkspaceConfigAuditEventsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/config-audit",
 		...options,
@@ -3378,8 +4297,16 @@ export const listWorkspaceConfigAuditEvents = <ThrowOnError extends boolean = fa
  */
 export const countWorkspaceConfigAuditEvents = <ThrowOnError extends boolean = false>(
 	options: Options<CountWorkspaceConfigAuditEventsData, ThrowOnError>,
-): RequestResult<CountWorkspaceConfigAuditEventsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<CountWorkspaceConfigAuditEventsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	CountWorkspaceConfigAuditEventsResponses,
+	CountWorkspaceConfigAuditEventsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		CountWorkspaceConfigAuditEventsResponses,
+		CountWorkspaceConfigAuditEventsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/config-audit/count",
 		...options,
@@ -3387,8 +4314,8 @@ export const countWorkspaceConfigAuditEvents = <ThrowOnError extends boolean = f
 
 export const list = <ThrowOnError extends boolean = false>(
 	options: Options<ListData, ThrowOnError>,
-): RequestResult<ListResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListResponses, unknown, ThrowOnError>({
+): RequestResult<ListResponses, ListErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListResponses, ListErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections",
 		...options,
@@ -3396,8 +4323,8 @@ export const list = <ThrowOnError extends boolean = false>(
 
 export const initiate = <ThrowOnError extends boolean = false>(
 	options: Options<InitiateData, ThrowOnError>,
-): RequestResult<InitiateResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<InitiateResponses, unknown, ThrowOnError>({
+): RequestResult<InitiateResponses, InitiateErrors, ThrowOnError> =>
+	(options.client ?? client).post<InitiateResponses, InitiateErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections",
 		...options,
@@ -3412,8 +4339,12 @@ export const initiate = <ThrowOnError extends boolean = false>(
  */
 export const getIntegrationCatalog = <ThrowOnError extends boolean = false>(
 	options: Options<GetIntegrationCatalogData, ThrowOnError>,
-): RequestResult<GetIntegrationCatalogResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetIntegrationCatalogResponses, unknown, ThrowOnError>({
+): RequestResult<GetIntegrationCatalogResponses, GetIntegrationCatalogErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetIntegrationCatalogResponses,
+		GetIntegrationCatalogErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/catalog",
 		...options,
@@ -3461,8 +4392,16 @@ export const replaceOutlineToken = <ThrowOnError extends boolean = false>(
 
 export const listConnectionProviderRepairs = <ThrowOnError extends boolean = false>(
 	options: Options<ListConnectionProviderRepairsData, ThrowOnError>,
-): RequestResult<ListConnectionProviderRepairsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListConnectionProviderRepairsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListConnectionProviderRepairsResponses,
+	ListConnectionProviderRepairsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		ListConnectionProviderRepairsResponses,
+		ListConnectionProviderRepairsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs",
 		...options,
@@ -3470,8 +4409,16 @@ export const listConnectionProviderRepairs = <ThrowOnError extends boolean = fal
 
 export const releaseConnectionProviderRepair = <ThrowOnError extends boolean = false>(
 	options: Options<ReleaseConnectionProviderRepairData, ThrowOnError>,
-): RequestResult<ReleaseConnectionProviderRepairResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ReleaseConnectionProviderRepairResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ReleaseConnectionProviderRepairResponses,
+	ReleaseConnectionProviderRepairErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		ReleaseConnectionProviderRepairResponses,
+		ReleaseConnectionProviderRepairErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs/{repairId}/release",
 		...options,
@@ -3486,8 +4433,12 @@ export const releaseConnectionProviderRepair = <ThrowOnError extends boolean = f
  */
 export const getConnectionSyncStatus = <ThrowOnError extends boolean = false>(
 	options: Options<GetConnectionSyncStatusData, ThrowOnError>,
-): RequestResult<GetConnectionSyncStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetConnectionSyncStatusResponses, unknown, ThrowOnError>({
+): RequestResult<GetConnectionSyncStatusResponses, GetConnectionSyncStatusErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetConnectionSyncStatusResponses,
+		GetConnectionSyncStatusErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{connectionId}/sync",
 		...options,
@@ -3498,8 +4449,12 @@ export const getConnectionSyncStatus = <ThrowOnError extends boolean = false>(
  */
 export const listConnectionSyncJobs = <ThrowOnError extends boolean = false>(
 	options: Options<ListConnectionSyncJobsData, ThrowOnError>,
-): RequestResult<ListConnectionSyncJobsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListConnectionSyncJobsResponses, unknown, ThrowOnError>({
+): RequestResult<ListConnectionSyncJobsResponses, ListConnectionSyncJobsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListConnectionSyncJobsResponses,
+		ListConnectionSyncJobsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs",
 		...options,
@@ -3549,8 +4504,16 @@ export const updateConnectionSyncJob = <ThrowOnError extends boolean = false>(
  */
 export const listConnectionSyncResources = <ThrowOnError extends boolean = false>(
 	options: Options<ListConnectionSyncResourcesData, ThrowOnError>,
-): RequestResult<ListConnectionSyncResourcesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListConnectionSyncResourcesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListConnectionSyncResourcesResponses,
+	ListConnectionSyncResourcesErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		ListConnectionSyncResourcesResponses,
+		ListConnectionSyncResourcesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{connectionId}/sync/resources",
 		...options,
@@ -3558,8 +4521,8 @@ export const listConnectionSyncResources = <ThrowOnError extends boolean = false
 
 export const read = <ThrowOnError extends boolean = false>(
 	options: Options<ReadData, ThrowOnError>,
-): RequestResult<ReadResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ReadResponses, unknown, ThrowOnError>({
+): RequestResult<ReadResponses, ReadErrors, ThrowOnError> =>
+	(options.client ?? client).get<ReadResponses, ReadErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{id}",
 		...options,
@@ -3577,8 +4540,12 @@ export const read = <ThrowOnError extends boolean = false>(
  */
 export const updateConnectionStatus = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateConnectionStatusData, ThrowOnError>,
-): RequestResult<UpdateConnectionStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateConnectionStatusResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateConnectionStatusResponses, UpdateConnectionStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdateConnectionStatusResponses,
+		UpdateConnectionStatusErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{id}/status",
 		...options,
@@ -3593,8 +4560,8 @@ export const updateConnectionStatus = <ThrowOnError extends boolean = false>(
  */
 export const getConversation = <ThrowOnError extends boolean = false>(
 	options: Options<GetConversationData, ThrowOnError>,
-): RequestResult<GetConversationResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetConversationResponses, unknown, ThrowOnError>({
+): RequestResult<GetConversationResponses, GetConversationErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetConversationResponses, GetConversationErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/conversation",
 		...options,
@@ -3605,8 +4572,12 @@ export const getConversation = <ThrowOnError extends boolean = false>(
  */
 export const listConversationEntries = <ThrowOnError extends boolean = false>(
 	options: Options<ListConversationEntriesData, ThrowOnError>,
-): RequestResult<ListConversationEntriesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListConversationEntriesResponses, unknown, ThrowOnError>({
+): RequestResult<ListConversationEntriesResponses, ListConversationEntriesErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListConversationEntriesResponses,
+		ListConversationEntriesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/conversation/entries",
 		...options,
@@ -3651,8 +4622,12 @@ export const getConversationThread = <ThrowOnError extends boolean = false>(
  */
 export const clearConversationVote = <ThrowOnError extends boolean = false>(
 	options: Options<ClearConversationVoteData, ThrowOnError>,
-): RequestResult<ClearConversationVoteResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<ClearConversationVoteResponses, unknown, ThrowOnError>({
+): RequestResult<ClearConversationVoteResponses, ClearConversationVoteErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		ClearConversationVoteResponses,
+		ClearConversationVoteErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/conversation/entries/{entryId}/vote",
 		...options,
@@ -3685,8 +4660,12 @@ export const setConversationVote = <ThrowOnError extends boolean = false>(
  */
 export const markConversationRead = <ThrowOnError extends boolean = false>(
 	options: Options<MarkConversationReadData, ThrowOnError>,
-): RequestResult<MarkConversationReadResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<MarkConversationReadResponses, unknown, ThrowOnError>({
+): RequestResult<MarkConversationReadResponses, MarkConversationReadErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		MarkConversationReadResponses,
+		MarkConversationReadErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/conversation/read",
 		...options,
@@ -3725,8 +4704,16 @@ export const submitConversationTurn = <ThrowOnError extends boolean = false>(
  */
 export const updateConversationTurnStatus = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateConversationTurnStatusData, ThrowOnError>,
-): RequestResult<UpdateConversationTurnStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateConversationTurnStatusResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdateConversationTurnStatusResponses,
+	UpdateConversationTurnStatusErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		UpdateConversationTurnStatusResponses,
+		UpdateConversationTurnStatusErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/conversation/turns/{turnId}/status",
 		...options,
@@ -3741,8 +4728,8 @@ export const updateConversationTurnStatus = <ThrowOnError extends boolean = fals
  */
 export const updateFeatures = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateFeaturesData, ThrowOnError>,
-): RequestResult<UpdateFeaturesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateFeaturesResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateFeaturesResponses, UpdateFeaturesErrors, ThrowOnError> =>
+	(options.client ?? client).patch<UpdateFeaturesResponses, UpdateFeaturesErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/features",
 		...options,
@@ -3757,8 +4744,12 @@ export const updateFeatures = <ThrowOnError extends boolean = false>(
  */
 export const listConsumerDeadLetters = <ThrowOnError extends boolean = false>(
 	options: Options<ListConsumerDeadLettersData, ThrowOnError>,
-): RequestResult<ListConsumerDeadLettersResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListConsumerDeadLettersResponses, unknown, ThrowOnError>({
+): RequestResult<ListConsumerDeadLettersResponses, ListConsumerDeadLettersErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListConsumerDeadLettersResponses,
+		ListConsumerDeadLettersErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/integrations/dead-letters",
 		...options,
@@ -3769,8 +4760,12 @@ export const listConsumerDeadLetters = <ThrowOnError extends boolean = false>(
  */
 export const replayConsumerDeadLetter = <ThrowOnError extends boolean = false>(
 	options: Options<ReplayConsumerDeadLetterData, ThrowOnError>,
-): RequestResult<ReplayConsumerDeadLetterResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ReplayConsumerDeadLetterResponses, unknown, ThrowOnError>({
+): RequestResult<ReplayConsumerDeadLetterResponses, ReplayConsumerDeadLetterErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		ReplayConsumerDeadLetterResponses,
+		ReplayConsumerDeadLetterErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays",
 		...options,
@@ -3781,8 +4776,16 @@ export const replayConsumerDeadLetter = <ThrowOnError extends boolean = false>(
  */
 export const workspaceListAvailableLlmModels = <ThrowOnError extends boolean = false>(
 	options: Options<WorkspaceListAvailableLlmModelsData, ThrowOnError>,
-): RequestResult<WorkspaceListAvailableLlmModelsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<WorkspaceListAvailableLlmModelsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	WorkspaceListAvailableLlmModelsResponses,
+	WorkspaceListAvailableLlmModelsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		WorkspaceListAvailableLlmModelsResponses,
+		WorkspaceListAvailableLlmModelsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/available-models",
 		...options,
@@ -3793,8 +4796,12 @@ export const workspaceListAvailableLlmModels = <ThrowOnError extends boolean = f
  */
 export const updateWorkspaceLlmBudget = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateWorkspaceLlmBudgetData, ThrowOnError>,
-): RequestResult<UpdateWorkspaceLlmBudgetResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateWorkspaceLlmBudgetResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateWorkspaceLlmBudgetResponses, UpdateWorkspaceLlmBudgetErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		UpdateWorkspaceLlmBudgetResponses,
+		UpdateWorkspaceLlmBudgetErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/budget",
 		...options,
@@ -3809,8 +4816,16 @@ export const updateWorkspaceLlmBudget = <ThrowOnError extends boolean = false>(
  */
 export const workspaceListLlmConnections = <ThrowOnError extends boolean = false>(
 	options: Options<WorkspaceListLlmConnectionsData, ThrowOnError>,
-): RequestResult<WorkspaceListLlmConnectionsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<WorkspaceListLlmConnectionsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	WorkspaceListLlmConnectionsResponses,
+	WorkspaceListLlmConnectionsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		WorkspaceListLlmConnectionsResponses,
+		WorkspaceListLlmConnectionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/connections",
 		...options,
@@ -3909,8 +4924,16 @@ export const workspaceUpdateLlmConnection = <ThrowOnError extends boolean = fals
  */
 export const workspaceProbeLlmConnection = <ThrowOnError extends boolean = false>(
 	options: Options<WorkspaceProbeLlmConnectionData, ThrowOnError>,
-): RequestResult<WorkspaceProbeLlmConnectionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<WorkspaceProbeLlmConnectionResponses, unknown, ThrowOnError>({
+): RequestResult<
+	WorkspaceProbeLlmConnectionResponses,
+	WorkspaceProbeLlmConnectionErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		WorkspaceProbeLlmConnectionResponses,
+		WorkspaceProbeLlmConnectionErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/connections/{id}/probe",
 		...options,
@@ -3921,8 +4944,12 @@ export const workspaceProbeLlmConnection = <ThrowOnError extends boolean = false
  */
 export const workspaceListLlmModels = <ThrowOnError extends boolean = false>(
 	options: Options<WorkspaceListLlmModelsData, ThrowOnError>,
-): RequestResult<WorkspaceListLlmModelsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<WorkspaceListLlmModelsResponses, unknown, ThrowOnError>({
+): RequestResult<WorkspaceListLlmModelsResponses, WorkspaceListLlmModelsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		WorkspaceListLlmModelsResponses,
+		WorkspaceListLlmModelsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/models",
 		...options,
@@ -3969,10 +4996,14 @@ export const workspaceUpdateLlmModel = <ThrowOnError extends boolean = false>(
  */
 export const workspaceProbeLlmModelCapabilities = <ThrowOnError extends boolean = false>(
 	options: Options<WorkspaceProbeLlmModelCapabilitiesData, ThrowOnError>,
-): RequestResult<WorkspaceProbeLlmModelCapabilitiesResponses, unknown, ThrowOnError> =>
+): RequestResult<
+	WorkspaceProbeLlmModelCapabilitiesResponses,
+	WorkspaceProbeLlmModelCapabilitiesErrors,
+	ThrowOnError
+> =>
 	(options.client ?? client).put<
 		WorkspaceProbeLlmModelCapabilitiesResponses,
-		unknown,
+		WorkspaceProbeLlmModelCapabilitiesErrors,
 		ThrowOnError
 	>({
 		security: [{ scheme: "bearer", type: "http" }],
@@ -3985,8 +5016,12 @@ export const workspaceProbeLlmModelCapabilities = <ThrowOnError extends boolean 
  */
 export const workspaceGetLlmSettings = <ThrowOnError extends boolean = false>(
 	options: Options<WorkspaceGetLlmSettingsData, ThrowOnError>,
-): RequestResult<WorkspaceGetLlmSettingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<WorkspaceGetLlmSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<WorkspaceGetLlmSettingsResponses, WorkspaceGetLlmSettingsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		WorkspaceGetLlmSettingsResponses,
+		WorkspaceGetLlmSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/settings",
 		...options,
@@ -3997,20 +5032,26 @@ export const workspaceGetLlmSettings = <ThrowOnError extends boolean = false>(
  */
 export const getLlmUsageReport = <ThrowOnError extends boolean = false>(
 	options: Options<GetLlmUsageReportData, ThrowOnError>,
-): RequestResult<GetLlmUsageReportResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetLlmUsageReportResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/llm/usage",
-		...options,
-	});
+): RequestResult<GetLlmUsageReportResponses, GetLlmUsageReportErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetLlmUsageReportResponses, GetLlmUsageReportErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/llm/usage",
+			...options,
+		},
+	);
 
 /**
  * List the MCP clients connected to the workspace
  */
 export const listMcpClientGrants = <ThrowOnError extends boolean = false>(
 	options: Options<ListMcpClientGrantsData, ThrowOnError>,
-): RequestResult<ListMcpClientGrantsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListMcpClientGrantsResponses, unknown, ThrowOnError>({
+): RequestResult<ListMcpClientGrantsResponses, ListMcpClientGrantsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListMcpClientGrantsResponses,
+		ListMcpClientGrantsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/mcp-grants",
 		...options,
@@ -4021,8 +5062,12 @@ export const listMcpClientGrants = <ThrowOnError extends boolean = false>(
  */
 export const revokeMcpClientGrant = <ThrowOnError extends boolean = false>(
 	options: Options<RevokeMcpClientGrantData, ThrowOnError>,
-): RequestResult<RevokeMcpClientGrantResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RevokeMcpClientGrantResponses, unknown, ThrowOnError>({
+): RequestResult<RevokeMcpClientGrantResponses, RevokeMcpClientGrantErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		RevokeMcpClientGrantResponses,
+		RevokeMcpClientGrantErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/mcp-grants/{grantId}",
 		...options,
@@ -4033,8 +5078,8 @@ export const revokeMcpClientGrant = <ThrowOnError extends boolean = false>(
  */
 export const listMemberships = <ThrowOnError extends boolean = false>(
 	options: Options<ListMembershipsData, ThrowOnError>,
-): RequestResult<ListMembershipsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListMembershipsResponses, unknown, ThrowOnError>({
+): RequestResult<ListMembershipsResponses, ListMembershipsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListMembershipsResponses, ListMembershipsErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/members",
 		...options,
@@ -4075,8 +5120,8 @@ export const leaveWorkspace = <ThrowOnError extends boolean = false>(
  */
 export const getOwnMembership = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnMembershipData, ThrowOnError>,
-): RequestResult<GetOwnMembershipResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnMembershipResponses, unknown, ThrowOnError>({
+): RequestResult<GetOwnMembershipResponses, GetOwnMembershipErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetOwnMembershipResponses, GetOwnMembershipErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/members/me",
 		...options,
@@ -4099,8 +5144,8 @@ export const removeMember = <ThrowOnError extends boolean = false>(
  */
 export const setMemberHidden = <ThrowOnError extends boolean = false>(
 	options: Options<SetMemberHiddenData, ThrowOnError>,
-): RequestResult<SetMemberHiddenResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<SetMemberHiddenResponses, unknown, ThrowOnError>({
+): RequestResult<SetMemberHiddenResponses, SetMemberHiddenErrors, ThrowOnError> =>
+	(options.client ?? client).patch<SetMemberHiddenResponses, SetMemberHiddenErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/members/{accountId}/hidden",
 		...options,
@@ -4133,8 +5178,12 @@ export const followProviderRole = <ThrowOnError extends boolean = false>(
  */
 export const listModelAssignments = <ThrowOnError extends boolean = false>(
 	options: Options<ListModelAssignmentsData, ThrowOnError>,
-): RequestResult<ListModelAssignmentsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListModelAssignmentsResponses, unknown, ThrowOnError>({
+): RequestResult<ListModelAssignmentsResponses, ListModelAssignmentsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListModelAssignmentsResponses,
+		ListModelAssignmentsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/model-assignments",
 		...options,
@@ -4145,8 +5194,12 @@ export const listModelAssignments = <ThrowOnError extends boolean = false>(
  */
 export const removeModelAssignment = <ThrowOnError extends boolean = false>(
 	options: Options<RemoveModelAssignmentData, ThrowOnError>,
-): RequestResult<RemoveModelAssignmentResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RemoveModelAssignmentResponses, unknown, ThrowOnError>({
+): RequestResult<RemoveModelAssignmentResponses, RemoveModelAssignmentErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		RemoveModelAssignmentResponses,
+		RemoveModelAssignmentErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/model-assignments/{purpose}",
 		...options,
@@ -4173,8 +5226,12 @@ export const assignModel = <ThrowOnError extends boolean = false>(
  */
 export const getMemberOnboarding = <ThrowOnError extends boolean = false>(
 	options: Options<GetMemberOnboardingData, ThrowOnError>,
-): RequestResult<GetMemberOnboardingResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetMemberOnboardingResponses, unknown, ThrowOnError>({
+): RequestResult<GetMemberOnboardingResponses, GetMemberOnboardingErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetMemberOnboardingResponses,
+		GetMemberOnboardingErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/onboarding/me",
 		...options,
@@ -4185,8 +5242,8 @@ export const getMemberOnboarding = <ThrowOnError extends boolean = false>(
  */
 export const updateAiChoice = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateAiChoiceData, ThrowOnError>,
-): RequestResult<UpdateAiChoiceResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateAiChoiceResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateAiChoiceResponses, UpdateAiChoiceErrors, ThrowOnError> =>
+	(options.client ?? client).put<UpdateAiChoiceResponses, UpdateAiChoiceErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/onboarding/me/ai-choice",
 		...options,
@@ -4201,8 +5258,12 @@ export const updateAiChoice = <ThrowOnError extends boolean = false>(
  */
 export const dismissMemberOnboarding = <ThrowOnError extends boolean = false>(
 	options: Options<DismissMemberOnboardingData, ThrowOnError>,
-): RequestResult<DismissMemberOnboardingResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<DismissMemberOnboardingResponses, unknown, ThrowOnError>({
+): RequestResult<DismissMemberOnboardingResponses, DismissMemberOnboardingErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		DismissMemberOnboardingResponses,
+		DismissMemberOnboardingErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/onboarding/me/dismissal",
 		...options,
@@ -4213,8 +5274,16 @@ export const dismissMemberOnboarding = <ThrowOnError extends boolean = false>(
  */
 export const getMemberOnboardingSettings = <ThrowOnError extends boolean = false>(
 	options: Options<GetMemberOnboardingSettingsData, ThrowOnError>,
-): RequestResult<GetMemberOnboardingSettingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetMemberOnboardingSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetMemberOnboardingSettingsResponses,
+	GetMemberOnboardingSettingsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetMemberOnboardingSettingsResponses,
+		GetMemberOnboardingSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/onboarding/settings",
 		...options,
@@ -4225,8 +5294,16 @@ export const getMemberOnboardingSettings = <ThrowOnError extends boolean = false
  */
 export const updateMemberOnboardingSettings = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateMemberOnboardingSettingsData, ThrowOnError>,
-): RequestResult<UpdateMemberOnboardingSettingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateMemberOnboardingSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdateMemberOnboardingSettingsResponses,
+	UpdateMemberOnboardingSettingsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		UpdateMemberOnboardingSettingsResponses,
+		UpdateMemberOnboardingSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/onboarding/settings",
 		...options,
@@ -4241,8 +5318,16 @@ export const updateMemberOnboardingSettings = <ThrowOnError extends boolean = fa
  */
 export const getMemberOnboardingLinkOptions = <ThrowOnError extends boolean = false>(
 	options: Options<GetMemberOnboardingLinkOptionsData, ThrowOnError>,
-): RequestResult<GetMemberOnboardingLinkOptionsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetMemberOnboardingLinkOptionsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetMemberOnboardingLinkOptionsResponses,
+	GetMemberOnboardingLinkOptionsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetMemberOnboardingLinkOptionsResponses,
+		GetMemberOnboardingLinkOptionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/onboarding/settings/links",
 		...options,
@@ -4357,8 +5442,16 @@ export const updateOutlineCollectionState = <ThrowOnError extends boolean = fals
  */
 export const getWorkspacePasskeyPolicy = <ThrowOnError extends boolean = false>(
 	options: Options<GetWorkspacePasskeyPolicyData, ThrowOnError>,
-): RequestResult<GetWorkspacePasskeyPolicyResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetWorkspacePasskeyPolicyResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetWorkspacePasskeyPolicyResponses,
+	GetWorkspacePasskeyPolicyErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetWorkspacePasskeyPolicyResponses,
+		GetWorkspacePasskeyPolicyErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/passkey-policy",
 		...options,
@@ -4369,8 +5462,16 @@ export const getWorkspacePasskeyPolicy = <ThrowOnError extends boolean = false>(
  */
 export const updateWorkspacePasskeyPolicy = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateWorkspacePasskeyPolicyData, ThrowOnError>,
-): RequestResult<UpdateWorkspacePasskeyPolicyResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateWorkspacePasskeyPolicyResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdateWorkspacePasskeyPolicyResponses,
+	UpdateWorkspacePasskeyPolicyErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		UpdateWorkspacePasskeyPolicyResponses,
+		UpdateWorkspacePasskeyPolicyErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/passkey-policy",
 		...options,
@@ -4401,8 +5502,12 @@ export const listAdoptablePractices = <ThrowOnError extends boolean = false>(
  */
 export const previewGroupAdoption = <ThrowOnError extends boolean = false>(
 	options: Options<PreviewGroupAdoptionData, ThrowOnError>,
-): RequestResult<PreviewGroupAdoptionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<PreviewGroupAdoptionResponses, unknown, ThrowOnError>({
+): RequestResult<PreviewGroupAdoptionResponses, PreviewGroupAdoptionErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		PreviewGroupAdoptionResponses,
+		PreviewGroupAdoptionErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-catalog/adoption/groups/{slug}",
 		...options,
@@ -4413,8 +5518,8 @@ export const previewGroupAdoption = <ThrowOnError extends boolean = false>(
  */
 export const adoptGroup = <ThrowOnError extends boolean = false>(
 	options: Options<AdoptGroupData, ThrowOnError>,
-): RequestResult<AdoptGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdoptGroupResponses, unknown, ThrowOnError>({
+): RequestResult<AdoptGroupResponses, AdoptGroupErrors, ThrowOnError> =>
+	(options.client ?? client).post<AdoptGroupResponses, AdoptGroupErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-catalog/adoption/groups/{slug}",
 		...options,
@@ -4453,8 +5558,12 @@ export const adoptPractice = <ThrowOnError extends boolean = false>(
  */
 export const listPracticeDrafts = <ThrowOnError extends boolean = false>(
 	options: Options<ListPracticeDraftsData, ThrowOnError>,
-): RequestResult<ListPracticeDraftsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListPracticeDraftsResponses, unknown, ThrowOnError>({
+): RequestResult<ListPracticeDraftsResponses, ListPracticeDraftsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListPracticeDraftsResponses,
+		ListPracticeDraftsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-drafts",
 		...options,
@@ -4465,8 +5574,12 @@ export const listPracticeDrafts = <ThrowOnError extends boolean = false>(
  */
 export const deletePracticeDraft = <ThrowOnError extends boolean = false>(
 	options: Options<DeletePracticeDraftData, ThrowOnError>,
-): RequestResult<DeletePracticeDraftResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<DeletePracticeDraftResponses, unknown, ThrowOnError>({
+): RequestResult<DeletePracticeDraftResponses, DeletePracticeDraftErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		DeletePracticeDraftResponses,
+		DeletePracticeDraftErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}",
 		...options,
@@ -4479,16 +5592,18 @@ export const deletePracticeDraft = <ThrowOnError extends boolean = false>(
  */
 export const savePracticeDraft = <ThrowOnError extends boolean = false>(
 	options: Options<SavePracticeDraftData, ThrowOnError>,
-): RequestResult<SavePracticeDraftResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<SavePracticeDraftResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
+): RequestResult<SavePracticeDraftResponses, SavePracticeDraftErrors, ThrowOnError> =>
+	(options.client ?? client).put<SavePracticeDraftResponses, SavePracticeDraftErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}",
+			...options,
+			headers: {
+				"Content-Type": "application/json",
+				...options.headers,
+			},
 		},
-	});
+	);
 
 /**
  * Put a draft practice in use
@@ -4497,8 +5612,12 @@ export const savePracticeDraft = <ThrowOnError extends boolean = false>(
  */
 export const activatePracticeDraft = <ThrowOnError extends boolean = false>(
 	options: Options<ActivatePracticeDraftData, ThrowOnError>,
-): RequestResult<ActivatePracticeDraftResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<ActivatePracticeDraftResponses, unknown, ThrowOnError>({
+): RequestResult<ActivatePracticeDraftResponses, ActivatePracticeDraftErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		ActivatePracticeDraftResponses,
+		ActivatePracticeDraftErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}/state",
 		...options,
@@ -4510,8 +5629,12 @@ export const activatePracticeDraft = <ThrowOnError extends boolean = false>(
 
 export const listPracticeGroups = <ThrowOnError extends boolean = false>(
 	options: Options<ListPracticeGroupsData, ThrowOnError>,
-): RequestResult<ListPracticeGroupsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListPracticeGroupsResponses, unknown, ThrowOnError>({
+): RequestResult<ListPracticeGroupsResponses, ListPracticeGroupsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListPracticeGroupsResponses,
+		ListPracticeGroupsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups",
 		...options,
@@ -4519,8 +5642,12 @@ export const listPracticeGroups = <ThrowOnError extends boolean = false>(
 
 export const createPracticeGroup = <ThrowOnError extends boolean = false>(
 	options: Options<CreatePracticeGroupData, ThrowOnError>,
-): RequestResult<CreatePracticeGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CreatePracticeGroupResponses, unknown, ThrowOnError>({
+): RequestResult<CreatePracticeGroupResponses, CreatePracticeGroupErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CreatePracticeGroupResponses,
+		CreatePracticeGroupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups",
 		...options,
@@ -4532,8 +5659,12 @@ export const createPracticeGroup = <ThrowOnError extends boolean = false>(
 
 export const reorderPracticeGroups = <ThrowOnError extends boolean = false>(
 	options: Options<ReorderPracticeGroupsData, ThrowOnError>,
-): RequestResult<ReorderPracticeGroupsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<ReorderPracticeGroupsResponses, unknown, ThrowOnError>({
+): RequestResult<ReorderPracticeGroupsResponses, ReorderPracticeGroupsErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		ReorderPracticeGroupsResponses,
+		ReorderPracticeGroupsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/reorder",
 		...options,
@@ -4550,8 +5681,12 @@ export const reorderPracticeGroups = <ThrowOnError extends boolean = false>(
  */
 export const getOwnGroupStandings = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnGroupStandingsData, ThrowOnError>,
-): RequestResult<GetOwnGroupStandingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnGroupStandingsResponses, unknown, ThrowOnError>({
+): RequestResult<GetOwnGroupStandingsResponses, GetOwnGroupStandingsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetOwnGroupStandingsResponses,
+		GetOwnGroupStandingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/standings",
 		...options,
@@ -4559,8 +5694,12 @@ export const getOwnGroupStandings = <ThrowOnError extends boolean = false>(
 
 export const deletePracticeGroup = <ThrowOnError extends boolean = false>(
 	options: Options<DeletePracticeGroupData, ThrowOnError>,
-): RequestResult<DeletePracticeGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<DeletePracticeGroupResponses, unknown, ThrowOnError>({
+): RequestResult<DeletePracticeGroupResponses, DeletePracticeGroupErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		DeletePracticeGroupResponses,
+		DeletePracticeGroupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}",
 		...options,
@@ -4568,8 +5707,8 @@ export const deletePracticeGroup = <ThrowOnError extends boolean = false>(
 
 export const getPracticeGroup = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeGroupData, ThrowOnError>,
-): RequestResult<GetPracticeGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeGroupResponses, unknown, ThrowOnError>({
+): RequestResult<GetPracticeGroupResponses, GetPracticeGroupErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetPracticeGroupResponses, GetPracticeGroupErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}",
 		...options,
@@ -4577,8 +5716,12 @@ export const getPracticeGroup = <ThrowOnError extends boolean = false>(
 
 export const updatePracticeGroup = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePracticeGroupData, ThrowOnError>,
-): RequestResult<UpdatePracticeGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdatePracticeGroupResponses, unknown, ThrowOnError>({
+): RequestResult<UpdatePracticeGroupResponses, UpdatePracticeGroupErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdatePracticeGroupResponses,
+		UpdatePracticeGroupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}",
 		...options,
@@ -4590,8 +5733,12 @@ export const updatePracticeGroup = <ThrowOnError extends boolean = false>(
 
 export const resetGroupToCatalog = <ThrowOnError extends boolean = false>(
 	options: Options<ResetGroupToCatalogData, ThrowOnError>,
-): RequestResult<ResetGroupToCatalogResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<ResetGroupToCatalogResponses, unknown, ThrowOnError>({
+): RequestResult<ResetGroupToCatalogResponses, ResetGroupToCatalogErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		ResetGroupToCatalogResponses,
+		ResetGroupToCatalogErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/catalog-customization",
 		...options,
@@ -4599,8 +5746,12 @@ export const resetGroupToCatalog = <ThrowOnError extends boolean = false>(
 
 export const setGroupFeedbackMode = <ThrowOnError extends boolean = false>(
 	options: Options<SetGroupFeedbackModeData, ThrowOnError>,
-): RequestResult<SetGroupFeedbackModeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<SetGroupFeedbackModeResponses, unknown, ThrowOnError>({
+): RequestResult<SetGroupFeedbackModeResponses, SetGroupFeedbackModeErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		SetGroupFeedbackModeResponses,
+		SetGroupFeedbackModeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/feedback-mode",
 		...options,
@@ -4615,8 +5766,12 @@ export const setGroupFeedbackMode = <ThrowOnError extends boolean = false>(
  */
 export const listOwnGroupReviews = <ThrowOnError extends boolean = false>(
 	options: Options<ListOwnGroupReviewsData, ThrowOnError>,
-): RequestResult<ListOwnGroupReviewsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListOwnGroupReviewsResponses, unknown, ThrowOnError>({
+): RequestResult<ListOwnGroupReviewsResponses, ListOwnGroupReviewsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListOwnGroupReviewsResponses,
+		ListOwnGroupReviewsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/reviews",
 		...options,
@@ -4629,8 +5784,16 @@ export const listOwnGroupReviews = <ThrowOnError extends boolean = false>(
  */
 export const getOwnPracticeProfileOverview = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnPracticeProfileOverviewData, ThrowOnError>,
-): RequestResult<GetOwnPracticeProfileOverviewResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnPracticeProfileOverviewResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetOwnPracticeProfileOverviewResponses,
+	GetOwnPracticeProfileOverviewErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetOwnPracticeProfileOverviewResponses,
+		GetOwnPracticeProfileOverviewErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-profile/overview",
 		...options,
@@ -4641,8 +5804,8 @@ export const getOwnPracticeProfileOverview = <ThrowOnError extends boolean = fal
  */
 export const listOwnReviews = <ThrowOnError extends boolean = false>(
 	options: Options<ListOwnReviewsData, ThrowOnError>,
-): RequestResult<ListOwnReviewsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListOwnReviewsResponses, unknown, ThrowOnError>({
+): RequestResult<ListOwnReviewsResponses, ListOwnReviewsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListOwnReviewsResponses, ListOwnReviewsErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-profile/reviews",
 		...options,
@@ -4653,8 +5816,8 @@ export const listOwnReviews = <ThrowOnError extends boolean = false>(
  */
 export const getOwnReview = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnReviewData, ThrowOnError>,
-): RequestResult<GetOwnReviewResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnReviewResponses, unknown, ThrowOnError>({
+): RequestResult<GetOwnReviewResponses, GetOwnReviewErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetOwnReviewResponses, GetOwnReviewErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-profile/reviews/{reviewId}",
 		...options,
@@ -4667,8 +5830,12 @@ export const getOwnReview = <ThrowOnError extends boolean = false>(
  */
 export const startPracticeTrial = <ThrowOnError extends boolean = false>(
 	options: Options<StartPracticeTrialData, ThrowOnError>,
-): RequestResult<StartPracticeTrialResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<StartPracticeTrialResponses, unknown, ThrowOnError>({
+): RequestResult<StartPracticeTrialResponses, StartPracticeTrialErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		StartPracticeTrialResponses,
+		StartPracticeTrialErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-trials",
 		...options,
@@ -4683,8 +5850,8 @@ export const startPracticeTrial = <ThrowOnError extends boolean = false>(
  */
 export const getPracticeTrial = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeTrialData, ThrowOnError>,
-): RequestResult<GetPracticeTrialResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeTrialResponses, unknown, ThrowOnError>({
+): RequestResult<GetPracticeTrialResponses, GetPracticeTrialErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetPracticeTrialResponses, GetPracticeTrialErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-trials/{trialId}",
 		...options,
@@ -4692,8 +5859,8 @@ export const getPracticeTrial = <ThrowOnError extends boolean = false>(
 
 export const listPractices = <ThrowOnError extends boolean = false>(
 	options: Options<ListPracticesData, ThrowOnError>,
-): RequestResult<ListPracticesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListPracticesResponses, unknown, ThrowOnError>({
+): RequestResult<ListPracticesResponses, ListPracticesErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListPracticesResponses, ListPracticesErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices",
 		...options,
@@ -4701,8 +5868,8 @@ export const listPractices = <ThrowOnError extends boolean = false>(
 
 export const createPractice = <ThrowOnError extends boolean = false>(
 	options: Options<CreatePracticeData, ThrowOnError>,
-): RequestResult<CreatePracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CreatePracticeResponses, unknown, ThrowOnError>({
+): RequestResult<CreatePracticeResponses, CreatePracticeErrors, ThrowOnError> =>
+	(options.client ?? client).post<CreatePracticeResponses, CreatePracticeErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices",
 		...options,
@@ -4714,8 +5881,16 @@ export const createPractice = <ThrowOnError extends boolean = false>(
 
 export const getPracticeDefinitionOptions = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeDefinitionOptionsData, ThrowOnError>,
-): RequestResult<GetPracticeDefinitionOptionsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeDefinitionOptionsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetPracticeDefinitionOptionsResponses,
+	GetPracticeDefinitionOptionsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetPracticeDefinitionOptionsResponses,
+		GetPracticeDefinitionOptionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/definition-options",
 		...options,
@@ -4723,8 +5898,12 @@ export const getPracticeDefinitionOptions = <ThrowOnError extends boolean = fals
 
 export const getFeedbackModeRollup = <ThrowOnError extends boolean = false>(
 	options: Options<GetFeedbackModeRollupData, ThrowOnError>,
-): RequestResult<GetFeedbackModeRollupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetFeedbackModeRollupResponses, unknown, ThrowOnError>({
+): RequestResult<GetFeedbackModeRollupResponses, GetFeedbackModeRollupErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetFeedbackModeRollupResponses,
+		GetFeedbackModeRollupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/feedback-modes",
 		...options,
@@ -4737,8 +5916,16 @@ export const getFeedbackModeRollup = <ThrowOnError extends boolean = false>(
  */
 export const getOwnDeliveredWorkFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnDeliveredWorkFeedbackData, ThrowOnError>,
-): RequestResult<GetOwnDeliveredWorkFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnDeliveredWorkFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetOwnDeliveredWorkFeedbackResponses,
+	GetOwnDeliveredWorkFeedbackErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetOwnDeliveredWorkFeedbackResponses,
+		GetOwnDeliveredWorkFeedbackErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/feedback/on-work",
 		...options,
@@ -4749,8 +5936,16 @@ export const getOwnDeliveredWorkFeedback = <ThrowOnError extends boolean = false
  */
 export const getOwnPracticePageFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnPracticePageFeedbackData, ThrowOnError>,
-): RequestResult<GetOwnPracticePageFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnPracticePageFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetOwnPracticePageFeedbackResponses,
+	GetOwnPracticePageFeedbackErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetOwnPracticePageFeedbackResponses,
+		GetOwnPracticePageFeedbackErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/feedback/practice-page",
 		...options,
@@ -4819,8 +6014,8 @@ export const replaceOwnFeedbackResponse = <ThrowOnError extends boolean = false>
  */
 export const listReviewItems = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewItemsData, ThrowOnError>,
-): RequestResult<ListReviewItemsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewItemsResponses, unknown, ThrowOnError>({
+): RequestResult<ListReviewItemsResponses, ListReviewItemsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListReviewItemsResponses, ListReviewItemsErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/items",
 		...options,
@@ -4831,8 +6026,8 @@ export const listReviewItems = <ThrowOnError extends boolean = false>(
  */
 export const getItemFacts = <ThrowOnError extends boolean = false>(
 	options: Options<GetItemFactsData, ThrowOnError>,
-): RequestResult<GetItemFactsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetItemFactsResponses, unknown, ThrowOnError>({
+): RequestResult<GetItemFactsResponses, GetItemFactsErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetItemFactsResponses, GetItemFactsErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/items/{itemId}/facts",
 		...options,
@@ -4843,8 +6038,8 @@ export const getItemFacts = <ThrowOnError extends boolean = false>(
  */
 export const getOwnItemTrace = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnItemTraceData, ThrowOnError>,
-): RequestResult<GetOwnItemTraceResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnItemTraceResponses, unknown, ThrowOnError>({
+): RequestResult<GetOwnItemTraceResponses, GetOwnItemTraceErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetOwnItemTraceResponses, GetOwnItemTraceErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/items/{itemId}/own-trace",
 		...options,
@@ -4855,8 +6050,12 @@ export const getOwnItemTrace = <ThrowOnError extends boolean = false>(
  */
 export const listOwnItemReviews = <ThrowOnError extends boolean = false>(
 	options: Options<ListOwnItemReviewsData, ThrowOnError>,
-): RequestResult<ListOwnItemReviewsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListOwnItemReviewsResponses, unknown, ThrowOnError>({
+): RequestResult<ListOwnItemReviewsResponses, ListOwnItemReviewsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListOwnItemReviewsResponses,
+		ListOwnItemReviewsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/items/{itemId}/reviews",
 		...options,
@@ -4867,8 +6066,8 @@ export const listOwnItemReviews = <ThrowOnError extends boolean = false>(
  */
 export const getItemTrace = <ThrowOnError extends boolean = false>(
 	options: Options<GetItemTraceData, ThrowOnError>,
-): RequestResult<GetItemTraceResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetItemTraceResponses, unknown, ThrowOnError>({
+): RequestResult<GetItemTraceResponses, GetItemTraceErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetItemTraceResponses, GetItemTraceErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/items/{itemId}/trace",
 		...options,
@@ -4879,8 +6078,12 @@ export const getItemTrace = <ThrowOnError extends boolean = false>(
  */
 export const listPracticeReleases = <ThrowOnError extends boolean = false>(
 	options: Options<ListPracticeReleasesData, ThrowOnError>,
-): RequestResult<ListPracticeReleasesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListPracticeReleasesResponses, unknown, ThrowOnError>({
+): RequestResult<ListPracticeReleasesResponses, ListPracticeReleasesErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListPracticeReleasesResponses,
+		ListPracticeReleasesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/releases",
 		...options,
@@ -4891,8 +6094,12 @@ export const listPracticeReleases = <ThrowOnError extends boolean = false>(
  */
 export const declinePracticeRelease = <ThrowOnError extends boolean = false>(
 	options: Options<DeclinePracticeReleaseData, ThrowOnError>,
-): RequestResult<DeclinePracticeReleaseResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<DeclinePracticeReleaseResponses, unknown, ThrowOnError>({
+): RequestResult<DeclinePracticeReleaseResponses, DeclinePracticeReleaseErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		DeclinePracticeReleaseResponses,
+		DeclinePracticeReleaseErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/releases/{slug}",
 		...options,
@@ -4903,8 +6110,12 @@ export const declinePracticeRelease = <ThrowOnError extends boolean = false>(
  */
 export const getPracticeRelease = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeReleaseData, ThrowOnError>,
-): RequestResult<GetPracticeReleaseResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeReleaseResponses, unknown, ThrowOnError>({
+): RequestResult<GetPracticeReleaseResponses, GetPracticeReleaseErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetPracticeReleaseResponses,
+		GetPracticeReleaseErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/releases/{slug}",
 		...options,
@@ -4915,8 +6126,12 @@ export const getPracticeRelease = <ThrowOnError extends boolean = false>(
  */
 export const acceptPracticeRelease = <ThrowOnError extends boolean = false>(
 	options: Options<AcceptPracticeReleaseData, ThrowOnError>,
-): RequestResult<AcceptPracticeReleaseResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AcceptPracticeReleaseResponses, unknown, ThrowOnError>({
+): RequestResult<AcceptPracticeReleaseResponses, AcceptPracticeReleaseErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		AcceptPracticeReleaseResponses,
+		AcceptPracticeReleaseErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/releases/{slug}",
 		...options,
@@ -4933,8 +6148,8 @@ export const acceptPracticeRelease = <ThrowOnError extends boolean = false>(
  */
 export const listOwnResults = <ThrowOnError extends boolean = false>(
 	options: Options<ListOwnResultsData, ThrowOnError>,
-): RequestResult<ListOwnResultsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListOwnResultsResponses, unknown, ThrowOnError>({
+): RequestResult<ListOwnResultsResponses, ListOwnResultsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListOwnResultsResponses, ListOwnResultsErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/results",
 		...options,
@@ -4957,20 +6172,26 @@ export const getOwnResult = <ThrowOnError extends boolean = false>(
  */
 export const listReviewBatches = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewBatchesData, ThrowOnError>,
-): RequestResult<ListReviewBatchesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewBatchesResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/practices/review-batches",
-		...options,
-	});
+): RequestResult<ListReviewBatchesResponses, ListReviewBatchesErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListReviewBatchesResponses, ListReviewBatchesErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/practices/review-batches",
+			...options,
+		},
+	);
 
 /**
  * Create a review batch
  */
 export const createReviewBatch = <ThrowOnError extends boolean = false>(
 	options: Options<CreateReviewBatchData, ThrowOnError>,
-): RequestResult<CreateReviewBatchResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CreateReviewBatchResponses, unknown, ThrowOnError>({
+): RequestResult<CreateReviewBatchResponses, CreateReviewBatchErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CreateReviewBatchResponses,
+		CreateReviewBatchErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-batches",
 		...options,
@@ -4985,8 +6206,12 @@ export const createReviewBatch = <ThrowOnError extends boolean = false>(
  */
 export const updateReviewBatchStatus = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateReviewBatchStatusData, ThrowOnError>,
-): RequestResult<UpdateReviewBatchStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateReviewBatchStatusResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateReviewBatchStatusResponses, UpdateReviewBatchStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdateReviewBatchStatusResponses,
+		UpdateReviewBatchStatusErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-batches/{batchId}/status",
 		...options,
@@ -5019,8 +6244,8 @@ export const resolveReviewContext = <ThrowOnError extends boolean = false>(
  */
 export const requestReview = <ThrowOnError extends boolean = false>(
 	options: Options<RequestReviewData, ThrowOnError>,
-): RequestResult<RequestReviewResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RequestReviewResponses, unknown, ThrowOnError>({
+): RequestResult<RequestReviewResponses, RequestReviewErrors, ThrowOnError> =>
+	(options.client ?? client).post<RequestReviewResponses, RequestReviewErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-requests",
 		...options,
@@ -5035,8 +6260,12 @@ export const requestReview = <ThrowOnError extends boolean = false>(
  */
 export const listReviewSchedules = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewSchedulesData, ThrowOnError>,
-): RequestResult<ListReviewSchedulesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewSchedulesResponses, unknown, ThrowOnError>({
+): RequestResult<ListReviewSchedulesResponses, ListReviewSchedulesErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListReviewSchedulesResponses,
+		ListReviewSchedulesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-schedules",
 		...options,
@@ -5047,8 +6276,12 @@ export const listReviewSchedules = <ThrowOnError extends boolean = false>(
  */
 export const createReviewSchedule = <ThrowOnError extends boolean = false>(
 	options: Options<CreateReviewScheduleData, ThrowOnError>,
-): RequestResult<CreateReviewScheduleResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CreateReviewScheduleResponses, unknown, ThrowOnError>({
+): RequestResult<CreateReviewScheduleResponses, CreateReviewScheduleErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CreateReviewScheduleResponses,
+		CreateReviewScheduleErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-schedules",
 		...options,
@@ -5063,8 +6296,12 @@ export const createReviewSchedule = <ThrowOnError extends boolean = false>(
  */
 export const deleteReviewSchedule = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteReviewScheduleData, ThrowOnError>,
-): RequestResult<DeleteReviewScheduleResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<DeleteReviewScheduleResponses, unknown, ThrowOnError>({
+): RequestResult<DeleteReviewScheduleResponses, DeleteReviewScheduleErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		DeleteReviewScheduleResponses,
+		DeleteReviewScheduleErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-schedules/{scheduleId}",
 		...options,
@@ -5075,8 +6312,12 @@ export const deleteReviewSchedule = <ThrowOnError extends boolean = false>(
  */
 export const setReviewScheduleEnabled = <ThrowOnError extends boolean = false>(
 	options: Options<SetReviewScheduleEnabledData, ThrowOnError>,
-): RequestResult<SetReviewScheduleEnabledResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<SetReviewScheduleEnabledResponses, unknown, ThrowOnError>({
+): RequestResult<SetReviewScheduleEnabledResponses, SetReviewScheduleEnabledErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		SetReviewScheduleEnabledResponses,
+		SetReviewScheduleEnabledErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-schedules/{scheduleId}",
 		...options,
@@ -5091,8 +6332,12 @@ export const setReviewScheduleEnabled = <ThrowOnError extends boolean = false>(
  */
 export const updateReviewSchedule = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateReviewScheduleData, ThrowOnError>,
-): RequestResult<UpdateReviewScheduleResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateReviewScheduleResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateReviewScheduleResponses, UpdateReviewScheduleErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		UpdateReviewScheduleResponses,
+		UpdateReviewScheduleErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-schedules/{scheduleId}",
 		...options,
@@ -5107,8 +6352,16 @@ export const updateReviewSchedule = <ThrowOnError extends boolean = false>(
  */
 export const getPracticeReviewSettings = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeReviewSettingsData, ThrowOnError>,
-): RequestResult<GetPracticeReviewSettingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeReviewSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetPracticeReviewSettingsResponses,
+	GetPracticeReviewSettingsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetPracticeReviewSettingsResponses,
+		GetPracticeReviewSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-settings",
 		...options,
@@ -5119,8 +6372,16 @@ export const getPracticeReviewSettings = <ThrowOnError extends boolean = false>(
  */
 export const updatePracticeReviewSettings = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePracticeReviewSettingsData, ThrowOnError>,
-): RequestResult<UpdatePracticeReviewSettingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdatePracticeReviewSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdatePracticeReviewSettingsResponses,
+	UpdatePracticeReviewSettingsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		UpdatePracticeReviewSettingsResponses,
+		UpdatePracticeReviewSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-settings",
 		...options,
@@ -5132,8 +6393,12 @@ export const updatePracticeReviewSettings = <ThrowOnError extends boolean = fals
 
 export const previewReviewScope = <ThrowOnError extends boolean = false>(
 	options: Options<PreviewReviewScopeData, ThrowOnError>,
-): RequestResult<PreviewReviewScopeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<PreviewReviewScopeResponses, unknown, ThrowOnError>({
+): RequestResult<PreviewReviewScopeResponses, PreviewReviewScopeErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		PreviewReviewScopeResponses,
+		PreviewReviewScopeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-settings/scope-preview",
 		...options,
@@ -5145,8 +6410,12 @@ export const previewReviewScope = <ThrowOnError extends boolean = false>(
 
 export const listReviewedPractices = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewedPracticesData, ThrowOnError>,
-): RequestResult<ListReviewedPracticesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewedPracticesResponses, unknown, ThrowOnError>({
+): RequestResult<ListReviewedPracticesResponses, ListReviewedPracticesErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListReviewedPracticesResponses,
+		ListReviewedPracticesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviewed",
 		...options,
@@ -5168,8 +6437,12 @@ export const listReviews = <ThrowOnError extends boolean = false>(
 
 export const listReviewFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewFeedbackData, ThrowOnError>,
-): RequestResult<ListReviewFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<ListReviewFeedbackResponses, ListReviewFeedbackErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListReviewFeedbackResponses,
+		ListReviewFeedbackErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback",
 		...options,
@@ -5177,8 +6450,16 @@ export const listReviewFeedback = <ThrowOnError extends boolean = false>(
 
 export const countReviewFeedbackByLocation = <ThrowOnError extends boolean = false>(
 	options: Options<CountReviewFeedbackByLocationData, ThrowOnError>,
-): RequestResult<CountReviewFeedbackByLocationResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<CountReviewFeedbackByLocationResponses, unknown, ThrowOnError>({
+): RequestResult<
+	CountReviewFeedbackByLocationResponses,
+	CountReviewFeedbackByLocationErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		CountReviewFeedbackByLocationResponses,
+		CountReviewFeedbackByLocationErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/locations",
 		...options,
@@ -5186,8 +6467,16 @@ export const countReviewFeedbackByLocation = <ThrowOnError extends boolean = fal
 
 export const countReviewFeedbackByReason = <ThrowOnError extends boolean = false>(
 	options: Options<CountReviewFeedbackByReasonData, ThrowOnError>,
-): RequestResult<CountReviewFeedbackByReasonResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<CountReviewFeedbackByReasonResponses, unknown, ThrowOnError>({
+): RequestResult<
+	CountReviewFeedbackByReasonResponses,
+	CountReviewFeedbackByReasonErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		CountReviewFeedbackByReasonResponses,
+		CountReviewFeedbackByReasonErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/reasons",
 		...options,
@@ -5195,17 +6484,23 @@ export const countReviewFeedbackByReason = <ThrowOnError extends boolean = false
 
 export const getReviewFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<GetReviewFeedbackData, ThrowOnError>,
-): RequestResult<GetReviewFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetReviewFeedbackResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}",
-		...options,
-	});
+): RequestResult<GetReviewFeedbackResponses, GetReviewFeedbackErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetReviewFeedbackResponses, GetReviewFeedbackErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}",
+			...options,
+		},
+	);
 
 export const listFeedbackDecisions = <ThrowOnError extends boolean = false>(
 	options: Options<ListFeedbackDecisionsData, ThrowOnError>,
-): RequestResult<ListFeedbackDecisionsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListFeedbackDecisionsResponses, unknown, ThrowOnError>({
+): RequestResult<ListFeedbackDecisionsResponses, ListFeedbackDecisionsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListFeedbackDecisionsResponses,
+		ListFeedbackDecisionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/decisions",
 		...options,
@@ -5213,8 +6508,12 @@ export const listFeedbackDecisions = <ThrowOnError extends boolean = false>(
 
 export const createFeedbackDecision = <ThrowOnError extends boolean = false>(
 	options: Options<CreateFeedbackDecisionData, ThrowOnError>,
-): RequestResult<CreateFeedbackDecisionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CreateFeedbackDecisionResponses, unknown, ThrowOnError>({
+): RequestResult<CreateFeedbackDecisionResponses, CreateFeedbackDecisionErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CreateFeedbackDecisionResponses,
+		CreateFeedbackDecisionErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/decisions",
 		...options,
@@ -5226,8 +6525,12 @@ export const createFeedbackDecision = <ThrowOnError extends boolean = false>(
 
 export const recheckFeedbackDelivery = <ThrowOnError extends boolean = false>(
 	options: Options<RecheckFeedbackDeliveryData, ThrowOnError>,
-): RequestResult<RecheckFeedbackDeliveryResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RecheckFeedbackDeliveryResponses, unknown, ThrowOnError>({
+): RequestResult<RecheckFeedbackDeliveryResponses, RecheckFeedbackDeliveryErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		RecheckFeedbackDeliveryResponses,
+		RecheckFeedbackDeliveryErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/recheck",
 		...options,
@@ -5235,8 +6538,8 @@ export const recheckFeedbackDelivery = <ThrowOnError extends boolean = false>(
 
 export const retryFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<RetryFeedbackData, ThrowOnError>,
-): RequestResult<RetryFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RetryFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<RetryFeedbackResponses, RetryFeedbackErrors, ThrowOnError> =>
+	(options.client ?? client).post<RetryFeedbackResponses, RetryFeedbackErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/retry",
 		...options,
@@ -5247,8 +6550,8 @@ export const retryFeedback = <ThrowOnError extends boolean = false>(
  */
 export const getReviewLineage = <ThrowOnError extends boolean = false>(
 	options: Options<GetReviewLineageData, ThrowOnError>,
-): RequestResult<GetReviewLineageResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetReviewLineageResponses, unknown, ThrowOnError>({
+): RequestResult<GetReviewLineageResponses, GetReviewLineageErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetReviewLineageResponses, GetReviewLineageErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/lineage",
 		...options,
@@ -5277,8 +6580,12 @@ export const getReviewOverview = <ThrowOnError extends boolean = false>(
  */
 export const listReviewProblems = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewProblemsData, ThrowOnError>,
-): RequestResult<ListReviewProblemsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewProblemsResponses, unknown, ThrowOnError>({
+): RequestResult<ListReviewProblemsResponses, ListReviewProblemsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListReviewProblemsResponses,
+		ListReviewProblemsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/problems",
 		...options,
@@ -5289,8 +6596,8 @@ export const listReviewProblems = <ThrowOnError extends boolean = false>(
  */
 export const getReviewProblem = <ThrowOnError extends boolean = false>(
 	options: Options<GetReviewProblemData, ThrowOnError>,
-): RequestResult<GetReviewProblemResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetReviewProblemResponses, unknown, ThrowOnError>({
+): RequestResult<GetReviewProblemResponses, GetReviewProblemErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetReviewProblemResponses, GetReviewProblemErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/problems/{problemId}",
 		...options,
@@ -5303,8 +6610,8 @@ export const getReviewProblem = <ThrowOnError extends boolean = false>(
  */
 export const getReviewQueue = <ThrowOnError extends boolean = false>(
 	options: Options<GetReviewQueueData, ThrowOnError>,
-): RequestResult<GetReviewQueueResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetReviewQueueResponses, unknown, ThrowOnError>({
+): RequestResult<GetReviewQueueResponses, GetReviewQueueErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetReviewQueueResponses, GetReviewQueueErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/queue",
 		...options,
@@ -5315,20 +6622,22 @@ export const getReviewQueue = <ThrowOnError extends boolean = false>(
  */
 export const listReviewResults = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewResultsData, ThrowOnError>,
-): RequestResult<ListReviewResultsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewResultsResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/practices/reviews/results",
-		...options,
-	});
+): RequestResult<ListReviewResultsResponses, ListReviewResultsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListReviewResultsResponses, ListReviewResultsErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/practices/reviews/results",
+			...options,
+		},
+	);
 
 /**
  * Get a review result
  */
 export const getReviewResult = <ThrowOnError extends boolean = false>(
 	options: Options<GetReviewResultData, ThrowOnError>,
-): RequestResult<GetReviewResultResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetReviewResultResponses, unknown, ThrowOnError>({
+): RequestResult<GetReviewResultResponses, GetReviewResultErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetReviewResultResponses, GetReviewResultErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/results/{resultId}",
 		...options,
@@ -5339,8 +6648,8 @@ export const getReviewResult = <ThrowOnError extends boolean = false>(
  */
 export const listResultMarks = <ThrowOnError extends boolean = false>(
 	options: Options<ListResultMarksData, ThrowOnError>,
-): RequestResult<ListResultMarksResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListResultMarksResponses, unknown, ThrowOnError>({
+): RequestResult<ListResultMarksResponses, ListResultMarksErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListResultMarksResponses, ListResultMarksErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/results/{resultId}/marks",
 		...options,
@@ -5351,8 +6660,8 @@ export const listResultMarks = <ThrowOnError extends boolean = false>(
  */
 export const createResultMark = <ThrowOnError extends boolean = false>(
 	options: Options<CreateResultMarkData, ThrowOnError>,
-): RequestResult<CreateResultMarkResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CreateResultMarkResponses, unknown, ThrowOnError>({
+): RequestResult<CreateResultMarkResponses, CreateResultMarkErrors, ThrowOnError> =>
+	(options.client ?? client).post<CreateResultMarkResponses, CreateResultMarkErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/results/{resultId}/marks",
 		...options,
@@ -5367,8 +6676,12 @@ export const createResultMark = <ThrowOnError extends boolean = false>(
  */
 export const removeResultMark = <ThrowOnError extends boolean = false>(
 	options: Options<RemoveResultMarkData, ThrowOnError>,
-): RequestResult<RemoveResultMarkResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RemoveResultMarkResponses, unknown, ThrowOnError>({
+): RequestResult<RemoveResultMarkResponses, RemoveResultMarkErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		RemoveResultMarkResponses,
+		RemoveResultMarkErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/results/{resultId}/marks/{markId}",
 		...options,
@@ -5397,8 +6710,8 @@ export const getReviewTiming = <ThrowOnError extends boolean = false>(
  */
 export const getReview = <ThrowOnError extends boolean = false>(
 	options: Options<GetReviewData, ThrowOnError>,
-): RequestResult<GetReviewResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetReviewResponses, unknown, ThrowOnError>({
+): RequestResult<GetReviewResponses, GetReviewErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetReviewResponses, GetReviewErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/{reviewId}",
 		...options,
@@ -5409,8 +6722,8 @@ export const getReview = <ThrowOnError extends boolean = false>(
  */
 export const cancelReview = <ThrowOnError extends boolean = false>(
 	options: Options<CancelReviewData, ThrowOnError>,
-): RequestResult<CancelReviewResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CancelReviewResponses, unknown, ThrowOnError>({
+): RequestResult<CancelReviewResponses, CancelReviewErrors, ThrowOnError> =>
+	(options.client ?? client).post<CancelReviewResponses, CancelReviewErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel",
 		...options,
@@ -5418,8 +6731,12 @@ export const cancelReview = <ThrowOnError extends boolean = false>(
 
 export const listReviewFeedbackChecks = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewFeedbackChecksData, ThrowOnError>,
-): RequestResult<ListReviewFeedbackChecksResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewFeedbackChecksResponses, unknown, ThrowOnError>({
+): RequestResult<ListReviewFeedbackChecksResponses, ListReviewFeedbackChecksErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListReviewFeedbackChecksResponses,
+		ListReviewFeedbackChecksErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/{reviewId}/feedback-checks",
 		...options,
@@ -5430,8 +6747,8 @@ export const listReviewFeedbackChecks = <ThrowOnError extends boolean = false>(
  */
 export const listScans = <ThrowOnError extends boolean = false>(
 	options: Options<ListScansData, ThrowOnError>,
-): RequestResult<ListScansResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListScansResponses, unknown, ThrowOnError>({
+): RequestResult<ListScansResponses, ListScansErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListScansResponses, ListScansErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/scans",
 		...options,
@@ -5442,8 +6759,8 @@ export const listScans = <ThrowOnError extends boolean = false>(
  */
 export const startScan = <ThrowOnError extends boolean = false>(
 	options: Options<StartScanData, ThrowOnError>,
-): RequestResult<StartScanResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<StartScanResponses, unknown, ThrowOnError>({
+): RequestResult<StartScanResponses, StartScanErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartScanResponses, StartScanErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/scans",
 		...options,
@@ -5458,8 +6775,8 @@ export const startScan = <ThrowOnError extends boolean = false>(
  */
 export const getScan = <ThrowOnError extends boolean = false>(
 	options: Options<GetScanData, ThrowOnError>,
-): RequestResult<GetScanResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetScanResponses, unknown, ThrowOnError>({
+): RequestResult<GetScanResponses, GetScanErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetScanResponses, GetScanErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}",
 		...options,
@@ -5470,8 +6787,8 @@ export const getScan = <ThrowOnError extends boolean = false>(
  */
 export const getScanReport = <ThrowOnError extends boolean = false>(
 	options: Options<GetScanReportData, ThrowOnError>,
-): RequestResult<GetScanReportResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetScanReportResponses, unknown, ThrowOnError>({
+): RequestResult<GetScanReportResponses, GetScanReportErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetScanReportResponses, GetScanReportErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/report",
 		...options,
@@ -5482,8 +6799,12 @@ export const getScanReport = <ThrowOnError extends boolean = false>(
  */
 export const listScanReportItems = <ThrowOnError extends boolean = false>(
 	options: Options<ListScanReportItemsData, ThrowOnError>,
-): RequestResult<ListScanReportItemsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListScanReportItemsResponses, unknown, ThrowOnError>({
+): RequestResult<ListScanReportItemsResponses, ListScanReportItemsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListScanReportItemsResponses,
+		ListScanReportItemsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/report/items",
 		...options,
@@ -5494,8 +6815,12 @@ export const listScanReportItems = <ThrowOnError extends boolean = false>(
  */
 export const listScanReportProblems = <ThrowOnError extends boolean = false>(
 	options: Options<ListScanReportProblemsData, ThrowOnError>,
-): RequestResult<ListScanReportProblemsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListScanReportProblemsResponses, unknown, ThrowOnError>({
+): RequestResult<ListScanReportProblemsResponses, ListScanReportProblemsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListScanReportProblemsResponses,
+		ListScanReportProblemsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/report/problems",
 		...options,
@@ -5506,8 +6831,8 @@ export const listScanReportProblems = <ThrowOnError extends boolean = false>(
  */
 export const exportScanSarif = <ThrowOnError extends boolean = false>(
 	options: Options<ExportScanSarifData, ThrowOnError>,
-): RequestResult<ExportScanSarifResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ExportScanSarifResponses, unknown, ThrowOnError>({
+): RequestResult<ExportScanSarifResponses, ExportScanSarifErrors, ThrowOnError> =>
+	(options.client ?? client).get<ExportScanSarifResponses, ExportScanSarifErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/report/sarif",
 		...options,
@@ -5518,16 +6843,18 @@ export const exportScanSarif = <ThrowOnError extends boolean = false>(
  */
 export const updateScanStatus = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateScanStatusData, ThrowOnError>,
-): RequestResult<UpdateScanStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateScanStatusResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/status",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
+): RequestResult<UpdateScanStatusResponses, UpdateScanStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<UpdateScanStatusResponses, UpdateScanStatusErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/status",
+			...options,
+			headers: {
+				"Content-Type": "application/json",
+				...options.headers,
+			},
 		},
-	});
+	);
 
 /**
  * List the current developer's practice standings
@@ -5536,8 +6863,12 @@ export const updateScanStatus = <ThrowOnError extends boolean = false>(
  */
 export const getOwnPracticeStandings = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnPracticeStandingsData, ThrowOnError>,
-): RequestResult<GetOwnPracticeStandingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnPracticeStandingsResponses, unknown, ThrowOnError>({
+): RequestResult<GetOwnPracticeStandingsResponses, GetOwnPracticeStandingsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetOwnPracticeStandingsResponses,
+		GetOwnPracticeStandingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/standings",
 		...options,
@@ -5550,8 +6881,16 @@ export const getOwnPracticeStandings = <ThrowOnError extends boolean = false>(
  */
 export const getPracticeWorkspaceTiles = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeWorkspaceTilesData, ThrowOnError>,
-): RequestResult<GetPracticeWorkspaceTilesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeWorkspaceTilesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetPracticeWorkspaceTilesResponses,
+	GetPracticeWorkspaceTilesErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetPracticeWorkspaceTilesResponses,
+		GetPracticeWorkspaceTilesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/tiles",
 		...options,
@@ -5564,8 +6903,16 @@ export const getPracticeWorkspaceTiles = <ThrowOnError extends boolean = false>(
  */
 export const getPracticeWorkspaceOverview = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeWorkspaceOverviewData, ThrowOnError>,
-): RequestResult<GetPracticeWorkspaceOverviewResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeWorkspaceOverviewResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetPracticeWorkspaceOverviewResponses,
+	GetPracticeWorkspaceOverviewErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetPracticeWorkspaceOverviewResponses,
+		GetPracticeWorkspaceOverviewErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/workspace-overview",
 		...options,
@@ -5573,8 +6920,8 @@ export const getPracticeWorkspaceOverview = <ThrowOnError extends boolean = fals
 
 export const deletePractice = <ThrowOnError extends boolean = false>(
 	options: Options<DeletePracticeData, ThrowOnError>,
-): RequestResult<DeletePracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<DeletePracticeResponses, unknown, ThrowOnError>({
+): RequestResult<DeletePracticeResponses, DeletePracticeErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeletePracticeResponses, DeletePracticeErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}",
 		...options,
@@ -5582,8 +6929,8 @@ export const deletePractice = <ThrowOnError extends boolean = false>(
 
 export const getPractice = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeData, ThrowOnError>,
-): RequestResult<GetPracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeResponses, unknown, ThrowOnError>({
+): RequestResult<GetPracticeResponses, GetPracticeErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetPracticeResponses, GetPracticeErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}",
 		...options,
@@ -5591,8 +6938,8 @@ export const getPractice = <ThrowOnError extends boolean = false>(
 
 export const updatePractice = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePracticeData, ThrowOnError>,
-): RequestResult<UpdatePracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdatePracticeResponses, unknown, ThrowOnError>({
+): RequestResult<UpdatePracticeResponses, UpdatePracticeErrors, ThrowOnError> =>
+	(options.client ?? client).patch<UpdatePracticeResponses, UpdatePracticeErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}",
 		...options,
@@ -5604,8 +6951,12 @@ export const updatePractice = <ThrowOnError extends boolean = false>(
 
 export const resetPracticeToCatalog = <ThrowOnError extends boolean = false>(
 	options: Options<ResetPracticeToCatalogData, ThrowOnError>,
-): RequestResult<ResetPracticeToCatalogResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<ResetPracticeToCatalogResponses, unknown, ThrowOnError>({
+): RequestResult<ResetPracticeToCatalogResponses, ResetPracticeToCatalogErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		ResetPracticeToCatalogResponses,
+		ResetPracticeToCatalogErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/catalog-customization",
 		...options,
@@ -5613,8 +6964,12 @@ export const resetPracticeToCatalog = <ThrowOnError extends boolean = false>(
 
 export const setPracticeFeedbackMode = <ThrowOnError extends boolean = false>(
 	options: Options<SetPracticeFeedbackModeData, ThrowOnError>,
-): RequestResult<SetPracticeFeedbackModeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<SetPracticeFeedbackModeResponses, unknown, ThrowOnError>({
+): RequestResult<SetPracticeFeedbackModeResponses, SetPracticeFeedbackModeErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		SetPracticeFeedbackModeResponses,
+		SetPracticeFeedbackModeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/feedback-mode",
 		...options,
@@ -5631,8 +6986,12 @@ export const setPracticeFeedbackMode = <ThrowOnError extends boolean = false>(
  */
 export const checkPracticeFiles = <ThrowOnError extends boolean = false>(
 	options: Options<CheckPracticeFilesData, ThrowOnError>,
-): RequestResult<CheckPracticeFilesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CheckPracticeFilesResponses, unknown, ThrowOnError>({
+): RequestResult<CheckPracticeFilesResponses, CheckPracticeFilesErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CheckPracticeFilesResponses,
+		CheckPracticeFilesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/file-check",
 		...options,
@@ -5647,8 +7006,12 @@ export const checkPracticeFiles = <ThrowOnError extends boolean = false>(
  */
 export const downloadPracticeFiles = <ThrowOnError extends boolean = false>(
 	options: Options<DownloadPracticeFilesData, ThrowOnError>,
-): RequestResult<DownloadPracticeFilesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<DownloadPracticeFilesResponses, unknown, ThrowOnError>({
+): RequestResult<DownloadPracticeFilesResponses, DownloadPracticeFilesErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		DownloadPracticeFilesResponses,
+		DownloadPracticeFilesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/files",
 		...options,
@@ -5656,8 +7019,8 @@ export const downloadPracticeFiles = <ThrowOnError extends boolean = false>(
 
 export const movePractice = <ThrowOnError extends boolean = false>(
 	options: Options<MovePracticeData, ThrowOnError>,
-): RequestResult<MovePracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<MovePracticeResponses, unknown, ThrowOnError>({
+): RequestResult<MovePracticeResponses, MovePracticeErrors, ThrowOnError> =>
+	(options.client ?? client).patch<MovePracticeResponses, MovePracticeErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/group",
 		...options,
@@ -5669,21 +7032,27 @@ export const movePractice = <ThrowOnError extends boolean = false>(
 
 export const bindPracticeGroup = <ThrowOnError extends boolean = false>(
 	options: Options<BindPracticeGroupData, ThrowOnError>,
-): RequestResult<BindPracticeGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<BindPracticeGroupResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/group",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
+): RequestResult<BindPracticeGroupResponses, BindPracticeGroupErrors, ThrowOnError> =>
+	(options.client ?? client).put<BindPracticeGroupResponses, BindPracticeGroupErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/group",
+			...options,
+			headers: {
+				"Content-Type": "application/json",
+				...options.headers,
+			},
 		},
-	});
+	);
 
 export const getPracticeGuidance = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeGuidanceData, ThrowOnError>,
-): RequestResult<GetPracticeGuidanceResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeGuidanceResponses, unknown, ThrowOnError>({
+): RequestResult<GetPracticeGuidanceResponses, GetPracticeGuidanceErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetPracticeGuidanceResponses,
+		GetPracticeGuidanceErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/guidance",
 		...options,
@@ -5691,8 +7060,12 @@ export const getPracticeGuidance = <ThrowOnError extends boolean = false>(
 
 export const listPracticeVersions = <ThrowOnError extends boolean = false>(
 	options: Options<ListPracticeVersionsData, ThrowOnError>,
-): RequestResult<ListPracticeVersionsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListPracticeVersionsResponses, unknown, ThrowOnError>({
+): RequestResult<ListPracticeVersionsResponses, ListPracticeVersionsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListPracticeVersionsResponses,
+		ListPracticeVersionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/versions",
 		...options,
@@ -5703,8 +7076,16 @@ export const listPracticeVersions = <ThrowOnError extends boolean = false>(
  */
 export const submitWorkspaceProductFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<SubmitWorkspaceProductFeedbackData, ThrowOnError>,
-): RequestResult<SubmitWorkspaceProductFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<SubmitWorkspaceProductFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<
+	SubmitWorkspaceProductFeedbackResponses,
+	SubmitWorkspaceProductFeedbackErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		SubmitWorkspaceProductFeedbackResponses,
+		SubmitWorkspaceProductFeedbackErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/product-feedback",
 		...options,
@@ -5719,10 +7100,14 @@ export const submitWorkspaceProductFeedback = <ThrowOnError extends boolean = fa
  */
 export const getWorkspacePublicActivitySettings = <ThrowOnError extends boolean = false>(
 	options: Options<GetWorkspacePublicActivitySettingsData, ThrowOnError>,
-): RequestResult<GetWorkspacePublicActivitySettingsResponses, unknown, ThrowOnError> =>
+): RequestResult<
+	GetWorkspacePublicActivitySettingsResponses,
+	GetWorkspacePublicActivitySettingsErrors,
+	ThrowOnError
+> =>
 	(options.client ?? client).get<
 		GetWorkspacePublicActivitySettingsResponses,
-		unknown,
+		GetWorkspacePublicActivitySettingsErrors,
 		ThrowOnError
 	>({
 		security: [{ scheme: "bearer", type: "http" }],
@@ -5737,8 +7122,12 @@ export const getWorkspacePublicActivitySettings = <ThrowOnError extends boolean 
  */
 export const updatePublicActivity = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePublicActivityData, ThrowOnError>,
-): RequestResult<UpdatePublicActivityResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdatePublicActivityResponses, unknown, ThrowOnError>({
+): RequestResult<UpdatePublicActivityResponses, UpdatePublicActivityErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdatePublicActivityResponses,
+		UpdatePublicActivityErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/public-activity",
 		...options,
@@ -5753,8 +7142,16 @@ export const updatePublicActivity = <ThrowOnError extends boolean = false>(
  */
 export const removeRepositoryToMonitor = <ThrowOnError extends boolean = false>(
 	options: Options<RemoveRepositoryToMonitorData, ThrowOnError>,
-): RequestResult<RemoveRepositoryToMonitorResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RemoveRepositoryToMonitorResponses, unknown, ThrowOnError>({
+): RequestResult<
+	RemoveRepositoryToMonitorResponses,
+	RemoveRepositoryToMonitorErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).delete<
+		RemoveRepositoryToMonitorResponses,
+		RemoveRepositoryToMonitorErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/repositories",
 		...options,
@@ -5765,8 +7162,12 @@ export const removeRepositoryToMonitor = <ThrowOnError extends boolean = false>(
  */
 export const getRepositoriesToMonitor = <ThrowOnError extends boolean = false>(
 	options: Options<GetRepositoriesToMonitorData, ThrowOnError>,
-): RequestResult<GetRepositoriesToMonitorResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetRepositoriesToMonitorResponses, unknown, ThrowOnError>({
+): RequestResult<GetRepositoriesToMonitorResponses, GetRepositoriesToMonitorErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetRepositoriesToMonitorResponses,
+		GetRepositoriesToMonitorErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/repositories",
 		...options,
@@ -5777,8 +7178,12 @@ export const getRepositoriesToMonitor = <ThrowOnError extends boolean = false>(
  */
 export const addRepositoryToMonitor = <ThrowOnError extends boolean = false>(
 	options: Options<AddRepositoryToMonitorData, ThrowOnError>,
-): RequestResult<AddRepositoryToMonitorResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AddRepositoryToMonitorResponses, unknown, ThrowOnError>({
+): RequestResult<AddRepositoryToMonitorResponses, AddRepositoryToMonitorErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		AddRepositoryToMonitorResponses,
+		AddRepositoryToMonitorErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/repositories",
 		...options,
@@ -5789,8 +7194,16 @@ export const addRepositoryToMonitor = <ThrowOnError extends boolean = false>(
  */
 export const getGitLabRepositorySelection = <ThrowOnError extends boolean = false>(
 	options: Options<GetGitLabRepositorySelectionData, ThrowOnError>,
-): RequestResult<GetGitLabRepositorySelectionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetGitLabRepositorySelectionResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetGitLabRepositorySelectionResponses,
+	GetGitLabRepositorySelectionErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetGitLabRepositorySelectionResponses,
+		GetGitLabRepositorySelectionErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/repositories/selection",
 		...options,
@@ -5801,26 +7214,36 @@ export const getGitLabRepositorySelection = <ThrowOnError extends boolean = fals
  */
 export const updateGitLabRepositorySelection = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateGitLabRepositorySelectionData, ThrowOnError>,
-): RequestResult<UpdateGitLabRepositorySelectionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateGitLabRepositorySelectionResponses, unknown, ThrowOnError>(
-		{
-			security: [{ scheme: "bearer", type: "http" }],
-			url: "/workspaces/{workspaceSlug}/repositories/selection",
-			...options,
-			headers: {
-				"Content-Type": "application/json",
-				...options.headers,
-			},
+): RequestResult<
+	UpdateGitLabRepositorySelectionResponses,
+	UpdateGitLabRepositorySelectionErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		UpdateGitLabRepositorySelectionResponses,
+		UpdateGitLabRepositorySelectionErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/repositories/selection",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
 		},
-	);
+	});
 
 /**
  * List stopped GitLab projects whose synced work the workspace still keeps
  */
 export const getStoppedGitLabProjects = <ThrowOnError extends boolean = false>(
 	options: Options<GetStoppedGitLabProjectsData, ThrowOnError>,
-): RequestResult<GetStoppedGitLabProjectsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetStoppedGitLabProjectsResponses, unknown, ThrowOnError>({
+): RequestResult<GetStoppedGitLabProjectsResponses, GetStoppedGitLabProjectsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetStoppedGitLabProjectsResponses,
+		GetStoppedGitLabProjectsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/repositories/stopped",
 		...options,
@@ -5831,8 +7254,16 @@ export const getStoppedGitLabProjects = <ThrowOnError extends boolean = false>(
  */
 export const removeStoppedGitLabProject = <ThrowOnError extends boolean = false>(
 	options: Options<RemoveStoppedGitLabProjectData, ThrowOnError>,
-): RequestResult<RemoveStoppedGitLabProjectResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RemoveStoppedGitLabProjectResponses, unknown, ThrowOnError>({
+): RequestResult<
+	RemoveStoppedGitLabProjectResponses,
+	RemoveStoppedGitLabProjectErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).delete<
+		RemoveStoppedGitLabProjectResponses,
+		RemoveStoppedGitLabProjectErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/repositories/stopped/{repositoryItemId}",
 		...options,
@@ -5843,20 +7274,26 @@ export const removeStoppedGitLabProject = <ThrowOnError extends boolean = false>
  */
 export const listSlackChannels = <ThrowOnError extends boolean = false>(
 	options: Options<ListSlackChannelsData, ThrowOnError>,
-): RequestResult<ListSlackChannelsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListSlackChannelsResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/slack/channels",
-		...options,
-	});
+): RequestResult<ListSlackChannelsResponses, ListSlackChannelsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListSlackChannelsResponses, ListSlackChannelsErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/slack/channels",
+			...options,
+		},
+	);
 
 /**
  * Allow-list a Slack channel (lands in PENDING; idempotent on the natural key)
  */
 export const registerSlackChannel = <ThrowOnError extends boolean = false>(
 	options: Options<RegisterSlackChannelData, ThrowOnError>,
-): RequestResult<RegisterSlackChannelResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RegisterSlackChannelResponses, unknown, ThrowOnError>({
+): RequestResult<RegisterSlackChannelResponses, RegisterSlackChannelErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		RegisterSlackChannelResponses,
+		RegisterSlackChannelErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/slack/channels",
 		...options,
@@ -5871,8 +7308,16 @@ export const registerSlackChannel = <ThrowOnError extends boolean = false>(
  */
 export const listSlackChannelCandidates = <ThrowOnError extends boolean = false>(
 	options: Options<ListSlackChannelCandidatesData, ThrowOnError>,
-): RequestResult<ListSlackChannelCandidatesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListSlackChannelCandidatesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListSlackChannelCandidatesResponses,
+	ListSlackChannelCandidatesErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		ListSlackChannelCandidatesResponses,
+		ListSlackChannelCandidatesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/slack/channels/candidates",
 		...options,
@@ -5883,8 +7328,16 @@ export const listSlackChannelCandidates = <ThrowOnError extends boolean = false>
  */
 export const updateSlackChannelConsent = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateSlackChannelConsentData, ThrowOnError>,
-): RequestResult<UpdateSlackChannelConsentResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateSlackChannelConsentResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdateSlackChannelConsentResponses,
+	UpdateSlackChannelConsentErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		UpdateSlackChannelConsentResponses,
+		UpdateSlackChannelConsentErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/slack/channels/{slackChannelId}",
 		...options,
@@ -5899,8 +7352,16 @@ export const updateSlackChannelConsent = <ThrowOnError extends boolean = false>(
  */
 export const listSlackChannelConsentEvents = <ThrowOnError extends boolean = false>(
 	options: Options<ListSlackChannelConsentEventsData, ThrowOnError>,
-): RequestResult<ListSlackChannelConsentEventsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListSlackChannelConsentEventsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListSlackChannelConsentEventsResponses,
+	ListSlackChannelConsentEventsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		ListSlackChannelConsentEventsResponses,
+		ListSlackChannelConsentEventsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/slack/channels/{slackChannelId}/consent-events",
 		...options,
@@ -5911,8 +7372,16 @@ export const listSlackChannelConsentEvents = <ThrowOnError extends boolean = fal
  */
 export const updateSlackUserPreferences = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateSlackUserPreferencesData, ThrowOnError>,
-): RequestResult<UpdateSlackUserPreferencesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateSlackUserPreferencesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdateSlackUserPreferencesResponses,
+	UpdateSlackUserPreferencesErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		UpdateSlackUserPreferencesResponses,
+		UpdateSlackUserPreferencesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/slack/me/preferences",
 		...options,
@@ -5927,8 +7396,8 @@ export const updateSlackUserPreferences = <ThrowOnError extends boolean = false>
  */
 export const getSlackScopes = <ThrowOnError extends boolean = false>(
 	options: Options<GetSlackScopesData, ThrowOnError>,
-): RequestResult<GetSlackScopesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetSlackScopesResponses, unknown, ThrowOnError>({
+): RequestResult<GetSlackScopesResponses, GetSlackScopesErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetSlackScopesResponses, GetSlackScopesErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/slack/scopes",
 		...options,
@@ -5939,8 +7408,8 @@ export const getSlackScopes = <ThrowOnError extends boolean = false>(
  */
 export const updateStatus = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateStatusData, ThrowOnError>,
-): RequestResult<UpdateStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateStatusResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateStatusResponses, UpdateStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<UpdateStatusResponses, UpdateStatusErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/status",
 		...options,
@@ -5955,8 +7424,12 @@ export const updateStatus = <ThrowOnError extends boolean = false>(
  */
 export const getWorkspaceSyncProgress = <ThrowOnError extends boolean = false>(
 	options: Options<GetWorkspaceSyncProgressData, ThrowOnError>,
-): RequestResult<GetWorkspaceSyncProgressResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetWorkspaceSyncProgressResponses, unknown, ThrowOnError>({
+): RequestResult<GetWorkspaceSyncProgressResponses, GetWorkspaceSyncProgressErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetWorkspaceSyncProgressResponses,
+		GetWorkspaceSyncProgressErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/sync/progress",
 		...options,
@@ -5969,8 +7442,8 @@ export const getWorkspaceSyncProgress = <ThrowOnError extends boolean = false>(
  */
 export const getAllTeams = <ThrowOnError extends boolean = false>(
 	options: Options<GetAllTeamsData, ThrowOnError>,
-): RequestResult<GetAllTeamsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetAllTeamsResponses, unknown, ThrowOnError>({
+): RequestResult<GetAllTeamsResponses, GetAllTeamsErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetAllTeamsResponses, GetAllTeamsErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/teams",
 		...options,
@@ -5983,8 +7456,12 @@ export const getAllTeams = <ThrowOnError extends boolean = false>(
  */
 export const updateTeamVisibility = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateTeamVisibilityData, ThrowOnError>,
-): RequestResult<UpdateTeamVisibilityResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateTeamVisibilityResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateTeamVisibilityResponses, UpdateTeamVisibilityErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdateTeamVisibilityResponses,
+		UpdateTeamVisibilityErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/teams/{id}/visibility",
 		...options,
@@ -5999,8 +7476,12 @@ export const updateTeamVisibility = <ThrowOnError extends boolean = false>(
  */
 export const removeLabelFromTeam = <ThrowOnError extends boolean = false>(
 	options: Options<RemoveLabelFromTeamData, ThrowOnError>,
-): RequestResult<RemoveLabelFromTeamResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RemoveLabelFromTeamResponses, unknown, ThrowOnError>({
+): RequestResult<RemoveLabelFromTeamResponses, RemoveLabelFromTeamErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		RemoveLabelFromTeamResponses,
+		RemoveLabelFromTeamErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}",
 		...options,
@@ -6011,8 +7492,8 @@ export const removeLabelFromTeam = <ThrowOnError extends boolean = false>(
  */
 export const addLabelToTeam = <ThrowOnError extends boolean = false>(
 	options: Options<AddLabelToTeamData, ThrowOnError>,
-): RequestResult<AddLabelToTeamResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AddLabelToTeamResponses, unknown, ThrowOnError>({
+): RequestResult<AddLabelToTeamResponses, AddLabelToTeamErrors, ThrowOnError> =>
+	(options.client ?? client).put<AddLabelToTeamResponses, AddLabelToTeamErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}",
 		...options,
@@ -6020,8 +7501,16 @@ export const addLabelToTeam = <ThrowOnError extends boolean = false>(
 
 export const updateRepositoryVisibility = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateRepositoryVisibilityData, ThrowOnError>,
-): RequestResult<UpdateRepositoryVisibilityResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateRepositoryVisibilityResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdateRepositoryVisibilityResponses,
+	UpdateRepositoryVisibilityErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		UpdateRepositoryVisibilityResponses,
+		UpdateRepositoryVisibilityErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/teams/{teamId}/repositories/{repositoryId}/visibility",
 		...options,
@@ -6036,8 +7525,8 @@ export const updateRepositoryVisibility = <ThrowOnError extends boolean = false>
  */
 export const updateToken = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateTokenData, ThrowOnError>,
-): RequestResult<UpdateTokenResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateTokenResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateTokenResponses, UpdateTokenErrors, ThrowOnError> =>
+	(options.client ?? client).patch<UpdateTokenResponses, UpdateTokenErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/token",
 		...options,
@@ -6052,20 +7541,22 @@ export const updateToken = <ThrowOnError extends boolean = false>(
  */
 export const listUserViewUsers = <ThrowOnError extends boolean = false>(
 	options: Options<ListUserViewUsersData, ThrowOnError>,
-): RequestResult<ListUserViewUsersResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListUserViewUsersResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/user-view/users",
-		...options,
-	});
+): RequestResult<ListUserViewUsersResponses, ListUserViewUsersErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListUserViewUsersResponses, ListUserViewUsersErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/user-view/users",
+			...options,
+		},
+	);
 
 /**
  * Confirm access to a workspace user
  */
 export const getUserViewUser = <ThrowOnError extends boolean = false>(
 	options: Options<GetUserViewUserData, ThrowOnError>,
-): RequestResult<GetUserViewUserResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetUserViewUserResponses, unknown, ThrowOnError>({
+): RequestResult<GetUserViewUserResponses, GetUserViewUserErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetUserViewUserResponses, GetUserViewUserErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/user-view/users/{accountId}",
 		...options,
@@ -6076,9 +7567,11 @@ export const getUserViewUser = <ThrowOnError extends boolean = false>(
  */
 export const getUsersWithTeams = <ThrowOnError extends boolean = false>(
 	options: Options<GetUsersWithTeamsData, ThrowOnError>,
-): RequestResult<GetUsersWithTeamsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetUsersWithTeamsResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/users",
-		...options,
-	});
+): RequestResult<GetUsersWithTeamsResponses, GetUsersWithTeamsErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetUsersWithTeamsResponses, GetUsersWithTeamsErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/users",
+			...options,
+		},
+	);

@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ListPracticeDraftsData, ListPracticeDraftsResponses } from "../types.gen.js";
+import type {
+	ListPracticeDraftsData,
+	ListPracticeDraftsErrors,
+	ListPracticeDraftsResponses,
+} from "../types.gen.js";
 
 /**
  * List the draft practices
  */
 export const listPracticeDrafts = <ThrowOnError extends boolean = false>(
 	options: Options<ListPracticeDraftsData, ThrowOnError>,
-): RequestResult<ListPracticeDraftsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListPracticeDraftsResponses, unknown, ThrowOnError>({
+): RequestResult<ListPracticeDraftsResponses, ListPracticeDraftsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListPracticeDraftsResponses,
+		ListPracticeDraftsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-drafts",
 		...options,

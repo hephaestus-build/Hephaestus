@@ -3,7 +3,11 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { SavePracticeDraftData, SavePracticeDraftResponses } from "../types.gen.js";
+import type {
+	SavePracticeDraftData,
+	SavePracticeDraftErrors,
+	SavePracticeDraftResponses,
+} from "../types.gen.js";
 
 /**
  * Save a practice folder to try
@@ -12,13 +16,15 @@ import type { SavePracticeDraftData, SavePracticeDraftResponses } from "../types
  */
 export const savePracticeDraft = <ThrowOnError extends boolean = false>(
 	options: Options<SavePracticeDraftData, ThrowOnError>,
-): RequestResult<SavePracticeDraftResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<SavePracticeDraftResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
+): RequestResult<SavePracticeDraftResponses, SavePracticeDraftErrors, ThrowOnError> =>
+	(options.client ?? client).put<SavePracticeDraftResponses, SavePracticeDraftErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}",
+			...options,
+			headers: {
+				"Content-Type": "application/json",
+				...options.headers,
+			},
 		},
-	});
+	);
