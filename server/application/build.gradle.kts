@@ -284,11 +284,25 @@ val testTiers =
         "liveTest" to "live",
     )
 
-// The integration shards: `review` holds one review from its request to its admitted results,
-// which the fast tier runs on every pull request. The numbered shards split every other class by
-// the seconds it took, as integration-test-durations.json records them
+// The integration shards: `review` runs on every pull request that selects the server suites.
+// It holds one review from its request to its admitted results, and the contract tests. Each
+// contract test checks the code against a file that ships beside it, such as the migrated schema
+// or the alert rules, or bounds the statements of one request. A numbered shard would first run
+// them in the merge queue. A test opts in by its name. The numbered shards split every other class
+// by the seconds it took, as integration-test-durations.json records them
 // (docs/contributor/ci-cd.mdx § Integration shards).
-val reviewTestClass = "de.tum.cit.aet.hephaestus.practices.review.ReviewEndToEndIntegrationTest"
+val reviewShardTests =
+    listOf(
+        "de.tum.cit.aet.hephaestus.practices.review.ReviewEndToEndIntegrationTest",
+        "de.tum.cit.aet.hephaestus.Schema*IntegrationTest",
+        "de.tum.cit.aet.hephaestus.observability.ScrapeContractIntegrationTest",
+        "*CostIntegrationTest",
+    )
+
+// Gradle's test filter reads `*` as any characters, matched against the whole class name.
+fun inReviewShard(className: String) = reviewShardTests.any { pattern ->
+    Regex(pattern.split("*").joinToString(".*") { Regex.escape(it) }).matches(className)
+}
 
 /** Each class's numbered shard, from a longest-first greedy fit; a class without seconds hashes. */
 class IntegrationShards(val count: Int, private val assignment: Map<String, Int>) :
@@ -297,7 +311,7 @@ class IntegrationShards(val count: Int, private val assignment: Map<String, Int>
         assignment[className] ?: (Math.floorMod(className.hashCode(), count) + 1)
 }
 
-fun integrationShards(durations: String, reviewClass: String): IntegrationShards {
+fun integrationShards(durations: String): IntegrationShards {
     val document = groovy.json.JsonSlurper().parseText(durations) as Map<*, *>
     val count = (document["shards"] as Number).toInt()
     require(count > 0) { "The integration test durations need at least one shard" }
@@ -305,7 +319,7 @@ fun integrationShards(durations: String, reviewClass: String): IntegrationShards
     val assignment =
         (document["seconds"] as Map<*, *>)
             .map { (name, seconds) -> name as String to (seconds as Number).toDouble() }
-            .filter { (name, _) -> name != reviewClass }
+            .filterNot { (name, _) -> inReviewShard(name) }
             .sortedWith(compareByDescending<Pair<String, Double>> { it.second }.thenBy { it.first })
             .associate { (name, seconds) ->
                 val shard = load.indices.minBy { load[it] }
@@ -333,8 +347,7 @@ val integrationPartition =
         providers
             .fileContents(layout.projectDirectory.file("integration-test-durations.json"))
             .asText
-            .get(),
-        reviewTestClass,
+            .get()
     )
 val integrationInventories =
     mapOf("integrationReviewInventory" to "review") +
@@ -422,12 +435,12 @@ tasks.test {
 fun Test.selectIntegrationShard(shard: String, shards: IntegrationShards) {
     when (shard) {
         "" -> Unit
-        "review" -> filter { includeTestsMatching(reviewTestClass) }
+        "review" -> filter { reviewShardTests.forEach(::includeTestsMatching) }
         else -> {
             val index =
                 shard.toIntOrNull()?.takeIf { it in 1..shards.count }
                     ?: error("Unknown integration shard: $shard (review or 1 to ${shards.count})")
-            filter { excludeTestsMatching(reviewTestClass) }
+            filter { reviewShardTests.forEach(::excludeTestsMatching) }
             include(IntegrationShardSpec(index, shards))
         }
     }
