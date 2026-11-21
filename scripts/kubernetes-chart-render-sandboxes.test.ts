@@ -743,7 +743,7 @@ await test("a backup Pod never preempts, and every role and Job of the release o
 			.map((resource) => podSpec(resource)),
 	];
 	for (const spec of others) {
-		// A Pod of a higher tier preempts a running backup before it preempts a sandbox.
+		// A Pod of a higher tier preempts a running backup before it preempts a conversation sandbox.
 		assert.ok(
 			Number(get(classOf(spec), "value")) > backupValue,
 			String(get(spec, "priorityClassName")),

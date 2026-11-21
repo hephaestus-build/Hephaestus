@@ -159,7 +159,7 @@ postgresql:
     schedule:
       full: "15 2 * * 0"
       differential: "15 2 * * 1-6"
-    # pgBackRest's TLS server beside PostgreSQL, and the backup Jobs (docs/admin/sizing.mdx § Node reserve).
+    # pgBackRest's TLS server beside PostgreSQL, and the scheduled backup Jobs (docs/admin/sizing.mdx § Node reserve).
     resources:
       requests: { cpu: 100m, memory: 256Mi, ephemeral-storage: 64Mi }
       limits: { cpu: "1", memory: 256Mi, ephemeral-storage: 1Gi }
