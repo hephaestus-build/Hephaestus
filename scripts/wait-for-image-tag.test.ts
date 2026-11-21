@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -110,3 +114,91 @@ void test("the digest before the promotion is the tag's digest, or none, read th
 	);
 	assert.ok(error instanceof Error && error.message === `Cannot read ${reference}: denied`);
 });
+
+/**
+ * Runs the script as the workflow does, with a `docker` that fails `failures` times with `message` and then answers
+ * `answer` (the JSON of a manifest).
+ */
+async function cli(
+	args: readonly string[],
+	registryAnswer: { failures: number; message: string; answer: string },
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
+	const directory = await mkdtemp(path.join(tmpdir(), "wait-for-image-tag-"));
+	try {
+		await writeFile(
+			path.join(directory, "docker"),
+			[
+				"#!/bin/sh",
+				'n=$(cat "$READS" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$READS"',
+				'if [ "$n" -le "$FAILURES" ]; then echo "$MESSAGE" >&2; exit 1; fi',
+				String.raw`printf '%s\n' "$ANSWER"`,
+				"",
+			].join("\n"),
+		);
+		await chmod(path.join(directory, "docker"), 0o755);
+		const result = spawnSync(process.execPath, ["scripts/wait-for-image-tag.ts", ...args], {
+			encoding: "utf8",
+			env: {
+				...process.env,
+				PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+				READS: path.join(directory, "reads"),
+				FAILURES: String(registryAnswer.failures),
+				MESSAGE: registryAnswer.message,
+				ANSWER: registryAnswer.answer,
+			},
+		});
+		return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+}
+
+void test(
+	"`current` prints only the digest on standard output, also after a transient error, and logs to standard error",
+	{ skip: process.platform === "win32" },
+	async () => {
+		const result = await cli(["current", reference], {
+			failures: 1,
+			message: "ERROR: 503 Service Unavailable",
+			answer: JSON.stringify({ digest: previous }),
+		});
+		assert.equal(result.status, 0, result.stderr);
+		assert.equal(result.stdout, `${previous}\n`);
+		assert.match(
+			result.stderr,
+			/503 Service Unavailable, 0 s after the first read; reading it again in 1 s/u,
+		);
+	},
+);
+
+void test(
+	"a failing mode prints nothing on standard output and its annotation on standard error",
+	{ skip: process.platform === "win32" },
+	async () => {
+		const denied = await cli(["current", reference], {
+			failures: 1,
+			message: "ERROR: unauthorized: authentication required",
+			answer: "",
+		});
+		assert.equal(denied.status, 1);
+		assert.equal(denied.stdout, "");
+		assert.match(denied.stderr, /^::error title=Image alias::Cannot read /mu);
+
+		const moved = await cli(["wait", reference, promoted, previous], {
+			failures: 0,
+			message: "",
+			answer: JSON.stringify({ digest: foreign }),
+		});
+		assert.equal(moved.status, 1);
+		assert.equal(moved.stdout, "");
+		assert.match(moved.stderr, /^::error title=Image alias changed by another writer::/mu);
+
+		const settled = await cli(["wait", reference, promoted, "none"], {
+			failures: 0,
+			message: "",
+			answer: JSON.stringify({ digest: promoted }),
+		});
+		assert.equal(settled.status, 0, settled.stderr);
+		assert.equal(settled.stdout, "");
+	},
+);

@@ -9,6 +9,8 @@
  * digest means that another writer moved the tag, and the check fails at once. A rate limit or a server error is read
  * again within the same 60 s; any other registry error fails at once. The tag's answer is never a source, only compared.
  * The manifest job of `reusable-docker-build.yml` waits in shell, because that job runs no repository code.
+ * Standard output carries only the result of `current`, which the workflow captures; every log line and annotation
+ * goes to standard error, where the runner reads workflow commands too.
  */
 import { spawnSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -143,7 +145,7 @@ if (import.meta.main) {
 	const registry: Registry = {
 		read: readTag,
 		pause: async (seconds) => sleep(seconds * 1000),
-		log: (line) => console.log(line),
+		log: (line) => console.error(line),
 	};
 	try {
 		if (mode === "current" && reference !== undefined) {
@@ -157,7 +159,7 @@ if (import.meta.main) {
 			(previous === "none" || DIGEST.test(previous))
 		) {
 			await waitForTag(reference, promoted, previous === "none" ? null : previous, registry);
-			console.log(`${reference} resolves to ${promoted}`);
+			console.error(`${reference} resolves to ${promoted}`);
 		} else {
 			throw new Error(
 				"Usage: wait-for-image-tag.ts current <repository:tag> | wait <repository:tag> <sha256:promoted> <sha256:previous|none>",
@@ -166,7 +168,7 @@ if (import.meta.main) {
 	} catch (error) {
 		const title =
 			error instanceof AliasChangedError ? "Image alias changed by another writer" : "Image alias";
-		console.log(
+		console.error(
 			`::error title=${title}::${error instanceof Error ? error.message : String(error)}`,
 		);
 		process.exit(1);
