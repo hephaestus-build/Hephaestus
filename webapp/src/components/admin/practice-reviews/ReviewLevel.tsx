@@ -647,6 +647,7 @@ function ReviewPracticeList({
 											workspaceSlug={workspaceSlug}
 											practiceSlug={practice.practiceSlug}
 											practiceName={practice.practiceName}
+											editedIn={practice.editedIn}
 											reviewId={review.id}
 											run={practice.script}
 											details={false}

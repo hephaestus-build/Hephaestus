@@ -6100,6 +6100,10 @@ export type ReviewOverview = {
 };
 
 export type ReviewPractice = {
+	/**
+	 * Where the practice is edited now, which decides whether Practice setup can edit it
+	 */
+	editedIn: PracticeEditedIn;
 	itemCounts: ReviewItemCounts;
 	number: null | number;
 	practiceName: string;

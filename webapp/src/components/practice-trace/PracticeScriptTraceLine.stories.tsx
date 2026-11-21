@@ -20,6 +20,7 @@ const meta = {
 		workspaceSlug: "demo",
 		practiceSlug: "thin-controllers",
 		practiceName: "Thin controllers",
+		editedIn: "HEPHAESTUS",
 		reviewId: REVIEW,
 		run: practiceScriptRuns.returned,
 	},
@@ -59,6 +60,28 @@ export const OnTheReviewSheet: Story = {
 	args: { run: practiceScriptRuns.failed, details: false },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("link", { name: DETAILS })).not.toBeInTheDocument();
+	},
+};
+
+/** A failed script of a practice edited by hand offers to edit it in Practice setup. */
+export const FailedScript: Story = {
+	args: { run: practiceScriptRuns.failed, details: false },
+	play: async ({ canvas }) => {
+		const link = canvas.getByRole("link", { name: /^Edit the script/u });
+		await expect(link.getAttribute("href")).toContain("practice-edit");
+	},
+};
+
+/**
+ * A practice edited in the practice repository keeps its script in its folder there, so the link opens
+ * its read-only level, which names the repository and offers Edit in Hephaestus.
+ */
+export const FailedScriptEditedInRepository: Story = {
+	args: { run: practiceScriptRuns.failed, details: false, editedIn: "REPOSITORY" },
+	play: async ({ canvas }) => {
+		const link = canvas.getByRole("link", { name: /^Open in Practice setup/u });
+		await expect(link.getAttribute("href")).not.toContain("practice-edit");
+		await expect(canvas.queryByRole("link", { name: /^Edit the script/u })).not.toBeInTheDocument();
 	},
 };
 

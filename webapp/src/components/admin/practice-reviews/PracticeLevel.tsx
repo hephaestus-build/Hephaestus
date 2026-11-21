@@ -3,10 +3,7 @@ import { definitionFor } from "@/components/common/status-def";
 
 import type { Practice, PracticeDefinitionOptions, PracticeVersion } from "@/api/types.gen";
 import { PRACTICE_DEFINITION_FIELDS } from "@/components/admin/practices/practice-definition-fields";
-import {
-	practiceFormLevel,
-	practiceSetupLevel,
-} from "@/components/admin/practices/practice-search";
+import { practiceSetupLevelFor } from "@/components/admin/practices/practice-search";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { WorkspacePracticeDefinition } from "@/components/admin/practices/WorkspacePracticeDefinition";
 import { InlineLink } from "@/components/common/InlineLink";
@@ -94,7 +91,9 @@ export function PracticeLevel({
 							<Link
 								to="/w/$workspaceSlug/admin/practices"
 								params={{ workspaceSlug }}
-								search={{ detail: [detailStackKey(setupLevel(practice))] }}
+								search={{
+									detail: [detailStackKey(practiceSetupLevelFor(practice.slug, practice.editedIn))],
+								}}
 							/>
 						}
 					>
@@ -194,16 +193,6 @@ export function PracticeLevel({
 			</DrawerBody>
 		</>
 	);
-}
-
-/**
- * Where the link to Practice setup lands. A practice edited in the practice repository has no editor
- * there: its read-only level says so and offers Edit in Hephaestus.
- */
-function setupLevel(practice: Practice) {
-	return practice.editedIn === "REPOSITORY"
-		? practiceSetupLevel(practice.slug)
-		: practiceFormLevel(practice.slug);
 }
 
 function practiceHistory(practice: Practice): SheetEvent[] {
