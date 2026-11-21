@@ -1,0 +1,10 @@
+{
+	"accepted": [
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/practices/index.tsx?tsr-split=component",
+			"gzipBytes": 226884,
+			"acceptedBy": "branch practice-repository-ui",
+			"reason": "Practice setup shows a practice edited in the practice repository as read-only, names its repository and commit, and offers Edit in Hephaestus"
+		}
+	]
+}

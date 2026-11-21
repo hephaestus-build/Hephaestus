@@ -26,6 +26,11 @@ export interface WorkspaceCatalogUpdatesPageProps {
 	state: PanelState<{ proposals: PracticeReleaseProposal[] }>;
 	/** The decision being saved, which holds the other one back. */
 	pending: "accept" | "decline" | null;
+	/**
+	 * The practices edited in the practice repository. Their folder there holds the definition, so an
+	 * update to one cannot be accepted here, only declined.
+	 */
+	editedInRepositorySlugs: ReadonlySet<string>;
 	onAccept: (
 		proposal: PracticeReleaseProposal,
 		choices: AcceptPracticeReleaseRequest["choices"],
@@ -37,6 +42,7 @@ export function WorkspaceCatalogUpdatesPage({
 	workspaceSlug,
 	state,
 	pending,
+	editedInRepositorySlugs,
 	onAccept,
 	onDecline,
 }: WorkspaceCatalogUpdatesPageProps) {
@@ -73,6 +79,7 @@ export function WorkspaceCatalogUpdatesPage({
 				<CatalogUpdateList
 					proposals={state.proposals}
 					pending={pending}
+					editedInRepositorySlugs={editedInRepositorySlugs}
 					onAccept={onAccept}
 					onDecline={onDecline}
 				/>
@@ -84,15 +91,18 @@ export function WorkspaceCatalogUpdatesPage({
 function CatalogUpdateList({
 	proposals,
 	pending,
+	editedInRepositorySlugs,
 	onAccept,
 	onDecline,
 }: { proposals: PracticeReleaseProposal[] } & Pick<
 	WorkspaceCatalogUpdatesPageProps,
-	"pending" | "onAccept" | "onDecline"
+	"pending" | "editedInRepositorySlugs" | "onAccept" | "onDecline"
 >) {
 	const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
 	const selected =
 		proposals.find((proposal) => proposal.practiceSlug === selectedSlug) ?? proposals[0];
+	const editedInRepository =
+		selected !== undefined && editedInRepositorySlugs.has(selected.practiceSlug);
 	if (selected === undefined) {
 		return (
 			<Empty variant="outlined">
@@ -132,7 +142,16 @@ function CatalogUpdateList({
 				key={selected.etag}
 				proposal={selected}
 				pending={pending}
-				declineNote="Declining keeps your practice as it is until the catalog changes again. Reset to catalog stays available on the practice."
+				declineNote={
+					editedInRepository
+						? "Declining keeps your practice as it is until the catalog changes again."
+						: "Declining keeps your practice as it is until the catalog changes again. Reset to catalog stays available on the practice."
+				}
+				acceptUnavailable={
+					editedInRepository
+						? "This practice is edited in the practice repository, so you cannot accept an update here. Change its folder there, or choose Edit in Hephaestus on the practice first."
+						: undefined
+				}
 				onAccept={(choices) => onAccept(selected, choices)}
 				onDecline={() => onDecline(selected)}
 			/>

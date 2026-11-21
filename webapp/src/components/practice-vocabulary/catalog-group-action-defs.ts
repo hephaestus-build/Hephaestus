@@ -29,7 +29,9 @@ export const CATALOG_GROUP_ACTION_DEFS: StatusDefs<CatalogGroupAction> = {
 		label: "Blocked",
 		icon: CircleAlert,
 		badgeVariant: "warning",
-		description: "Another practice already uses this name.",
+		// Blocked for several reasons: another practice uses the name, the copy sits in another group,
+		// or its folder in the practice repository sets its group. The words hold for each of them.
+		description: "This practice stays as it is.",
 	},
 };
 

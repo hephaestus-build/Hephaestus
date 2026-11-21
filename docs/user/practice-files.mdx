@@ -51,9 +51,16 @@ The folders live on the default branch, under `.hephaestus/practices/` unless yo
    When the folder's definition differs from the current version, it becomes the next version.
 
 A practice edited in the repository is read-only in Hephaestus, except for its feedback mode and position.
-Its folder names its group, so you cannot delete that group in Hephaestus while the practice is in it.
-The same request with `{"editedIn": "HEPHAESTUS"}` makes it editable here again and keeps its current version.
-Unsetting the practice repository does the same for every practice edited there. Nothing is deleted.
+In **Practice setup**, it shows **Edited in the practice repository**.
+Its panel names the repository and, when its current version was read from there, the commit.
+You cannot edit it, delete it, move it to another group, or reset it to the catalog.
+You also cannot accept a catalog update for it, or delete the group that it is in: its folder names that group.
+In **Practice reviews**, the history of the practice shows the commit of each version from the repository.
+
+To change the practice in Hephaestus again, open it in **Practice setup** and choose **Edit in Hephaestus**.
+The practice keeps its current version.
+Later changes to its folder no longer reach the practice.
+Changing or unsetting the practice repository makes every practice edited there editable in Hephaestus again. Nothing is deleted.
 
 Anyone who can merge into the default branch of the practice repository changes what reviews judge, and the practice scripts that run in review sandboxes.
 Protect that branch as you protect your code: require a review before a merge.
