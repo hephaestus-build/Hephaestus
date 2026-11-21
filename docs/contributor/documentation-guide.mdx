@@ -197,6 +197,7 @@ These rules come from the [C4 model](https://c4model.com/diagrams/notation), [ar
 - Label each arrow with what crosses it, such as `SandboxClaim` or `model calls, API key`. Do not write "uses".
 - Put no notes in the diagram. The text gives the responsibilities and the reasons.
 - Map every box and arrow to code or to an ADR. A catalogue table under a structural view names the package.
+- Give each box its element type and, for a container, its technology. The view title names the type of its boxes. A keyword such as `«external»` marks a box of another type. Add a Technology column to the catalogue table of a container view, such as "Spring Boot, Java". Write no versions: the build files own them. A component view states the technology of its container once, in its lead-in.
 - Leave out what is implied, such as a standard OAuth flow or an arrow from every part to PostgreSQL.
 - Never mark a meaning by color alone. Add a keyword such as `«cluster admin»`, a word such as "Stop:", or a line style. Show it in the legend or the lead-in.
 
@@ -214,7 +215,7 @@ It has no C4 module. The C4 model is independent of notation, so a C4 level is d
 
 1. Edit or add the source in `docs/diagrams/<name>.hyl`. Keep the line `// @shared-style`, and call one legend once. `docs/diagrams/style.hyl` holds the shared style and the legends.
 2. Run `vp run generate:diagrams`. `scripts/render-diagrams.ts` renders each source with the pinned `@hylimo/cli` into `docs/public/img/diagrams/<name>.light.svg` and `<name>.dark.svg`.
-3. Show it with `<SystemDiagram name="<name>" title="<view>: <scope>" alt="…">` in the page. Every page has the component without an import. The title states the view and its scope. The alt text has at most 155 characters. The children are a table with every connection of the view. The page shows it under "Connections as text", and the image refers to it with `aria-describedby`.
+3. Show it with `<SystemDiagram name="<name>" title="<view>: <scope>" alt="…">` in the page. Every page has the component without an import. The title states the view and its scope. The alt text has at most 155 characters. The children are a table with every connection of the view. The page shows it under "Connections as text", and the image refers to it with `aria-describedby`. `gate:docs-pages` fails when the source does not exist, or when the title, the alt text or the table is missing.
 4. Commit the source and both SVGs. `gate:system-diagrams` fails when an SVG does not match its source.
 
 Draw each frame first, then place every box at an absolute position, `apos(x, y)`. HyLiMo lays out the children of a nested frame on its own, so a box is never a child of a frame. Compute the outline position of each end of an edge, so that each edge is straight or orthogonal.
