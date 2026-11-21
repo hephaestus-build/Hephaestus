@@ -7,12 +7,13 @@ import java.util.stream.Stream;
 /**
  * The membership reasons for which Hephaestus withholds a practice on purpose, by a policy decision, not a failure.
  * Selection writes the role, bot, scope and checks reasons. Capture writes the readiness and fit reasons. Practice
- * start writes {@code REPLACED} when a newer review of the item already measured the practice, {@code SOURCES_MOVED} when its own
- * sources moved and none does, and {@code READINESS_REFUSED} when they cannot be verified. A replaced review writes
- * {@code REPLACED}, or {@code SOURCES_MOVED} for a practice in feedback mode Off that the newer push leaves out. An attempt that ended writes {@code NOT_RUN} for each practice it never measured. Staging
- * and admission write {@code ROLE_UNAVAILABLE} when the developer is no longer eligible, {@code WORKSPACE_INACTIVE}
- * when the workspace is not active, and {@code STALE_ROLLOUT_REVISION} when the workspace's review settings changed
- * while the review waited.
+ * start writes {@code REPLACED} when a newer review of the item already measured the practice, {@code SOURCES_MOVED}
+ * when its own sources moved and none does, and {@code READINESS_REFUSED} when they cannot be verified. A replaced
+ * review writes {@code REPLACED}, or {@code SOURCES_MOVED} for a practice in feedback mode Off that the newer push
+ * leaves out. An attempt that ended writes {@code NOT_RUN} for each practice it never measured. Staging and admission
+ * write {@code ROLE_UNAVAILABLE} when the developer is no longer eligible, {@code WORKSPACE_INACTIVE} when the
+ * workspace is not active, and {@code STALE_ROLLOUT_REVISION} when the workspace's review settings changed while the
+ * review waited.
  *
  * <p>Every other membership reason is a failure of a run or of admission: a {@link ReviewStopReason} of an attempt
  * that failed or stopped, a candidate refusal, {@code COPY_AUTHORITY_UNAVAILABLE}, or a reason that only history

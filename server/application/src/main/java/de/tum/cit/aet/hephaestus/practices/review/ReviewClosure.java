@@ -67,7 +67,8 @@ class ReviewClosure {
     /**
      * Ends a queued event review that newer occasions of its item replace before it starts. A practice that those
      * occasions leave out until a milestone is not replaced, since no newer review measures it: its own sources moved,
-     * and the next milestone selects it again. When that holds for every practice, nothing replaces the review either.
+     * and the next readiness edge that it is owed at, or the next milestone, selects it again. When that holds for every
+     * practice, nothing replaces the review either.
      */
     void replace(Review review, ItemKind kind, Collection<ItemEventName> newer, Instant at) {
         long workspace = review.getWorkspaceId();
