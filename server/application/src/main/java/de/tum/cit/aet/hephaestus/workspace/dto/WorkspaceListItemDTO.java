@@ -45,10 +45,11 @@ public record WorkspaceListItemDTO(
                         + " turned it on")
         Boolean publishesPublicActivity,
 
-        @NonNull
+        // Optional in the contract: a server from before this property leaves it out (ADR 0103).
         @Schema(
                 description = "Whether workspace admins see practice results per person. Every member reads it,"
-                        + " because it decides who sees their results.")
+                        + " because it decides who sees their results.",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         Boolean perPersonResultsForAdmins,
 
         @NonNull
