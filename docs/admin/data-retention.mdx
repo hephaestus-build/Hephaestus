@@ -78,7 +78,7 @@ The jobs that delete review job data run only when `AGENT_ENABLED` is `true`.
 | Outline documents | No age limit. Document bodies above 200 MB for each workspace are evicted. | `hephaestus.integration.outline.cache.max-size-mb` | Outline sync |
 | GitHub and GitLab mirror tables | No age limit while a workspace monitors the repository | None | Repository monitoring |
 | Sync job history | The newest 50 runs of each connection | None | Each new sync run |
-| Connection audit records | No automatic deletion | None | Workspace purge |
+| Connection audit records | The admin who acted and any reason they gave: 365 days. The event and its time stay until workspace purge, so that a repeated provider event changes nothing. | None | A server job at 00:25 every day. Workspace purge deletes the records |
 | Authentication events, including sign-ins, user views, IP address, and user agent | 12 months, in monthly partitions | None | Partition maintenance at 00:10 every day |
 | Configuration audit events | 365 days | None | A server job at 00:20 every day |
 | Issued access tokens | Until they expire. Access tokens last 24 hours. | `hephaestus.auth.access-ttl` | A server job at 03:30 every day |

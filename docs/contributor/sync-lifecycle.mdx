@@ -167,8 +167,9 @@ Disconnect calls the GitHub or GitLab strategy's `eraseLocalData` inside its tra
 ### Retained on both erase triggers
 
 `sync_job`, `connection_activity` and `connection_audit` survive for all four integration kinds:
-operational audit only (kind, type, status, timestamps), no mirrored third-party content, capped per
-connection by the sync-job pruner. Global identity rows (`user`, `organization`,
+operational audit only (kind, type, status, timestamps), no mirrored third-party content.
+The sync-job pruner keeps the newest runs of each connection.
+`connection_audit` keeps its rows, because its replay guard reads them, and loses the actor and detail of a row after 365 days. Global identity rows (`user`, `organization`,
 `identity_provider`) are cross-tenant shared and never touched here.
 
 ### A redelivered or older payload changes nothing
