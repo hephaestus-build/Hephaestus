@@ -663,7 +663,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
 
     /**
      * A retry whose capture moved seals the review with the practices no attempt measured as owed, never as replaced:
-     * no newer review measures them, so they are carried and run again.
+     * no newer review measured them, so they are carried and run again.
      */
     @Test
     void shouldStopTheOpenPracticesAsNotRunAndSealWhenTheRetryFindsTheSourcesStale() {

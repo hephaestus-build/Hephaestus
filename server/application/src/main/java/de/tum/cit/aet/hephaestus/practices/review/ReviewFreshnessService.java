@@ -102,8 +102,7 @@ public class ReviewFreshnessService implements ReviewFreshness {
             return true;
         }
         // REPLACED only when a newer review already measured this practice: one that only selected it can still
-        // withhold
-        // it. Otherwise its own sources moved and it runs again.
+        // withhold it. Otherwise its own sources moved and it runs again.
         var reason = state != Currentness.STALE
                 ? ReviewStopReason.READINESS_REFUSED
                 : reviews.existsNewerMeasurementOfPractice(
