@@ -3284,13 +3284,13 @@ tests:
               pod: hephaestus-server-1
               container: server
             exp_annotations:
-              summary: The kernel killed a container for its memory
+              summary: The kernel killed a container, or a process in it, for its memory
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 28m
         alertname: HephaestusContainerOomKilled
         exp_alerts: []
 
-  - name: a kernel kill of one process in a running container fires, the 2026-11-14 PostgreSQL backend kill
+  - name: a kernel kill of one process in a running container that cAdvisor counts fires, a still counter does not
     interval: 1m
     input_series:
       # The container keeps running: no restart and no terminated reason. cAdvisor counts the kill.
@@ -3314,13 +3314,13 @@ tests:
               pod: hephaestus-postgresql-0
               container: postgresql
             exp_annotations:
-              summary: The kernel killed a container for its memory
+              summary: The kernel killed a container, or a process in it, for its memory
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 25m
         alertname: HephaestusContainerOomKilled
         exp_alerts: []
 
-  - name: a kernel OOM kill on a node fires when no container metric shows it, a quiet node does not
+  - name: the 2026-11-14 PostgreSQL backend kill fires on the node when no container metric shows it, a quiet node does not
     interval: 1m
     input_series:
       # cAdvisor could not read the kernel log, so its counter stays at 0; the kernel's own count rises.
@@ -3368,7 +3368,7 @@ tests:
               pod: hephaestus-turn-1
               container: sandbox
             exp_annotations:
-              summary: The kernel killed a container for its memory
+              summary: The kernel killed a container, or a process in it, for its memory
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a container whose anonymous memory stays near its limit fires, a peak shorter than 10 minutes does not
