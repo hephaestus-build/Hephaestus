@@ -15,7 +15,7 @@ import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
 import { type ScanOutcome, scanAll, type Subject } from "./lib/image-scan.ts";
-import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
+import { asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { run } from "./lib/process.ts";
 import { PLATFORMS, planUpstreamSubjects } from "./scan-upstream-images.ts";
 
@@ -59,20 +59,17 @@ export function channelTarget(value: unknown, channel: Channel): ChannelTarget {
 }
 
 /**
- * Each deployed image as a scan subject, named as `security/release-images.json` names it, because the
- * policy's exceptions are keyed by that name. An image that the inventory does not name has no policy
- * key, so it fails here instead of being scanned under a guessed name.
+ * Each deployed image as a scan subject, named as the policy's exceptions name it. A first-party image is
+ * named by its repository under the registry, also after `security/release-images.json` stops listing it:
+ * a host can still run an image that main no longer builds. An upstream image is named as the inventory
+ * names it. An upstream image that the inventory does not name has no policy key, so it fails here instead
+ * of being scanned under a guessed name.
  */
 export function deployedSubjects(
 	images: readonly string[],
 	inventory: unknown,
 	registry: string,
 ): Subject[] {
-	const firstParty = new Set(
-		asArray(asRecord(inventory, "release image inventory").images, "images").map((image, index) =>
-			asString(image, `images[${index}]`),
-		),
-	);
 	const upstream = new Map(
 		planUpstreamSubjects(inventory).map((subject) => [subject.repository, subject.image]),
 	);
@@ -84,7 +81,7 @@ export function deployedSubjects(
 		const owned = repository.startsWith(`${registry}/`)
 			? repository.slice(registry.length + 1)
 			: undefined;
-		const image = owned !== undefined && firstParty.has(owned) ? owned : upstream.get(repository);
+		const image = owned ?? upstream.get(repository);
 		if (image === undefined) {
 			throw new Error(
 				`security/release-images.json does not name the deployed image ${repository}`,

@@ -55,6 +55,24 @@ void test("each deployed image is scanned under the name that the policy keys it
 	]);
 });
 
+void test("a first-party image that main no longer builds keeps its name, because a host can still run it", () => {
+	assert.ok(!JSON.stringify(inventory).includes('"webapp"'));
+	assert.deepEqual(
+		deployedSubjects(
+			[`ghcr.io/hephaestus-build/webapp@${digest}`],
+			inventory,
+			"ghcr.io/hephaestus-build",
+		),
+		[
+			{
+				image: "webapp",
+				reference: `ghcr.io/hephaestus-build/webapp@${digest}`,
+				repository: "ghcr.io/hephaestus-build/webapp",
+			},
+		],
+	);
+});
+
 void test("an image without a digest or a policy name is refused, not scanned under a guess", () => {
 	assert.throws(
 		() =>
