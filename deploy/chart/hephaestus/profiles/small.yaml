@@ -8,11 +8,6 @@
 # The sandboxes are on: reviews are the product. The operator states sandbox.namespace and
 # networkPolicy.kubernetesApi, and the chart refuses to render without them
 # (docs/admin/kubernetes.mdx § Install).
-postgresql:
-  # The memory settings and the memory follow the chart's defaults (docs/admin/sizing.mdx § PostgreSQL memory).
-  parameters:
-    effective_cache_size: 1GB
-    max_wal_size: 1GB
 server:
   databasePool: { minimumIdle: 2 }
   # Reserve a replacement beside the draining server within the single node budget.

@@ -1022,8 +1022,9 @@ parameters and max_connections. docs/admin/sizing.mdx § PostgreSQL memory docum
 measurement behind each constant, and a chart test holds the two together.
 - Shared memory: PostgreSQL 18's shared_memory_size is shared_buffers, about 1/16 of it again for the buffer
   descriptors and WAL buffers, about 20 MiB of fixed tables, and 64 KiB for each connection slot.
-- Each connection: the private memory that a server connection keeps, measured with jit=off, plus one sort or
-  hash of work_mem x hash_mem_multiplier in flight. A parallel worker is a connection too.
+- Each connection: the private memory that a server connection keeps, measured with jit=off, its page tables for
+  shared memory (shared_buffers / 512 once it has touched all of it), and one sort or hash of
+  work_mem x hash_mem_multiplier in flight. A parallel worker is a connection too.
 - Maintenance: one maintenance_work_mem, such as the migration's CREATE INDEX, and every autovacuum worker's
   autovacuum_work_mem.
 - Processes: the postmaster and the background processes, measured.
@@ -1044,7 +1045,7 @@ measurement behind each constant, and a chart test holds the two together.
 {{- $parallel := 0 -}}
 {{- if gt (int (default 0 $parameters.max_parallel_workers_per_gather)) 0 -}}{{- $parallel = 8 -}}{{- end -}}
 {{- $shared := add $sharedBuffers (divf $sharedBuffers 16 | ceil | int64) 20 (divf $connections 16 | ceil | int64) -}}
-{{- $perConnection := add $connectionMi (mulf $workMem $hash | ceil | int64) -}}
+{{- $perConnection := add $connectionMi (divf $sharedBuffers 512 | ceil | int64) (mulf $workMem $hash | ceil | int64) -}}
 {{- $backends := mul (add $connections $parallel) $perConnection -}}
 {{- $maintenanceTotal := add $maintenance (mul $workers $autovacuum) -}}
 {{- $total := add $shared $backends $maintenanceTotal $processesMi -}}
@@ -1055,7 +1056,7 @@ measurement behind each constant, and a chart test holds the two together.
 
 {{/*
 The bundled PostgreSQL's resources: memory `auto` takes the derived size, and the request follows the limit. An
-explicit limit below the derived size fails, with its parts.
+explicit limit below the derived size fails, with its parts, and so does a request above the limit.
 */}}
 {{- define "hephaestus.postgresqlResources" -}}
 {{- $memory := include "hephaestus.postgresqlMemory" . | fromJson -}}
@@ -1069,7 +1070,11 @@ explicit limit below the derived size fails, with its parts.
   (int64 $memory.connectionsMi) (int64 $memory.maintenanceMi) (int64 $memory.processesMi)) -}}
 {{- end -}}
 {{- $_ := set $resources.limits "memory" $limit -}}
-{{- if eq (toString $resources.requests.memory) "auto" -}}{{- $_ := set $resources.requests "memory" $limit -}}{{- end -}}
+{{- if eq (toString $resources.requests.memory) "auto" -}}
+{{- $_ := set $resources.requests "memory" $limit -}}
+{{- else if gt (include "hephaestus.quantityUnits" (dict "value" $resources.requests.memory "unit" 1048576) | int64) (include "hephaestus.quantityUnits" (dict "value" $limit "unit" 1048576 "roundDown" true) | int64) -}}
+{{- fail (printf "postgresql.resources.requests.memory (%s) is above the memory limit (%s)" (toString $resources.requests.memory) $limit) -}}
+{{- end -}}
 {{- toYaml $resources -}}
 {{- end -}}
 

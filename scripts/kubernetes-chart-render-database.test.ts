@@ -748,6 +748,17 @@ await test("every profile's PostgreSQL runs without JIT, in the memory that docs
 	};
 	const connectionMi = documented("Private memory of each connection");
 	const processesMi = documented("Postmaster and background processes");
+	// The page states the formula that this test computes, constant for constant.
+	for (const line of [
+		"shared memory   = shared_buffers + shared_buffers / 16 + 20 MiB + max_connections / 16 MiB",
+		`each connection = ${connectionMi} MiB + shared_buffers / 512 + work_mem × hash_mem_multiplier`,
+		"maintenance     = maintenance_work_mem + autovacuum_max_workers × autovacuum_work_mem",
+		`processes       = ${processesMi} MiB`,
+		"the sum up to a multiple of 128 MiB",
+		"it also adds 8 parallel workers as connections",
+	]) {
+		assert.ok(sizing.includes(line), `docs/admin/sizing.mdx states: ${line}`);
+	}
 	for (const name of profiles.filter((candidate) => candidate !== "external")) {
 		const resources = rendered(layersFor(name));
 		const settings = postgresqlSettings(resources);
@@ -771,7 +782,9 @@ await test("every profile's PostgreSQL runs without JIT, in the memory that docs
 		const sharedBuffers = mib("shared_buffers");
 		const shared = sharedBuffers + Math.ceil(sharedBuffers / 16) + 20 + Math.ceil(connections / 16);
 		const perConnection =
-			connectionMi + Math.ceil(mib("work_mem") * Number(setting("hash_mem_multiplier")));
+			connectionMi +
+			Math.ceil(sharedBuffers / 512) +
+			Math.ceil(mib("work_mem") * Number(setting("hash_mem_multiplier")));
 		const maintenance =
 			mib("maintenance_work_mem") +
 			Number(setting("autovacuum_max_workers")) * mib("autovacuum_work_mem");
@@ -788,7 +801,7 @@ await test("every profile's PostgreSQL runs without JIT, in the memory that docs
 	}
 });
 
-await test("PostgreSQL refuses an explicit memory limit below its derived size, and a missing memory setting", () => {
+await test("PostgreSQL refuses a memory limit below its derived size, a request above it, and a missing memory setting", () => {
 	const layers = layersFor("small");
 	const derived = Number(
 		String(
@@ -807,6 +820,15 @@ await test("PostgreSQL refuses an explicit memory limit below its derived size, 
 	const database = container(workload(roomy, "postgresql"));
 	assert.equal(get(database, "resources", "limits", "memory"), "4Gi");
 	assert.equal(get(database, "resources", "requests", "memory"), "4Gi", "auto follows the limit");
+	const overRequested = render([
+		...layers,
+		{ postgresql: { resources: { requests: { memory: `${derived + 128}Mi` } } } },
+	]);
+	assert.equal(overRequested.ok, false);
+	assert.match(
+		overRequested.stderr,
+		/postgresql\.resources\.requests\.memory .* is above the memory limit/u,
+	);
 	const missing = render([...layers, { postgresql: { parameters: { work_mem: null } } }]);
 	assert.equal(missing.ok, false);
 	assert.match(missing.stderr, /postgresql\.parameters\.work_mem is required/u);
