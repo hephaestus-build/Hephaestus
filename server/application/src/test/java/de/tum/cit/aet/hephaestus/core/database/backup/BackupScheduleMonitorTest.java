@@ -7,7 +7,9 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +26,7 @@ class BackupScheduleMonitorTest extends BaseUnitTest {
     private static final String DIFF = "hephaestus-postgresql-backup-diff";
 
     private final Map<String, BackupSchedules.Schedule> schedules = new HashMap<>();
+    private final MovingClock clock = new MovingClock(NOW);
     private @Nullable RuntimeException failure;
     private MeterRegistry registry;
     private BackupScheduleMonitor monitor;
@@ -38,10 +41,7 @@ class BackupScheduleMonitorTest extends BaseUnitTest {
             return Optional.ofNullable(schedules.get(name));
         };
         monitor = new BackupScheduleMonitor(
-                reader,
-                new BackupScheduleProperties("hephaestus", List.of(FULL, DIFF)),
-                Clock.fixed(NOW, ZoneOffset.UTC),
-                registry);
+                reader, new BackupScheduleProperties("hephaestus", List.of(FULL, DIFF)), clock, registry);
     }
 
     @Test
@@ -100,8 +100,12 @@ class BackupScheduleMonitorTest extends BaseUnitTest {
         schedules.put(FULL, new BackupSchedules.Schedule(NOW.minusSeconds(900_000), NOW.minusSeconds(60)));
         schedules.put(DIFF, new BackupSchedules.Schedule(NOW.minusSeconds(900_000), null));
         monitor.sample();
-
         assertThat(age()).isEqualTo(60);
+
+        // No read in between: the age still counts from the same success at every scrape.
+        clock.advance(Duration.ofMinutes(4));
+
+        assertThat(age()).isEqualTo(300);
     }
 
     private double age() {
@@ -112,5 +116,34 @@ class BackupScheduleMonitorTest extends BaseUnitTest {
         return registry.get(CoreMetrics.DATABASE_BACKUP_SAMPLE_FAILURES)
                 .counter()
                 .count();
+    }
+
+    /** A clock that a test moves forward. */
+    private static final class MovingClock extends Clock {
+
+        private Instant now;
+
+        MovingClock(Instant now) {
+            this.now = now;
+        }
+
+        void advance(Duration duration) {
+            now = now.plus(duration);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
+        }
     }
 }
