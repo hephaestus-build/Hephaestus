@@ -549,12 +549,10 @@ public class ReviewServiceImpl implements ReviewService {
                     workspaceId, itemId, pinned.version().value(), ReviewWithholdings.CARRIED));
         }
         var selected = gated.stream().filter(p -> !waiting.contains(p.getId())).toList();
-        if (selected.isEmpty() && !waiting.isEmpty())
-            throw new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
-                    "Every selected practice has feedback mode Off and waits for a milestone of the work.",
-                    ReviewRequestReason.FEEDBACK_MODE_OFF);
-        var selectedIds = selected.stream().map(Practice::getId).collect(Collectors.toSet());
+        boolean allOff = selected.isEmpty() && !waiting.isEmpty();
+        // A window of practices that all wait still waits for an earlier review of them, so a queued one is replaced.
+        var selectedIds =
+                (allOff ? gated : selected).stream().map(Practice::getId).collect(Collectors.toSet());
         // Starting a review commits before its job is enqueued, so a running review with no job yet still measures.
         // One that never got a job stops holding the window one cap after it started.
         Instant enqueuedBy = clock.instant().minus(itemEvents.quietWindowCap());
@@ -569,6 +567,11 @@ public class ReviewServiceImpl implements ReviewService {
                     ReviewRequestRejected.Reason.REQUEST_CONFLICT,
                     "An earlier review of this item still measures a selected practice.",
                     ReviewRequestReason.REVIEW_IN_PROGRESS);
+        if (allOff)
+            throw new ReviewRequestRejected(
+                    ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
+                    "Every selected practice has feedback mode Off and waits for a milestone of the work.",
+                    ReviewRequestReason.FEEDBACK_MODE_OFF);
         if (occasions.stream().anyMatch(name -> itemOptions.occasion(kind, name) == OccasionKind.MILESTONE))
             return selected;
         var current = results.findByWorkspaceIdAndItemIdAndEndedAtIsNull(workspaceId, itemId).stream()

@@ -2338,9 +2338,12 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 "synchronize",
                 pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
         closeWindows(prepared);
-        var pushed = occasion(prepared, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED);
-        assertThat(pushed.getState()).isEqualTo(ItemEventState.WITHHELD);
-        assertThat(pushed.getReason()).isEqualTo(ReviewRequestReason.FEEDBACK_MODE_OFF);
+        // The push also records the edit of its head; the newest occasion of the window decides for both.
+        assertThat(itemEvents(prepared))
+                .filteredOn(event -> !event.getName().equals(ScmItemEvents.PULL_REQUEST_OPENED.value()))
+                .allSatisfy(event -> assertThat(event.getState()).isEqualTo(ItemEventState.WITHHELD))
+                .extracting(ItemEvent::getReason)
+                .contains(ReviewRequestReason.FEEDBACK_MODE_OFF);
         assertThat(newestReview(prepared).getId()).isEqualTo(opened.getId());
 
         // A practice that reviews only on pushes has no milestone to wait for: a push still measures it in Off.
