@@ -139,17 +139,16 @@ jobs:
 
       - name: Save performance history
         if: ${{ !cancelled() && steps.record.outcome == 'success' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: ${{ env.HISTORY_ARTIFACT }}
           path: ci-profile-history
           if-no-files-found: error
           retention-days: 90
-          overwrite: true
 
       - name: Upload profile
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: server-integration-profile-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -208,7 +207,7 @@ jobs:
 
       - name: Upload profile
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: server-verification-profile-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -241,7 +240,7 @@ jobs:
         run: node scripts/report-ci-latency.ts
       - name: Upload latency evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: ci-latency-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/ci-metrics/ci-latency.json
@@ -295,7 +294,7 @@ jobs:
           server/application/build/test-results/integrationTest ci-metrics/test-results.json
       - name: Retain comparison evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: runner-comparison-${{ matrix.runner }}-${{ matrix.sample }}-${{ github.run_attempt }}
           path: |

@@ -446,7 +446,7 @@ void test("the Scorecard ratchet runs on every event that can move a score, outs
 	assert.equal(workflow.getIn(["jobs", "ratchet", "permissions", "contents"]), "read");
 	assert.equal(workflow.hasIn(["jobs", "ratchet", "permissions", "id-token"]), false);
 	assert.equal(
-		step(workflow, ["jobs", "ratchet"], "actions/upload-artifact").get("path"),
+		step(workflow, ["jobs", "ratchet"], "./.github/actions/upload-artifact-retry").get("path"),
 		"tmp/scorecard-assessment.json",
 	);
 	assert.match(

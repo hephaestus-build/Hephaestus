@@ -122,8 +122,9 @@ jobs:
         run: ./gradlew :application:releaseRatchetTest "-Phephaestus.releaseVersion=$RELEASE_VERSION"
       - name: Keep the ratchet results
         if: always() && needs.release.outputs.prerelease != 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: stable-release-ratchets
           path: server/application/build/test-results/releaseRatchetTest
           if-no-files-found: warn
@@ -166,10 +167,9 @@ jobs:
           node scripts/github-release-notes.ts notes.md release-body.md
 
       - name: Keep the complete notes and bounded description
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: release-notes
-          overwrite: true
           path: |
             notes.md
             release-body.md
@@ -216,10 +216,9 @@ jobs:
           echo "sha256=$(sha256sum "$package" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Keep the extension package
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: extension-package
-          overwrite: true
           path: hephaestus-chrome-extension-${{ needs.release.outputs.version }}.zip
           if-no-files-found: error
 
@@ -347,8 +346,9 @@ jobs:
 
       - name: Retain sandbox qualification summary
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: sandbox-security-summary
           path: ${{ runner.temp }}/sandbox-security.json
           if-no-files-found: warn

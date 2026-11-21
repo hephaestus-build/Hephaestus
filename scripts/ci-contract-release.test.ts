@@ -1087,7 +1087,7 @@ void test("the site root publishes whichever folder the release tag's own docs b
 	const jobPath = ["jobs", "build-release"];
 	const shell = runScript(workflow, jobPath, "Find the release build");
 	assert.equal(
-		step(workflow, jobPath, "actions/upload-artifact").get("path"),
+		step(workflow, jobPath, "./.github/actions/upload-artifact-retry").get("path"),
 		`\${{ steps.release-build.outputs.path }}`,
 	);
 	const publishes = async (folders: string[]) => {

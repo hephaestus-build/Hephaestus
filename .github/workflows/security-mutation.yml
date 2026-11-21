@@ -68,9 +68,10 @@ jobs:
 
       - name: Upload mutation report
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: security-mutation-report-${{ github.run_id }}-${{ github.run_attempt }}
           path: server/application/build/reports/pitest
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30

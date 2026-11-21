@@ -1,7 +1,7 @@
 name: Repo / Pull request
 
 # The unprivileged half of the pull request policy. It runs with the pull request's own workflow
-# files and no permissions, and records only which pull request it ran for and why.
+# files and read access only, and records only which pull request it ran for and why.
 # pull-request-policy.yml runs the policy from the default branch when this run completes, and
 # treats this record as untrusted data. docs/contributor/ci-cd.mdx § Pull request policy.
 
@@ -27,7 +27,15 @@ jobs:
     name: "Record the pull request"
     timeout-minutes: 15
     runs-on: ubuntu-slim
+    permissions:
+      contents: read
     steps:
+      # Only the upload action, which retries a failed upload: the job runs no other repository code.
+      - name: Check out the upload action
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Write the pull request number and the event action
         env:
           NUMBER: ${{ github.event.pull_request.number }}
@@ -35,7 +43,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/pull-request"
           printf '%s\n%s\n' "$NUMBER" "$ACTION" > "$RUNNER_TEMP/pull-request/record"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: ./.github/actions/upload-artifact-retry
         with:
           name: pull-request
           path: ${{ runner.temp }}/pull-request/record

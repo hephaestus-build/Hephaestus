@@ -139,8 +139,9 @@ jobs:
         run: node scripts/rescan-release-images.ts release-evidence reports "$RELEASE_TAG"
       - name: Upload diagnostic reports
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: supported-release-rescan-${{ github.run_id }}
           path: reports
           if-no-files-found: warn
@@ -221,7 +222,7 @@ jobs:
         run: node scripts/report-deployed-exposure.ts reports/deployed
       - name: Upload the deployed rescan reports
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: deployed-rescan-${{ github.run_id }}
           path: reports/deployed

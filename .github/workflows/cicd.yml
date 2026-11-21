@@ -941,8 +941,9 @@ jobs:
 
       - name: Keep the gate result
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: feedback-eval-gate
           path: ${{ runner.temp }}/feedback-eval-gate
           retention-days: 14
@@ -1004,7 +1005,7 @@ jobs:
           install-syft: "false"
       - uses: ./.github/actions/download-trivy-db
         id: database
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: ./.github/actions/upload-artifact-retry
         id: snapshot
         with:
           name: trivy-db-${{ github.run_id }}-${{ github.run_attempt }}
@@ -1490,8 +1491,9 @@ jobs:
 
       - name: Retain sandbox qualification summary
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: sandbox-security-preflight-summary
           path: ${{ runner.temp }}/sandbox-security.json
           if-no-files-found: warn

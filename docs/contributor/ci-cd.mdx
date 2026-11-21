@@ -137,13 +137,16 @@ Test checks show totals and failed suites/cases, not an inventory of successful 
 lookup runs only when failure annotations are needed. The complete unit, integration, database and
 Storybook JUnit reports remain downloadable for fourteen days, including successful runs.
 
-These reports, the diagnostics below and the required artifacts upload through `.github/actions/upload-artifact-retry`, in up to three attempts.
-A report sets `required: "false"`. If it still fails to upload, the job keeps the verdict of its tests.
+Every artifact upload goes through `.github/actions/upload-artifact-retry`, in up to three attempts.
+The exception is `scorecard.yml`: OpenSSF Scorecard publishes only from a workflow that runs allowlisted actions.
+A report is a diagnostic for a person, next to a verdict that the job's own steps decide.
+It sets `required: "false"`. If it still fails to upload, the job keeps the verdict of its tests.
 A warning and the job summary then name the missing reports.
 
-A required artifact is an input to a later job or to the release.
-Examples are the packaged server, the image digests and the release evidence.
+Every other artifact is required: a later job, a later run or the release reads it, or a report run exists to make it.
+Examples are the packaged server, the image digests, the release evidence and the weekly flake report.
 If it still fails to upload, the job fails with an error that names the artifact.
+`scripts/ci-upload-artifact-retry.test.ts` lists the reports.
 
 Chromatic
 prints warnings/errors alongside the structured visual-coverage summary. Its JUnit report is retained
@@ -476,8 +479,9 @@ They do not run on `pull_request_target`.
 GitHub blocks that event by default in public repositories from 2026-12-02 ([GitHub changelog](https://github.blog/changelog/2026-11-02-pull_request_target-blocked-by-default-december-2)).
 Instead, two workflows split the work, as GitHub Security Lab recommends ([Preventing pwn requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)):
 
-1. `pull-request.yml` runs on `pull_request`, with the pull request's own workflow files and no permissions.
-   It records the pull request number and the event action as the `pull-request` artifact. It checks out nothing.
+1. `pull-request.yml` runs on `pull_request`, with the pull request's own workflow files and read access only.
+   It records the pull request number and the event action as the `pull-request` artifact.
+   It checks out only the upload action, which retries a failed upload.
 2. `pull-request-policy.yml` runs on `workflow_run` when that run succeeds.
    GitHub runs it from the default branch, with the permissions that each job declares.
    It checks out only the default branch's policy files and runs no pull-request code.
@@ -722,7 +726,7 @@ The required checks are job names, so a display name does not change them.
 | Workflow                              | Trigger                                                                       | Purpose                                                                                                                                                                                                                          |
 | ------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cicd.yml`                            | PR, merge group, push to main, manual                                         | Validates changes before merge and publishes final-SHA images after merge. The release evidence gate runs over the images the run built on the Version PR's branch, and wherever the `release-preflight` dispatch input asks for it |
-| `pull-request.yml`                    | PR opened, edited, synchronized, reopened, ready for review                   | Records the pull request number and event action as an artifact, with no permissions. Checks out and runs nothing                                                                                                               |
+| `pull-request.yml`                    | PR opened, edited, synchronized, reopened, ready for review                   | Records the pull request number and event action as an artifact, with read access only. Checks out and runs only the upload action                                                                                                               |
 | `pull-request-policy.yml`             | `pull-request.yml` completed successfully                                     | From the default branch: validates the title against the exported policy in `commitlint.config.ts`, applies the commit identity and attribution policies, and posts the `Validate PR` check. Approves a listed maintainer's pull request. Assigns the author when the pull request opens |
 | `ci-quality-gates.yml`                | Called by cicd.yml                                                            | Selects quality legs, clean-install verification and story tests                                                                                                                                                                 |
 | `cache-toolchain.yml`                 | Main push changing install inputs or setup                                    | Seeds trusted Linux and Windows install caches without repeating quality gates                                                                                                                                                   |

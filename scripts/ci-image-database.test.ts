@@ -236,7 +236,9 @@ void test("snapshot identity comes from the producer, not the consumer attempt, 
 	assert.ok(isSeq(producer));
 	const upload = producer.items.find((step) => isMap(step) && step.get("id") === "snapshot");
 	assert.ok(isMap(upload));
-	assert.match(String(upload.get("uses")), /^actions\/upload-artifact@[a-f0-9]{40}$/u);
+	// Required by default: the image scans read this snapshot. A retry replaces only an attempt that failed.
+	assert.equal(upload.get("uses"), "./.github/actions/upload-artifact-retry");
+	assert.equal(upload.getIn(["with", "required"]), undefined);
 	assert.equal(
 		upload.getIn(["with", "name"]),
 		`trivy-db-\${{ github.run_id }}-\${{ github.run_attempt }}`,
