@@ -899,7 +899,8 @@ await test("the database budget holds the runtime pools, rollout, listeners and 
 			layers: [
 				...base,
 				{
-					sandbox: { reviewMemory: memoryFor(8) },
+					// The connection budget, not the node fit: a budget that holds eight reviews.
+					sandbox: { reviewMemory: memoryFor(8), budget: { cpu: "8", memory: "32Gi" } },
 					// Eight reviews and two conversation loads fit small's 20Gi Git cache at 1Gi each.
 					server: { gitCache: { snapshotLimit: "1Gi" } },
 				},

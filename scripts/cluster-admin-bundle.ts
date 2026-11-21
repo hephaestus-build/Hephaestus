@@ -59,7 +59,7 @@ metadata:
 value: 1000
 globalDefault: false
 preemptionPolicy: Never
-description: "Hephaestus review sandboxes"
+description: "Hephaestus review sandboxes and database backups"
 ---
 # Read only. The agent-sandbox controller in the namespace ${CONTROLLER.namespace} lists and watches these kinds
 # in all namespaces. It writes only in the release's sandbox namespace, through a Role.

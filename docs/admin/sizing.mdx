@@ -216,7 +216,7 @@ These are the sizes for each profile. A chart test computes them again from this
 | `cluster` | 300 | 9251 MiB |
 
 `max_connections` follows the [connection budget](#database-connections), so more servers or a larger pool also raise the memory.
-With backups on, the pgBackRest sidecar also requests its full 512 MiB limit.
+With backups on, the pgBackRest sidecar also requests its full 256 MiB limit.
 
 ## Node reserve
 
@@ -239,32 +239,41 @@ cert-manager and the local-path provisioner set no requests, and the headroom co
 `small.yaml` states 210m CPU and 262Mi, and a chart test compares that sum with these files and this table.
 Of the 14196 MiB of a 16 GiB node, the reserve keeps 972 MiB, and the release can use 13224 MiB.
 
-A backup never takes room from the upgrade or from a sandbox.
+Every upgrade with backups on runs the stanza Job beside the migration, so the upgrade peak counts it, with 64 MiB.
+`stanza-create` and `check` used at most 5 MiB of memory together.
+The upgrade peak does not count a scheduled backup that starts during an upgrade, for 256 MiB.
+Such a backup fits in the headroom, or it waits for room.
 
-Its Pods, a scheduled backup and the stanza Job of each upgrade, take the lowest priority, which never preempts.
-A backup that starts during an upgrade waits for room. An upgrade that needs the room preempts a running backup, and its Job runs it again.
-PostgreSQL archives its WAL from its own Pod also meanwhile, so no change is lost.
-Thus, the upgrade peak does not count a backup. The steady state counts one backup, so that a backup gets its room when no upgrade runs.
+With sandboxes, backup Pods take the lowest priority, which never preempts.
+This decides who yields when the requests on the node are full.
+A backup waits for room, and a Pod of a higher priority preempts a running backup before a sandbox.
+A preemption does not count as a failed attempt, so the Job runs the backup again.
+PostgreSQL archives its WAL from its own Pod while a backup waits, so no change is lost.
+The steady state counts one backup, so that a backup gets its room when no upgrade runs.
 
-`postgresql.backup.resources` sizes pgBackRest's TLS server beside PostgreSQL and the backup Jobs, with 256 MiB each.
+`postgresql.backup.resources` sizes pgBackRest's TLS server beside PostgreSQL and the scheduled backup Jobs, with 256 MiB each.
+
 On 2026-11-21, a full encrypted backup of a 2.25 GB database was measured.
 It used at most 31 MiB of private memory in the server and 18 MiB in the Job.
 With a 256 MiB limit, it took 22 seconds, as long as with no limit. With 128 MiB, it took 291 seconds, because the kernel reclaimed its page cache.
-The S3 upload adds a buffer of a few MiB that this measurement, to a local repository, did not include.
+The measurement wrote to a local repository. An S3 repository was not measured.
 
 A restore writes every data file, and the kernel charges the written pages to its limit until they reach the disk.
 It failed with 256 MiB and passed with 512 MiB, so `postgresql.backup.restore.resources` keeps 512 MiB.
 
-On a 16 GiB node, the upgrade peak binds. The free memory is what the node keeps free at that peak with every turn in use, the reserve included:
+On a 16 GiB node, the upgrade peak sets the turns.
+The free memory is what the node keeps free at the peak with every turn in use, after the requests of the release and of `outsideRelease`:
 
 | Install | Release requests at the upgrade peak, before turns | Conversation turns | Free memory at the peak |
 | --- | --- | --- | --- |
-| `small.yaml` | 11844 MiB | 3 | 1200 MiB |
-| `small.yaml`, backups on | 12100 MiB | 2 | 1328 MiB |
-| `small.yaml`, backups, database metrics and the monitoring stack | 12516 MiB | 1 | 1296 MiB |
-| One host | 11892 MiB | 3 | 1008 MiB |
-| One host, backups on | 12148 MiB | 2 | 1184 MiB |
-| One host, backups, database metrics and the monitoring stack | 12564 MiB | 1 | 1200 MiB |
+| `small.yaml` | 11844 MiB | 3 | 938 MiB |
+| `small.yaml`, backups on | 12164 MiB | 2 | 1002 MiB |
+| `small.yaml`, backups, database metrics and the monitoring stack | 12580 MiB | 1 | 970 MiB |
+| One host | 11892 MiB | 3 | 746 MiB |
+| One host, backups on | 12212 MiB | 2 | 858 MiB |
+| One host, backups, database metrics and the monitoring stack | 12628 MiB | 1 | 874 MiB |
+
+A scheduled backup that starts during an upgrade takes 256 MiB of that free memory.
 
 ## Database connections
 

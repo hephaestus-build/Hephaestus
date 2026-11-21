@@ -577,7 +577,6 @@ export function surge(deployment: Resource): number {
 
 export const gib = (bytes: number) => (bytes / 2 ** 30).toFixed(1);
 
-/** The allocatable budget is declared by the profile, not by this test. */
 /**
  * The room that the single-node profile gives the release: its node's allocatable, less 5 % headroom and the requests
  * of the workloads outside the release (docs/admin/sizing.mdx § Node reserve).
@@ -597,10 +596,12 @@ export const nodeRoom = (override?: unknown) => {
 	return { cpu: room("cpu", 0.001), memory: room("memory", 2 ** 20) };
 };
 
-/** A backup Pod: with sandboxes, it never preempts, so an upgrade that needs its room preempts it. */
-export const yieldsToUpgrade = (resource: Resource) =>
-	componentOf(resource) === "postgresql-backup" &&
-	(kindOf(resource) === "CronJob" || kindOf(resource) === "Job");
+/**
+ * A scheduled backup. With sandboxes, the upgrade budget leaves it out: it fits in the reserve's headroom, or it waits,
+ * because it never preempts (docs/admin/sizing.mdx § Node reserve). The stanza Job of each upgrade counts.
+ */
+export const scheduledBackup = (resource: Resource) =>
+	componentOf(resource) === "postgresql-backup" && kindOf(resource) === "CronJob";
 
 /** Independently total the rendered requests at the two supported operating phases. */
 export const fitTotals = (
@@ -633,9 +634,7 @@ export const fitTotals = (
 	}
 	const sandboxes = resources.some((resource) => kindOf(resource) === "SandboxTemplate");
 	for (const resource of resources.filter((candidate) => kindOf(candidate) === "Job")) {
-		if (!(sandboxes && yieldsToUpgrade(resource))) {
-			add(upgrade, podSpec(resource), 1);
-		}
+		add(upgrade, podSpec(resource), 1);
 	}
 	const backup = resources.find(
 		(resource) => kindOf(resource) === "CronJob" && get(resource, "spec", "suspend") !== true,

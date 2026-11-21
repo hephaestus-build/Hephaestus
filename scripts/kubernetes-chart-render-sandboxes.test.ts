@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { stringify } from "yaml";
+import { parse, stringify } from "yaml";
 import {
 	adminBundle,
 	amount,
@@ -37,6 +38,9 @@ import {
 	reviewWidth,
 	sandboxGib,
 	sandboxLayer,
+	stackOn,
+	readValues,
+	profile,
 	sandboxNamespace,
 	sandboxPods,
 	sandboxQuota,
@@ -53,7 +57,7 @@ import {
 	withSandboxes,
 	workload,
 	workloads,
-	yieldsToUpgrade,
+	scheduledBackup,
 	reviewMemoryMi,
 	javaCapacityConstant,
 } from "./kubernetes-chart-render-support.ts";
@@ -639,6 +643,57 @@ await test("auto is the largest turn count whose rendered steady and drained-upg
 	}
 });
 
+await test("the node reserve table of docs/admin/sizing.mdx is what the single-node installs render", () => {
+	const sizing = readFileSync(new URL("../docs/admin/sizing.mdx", import.meta.url), "utf8");
+	const allocatable = amount(get(readValues(profile("small")), "sandbox", "budget", "memory"));
+	const outside = amount(
+		get(readValues(profile("small")), "sandbox", "budget", "outsideRelease", "memory"),
+	);
+	const oneHost = asRecord(
+		parse(readFileSync(new URL("../deploy/platform/k3s-values.yaml", import.meta.url), "utf8")),
+		"k3s-values.yaml",
+	);
+	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
+	const backup = {
+		postgresql: {
+			backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+		},
+	};
+	const everything: Layer[] = [stackOn, backup, { postgresql: { metrics: { enabled: true } } }];
+	const gvisor = { cpuMillis: 10, memoryMi: 48 };
+	const none = { cpuMillis: 0, memoryMi: 0 };
+	const installs: { install: string; layers: Layer[]; overhead: typeof none }[] = [
+		{ install: "`small.yaml`", layers: [], overhead: none },
+		{ install: "`small.yaml`, backups on", layers: [backup], overhead: none },
+		{
+			install: "`small.yaml`, backups, database metrics and the monitoring stack",
+			layers: everything,
+			overhead: none,
+		},
+		{ install: "One host", layers: [oneHost], overhead: gvisor },
+		{ install: "One host, backups on", layers: [oneHost, backup], overhead: gvisor },
+		{
+			install: "One host, backups, database metrics and the monitoring stack",
+			layers: [oneHost, ...everything],
+			overhead: gvisor,
+		},
+	];
+	for (const { install, layers, overhead } of installs) {
+		const base = [...layersFor("small"), ...layers];
+		const resources = rendered(base);
+		const turns = Number(
+			envValue(workload(resources, "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY"),
+		);
+		const before = fitTotals(rendered([...base, { sandbox: { conversationTurns: 0 } }]), overhead);
+		const peak = fitTotals(resources, overhead);
+		const free = Math.round(
+			(allocatable - outside - Math.max(peak.upgrade.memory, peak.steady.memory)) / 2 ** 20,
+		);
+		const row = `| ${install} | ${Math.round(before.upgrade.memory / 2 ** 20)} MiB | ${turns} | ${free} MiB |`;
+		assert.ok(sizing.includes(row), `docs/admin/sizing.mdx § Node reserve states ${row}`);
+	}
+});
+
 await test("a backup Pod never preempts, and every role and Job of the release outranks it", () => {
 	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
 	const resources = rendered([
@@ -660,7 +715,11 @@ await test("a backup Pod never preempts, and every role and Job of the release o
 		assert.ok(priorityClass, String(get(spec, "priorityClassName")));
 		return priorityClass;
 	};
-	const backups = resources.filter(yieldsToUpgrade);
+	const backups = resources.filter(
+		(resource) =>
+			scheduledBackup(resource) ||
+			(kindOf(resource) === "Job" && nameOf(resource).includes("-postgresql-backup-stanza-")),
+	);
 	// The two scheduled backups and the stanza Job of this release.
 	assert.equal(backups.length, 3);
 	const backupClasses = backups.map((resource) =>
@@ -671,7 +730,7 @@ await test("a backup Pod never preempts, and every role and Job of the release o
 		),
 	);
 	for (const priorityClass of backupClasses) {
-		// Waits for room instead of taking it: an upgrade or a conversation sandbox never loses its room to a backup.
+		// When the node's requests are full, a backup waits for room instead of preempting another Pod.
 		assert.equal(get(priorityClass, "preemptionPolicy"), "Never");
 	}
 	const backupValue = Math.max(
@@ -680,11 +739,11 @@ await test("a backup Pod never preempts, and every role and Job of the release o
 	const others = [
 		...workloads(resources).map((resource) => podSpec(resource)),
 		...resources
-			.filter((resource) => kindOf(resource) === "Job" && !yieldsToUpgrade(resource))
+			.filter((resource) => kindOf(resource) === "Job" && !backups.includes(resource))
 			.map((resource) => podSpec(resource)),
 	];
 	for (const spec of others) {
-		// The upgrade's Pods preempt a running backup rather than a sandbox.
+		// A Pod of a higher tier preempts a running backup before it preempts a sandbox.
 		assert.ok(
 			Number(get(classOf(spec), "value")) > backupValue,
 			String(get(spec, "priorityClassName")),
@@ -733,11 +792,9 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 			disk += amount(get(claim, "spec", "resources", "requests", "storage"));
 		}
 	}
-	// The migration Job runs beside the upgrade. A backup Pod yields to it: it waits for room, or the upgrade
-	// preempts it.
-	for (const job of resources.filter(
-		(candidate) => kindOf(candidate) === "Job" && !yieldsToUpgrade(candidate),
-	)) {
+	// The migration Job and the stanza Job run beside the upgrade. A scheduled backup is not counted: it fits in the
+	// reserve's headroom, or it waits.
+	for (const job of resources.filter((candidate) => kindOf(candidate) === "Job")) {
 		add(podSpec(job), 1);
 	}
 	const residents = workloads(resources).reduce(
@@ -922,10 +979,10 @@ await test("the small profile fits its declared budget at steady state and the d
 		steady.memory <= node.memory,
 		`steady: ${gib(steady.memory)} of ${gib(node.memory)} GiB`,
 	);
-	// An upgrade keeps the old server beside its replacement. Other Deployments can surge, and the migration Job
-	// can run beside the resident conversation sandboxes. Backup Pods yield to the upgrade.
+	// An upgrade keeps the old server beside its replacement. Other Deployments can surge, and the migration and
+	// stanza Jobs can run beside the resident conversation sandboxes. A scheduled backup is not counted.
 	const jobs = resources
-		.filter((resource) => kindOf(resource) === "Job" && !yieldsToUpgrade(resource))
+		.filter((resource) => kindOf(resource) === "Job")
 		.map((job): [unknown, number] => [podSpec(job), 1]);
 	const upgrade = sum(
 		total([
