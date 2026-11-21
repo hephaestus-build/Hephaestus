@@ -1,8 +1,18 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
-import { readJsonFileSync } from "./lib/json.ts";
-import { channelTarget, deployedSubjects, promoteIdentity } from "./scan-deployed-images.ts";
+import { environmentForGitFixture } from "./lib/git-environment.ts";
+import { asArray, asRecord, readJsonFileSync } from "./lib/json.ts";
+import {
+	channelTarget,
+	commitInventory,
+	deployedSubjects,
+	promoteIdentity,
+} from "./scan-deployed-images.ts";
 
 const digest = `sha256:${"a".repeat(64)}`;
 const inventory = readJsonFileSync("security/release-images.json");
@@ -74,6 +84,58 @@ void test("an image without a digest or a policy name is refused, not scanned un
 			),
 		/does not name the deployed image docker\.io\/library\/redis/u,
 	);
+});
+
+const gitEnvironment = environmentForGitFixture();
+const git = (cwd: string, ...args: string[]) =>
+	execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...args], {
+		cwd,
+		encoding: "utf8",
+		env: gitEnvironment,
+	}).trim();
+
+void test("a commit channel's images are named by the inventory of the commit it deploys, not main's", async () => {
+	const directory = await mkdtemp(path.join(tmpdir(), "deployed-inventory-"));
+	try {
+		const origin = path.join(directory, "origin");
+		await mkdir(path.join(origin, "security"), { recursive: true });
+		git(origin, "init", "--quiet", "--initial-branch=main");
+		// The workflow fetches the deployed commit by its hash, which GitHub allows.
+		git(origin, "config", "uploadpack.allowReachableSHA1InWant", "true");
+		const current = asRecord(inventory, "inventory");
+		const images = asArray(current.images, "images");
+		const write = async (names: readonly unknown[]) =>
+			writeFile(
+				path.join(origin, "security/release-images.json"),
+				JSON.stringify({ ...current, images: names }),
+			);
+		// An older build still ran an image that main no longer builds.
+		await write([...images, "webapp"]);
+		git(origin, "add", ".");
+		git(origin, "commit", "--quiet", "-m", "older build");
+		const older = git(origin, "rev-parse", "HEAD");
+		await write(images);
+		git(origin, "commit", "--quiet", "-am", "main");
+		// Shallow, as the workflow's checkout is: the older commit is not in it.
+		const checkout = path.join(directory, "checkout");
+		git(directory, "clone", "--quiet", "--depth=1", `file://${origin}`, checkout);
+
+		const webApp = `ghcr.io/hephaestus-build/webapp@${digest}`;
+		assert.deepEqual(
+			deployedSubjects(
+				[webApp],
+				await commitInventory(older, checkout, gitEnvironment),
+				"ghcr.io/hephaestus-build",
+			),
+			[{ image: "webapp", reference: webApp, repository: "ghcr.io/hephaestus-build/webapp" }],
+		);
+		assert.throws(
+			() => deployedSubjects([webApp], inventory, "ghcr.io/hephaestus-build"),
+			/does not name the deployed image ghcr\.io\/hephaestus-build\/webapp/u,
+		);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
 });
 
 void test("only the promotion workflow on main may sign a channel", () => {
