@@ -578,7 +578,7 @@ public class GitLabMergeRequestSyncService {
         var approvalRows = iid != null
                         && syncApprovers != null
                         && "merged".equalsIgnoreCase(fields.state())
-                        && !GitLabMergeRequestProcessor.isSettling(fields.detailedMergeStatus())
+                        && !GitLabMergeRequestReadiness.isSettling(fields.detailedMergeStatus())
                 ? approvalClient.read(scopeId, repository.getNativeId(), iid)
                 : null;
 

@@ -63,6 +63,7 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
             GitLabEventAction.UNAPPROVAL);
 
     private final GitLabMergeRequestProcessor mergeRequestProcessor;
+    private final GitLabMergeRequestReadiness readiness;
     private final GitLabWebhookContextResolver contextResolver;
     private final GitLabClosingIssueClient closingIssueClient;
     private final GitLabMergeRequestReadinessReader readinessReader;
@@ -71,6 +72,7 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
 
     GitLabMergeRequestMessageHandler(
             GitLabMergeRequestProcessor mergeRequestProcessor,
+            GitLabMergeRequestReadiness readiness,
             GitLabWebhookContextResolver contextResolver,
             GitLabClosingIssueClient closingIssueClient,
             GitLabMergeRequestReadinessReader readinessReader,
@@ -84,6 +86,7 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
                 deserializer,
                 transactionTemplate);
         this.mergeRequestProcessor = mergeRequestProcessor;
+        this.readiness = readiness;
         this.contextResolver = contextResolver;
         this.closingIssueClient = closingIssueClient;
         this.readinessReader = readinessReader;
@@ -102,10 +105,10 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
      * its merge status, head pipeline and approvals — so after an event that can move them GitLab is read for this
      * one merge request, outside the transaction, and what it said is recorded in a second short one where the
      * delivery may still write to the project as stored now ({@link GitLabWebhookContextResolver#mayStillWrite}) and
-     * the answer still describes the stored head ({@link GitLabMergeRequestProcessor#applyReadiness}). A failed read
+     * the answer still describes the stored head ({@link GitLabMergeRequestReadiness#applyReadiness}). A failed read
      * records nothing: the facts stay as the event left them, unknown where it moved the head, until the next event or
      * sync. After a merge the same read records who merged it, when and the merge commit where the hook named none of
-     * them ({@link GitLabMergeRequestProcessor#applyTerminalFacts}), and only then, in the same second transaction and
+     * them ({@link GitLabMergeRequestReadiness#applyTerminalFacts}), and only then, in the same second transaction and
      * under the same project check, is the merge offered for review ({@link GitLabMergeRequestProcessor#offerMerge}) —
      * also when the read failed, so that a merger it could not name holds the review pending instead of dropping it.
      * An opened or updated merge request also has the issues it closes read from GitLab — the webhook stores the
@@ -170,14 +173,14 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
             }
             if (merge) {
                 if (facts != null) {
-                    mergeRequestProcessor.applyTerminalFacts(repository, iid, facts);
-                    mergeRequestProcessor.applyReadiness(repository, iid, facts, requestedAt, stored.context());
+                    readiness.applyTerminalFacts(repository, iid, facts);
+                    readiness.applyReadiness(repository, iid, facts, requestedAt, stored.context());
                 }
                 // Offered whether or not the read succeeded: a merger it could not name
                 // holds the review pending.
                 mergeRequestProcessor.offerMerge(repository, iid, stored.context());
             } else if (facts != null) {
-                mergeRequestProcessor.applyReadiness(repository, iid, facts, requestedAt, stored.context());
+                readiness.applyReadiness(repository, iid, facts, requestedAt, stored.context());
             }
         });
     }

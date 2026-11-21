@@ -30,7 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabN
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO.EmbeddedIssue;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO.EmbeddedMergeRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO.NoteAttributes;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadiness;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiffNoteWebhookProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
@@ -66,7 +66,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
     private GitLabDiffNoteWebhookProcessor diffNoteProcessor;
 
     @Mock
-    private GitLabMergeRequestProcessor mergeRequestProcessor;
+    private GitLabMergeRequestReadiness mergeRequestReadiness;
 
     @Mock
     private GitLabWebhookContextResolver contextResolver;
@@ -108,7 +108,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
         handler = new GitLabNoteMessageHandler(
                 issueCommentProcessor,
                 diffNoteProcessor,
-                mergeRequestProcessor,
+                mergeRequestReadiness,
                 contextResolver,
                 pullRequestRepository,
                 userService,

@@ -101,6 +101,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    private GitLabMergeRequestReadiness readiness;
     private GitLabMergeRequestProcessor processor;
     private Repository testRepo;
     private IdentityProvider gitLabProvider;
@@ -114,10 +115,12 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 Duration.ofMillis(200),
                 Duration.ofMinutes(5));
 
+        readiness = new GitLabMergeRequestReadiness(
+                pullRequestRepository, reviewRepository, gitLabUserService, eventPublisher);
         processor = new GitLabMergeRequestProcessor(
                 gitLabUserService,
                 pullRequestRepository,
-                reviewRepository,
+                readiness,
                 milestoneRepository,
                 issueRepository,
                 userRepository,
@@ -523,7 +526,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
 
         private PullRequestReview standingApproval(PullRequest pr, PullRequestReview.State state) {
             PullRequestReview review = new PullRequestReview();
-            review.setNativeId(GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID));
+            review.setNativeId(GitLabMergeRequestReadiness.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID));
             review.setState(state);
             review.setDismissed(state == PullRequestReview.State.DISMISSED);
             review.setHtmlUrl("https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5#approvals");
@@ -1435,7 +1438,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             staleApprover.setNativeId(99999L);
             staleApprover.setLogin("staleuser");
 
-            long staleNativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, 99999L);
+            long staleNativeId = GitLabMergeRequestReadiness.generateApprovalNativeId(RAW_MR_ID, 99999L);
             PullRequestReview staleReview = new PullRequestReview();
             staleReview.setNativeId(staleNativeId);
             staleReview.setProvider(gitLabProvider);
@@ -1545,7 +1548,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             User approver = createApproverEntity();
             Instant notedAt = Instant.parse("2026-10-05T12:56:28.794Z");
             PullRequestReview noted = new PullRequestReview();
-            noted.setNativeId(GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID));
+            noted.setNativeId(GitLabMergeRequestReadiness.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID));
             noted.setProvider(gitLabProvider);
             noted.setState(PullRequestReview.State.APPROVED);
             noted.setHtmlUrl("https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5#approvals");
@@ -1709,7 +1712,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             pr.setBody("Why this change is needed");
             review = new PullRequestReview();
             review.setId(500L);
-            review.setNativeId(GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID));
+            review.setNativeId(GitLabMergeRequestReadiness.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID));
             review.setProvider(gitLabProvider);
             review.setAuthor(approver);
             review.setState(PullRequestReview.State.APPROVED);
@@ -1766,14 +1769,14 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void shouldNotReplaceADateUsingAnOldSnapshotOrAnotherHead() {
             stubSnapshotWrite();
             review.setSubmittedAt(actualApproval);
-            assertThat(processor.applyReadiness(
+            assertThat(readiness.applyReadiness(
                             testRepo,
                             MR_IID,
                             facts(snapshot(materialVersion), "b".repeat(40), materialVersion),
                             readAt,
                             ProcessingContext.forSync(1L, testRepo)))
                     .isFalse();
-            assertThat(processor.applyReadiness(
+            assertThat(readiness.applyReadiness(
                             testRepo,
                             MR_IID,
                             facts(
@@ -1794,7 +1797,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             pr.setMergeable(false);
             pr.setReviewDecision(ReviewDecision.REVIEW_REQUIRED);
             var seconds = materialVersion.truncatedTo(ChronoUnit.SECONDS);
-            assertThat(processor.applyReadiness(
+            assertThat(readiness.applyReadiness(
                             testRepo,
                             MR_IID,
                             facts(snapshot(actualApproval), APPROVAL_HEAD, seconds),
@@ -1806,7 +1809,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             assertThat(pr.getMergeable()).isFalse();
             assertThat(pr.getReviewDecision()).isEqualTo(ReviewDecision.REVIEW_REQUIRED);
             assertThat(pr.getReviewersObservedAt()).isEqualTo(readAt);
-            assertThat(processor.applyReadiness(
+            assertThat(readiness.applyReadiness(
                             testRepo,
                             MR_IID,
                             facts(snapshot(materialVersion), APPROVAL_HEAD, seconds),
@@ -1837,7 +1840,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                                     "actors".equals(mismatch) ? RAW_APPROVER_ID + 1 : RAW_APPROVER_ID),
                             actualApproval)));
             if ("withdrawn".equals(mismatch)) review.setDismissed(true);
-            assertThat(processor.applyReadiness(
+            assertThat(readiness.applyReadiness(
                             testRepo,
                             MR_IID,
                             facts(rows, APPROVAL_HEAD, materialVersion.truncatedTo(ChronoUnit.SECONDS)),
@@ -1886,7 +1889,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     head,
                     "version".equals(mismatch) ? materialVersion.minusSeconds(1) : materialVersion);
 
-            assertThat(processor.applyReadiness(
+            assertThat(readiness.applyReadiness(
                             testRepo, MR_IID, facts, readAt, ProcessingContext.forSync(1L, testRepo)))
                     .isFalse();
 
@@ -1914,7 +1917,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 long project,
                 String head,
                 Instant requestedAt) {
-            return processor.applyReadiness(
+            return readiness.applyReadiness(
                     testRepo,
                     MR_IID,
                     pairFacts(pair, project, head, materialVersion),
@@ -1952,7 +1955,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         }
 
         private boolean read(GitLabApprovalClient.@Nullable Snapshot rows, Instant observedAt) {
-            return processor.applyReadiness(
+            return readiness.applyReadiness(
                     testRepo,
                     MR_IID,
                     facts(rows, APPROVAL_HEAD, materialVersion),
@@ -2111,9 +2114,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
 
         @Test
         void uniqueIdsForDifferentPairs() {
-            long id1 = GitLabMergeRequestProcessor.generateApprovalNativeId(100, 200);
-            long id2 = GitLabMergeRequestProcessor.generateApprovalNativeId(100, 201);
-            long id3 = GitLabMergeRequestProcessor.generateApprovalNativeId(101, 200);
+            long id1 = GitLabMergeRequestReadiness.generateApprovalNativeId(100, 200);
+            long id2 = GitLabMergeRequestReadiness.generateApprovalNativeId(100, 201);
+            long id3 = GitLabMergeRequestReadiness.generateApprovalNativeId(101, 200);
 
             assertThat(id1).isPositive();
             assertThat(id2).isPositive();
@@ -2124,15 +2127,15 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
 
         @Test
         void deterministicOutput() {
-            long id1 = GitLabMergeRequestProcessor.generateApprovalNativeId(999555, 12345);
-            long id2 = GitLabMergeRequestProcessor.generateApprovalNativeId(999555, 12345);
+            long id1 = GitLabMergeRequestReadiness.generateApprovalNativeId(999555, 12345);
+            long id2 = GitLabMergeRequestReadiness.generateApprovalNativeId(999555, 12345);
             assertThat(id1).isEqualTo(id2);
         }
 
         @Test
         void alwaysPositiveForMax32BitMrId() {
             long maxSafe = (1L << 32) - 1; // 4294967295
-            long id = GitLabMergeRequestProcessor.generateApprovalNativeId(maxSafe, 1);
+            long id = GitLabMergeRequestReadiness.generateApprovalNativeId(maxSafe, 1);
             // (0xFFFFFFFF << 32) | 1 would set sign bit, but & Long.MAX_VALUE clears it
             assertThat(id).isPositive();
         }
@@ -2140,7 +2143,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void positiveForMax32BitUserId() {
             long maxUser = (1L << 32) - 1; // 4294967295
-            long id = GitLabMergeRequestProcessor.generateApprovalNativeId(1, maxUser);
+            long id = GitLabMergeRequestReadiness.generateApprovalNativeId(1, maxUser);
             // (1 << 32) | 0xFFFFFFFF = 0x1_FFFFFFFF which is positive
             assertThat(id).isPositive();
         }
@@ -2167,7 +2170,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         "failed, FAILURE",
     })
     void shouldMapAPipelineStatusToOneCheckState(String status, CheckState expected) {
-        assertThat(GitLabMergeRequestProcessor.mapPipelineStatus(status)).isEqualTo(expected);
+        assertThat(GitLabHeadPipeline.mapPipelineStatus(status)).isEqualTo(expected);
     }
 
     private PullRequest createPullRequestEntity() {

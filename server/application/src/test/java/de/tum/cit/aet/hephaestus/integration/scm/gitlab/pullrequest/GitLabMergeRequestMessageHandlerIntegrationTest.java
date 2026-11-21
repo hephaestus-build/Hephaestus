@@ -129,6 +129,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     private GitLabMergeRequestProcessor mergeRequestProcessor;
 
     @Autowired
+    private GitLabMergeRequestReadiness mergeRequestReadiness;
+
+    @Autowired
     private PullRequestRepository pullRequestRepository;
 
     @Autowired
@@ -407,7 +410,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 assertThat(review.getId()).isPositive(); // auto-generated PK
 
                 long expectedNativeId =
-                        GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR4_ID, NATIVE_APPROVER_ID);
+                        GitLabMergeRequestReadiness.generateApprovalNativeId(NATIVE_MR4_ID, NATIVE_APPROVER_ID);
                 assertThat(review.getNativeId()).isEqualTo(expectedNativeId);
             });
 
@@ -424,7 +427,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             receiveWithApprovals(loadPayload("merge_request.unapproved"), List.of());
 
             transactionTemplate.executeWithoutResult(status -> {
-                long nativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR4_ID, NATIVE_APPROVER_ID);
+                long nativeId = GitLabMergeRequestReadiness.generateApprovalNativeId(NATIVE_MR4_ID, NATIVE_APPROVER_ID);
                 var review = reviewRepository.findByNativeIdAndProviderId(nativeId, persistedId(savedProvider));
                 assertThat(review).isPresent();
                 assertThat(review.get().getState()).isEqualTo(PullRequestReview.State.DISMISSED);
@@ -798,7 +801,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         private PullRequestReview.@Nullable State approvalState() {
-            long nativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR4_ID, NATIVE_APPROVER_ID);
+            long nativeId = GitLabMergeRequestReadiness.generateApprovalNativeId(NATIVE_MR4_ID, NATIVE_APPROVER_ID);
             return reviewRepository
                     .findByNativeIdAndProviderId(nativeId, persistedId(savedProvider))
                     .map(PullRequestReview::getState)
@@ -1438,7 +1441,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         private boolean read(GitLabMergeRequestReadinessReader.Facts facts, Instant requestedAt) {
-            return mergeRequestProcessor.applyReadiness(
+            return mergeRequestReadiness.applyReadiness(
                     savedRepo, MR4_IID, facts, requestedAt, ProcessingContext.forSync(null, savedRepo));
         }
 
@@ -1613,7 +1616,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(mr2().getBaseRefOid()).isEqualTo("a".repeat(40));
 
             Instant accepted = Instant.now().plusSeconds(60).truncatedTo(ChronoUnit.MICROS);
-            assertThat(mergeRequestProcessor.applyReadiness(
+            assertThat(mergeRequestReadiness.applyReadiness(
                             savedRepo,
                             MR2_IID,
                             new GitLabMergeRequestReadinessReader.Facts(
@@ -1715,7 +1718,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         private @Nullable PullRequestReview mr2Approval(long userNativeId) {
-            long nativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR2_ID, userNativeId);
+            long nativeId = GitLabMergeRequestReadiness.generateApprovalNativeId(NATIVE_MR2_ID, userNativeId);
             return reviewRepository
                     .findByNativeIdAndProviderId(nativeId, persistedId(savedProvider))
                     .orElse(null);
@@ -1907,7 +1910,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 currentApprovers,
                 GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
                 null);
-        assertThat(mergeRequestProcessor.applyReadiness(
+        assertThat(mergeRequestReadiness.applyReadiness(
                         savedRepo, MR4_IID, facts, Instant.now(), ProcessingContext.forSync(null, savedRepo)))
                 .isTrue();
     }
@@ -1922,7 +1925,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     /** MR !4's approval review by the user GitLab knows as {@code userNativeId}, or null. */
     private @Nullable PullRequestReview approval(long userNativeId) {
-        long nativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR4_ID, userNativeId);
+        long nativeId = GitLabMergeRequestReadiness.generateApprovalNativeId(NATIVE_MR4_ID, userNativeId);
         return reviewRepository
                 .findByNativeIdAndProviderId(nativeId, persistedId(savedProvider))
                 .orElse(null);
@@ -2069,6 +2072,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             when(clients.forScope(any())).thenReturn(ScriptedGraphQlClient.of(request -> Mono.fromSupplier(answer)));
             return new GitLabMergeRequestMessageHandler(
                     mergeRequestProcessor,
+                    mergeRequestReadiness,
                     webhookContextResolver,
                     mock(GitLabClosingIssueClient.class),
                     mock(GitLabMergeRequestReadinessReader.class),

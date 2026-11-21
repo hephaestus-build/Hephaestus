@@ -319,7 +319,7 @@ Thus, incremental sync reads a missed event.
 GitLab's `approved` says only that the approval rules are met
 ([`approval_state.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/models/approval_state.rb)), and a
 project that requires no approval meets them with nobody approving. So the sync
-(`GitLabMergeRequestProcessor#reviewDecision`) derives the decision from what people did:
+(`GitLabMergeRequestReadiness#reviewDecision`) derives the decision from what people did:
 
 - `CHANGES_REQUESTED` while a request for changes stands.
   On Premium, this includes `REQUESTED_CHANGES` merge status when the project blocks merge for a request.
@@ -328,7 +328,7 @@ project that requires no approval meets them with nobody approving. So the sync
 - `REVIEW_REQUIRED` otherwise, including an approval that leaves required approvals missing.
 - None when the reviewer or approver list was not read whole: either could hide a decision.
 
-The processor does not read `approvalsRequired`, because the Community Edition schema has no such field. A request for changes is
+`GitLabMergeRequestReadiness` does not read `approvalsRequired`, because the Community Edition schema has no such field. A request for changes is
 attributed to a person only from the system note "requested changes" that names them
 (`GitLabReviewReconciler#recordSystemNote`). The `detailed_merge_status` embedded in a note hook belongs to the merge
 request and is repeated on every note while anyone's request stands. A live note of that kind also dismisses its
@@ -370,7 +370,7 @@ A webhook names one person's act, not the whole decision:
 A merge request hook carries no merge status, head pipeline, or approvals, which merge advice requires.
 After storage of an opened, updated, reopened, or approval hook, `GitLabMergeRequestMessageHandler` reads that merge request outside the hook transaction.
 It uses `GetMergeRequestReadiness` and `GitLabMergeRequestReadinessReader`.
-`GitLabMergeRequestProcessor#applyReadiness` records the result in a second short transaction, with the row locked.
+`GitLabMergeRequestReadiness#applyReadiness` records the result in a second short transaction, with the row locked.
 
 The delivery must still have permission to write to the project as currently stored (`GitLabWebhookContextResolver#mayStillWrite`).
 On a connection route, the connection remains active and the handler admits the project again.

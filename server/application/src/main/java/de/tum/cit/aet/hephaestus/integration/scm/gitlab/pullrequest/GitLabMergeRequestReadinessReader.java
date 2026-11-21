@@ -23,8 +23,8 @@ import org.springframework.stereotype.Service;
 /**
  * Reads one merge request's merge readiness from GitLab: its head, merge status, head pipeline, reviewers and
  * approvers. A webhook stores what it carries and none of these, so the message handler reads them after the event,
- * outside its transaction, and the processor applies them only while they still describe the stored head
- * ({@link GitLabMergeRequestProcessor#applyReadiness}). Review preparation also reads the paired diff refs when
+ * outside its transaction, and the readiness bean applies them only while they still describe the stored head
+ * ({@link GitLabMergeRequestReadiness#applyReadiness}). Review preparation also reads the paired diff refs when
  * GitLab has not provided the diff base yet.
  */
 @Service
@@ -188,7 +188,7 @@ public class GitLabMergeRequestReadinessReader {
                 if (facts != null
                         && "merged".equalsIgnoreCase(facts.state())
                         && facts.approvers() != null
-                        && !GitLabMergeRequestProcessor.isSettling(facts.detailedMergeStatus())) {
+                        && !GitLabMergeRequestReadiness.isSettling(facts.detailedMergeStatus())) {
                     facts = facts.withApprovalRows(approvalClient.read(scopeId, facts.projectNativeId(), iid));
                 }
                 return facts;

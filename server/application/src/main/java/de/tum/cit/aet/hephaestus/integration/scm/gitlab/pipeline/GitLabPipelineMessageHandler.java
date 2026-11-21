@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pipeline.dto.GitLabPipelineEventDTO;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabHeadPipeline;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -90,7 +90,7 @@ public class GitLabPipelineMessageHandler extends AbstractIntegrationMessageHand
             return;
         }
         long repositoryId = Objects.requireNonNull(context.repository()).getId();
-        CheckState state = GitLabMergeRequestProcessor.mapPipelineStatus(pipeline.status());
+        CheckState state = GitLabHeadPipeline.mapPipelineStatus(pipeline.status());
 
         List<PullRequest> targets = event.mergeRequest() == null
                 ? pullRequestRepository.findAllForUpdateByRepositoryIdAndHeadRefOid(repositoryId, pipeline.sha())

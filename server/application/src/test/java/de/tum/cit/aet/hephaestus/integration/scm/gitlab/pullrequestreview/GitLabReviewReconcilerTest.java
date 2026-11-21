@@ -12,7 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadiness;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.List;
@@ -58,7 +58,7 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
     /** The approver's stored approval, the row a note would change if notes changed approvals. */
     private PullRequestReview approval(Instant submittedAt) {
         PullRequestReview review = new PullRequestReview();
-        review.setNativeId(GitLabMergeRequestProcessor.generateApprovalNativeId(4242L, 99L));
+        review.setNativeId(GitLabMergeRequestReadiness.generateApprovalNativeId(4242L, 99L));
         review.setState(PullRequestReview.State.APPROVED);
         review.setSubmittedAt(submittedAt);
         review.setCreatedAt(submittedAt);
@@ -92,7 +92,7 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
         long nativeId = GitLabReviewReconciler.generateChangesRequestedNativeId("gid://gitlab/Note/4538627", 99L);
         assertThat(review.getNativeId()).isEqualTo(nativeId);
         assertThat(nativeId)
-                .isNotEqualTo(GitLabMergeRequestProcessor.generateApprovalNativeId(4242L, 99L))
+                .isNotEqualTo(GitLabMergeRequestReadiness.generateApprovalNativeId(4242L, 99L))
                 .isNotEqualTo(GitLabReviewReconciler.generateCommentedReviewNativeId("gid://gitlab/Note/4538627", 99L));
         assertThat(pr.getReviews()).contains(review);
     }
