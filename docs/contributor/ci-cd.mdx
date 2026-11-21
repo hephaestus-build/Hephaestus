@@ -137,6 +137,12 @@ Test checks show totals and failed suites/cases, not an inventory of successful 
 lookup runs only when failure annotations are needed. The complete unit, integration, database and
 Storybook JUnit reports remain downloadable for fourteen days, including successful runs.
 
+These reports and the diagnostics below upload through `.github/actions/retain-reports`, in up to three attempts.
+A report that still fails to upload does not fail the job: its verdict comes from its tests.
+A warning and the job summary then name the missing reports.
+Some artifacts are inputs to a later job or the release, such as the packaged server, the image digests and the release evidence.
+They upload directly, so the loss of one fails the job.
+
 Chromatic
 prints warnings/errors alongside the structured visual-coverage summary. Its JUnit report is retained
 with the Storybook reports. Do not publish its debug log or diagnostics file: they can contain

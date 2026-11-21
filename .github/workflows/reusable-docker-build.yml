@@ -313,7 +313,7 @@ jobs:
 
       - name: Retain complete buildpack diagnostics
         if: ${{ always() && steps.prep.outcome == 'success' && contains(fromJSON(steps.prep.outputs.images), 'server') }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/retain-reports
         with:
           name: buildpacks-log-${{ steps.prep.outputs.platform_pair }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/buildpacks.log

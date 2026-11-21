@@ -118,7 +118,7 @@ jobs:
       # A green browser suite can still hide server startup failures. Preserve the raw log too.
       - name: Upload diagnostics
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/retain-reports
         with:
           name: webapp-e2e-results
           path: |
@@ -229,7 +229,7 @@ jobs:
       # A green browser suite can still hide server startup failures. Preserve the raw log too.
       - name: Upload diagnostics
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/retain-reports
         with:
           name: extension-e2e-results
           path: |

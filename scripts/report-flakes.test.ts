@@ -139,7 +139,8 @@ void test("every CI step that uploads attempt reports is recognised as the job's
 				const inputs = node.get("with");
 				if (
 					typeof upload === "string" &&
-					upload.startsWith("actions/upload-artifact@") &&
+					(upload.startsWith("actions/upload-artifact@") ||
+						upload === "./.github/actions/retain-reports") &&
 					isMap(inputs) &&
 					/-reports-\$\{\{ github\.run_attempt \}\}/u.test(String(inputs.get("name")))
 				) {
