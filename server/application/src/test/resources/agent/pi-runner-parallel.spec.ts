@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, realpathSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	realpathSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { test } from "node:test";
@@ -245,6 +252,43 @@ void test("the deadline retains finished work and ends running and queued practi
 			evaluated: 1,
 			eligible: 4,
 		});
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+void test("a session that stays busy and never stops is left behind, so the watchdog never ends the review", async () => {
+	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-unsettled-")));
+	try {
+		stagePractices(
+			cwd,
+			["a-finished", "z-busy"].map((slug) => ({ slug })),
+		);
+		// The busy session answers without a result. Asking it once more waits 30 s for it to go idle, and stopping it
+		// waits 30 s more: past the watchdog at budget + 30 s, unless measuring returns without it.
+		const exit = await runRunner(
+			cwd,
+			{ "z-busy": "silent" },
+			{
+				AGENT_BUDGET_MS: "6500",
+				PI_HOST_COLD_LEADER: "z-busy",
+				PI_HOST_BUSY: "z-busy",
+				PI_HOST_UNSETTLED_STOP: "z-busy",
+			},
+		);
+		assert.ok(
+			!existsSync(nodePath.join(cwd, "out/watchdog-killed.json")),
+			"the watchdog ended the review",
+		);
+		assert.equal(exit.status, 78, exit.stderr);
+		assert.match(exit.stderr, /measurement\.left_at_deadline sessions_left=1/u);
+		assert.deepEqual(
+			resultsOf(cwd).results.map((result: unknown) => field(result, "practiceSlug")),
+			["a-finished"],
+		);
+		assert.deepEqual(field(readJsonFile(cwd, "out/result.json"), "nonResults"), [
+			{ practiceSlug: "z-busy", reason: "DEADLINE" },
+		]);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}

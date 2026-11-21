@@ -741,8 +741,13 @@ async function runReview(): Promise<void> {
 		Reflect.construct(sdkUndici.Agent, [{ headersTimeout: 0 }]),
 	]);
 
+	// The watchdog stops the process this long after the budget. A stop at the budget end must leave the runner
+	// END_RESERVE_MS of it to record and stage what it measured, so no wait after the budget end runs past CLOSE_BY.
+	const WATCHDOG_GRACE_MS = 30_000;
+	const END_RESERVE_MS = 10_000;
+	const CLOSE_BY = PROCESS_START_MS + AGENT_BUDGET_MS + WATCHDOG_GRACE_MS - END_RESERVE_MS;
 	setTimeout(() => {
-		diagnose("watchdog.exited", { after_ms: AGENT_BUDGET_MS + 30_000 });
+		diagnose("watchdog.exited", { after_ms: AGENT_BUDGET_MS + WATCHDOG_GRACE_MS });
 		// What each open session waited on when the budget ran out, written before the output is finalized in case that
 		// fails.
 		try {
@@ -759,7 +764,7 @@ async function runReview(): Promise<void> {
 				WATCHDOG_PATH,
 				JSON.stringify({
 					budgetMs: AGENT_BUDGET_MS,
-					elapsedMs: AGENT_BUDGET_MS + 30_000,
+					elapsedMs: AGENT_BUDGET_MS + WATCHDOG_GRACE_MS,
 					reason: "runtime exceeded budget + 30s grace, hard-killed by watchdog",
 				}),
 			);
@@ -767,7 +772,7 @@ async function runReview(): Promise<void> {
 			/* best-effort — already exiting */
 		}
 		process.exit(3);
-	}, AGENT_BUDGET_MS + 30_000).unref();
+	}, AGENT_BUDGET_MS + WATCHDOG_GRACE_MS).unref();
 
 	mkdirSync(OUTPUT, { recursive: true });
 
@@ -2912,6 +2917,42 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			},
 		};
 
+		// Set when measuring returned without a session: that session's later failure changes nothing of the run.
+		let measurementLeft = false;
+		/**
+		 * The sessions' outcomes, or only the ones that settled by `closeBy`. Whatever still runs then is left behind,
+		 * so the runner keeps the watchdog's reserve to record and stage what it measured.
+		 */
+		async function settledBy<T>(
+			running: readonly Promise<T>[],
+			closeBy: number,
+		): Promise<(PromiseSettledResult<T> | undefined)[]> {
+			const outcomes: (PromiseSettledResult<T> | undefined)[] = running.map(() => undefined);
+			const all = Promise.all(
+				running.map(async (work, index) => {
+					try {
+						outcomes[index] = { status: "fulfilled", value: await work };
+					} catch (error: unknown) {
+						outcomes[index] = { status: "rejected", reason: error };
+					}
+				}),
+			);
+			const deadline = scheduleDeadline(Math.max(0, closeBy - Date.now()), () => undefined);
+			try {
+				await Promise.race([all, deadline.elapsed]);
+			} finally {
+				clearTimeout(deadline.timer);
+			}
+			const left = outcomes.filter((outcome) => outcome === undefined).length;
+			if (left > 0) {
+				measurementClosed = true;
+				measurementLeft = true;
+				diagnose("measurement.left_at_deadline", { sessions_left: left });
+				persistRunnerDebug();
+			}
+			return outcomes;
+		}
+
 		async function measurePractices(): Promise<void> {
 			const stalled = newStallRule();
 			const serial = practiceIndex.some((practice) => practice.contextPaths !== undefined);
@@ -2919,12 +2960,23 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				for (const [index, slug] of allSlugs.entries()) {
 					const label = `turn ${index + 1}/${allSlugs.length} (${slug})`;
 					PLACES.set(label, { phase: "review", turn: index + 1 });
-					const stop = await runScope(
-						scopeContext,
-						label,
-						`## Turn ${index + 1} of ${allSlugs.length}: ${slug}`,
-						[slug],
+					const [outcome] = await settledBy(
+						[
+							runScope(scopeContext, label, `## Turn ${index + 1} of ${allSlugs.length}: ${slug}`, [
+								slug,
+							]),
+						],
+						CLOSE_BY,
 					);
+					if (outcome === undefined) {
+						break;
+					}
+					if (outcome.status === "rejected") {
+						throw outcome.reason instanceof Error
+							? outcome.reason
+							: new Error(String(outcome.reason));
+					}
+					const stop = outcome.value;
 					if (stalled(stop)) {
 						unreachedReason = "unavailable";
 						diagnose("measurement.ended", { reason: "stalled" });
@@ -2966,6 +3018,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 							stalledStarts.abort();
 						}
 					} catch (error) {
+						if (measurementLeft) {
+							throw error;
+						}
 						// The first failure in time is the cause; the abort below can fail the other sessions after it.
 						sessionFailure ??= { error };
 						measurementClosed = true;
@@ -2993,7 +3048,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					activeScopes.add(scope);
 					running.push(runSession(work, scope));
 				}
-				const workers = await Promise.allSettled(running);
+				const settled = await settledBy(running, CLOSE_BY);
+				const workers = settled.filter((worker) => worker !== undefined);
 				runnerDebug.sessionsAtOnce = sessionsAtOnce;
 				diagnose("review.paced", {
 					sessions_at_once: sessionsAtOnce,

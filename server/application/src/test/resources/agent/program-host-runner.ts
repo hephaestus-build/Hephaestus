@@ -777,14 +777,25 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 					pendingMessageCount: 0,
 					getContextUsage: () => ({ tokens: 1000, contextWindow: 128_000, percent: 0 }),
 					compact: async () => ({}),
-					isIdle: true,
+					// A session that stays busy, as a native run that never reports its end.
+					get isIdle() {
+						return sessionSlug === undefined || sessionSlug !== process.env.PI_HOST_BUSY;
+					},
 					isStreaming: false,
-					waitForIdle: async () => undefined,
+					waitForIdle: async () => {
+						if (sessionSlug !== undefined && sessionSlug === process.env.PI_HOST_BUSY) {
+							await Promise.withResolvers<never>().promise;
+						}
+					},
 					abortCompaction: () => undefined,
 					abort: async () => {
 						aborted = true;
 						if (sessionSlug === process.env.PI_HOST_STOP_FAILURE) {
 							throw new Error("session stop failed");
+						}
+						// A session whose stop never settles, as a native call that ignores its abort.
+						if (sessionSlug === process.env.PI_HOST_UNSETTLED_STOP) {
+							await Promise.withResolvers<never>().promise;
 						}
 					},
 					dispose: () => undefined,
