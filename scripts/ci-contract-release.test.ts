@@ -1020,7 +1020,21 @@ void describe("ci-contract: release", () => {
 			publication,
 			/docker buildx imagetools create "\$\{flags\[@\]\}" "\$ref@\$digest"/u,
 		);
-		const waited = publication.indexOf('node scripts/wait-for-image-tag.ts "$ref:$tag" "$digest"');
+		// Each alias's digest before the writes is the only stale answer that the check accepts.
+		const before = publication.indexOf(
+			'before=$(node scripts/wait-for-image-tag.ts current "$ref:$tag")',
+		);
+		assert.ok(
+			before !== -1 && before < promoted,
+			"the previous digests are read before the writes",
+		);
+		assert.ok(
+			publication.indexOf("--promote") < before,
+			"the previous digests are read under the lock",
+		);
+		const waited = publication.indexOf(
+			'node scripts/wait-for-image-tag.ts wait "$ref:$tag" "$digest" "$before"',
+		);
 		assert.ok(waited > promoted, "each alias is checked against its digest after the promotion");
 		assert.doesNotMatch(publication, /imagetools inspect "\$ref:\$tag"/u);
 

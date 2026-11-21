@@ -196,8 +196,11 @@ The job keeps the immutable assets and retries image aliases by digest.
 
 Immediately before alias writes, the release planner checks the semantic newest published stable release under the promotion lock.
 An older release cannot move aliases after a newer stable release publishes, regardless of GitHub's latest marker.
-After the writes, each alias must resolve to its verified digest. The registry can serve a tag's old digest for a moment, so the job waits for it, for at most 60 s (`scripts/wait-for-image-tag.ts`).
 A full workflow rerun still skips an already-published version.
+
+Before the writes, the job reads each alias's digest under the lock.
+After the writes, each alias must resolve to its verified digest. The registry can serve the previous digest, or no tag, for a moment, so the job waits, for at most 60 s (`scripts/wait-for-image-tag.ts`).
+Any other digest means that another writer moved the alias, and the job fails at once.
 
 Version-commit reverts are no longer part of recovery, but their exemption remains.
 `verify-changesets` normally freezes released text in feature PRs, except for its docs URLs (`.changeset/README.md`).
