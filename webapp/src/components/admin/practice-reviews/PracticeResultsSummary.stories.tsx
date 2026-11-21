@@ -70,7 +70,8 @@ export const EditedInRepository: Story = {
 export const EditedInUnknown: Story = {
 	args: { editedIn: undefined },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("link", { name: "Open in Practice setup" })).toBeVisible();
+		const link = canvas.getByRole("link", { name: "Open in Practice setup" });
+		await expect(link.getAttribute("href")).not.toContain("practice-edit");
 	},
 };
 

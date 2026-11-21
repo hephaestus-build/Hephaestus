@@ -309,6 +309,35 @@ function PracticeCatalogRoute() {
 	const levelQueries = useQueries({
 		queries: detailStack.map((entry) => levelQueryOptions(workspaceSlug, entry)),
 	});
+	// The open editor levels that opened on a practice edited here. One that reads as edited in the
+	// practice repository later moved there while open: it keeps its draft to copy, and does not turn
+	// into the read-only note. Adjusted during render, so a closed level forgets it at once.
+	const [openedEditable, setOpenedEditable] = useState<ReadonlySet<string>>(() => new Set());
+	const openEditors = new Map<string, boolean>();
+	for (const [index, entry] of detailStack.entries()) {
+		if (entry.kind === "practice-edit") {
+			const editable = workspacePracticeAt(levelQueries[index])?.editedIn === "HEPHAESTUS";
+			openEditors.set(detailStackKey(entry), editable);
+		}
+	}
+	const nextOpenedEditable = new Set(
+		[...openEditors]
+			.filter(([key, editable]) => editable || openedEditable.has(key))
+			.map(([key]) => key),
+	);
+	if (
+		nextOpenedEditable.size !== openedEditable.size ||
+		[...nextOpenedEditable].some((key) => !openedEditable.has(key))
+	) {
+		setOpenedEditable(nextOpenedEditable);
+	}
+	// A refused save belongs to its editor level: closing the level ends it.
+	if (
+		conflict !== null &&
+		!detailStack.some((entry) => entry.kind === "practice-edit" && entry.id === conflict.slug)
+	) {
+		setConflict(null);
+	}
 
 	// A level behind is named by what it shows once that has loaded, and by its kind until then.
 	const pathAt = levelPathAt(detailStack, {
@@ -592,7 +621,8 @@ function PracticeCatalogRoute() {
 		const refused = !creating && conflict?.slug === entry.id ? conflict : undefined;
 		// Moved to the practice repository meanwhile: the draft stays to copy from, and the server
 		// refuses every save until the practice is edited in Hephaestus again.
-		const movedToRepository = refused !== undefined && editing?.editedIn === "REPOSITORY";
+		const movedToRepository =
+			!creating && openedEditable.has(detailStackKey(entry)) && editing?.editedIn === "REPOSITORY";
 		let conflictNotice: ReactNode;
 		if (movedToRepository && editInHephaestus !== undefined) {
 			const repository = editInHephaestus.repositoryName ?? "the practice repository";
@@ -601,8 +631,9 @@ function PracticeCatalogRoute() {
 					<AlertTitle>This practice is now edited in {repository}</AlertTitle>
 					<AlertDescription>
 						<p>
-							Nothing was saved. Your changes are still here, so copy what you want to keep. Its
-							folder in {repository} now holds its definition and group, so it cannot be saved here.
+							{refused === undefined ? "" : "Nothing was saved. "}Your changes are still here, so
+							copy what you want to keep. Its folder in {repository} now holds its definition and
+							group, so they cannot be saved here.
 						</p>
 						<Button
 							size="sm"
@@ -650,6 +681,7 @@ function PracticeCatalogRoute() {
 		) => {
 			try {
 				await editor.update(practice, request, groupSlug);
+				setConflict(null);
 			} catch (error) {
 				if (problemStatusOf(error) === 409) {
 					setConflict({ slug: practice.slug, expectedVersionId: request.expectedVersionId });
