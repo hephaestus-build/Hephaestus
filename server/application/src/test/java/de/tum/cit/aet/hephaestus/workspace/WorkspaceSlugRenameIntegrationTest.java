@@ -197,7 +197,7 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         workspaceService.renameSlug(workspace.getId(), "install-alpha-renamed");
 
-        Workspace created = installationLifecycle.createOrUpdateFromInstallation(
+        Workspace created = installationProvisioning.createOrUpdateFromInstallation(
                 999L,
                 installationAccount.getNativeId(),
                 "install-alpha",
@@ -228,7 +228,7 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .getId());
         workspaceRepository.saveAndFlush(existing);
 
-        Workspace linked = installationLifecycle.createOrUpdateFromInstallation(
+        Workspace linked = installationProvisioning.createOrUpdateFromInstallation(
                 1111L, 1112L, "collision", GitHubInstallationAccountKind.ORGANIZATION, null, RepositorySelection.ALL);
 
         assertThat(linked).isNotNull();

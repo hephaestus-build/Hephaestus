@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.GitHubSubIssueS
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncScheduler;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDeletionSweepService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.GitHubTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
@@ -450,19 +451,21 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
         });
         return new GitHubDataSyncScheduler(
                 targets,
-                contextProvider(),
-                mock(GitHubDataSyncService.class),
-                mock(GitHubDeletionSweepService.class),
-                mock(GitHubSubIssueSyncService.class),
-                issueTypes,
-                mock(GitHubIssueDependencySyncService.class),
-                mock(GitHubTeamSyncService.class),
                 properties(),
-                mock(RateLimitTracker.class),
                 executor,
                 connectionQueries,
                 jobs,
-                mock(GitHubHeadCheckRunsReread.class));
+                new GitHubScopeSync(
+                        targets,
+                        contextProvider(),
+                        mock(GitHubDataSyncService.class),
+                        mock(GitHubDeletionSweepService.class),
+                        mock(GitHubSubIssueSyncService.class),
+                        issueTypes,
+                        mock(GitHubIssueDependencySyncService.class),
+                        mock(GitHubTeamSyncService.class),
+                        mock(RateLimitTracker.class),
+                        mock(GitHubHeadCheckRunsReread.class)));
     }
 
     private GitLabDataSyncScheduler gitLabScheduler(List<SyncSession> sessions, Executor executor) {

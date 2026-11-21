@@ -120,6 +120,9 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     "de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry(
+                    "de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationProvisioning",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
                     "de.tum.cit.aet.hephaestus.integration.scm.github.workspace.GitHubWorkspaceProvisioningAdapter",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry(

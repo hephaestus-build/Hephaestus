@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationAccountKind;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationRequests;
 import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationProvisioning;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -27,6 +28,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
     private static final Logger log = LoggerFactory.getLogger(GitHubWorkspaceProvisioningAdapter.class);
 
     private final GitHubInstallationLifecycle installationLifecycle;
+    private final GitHubInstallationProvisioning installationProvisioning;
     private final WorkspaceRepositoryMonitorService repositoryMonitorService;
     private final WorkspaceScopeFilter workspaceScopeFilter;
     private final GitHubInstallationRequests installationRequests;
@@ -36,12 +38,14 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
 
     public GitHubWorkspaceProvisioningAdapter(
             GitHubInstallationLifecycle installationLifecycle,
+            GitHubInstallationProvisioning installationProvisioning,
             WorkspaceRepositoryMonitorService repositoryMonitorService,
             WorkspaceScopeFilter workspaceScopeFilter,
             GitHubWorkspaceDataSyncTrigger dataSyncTrigger,
             @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor,
             GitHubInstallationRequests installationRequests) {
         this.installationLifecycle = installationLifecycle;
+        this.installationProvisioning = installationProvisioning;
         this.installationRequests = installationRequests;
         this.repositoryMonitorService = repositoryMonitorService;
         this.workspaceScopeFilter = workspaceScopeFilter;
@@ -76,7 +80,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
         }
 
         RepositorySelection selection = RepositorySelection.SELECTED;
-        Workspace workspace = installationLifecycle.createOrUpdateFromInstallation(
+        Workspace workspace = installationProvisioning.createOrUpdateFromInstallation(
                 installation.installationId(),
                 installation.accountId(),
                 installation.accountLogin(),

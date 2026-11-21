@@ -46,6 +46,7 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
     void setUp() {
         adapter = new GitHubWorkspaceProvisioningAdapter(
                 installationLifecycle,
+                mock(),
                 repositoryMonitorService,
                 workspaceScopeFilter,
                 dataSyncTrigger,

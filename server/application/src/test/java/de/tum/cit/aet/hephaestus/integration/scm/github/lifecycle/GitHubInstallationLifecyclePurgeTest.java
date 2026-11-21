@@ -67,6 +67,8 @@ class GitHubInstallationLifecyclePurgeTest extends BaseUnitTest {
 
     private GitHubInstallationLifecycle listener;
 
+    private GitHubInstallationProvisioning provisioning;
+
     @BeforeEach
     void setUp() {
         var roots = new WorkspaceRootsAdapter(workspaceRepository, mock());
@@ -76,6 +78,15 @@ class GitHubInstallationLifecyclePurgeTest extends BaseUnitTest {
                 mock(),
                 mock(),
                 repositoryRepository,
+                identityProviders,
+                connectionService,
+                workspaceLifecycleService,
+                mock(),
+                mock(),
+                mock());
+        provisioning = new GitHubInstallationProvisioning(
+                roots,
+                roots,
                 mock(),
                 identityProviders,
                 mock(),
@@ -83,10 +94,6 @@ class GitHubInstallationLifecyclePurgeTest extends BaseUnitTest {
                 gitHubAppTokenService,
                 organizationService,
                 connectionService,
-                workspaceLifecycleService,
-                mock(),
-                mock(),
-                mock(),
                 mock());
     }
 
@@ -141,7 +148,7 @@ class GitHubInstallationLifecyclePurgeTest extends BaseUnitTest {
         WorkspaceStatusFixture.markPurged(workspace);
         locked(workspace);
 
-        Workspace result = listener.createOrUpdateFromInstallation(
+        Workspace result = provisioning.createOrUpdateFromInstallation(
                 INSTALLATION_ID,
                 99L,
                 "acme",
@@ -165,7 +172,7 @@ class GitHubInstallationLifecyclePurgeTest extends BaseUnitTest {
         when(organizationService.findId(99L, 3L)).thenReturn(Optional.of(7L));
         when(workspaceRepository.findByOrganizationIdForUpdate(7L)).thenReturn(Optional.of(workspace));
 
-        Workspace result = listener.createOrUpdateFromInstallation(
+        Workspace result = provisioning.createOrUpdateFromInstallation(
                 INSTALLATION_ID,
                 99L,
                 "acme",

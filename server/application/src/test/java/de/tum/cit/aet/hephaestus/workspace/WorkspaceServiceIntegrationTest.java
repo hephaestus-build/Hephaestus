@@ -51,7 +51,7 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
             workspaceRepository.saveAndFlush(existing);
         }
 
-        Workspace incoming = installationLifecycle.createOrUpdateFromInstallation(
+        Workspace incoming = installationProvisioning.createOrUpdateFromInstallation(
                 998881L, 998882L, "reused-personal-account", kind, null, RepositorySelection.ALL);
 
         assertNotNull(incoming);
@@ -63,7 +63,7 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         incoming.getId(), accountId(formerAccount)))
                 .isEmpty();
 
-        Workspace renamed = installationLifecycle.createOrUpdateFromInstallation(
+        Workspace renamed = installationProvisioning.createOrUpdateFromInstallation(
                 998881L, 998882L, "renamed-installed-account", kind, null, RepositorySelection.ALL);
         assertNotNull(renamed);
         assertThat(renamed.getId()).isEqualTo(incoming.getId());
@@ -74,7 +74,7 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
         User formerLoginOwner = persistUser("reassigned-installation");
         long installedAccountId = 998877L;
 
-        Workspace workspace = installationLifecycle.createOrUpdateFromInstallation(
+        Workspace workspace = installationProvisioning.createOrUpdateFromInstallation(
                 998878L,
                 installedAccountId,
                 "reassigned-installation",
@@ -162,7 +162,7 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
         // "PAT_ORG without token" shape the migration replaces. The lifecycle listener
         // should promote it cleanly to a GitHub App Connection.
 
-        Workspace promoted = installationLifecycle.createOrUpdateFromInstallation(
+        Workspace promoted = installationProvisioning.createOrUpdateFromInstallation(
                 95711017L,
                 95711018L,
                 "ls1intum",

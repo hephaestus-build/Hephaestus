@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService.AppInstallation;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle.InstallationAccount;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationProvisioning.InstallationAccount;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import java.io.UncheckedIOException;
 import org.slf4j.Logger;

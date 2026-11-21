@@ -10,7 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
-import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncScheduler;
+import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.backfill.GitHubHistoricalBackfillService;
 import de.tum.cit.aet.hephaestus.integration.scm.sync.status.BackfillTally;
 import java.util.List;
@@ -28,17 +28,17 @@ public class GitHubIntegrationSyncRunner implements IntegrationSyncRunner {
 
     private static final Logger log = LoggerFactory.getLogger(GitHubIntegrationSyncRunner.class);
 
-    private final GitHubDataSyncScheduler dataSyncScheduler;
+    private final GitHubScopeSync scopeSync;
     private final SyncTargetProvider syncTargetProvider;
     private final GitHubHistoricalBackfillService backfillService;
     private final SyncSchedulerProperties syncSchedulerProperties;
 
     public GitHubIntegrationSyncRunner(
-            GitHubDataSyncScheduler dataSyncScheduler,
+            GitHubScopeSync scopeSync,
             SyncTargetProvider syncTargetProvider,
             GitHubHistoricalBackfillService backfillService,
             SyncSchedulerProperties syncSchedulerProperties) {
-        this.dataSyncScheduler = dataSyncScheduler;
+        this.scopeSync = scopeSync;
         this.syncTargetProvider = syncTargetProvider;
         this.backfillService = backfillService;
         this.syncSchedulerProperties = syncSchedulerProperties;
@@ -58,7 +58,7 @@ public class GitHubIntegrationSyncRunner implements IntegrationSyncRunner {
      */
     @Override
     public void reconcile(IntegrationRef ref, SyncExecutionHandle handle, SyncJobType type) {
-        dataSyncScheduler.syncWorkspaceNow(ref.workspaceId(), handle, type);
+        scopeSync.syncWorkspaceNow(ref.workspaceId(), handle, type);
         if (handle.isCancellationRequested()) {
             handle.reportCancelled();
         }

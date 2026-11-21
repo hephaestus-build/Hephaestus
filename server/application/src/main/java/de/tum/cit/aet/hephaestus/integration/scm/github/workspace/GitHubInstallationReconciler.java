@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenServic
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationAccountKind;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationRequests;
 import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationProvisioning;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
@@ -59,6 +60,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
 
     private final GitHubAppTokenService gitHubAppTokenService;
     private final GitHubInstallationLifecycle installationLifecycle;
+    private final GitHubInstallationProvisioning installationProvisioning;
     private final WorkspaceSummaryQuery workspaces;
     private final WorkspaceService workspaceService;
     private final WorkspaceScopeFilter workspaceScopeFilter;
@@ -68,6 +70,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
     public GitHubInstallationReconciler(
             GitHubAppTokenService gitHubAppTokenService,
             GitHubInstallationLifecycle installationLifecycle,
+            GitHubInstallationProvisioning installationProvisioning,
             WorkspaceSummaryQuery workspaces,
             WorkspaceService workspaceService,
             WorkspaceScopeFilter workspaceScopeFilter,
@@ -76,6 +79,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
         this.installationRequests = installationRequests;
         this.gitHubAppTokenService = gitHubAppTokenService;
         this.installationLifecycle = installationLifecycle;
+        this.installationProvisioning = installationProvisioning;
         this.workspaces = workspaces;
         this.workspaceService = workspaceService;
         this.workspaceScopeFilter = workspaceScopeFilter;
@@ -194,7 +198,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
 
         var account = installation.account();
 
-        Workspace workspace = installationLifecycle.createOrUpdateFromInstallation(
+        Workspace workspace = installationProvisioning.createOrUpdateFromInstallation(
                 installationId, account.id(), login, wsAccountKind, account.avatarUrl(), selection);
 
         if (workspace == null) {
