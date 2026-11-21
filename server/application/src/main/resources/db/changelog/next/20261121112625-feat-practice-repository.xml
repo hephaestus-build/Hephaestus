@@ -19,7 +19,7 @@
                 <constraints nullable="false"/>
             </column>
         </createTable>
-        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="workspace_practice_repository" constraintName="fk_practice_repository_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="workspace_practice_repository" constraintName="fk_practice_repository_workspace" deferrable="false" initiallyDeferred="false" onDelete="CASCADE" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
     </changeSet>
     <changeSet id="20261118033626-2" author="hephaestus">
         <comment>A practice is edited in Hephaestus or in the practice repository; the repository then owns its definition and group (ADR 0118).</comment>
