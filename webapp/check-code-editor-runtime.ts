@@ -12,8 +12,11 @@ import { appSourcePlugins } from "./vite.shared.ts";
 
 const fixtureRoot = fileURLToPath(new URL("tools/code-editor-runtime", import.meta.url));
 const sourceRoot = fileURLToPath(new URL("src", import.meta.url));
-// The server sends this policy (`SecurityHeaders`). This check serves the app from one origin over HTTP, so neither the
-// workspace apex nor `upgrade-insecure-requests` applies.
+// The server sends this policy (`SecurityHeaders`), and on the web app's page it names the page's script nonce in place
+// of `'self'`. This check serves the app from one origin over HTTP, so neither the workspace apex nor
+// `upgrade-insecure-requests` applies. A static server cannot change the nonce per request, so the build's placeholder
+// stands in for it.
+const NONCE = "HEPHAESTUS_CSP_NONCE";
 const directives = await readFile(
 	new URL(
 		"../server/application/src/main/resources/security/content-security-policy.txt",
@@ -21,11 +24,15 @@ const directives = await readFile(
 	),
 	"utf8",
 );
-const policy = directives
+const shipped = directives
 	.split("\n")
 	.filter((directive) => directive.trim() !== "")
 	.join("; ");
-assert.match(policy, /script-src 'self';/u, "The shipped content security policy is missing");
+assert.match(shipped, /script-src 'self';/u, "The shipped content security policy is missing");
+const policy = shipped.replace(
+	"script-src 'self';",
+	`script-src 'nonce-${NONCE}' 'strict-dynamic';`,
+);
 const output = await mkdtemp(path.join(tmpdir(), "hephaestus-editor-check-"));
 try {
 	await build({
@@ -33,6 +40,7 @@ try {
 		root: fixtureRoot,
 		plugins: appSourcePlugins(),
 		resolve: { alias: { "@": sourceRoot } },
+		html: { cspNonce: NONCE },
 		build: { outDir: output, emptyOutDir: true },
 	});
 	const server = await preview({

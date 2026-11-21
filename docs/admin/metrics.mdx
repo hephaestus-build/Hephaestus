@@ -620,7 +620,7 @@ It counts a repeated failure instead of sending it again.
 It sends at most 20 distinct failures, in at most 10 reports, one at a time.
 
 A report has only closed values: the kind, the journey page, the class of the error and the release of the web app.
-The release is the commit that the web app image was built from, or its version.
+The release is the commit that the server was built from, or its version: the server writes both into the page.
 A report also has the positions of the stack frames in the web app's own scripts.
 It has no error message, page address, query string, user agent or identifier of a person or workspace.
 The server refuses a value outside these sets.

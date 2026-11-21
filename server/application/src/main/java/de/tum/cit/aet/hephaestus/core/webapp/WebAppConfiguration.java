@@ -59,13 +59,16 @@ class WebAppConfiguration implements WebMvcConfigurer {
     RouterFunction<ServerResponse> webAppIndexRoute(WebAppIndex index) {
         RequestPredicate clientRoute = RequestPredicates.method(HttpMethod.GET)
                 .or(RequestPredicates.method(HttpMethod.HEAD))
-                .and(request -> index.html().isPresent() && isClientRoute(path(request), index));
-        return RouterFunctions.route(
-                clientRoute,
-                request -> ServerResponse.ok()
-                        .contentType(MediaType.TEXT_HTML)
-                        .cacheControl(CacheControl.noStore())
-                        .body(index.html().orElseThrow()));
+                .and(request -> index.present() && isClientRoute(path(request), index));
+        return RouterFunctions.route(clientRoute, request -> {
+            // The header writer reads the nonce when the response commits, after this handler chose it.
+            String nonce = WebAppIndex.newNonce();
+            request.servletRequest().setAttribute(WebAppRequests.SCRIPT_NONCE, nonce);
+            return ServerResponse.ok()
+                    .contentType(MediaType.TEXT_HTML)
+                    .cacheControl(CacheControl.noStore())
+                    .body(index.html(nonce));
+        });
     }
 
     static boolean isClientRoute(String path, WebAppIndex index) {

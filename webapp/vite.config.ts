@@ -34,6 +34,8 @@ const viteConfig = defineConfig({
 			plugin === false ? false : { ...plugin, apply: "serve" as const },
 		),
 	],
+	// The server writes each request's script nonce in place of this placeholder (`WebAppIndex`).
+	html: { cspNonce: "HEPHAESTUS_CSP_NONCE" },
 	build: {
 		license: { fileName: BUNDLE_LICENSE_FILE },
 		rolldownOptions: {
@@ -95,7 +97,7 @@ const viteConfig = defineConfig({
 					name: "app",
 					environment: "jsdom",
 					exclude: [...configDefaults.exclude, "e2e/**/*.spec.ts", "tools/oxlint/rules/**"],
-					setupFiles: ["./src/test/setup-msw.ts"],
+					setupFiles: ["./src/test/setup-zod.ts", "./src/test/setup-msw.ts"],
 				},
 			},
 			{

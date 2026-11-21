@@ -3,8 +3,7 @@
  * document again, and a change of the search on the page the reader is on keeps their scroll. Like
  * `journeys.spec.ts`, it needs no server: the synthetic workspace answers the API.
  */
-import { expect, test } from "@playwright/test";
-
+import { expect, test } from "./fixtures.ts";
 import { openJourney, WORKSPACE } from "./journey-cost.ts";
 
 const PROFILE = "Reviewers cannot see how to check your change";

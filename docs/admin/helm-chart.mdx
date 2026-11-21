@@ -252,11 +252,12 @@ Each integration takes its settings from your values file and its secrets from t
 
 The server serves each path as it receives it, so no rule changes a path.
 
-The Gateway controller must support the core `HTTPRoute` features and this extended feature:
+The Gateway controller must support the core `HTTPRoute` features.
+The rules use no filter: the server sends every response header itself.
 
-- `ResponseHeaderModifier`, for `Strict-Transport-Security` on the web app's rules. The server sends this header itself.
-
-The chart cannot detect a controller without it. Confirm the feature for your controller.
+A proxy or CDN in front of the Gateway must pass the web app's page through unchanged, and must not cache it.
+Each page load carries its own script nonce, and the page runs only the scripts that carry it.
+A script that a proxy adds to the page does not run, and a cached page shows one nonce to every reader.
 
 The live streams of Hephaestus stay open for much longer than one request.
 The server sends a heartbeat on each live stream about every 20 seconds. Two events can be about 40 seconds apart.
