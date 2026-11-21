@@ -415,8 +415,10 @@ describe("practice profile route", () => {
 
 	it("tells the reader whether admins of this workspace see their results with their name", async () => {
 		server.use(
-			http.get("*/workspaces/:workspaceSlug/per-person-results", () =>
-				HttpResponse.json({ enabled: false, canTurnOn: false }),
+			http.get("*/workspaces", () =>
+				HttpResponse.json([
+					workspaceListItem("acme", { practicesEnabled: true, perPersonResultsForAdmins: false }),
+				]),
 			),
 		);
 		await renderProfile();

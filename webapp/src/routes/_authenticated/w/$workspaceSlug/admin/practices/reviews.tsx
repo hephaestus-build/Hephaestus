@@ -7,7 +7,7 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 
-import { getPerPersonResultsOptions } from "@/api/@tanstack/react-query.gen";
+import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 
 import { PracticeReviewsLayout } from "@/components/admin/practice-reviews/PracticeReviewsLayout";
 import { recordLevel, type RecordRef } from "@/components/admin/practice-reviews/review-layers";
@@ -56,10 +56,11 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/pra
 		if (!location.href.includes("developerId=")) {
 			return;
 		}
-		const setting = await context.queryClient
-			.query(getPerPersonResultsOptions({ path: { workspaceSlug: params.workspaceSlug } }))
+		const workspaces = await context.queryClient
+			.query(listWorkspacesOptions())
 			.catch(() => undefined);
-		if (setting?.enabled !== false) {
+		const workspace = workspaces?.find((item) => item.workspaceSlug === params.workspaceSlug);
+		if (workspace?.perPersonResultsForAdmins !== false) {
 			return;
 		}
 		const url = new URL(location.href, "http://localhost");

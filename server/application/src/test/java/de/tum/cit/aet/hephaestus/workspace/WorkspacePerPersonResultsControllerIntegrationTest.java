@@ -47,6 +47,9 @@ class WorkspacePerPersonResultsControllerIntegrationTest extends AbstractWorkspa
 
     @Test
     void aNewWorkspaceStartsWithoutPerPersonResults() {
+        listed(member)
+                .jsonPath("$[?(@.workspaceSlug == 'per-person')].perPersonResultsForAdmins")
+                .isEqualTo(false);
         read(member)
                 .jsonPath("$.enabled")
                 .isEqualTo(false)
@@ -72,6 +75,9 @@ class WorkspacePerPersonResultsControllerIntegrationTest extends AbstractWorkspa
                 .isEqualTo(true);
         assertThat(stored()).isTrue();
         read(member).jsonPath("$.enabled").isEqualTo(true);
+        listed(member)
+                .jsonPath("$[?(@.workspaceSlug == 'per-person')].perPersonResultsForAdmins")
+                .isEqualTo(true);
 
         update(admin, false)
                 .expectStatus()
@@ -90,6 +96,18 @@ class WorkspacePerPersonResultsControllerIntegrationTest extends AbstractWorkspa
         return webTestClient
                 .get()
                 .uri("/workspaces/{slug}/per-person-results", workspace.getWorkspaceSlug())
+                .headers(caller)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody();
+    }
+
+    /** The workspace list carries the setting, so the pages that depend on it need no read of their own. */
+    private WebTestClient.BodyContentSpec listed(Consumer<HttpHeaders> caller) {
+        return webTestClient
+                .get()
+                .uri("/workspaces")
                 .headers(caller)
                 .exchange()
                 .expectStatus()

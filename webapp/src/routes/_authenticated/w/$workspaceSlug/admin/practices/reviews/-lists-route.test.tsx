@@ -19,7 +19,7 @@ import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/revie
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
 
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
-import { ownMembership } from "@/mocks/fixtures/workspaces";
+import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { precedes } from "@/test/dom";
 import { ObserverStub } from "@/test/observers";
@@ -442,8 +442,8 @@ describe("practice review list routes", () => {
 		const [result] = reviewResults;
 		assert(result);
 		server.use(
-			http.get("*/workspaces/:workspaceSlug/per-person-results", () =>
-				HttpResponse.json({ enabled: false, canTurnOn: false }),
+			http.get("*/workspaces", () =>
+				HttpResponse.json([workspaceListItem("acme", { perPersonResultsForAdmins: false })]),
 			),
 			http.get("*/workspaces/:workspaceSlug/practices/reviews/results", ({ request }) => {
 				resultUrls.push(new URL(request.url));
@@ -463,8 +463,8 @@ describe("practice review list routes", () => {
 	it("drops the person from an old address while per-person results are off", async () => {
 		const { resultUrls } = recordRequests();
 		server.use(
-			http.get("*/workspaces/:workspaceSlug/per-person-results", () =>
-				HttpResponse.json({ enabled: false, canTurnOn: false }),
+			http.get("*/workspaces", () =>
+				HttpResponse.json([workspaceListItem("acme", { perPersonResultsForAdmins: false })]),
 			),
 		);
 

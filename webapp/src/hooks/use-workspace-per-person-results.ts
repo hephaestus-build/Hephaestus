@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	getPerPersonResultsOptions,
 	getPerPersonResultsQueryKey,
+	listWorkspacesQueryKey,
 	updatePerPersonResultsMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { PerPersonResults } from "@/api/types.gen";
@@ -49,7 +50,11 @@ export function useWorkspacePerPersonResults(
 			toast.error("We could not change this setting", { description: problemDetailOf(error) });
 		},
 		onSettled: async () =>
-			invalidateWorkspaceReads(queryClient, workspaceSlug, READS_THAT_NAME_PEOPLE),
+			Promise.all([
+				invalidateWorkspaceReads(queryClient, workspaceSlug, READS_THAT_NAME_PEOPLE),
+				// The pages that show or hide names read the setting from the workspace list.
+				queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() }),
+			]),
 	});
 	let state: WorkspacePerPersonResultsSettingsProps["state"];
 	if (query.isPending) {

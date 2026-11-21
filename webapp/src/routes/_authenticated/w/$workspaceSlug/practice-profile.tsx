@@ -11,7 +11,7 @@ import {
 import { CompassIcon } from "lucide-react";
 import { lazy, type ReactNode, Suspense, use, useState, useTransition } from "react";
 
-import { getOwnResultOptions, getPerPersonResultsOptions } from "@/api/@tanstack/react-query.gen";
+import { getOwnResultOptions } from "@/api/@tanstack/react-query.gen";
 import type { GroupRef, ResultDetail, ResultList } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { combinePanelStates, queryLoadState } from "@/components/common/panel-state";
@@ -170,8 +170,7 @@ function PracticeProfile() {
 	const setView = (view: Partial<PracticeProfileSearch>) => stackControls.setView(view);
 
 	const featureState = useWorkspaceFeatures(workspaceSlug);
-	const perPersonResults = useQuery(getPerPersonResultsOptions({ path: { workspaceSlug } })).data
-		?.enabled;
+	const perPersonResults = featureState.perPersonResultsForAdmins;
 	const focusSwitch = usePracticeFocusSwitch(workspaceSlug);
 	const {
 		groups,

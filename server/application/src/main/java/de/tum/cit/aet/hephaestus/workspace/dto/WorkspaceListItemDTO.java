@@ -47,6 +47,12 @@ public record WorkspaceListItemDTO(
 
         @NonNull
         @Schema(
+                description = "Whether workspace admins see practice results per person. Every member reads it,"
+                        + " because it decides who sees their results.")
+        Boolean perPersonResultsForAdmins,
+
+        @NonNull
+        @Schema(
                 description = "Hosts that a link in model-written text may point to in this workspace: Hephaestus and"
                         + " the workspace's providers. A host that starts with a dot also allows its subdomains."
                         + " Any other link shows as text.")
@@ -70,6 +76,7 @@ public record WorkspaceListItemDTO(
                 instanceAllowsPublicActivity
                         && workspace.status() == WorkspaceStatus.ACTIVE
                         && Boolean.TRUE.equals(workspace.publicActivityEnabled()),
+                workspace.perPersonResultsForAdmins(),
                 linkHosts);
     }
 }
