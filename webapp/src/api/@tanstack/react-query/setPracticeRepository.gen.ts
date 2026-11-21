@@ -4,7 +4,11 @@ import type { UseMutationOptions } from "@tanstack/react-query";
 
 import type { Options } from "../../sdk.gen.js";
 import { setPracticeRepository } from "../../sdk/setPracticeRepository.gen.js";
-import type { SetPracticeRepositoryData, SetPracticeRepositoryError } from "../../types.gen.js";
+import type {
+	SetPracticeRepositoryData,
+	SetPracticeRepositoryError,
+	SetPracticeRepositoryResponse,
+} from "../../types.gen.js";
 
 /**
  * Set the practice repository
@@ -13,9 +17,13 @@ import type { SetPracticeRepositoryData, SetPracticeRepositoryError } from "../.
  */
 export const setPracticeRepositoryMutation = (
 	options?: Partial<Options<SetPracticeRepositoryData>>,
-): UseMutationOptions<unknown, SetPracticeRepositoryError, Options<SetPracticeRepositoryData>> => {
+): UseMutationOptions<
+	SetPracticeRepositoryResponse,
+	SetPracticeRepositoryError,
+	Options<SetPracticeRepositoryData>
+> => {
 	const mutationOptions: UseMutationOptions<
-		unknown,
+		SetPracticeRepositoryResponse,
 		SetPracticeRepositoryError,
 		Options<SetPracticeRepositoryData>
 	> = {

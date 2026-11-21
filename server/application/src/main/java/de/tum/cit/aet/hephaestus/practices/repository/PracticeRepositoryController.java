@@ -54,6 +54,7 @@ public class PracticeRepositoryController {
     @PutMapping
     @RequiresRecentSignIn(refusal = "PRACTICE_REPOSITORY_CHANGE")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_REPOSITORY")
+    @ApiResponse(responseCode = "200", description = "The practice repository")
     @ApiResponse(
             responseCode = "400",
             description =
