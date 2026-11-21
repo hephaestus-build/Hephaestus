@@ -170,7 +170,7 @@ It also never takes a practice with a read that the current source catalog canno
 Capture would withhold such a practice on every review and leave each review Partial.
 `ReviewServiceImpl` then removes practices that do not run now:
 
-1. Occasions that all continue leave out each practice in feedback mode Off that also reviews on a milestone or an outcome of the item kind. It waits for that moment, because its feedback reaches no one. A practice that the pinned version still owes for any carried reason, such as its checks or a spent deadline, stays: it finishes the measurement of that version, but never follows a newer head. A practice in Off with no such event keeps its continuing occasions. If nothing is left, the event is withheld with `FEEDBACK_MODE_OFF`.
+1. Occasions that all continue leave out a practice in feedback mode Off with a milestone or outcome event. Its feedback reaches no one, so it waits for that moment. A practice that the pinned version still owes, for any carried reason, stays. Thus, it finishes that version but never follows a newer head. A practice in Off with no such event keeps its continuing occasions. If nothing is left, the event is withheld with `FEEDBACK_MODE_OFF`.
 2. A practice that a queued or running review of the item still measures holds the whole window. The events wait with `REVIEW_IN_PROGRESS` and are offered again one window later.
 3. A continuing occasion leaves out each practice with a current result. A [milestone](practice-review-glossary#review-terms) keeps them. If nothing is left, the event is withheld with `ALREADY_CURRENT`.
 4. A practice can need the item's checks source (Required or Complete). If the checks have not settled, it gets a withheld membership. Its [readiness reason](practice-review-glossary#readiness-reasons) says why.
@@ -183,10 +183,13 @@ If it finds one, the review ends with the stop reason `REPLACED`, and no sandbox
 A running review, a person's requested review, and a newer event at the same version change nothing.
 
 The unmeasured practices of a replaced review get a withheld membership with the reason `REPLACED`.
-When every newer occasion continues, a practice that those occasions leave out until a milestone gets `SOURCES_MOVED` instead: the review of the push does not measure it.
+
+Occasions that all continue can leave out a practice until a milestone.
+When every newer occasion continues, such a practice gets `SOURCES_MOVED` instead, because the review of the push does not measure it.
 When that holds for every practice, the review itself ends with `SOURCES_MOVED`, since nothing replaces it.
 The next readiness edge of the item selects the others with what its own events select, and the next milestone selects those in Off.
 This is the same rule as for a practice that waits for checks.
+
 A retry that seals at a moved version writes `NOT_RUN` for what it did not measure, so the next edge also selects it.
 A refusal that can pass, such as an exhausted budget, keeps every event of the window waiting, so that the retry still selects their union.
 

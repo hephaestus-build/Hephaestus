@@ -2385,8 +2385,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(replaced(workspace, stale.getId())).isTrue();
 
         var members = membersOf(workspace, stale.getId());
-        assertThat(members.get(delivering).getReason()).isEqualTo("REPLACED");
-        assertThat(members.get(off).getReason()).isEqualTo("SOURCES_MOVED");
+        assertThat(reasonOf(members, delivering)).isEqualTo("REPLACED");
+        assertThat(reasonOf(members, off)).isEqualTo("SOURCES_MOVED");
         assertThat(jdbc.queryForList(
                         "SELECT practice_id||':'||status||'/'||reason FROM review_practice WHERE review_id=?",
                         String.class,
@@ -2446,7 +2446,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var ended = reviews.findById(stale.getId()).orElseThrow();
         assertThat(ended.getStatus()).isEqualTo(ReviewStatus.CANCELLED);
         assertThat(ended.getStopReason()).isEqualTo(ReviewStopReason.SOURCES_MOVED);
-        assertThat(membersOf(workspace, stale.getId()).get(off).getReason()).isEqualTo("SOURCES_MOVED");
+        assertThat(reasonOf(membersOf(workspace, stale.getId()), off)).isEqualTo("SOURCES_MOVED");
     }
 
     @Test
@@ -2475,8 +2475,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(reviews.findById(stale.getId()).orElseThrow().getStopReason())
                 .isEqualTo(ReviewStopReason.REPLACED);
         var members = membersOf(workspace, stale.getId());
-        assertThat(members.get(delivering).getReason()).isEqualTo("REPLACED");
-        assertThat(members.get(off).getReason()).isEqualTo("REPLACED");
+        assertThat(reasonOf(members, delivering)).isEqualTo("REPLACED");
+        assertThat(reasonOf(members, off)).isEqualTo("REPLACED");
     }
 
     @Test
@@ -2496,7 +2496,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         });
         publish(prepared);
         var opened = newestReview(prepared);
-        assertThat(membersOf(workspace, opened.getId()).get(off).getReason()).isEqualTo("CHECKS_PENDING");
+        assertThat(reasonOf(membersOf(workspace, opened.getId()), off)).isEqualTo("CHECKS_PENDING");
 
         // The checks event continues, but this version still owes the practice: it finishes the milestone's
         // measurement.
@@ -2665,6 +2665,10 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var practice = practices.findByWorkspaceIdAndSlug(workspace, slug).orElseThrow();
         practice.setFeedbackMode(mode);
         return practices.saveAndFlush(practice).getId();
+    }
+
+    private static @Nullable String reasonOf(Map<Long, ReviewItem> members, long practice) {
+        return Objects.requireNonNull(members.get(practice)).getReason();
     }
 
     private void setFeedbackMode(long practiceId, FeedbackMode mode) {

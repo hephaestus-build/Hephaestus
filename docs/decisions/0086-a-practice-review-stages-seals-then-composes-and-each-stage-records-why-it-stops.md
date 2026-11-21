@@ -252,23 +252,27 @@ Production reviewed a repository whose pull requests got several pushes within o
 A review of 40 practices took about 16 minutes, so nearly every review met a push before its one seal (§ 10).
 A push changes the sources of most practices, so most of the staged work ended `WORK_CHANGED`.
 The six practices in Approve first were among them, and no feedback reached anyone.
-Selection was the cause: each push measured every practice that reviews on pushes, including the 34 practices in feedback mode Off, whose feedback reaches no one.
+Selection was the cause: each push measured every practice that reviews on pushes.
+This included the 34 practices in feedback mode Off, whose feedback reaches no one.
 
 This update extends § 5 and § 6:
 
-- Occasions that all continue, such as a push, an edit or a follow-up occasion, leave out a practice in feedback mode Off.
-  The practice then waits for a milestone or an outcome of its item, such as opened, ready, merged, closed, published, or a request.
-  This also holds when the practice is carried from an older version, so it never follows a newer head.
-  A practice that its own version still owes for any carried reason, such as its checks or a spent deadline, finishes on a continuing occasion at that version.
-  Otherwise a practice that waits for the checks at opened would wait until merged, and the follow-up of a review that ran out of time would measure nothing.
-- A practice in feedback mode Off that reviews on no milestone or outcome of its item kind has no other moment.
+- Occasions that all continue leave out a practice in feedback mode Off. A push, an edit and a follow-up occasion continue.
+  The practice waits for a milestone or an outcome of its item, such as opened, ready, merged, closed or published.
+  This also holds when it is carried from an older version, so it never follows a newer head.
+  A practice that its own version still owes, for any carried reason, finishes at that version.
+  Otherwise a practice that waits for the checks at opened would wait until merged.
+  Also, the follow-up of a review that ran out of time would measure nothing.
+- A practice in Off can review on no milestone or outcome of its item kind. Then it has no other moment.
   So its continuing occasions keep it. A conversation thread is such a kind: its one event continues.
 - When every practice that a push selects is in Off, the push is withheld with `FEEDBACK_MODE_OFF`.
-- A queued review that a newer push replaces at claim withholds such a practice with `SOURCES_MOVED`, not `REPLACED`.
+- A newer push can replace a queued review at claim. The review then withholds such a practice with `SOURCES_MOVED`.
   The review of the push does not measure it, and `REPLACED` means that a newer review measures the practice.
-  When this holds for every practice of the review, the review ends with `SOURCES_MOVED` too, since nothing replaces it.
+  When this holds for every practice, the review ends with `SOURCES_MOVED` too, since nothing replaces it.
   When a newer milestone waits, every practice is `REPLACED`, as before.
-- The selection reads the effective feedback mode when it decides. A practice that changes from Off to Approve first or Automatic is measured on the next push that changes what it reads.
+- The selection reads the effective feedback mode when it decides.
+  A practice that changes from Off to an active mode is measured on the next push.
+  That push must change what it reads, or the practice stays current.
 
 The run already starts the practices whose feedback reaches someone first ([pipeline guide](../contributor/practice-review-pipeline.mdx#admit-results)).
 So a push now measures only what someone reads, and a review of a push is about as short as those practices.
