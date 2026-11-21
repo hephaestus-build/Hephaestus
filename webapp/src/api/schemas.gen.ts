@@ -18387,7 +18387,6 @@ export const WorkspaceListItemSchema = {
 		"displayName",
 		"id",
 		"linkHosts",
-		"perPersonResultsForAdmins",
 		"practicesEnabled",
 		"publishesPublicActivity",
 		"status",

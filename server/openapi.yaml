@@ -31976,7 +31976,6 @@ components:
       - displayName
       - id
       - linkHosts
-      - perPersonResultsForAdmins
       - practicesEnabled
       - publishesPublicActivity
       - status
