@@ -86,6 +86,7 @@ class GitHubInstallationLifecyclePurgeTest extends BaseUnitTest {
                 workspaceLifecycleService,
                 mock(),
                 mock(),
+                mock(),
                 mock());
     }
 

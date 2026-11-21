@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorCommands;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -69,6 +70,7 @@ public class GitHubInstallationLifecycle {
     private final IntegrationAttentionService attention;
     private final ScmWorkspaceContentEraser contentEraser;
     private final GitHubInstallationRequests installationRequests;
+    private final WorkspaceSummaryQuery workspaceStates;
 
     public GitHubInstallationLifecycle(
             WorkspaceRoots workspaces,
@@ -86,7 +88,8 @@ public class GitHubInstallationLifecycle {
             WorkspaceLifecycleService workspaceLifecycleService,
             IntegrationAttentionService attention,
             ScmWorkspaceContentEraser contentEraser,
-            GitHubInstallationRequests installationRequests) {
+            GitHubInstallationRequests installationRequests,
+            WorkspaceSummaryQuery workspaceStates) {
         this.workspaces = workspaces;
         this.workspaceLocks = workspaceLocks;
         this.monitors = monitors;
@@ -103,6 +106,7 @@ public class GitHubInstallationLifecycle {
         this.attention = attention;
         this.contentEraser = contentEraser;
         this.installationRequests = installationRequests;
+        this.workspaceStates = workspaceStates;
     }
 
     /**
@@ -311,8 +315,9 @@ public class GitHubInstallationLifecycle {
 
     /**
      * Vendor-side uninstall ({@code installation.deleted}) — runs the purge an admin-initiated workspace
-     * deletion runs, via {@link WorkspaceLifecycleService#purgeWorkspace(String)}, inside the consumer's transaction:
-     * the removals at Slack and Outline then wait for authorization under Provider removals.
+     * deletion runs, via {@link WorkspaceLifecycleService#purgeWorkspace(String)}, inside the consumer's transaction.
+     * The inbox handler runs {@link #removeAtProvidersBeforePurge(long)} first, so the removals at Slack and Outline
+     * happen before the purge erases their credentials.
      *
      * <p><b>Why not a status write.</b> {@code PURGED} is a terminal, slug-burning state that the
      * rest of the system reads as "this workspace's data is gone". Setting it without running the
@@ -351,8 +356,33 @@ public class GitHubInstallationLifecycle {
         }
 
         Workspace workspace = workspaceOpt.get();
-        IntegrationRef ref =
-                new IntegrationRef(IntegrationKind.GITHUB, workspace.getId(), Long.toString(installationId));
+        recordUninstall(workspace.getId(), installationId);
+        Workspace purged = workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug());
+        log.info(
+                "Purged workspace after vendor-side uninstall: installationId={}, workspaceId={}",
+                installationId,
+                purged.getId());
+        return Optional.of(purged);
+    }
+
+    /**
+     * The provider half of {@link #purgeWorkspaceForInstallation(long)}, which the inbox handler runs first with no
+     * transaction open: the purge's transaction cannot call providers, and it erases the credentials those calls need.
+     * Once the purge guards admit the removal, it records GitHub's uninstall on the connection, then the workspace's
+     * other connections, such as Slack and Outline, remove what they set up at their providers. A redelivery runs it
+     * again, and each step skips what is done.
+     */
+    public void removeAtProvidersBeforePurge(long installationId) {
+        workspaceStates
+                .findStateByInstallationId(installationId)
+                .filter(state -> !Workspace.WorkspaceStatus.PURGED.name().equals(state.status()))
+                .ifPresent(state -> workspaceLifecycleService.removeAtProvidersBeforePurge(
+                        state.id(), () -> recordUninstall(state.id(), installationId)));
+    }
+
+    /** Disconnects the installation's connection and erases its mirror; a connection already disconnected stays. */
+    private void recordUninstall(long workspaceId, long installationId) {
+        IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, workspaceId, Long.toString(installationId));
         connectionService
                 .findReferenced(ref)
                 .ifPresent(connection -> connectionService.disconnectForErasure(
@@ -364,13 +394,7 @@ public class GitHubInstallationLifecycle {
                                 IntegrationKind.GITHUB.name(),
                                 "provider-uninstall-github-" + installationId,
                                 "GitHub reported the installation was deleted"),
-                        () -> contentEraser.eraseWorkspaceScmMirror(workspace.getId())));
-        Workspace purged = workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug());
-        log.info(
-                "Purged workspace after vendor-side uninstall: installationId={}, workspaceId={}",
-                installationId,
-                purged.getId());
-        return Optional.of(purged);
+                        () -> contentEraser.eraseWorkspaceScmMirror(workspaceId)));
     }
 
     /**

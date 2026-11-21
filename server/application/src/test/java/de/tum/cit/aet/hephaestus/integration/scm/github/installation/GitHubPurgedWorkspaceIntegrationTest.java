@@ -115,6 +115,7 @@ class GitHubPurgedWorkspaceIntegrationTest extends BaseIntegrationTest {
                 organizationService,
                 appTokens,
                 providerLookup,
+                installationLifecycle,
                 deserializer,
                 transactionTemplate);
     }

@@ -73,6 +73,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("integration.scm.domain.item.ScmItemSourceIntegrationTest", "scm-source-currentness"),
             assignment("integration.scm.github.BaseGitHubLiveIntegrationTest", "github-live"),
             assignment(
+                    "integration.scm.github.installation.GitHubUninstallProviderRemovalIntegrationTest",
+                    "outline-enabled"),
+            assignment(
                     "integration.scm.github.installation.adoption.GitHubInstallationAdoptionIntegrationTest",
                     "github-installation-adoption"),
             assignment(
@@ -331,6 +334,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "integration.outline.connect.OutlineConnectionAdminControllerIntegrationTest",
             "integration.outline.item.DocumentItemSourceIntegrationTest",
             "integration.outline.sync.OutlineDocumentSyncIntegrationTest",
+            "integration.scm.github.installation.GitHubUninstallProviderRemovalIntegrationTest",
             "integration.slack.SlackConsentLifecycleE2EIntegrationTest",
             "integration.slack.channel.SlackChannelAdminControllerIntegrationTest",
             "integration.slack.connect.SlackScopesControllerIntegrationTest",

@@ -213,24 +213,39 @@ public class WorkspaceLifecycleService {
         return purged;
     }
 
-    /**
-     * The owner's workspace removal. Provider calls cannot run inside the purge's transaction, and the purge erases the
-     * credentials they need, so the connections disconnect and send their provider removals first, each in its own
-     * transaction. A purge from inside a caller's transaction ({@link #purgeWorkspace(String)}) leaves each removal
-     * recorded for authorization instead.
-     */
+    /** The owner's workspace removal: {@link #removeAtProvidersBeforePurge(long, Runnable)}, then the purge. */
     public Workspace purgeWorkspace(WorkspaceContext workspaceContext) {
         String slug = requireSlug(workspaceContext);
-        Long pending = transactions.execute(status -> {
-            Workspace workspace = workspaceRepository
-                    .findByWorkspaceSlug(slug)
-                    .orElseThrow(() -> new EntityNotFoundException("Workspace", slug));
-            if (workspace.getStatus() == WorkspaceStatus.PURGED) return null;
-            purgeGuards.forEach(guard -> guard.verifyQuiescent(workspace.getId()));
-            return workspace.getId();
-        });
-        if (pending != null) providerRemovals.forEach(removal -> removal.removeBeforePurge(pending));
+        long workspaceId = Objects.requireNonNull(transactions.execute(status -> workspaceRepository
+                .findByWorkspaceSlug(slug)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", slug))
+                .getId()));
+        removeAtProvidersBeforePurge(workspaceId, () -> {});
         return Objects.requireNonNull(transactions.execute(status -> purgeWorkspaceInTransaction(slug)));
+    }
+
+    /**
+     * The provider half of a workspace removal. Provider calls cannot run inside the purge's transaction, and the purge
+     * erases the credentials they need, so a caller runs this first, with no transaction open: the connections
+     * disconnect and send their provider removals, each in its own transaction. A purge without it, from inside a
+     * caller's transaction ({@link #purgeWorkspace(String)}), leaves each removal recorded for authorization instead.
+     * It does nothing for a purged workspace.
+     *
+     * @param afterGuards runs once the purge guards admit the removal and before the provider removals, such as the
+     *     erasure that a provider's own uninstall records; a refusing guard leaves it unrun
+     */
+    public void removeAtProvidersBeforePurge(long workspaceId, Runnable afterGuards) {
+        boolean pending = Boolean.TRUE.equals(transactions.execute(status -> workspaceRepository
+                .findById(workspaceId)
+                .filter(workspace -> workspace.getStatus() != WorkspaceStatus.PURGED)
+                .map(workspace -> {
+                    purgeGuards.forEach(guard -> guard.verifyQuiescent(workspaceId));
+                    return true;
+                })
+                .orElse(false)));
+        if (!pending) return;
+        afterGuards.run();
+        providerRemovals.forEach(removal -> removal.removeBeforePurge(workspaceId));
     }
 
     /**
