@@ -319,9 +319,21 @@ describe("a practice edited in the practice repository", () => {
 	});
 
 	it("keeps an open draft to copy when another admin moves the practice there meanwhile", async () => {
+		let saves = 0;
+		const savedHere = wirePractice({
+			slug: "explain-the-change",
+			definition: definitionOf({ name: "My name" }),
+			versionId: "702",
+			versionNumber: 2,
+		});
 		server.use(
 			...practicesHandlers([editable]),
 			http.patch("*/workspaces/:workspaceSlug/practices/:practiceSlug", () => {
+				saves += 1;
+				if (saves > 1) {
+					server.use(...practicesHandlers([savedHere]));
+					return HttpResponse.json(savedHere);
+				}
 				server.use(...practicesHandlers([inRepository]));
 				return HttpResponse.json(
 					{
@@ -366,6 +378,38 @@ describe("a practice edited in the practice repository", () => {
 		screen.getByDisplayValue("My name");
 		expect(screen.getByRole("button", { name: "Save changes" })).toHaveProperty("disabled", false);
 		expect(screen.queryByText(/Someone saved a newer version/u)).toBeNull();
+
+		// The save goes through and the level closes; opening the editor again starts clean.
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		await waitFor(async () => expect(saves).toBe(2), ROUTE_RENDER_WAIT);
+		await waitFor(
+			async () => expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull(),
+			ROUTE_RENDER_WAIT,
+		);
+		fireEvent.click(await screen.findByRole("link", { name: "My name" }, ROUTE_RENDER_WAIT));
+		fireEvent.click(await screen.findByRole("link", { name: "Edit practice" }, ROUTE_RENDER_WAIT));
+		await screen.findByDisplayValue("My name", {}, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("alert")).toBeNull();
+	});
+
+	it("keeps an open draft to copy when a refresh shows the practice moved there, before any save", async () => {
+		server.use(...practicesHandlers([editable]));
+
+		const queryClient = renderRouteAt(at("practice-edit", "explain-the-change"));
+		fireEvent.change(await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT), {
+			target: { value: "My name" },
+		});
+		server.use(...practicesHandlers([inRepository]));
+		await queryClient.invalidateQueries();
+
+		const notice = await screen.findByText(
+			"This practice is now edited in acme/practices",
+			{},
+			ROUTE_RENDER_WAIT,
+		);
+		expect(notice.closest("[role=alert]")?.textContent).not.toContain("Nothing was saved");
+		screen.getByDisplayValue("My name");
+		expect(screen.getByRole("button", { name: "Save changes" })).toHaveProperty("disabled", true);
 	});
 
 	it("shows it read-only, then makes it editable here after the admin confirms", async () => {
