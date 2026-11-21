@@ -46,14 +46,14 @@ The view shows one decided change that `main` does not have yet. The rest of the
 The server serves the SPA ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)). Until that change lands, a webapp container with nginx serves it.
 PostgreSQL notifications carry the sync-status hints to the open browsers.
 
-| Container | What it is | Code |
-| --- | --- | --- |
-| Web app | The React SPA. The server serves it, and it runs in the browser. It calls the server through the generated OpenAPI client, with the `__Host-HEPHAESTUS_AT` cookie ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)). | `webapp/` |
-| Browser extension | The Chrome extension. It signs in with PKCE and sends a bearer token ([ADR 0048](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0048-installed-clients-sign-in-with-a-pkce-handoff.md)). | `extension/` |
-| Server | One JAR in one runtime role, as several replicas. It serves the SPA and owns the API, provider events, reviews, conversations, agent control, the sandbox gateway and the outbox. | `server/application/` |
-| PostgreSQL | The only truth. A server process or a sandbox is a cache. | `server/application/src/main/resources/db/changelog/` |
-| Sandbox | One agent-sandbox `Sandbox` for each subject, with one container: the driver, the tools and the workspace. | `docker/agents/pi/`, `agent.sandbox` |
-| agent-sandbox controller | The upstream controller. It turns a `SandboxClaim` into a `Sandbox` and its Pod. | platform manifest |
+| Container | Technology | What it is | Code |
+| --- | --- | --- | --- |
+| Web app | React, TypeScript | The React SPA. The server serves it, and it runs in the browser. It calls the server through the generated OpenAPI client, with the `__Host-HEPHAESTUS_AT` cookie ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)). | `webapp/` |
+| Browser extension | WXT, React, TypeScript, Chrome Manifest V3 | The Chrome extension. It signs in with PKCE and sends a bearer token ([ADR 0048](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0048-installed-clients-sign-in-with-a-pkce-handoff.md)). | `extension/` |
+| Server | Spring Boot, Java | One JAR in one runtime role, as several replicas. It serves the SPA and owns the API, provider events, reviews, conversations, agent control, the sandbox gateway and the outbox. | `server/application/` |
+| PostgreSQL | PostgreSQL | The only truth. A server process or a sandbox is a cache. | `server/application/src/main/resources/db/changelog/` |
+| Sandbox | Node.js, the Pi coding agent | One agent-sandbox `Sandbox` for each subject, with one container: the driver, the tools and the workspace. | `docker/agents/pi/`, `agent.sandbox` |
+| agent-sandbox controller | Go, Kubernetes controller | The upstream controller. It turns a `SandboxClaim` into a `Sandbox` and its Pod. | platform manifest |
 
 Each provider verifies its webhooks in its own way. Only some of them sign the body:
 
@@ -76,6 +76,7 @@ Every workspace-owned table carries `workspace_id`, and every workspace endpoint
 ## Components of the server
 
 This view opens the server box. It is a UML component diagram: it shows which part owns which work, and which interface wires two parts.
+Each part is a set of Java packages in the Spring Boot server, so every part has the technology of the server.
 
 A ball is an interface that a part provides. A socket is an interface that a part requires, so the socket is on the calling side.
 A socket on a ball, or a dashed arrow from a socket to a ball, is one connection.
@@ -85,7 +86,7 @@ A small square on the frame is a port. It passes a request from outside to the p
 
 Each interface carries the name of its Java type or route. "Provider SPI" is the neutral `integration.core.spi` package. The order of the steps is in the sequences: [one review](./practice-review-pipeline.mdx#one-review-from-event-to-feedback) and [one turn](#conversation).
 
-<SystemDiagram name="system-components" title="Component view: the server of Hephaestus" alt="Component diagram of the server: eight parts wired by their provided and required interfaces, with the ports /api, /webhooks, /internal/agent and /internal/llm.">
+<SystemDiagram name="system-components" title="Component view: the server of Hephaestus" alt="Component diagram of the server: eight parts wired by their interfaces, with the ports /api, /webhooks, /internal/agent and /internal/llm.">
 
 | Part | Requires | From |
 | --- | --- | --- |

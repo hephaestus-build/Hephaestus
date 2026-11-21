@@ -6,11 +6,11 @@
 			".": {
 				"direct": {
 					"prod": 0,
-					"dev": 47
+					"dev": 49
 				},
 				"transitive": {
 					"prod": 0,
-					"all": 871
+					"all": 874
 				}
 			},
 			"docs": {
