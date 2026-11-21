@@ -3,8 +3,7 @@
  * that adds a read, a round trip or a moved landmark fails here and states the new cost, so it lands
  * as a reviewed edit of the budget, and a saving lowers the budget in the same change.
  */
-import { expect, test } from "@playwright/test";
-
+import { expect, test } from "./fixtures.ts";
 import { budgets } from "./journey-budgets.ts";
 import { API, APP, journeyCost, WORKSPACE } from "./journey-cost.ts";
 

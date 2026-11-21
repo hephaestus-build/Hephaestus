@@ -34,6 +34,8 @@ const viteConfig = defineConfig({
 			plugin === false ? false : { ...plugin, apply: "serve" as const },
 		),
 	],
+	// The server writes each request's script nonce in place of this placeholder (`WebAppIndex`).
+	html: { cspNonce: "HEPHAESTUS_CSP_NONCE" },
 	build: {
 		license: { fileName: BUNDLE_LICENSE_FILE },
 		rolldownOptions: {

@@ -6,8 +6,9 @@ import de.tum.cit.aet.hephaestus.core.release.ReleaseProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -24,12 +25,21 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Every value of the record is fixed for the life of the process, so the page is rendered once. The record is
  * JSON inside a {@code <script>} element, so {@code <}, {@code >} and {@code &} are escaped: no value can end the
  * element.
+ *
+ * <p>Only the script nonce changes per request. Vite's {@code html.cspNonce} writes {@link #NONCE_PLACEHOLDER} on
+ * every script, style and preload tag of the build, and each request replaces it with a new nonce that the page's
+ * content security policy names ({@code SecurityHeaders}).
  */
 @Component
 @ConditionalOnServerRole
 public class WebAppIndex {
 
     private static final Logger log = LoggerFactory.getLogger(WebAppIndex.class);
+
+    /** The nonce that {@code webapp/vite.config.ts} builds into the page, which no request ever sends. */
+    static final String NONCE_PLACEHOLDER = "HEPHAESTUS_CSP_NONCE";
+
+    private static final SecureRandom NONCES = new SecureRandom();
 
     private final @Nullable String html;
 
@@ -74,6 +84,12 @@ public class WebAppIndex {
                 .replace(">", "\\u003e")
                 .replace("&", "\\u0026");
         String template = index.getContentAsString(StandardCharsets.UTF_8);
+        // A page built without the placeholder would carry no nonce, and the policy would block every script on it.
+        if (!template.contains("nonce=\"" + NONCE_PLACEHOLDER + "\"")) {
+            throw new IllegalStateException(
+                    "The web app's index.html carries no script nonce; build it with html.cspNonce "
+                            + NONCE_PLACEHOLDER);
+        }
         int head = template.indexOf("</head>");
         if (head < 0) {
             throw new IllegalStateException("The web app's index.html has no </head>");
@@ -85,9 +101,24 @@ public class WebAppIndex {
                 + template.substring(head);
     }
 
-    /** The page, or empty when this server has no web app. */
-    public Optional<String> html() {
-        return Optional.ofNullable(html);
+    /** Whether this server has a web app to serve. */
+    boolean present() {
+        return html != null;
+    }
+
+    /** A new script nonce: 128 random bits, as the CSP specification asks of a nonce. */
+    static String newNonce() {
+        byte[] bytes = new byte[16];
+        NONCES.nextBytes(bytes);
+        return Base64.getEncoder().encodeToString(bytes);
+    }
+
+    /** The page whose scripts carry this nonce. */
+    String html(String nonce) {
+        if (html == null) {
+            throw new IllegalStateException("This server has no web app");
+        }
+        return html.replace(NONCE_PLACEHOLDER, nonce);
     }
 
     /** Whether the web app has a file at this path, such as {@code /favicon.png}. */

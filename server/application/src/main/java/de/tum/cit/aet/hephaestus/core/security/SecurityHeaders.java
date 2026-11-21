@@ -9,6 +9,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -27,7 +28,10 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>{@code Strict-Transport-Security}: 30 days, includeSubDomains. See {@link #HSTS_MAX_AGE_SECONDS}.</li>
  *   <li>{@code X-Frame-Options: DENY} and {@code X-Content-Type-Options: nosniff}.</li>
- *   <li>{@code Content-Security-Policy}, enforced. See {@link #contentSecurityPolicy}.</li>
+ *   <li>{@code Content-Security-Policy}, enforced. See {@link #contentSecurityPolicy}. The web app's page names its
+ *       own script nonce instead of {@code 'self'}: see {@link #pagePolicy}.</li>
+ *   <li>{@code Content-Security-Policy-Report-Only: require-trusted-types-for 'script'} on the web app's page only,
+ *       until the browser suite shows no report and Trusted Types can be enforced (ADR 0100).</li>
  *   <li>{@code Referrer-Policy}: {@code no-referrer} on the web app's page and files, as its {@code index.html}
  *       also says; {@code strict-origin-when-cross-origin} on every other response.</li>
  *   <li>{@code Cross-Origin-Opener-Policy: same-origin}.</li>
@@ -45,6 +49,10 @@ public final class SecurityHeaders {
      */
     private static final long HSTS_MAX_AGE_SECONDS = 2_592_000;
 
+    private static final String CONTENT_SECURITY_POLICY = "Content-Security-Policy";
+
+    private static final String SELF_SCRIPTS = "script-src 'self'";
+
     private final String contentSecurityPolicy;
 
     public SecurityHeaders(
@@ -52,6 +60,8 @@ public final class SecurityHeaders {
         this.contentSecurityPolicy = contentSecurityPolicy(
                 "https".equals(issuer.getScheme()),
                 workspaceSubdomains.enabled() ? "https://" + workspaceSubdomains.baseDomain() : null);
+        // A policy file without `script-src 'self'` fails here, at startup, not on the first page.
+        pagePolicy(contentSecurityPolicy, "startup-check");
     }
 
     /**
@@ -89,6 +99,26 @@ public final class SecurityHeaders {
         return String.join("; ", directives);
     }
 
+    /**
+     * The policy of the web app's page: scripts run only with this response's nonce, and a script that one of them
+     * loads is trusted with it ({@code 'strict-dynamic'}), so the code-split chunks need no nonce of their own. Every
+     * browser of the build target supports {@code 'strict-dynamic'}, so no {@code 'self'} stays as a fallback.
+     *
+     * <p>Spring Security 7.2.0 writes this policy itself; once the Spring Boot version brings it, it replaces this
+     * method and the header writer in {@link #apply} (ADR 0100, update of 2026-11-17).
+     */
+    static String pagePolicy(String policy, String nonce) {
+        List<String> directives = List.of(policy.split("; "));
+        if (!directives.contains(SELF_SCRIPTS)) {
+            throw new IllegalStateException("The content security policy has no " + SELF_SCRIPTS + " to replace");
+        }
+        return directives.stream()
+                .map(directive -> directive.equals(SELF_SCRIPTS)
+                        ? "script-src 'nonce-" + nonce + "' 'strict-dynamic'"
+                        : directive)
+                .collect(Collectors.joining("; "));
+    }
+
     private static List<String> policyDirectives() {
         try (InputStream in = SecurityHeaders.class.getResourceAsStream(POLICY_DIRECTIVES)) {
             if (in == null) {
@@ -109,7 +139,17 @@ public final class SecurityHeaders {
                 .contentTypeOptions(contentType -> {})
                 .httpStrictTransportSecurity(
                         hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(HSTS_MAX_AGE_SECONDS))
-                .contentSecurityPolicy(csp -> csp.policyDirectives(contentSecurityPolicy))
+                .addHeaderWriter((request, response) -> {
+                    if (response.containsHeader(CONTENT_SECURITY_POLICY)) {
+                        return;
+                    }
+                    if (request.getAttribute(WebAppRequests.SCRIPT_NONCE) instanceof String nonce) {
+                        response.setHeader(CONTENT_SECURITY_POLICY, pagePolicy(contentSecurityPolicy, nonce));
+                        response.setHeader("Content-Security-Policy-Report-Only", "require-trusted-types-for 'script'");
+                    } else {
+                        response.setHeader(CONTENT_SECURITY_POLICY, contentSecurityPolicy);
+                    }
+                })
                 // The web app sends no referrer at all, so a file such as a stylesheet or worker does not send the
                 // origin to another site either; its page also says so in a meta tag.
                 .addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
