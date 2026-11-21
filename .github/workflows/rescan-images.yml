@@ -188,6 +188,8 @@ jobs:
       - name: Rescan the images that a commit channel names
         id: channels
         env:
+          # Reads each commit channel's own release image inventory.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/scan-deployed-images.ts deploy-state reports/deployed

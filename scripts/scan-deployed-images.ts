@@ -1,7 +1,7 @@
 /**
  * Rescans the images that the project's hosts run, as the signed deploy channels name them.
  *
- * The other rescans read `:main` and the latest stable release. Neither is what runs: staging can be
+ * The other rescans read `:main` and the supported release. Neither is always what runs: staging can be
  * frozen on an older build, and production can run a release candidate. Each channel on the
  * `deploy-state` branch is verified against the `promote.yml` signer before anything reads it, exactly
  * as a host verifies it before it applies it.
@@ -15,8 +15,8 @@ import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
 import { type ScanOutcome, scanAll, type Subject } from "./lib/image-scan.ts";
-import { asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
-import { run } from "./lib/process.ts";
+import { asRecord, asString, parseJson } from "./lib/json.ts";
+import { output, run } from "./lib/process.ts";
 import { PLATFORMS, planUpstreamSubjects } from "./scan-upstream-images.ts";
 
 export const CHANNELS = ["staging", "production"] as const;
@@ -58,12 +58,15 @@ export function channelTarget(value: unknown, channel: Channel): ChannelTarget {
 	return { kind: "commit", commit, images };
 }
 
+/** The name of a first-party repository under the registry, as `scan-main-images.ts` plans it. */
+const FIRST_PARTY_NAME = /^[a-z0-9-]+$/u;
+
 /**
- * Each deployed image as a scan subject, named as the policy's exceptions name it. A first-party image is
- * named by its repository under the registry, also after `security/release-images.json` stops listing it:
- * a host can still run an image that main no longer builds. An upstream image is named as the inventory
- * names it. An upstream image that the inventory does not name has no policy key, so it fails here instead
- * of being scanned under a guessed name.
+ * Each deployed image as a scan subject, named as the policy's exceptions name it. `inventory` is the
+ * `security/release-images.json` of the deployed commit, which a host checks the channel against. An
+ * upstream image is named as that inventory names it. A first-party image is named by its repository
+ * under the registry, also when the inventory does not list it. Any other image has no policy key, so it
+ * fails here instead of being scanned under a guessed name.
  */
 export function deployedSubjects(
 	images: readonly string[],
@@ -81,7 +84,10 @@ export function deployedSubjects(
 		const owned = repository.startsWith(`${registry}/`)
 			? repository.slice(registry.length + 1)
 			: undefined;
-		const image = owned ?? upstream.get(repository);
+		if (owned !== undefined && !FIRST_PARTY_NAME.test(owned)) {
+			throw new Error(`the deployed first-party image ${repository} has no single-segment name`);
+		}
+		const image = upstream.get(repository) ?? owned;
 		if (image === undefined) {
 			throw new Error(
 				`security/release-images.json does not name the deployed image ${repository}`,
@@ -106,6 +112,17 @@ async function verifiedChannel(directory: string, channel: Channel, repository: 
 	return channelTarget(parseJson(await readFile(file, "utf8")), channel);
 }
 
+/** The release image inventory of a commit, read from GitHub because the job checks out only main. */
+async function inventoryAt(repository: string, commit: string): Promise<unknown> {
+	const content = await output("gh", [
+		"api",
+		`repos/${repository}/contents/security/release-images.json?ref=${commit}`,
+		"--jq",
+		".content",
+	]);
+	return parseJson(Buffer.from(content, "base64").toString("utf8"));
+}
+
 if (import.meta.main) {
 	const [directory, reports] = process.argv.slice(2);
 	if (!isSet(directory) || !isSet(reports)) {
@@ -113,7 +130,6 @@ if (import.meta.main) {
 	}
 	const repository = asString(process.env.GITHUB_REPOSITORY, "GITHUB_REPOSITORY");
 	const registry = process.env.IMAGE_REGISTRY ?? "ghcr.io/hephaestus-build";
-	const inventory = await readJsonFile("security/release-images.json");
 	const outcomes: ScanOutcome[] = [];
 	const targets: Record<string, ChannelTarget> = {};
 	for (const channel of CHANNELS) {
@@ -126,7 +142,11 @@ if (import.meta.main) {
 			}
 			continue;
 		}
-		const subjects = deployedSubjects(target.images, inventory, registry);
+		const subjects = deployedSubjects(
+			target.images,
+			await inventoryAt(repository, target.commit),
+			registry,
+		);
 		for (const platform of PLATFORMS) {
 			outcomes.push(
 				...(await scanAll(subjects, path.join(reports, channel), {

@@ -55,12 +55,23 @@ void test("each deployed image is scanned under the name that the policy keys it
 	]);
 });
 
-void test("a first-party image that main no longer builds keeps its name, because a host can still run it", () => {
-	assert.ok(!JSON.stringify(inventory).includes('"webapp"'));
+void test("a first-party image that the inventory does not list keeps its name, because a host can still run it", () => {
+	const withoutWebapp = {
+		schemaVersion: 1,
+		images: ["server"],
+		upstream: [
+			{
+				name: "vmalert",
+				repository: "docker.io/victoriametrics/vmalert",
+				tag: "v1.156.0",
+				digest,
+			},
+		],
+	};
 	assert.deepEqual(
 		deployedSubjects(
 			[`ghcr.io/hephaestus-build/webapp@${digest}`],
-			inventory,
+			withoutWebapp,
 			"ghcr.io/hephaestus-build",
 		),
 		[
@@ -70,6 +81,25 @@ void test("a first-party image that main no longer builds keeps its name, becaus
 				repository: "ghcr.io/hephaestus-build/webapp",
 			},
 		],
+	);
+	// A look-alike registry is not first-party, and a nested repository has no policy name.
+	assert.throws(
+		() =>
+			deployedSubjects(
+				[`ghcr.io/hephaestus-build-evil/webapp@${digest}`],
+				withoutWebapp,
+				"ghcr.io/hephaestus-build",
+			),
+		/does not name the deployed image ghcr\.io\/hephaestus-build-evil\/webapp/u,
+	);
+	assert.throws(
+		() =>
+			deployedSubjects(
+				[`ghcr.io/hephaestus-build/charts/hephaestus@${digest}`],
+				withoutWebapp,
+				"ghcr.io/hephaestus-build",
+			),
+		/has no single-segment name/u,
 	);
 });
 
