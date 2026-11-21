@@ -1,6 +1,6 @@
 import { FolderGit2 } from "lucide-react";
 
-import { PracticeRepositoryLink } from "@/components/admin/practices/WorkspacePracticeRepositoryCard";
+import { PracticeRepositoryLink } from "@/components/admin/practices/PracticeRepositoryLink";
 import { Button } from "@/components/ui/button";
 import {
 	Item,
