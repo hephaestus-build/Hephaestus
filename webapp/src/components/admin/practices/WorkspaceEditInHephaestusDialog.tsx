@@ -41,9 +41,10 @@ export interface WorkspaceEditInHephaestusDialogProps {
 }
 
 /**
- * Asks before a practice edited in the practice repository becomes editable in Hephaestus: the
- * console has no Move to repository yet, so the reader cannot take it back from here. It stays open
- * until the practice has reloaded as editable, and keeps a refusal in view rather than in a toast.
+ * Asks before a practice edited in the practice repository becomes editable in Hephaestus: later
+ * changes to its folder stop reaching it, and Move to repository takes it back only from a valid
+ * folder. It stays open until the practice has reloaded as editable, and keeps a refusal in view
+ * rather than in a toast.
  */
 export function WorkspaceEditInHephaestusDialog({
 	practiceName,

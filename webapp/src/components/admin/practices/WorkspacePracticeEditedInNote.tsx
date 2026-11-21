@@ -1,5 +1,6 @@
 import { FolderGit2 } from "lucide-react";
 
+import { PracticeRepositoryLink } from "@/components/admin/practices/PracticeRepositoryLink";
 import { Button } from "@/components/ui/button";
 import {
 	Item,
@@ -11,10 +12,13 @@ import {
 } from "@/components/ui/item";
 
 export interface WorkspacePracticeEditedInNoteProps {
+	workspaceSlug: string;
 	/** The practice repository's provider path, such as `acme/practices`. Absent while unknown. */
 	repositoryName?: string;
 	/** The commit of the practice repository that the current version was read at. */
 	sourceCommit: string | null;
+	/** The `id` of Edit in Hephaestus, so focus can land on it after Move to repository. */
+	editInHephaestusId?: string;
 	/** Opens the confirmation, `WorkspaceEditInHephaestusDialog`. */
 	onEditInHephaestus: () => void;
 }
@@ -26,8 +30,10 @@ export interface WorkspacePracticeEditedInNoteProps {
  * to what replaced it.
  */
 export function WorkspacePracticeEditedInNote({
+	workspaceSlug,
 	repositoryName,
 	sourceCommit,
+	editInHephaestusId,
 	onEditInHephaestus,
 }: WorkspacePracticeEditedInNoteProps) {
 	return (
@@ -45,11 +51,16 @@ export function WorkspacePracticeEditedInNote({
 							{" "}
 							This version was read at commit <code>{sourceCommit.slice(0, 7)}</code>.
 						</>
-					)}
+					)}{" "}
+					See the{" "}
+					<PracticeRepositoryLink workspaceSlug={workspaceSlug}>
+						practice repository setting
+					</PracticeRepositoryLink>
+					.
 				</ItemDescription>
 			</ItemContent>
 			<ItemActions>
-				<Button size="sm" variant="outline" onClick={onEditInHephaestus}>
+				<Button id={editInHephaestusId} size="sm" variant="outline" onClick={onEditInHephaestus}>
 					Edit in Hephaestus
 				</Button>
 			</ItemActions>
