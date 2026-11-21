@@ -42,11 +42,10 @@ const REPORTS = [
 ];
 
 /**
- * The uploads outside the retries. OpenSSF Scorecard publishes results only from a workflow whose steps are all
- * allowlisted actions, and a local action is not one of them. The pull request record must run before the action
- * exists on the default branch, from where it checks the action out; it is converted by the next pull request.
+ * The one upload outside the retries: OpenSSF Scorecard publishes results only from a workflow whose steps are all
+ * allowlisted actions, and a local action is not one of them.
  */
-const DIRECT = ["pull-request.yml: pull-request", "scorecard.yml: Preserve the assessment"];
+const DIRECT = ["scorecard.yml: Preserve the assessment"];
 
 interface Step {
 	file: string;
@@ -75,7 +74,8 @@ function workflowSteps(): Step[] {
 						String(step.uses).startsWith("actions/checkout@") &&
 						isRecord(step.with) &&
 						step.with.path === undefined &&
-						step.with.ref !== undefined,
+						step.with.ref !== undefined &&
+						step.with.ref !== `\${{ github.event.repository.default_branch }}`,
 				);
 				return steps.map((step, index) => ({
 					file,
@@ -154,11 +154,7 @@ void test("no workflow uploads an artifact around the retries, and only the list
 		String(step.uses).startsWith("actions/upload-artifact@"),
 	);
 	assert.deepEqual(
-		// An unnamed step is known by its artifact.
-		direct.map(
-			({ file, step }) =>
-				`${file}: ${String(step.name ?? (isRecord(step.with) ? step.with.name : undefined))}`,
-		),
+		direct.map(({ file, step }) => `${file}: ${String(step.name)}`),
 		DIRECT,
 	);
 	const actions = readdirSync(".github/actions").filter(
@@ -225,4 +221,5 @@ void test("a job that checks out another ref uploads through this workflow's own
 		});
 		assert.equal(previous.if, step.if, `${where}: the copy is there whenever the upload runs`);
 	}
+	// pull-request.yml takes the action from the default branch; pull-request-policy.test.ts pins that checkout.
 });
