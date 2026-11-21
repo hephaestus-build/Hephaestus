@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
 @Tag("database")
 class EnumCheckConstraintsMigrationTest {
     private static final TestDatabase DATABASE = PostgreSQLTestContainer.createDatabase("enum_check_constraints");
-    private static final String CHANGELOG = "db/changelog/next/20261121133358-db-enum-check-constraints.xml";
+    private static final String CHANGELOG = "db/changelog/next/20261121154605-db-enum-check-constraints.xml";
     /** The query in {@code .migration/enum-columns-checked.md}, which psql runs with {@code \gexec}. */
     private static final String GUIDE_QUERY = """
             SELECT format('SELECT %L AS check_name, t.* FROM %s t WHERE NOT %s', conname, conrelid::regclass,

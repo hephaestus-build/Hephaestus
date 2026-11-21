@@ -137,7 +137,7 @@ The JPA diff does not write these checks, so write each one as a [draft](#native
 - **New enum column.** Add its check in the changelog that adds the column.
 - **New value.** Write a new changelog that drops the check and adds it again with the new list.
   Add the check `NOT VALID` in one change set, and validate it in a second change set.
-  Give each table its own pair, as `20261121133358-db-enum-check-constraints.xml` does.
+  Give each table its own pair, as `20261121154605-db-enum-check-constraints.xml` does.
   The previous release writes only values from the old list, so it can run beside the new check.
 - **Removed value.** Take two releases, as [Expand and contract](#expand-and-contract) describes.
   Release *N* stops writing the value and keeps the constant, so it can still read stored rows.
