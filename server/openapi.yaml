@@ -11401,6 +11401,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: The workspace has no practice repository to unset
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
       summary: Unset the practice repository
       tags:
       - practice-repository
@@ -11425,6 +11437,18 @@ paths:
           description: The practice repository
         "204":
           description: The workspace has no practice repository
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
       summary: Read the practice repository
       tags:
       - practice-repository
@@ -11462,6 +11486,18 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "The repository is not one that the workspace monitors, or\
             \ the directory is not a relative path"
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
       summary: Set the practice repository
       tags:
       - practice-repository
@@ -11508,6 +11544,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "The practice folder is not valid: problems lists each problem"
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
       summary: "Move a practice to the practice repository, or edit it in Hephaestus"
       tags:
       - practice-repository

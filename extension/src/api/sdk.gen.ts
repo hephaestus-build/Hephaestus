@@ -517,6 +517,7 @@ import type {
 	GetPracticeReleaseErrors,
 	GetPracticeReleaseResponses,
 	GetPracticeRepositoryData,
+	GetPracticeRepositoryErrors,
 	GetPracticeRepositoryResponses,
 	GetPracticeResponses,
 	GetPracticeReviewSettingsData,
@@ -5901,8 +5902,12 @@ export const unsetPracticeRepository = <ThrowOnError extends boolean = false>(
  */
 export const getPracticeRepository = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeRepositoryData, ThrowOnError>,
-): RequestResult<GetPracticeRepositoryResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeRepositoryResponses, unknown, ThrowOnError>({
+): RequestResult<GetPracticeRepositoryResponses, GetPracticeRepositoryErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetPracticeRepositoryResponses,
+		GetPracticeRepositoryErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-repository",
 		...options,
