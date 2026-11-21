@@ -38,7 +38,7 @@ On another cluster, issue it on the Gateway as you issue the certificate of the 
      enabled: true
    ```
 
-   The chart uses `host` as the base domain, and gives both settings to the server and the webapp.
+   The chart uses `host` as the base domain, and gives both settings to the server.
 
 2. Apply `site.yaml`.
    On a cluster, run the `helm upgrade` command of [Install](./kubernetes#install) again.
@@ -52,8 +52,8 @@ On another cluster, issue it on the Gateway as you issue the certificate of the 
    On a repeat run, the installer keeps `site.yaml`, so set the value in the file yourself.
    Without `--workspace-subdomains`, a repeat run stops instead of replacing the wildcard certificate, as [Run the installer](./k3s#2-run-the-installer) describes.
 
-The chart adds a wildcard route to the webapp.
-On a workspace host, the webapp refuses reserved or invalid labels and the API, sign-in and webhook paths.
+The chart adds a wildcard route to the server.
+On a workspace host, the server serves only the web app: it refuses reserved or invalid labels and the API, sign-in and webhook paths.
 On the apex, a `GET` or `HEAD` of a workspace path, such as `/w/acme/activity`, redirects to the workspace host with `308`.
 
 ## Register exact OAuth callbacks

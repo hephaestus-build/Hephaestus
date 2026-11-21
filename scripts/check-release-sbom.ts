@@ -1,4 +1,5 @@
 import { isSet } from "./lib/env.ts";
+import { KNOWN_BUNDLED_PACKAGES, WEB_APP_PACKAGES } from "./lib/web-app-scan.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -68,12 +69,14 @@ interface PackageInventory {
 	keys: Set<string>;
 }
 
-function spdxInventory(
-	spdxInput: unknown,
-	repository: string,
-	version: string,
-	type: "container" | "file",
-): PackageInventory {
+/** The image or source that a standard rendering must describe. A directory scan has none. */
+interface SbomBinding {
+	repository: string;
+	version: string;
+	type: "container" | "file";
+}
+
+function spdxInventory(spdxInput: unknown, binding: SbomBinding | undefined): PackageInventory {
 	const spdx = object(spdxInput, "SPDX SBOM");
 	if (spdx.spdxVersion !== "SPDX-2.3" || spdx.dataLicense !== "CC0-1.0") {
 		throw new Error("invalid SPDX document metadata");
@@ -84,7 +87,7 @@ function spdxInventory(
 	const containers: JsonObject[] = [];
 	for (const [index, value] of array(spdx.packages, "SPDX packages").entries()) {
 		const item = object(value, `SPDX package ${index}`);
-		if (item.primaryPackagePurpose === type.toUpperCase()) {
+		if (binding !== undefined && item.primaryPackagePurpose === binding.type.toUpperCase()) {
 			containers.push(item);
 		}
 		if (typeof item.name === "string" && typeof item.versionInfo === "string") {
@@ -100,6 +103,10 @@ function spdxInventory(
 
 	// Package parity alone would accept an SPDX rendering of a different source or image that
 	// installs the same packages, so bind each document to the subject as well.
+	if (binding === undefined) {
+		return { purls, keys };
+	}
+	const { repository, version, type } = binding;
 	const [container, ...extraContainers] = containers;
 	if (container === undefined || extraContainers.length > 0) {
 		throw new Error(`SPDX document must describe exactly one ${type}`);
@@ -115,25 +122,26 @@ function spdxInventory(
 
 function cycloneDxInventory(
 	cycloneDxInput: unknown,
-	repository: string,
-	version: string,
-	type: "container" | "file",
+	binding: SbomBinding | undefined,
 ): PackageInventory {
 	const cycloneDx = object(cycloneDxInput, "CycloneDX SBOM");
 	if (cycloneDx.bomFormat !== "CycloneDX") {
 		throw new Error("invalid CycloneDX format");
 	}
 	text(cycloneDx.specVersion, "CycloneDX spec version");
-	const subject = object(
-		object(cycloneDx.metadata, "CycloneDX metadata").component,
-		"CycloneDX metadata component",
-	);
-	if (
-		subject.type !== type ||
-		canonicalRepository(text(subject.name, "CycloneDX component name")) !== repository ||
-		subject.version !== version
-	) {
-		throw new Error(`CycloneDX document is not bound to ${imageReference(repository, version)}`);
+	if (binding !== undefined) {
+		const { repository, version, type } = binding;
+		const subject = object(
+			object(cycloneDx.metadata, "CycloneDX metadata").component,
+			"CycloneDX metadata component",
+		);
+		if (
+			subject.type !== type ||
+			canonicalRepository(text(subject.name, "CycloneDX component name")) !== repository ||
+			subject.version !== version
+		) {
+			throw new Error(`CycloneDX document is not bound to ${imageReference(repository, version)}`);
+		}
 	}
 	const purls = new Set<string>();
 	const keys = new Set<string>();
@@ -258,27 +266,77 @@ export function assertSbomFormatsCover(
 	const artifacts = array(object(syftInput, "Syft inventory").artifacts, "Syft artifacts");
 	assertDerivedInventoriesCover(
 		artifacts,
-		spdxInventory(spdxInput, repository, version, type),
-		cycloneDxInventory(cycloneDxInput, repository, version, type),
+		spdxInventory(spdxInput, { repository, version, type }),
+		cycloneDxInventory(cycloneDxInput, { repository, version, type }),
 	);
 }
 
-const BUNDLE_PACKAGES = "/usr/share/nginx/html/.vite/packages/";
+/**
+ * The standard renderings of a directory scan, such as the web app taken from the server image's jar, against its
+ * native inventory. The scan names a scratch path, not an image: the caller binds it to the image digest it came from
+ * (`lib/web-app-scan.ts`).
+ */
+export function assertDirectoryFormatsCover(
+	syftInput: unknown,
+	spdxInput: unknown,
+	cycloneDxInput: unknown,
+): void {
+	const artifacts = array(object(syftInput, "Syft inventory").artifacts, "Syft artifacts");
+	assertDerivedInventoriesCover(
+		artifacts,
+		spdxInventory(spdxInput, undefined),
+		cycloneDxInventory(cycloneDxInput, undefined),
+	);
+}
 
-function bundledNpmManifests(syft: JsonObject): string[] {
+/** Where an image or a scanned web app keeps one `package.json` per bundled npm package, and which must be there. */
+export interface NpmBundle {
+	readonly packages: string;
+	readonly known: readonly string[];
+}
+
+/** The nginx `webapp` image that releases before the server served the web app published (ADR 0100). */
+export const WEBAPP_IMAGE_BUNDLE: NpmBundle = {
+	packages: "/usr/share/nginx/html/.vite/packages/",
+	known: [],
+};
+
+/** The web app taken from the server image's own jar (`lib/web-app-scan.ts`). */
+export const SERVER_WEB_APP_BUNDLE: NpmBundle = {
+	packages: WEB_APP_PACKAGES,
+	known: KNOWN_BUNDLED_PACKAGES,
+};
+
+function bundledNpmManifests(syft: JsonObject, bundle: NpmBundle): string[] {
 	return array(syft.files ?? [], "Syft files")
 		.map((file) =>
 			text(object(object(file, "Syft file").location, "Syft location").path, "file path"),
 		)
-		.filter((file) => file.startsWith(BUNDLE_PACKAGES) && file.endsWith("/package.json"));
+		.filter((file) => file.startsWith(bundle.packages) && file.endsWith("/package.json"));
 }
 
-/** Each package manifest emitted from the bundle must survive the image scan as its own npm identity. */
-export function assertBundledNpmInventory(syftInput: unknown): void {
+/** `react@19.2.0` from `/…/packages/react%4019.2.0/package.json`. */
+function manifestIdentity(file: string, bundle: NpmBundle): string {
+	return decodeURIComponent(file.slice(bundle.packages.length, -"/package.json".length));
+}
+
+/**
+ * Each package manifest emitted from the bundle must survive the scan as its own npm identity, and the packages that
+ * every build bundles must be among them: an inventory that lost the bundle fails rather than listing fewer packages.
+ */
+export function assertBundledNpmInventory(syftInput: unknown, bundle: NpmBundle): void {
 	const syft = object(syftInput, "Syft SBOM");
-	const manifests = bundledNpmManifests(syft);
+	const manifests = bundledNpmManifests(syft, bundle);
 	if (manifests.length === 0) {
-		throw new Error("webapp image has no bundled npm package manifests");
+		throw new Error(`the scan has no bundled npm package manifests under ${bundle.packages}`);
+	}
+	const names = new Set(
+		manifests.map((file) => manifestIdentity(file, bundle).replace(/@[^@]+$/u, "")),
+	);
+	for (const name of bundle.known) {
+		if (!names.has(name)) {
+			throw new Error(`the web app's inventory has no bundled ${name}`);
+		}
 	}
 	const covered = new Set<string>();
 	for (const value of array(syft.artifacts, "Syft artifacts")) {
@@ -287,7 +345,7 @@ export function assertBundledNpmInventory(syftInput: unknown): void {
 			continue;
 		}
 		const identity = `${text(artifact.name, "npm name")}@${text(artifact.version, "npm version")}`;
-		const expected = `${BUNDLE_PACKAGES}${encodeURIComponent(identity)}/package.json`;
+		const expected = `${bundle.packages}${encodeURIComponent(identity)}/package.json`;
 		for (const location of array(artifact.locations, "npm locations")) {
 			if (object(location, "npm location").path === expected) {
 				covered.add(expected);
@@ -302,10 +360,14 @@ export function assertBundledNpmInventory(syftInput: unknown): void {
 }
 
 /** Prove that the vulnerability scanner read the same emitted identities as the SBOM scanner. */
-export function assertBundledNpmScan(syftInput: unknown, trivyInput: unknown): void {
-	const manifests = bundledNpmManifests(object(syftInput, "Syft SBOM"));
+export function assertBundledNpmScan(
+	syftInput: unknown,
+	trivyInput: unknown,
+	bundle: NpmBundle,
+): void {
+	const manifests = bundledNpmManifests(object(syftInput, "Syft SBOM"), bundle);
 	const covered = new Set<string>();
-	for (const value of array(object(trivyInput, "Trivy report").Results, "Trivy results")) {
+	for (const value of array(object(trivyInput, "Trivy report").Results ?? [], "Trivy results")) {
 		const result = object(value, "Trivy result");
 		if (result.Type !== "node-pkg") {
 			continue;
@@ -316,7 +378,7 @@ export function assertBundledNpmScan(syftInput: unknown, trivyInput: unknown): v
 				continue;
 			}
 			const file = imagePath(pkg.FilePath);
-			if (file === undefined || !file.startsWith(BUNDLE_PACKAGES)) {
+			if (file === undefined || !file.startsWith(bundle.packages)) {
 				continue;
 			}
 			covered.add(
@@ -325,9 +387,7 @@ export function assertBundledNpmScan(syftInput: unknown, trivyInput: unknown): v
 		}
 	}
 	for (const file of manifests) {
-		const identity = decodeURIComponent(
-			file.slice(BUNDLE_PACKAGES.length, -"/package.json".length),
-		);
+		const identity = manifestIdentity(file, bundle);
 		if (!covered.has(`${file}\0${identity}`)) {
 			throw new Error(`Trivy omitted bundled npm package ${identity} at ${file}`);
 		}
@@ -487,9 +547,10 @@ export function validateReleaseSbom(
 		throw new Error("Syft SBOM contains no packages");
 	}
 	const { expectedPurls, missingLicenses } = syftArtifactInventory(artifacts);
-	// Standalone image validation has no manifest, so it checks bundle metadata when present.
-	if (bundledNpmManifests(syft).length > 0) {
-		assertBundledNpmInventory(syft);
+	// Standalone image validation has no manifest, so it checks bundle metadata when present. Only the archived nginx
+	// image keeps a bundle in its file system; the server's web app has its own inventory (lib/web-app-scan.ts).
+	if (bundledNpmManifests(syft, WEBAPP_IMAGE_BUNDLE).length > 0) {
+		assertBundledNpmInventory(syft, WEBAPP_IMAGE_BUNDLE);
 	}
 
 	assertSbomFormatsCover(syft, spdxInput, cycloneDxInput, repository, digest, "container");

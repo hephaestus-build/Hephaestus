@@ -118,6 +118,36 @@ Each stage adds the check that keeps its part true:
 - Public pages need search ranking. Then add prerendering (option C′), still served by the server.
 - An operator needs to scale the frontend separately from the server.
 
+## Update — 2026-11-17: stage 2, and the plan for stage 3
+
+**Corrections to the Context.**
+The `/mentor` redirects had gone from nginx before stage 2 ([#4484](https://github.com/hephaestus-build/Hephaestus/pull/4484)).
+`SecurityHeaders` sent HSTS for 30 days, not for one year, and stage 2 keeps 30 days: a longer policy cannot be withdrawn before it expires.
+
+**What stage 2 added that the Decision did not name.**
+
+- The server takes over the work that the nginx image did besides serving files:
+  - the workspace-host rules: the 404 for a label that no workspace can have, the 404 for the API and sign-in on a workspace host, and the apex `/w/<slug>` redirect;
+  - the operator's legal-page overrides, which the chart now mounts into the server Pods (`server.legalOverrides`);
+  - `/.well-known/security.txt` (`server.securityContact`).
+- The header policy takes nginx's directives for the web app: `object-src 'none'`, `worker-src`, `manifest-src`, `font-src data:`, `img-src blob:` and `Permissions-Policy`.
+  `connect-src` adds the apex when workspaces have their own hosts.
+  `upgrade-insecure-requests` applies only to an HTTPS deployment.
+- **Release evidence of the bundled npm packages.**
+  The buildpack's CDS extraction leaves the web app inside `/workspace/runner.jar`, and neither Syft nor Trivy catalogs an npm package inside a jar.
+  Thus, the image scan alone would drop the web app's packages from the SBOM and the vulnerability scan, and the evidence gate would stay green.
+  Every scan of the server image also takes `web-app/` out of that image's own jar and scans it: the build gate, the daily scans and the release evidence (`bundledNpmSbom: 2`).
+  The scan stays bound to the image digest.
+  It fails when a package that every build bundles is missing.
+  [Release management § Supply-chain evidence](../contributor/release-management.mdx#supply-chain-evidence) owns the detail.
+
+**Stage 3 does not wait for Spring Security 7.2.**
+Spring Security's `HeaderWriter` is the extension point for a header that depends on the request.
+A custom writer sends `script-src 'nonce-…' 'strict-dynamic'` with a per-request nonce.
+The server writes the same nonce into `index.html` in place of the placeholder that Vite's `html.cspNonce` emits.
+The built-in nonce support of Spring Security 7.2.0 replaces the custom writer.
+Exit condition: Spring Security 7.2.0 is generally available in the Spring Boot version that the server uses (Spring Boot 4.2.0 or later).
+
 ## Sources
 
 The full table with quotes is `lanes/webarch/SOURCES.md` in the 1.0 program notes. These rows decide the outcome:

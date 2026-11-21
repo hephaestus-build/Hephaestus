@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
+import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -204,7 +205,7 @@ class PrometheusSecurityIntegrationTest {
     }
 
     @TestConfiguration(proxyBeanMethods = false)
-    @Import(SecurityConfig.class)
+    @Import({SecurityConfig.class, SecurityHeaders.class})
     @EnableConfigurationProperties(WorkspaceSubdomainProperties.class)
     @ImportAutoConfiguration({
         TomcatServletWebServerAutoConfiguration.class,

@@ -112,10 +112,7 @@ await test("a released chart's values.yaml pins the release, and changes nothing
 	assert.equal(validate(merge(values, operator)), true, JSON.stringify(validate.errors));
 	assert.equal(
 		validate(
-			merge(
-				values,
-				merge(operator, { images: { webapp: "ghcr.io/hephaestus-build/webapp:1.2.3" } }),
-			),
+			merge(values, merge(operator, { images: { agent: "ghcr.io/hephaestus-build/agent:1.2.3" } })),
 		),
 		false,
 	);
@@ -168,12 +165,12 @@ await test("a lock that does not cover exactly the release image inventory is re
 			chartValues(
 				lockWith(
 					rawLock.images.map((image) =>
-						image.image === "webapp" ? { ...image, provenance: "upstream" } : image,
+						image.image === "agent" ? { ...image, provenance: "upstream" } : image,
 					),
 				),
 				inventory,
 			),
-		/webapp has the wrong provenance class/u,
+		/agent has the wrong provenance class/u,
 	);
 	assert.throws(
 		() =>
@@ -218,7 +215,6 @@ await test("a commit lock names the chart images by digest, its upstream images 
 		HEPHAESTUS_IMAGE_VMALERT: pin("vmalert"),
 		HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/hephaestus-build/postgres@${digest("4")}`,
 		HEPHAESTUS_IMAGE_POSTGRES_EXPORTER: pin("postgres-exporter"),
-		HEPHAESTUS_IMAGE_WEBAPP: `ghcr.io/hephaestus-build/webapp@${digest("5")}`,
 		// An image the chart does not run.
 		HEPHAESTUS_IMAGE_TRAEFIK: `docker.io/library/traefik@${digest("6")}`,
 	};
@@ -228,10 +224,10 @@ await test("a commit lock names the chart images by digest, its upstream images 
 	// A followed commit reports the commit as its version, which the promotion verifies.
 	assert.equal(values.release.version, commit);
 
-	const { HEPHAESTUS_IMAGE_WEBAPP: _webapp, ...withoutWebapp } = images;
+	const { HEPHAESTUS_IMAGE_AGENT: _agent, ...withoutAgent } = images;
 	assert.throws(
-		() => commitChartValues(withoutWebapp, inventory, commit, chartImages),
-		/no webapp digest/u,
+		() => commitChartValues(withoutAgent, inventory, commit, chartImages),
+		/no agent digest/u,
 	);
 	assert.throws(
 		() =>
@@ -252,12 +248,12 @@ await test("a commit lock names the chart images by digest, its upstream images 
 	assert.throws(
 		() =>
 			commitChartValues(
-				{ ...images, HEPHAESTUS_IMAGE_WEBAPP: "ghcr.io/hephaestus-build/webapp:main" },
+				{ ...images, HEPHAESTUS_IMAGE_AGENT: "ghcr.io/hephaestus-build/agent:main" },
 				inventory,
 				commit,
 				chartImages,
 			),
-		/no webapp digest/u,
+		/no agent digest/u,
 	);
 });
 
@@ -319,12 +315,12 @@ await test("the chart ships no image, tag or release identity of its own", () =>
 	assert.deepEqual(images.required, [...chartImages]);
 	assert.equal(images.additionalProperties, false);
 	for (const reference of [
-		"ghcr.io/hephaestus-build/webapp:latest",
-		"ghcr.io/hephaestus-build/webapp:1.2.3",
-		`registry.example.com/webapp@${digest("1")}`,
-		"ghcr.io/hephaestus-build/webapp@sha256:short",
+		"ghcr.io/hephaestus-build/server:latest",
+		"ghcr.io/hephaestus-build/server:1.2.3",
+		`registry.example.com/server@${digest("1")}`,
+		"ghcr.io/hephaestus-build/server@sha256:short",
 	]) {
-		const values = install(prepared, operator, { images: { webapp: reference } });
+		const values = install(prepared, operator, { images: { server: reference } });
 		assert.equal(validate(values), false, reference);
 	}
 });
@@ -431,7 +427,7 @@ await test("the schema refuses settings the chart does not own", () => {
 		["a zero memory request", { server: { resources: { requests: { memory: "0Mi" } } } }],
 		[
 			"a zero ephemeral-storage limit",
-			{ webapp: { resources: { limits: { "ephemeral-storage": "0.0" } } } },
+			{ server: { resources: { limits: { "ephemeral-storage": "0.0" } } } },
 		],
 		["an empty volume", { postgresql: { persistence: { size: "0Gi" } } }],
 		["a text assurance switch", { config: { auth: { assuranceEnforced: "false" } } }],
@@ -485,8 +481,11 @@ await test("network policy is always rendered", () => {
 	assert.match(source("networkpolicy.yaml"), /^\{\{- \/\* Always rendered\./u);
 });
 
-await test("the route rewrites no path and keeps every webhook path whole", () => {
-	const route = source("route.yaml").split("---")[0] ?? "";
+/** The rules of one HTTPRoute document of the route template. */
+const rulesOf = (text: string) => text.split(/^ {4}- matches:$/mu).slice(1);
+
+await test("the route sends every path to the server whole, with no filter", () => {
+	const [route = "", workspaceRoute = ""] = source("route.yaml").split("---");
 	for (const forbidden of [
 		/^kind:\s*(?:Gateway|Ingress)\s*$/mu,
 		/RequestRedirect/u,
@@ -495,7 +494,7 @@ await test("the route rewrites no path and keeps every webhook path whole", () =
 		assert.doesNotMatch(route, forbidden, String(forbidden));
 	}
 	assert.match(route, /fail "route\.parentRefs is required/u);
-	const rules = route.split(/^ {4}- matches:$/mu).slice(1);
+	const rules = rulesOf(route);
 	const rule = (type: string, value: string) => {
 		const found = rules.filter((text) =>
 			text.includes(`type: ${type}\n            value: ${value}\n`),
@@ -503,50 +502,37 @@ await test("the route rewrites no path and keeps every webhook path whole", () =
 		assert.equal(found.length, 1, `${type} ${value}`);
 		return found[0] ?? "";
 	};
-	assert.deepEqual(backendOf(rule("PathPrefix", "/webhooks")), ["server", "8080"]);
-	assert.deepEqual(backendOf(rule("PathPrefix", "/api")), ["server", "8080"]);
-	assert.deepEqual(backendOf(rule("PathPrefix", "/")), ["webapp", "8080"]);
-	// The server serves the paths it receives, so no rule rewrites one.
-	assert.doesNotMatch(rules.join("\n"), /URLRewrite/u);
-	// The server sends its own HSTS. Only the web app's rules add it, because nginx sends none.
-	for (const text of rules) {
-		assert.equal(
-			text.includes("{{ toJson $hsts }}"),
-			backendOf(text)?.[0] === "webapp",
-			"HSTS only on the web app's rules",
-		);
+	assert.equal(rules.length, 2);
+	assert.match(rule("PathPrefix", "/api"), /request: 0s\n\s*backendRequest: 0s/u);
+	// The provider webhooks fall under the root rule, so their paths reach the server whole.
+	assert.deepEqual(backendOf(rule("PathPrefix", "/")), ["server", "8080"]);
+	const workspaceRules = rulesOf(workspaceRoute);
+	assert.equal(workspaceRules.length, 1);
+	// The server answers every path and sends every header, HSTS included, so no rule has a filter.
+	for (const text of [...rules, ...workspaceRules]) {
+		assert.deepEqual(backendOf(text), ["server", "8080"]);
+		assert.doesNotMatch(text, /filters:|URLRewrite|ResponseHeaderModifier|hsts/u);
 	}
 });
 
-await test("the webapp runs the non-root image as it is, with only /tmp writable", () => {
-	const webapp = source("webapp.yaml");
-	for (const forbidden of [
-		/initContainers/u,
-		/sysctls/u,
-		/ip_unprivileged_port_start/u,
-		// The operator's legal pages are the one mount there, and it is read-only.
-		/\/usr\/share\/nginx\/html(?!\/legal-overrides\n\s*readOnly: true\n)/u,
-		/\/var\/cache\/nginx/u,
-		/mountPath: \/run/u,
-		/^\s*(?:command|args):/mu,
-		/port: 80\n/u,
-		/containerPort: 80\n/u,
-	]) {
-		assert.doesNotMatch(webapp, forbidden, String(forbidden));
-	}
-	assert.match(webapp, /"user" 101 "group" 101/u);
-	assert.match(webapp, /containerPort: 8080\n/u);
-	assert.match(webapp, /- name: http\n\s*port: 8080\n\s*targetPort: http/u);
+await test("the server serves the operator's legal pages from a read-only ConfigMap mount", () => {
 	assert.deepEqual(
-		[...webapp.matchAll(/mountPath: (?<path>\S+)/gu)].map((match) => match.groups?.path),
-		[
-			"/etc/nginx/conf.d/workspace-maps.conf",
-			"/etc/nginx/workspace/server.conf",
-			"/tmp/hephaestus-webapp",
-			"/usr/share/nginx/html/legal-overrides",
-		],
+		templates
+			.filter(({ source: text }) => /nginx|"component" "webapp"/u.test(text))
+			.map(({ name }) => name),
+		[],
 	);
-	assert.match(webapp, /emptyDir:\n\s*sizeLimit: 16Mi/u);
+	const server = source("server.yaml");
+	assert.match(server, /- name: LEGAL_OVERRIDES_DIRECTORY\n\s*value: \/etc\/hephaestus\/legal\n/u);
+	assert.match(
+		server,
+		/- name: legal-overrides\n\s*mountPath: \/etc\/hephaestus\/legal\n\s*readOnly: true\n/u,
+	);
+	assert.match(server, /- name: legal-overrides\n\s*configMap:\n\s*name: \{\{ \. \| quote \}\}/u);
+	assert.match(
+		server,
+		/- name: SECURITY_CONTACT\n\s*value: \{\{ \.Values\.server\.securityContact \| quote \}\}/u,
+	);
 });
 
 await test("sandbox identities and other roles do not receive an API token", () => {

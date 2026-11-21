@@ -4,10 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
+import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.web.PublicActivityReadRequestMatcher;
+import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceOriginPolicy;
+import java.net.URI;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -112,7 +116,9 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
                         environment,
                         false,
                         false,
-                        "HEPHAESTUS_AT"))
+                        "HEPHAESTUS_AT",
+                        new SecurityHeaders(
+                                URI.create("https://hephaestus.build"), new WorkspaceSubdomainProperties(false, ""))))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("cookie-secure");
     }
@@ -128,7 +134,9 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
                         environment,
                         false,
                         false,
-                        "HEPHAESTUS_AT"))
+                        "HEPHAESTUS_AT",
+                        new SecurityHeaders(
+                                URI.create("https://hephaestus.build"), new WorkspaceSubdomainProperties(false, ""))))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("cookie-secure");
     }
@@ -144,13 +152,15 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
                         dev,
                         false,
                         false,
-                        "HEPHAESTUS_AT"))
+                        "HEPHAESTUS_AT",
+                        new SecurityHeaders(
+                                URI.create("https://hephaestus.build"), new WorkspaceSubdomainProperties(false, ""))))
                 .isNotNull();
     }
 
     @Test
     void csrfCookieName_dropsHostPrefixOnlyWhenInsecure() {
-        assertThat(SecurityConfig.csrfCookieName(true)).isEqualTo("__Host-XSRF-TOKEN");
-        assertThat(SecurityConfig.csrfCookieName(false)).isEqualTo("XSRF-TOKEN");
+        assertThat(AuthProperties.csrfCookieName(true)).isEqualTo("__Host-XSRF-TOKEN");
+        assertThat(AuthProperties.csrfCookieName(false)).isEqualTo("XSRF-TOKEN");
     }
 }

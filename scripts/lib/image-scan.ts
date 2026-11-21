@@ -10,12 +10,21 @@
  * platform-digest resolver through `resolve-image-scan-subject.ts`.
  */
 import { existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { asRecord, isRecord } from "./json.ts";
 import { scanJvmRuntime } from "./jvm-runtime.ts";
 import { output, run } from "./process.ts";
+import {
+	assertKnownPackagesScanned,
+	extractWebApp,
+	RUNNER_JAR,
+	WEB_APP_IMAGE,
+	WEB_APP_STEM,
+	webAppTrivyArguments,
+} from "./web-app-scan.ts";
 
 /** The platform a caller gets when it names none. Callers that must match the release evidence
  * gate, which is keyed per platform, name both — see `scan-upstream-images.ts`. */
@@ -53,6 +62,8 @@ export interface ScanOptions {
 	readonly platform?: string;
 	/** Collect every subject even when one scan is unavailable. Existing callers remain fail-fast. */
 	readonly continueOnError?: boolean;
+	/** The server image must carry the web app, as every image built since the web app moved into it does. */
+	readonly requireWebApp?: boolean;
 }
 
 /**
@@ -123,7 +134,7 @@ export async function resolvePlatformDigest(reference: string, platform: string)
 	return digest;
 }
 
-/** `webapp-linux-amd64`, the stem both report files and the uploaded artifact are named by. */
+/** `server-linux-amd64`, the stem both report files and the uploaded artifact are named by. */
 export function reportStem(image: string, platform: string): string {
 	return `${image}-${platform.replaceAll("/", "-")}`;
 }
@@ -142,6 +153,7 @@ async function scan(
 	directory: string,
 	platform: string,
 	annotate: boolean,
+	requireWebApp: boolean,
 ): Promise<ScanOutcome> {
 	const digest = subject.digest ?? (await resolvePlatformDigest(subject.reference, platform));
 	if (
@@ -183,14 +195,81 @@ async function scan(
 		"security/vulnerability-policy.json",
 		result,
 	];
-	if (await evaluatorPassed(evaluator, annotate)) {
-		return { image: subject.image, passed: true, platform };
-	}
-	if (!existsSync(result)) {
+	const imagePassed = await evaluatorPassed(evaluator, annotate);
+	if (!imagePassed && !existsSync(result)) {
 		// Native acquisition errors already reached stderr on the first invocation. Never repeat a scan.
 		throw new Error(`vulnerability policy evaluation produced no result for ${subject.image}`);
 	}
-	return { image: subject.image, passed: false, platform };
+	// A server image older than the web app's move into it carries none; the release evidence requires it.
+	const webAppPassed =
+		subject.image === WEB_APP_IMAGE
+			? await scanWebApp(subject, digest, platform, path.join(directory, stem), {
+					annotate,
+					required: requireWebApp,
+				})
+			: true;
+	return { image: subject.image, passed: imagePassed && webAppPassed !== false, platform };
+}
+
+/**
+ * The web app inside the server image's jar, which the image scan cannot see (`web-app-scan.ts`, ADR 0100), under the
+ * same policy and as findings of the same image digest. Writes `<stem>.web-app.json` and `<stem>.web-app.policy.json`.
+ * Returns whether the policy passed, or `undefined` when the image carries no web app and none is `required`.
+ */
+export async function scanWebApp(
+	subject: Pick<Subject, "image" | "repository">,
+	digest: string,
+	platform: string,
+	stem: string,
+	options: { annotate: boolean; required: boolean },
+): Promise<boolean | undefined> {
+	const reference = `${subject.repository}@${digest}`;
+	const scratch = await mkdtemp(path.join(tmpdir(), "web-app-"));
+	try {
+		const webApp = await extractWebApp(reference, platform, scratch);
+		if (webApp === undefined) {
+			if (options.required) {
+				throw new Error(`${reference} carries no web app in ${RUNNER_JAR}`);
+			}
+			return undefined;
+		}
+		const report = path.resolve(`${stem}.${WEB_APP_STEM}.json`);
+		await run(
+			"trivy",
+			webAppTrivyArguments(webApp, report, [
+				"--skip-db-update",
+				"--scanners",
+				"vuln",
+				"--list-all-pkgs",
+			]),
+			{ cwd: scratch },
+		);
+		assertKnownPackagesScanned(JSON.parse(await readFile(report, "utf8")));
+		const result = `${stem}.${WEB_APP_STEM}.policy.json`;
+		await rm(result, { force: true });
+		const passed = await evaluatorPassed(
+			[
+				path.join(import.meta.dirname, "..", "check-release-vulnerabilities.ts"),
+				subject.image,
+				platform,
+				digest,
+				subject.repository,
+				report,
+				"security/vulnerability-policy.json",
+				result,
+				"--web-app",
+			],
+			options.annotate,
+		);
+		if (!passed && !existsSync(result)) {
+			throw new Error(
+				`vulnerability policy evaluation produced no result for the web app of ${reference}`,
+			);
+		}
+		return passed;
+	} finally {
+		await rm(scratch, { recursive: true, force: true });
+	}
 }
 
 export async function scanAll(
@@ -203,7 +282,15 @@ export async function scanAll(
 	const outcomes: ScanOutcome[] = [];
 	for (const subject of subjects) {
 		try {
-			outcomes.push(await scan(subject, directory, platform, options.annotate ?? false));
+			outcomes.push(
+				await scan(
+					subject,
+					directory,
+					platform,
+					options.annotate ?? false,
+					options.requireWebApp ?? false,
+				),
+			);
 		} catch (error) {
 			if (options.continueOnError !== true) {
 				throw error;

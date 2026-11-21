@@ -384,9 +384,8 @@ Hephaestus ships no collector and names no destination.
 Read only the server and migration Pods.
 Their records hold no content.
 
-Do not read the webapp, PostgreSQL or any Pod of the sandbox namespace:
+Do not read PostgreSQL or any Pod of the sandbox namespace:
 
-- The webapp's nginx lines can name a client address and a request with its query.
 - PostgreSQL's error lines can quote row values.
 - A sandbox's output can hold reviewed code, a tool result, a provider's error message, the conversation or a credential.
   This includes the lines that the review runtime writes itself.

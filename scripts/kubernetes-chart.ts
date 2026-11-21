@@ -24,7 +24,6 @@ export const chartImages = [
 	"server",
 	"victoria-metrics",
 	"vmalert",
-	"webapp",
 ] as const;
 
 export type ChartImage = (typeof chartImages)[number];

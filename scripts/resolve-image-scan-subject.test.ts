@@ -401,8 +401,8 @@ void test(
 						...process.env,
 						RUNNER_TEMP: directory,
 						PLATFORM_PAIR: "linux-arm64",
-						IMAGES: JSON.stringify(["server", "webapp"]),
-						WEBAPP_DIGEST: `sha256:${artifact}`,
+						IMAGES: JSON.stringify(["server", "agent"]),
+						AGENT_DIGEST: `sha256:${artifact}`,
 						BUILDPACKS_DIGEST: `sha256:${buildpacks}`,
 						BUILDPACKS_OUTCOME: "success",
 						BAKE_OUTCOME: "success",
@@ -417,12 +417,12 @@ void test(
 			assert.deepEqual(
 				entries.toSorted((left, right) => left.localeCompare(right)),
 				[
+					"agent",
+					path.join("agent", "linux-arm64"),
+					path.join("agent", "linux-arm64", artifact),
 					"server",
 					path.join("server", "linux-arm64"),
 					path.join("server", "linux-arm64", buildpacks),
-					"webapp",
-					path.join("webapp", "linux-arm64"),
-					path.join("webapp", "linux-arm64", artifact),
 				],
 			);
 			// An image the build did not report fails the export, which still records the images that
@@ -437,8 +437,8 @@ void test(
 						...process.env,
 						RUNNER_TEMP: directory,
 						PLATFORM_PAIR: "linux-arm64",
-						IMAGES: JSON.stringify(["webapp", "postgres"]),
-						WEBAPP_DIGEST: `sha256:${artifact}`,
+						IMAGES: JSON.stringify(["agent", "postgres"]),
+						AGENT_DIGEST: `sha256:${artifact}`,
 						BUILDPACKS_DIGEST: "",
 						POSTGRES_DIGEST: "",
 						BUILDPACKS_OUTCOME: "skipped",
@@ -453,11 +453,7 @@ void test(
 					encoding: "utf8",
 					recursive: true,
 				}).toSorted((left, right) => left.localeCompare(right)),
-				[
-					"webapp",
-					path.join("webapp", "linux-arm64"),
-					path.join("webapp", "linux-arm64", artifact),
-				],
+				["agent", path.join("agent", "linux-arm64"), path.join("agent", "linux-arm64", artifact)],
 			);
 			// A failed build names its own error, so the export does not blame a missing digest.
 			rmSync(path.join(directory, "digests"), { recursive: true, force: true });
@@ -491,8 +487,8 @@ void test(
 						...process.env,
 						RUNNER_TEMP: directory,
 						PLATFORM_PAIR: "linux-arm64",
-						IMAGES: JSON.stringify(["webapp", "postgres"]),
-						WEBAPP_DIGEST: `sha256:${artifact}`,
+						IMAGES: JSON.stringify(["agent", "postgres"]),
+						AGENT_DIGEST: `sha256:${artifact}`,
 						POSTGRES_DIGEST: "",
 						BUILDPACKS_DIGEST: "",
 						BUILDPACKS_OUTCOME: "",
@@ -506,11 +502,7 @@ void test(
 					encoding: "utf8",
 					recursive: true,
 				}).toSorted((left, right) => left.localeCompare(right)),
-				[
-					"webapp",
-					path.join("webapp", "linux-arm64"),
-					path.join("webapp", "linux-arm64", artifact),
-				],
+				["agent", path.join("agent", "linux-arm64"), path.join("agent", "linux-arm64", artifact)],
 			);
 			assert.match(partial.stdout, /::notice::postgres has no digest/u);
 		} finally {

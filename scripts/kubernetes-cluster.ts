@@ -11,7 +11,7 @@
  *   upgrade  install, and check that PostgreSQL kept its Pods
  *   verify   every workload ready, and a sandbox of each SandboxTemplate passed the isolation
  *            gate (scripts/sandbox-isolation.ts)
- *   request  one HTTPS request to the webapp and the API through that Gateway
+ *   request  one HTTPS request to the web app and the API through that Gateway
  *   backup-drill  pgBackRest to a throwaway S3 server, then a point-in-time restore on a fresh node
  *   turn-roll  a TURN run in its conversation sandbox through a server rollout, with the capacity
  *            bench's fake model provider, then a Slack message that gets its answer, with a Slack Web API
@@ -139,7 +139,6 @@ export function mapImages(reference: (name: ChartImage) => string): ChartImages 
 		server: reference("server"),
 		"victoria-metrics": reference("victoria-metrics"),
 		vmalert: reference("vmalert"),
-		webapp: reference("webapp"),
 	};
 }
 
@@ -2677,7 +2676,7 @@ async function gatewayAnswer(
 
 /**
  * The routes of docs/admin/helm-chart.mdx § Gateway routes, through Traefik: the redirect to HTTPS,
- * the webapp, the server's `/api` routes, and the webhook path, over TLS that the
+ * the web app, the server's `/api` routes, and the webhook path, over TLS that the
  * certificate of the Gateway's listener carries.
  */
 async function gatewayRequests(
@@ -3085,11 +3084,12 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 			},
 		);
 	};
-	await build("webapp", ".", "webapp/Dockerfile");
 	await build("agent", "docker/agents", "docker/agents/pi/Dockerfile", [
 		"agent-runtime=server/application/src/main/resources/agent",
 	]);
 	await build("postgres", "docker/postgres");
+	// The server packages the built web app (ADR 0100).
+	await run("vp", ["run", "build:webapp"], { cwd: ROOT, stdout: "ignore" });
 	await run(
 		path.join(ROOT, "server", process.platform === "win32" ? "gradlew.bat" : "gradlew"),
 		[":application:bootJar", "-q"],
@@ -3135,7 +3135,7 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 	);
 	const inventory = await readInventory(path.join(ROOT, "security", "release-images.json"));
 	const resolved = [];
-	for (const image of ["webapp", "agent", "postgres", "server"]) {
+	for (const image of ["agent", "postgres", "server"]) {
 		resolved.push(await push(image, tag));
 	}
 	return chartImagesFrom(resolved, inventory.upstream);
@@ -3405,7 +3405,7 @@ export async function gateway(host: string): Promise<void> {
 	});
 }
 
-/** One HTTPS request to the webapp and one to the API, through the Gateway on 127.0.0.1:443. */
+/** One HTTPS request to the web app and one to the API, through the Gateway on 127.0.0.1:443. */
 export async function request(work: string, host: string): Promise<void> {
 	for (const route of ["/", "/api/identity-providers"]) {
 		await run("curl", [

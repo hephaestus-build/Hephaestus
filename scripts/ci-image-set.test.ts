@@ -60,7 +60,6 @@ function evaluate(source: unknown, names: string[], context: data.Dictionary): s
 
 const IMAGES = {
 	server: "application_server_changed",
-	webapp: "webapp_changed",
 	agent: "agent_images_changed",
 	postgres: "postgres_image_changed",
 } as const;
@@ -225,7 +224,7 @@ const SETTINGS: Settings[] = [
 		queue: [
 			NO_QUEUE,
 			{ queueImages: JSON.stringify(["server"]), versionBump: "false" },
-			{ queueImages: JSON.stringify(["webapp", "agent", "postgres"]), versionBump: "false" },
+			{ queueImages: JSON.stringify(["agent", "postgres"]), versionBump: "false" },
 			{ queueImages: ALL_IMAGES, versionBump: "false" },
 			{ queueImages: ALL_IMAGES, versionBump: "true" },
 		],

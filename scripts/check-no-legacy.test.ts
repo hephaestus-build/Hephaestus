@@ -122,6 +122,7 @@ await it("does not mistake a path default for an alias", () => {
 await it("rejects the common permanent redirect forms and component disguises", () => {
 	for (const [file, source] of [
 		[server, "response.setStatus(HttpStatus.MOVED_PERMANENTLY.value());"],
+		[server, "response.setStatus(HttpServletResponse.SC_PERMANENT_REDIRECT);"],
 		[server, 'response.sendRedirect("/current");'],
 		["webapp/docker/nginx.conf", "return 301 https://example.test/current;"],
 		["webapp/docker/nginx.conf", "return 308 $old_destination;"],
@@ -155,15 +156,16 @@ await it("a route redirect cannot hide behind an import name or expression body"
 	assert.ok(findings(route, source).some((finding) => finding.rule === "route-alias"));
 });
 
-await it("an extra workspace redirect map entry cannot use the canonical return exemption", () => {
-	const file = "deploy/chart/hephaestus/templates/workspace-routing.yaml";
-	const original = readFileSync(path.join(import.meta.dirname, "../", file), "utf8");
-	assert.deepEqual(findings(file, original), []);
+const hostGuard =
+	"server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/WorkspaceHostGuardConfiguration.java";
+await it("a second permanent redirect in the workspace host guard cannot use its exemption", () => {
+	const original = readFileSync(path.join(import.meta.dirname, "../", hostGuard), "utf8");
+	assert.deepEqual(findings(hostGuard, original), []);
 	const changed = original.replace(
-		'default "";',
-		'default "";\n      "~^old-host:/retired" "https://current.example/";',
+		"chain.doFilter(request, response);",
+		"response.setStatus(HttpServletResponse.SC_PERMANENT_REDIRECT);\n            chain.doFilter(request, response);",
 	);
-	assert.ok(findings(file, changed).some((finding) => finding.rule === "path-alias"));
+	assert.ok(findings(hostGuard, changed).some((finding) => finding.rule === "path-alias"));
 });
 await it("numeric Java redirects and absolute redirect views are refused", () => {
 	for (const source of [
@@ -190,14 +192,19 @@ await it("parentheses cannot hide route redirect expression bodies", () => {
 	}
 });
 
-await it("a changed canonical workspace source or destination is refused", () => {
-	const file = "deploy/chart/hephaestus/templates/workspace-routing.yaml";
-	const original = readFileSync(path.join(import.meta.dirname, "../", file), "utf8");
+await it("a changed workspace host source or destination is refused", () => {
+	const original = readFileSync(path.join(import.meta.dirname, "../", hostGuard), "utf8");
 	for (const changed of [
-		original.replace("(?:GET|HEAD):/w/", "(?:GET|HEAD):/retired/"),
-		original.replace("https://$workspace_slug.", "https://old.$workspace_slug."),
+		original.replace(
+			'Pattern.compile("/w/([^/]+)(/.*)?")',
+			'Pattern.compile("/retired/([^/]+)(/.*)?")',
+		),
+		original.replace(
+			'"https://" + workspacePath.group(1)',
+			'"https://old." + workspacePath.group(1)',
+		),
 	]) {
-		assert.ok(findings(file, changed).some((finding) => finding.rule === "path-alias"));
+		assert.ok(findings(hostGuard, changed).some((finding) => finding.rule === "path-alias"));
 	}
 });
 

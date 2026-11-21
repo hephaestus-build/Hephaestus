@@ -146,6 +146,11 @@ spring:
         problemdetails:
             enabled: true
 
+    # core.webapp.WebAppConfiguration maps the web app's files itself (ADR 0100).
+    web:
+        resources:
+            add-mappings: false
+
     # Disable Mustache template location check as we don't use Mustache templates
     mustache:
         check-template-location: false
@@ -196,6 +201,9 @@ server:
     tomcat:
         max-http-form-post-size: 2MB
         max-swallow-size: 2MB
+    # The web app's legal pages are Markdown, which the servlet container's default types do not name.
+    mime-mappings:
+        md: text/markdown;charset=utf-8
 
 # Actuator on the management port; health probes for Kubernetes liveness/readiness.
 management:
@@ -323,7 +331,8 @@ hephaestus:
             instance-admin-required: ${HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED:false}
             workspace-admin-required: ${HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED:false}
             rp-id: ${HEPHAESTUS_AUTH_PASSKEYS_RP_ID:}
-            allowed-origins: ${HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS:http://localhost:${WEBAPP_PORT:4200}}
+            # The page that runs the ceremony is the web app's, so its origin is the default.
+            allowed-origins: ${HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS:${hephaestus.host-url}}
             admin-max-age: ${HEPHAESTUS_AUTH_PASSKEYS_ADMIN_MAX_AGE:6h}
         # Passwordless local sign-in, which the practices demo seed uses. The prod profile refuses it.
         dev-login-enabled: ${HEPHAESTUS_AUTH_DEV_LOGIN_ENABLED:false}
@@ -483,7 +492,7 @@ hephaestus:
         # each profile can override; set them in application-local.yml to scope dev syncs.
     cors:
         allowed-origins:
-            - ${APPLICATION_HOST_URL:http://localhost:${WEBAPP_PORT:4200}}
+            - ${hephaestus.host-url}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # CONTEXT FABRIC AND LOCAL GIT CHECKOUT
@@ -500,6 +509,13 @@ hephaestus:
 
     webapp:
         url: ${HEPHAESTUS_WEBAPP_URL:${hephaestus.host-url}}
+
+    # The web app that this server serves (core.webapp.WebAppProperties, ADR 0100). The build packages it under
+    # classpath:/web-app/; a server without it serves the API only.
+    web-app:
+        location: classpath:/web-app/
+        security-contact: ${SECURITY_CONTACT:}
+        legal-overrides: ${LEGAL_OVERRIDES_DIRECTORY:}
 
     # The workspace MCP endpoint (core.mcp.McpProperties, ADR 0110). Off until an operator turns it on.
     mcp:

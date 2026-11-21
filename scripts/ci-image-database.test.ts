@@ -62,7 +62,6 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 		"all-images",
 		"server-image",
 		"kubernetes",
-		"webapp-image",
 		"agent-images",
 		"postgres-image",
 		"docker-config",

@@ -10,14 +10,22 @@ import { isRecord } from "./lib/json.ts";
 const digest = `sha256:${"a".repeat(64)}`;
 const release = "v0.86.1";
 
-async function fixture(tag = release) {
+/**
+ * An archived release by default: its server image predates the web app's move into it, and a webapp image carries
+ * the web app (ADR 0100).
+ */
+async function fixture(
+	tag = release,
+	names = ["server", "webapp"],
+	fields: Record<string, unknown> = {},
+) {
 	const directory = await mkdtemp(path.join(tmpdir(), "release-rescan-"));
 	const evidence = path.join(directory, "evidence");
 	const reports = path.join(directory, "reports");
 	const bin = path.join(directory, "bin");
 	await mkdir(evidence);
 	await mkdir(bin);
-	const images = ["server", "webapp"].map((image) => ({
+	const images = names.map((image) => ({
 		image,
 		repository: `ghcr.io/hephaestus-build/${image}`,
 		provenance: "first-party",
@@ -34,7 +42,7 @@ async function fixture(tag = release) {
 			digest,
 		})),
 	);
-	const manifest = { schemaVersion: 1, release: tag, commit: "b".repeat(40), subjects };
+	const manifest = { schemaVersion: 1, release: tag, commit: "b".repeat(40), subjects, ...fields };
 	await writeFile(
 		path.join(evidence, `release-${tag}.chart.json`),
 		JSON.stringify({
@@ -68,6 +76,11 @@ if [ "$FAIL_AUTH" = '${command}' ]; then printf '%s\n' '${command} refused' >&2;
 	await writeFile(
 		path.join(bin, "docker"),
 		`#!/bin/sh
+case "$1" in
+ create) printf '%s\n' 'container'; exit 0;;
+ cp) : > "$3"; exit 0;;
+ rm) exit 0;;
+esac
 if [ "$5" = '--raw' ]; then printf '%s' '{"layers":[]}'; else printf '%s' '${digest}'; fi
 `,
 		{ mode: 0o755 },
@@ -75,8 +88,15 @@ if [ "$5" = '--raw' ]; then printf '%s' '{"layers":[]}'; else printf '%s' '${dig
 	await writeFile(
 		path.join(bin, "trivy"),
 		`#!/bin/sh
-printf '%s\n' "$9" >> '${directory}/scans'
-printf '%s' '{"Results":[]}' > "$8"
+if [ "$1" = rootfs ]; then
+ # trivy rootfs --skip-db-update --scanners vuln --list-all-pkgs --format json --output <report> <web app>
+ printf '%s\n' "\${10}" >> '${directory}/scans'
+ if [ "$WEB_APP_PACKAGES" = none ]; then printf '%s' '{"Results":[]}' > "$9"
+ else printf '%s' '{"Results":[{"Type":"node-pkg","Packages":[{"Name":"react"},{"Name":"react-dom"}]}]}' > "$9"; fi
+else
+ printf '%s\n' "$9" >> '${directory}/scans'
+ printf '%s' '{"Results":[]}' > "$8"
+fi
 `,
 		{ mode: 0o755 },
 	);
@@ -95,6 +115,16 @@ for argument; do case "$argument" in syft-json=*) printf '%s' '${JSON.stringify(
 			mode: 0o755,
 		},
 	);
+	// The server's jar holds the web app only where WEB_APP is set.
+	await writeFile(
+		path.join(bin, "unzip"),
+		`#!/bin/sh
+# As unzip does, create only the last directory of the destination.
+mkdir "$5" 2>/dev/null || [ -d "$5" ] || { echo "checkdir: cannot create extraction directory: $5" >&2; exit 3; }
+if [ "$WEB_APP" = 'true' ]; then mkdir -p "$5/web-app"; : > "$5/web-app/index.html"; fi
+`,
+		{ mode: 0o755 },
+	);
 	await writeFile(
 		path.join(bin, "node"),
 		`#!/bin/sh
@@ -103,6 +133,9 @@ case "$1" in *verify-release-evidence.ts)
  if [ -n "$ARCHIVE_FAILURE" ]; then printf '%s\n' "$ARCHIVE_FAILURE" >&2
  else printf '%s\n' 'archived evidence has no SHA256SUMS signature' >&2; fi
  exit 1;; esac
+case "$6" in *.web-app.json) if [ "$FAIL_WEB_APP" = 'true' ]; then
+ printf '%s' '{"status":"fail"}' > "$8"; exit 1
+fi;; esac
 if [ "$2-$3" = 'server-linux/amd64' ] && [ "$PASS_SCAN" != 'true' ]; then
  if [ "$FAIL_SCAN" = 'infra' ]; then printf '%s\n' 'identity acquisition unavailable' >&2; exit 3; fi
  printf '%s' '{"status":"fail"}' > "$8"; exit 1
@@ -249,6 +282,80 @@ void test(
 		await assert.rejects(readFile(path.join(f.directory, "archive-read")), /ENOENT/u);
 		const scans = await readFile(path.join(f.directory, "scans"), "utf8");
 		assert.equal(scans.trim().split("\n").length, 4);
+	},
+);
+
+void test(
+	"a server image that carries the web app has the web app scanned under the same policy",
+	{ skip: process.platform === "win32" },
+	async () => {
+		for (const failWebApp of [false, true]) {
+			const f = await fixture(release, ["server", "agent"]);
+			const child = execute(f, {
+				PASS_SCAN: "true",
+				WEB_APP: "true",
+				FAIL_WEB_APP: String(failWebApp),
+			});
+			assert.equal(child.status === 0, !failWebApp, child.stderr);
+			// The two images and the server's web app, once per platform.
+			const scans = await readFile(path.join(f.directory, "scans"), "utf8");
+			assert.equal(scans.trim().split("\n").length, 6);
+			for (const platform of ["linux-amd64", "linux-arm64"]) {
+				const policy: unknown = JSON.parse(
+					await readFile(path.join(f.reports, `server-${platform}.web-app.policy.json`), "utf8"),
+				);
+				assert.deepEqual(policy, { status: failWebApp ? "fail" : "pass" });
+			}
+			const value = await result(f);
+			assert.deepEqual(value.outcomes, [
+				{ image: "server", passed: !failWebApp, platform: "linux/amd64" },
+				{ image: "agent", passed: true, platform: "linux/amd64" },
+				{ image: "server", passed: !failWebApp, platform: "linux/arm64" },
+				{ image: "agent", passed: true, platform: "linux/arm64" },
+			]);
+			assert.deepEqual(value.currentSecurity, { status: failWebApp ? "fail" : "pass" });
+		}
+	},
+);
+
+void test(
+	"a release that evidences the web app in the server image fails a rescan that cannot find it",
+	{ skip: process.platform === "win32" },
+	async () => {
+		for (const bundledNpmSbom of [1, 2]) {
+			const f = await fixture(release, ["server", "agent"], { bundledNpmSbom });
+			const child = execute(f, { PASS_SCAN: "true" });
+			assert.equal(child.status === 0, bundledNpmSbom === 1, child.stderr);
+			const value = await result(f);
+			assert.deepEqual(value.currentSecurity, { status: bundledNpmSbom === 1 ? "pass" : "fail" });
+		}
+	},
+);
+
+void test(
+	"a scan of the web app that lists no bundled react is unavailable, not a pass",
+	{ skip: process.platform === "win32" },
+	async () => {
+		const f = await fixture(release, ["server", "agent"]);
+		const child = execute(f, { PASS_SCAN: "true", WEB_APP: "true", WEB_APP_PACKAGES: "none" });
+		assert.notEqual(child.status, 0);
+		const value = await result(f);
+		assert.deepEqual(value.outcomes, [
+			{
+				image: "server",
+				platform: "linux/amd64",
+				passed: false,
+				error: "the scan of the web app lists no bundled react",
+			},
+			{ image: "agent", passed: true, platform: "linux/amd64" },
+			{
+				image: "server",
+				platform: "linux/arm64",
+				passed: false,
+				error: "the scan of the web app lists no bundled react",
+			},
+			{ image: "agent", passed: true, platform: "linux/arm64" },
+		]);
 	},
 );
 

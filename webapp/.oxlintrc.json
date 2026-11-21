@@ -433,8 +433,8 @@
 				// `process.env.X` is not a build error — it reads as `undefined` in the browser, so the
 				// failure surfaces wherever the value was needed rather than here. The two legitimate
 				// sources are separate: `import.meta.env` carries the build-time mode flags (`DEV`), while
-				// runtime configuration reaches the bundle through `window.__ENV__`, wrapped by
-				// `@/environment` and filled in by the container entrypoint.
+				// runtime configuration reaches the bundle through the config record that the server writes into
+				// `index.html`, read by `@/environment`.
 				"no-restricted-properties": [
 					"error",
 					{

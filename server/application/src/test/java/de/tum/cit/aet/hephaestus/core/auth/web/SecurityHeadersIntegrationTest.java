@@ -27,7 +27,7 @@ import org.springframework.web.context.WebApplicationContext;
  */
 class SecurityHeadersIntegrationTest extends RealAuthIntegrationTest {
 
-    /** The policy browsers already keep; the chart's route sets the same value on the web app's rules. */
+    /** The policy that browsers already keep, sent by the server for the API and the web app alike. */
     private static final String HSTS = "max-age=2592000 ; includeSubDomains";
 
     @Autowired
@@ -63,7 +63,10 @@ class SecurityHeadersIntegrationTest extends RealAuthIntegrationTest {
                                 allOf(
                                         containsString("default-src 'self'"),
                                         containsString("script-src 'self';"),
-                                        containsString("img-src 'self' data: https:"),
+                                        containsString("img-src 'self' data: blob: https:"),
+                                        containsString("object-src 'none'"),
+                                        // A page on a workspace host calls the API on the apex.
+                                        containsString("connect-src 'self' https://hephaestus.build;"),
                                         containsString("form-action 'self'"),
                                         containsString("frame-ancestors 'none'"),
                                         containsString("base-uri 'self'"),

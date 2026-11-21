@@ -337,7 +337,7 @@ Files: ["@earendil-works__pi-ai@1.0.0.patch"]
 				schemaVersion: 1,
 				release: "v0.95.2",
 				commit: revision,
-				bundledNpmSbom: 1,
+				bundledNpmSbom: 2,
 				sourceSbom: 1,
 			}),
 		);

@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-import { E2E_BASE_URL, E2E_PORT } from "./e2e/urls.ts";
+import { E2E_BASE_URL } from "./e2e/urls.ts";
 
 const onCI = process.env.CI !== undefined;
 
@@ -24,10 +24,4 @@ export default defineConfig({
 		screenshot: "only-on-failure",
 	},
 	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-	webServer: {
-		command: `vp build && vp preview --host 127.0.0.1 --port ${E2E_PORT}`,
-		url: E2E_BASE_URL,
-		reuseExistingServer: !onCI,
-		timeout: 120_000,
-	},
 });

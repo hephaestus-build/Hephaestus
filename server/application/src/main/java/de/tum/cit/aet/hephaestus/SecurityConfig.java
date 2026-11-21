@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.ProblemResponse;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
+import de.tum.cit.aet.hephaestus.core.webapp.WebAppRequests;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceOriginPolicy;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -80,6 +81,7 @@ public class SecurityConfig {
     private final boolean devLoginEnabled;
     private final boolean cookieSecure;
     private final String authCookieName;
+    private final SecurityHeaders securityHeaders;
 
     public SecurityConfig(
             CorsProperties corsProperties,
@@ -88,7 +90,8 @@ public class SecurityConfig {
             Environment environment,
             @Value("${hephaestus.auth.dev-login-enabled:false}") boolean devLoginEnabled,
             @Value("${hephaestus.auth.cookie-secure:true}") boolean cookieSecure,
-            @Value("${hephaestus.auth.cookie-name:" + AuthProperties.DEFAULT_COOKIE_NAME + "}") String authCookieName) {
+            @Value("${hephaestus.auth.cookie-name:" + AuthProperties.DEFAULT_COOKIE_NAME + "}") String authCookieName,
+            SecurityHeaders securityHeaders) {
         if (!cookieSecure && (!environment.matchesProfiles("e2e") || environment.matchesProfiles("prod"))) {
             throw new IllegalStateException("hephaestus.auth.cookie-secure=false is only allowed in the 'e2e' profile "
                     + "without the 'prod' profile. The server fails closed and does not start.");
@@ -99,11 +102,7 @@ public class SecurityConfig {
         this.devLoginEnabled = devLoginEnabled;
         this.cookieSecure = cookieSecure;
         this.authCookieName = authCookieName;
-    }
-
-    /** CSRF cookie name: {@code __Host-}-prefixed in production; the prefix is dropped for local http E2E. */
-    static String csrfCookieName(boolean cookieSecure) {
-        return cookieSecure ? "__Host-XSRF-TOKEN" : "XSRF-TOKEN";
+        this.securityHeaders = securityHeaders;
     }
 
     interface AuthoritiesConverter extends Converter<Map<String, Object>, Collection<GrantedAuthority>> {}
@@ -230,7 +229,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(requests -> requests.anyRequest().permitAll());
         // Webhook and OAuth callback responses leave through the browser-facing host, so they carry the same header
         // set.
-        SecurityHeaders.apply(http);
+        securityHeaders.apply(http);
         return http.build();
     }
 
@@ -273,7 +272,7 @@ public class SecurityConfig {
             });
             // Same security headers as the resource-server chain — a no-decoder pod still serves
             // OpenAPI / OPTIONS / denied responses, so HSTS/CSP/COOP/etc. should apply here too.
-            SecurityHeaders.apply(http);
+            securityHeaders.apply(http);
             return http.build();
         }
 
@@ -324,7 +323,7 @@ public class SecurityConfig {
                 }));
         // Security headers (HSTS, CSP (enforced), COOP, COEP, Referrer-Policy,
         // X-Content-Type-Options) for the user-facing resource-server chain.
-        SecurityHeaders.apply(http);
+        securityHeaders.apply(http);
 
         // Register after authentication so account-scoped buckets can use the principal.
         AuthRateLimitFilter authRateLimitFilter = authRateLimitFilterProvider.getIfAvailable();
@@ -388,6 +387,8 @@ public class SecurityConfig {
             requests.requestMatchers(api.matcher(HttpMethod.GET, "/workspaces/providers"))
                     .permitAll();
             requests.requestMatchers(PublicActivityReadRequestMatcher.MATCHER).permitAll();
+            // The web app's page and files (ADR 0100). permitAll, not ignoring, so they carry the security headers.
+            requests.requestMatchers(WebAppRequests.MATCHER).permitAll();
             // A broken sign-in page is a fault too, so a reader need not be signed in to report one.
             requests.requestMatchers(api.matcher(HttpMethod.POST, "/browser-faults"))
                     .permitAll();
@@ -409,12 +410,15 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** An anonymous read gets no cookie, so the public read must not publish a per-client SPA CSRF cookie. */
+    /**
+     * An anonymous read gets no cookie, so neither the public read nor a file of the web app publishes a per-client SPA
+     * CSRF cookie. The web app asks for its token through the API.
+     */
     private static final class PublicActivityReadFilter extends OncePerRequestFilter {
         @Override
         protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
                 throws ServletException, IOException {
-            if (PublicActivityReadRequestMatcher.MATCHER.matches(request)) {
+            if (PublicActivityReadRequestMatcher.MATCHER.matches(request) || WebAppRequests.MATCHER.matches(request)) {
                 CsrfFilter.skipRequest(request);
             }
             chain.doFilter(request, response);
@@ -431,7 +435,7 @@ public class SecurityConfig {
     @Bean
     CookieCsrfTokenRepository csrfTokenRepository() {
         CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
-        repository.setCookieName(csrfCookieName(cookieSecure));
+        repository.setCookieName(AuthProperties.csrfCookieName(cookieSecure));
         repository.setCookieCustomizer(
                 cookie -> cookie.secure(cookieSecure).path("/").sameSite("Lax"));
         return repository;

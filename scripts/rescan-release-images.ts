@@ -4,9 +4,10 @@ import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
 import { scanAll, type ScanOutcome } from "./lib/image-scan.ts";
-import { readJsonFileSync } from "./lib/json.ts";
+import { isRecord, readJsonFileSync } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
 import { releaseCertificateIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
+import { sbomInventoryVersion } from "./lib/release-sbom-contract.ts";
 import {
 	isRelease,
 	jointLockAsset,
@@ -37,11 +38,16 @@ async function authenticateSubjects(directory: string, release: string) {
 	}
 	const manifestValue = readJsonFileSync(path.join(directory, "manifest.json"));
 	verifyLockAgainstEvidence(lock, manifestValue);
-	return validateManifest(
+	const manifest = validateManifest(
 		manifestValue,
 		readJsonFileSync(path.join(directory, "release-images.json")),
 		releaseIdentityFor(release).namespace,
 	);
+	// A release whose evidence covers the web app in the server image keeps it covered: a rescan that cannot find the
+	// web app fails instead of passing on the image alone.
+	const requireWebApp =
+		isRecord(manifestValue) && sbomInventoryVersion(manifestValue, "bundledNpmSbom", false) >= 2;
+	return { ...manifest, requireWebApp };
 }
 
 export async function rescanReleaseImages(directory: string, reports: string, release: string) {
@@ -104,7 +110,12 @@ export async function rescanReleaseImages(directory: string, reports: string, re
 				reference: `${subject.repository}@${subject.digest}`,
 			}));
 		outcomes.push(
-			...(await scanAll(subjects, reports, { platform, annotate: true, continueOnError: true })),
+			...(await scanAll(subjects, reports, {
+				platform,
+				annotate: true,
+				continueOnError: true,
+				requireWebApp: manifest.requireWebApp,
+			})),
 		);
 	}
 	const currentSecurity = { status: outcomes.every((outcome) => outcome.passed) ? "pass" : "fail" };

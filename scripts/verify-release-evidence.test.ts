@@ -12,6 +12,7 @@ import {
 	attestationContainsSbom,
 	indexContainsSubject,
 	validateImageBundleInventory,
+	validateWebAppInventory,
 	requiresSignedEvidence,
 	generationTime,
 	validateLicenseReport,
@@ -440,7 +441,10 @@ void it("signed evidence is required from the owned release boundary, including 
 });
 
 void it("requires bundle metadata and scanner coverage when the signed manifest declares it", () => {
-	assert.doesNotThrow(() => validateImageBundleInventory({}, {}, "webapp", false));
-	assert.doesNotThrow(() => validateImageBundleInventory({}, {}, "agent", true));
-	assert.throws(() => validateImageBundleInventory({}, {}, "webapp", true), /no bundled npm/u);
+	assert.doesNotThrow(() => validateImageBundleInventory({}, {}, "webapp", 0));
+	assert.doesNotThrow(() => validateImageBundleInventory({}, {}, "agent", 1));
+	assert.throws(() => validateImageBundleInventory({}, {}, "webapp", 1), /no bundled npm/u);
+	// From version 2 the web app is evidenced through the server subject, not through an image of its own.
+	assert.doesNotThrow(() => validateImageBundleInventory({}, {}, "webapp", 2));
+	assert.throws(() => validateWebAppInventory({}, {}), /no bundled npm/u);
 });

@@ -101,7 +101,7 @@ The browser fault reporter and the reference on error views came in later change
 
 `BrowserFaultsControllerIntegrationTest` and `BrowserFaultRecorderTest` check the closed values, the trace id rule and the one log event and counter per fault.
 `BrowserFaultsSwitchTest` and `WebVitalsSwitchTest` check that each purpose is off until the operator turns it on.
-`webapp/Dockerfile` fails the build when a `.map` file appears in the output.
+The *Server package* job of `cicd.yml` fails the build when a `.map` file appears in the web app's output.
 `vp run test:alerts` (`scripts/check-alert-rules.ts`) fails when an alert has no runbook row or no rule test. Review catches the other parts of decision 6.
 
 ## Revisit when
@@ -113,7 +113,7 @@ The browser fault reporter and the reference on error views came in later change
 ## Update — 2026-11-11: no source maps
 
 Decision 4 does not hold for 1.0. The release ships no source maps, hidden or served.
-The webapp build emits none, and `webapp/Dockerfile` fails the build if a `.map` file appears.
+The webapp build emits none, and the *Server package* job fails the build if a `.map` file appears (ADR 0100).
 [Release management](../contributor/release-management.mdx) § Browser source maps states this.
 
 A browser fault carries the build commit as `browser.release`.

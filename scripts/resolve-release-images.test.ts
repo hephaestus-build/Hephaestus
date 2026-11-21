@@ -16,9 +16,9 @@ import {
 const DIGEST = `sha256:${"a".repeat(64)}`;
 const OTHER = `sha256:${"b".repeat(64)}`;
 const subject = {
-	image: "webapp",
-	reference: "ghcr.io/hephaestus-build/webapp:run-1-1",
-	repository: "ghcr.io/hephaestus-build/webapp",
+	image: "agent",
+	reference: "ghcr.io/hephaestus-build/agent:run-1-1",
+	repository: "ghcr.io/hephaestus-build/agent",
 };
 const noSleep = async (): Promise<void> => {
 	throw new Error("the resolver must not sleep on a first-attempt success");
@@ -31,7 +31,7 @@ void describe("resolveReleaseImages", () => {
 			sleep: noSleep,
 		});
 		assert.deepEqual(images, [
-			{ image: "webapp", indexDigest: DIGEST, repository: "ghcr.io/hephaestus-build/webapp" },
+			{ image: "agent", indexDigest: DIGEST, repository: "ghcr.io/hephaestus-build/agent" },
 		]);
 	});
 
@@ -78,7 +78,7 @@ void describe("resolveReleaseImages", () => {
 
 void describe("the resolver's hand-off to the evidence generator", () => {
 	const images = [
-		{ image: "webapp", indexDigest: DIGEST, repository: "ghcr.io/hephaestus-build/webapp" },
+		{ image: "agent", indexDigest: DIGEST, repository: "ghcr.io/hephaestus-build/agent" },
 		{ image: "postgres", indexDigest: OTHER, repository: "ghcr.io/hephaestus-build/postgres" },
 	];
 
@@ -88,31 +88,31 @@ void describe("the resolver's hand-off to the evidence generator", () => {
 
 	void test("rejects a line the generator would otherwise read as a subject", () => {
 		for (const line of [
-			"webapp\tghcr.io/hephaestus-build/webapp\n",
-			`webapp\t\t${DIGEST}\n`,
-			"webapp\tghcr.io/hephaestus-build/webapp\tlatest\n",
-			`webapp\tghcr.io/hephaestus-build/webapp\t${DIGEST.toUpperCase()}\n`,
+			"agent\tghcr.io/hephaestus-build/agent\n",
+			`agent\t\t${DIGEST}\n`,
+			"agent\tghcr.io/hephaestus-build/agent\tlatest\n",
+			`agent\tghcr.io/hephaestus-build/agent\t${DIGEST.toUpperCase()}\n`,
 		]) {
 			assert.throws(() => parseResolvedImages(line), /malformed resolved release image/u);
 		}
 	});
 
 	void test("names a step output for every image, not only the ones a job reads today", () => {
-		assert.equal(digestOutputs(images), `webapp-digest=${DIGEST}\npostgres-digest=${OTHER}\n`);
+		assert.equal(digestOutputs(images), `agent-digest=${DIGEST}\npostgres-digest=${OTHER}\n`);
 	});
 });
 
 void test("captured release images retain the exact inventory and digests without a tag lookup", () => {
-	assert.deepEqual(capturedReleaseImages([subject], JSON.stringify({ webapp: OTHER })), [
-		{ image: "webapp", repository: subject.repository, indexDigest: OTHER },
+	assert.deepEqual(capturedReleaseImages([subject], JSON.stringify({ agent: OTHER })), [
+		{ image: "agent", repository: subject.repository, indexDigest: OTHER },
 	]);
 	for (const input of [
 		"{}",
 		"null",
 		"[]",
-		'{"webapp":""}',
-		'{"webapp":"latest"}',
-		JSON.stringify({ webapp: DIGEST, unexpected: OTHER }),
+		'{"agent":""}',
+		'{"agent":"latest"}',
+		JSON.stringify({ agent: DIGEST, unexpected: OTHER }),
 		"invalid",
 	]) {
 		assert.throws(() => capturedReleaseImages([subject], input));
@@ -123,7 +123,7 @@ void test("the captured-image CLI writes only complete producer digests without 
 	const directory = await mkdtemp(path.join(tmpdir(), "captured-release-images-"));
 	context.after(async () => rm(directory, { recursive: true, force: true }));
 	const output = path.join(directory, "images.tsv");
-	const images = ["server", "webapp", "agent", "postgres"];
+	const images = ["server", "agent", "postgres"];
 	const digests = Object.fromEntries(images.map((image) => [image, DIGEST]));
 	const run = (input: string) =>
 		spawnSync(process.execPath, ["scripts/resolve-captured-release-images.ts", output], {

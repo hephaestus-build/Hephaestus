@@ -52,15 +52,14 @@ For each transfer outside the EU or EEA, document the Chapter V safeguard for th
 3. Name the ConfigMap in your values file, then run the install command again:
 
    ```yaml title="values.yaml"
-   webapp:
+   server:
      legalOverrides: hephaestus-legal-overrides
    ```
 
-The chart mounts the ConfigMap read-only at `/usr/share/nginx/html/legal-overrides`.
-The webapp Pod waits until the ConfigMap exists.
-A webapp container outside the chart reads the same two files from that path. The files must be readable by UID 101.
+The chart mounts the ConfigMap read-only into the server Pods.
+The server Pods wait until the ConfigMap exists.
 
-The webapp reads the files on each page load.
+The server reads the files on each page load.
 Kubernetes updates a mounted ConfigMap within about a minute, so a later edit needs no redeploy.
 Each page is resolved on its own: an override of one file leaves the other page on the placeholder.
 

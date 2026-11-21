@@ -10,6 +10,14 @@ const candidates = (page: LegalPageId): Candidate[] => [
 	{ url: `/legal/_disclaimer/${page}.md`, source: "disclaimer" },
 ];
 
+/**
+ * A body that nobody reads keeps its request open until the response is collected, and the server sends a missing
+ * file's answer in chunks: the page would never go quiet.
+ */
+async function discard(response: Response): Promise<void> {
+	await response.body?.cancel().catch(() => undefined);
+}
+
 async function tryFetch(url: string, signal?: AbortSignal): Promise<string | null> {
 	let response: Response;
 	try {
@@ -24,13 +32,15 @@ async function tryFetch(url: string, signal?: AbortSignal): Promise<string | nul
 		return null;
 	}
 	if (!response.ok) {
+		await discard(response);
 		return null;
 	}
-	// Defeat SPA fallbacks that served /index.html with a 200. nginx is configured
-	// to 404 on missing legal files, but the client-side guard protects forks whose
-	// reverse proxy is not (yet) configured that way.
+	// Defeat SPA fallbacks that served /index.html with a 200. The server answers a
+	// missing legal file with a 404, but the client-side guard protects a reverse proxy
+	// that rewrites misses to the page.
 	const contentType = response.headers.get("content-type") ?? "";
 	if (contentType.includes("text/html")) {
+		await discard(response);
 		return null;
 	}
 	const body = await response.text();

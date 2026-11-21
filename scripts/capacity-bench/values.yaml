@@ -28,8 +28,6 @@ server:
   replicas: 0
 sandbox:
   namespace: capacity-bench-20261030-sandboxes
-webapp:
-  replicas: 1
 config:
   auth:
     assuranceEnforced: false
