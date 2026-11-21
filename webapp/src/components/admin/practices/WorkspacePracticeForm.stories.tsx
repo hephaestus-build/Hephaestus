@@ -171,6 +171,34 @@ export const EditConflict: Story = {
 	},
 };
 
+/**
+ * Another admin moved the practice to the practice repository while this draft was open. The draft stays
+ * to copy from, with its fields still editable and selectable, and saving is off.
+ */
+export const MovedToRepository: Story = {
+	args: {
+		mode: "edit",
+		initialData: mockScriptedPractice,
+		onSubmit: fn(),
+		isSubmitDisabled: true,
+		notice: (
+			<Alert variant="warning" role="alert">
+				<AlertTitle>This practice is now edited in acme/practices</AlertTitle>
+				<AlertDescription>
+					Nothing was saved. Your changes are still here, so copy what you want to keep.
+				</AlertDescription>
+			</Alert>
+		),
+	},
+	play: async ({ args }) => {
+		const panel = await settledDrawerPanel();
+		await expect(within(panel).getByRole("alert")).toHaveTextContent(/Nothing was saved/u);
+		await expect(within(panel).getByRole("button", { name: "Save changes" })).toBeDisabled();
+		await expect(within(panel).getByRole("textbox", { name: /Name/u })).toBeEnabled();
+		await expect(args.onSubmit).not.toHaveBeenCalled();
+	},
+};
+
 /** A read behind the form failed to refresh. The draft stays open beside the retry. */
 export const RefreshFailed: Story = {
 	args: {

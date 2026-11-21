@@ -318,6 +318,56 @@ describe("a practice edited in the practice repository", () => {
 		);
 	});
 
+	it("keeps an open draft to copy when another admin moves the practice there meanwhile", async () => {
+		server.use(
+			...practicesHandlers([editable]),
+			http.patch("*/workspaces/:workspaceSlug/practices/:practiceSlug", () => {
+				server.use(...practicesHandlers([inRepository]));
+				return HttpResponse.json(
+					{
+						title: "Conflict",
+						status: 409,
+						detail: "This practice is edited in the practice repository.",
+					},
+					{ status: 409 },
+				);
+			}),
+			http.put(editedInUrl, () => {
+				server.use(...practicesHandlers([editable]));
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+
+		renderRouteAt(at("practice-edit", "explain-the-change"));
+		fireEvent.change(await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT), {
+			target: { value: "My name" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+		// The refusal says why, and the draft stays on screen to copy from, with saving off.
+		const notice = await screen.findByText(
+			"This practice is now edited in acme/practices",
+			{},
+			ROUTE_RENDER_WAIT,
+		);
+		expect(notice.closest("[role=alert]")?.textContent).toContain("Nothing was saved");
+		screen.getByDisplayValue("My name");
+		expect(screen.getByRole("button", { name: "Save changes" })).toHaveProperty("disabled", true);
+
+		// Edit in Hephaestus keeps the version, so the same draft can be saved again.
+		fireEvent.click(screen.getByRole("button", { name: "Edit in Hephaestus" }));
+		const dialog = await screen.findByRole("alertdialog");
+		fireEvent.click(within(dialog).getByRole("button", { name: "Edit in Hephaestus" }));
+		await waitFor(
+			async () =>
+				expect(screen.queryByText("This practice is now edited in acme/practices")).toBeNull(),
+			ROUTE_RENDER_WAIT,
+		);
+		screen.getByDisplayValue("My name");
+		expect(screen.getByRole("button", { name: "Save changes" })).toHaveProperty("disabled", false);
+		expect(screen.queryByText(/Someone saved a newer version/u)).toBeNull();
+	});
+
 	it("shows it read-only, then makes it editable here after the admin confirms", async () => {
 		const sent: { practiceSlug: unknown; body: unknown }[] = [];
 		const answer = deferred();
