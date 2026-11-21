@@ -113,6 +113,7 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
         VARCHAR(8) state "NOT NULL"
+        VARCHAR(16) edited_in "NOT NULL"
     }
 
     PracticeGroup {
@@ -143,6 +144,7 @@ erDiagram
         BIGINT created_by_account_id FK
         TIMESTAMPTZ created_at "NOT NULL"
         BOOLEAN tried "NOT NULL"
+        VARCHAR(64) source_commit
     }
 
     Problem {
@@ -337,6 +339,14 @@ erDiagram
         TIMESTAMPTZ updated_at "NOT NULL"
     }
 
+    WorkspacePracticeRepository {
+        BIGINT workspace_id PK,FK
+        VARCHAR(255) directory "NOT NULL"
+        BIGINT repository_item_id "NOT NULL"
+        BIGINT revision "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+    }
+
     Account["Account · Core"]
     ConversationEntry["ConversationEntry · Conversation"]
     ConversationTurn["ConversationTurn · Conversation"]
@@ -349,6 +359,7 @@ erDiagram
     %% Relationships
     %% One-to-One relationships
     PracticeVersion ||--|| Practice : references
+    Workspace ||--|| WorkspacePracticeRepository : has
 
     %% One-to-Many relationships
     Membership ||--o{ Feedback : references

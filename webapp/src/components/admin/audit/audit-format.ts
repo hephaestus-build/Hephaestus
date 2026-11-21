@@ -57,6 +57,7 @@ export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
 	WORKSPACE_OWNER_CHANGE: "Workspace owner change",
 	WORKSPACE_DELETION: "Workspace deletion",
 	PROVIDER_RESOURCE_RELEASE: "Provider removal release",
+	PRACTICE_REPOSITORY_CHANGE: "Practice repository change",
 	INSTALLATION_EVENT_REPLAYED: "Installation event replayed",
 	GITHUB_INSTALLATION_ADOPTED: "GitHub installation adopted",
 	GITHUB_INSTALLATION_DECLINED: "GitHub installation declined",

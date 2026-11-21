@@ -96,6 +96,7 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "review_practice",
             "catalog_entry",
             "practice_group",
+            "workspace_practice_repository", // A repository item id and a directory.
             "review_scope_repository",
             "pull_request_closing_issue",
             "pull_request_requested_team",

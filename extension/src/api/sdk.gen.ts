@@ -220,6 +220,9 @@ import type {
 	CancelReviewData,
 	CancelReviewErrors,
 	CancelReviewResponses,
+	ChangePracticeEditedInData,
+	ChangePracticeEditedInErrors,
+	ChangePracticeEditedInResponses,
 	CheckPracticeFilesData,
 	CheckPracticeFilesErrors,
 	CheckPracticeFilesResponses,
@@ -510,6 +513,9 @@ import type {
 	GetPracticeReleaseData,
 	GetPracticeReleaseErrors,
 	GetPracticeReleaseResponses,
+	GetPracticeRepositoryData,
+	GetPracticeRepositoryErrors,
+	GetPracticeRepositoryResponses,
 	GetPracticeResponses,
 	GetPracticeReviewSettingsData,
 	GetPracticeReviewSettingsErrors,
@@ -967,6 +973,9 @@ import type {
 	SetPracticeFeedbackModeData,
 	SetPracticeFeedbackModeErrors,
 	SetPracticeFeedbackModeResponses,
+	SetPracticeRepositoryData,
+	SetPracticeRepositoryErrors,
+	SetPracticeRepositoryResponses,
 	SetReviewScheduleEnabledData,
 	SetReviewScheduleEnabledErrors,
 	SetReviewScheduleEnabledResponses,
@@ -991,6 +1000,9 @@ import type {
 	UnlinkIdentityData,
 	UnlinkIdentityErrors,
 	UnlinkIdentityResponses,
+	UnsetPracticeRepositoryData,
+	UnsetPracticeRepositoryErrors,
+	UnsetPracticeRepositoryResponses,
 	UnsubscribeEmailData,
 	UnsubscribeEmailErrors,
 	UnsubscribeEmailResponses,
@@ -5821,6 +5833,84 @@ export const getOwnReview = <ThrowOnError extends boolean = false>(
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-profile/reviews/{reviewId}",
 		...options,
+	});
+
+/**
+ * Unset the practice repository
+ *
+ * Every practice edited there is edited in Hephaestus again. Nothing is deleted.
+ */
+export const unsetPracticeRepository = <ThrowOnError extends boolean = false>(
+	options: Options<UnsetPracticeRepositoryData, ThrowOnError>,
+): RequestResult<UnsetPracticeRepositoryResponses, UnsetPracticeRepositoryErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		UnsetPracticeRepositoryResponses,
+		UnsetPracticeRepositoryErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practice-repository",
+		...options,
+	});
+
+/**
+ * Read the practice repository
+ */
+export const getPracticeRepository = <ThrowOnError extends boolean = false>(
+	options: Options<GetPracticeRepositoryData, ThrowOnError>,
+): RequestResult<GetPracticeRepositoryResponses, GetPracticeRepositoryErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetPracticeRepositoryResponses,
+		GetPracticeRepositoryErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practice-repository",
+		...options,
+	});
+
+/**
+ * Set the practice repository
+ *
+ * Choosing another repository or directory moves every practice edited in the old one back to Hephaestus.
+ */
+export const setPracticeRepository = <ThrowOnError extends boolean = false>(
+	options: Options<SetPracticeRepositoryData, ThrowOnError>,
+): RequestResult<SetPracticeRepositoryResponses, SetPracticeRepositoryErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		SetPracticeRepositoryResponses,
+		SetPracticeRepositoryErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practice-repository",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * Move a practice to the practice repository, or edit it in Hephaestus
+ *
+ * Moving to the repository reads the practice's folder at the head of the default branch, and refuses when the folder is missing or invalid. Editing in Hephaestus keeps the current version.
+ */
+export const changePracticeEditedIn = <ThrowOnError extends boolean = false>(
+	options: Options<ChangePracticeEditedInData, ThrowOnError>,
+): RequestResult<ChangePracticeEditedInResponses, ChangePracticeEditedInErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		ChangePracticeEditedInResponses,
+		ChangePracticeEditedInErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practice-repository/practices/{practiceSlug}/edited-in",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 /**
