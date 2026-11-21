@@ -88,9 +88,13 @@ for argument; do case "$argument" in syft-json=*) printf '%s' '${JSON.stringify(
 `,
 		{ mode: 0o755 },
 	);
-	await writeFile(path.join(bin, "grype"), `#!/bin/sh\nprintf '{"matches":[]}'\n`, {
-		mode: 0o755,
-	});
+	await writeFile(
+		path.join(bin, "grype"),
+		`#!/bin/sh\nif [ "$1" = db ]; then printf '[]'; else printf '{"matches":[]}'; fi\n`,
+		{
+			mode: 0o755,
+		},
+	);
 	await writeFile(
 		path.join(bin, "node"),
 		`#!/bin/sh

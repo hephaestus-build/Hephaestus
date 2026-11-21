@@ -4,8 +4,9 @@
  * Trivy reads JVM archives, but not a JRE that a tarball installed: it reports no package for
  * `/layers/paketo-buildpacks_bellsoft-liberica/jre`, so no gate saw a JVM CVE. Syft's
  * `java-jvm-cataloger` reads the runtime's `release` file and records it with an `oracle:openjdk` CPE, and
- * Grype matches that CPE. This script runs both and appends Grype's matches to the Trivy report as one
- * more result, so `check-release-vulnerabilities.ts` judges them under the same policy, and release
+ * Grype matches that CPE. Grype's own matcher misses a build of a fourth-part fix (`rangeMatches`), so the
+ * same database's ranges are also compared here. This script appends the matches to the Trivy report as
+ * one more result, so `check-release-vulnerabilities.ts` judges them under the same policy, and release
  * verification re-derives them from the same archived report.
  *
  * The server image must contain a JVM. For an image built from this checkout (`pinned`), it must also be
@@ -147,6 +148,205 @@ export function jvmResult(grypeInput: unknown, jvm: JvmPackage): Record<string, 
 	};
 }
 
+/** The `vendor:product` of a CPE 2.3 name, such as `oracle:openjdk`. */
+function cpeProduct(cpe: string): string {
+	return cpe.split(":").slice(3, 5).join(":");
+}
+
+/**
+ * A JVM version's numeric parts: `25.0.5.0.3+5-LTS` is 25.0.5.0.3, and `1.8.0_512` is 1.8.0.512. The build
+ * and any suffix after `+` or `-` do not count, so a bound such as `8-update72` reads as 8. Grype maps a
+ * `1.x` version to `x`, and this does not, so the comparison holds for Java 9 and later only.
+ */
+function versionParts(version: string): number[] {
+	const parts = (version.split(/[+-]/u)[0] ?? "").match(/\d+/gu);
+	if (parts === null) {
+		throw new Error(`the JVM version ${version} has no number`);
+	}
+	return parts.map(Number);
+}
+
+function compareParts(left: readonly number[], right: readonly number[]): number {
+	for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+		const difference = (left[index] ?? 0) - (right[index] ?? 0);
+		if (difference !== 0) {
+			return difference;
+		}
+	}
+	return 0;
+}
+
+const COMPARISONS: Readonly<Record<string, (order: number) => boolean>> = {
+	"<": (order) => order < 0,
+	"<=": (order) => order <= 0,
+	">": (order) => order > 0,
+	">=": (order) => order >= 0,
+	"=": (order) => order === 0,
+};
+
+/**
+ * Whether a version satisfies a Grype constraint such as `>= 22, < 25.0.5.1 || >= 26, < 27.0.1.1`, with
+ * every part compared.
+ */
+export function satisfiesConstraint(installed: readonly number[], constraint: string): boolean {
+	return constraint.split("||").some((group) =>
+		group.split(",").every((term) => {
+			const match = /^(?<operator><=|>=|<|>|=)?\s*(?<bound>\S+)$/u.exec(term.trim());
+			if (match?.groups?.bound === undefined) {
+				throw new Error(`Grype constraint ${constraint} has a term that is not a comparison`);
+			}
+			const order = compareParts(installed, versionParts(match.groups.bound));
+			return COMPARISONS[match.groups.operator ?? "="]?.(order) ?? false;
+		}),
+	);
+}
+
+/** Grype's severities, lowest first. */
+const SEVERITY_ORDER: readonly string[] = [
+	"Unknown",
+	"Negligible",
+	"Low",
+	"Medium",
+	"High",
+	"Critical",
+];
+
+/** The severity bands of CVSS v3 and v4 base scores, highest first (FIRST CVSS v3.1 specification). */
+const CVSS_BANDS: readonly (readonly [number, string])[] = [
+	[9, "Critical"],
+	[7, "High"],
+	[4, "Medium"],
+	[0.1, "Low"],
+];
+
+/** The severity of a CVSS base score. Version 2 has no Critical band, so its 9.0 to 10.0 is High. */
+function cvssSeverity(version: string, score: number): string {
+	const band = CVSS_BANDS.find(([floor]) => score >= floor)?.[1] ?? "Unknown";
+	return version.startsWith("2") && band === "Critical" ? "High" : band;
+}
+
+/**
+ * The highest of the row's severity and the severity of each of its CVSS scores. `grype db search` calls a
+ * base score of 10.0 `unknown`, so its own label alone could turn a critical finding into one that blocks
+ * nothing.
+ */
+function databaseSeverity(id: string, vulnerability: Record<string, unknown>): string {
+	const label = asString(vulnerability.severity, `${id} severity`);
+	const severities = [`${label.charAt(0).toUpperCase()}${label.slice(1)}`];
+	for (const value of asArray(vulnerability.severities ?? [], `${id} severities`)) {
+		const entry = asRecord(value, `${id} severity entry`);
+		if (entry.scheme !== "CVSS") {
+			continue;
+		}
+		const cvss = asRecord(entry.value, `${id} CVSS`);
+		const score = asRecord(cvss.metrics, `${id} CVSS metrics`).baseScore;
+		if (typeof score !== "number") {
+			throw new Error(`${id} has a CVSS entry without a base score`);
+		}
+		severities.push(cvssSeverity(asString(cvss.version, `${id} CVSS version`), score));
+	}
+	let highest = "Unknown";
+	for (const severity of severities) {
+		if (SEVERITY_ORDER.indexOf(severity) > SEVERITY_ORDER.indexOf(highest)) {
+			highest = severity;
+		}
+	}
+	return highest;
+}
+
+/** Whether a range applies only to Windows, which no image runs (Grype skips it on Linux too). */
+function windowsOnly(detail: Record<string, unknown>): boolean {
+	if (detail.qualifiers === undefined) {
+		return false;
+	}
+	const platforms = asRecord(detail.qualifiers, "Grype qualifiers").platform_cpes ?? [];
+	const cpes = asArray(platforms, "Grype platform CPEs").map((cpe) =>
+		asString(cpe, "platform CPE"),
+	);
+	return cpes.length > 0 && cpes.every((cpe) => cpe.includes(":microsoft:windows:"));
+}
+
+/**
+ * The vulnerabilities whose database ranges contain the JVM, as Grype matches. Grype compares `jvm`
+ * versions on three parts, so it reads `< 25.0.5.1` as `< 25.0.5` and matches no build of 25.0.5, though
+ * 25.0.5.0.3 is affected: a vendor's out-of-band fix is a fourth-part release. This reads the ranges of
+ * `grype db search` for the JVM's CPE products and compares every part. `mergedMatches` adds them to
+ * Grype's own.
+ */
+export function rangeMatches(searchInput: unknown, jvm: JvmPackage): Record<string, unknown>[] {
+	const products = new Set(jvm.cpes.map(cpeProduct));
+	const installed = versionParts(jvm.version);
+	const matches: Record<string, unknown>[] = [];
+	for (const [index, value] of asArray(searchInput, "Grype database search").entries()) {
+		const row = asRecord(value, `Grype database search[${index}]`);
+		const vulnerability = asRecord(row.vulnerability, "Grype database vulnerability");
+		const id = asString(vulnerability.id, "Grype database vulnerability id");
+		for (const packageValue of asArray(row.packages, `${id} packages`)) {
+			const affected = asRecord(packageValue, `${id} package`);
+			if (!products.has(cpeProduct(asString(affected.cpe, `${id} package CPE`)))) {
+				continue;
+			}
+			const detail = asRecord(affected.detail, `${id} package detail`);
+			if (windowsOnly(detail)) {
+				continue;
+			}
+			for (const rangeValue of asArray(detail.ranges ?? [], `${id} ranges`)) {
+				const range = asRecord(rangeValue, `${id} range`);
+				const constraint = asString(
+					asRecord(range.version, `${id} range version`).constraint,
+					`${id} constraint`,
+				);
+				if (!satisfiesConstraint(installed, constraint)) {
+					continue;
+				}
+				const fix = range.fix === undefined ? undefined : asRecord(range.fix, `${id} fix`);
+				matches.push({
+					vulnerability: {
+						id,
+						severity: databaseSeverity(id, vulnerability),
+						fix:
+							fix?.state === "fixed"
+								? { state: "fixed", versions: [asString(fix.version, `${id} fix version`)] }
+								: { state: fix?.state ?? "unknown" },
+					},
+					artifact: { name: jvm.name, version: jvm.version },
+				});
+			}
+		}
+	}
+	return matches;
+}
+
+/**
+ * Grype's matches, and the range matches of vulnerabilities that Grype did not match. Grype's own match of a
+ * vulnerability wins, so the range matcher can add a finding but never change Grype's severity or fix.
+ */
+export function mergedMatches(
+	grypeMatches: readonly unknown[],
+	ranges: readonly Record<string, unknown>[],
+): unknown[] {
+	const matched = new Set(
+		grypeMatches.map((match) =>
+			asString(
+				asRecord(asRecord(match, "Grype match").vulnerability, "Grype vulnerability").id,
+				"id",
+			),
+		),
+	);
+	return [
+		...grypeMatches,
+		...ranges.filter(
+			(match) =>
+				!matched.has(asString(asRecord(match.vulnerability, "range vulnerability").id, "id")),
+		),
+	];
+}
+
+/** The `grype db search` call for every vulnerability of a CPE product, with no result limit. */
+export function databaseSearchArguments(product: string): string[] {
+	return ["db", "search", "--pkg", `cpe:2.3:a:${product}`, "--limit", "0", "-o", "json"];
+}
+
 /** The report with the JVM results appended. A report that already carries them is refused, not doubled. */
 export function withJvmResults(
 	reportInput: unknown,
@@ -161,7 +361,8 @@ export function withJvmResults(
 }
 
 // `setup-release-security-tools` downloads the database once per job. A scan never downloads it, and
-// refuses a database past the freshness bound.
+// refuses a database past the freshness bound. Only `grype sbom:` checks that bound, so it runs before
+// `grype db search` on the same database.
 const GRYPE_ENVIRONMENT = {
 	GRYPE_CHECK_FOR_APP_UPDATE: "false",
 	GRYPE_DB_AUTO_UPDATE: "false",
@@ -216,15 +417,26 @@ async function scanInto(scratch: string, options: JvmScan): Promise<JvmPackage[]
 	const grype = parseJson(
 		await output("grype", [`sbom:${sbom}`, "-o", "json"], { env: GRYPE_ENVIRONMENT }),
 	);
+	// The affected packages of every vulnerability in the database for the JVMs' CPE products.
+	const affected: unknown[] = [];
+	for (const product of new Set(packages.flatMap((jvm) => jvm.cpes.map(cpeProduct)))) {
+		const search = await output("grype", databaseSearchArguments(product), {
+			env: GRYPE_ENVIRONMENT,
+		});
+		affected.push(...asArray(parseJson(search), `Grype database search for ${product}`));
+	}
 	const results = packages.map((jvm) =>
 		jvmResult(
 			{
-				matches: asArray(asRecord(grype, "Grype report").matches, "Grype matches").filter(
-					(match) =>
-						isRecord(match) &&
-						isRecord(match.artifact) &&
-						match.artifact.name === jvm.name &&
-						match.artifact.version === jvm.version,
+				matches: mergedMatches(
+					asArray(asRecord(grype, "Grype report").matches, "Grype matches").filter(
+						(match) =>
+							isRecord(match) &&
+							isRecord(match.artifact) &&
+							match.artifact.name === jvm.name &&
+							match.artifact.version === jvm.version,
+					),
+					rangeMatches(affected, jvm),
 				),
 			},
 			jvm,
