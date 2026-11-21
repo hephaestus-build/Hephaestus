@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -22,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerPropert
 import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
@@ -38,6 +40,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitMetadataEnr
 import de.tum.cit.aet.hephaestus.integration.scm.github.commit.GitHubCommitBackfillService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
@@ -60,6 +63,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -229,11 +233,11 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
                 .when(commitBackfillService.backfillCommits(any(), any(), any()))
                 .thenReturn(0);
         lenient()
-                .when(issueSyncService.syncForRepository(any(), any(), any(), any(), any()))
-                .thenReturn(SyncResult.completed(3));
+                .when(issueSyncService.syncForRepository(any(), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.completed(3), null));
         lenient()
-                .when(pullRequestSyncService.syncForRepository(any(), any(), any(), any(), any()))
-                .thenReturn(SyncResult.completed(2));
+                .when(pullRequestSyncService.syncForRepository(any(), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.completed(2), null));
     }
 
     /**
@@ -245,9 +249,16 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
      * @param pullRequestCursor value for the backfill-owned PR cursor column
      */
     private static SyncTarget syncTarget(@Nullable String issueCursor, @Nullable String pullRequestCursor) {
+        var builder = recentlySynced();
+        if (issueCursor != null) builder.issueSyncCursor(issueCursor);
+        if (pullRequestCursor != null) builder.pullRequestSyncCursor(pullRequestCursor);
+        return builder.build();
+    }
+
+    private static SyncTargetTestBuilder recentlySynced() {
         // All timestamps recent => within cooldown and initial sync "completed".
         Instant recent = Instant.now();
-        var builder = SyncTargetTestBuilder.syncTarget()
+        return SyncTargetTestBuilder.syncTarget()
                 .id(SYNC_TARGET_ID)
                 .scopeId(SCOPE_ID)
                 .nativeId(NATIVE_ID)
@@ -260,9 +271,6 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
                 .lastPullRequestsSyncedAt(recent)
                 .lastCollaboratorsSyncedAt(recent)
                 .lastFullSyncAt(recent);
-        if (issueCursor != null) builder.issueSyncCursor(issueCursor);
-        if (pullRequestCursor != null) builder.pullRequestSyncCursor(pullRequestCursor);
-        return builder.build();
     }
 
     private static final long NATIVE_ID = 555L;
@@ -310,8 +318,8 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
         when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq("owner/renamed"), any(), any()))
                 .thenReturn(Optional.of(repository));
         assertThat(service.syncSyncTarget(target)).isTrue();
-        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID + 1), any(), any(), any());
-        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID + 1), any(), any(), any());
+        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID + 1), any(), any());
+        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID + 1), any(), any());
         verify(repositorySyncService, times(unavailable ? 0 : 1))
                 .syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any(), any());
         verify(syncTargetProvider).clearRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID);
@@ -424,8 +432,8 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
         boolean result = service.syncSyncTarget(target);
 
         // The sub-syncs still run rather than being skipped as "repoUnchanged".
-        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
-        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
+        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any());
+        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any());
         assertThat(result).isTrue();
         verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, null);
     }
@@ -443,8 +451,10 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
     @Test
     void shouldRecordIncompleteIssueSyncAndClearAfterRecovery() {
         SyncTarget target = syncTarget(null, null);
-        when(issueSyncService.syncForRepository(any(), any(), any(), any(), any()))
-                .thenReturn(SyncResult.abortedError(1), SyncResult.completed(3));
+        when(issueSyncService.syncForRepository(any(), any(), any(), any()))
+                .thenReturn(
+                        new RecentSyncResult(SyncResult.abortedError(1), null),
+                        new RecentSyncResult(SyncResult.completed(3), null));
 
         assertThat(service.syncSyncTarget(target)).isFalse();
         verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, "Issue sync: ABORTED_ERROR");
@@ -467,32 +477,101 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
 
         assertThat(service.syncSyncTarget(target)).isTrue();
         verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, null);
-        verify(issueSyncService, times(2)).syncForRepository(any(), any(), any(), any(), any());
+        verify(issueSyncService, times(2)).syncForRepository(any(), any(), any(), any());
     }
 
     @Test
     void shouldNotResumeIncrementalSyncFromBackfillCursor() {
-        // Mid-backfill state — the shared cursor columns hold CREATED_AT-ordered checkpoints belonging to
-        // GitHubHistoricalBackfillService.
+        // Mid-backfill state: the backfill's cursor columns hold CREATED_AT-ordered checkpoints.
         SyncTarget target = syncTarget("issue-cursor-created-at-desc", "pr-cursor-created-at-desc");
 
         service.syncSyncTarget(target);
 
-        // The UPDATED_AT-ordered incremental path starts fresh instead of resuming from a cursor produced
-        // by a different ordering (which would skip the newest items).
-        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
-        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
+        // The UPDATED_AT-ordered recent pass starts at the newest item instead of a cursor of another ordering.
+        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), any());
+        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), any());
+        verify(syncTargetProvider, never()).updateSyncCursor(any(), any(), any());
     }
 
     @Test
-    void shouldNotClobberBackfillCursorWhenRunningIncrementalSync() {
-        SyncTarget target = syncTarget("issue-cursor-created-at-desc", "pr-cursor-created-at-desc");
+    void shouldOpenARecentWindowWhenAPassStopsAtThePageCap() {
+        SyncTarget target = syncTarget(null, null);
+        when(issueSyncService.syncForRepository(any(), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.abortedError(25_000), "cursor-at-cap"));
+        Instant before = Instant.now();
 
         service.syncSyncTarget(target);
 
-        // Passing a null syncTargetId disables cursor persistence inside the sync services, so backfill's
-        // checkpoint survives an interleaved incremental run.
-        verify(issueSyncService, never()).syncForRepository(any(), any(), eq(SYNC_TARGET_ID), any(), any());
-        verify(pullRequestSyncService, never()).syncForRepository(any(), any(), eq(SYNC_TARGET_ID), any(), any());
+        var window = ArgumentCaptor.forClass(SyncTargetProvider.RecentWindow.class);
+        verify(syncTargetProvider).updateRecentWindow(eq(SYNC_TARGET_ID), eq(SyncCursorKind.ISSUE), window.capture());
+        assertThat(window.getValue().resumeCursor()).isEqualTo("cursor-at-cap");
+        assertThat(window.getValue().startedAt()).isBetween(before, Instant.now());
+        verify(syncTargetProvider, never()).updateSyncTimestamp(eq(SYNC_TARGET_ID), eq(SyncType.ISSUES), any());
+    }
+
+    @Test
+    void shouldResumeAnOpenWindowAndKeepItsStartWhenThePassStopsAtTheCapAgain() {
+        Instant opened = Instant.parse("2026-11-20T03:00:00Z");
+        SyncTarget target = recentlySynced()
+                .pullRequestRecentWindow(new SyncTargetProvider.RecentWindow("cursor-1", opened))
+                .build();
+        when(pullRequestSyncService.syncForRepository(any(), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.abortedError(10_000), "cursor-2"));
+
+        service.syncSyncTarget(target);
+
+        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), eq("cursor-1"), any());
+        verify(syncTargetProvider)
+                .updateRecentWindow(
+                        SYNC_TARGET_ID,
+                        SyncCursorKind.PULL_REQUEST,
+                        new SyncTargetProvider.RecentWindow("cursor-2", opened));
+        verify(syncTargetProvider, never()).updateSyncTimestamp(eq(SYNC_TARGET_ID), eq(SyncType.PULL_REQUESTS), any());
+    }
+
+    @Test
+    void shouldMoveTheWatermarkToTheWindowStartAndCloseTheWindowOnceItIsRead() {
+        Instant opened = Instant.parse("2026-11-20T03:00:00Z");
+        SyncTarget target = recentlySynced()
+                .issueRecentWindow(new SyncTargetProvider.RecentWindow("cursor-1", opened))
+                .build();
+
+        service.syncSyncTarget(target);
+
+        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), eq("cursor-1"), any());
+        // The changes after the window opened are newer than its start, so the next run reads them from there.
+        verify(syncTargetProvider).updateSyncTimestamp(SYNC_TARGET_ID, SyncType.ISSUES, opened);
+        verify(syncTargetProvider).updateRecentWindow(SYNC_TARGET_ID, SyncCursorKind.ISSUE, null);
+    }
+
+    @Test
+    void shouldCloseAnOpenWindowAndKeepTheWatermarkWhenAResumedPassFails() {
+        Instant opened = Instant.parse("2026-11-20T03:00:00Z");
+        SyncTarget target = recentlySynced()
+                .issueRecentWindow(new SyncTargetProvider.RecentWindow("cursor-github-refuses", opened))
+                .build();
+        when(issueSyncService.syncForRepository(any(), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.abortedError(0), null));
+
+        service.syncSyncTarget(target);
+
+        // The next run reads from the newest issue again instead of retrying a cursor GitHub refuses.
+        verify(syncTargetProvider).updateRecentWindow(SYNC_TARGET_ID, SyncCursorKind.ISSUE, null);
+        verify(syncTargetProvider, never()).updateSyncTimestamp(eq(SYNC_TARGET_ID), eq(SyncType.ISSUES), any());
+    }
+
+    @Test
+    void shouldKeepAnOpenWindowWhenAResumedPassIsRateLimited() {
+        Instant opened = Instant.parse("2026-11-20T03:00:00Z");
+        SyncTarget target = recentlySynced()
+                .issueRecentWindow(new SyncTargetProvider.RecentWindow("cursor-1", opened))
+                .build();
+        when(issueSyncService.syncForRepository(any(), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.abortedRateLimit(40), null));
+
+        service.syncSyncTarget(target);
+
+        verify(syncTargetProvider, never()).updateRecentWindow(eq(SYNC_TARGET_ID), eq(SyncCursorKind.ISSUE), any());
+        verify(syncTargetProvider, never()).updateSyncTimestamp(eq(SYNC_TARGET_ID), eq(SyncType.ISSUES), any());
     }
 }

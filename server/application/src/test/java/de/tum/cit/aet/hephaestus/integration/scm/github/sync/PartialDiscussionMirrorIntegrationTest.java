@@ -236,7 +236,6 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
                 reviewComments,
                 context.getBean(GitHubIssueCommentProcessor.class),
                 issueComments,
-                context.getBean(BackfillStateProvider.class),
                 transactions,
                 properties,
                 context.getBean(SyncSchedulerProperties.class),
@@ -288,7 +287,8 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
                 spec,
                 valid("node.closingIssuesReferences", GHIssueConnection.class, closingReferences(151, 151, false)));
 
-        SyncResult result = sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+        SyncResult result =
+                sync.syncForRepository(workspaceId, repositoryId, null, null).result();
 
         assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED);
         long pullId = pullRequests
@@ -310,7 +310,8 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
         when(spec.variable(anyString(), any())).thenReturn(spec);
         when(spec.execute()).thenReturn(Mono.error(new IllegalStateException("unavailable")));
 
-        SyncResult result = sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+        SyncResult result =
+                sync.syncForRepository(workspaceId, repositoryId, null, null).result();
 
         assertThat(result.status()).isEqualTo(SyncResult.Status.ABORTED_ERROR);
         assertThat(pullRequests.findByRepositoryIdAndNumber(repositoryId, NUMBER))
@@ -349,7 +350,8 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
         stubPullRequestPage();
         stubThreadPagerHittingACriticalRateLimit();
 
-        SyncResult result = sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+        SyncResult result =
+                sync.syncForRepository(workspaceId, repositoryId, null, null).result();
 
         long pullRequestId = pullRequests
                 .findByRepositoryIdAndNumber(repositoryId, NUMBER)
@@ -411,7 +413,7 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
         stubTheRestOfTheFirstThread();
         stubTheSixthThread();
 
-        sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+        sync.syncForRepository(workspaceId, repositoryId, null, null);
 
         long pullRequestId = pullRequests
                 .findByRepositoryIdAndNumber(repositoryId, NUMBER)
@@ -438,7 +440,7 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
                 .thenReturn(Mono.just(pager))
                 .thenReturn(Mono.error(new IllegalStateException("GitHub answered nothing usable")));
 
-        sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+        sync.syncForRepository(workspaceId, repositoryId, null, null);
 
         long pullRequestId = pullRequests
                 .findByRepositoryIdAndNumber(repositoryId, NUMBER)
@@ -474,7 +476,7 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
         stubTheSixthThread();
         stubTheConversation(Mono.just(conversationPage(base + 200, false)));
 
-        sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+        sync.syncForRepository(workspaceId, repositoryId, null, null);
 
         assertThat(askedInTransaction)
                 .as("the second thread page, then the second conversation page, each with no transaction open")
@@ -491,7 +493,7 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
                 Mono.just(conversationPage(base + 300, true)),
                 Mono.error(new IllegalStateException("GitHub answered nothing usable")));
 
-        sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+        sync.syncForRepository(workspaceId, repositoryId, null, null);
 
         assertThat(issueComments(base + 300)).isEqualTo(1);
     }

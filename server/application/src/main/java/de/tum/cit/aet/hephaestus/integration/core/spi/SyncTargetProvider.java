@@ -148,6 +148,14 @@ public interface SyncTargetProvider
     }
 
     /**
+     * A recent sync window that one run could not read to its end.
+     *
+     * @param resumeCursor where the next run resumes the provider's newest-first list
+     * @param startedAt    when the window started; the watermark moves here once the window is read
+     */
+    record RecentWindow(String resumeCursor, Instant startedAt) {}
+
+    /**
      * A repository configured for synchronization within a scope.
      *
      * @param id                                  unique sync target identifier
@@ -169,6 +177,8 @@ public interface SyncTargetProvider
      * @param backfillLastRunAt                   when backfill last executed
      * @param issueSyncCursor                     pagination cursor for resuming issue sync
      * @param pullRequestSyncCursor               pagination cursor for resuming PR sync
+     * @param issueRecentWindow                   the open recent issue window, or null
+     * @param pullRequestRecentWindow             the open recent pull request window, or null
      * @param nativeId                            provider's stable numeric repository id (GitHub
      *                                            {@code repository.id} / GitLab {@code project.id}). Unlike
      *                                            {@code repositoryNameWithOwner} it never changes across a
@@ -196,6 +206,8 @@ public interface SyncTargetProvider
             @Nullable Instant backfillLastRunAt,
             @Nullable String issueSyncCursor,
             @Nullable String pullRequestSyncCursor,
+            @Nullable RecentWindow issueRecentWindow,
+            @Nullable RecentWindow pullRequestRecentWindow,
             Long nativeId) {
         /** @return true if full sync has never run or is older than {@code staleThreshold} */
         public boolean needsFullSync(Instant staleThreshold) {

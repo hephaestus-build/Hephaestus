@@ -56,8 +56,9 @@ class GitHubLiveIssueSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 
         // 4. Sync issues
-        SyncResult syncResult =
-                issueSyncService.syncForRepository(workspace.getId(), localRepo.getId(), null, null, null);
+        SyncResult syncResult = issueSyncService
+                .syncForRepository(workspace.getId(), localRepo.getId(), null, null)
+                .result();
 
         // 5. Verify
         assertThat(syncResult.isCompleted()).isTrue();
@@ -86,8 +87,9 @@ class GitHubLiveIssueSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 
         // 3. Sync issues (this should include comments via the issue processor)
-        SyncResult syncResult =
-                issueSyncService.syncForRepository(workspace.getId(), localRepo.getId(), null, null, null);
+        SyncResult syncResult = issueSyncService
+                .syncForRepository(workspace.getId(), localRepo.getId(), null, null)
+                .result();
         assertThat(syncResult.isCompleted()).isTrue();
         assertThat(syncResult.count()).isGreaterThanOrEqualTo(1);
 
@@ -136,8 +138,9 @@ class GitHubLiveIssueSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 
         // 4. Sync issues
-        SyncResult syncResult =
-                issueSyncService.syncForRepository(workspace.getId(), localRepo.getId(), null, null, null);
+        SyncResult syncResult = issueSyncService
+                .syncForRepository(workspace.getId(), localRepo.getId(), null, null)
+                .result();
 
         // 5. Verify both issues are synced
         assertThat(syncResult.isCompleted()).isTrue();

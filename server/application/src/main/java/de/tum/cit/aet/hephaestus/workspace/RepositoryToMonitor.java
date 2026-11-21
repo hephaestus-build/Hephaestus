@@ -153,6 +153,21 @@ public class RepositoryToMonitor {
      */
     private @Nullable String pullRequestSyncCursor;
 
+    /**
+     * Where the recent issue sync resumes a window that had more changed issues than one run may read: a cursor into
+     * GitHub's newest-first list. Null while no window is open. The backfill's cursor is {@link #issueSyncCursor}.
+     */
+    private @Nullable String issueRecentCursor;
+
+    /** When the open recent issue window started. The issue watermark moves here once the window is read. */
+    private @Nullable Instant issueRecentWindowStart;
+
+    /** As {@link #issueRecentCursor}, for pull requests. */
+    private @Nullable String pullRequestRecentCursor;
+
+    /** As {@link #issueRecentWindowStart}, for pull requests. */
+    private @Nullable Instant pullRequestRecentWindowStart;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "workspace_id", nullable = false)
     @ToString.Exclude

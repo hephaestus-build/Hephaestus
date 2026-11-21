@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncMet
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
 import java.time.Instant;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Provides sync timestamp operations for the integration.scm ETL engine.
@@ -53,4 +54,13 @@ public interface SyncTimestampProvider {
      * @param syncedAt the timestamp of the sync
      */
     void updateTeamsSyncTimestamp(Long scopeId, Instant syncedAt);
+
+    /**
+     * Opens, moves or closes the recent sync window of one sync target and kind.
+     *
+     * @param syncTargetId the sync target ID
+     * @param kind         issues or pull requests
+     * @param window       the open window, or null to close it
+     */
+    void updateRecentWindow(Long syncTargetId, SyncCursorKind kind, SyncTargetProvider.@Nullable RecentWindow window);
 }

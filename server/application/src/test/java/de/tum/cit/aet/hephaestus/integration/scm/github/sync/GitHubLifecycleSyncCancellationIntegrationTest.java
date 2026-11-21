@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitMetadataEnr
 import de.tum.cit.aet.hephaestus.integration.scm.github.commit.GitHubCommitBackfillService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
@@ -129,11 +130,12 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
             String name = invocation.getArgument(1);
             return Optional.of(name.equals(first.getNameWithOwner()) ? first : second);
         });
-        when(issues.syncForRepository(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+        when(issues.syncForRepository(any(), any(), any(), any())).thenAnswer(invocation -> {
             processed.add(invocation.getArgument(1));
-            return SyncResult.completed(1);
+            return new RecentSyncResult(SyncResult.completed(1), null);
         });
-        when(pullRequests.syncForRepository(any(), any(), any(), any(), any())).thenReturn(SyncResult.completed(1));
+        when(pullRequests.syncForRepository(any(), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.completed(1), null));
     }
 
     @ParameterizedTest
@@ -143,10 +145,10 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
         doAnswer(invocation -> {
                     processed.add(invocation.getArgument(1));
                     requestCancellation(run.connection());
-                    return SyncResult.completed(1);
+                    return new RecentSyncResult(SyncResult.completed(1), null);
                 })
                 .when(issues)
-                .syncForRepository(any(), any(), any(), any(), any());
+                .syncForRepository(any(), any(), any(), any());
 
         run.trigger().syncAllRepositories(workspace.getId());
 
@@ -369,10 +371,11 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
         doAnswer(invocation -> {
                     Long repositoryId = invocation.getArgument(1);
                     processed.add(repositoryId);
-                    return repositoryId.equals(repository.getId()) ? result : SyncResult.completed(1);
+                    return new RecentSyncResult(
+                            repositoryId.equals(repository.getId()) ? result : SyncResult.completed(1), null);
                 })
                 .when(issues)
-                .syncForRepository(any(), any(), any(), any(), any());
+                .syncForRepository(any(), any(), any(), any());
     }
 
     private Repository monitoredRepository(String name, long nativeId) {

@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.BackfillProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.FilterProperties;
-import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -118,7 +117,7 @@ class GitHubIncrementalSyncTest extends BaseUnitTest {
     void shouldKeepTheIssueWatermarkOverlapAndSkipEmptyReads() {
         when(field.toEntity(Integer.class)).thenReturn(0);
 
-        assertThat(issues().syncForRepository(1L, 2L, null, null, WATERMARK)).isEqualTo(SyncResult.completed(0));
+        assertThat(issues().syncForRepository(1L, 2L, null, WATERMARK).result()).isEqualTo(SyncResult.completed(0));
 
         assertThat(variables.get("since")).isEqualTo("2026-01-01T11:55Z");
         assertThat(documents).containsExactly("GetRepositoryIssueCount");
@@ -129,7 +128,7 @@ class GitHubIncrementalSyncTest extends BaseUnitTest {
         when(field.toEntity(Integer.class)).thenReturn(0);
         Instant earliest = Instant.now().minus(Duration.ofDays(7));
 
-        assertThat(issues().syncForRepository(1L, 2L, null, null, null)).isEqualTo(SyncResult.completed(0));
+        assertThat(issues().syncForRepository(1L, 2L, null, null).result()).isEqualTo(SyncResult.completed(0));
 
         assertThat(OffsetDateTime.parse((String) variables.get("since")).toInstant())
                 .isBetween(earliest, Instant.now().minus(Duration.ofDays(7)));
@@ -142,7 +141,7 @@ class GitHubIncrementalSyncTest extends BaseUnitTest {
         empty.setNodes(List.of());
         when(field.toEntity(GHIssueConnection.class)).thenReturn(empty);
 
-        issues().syncForRepository(1L, 2L, null, "resume-cursor", WATERMARK);
+        issues().syncForRepository(1L, 2L, "resume-cursor", WATERMARK);
 
         assertThat(documents).containsExactly("GetRepositoryIssues");
         assertThat(variables).containsEntry("after", "resume-cursor").containsEntry("since", "2026-01-01T11:55Z");
@@ -153,7 +152,7 @@ class GitHubIncrementalSyncTest extends BaseUnitTest {
         latestPullRequest("2026-01-01T11:57:00Z");
         emptyPullRequestPage();
 
-        pullRequests().syncForRepository(1L, 2L, null, null, WATERMARK);
+        pullRequests().syncForRepository(1L, 2L, null, WATERMARK);
 
         assertThat(documents).containsExactly("GetRepositoryPullRequestLatestUpdate", "GetRepositoryPullRequests");
     }
@@ -162,7 +161,7 @@ class GitHubIncrementalSyncTest extends BaseUnitTest {
     void shouldSkipPullRequestsBeforeTheBufferedWatermark() {
         latestPullRequest("2026-01-01T11:54:00Z");
 
-        assertThat(pullRequests().syncForRepository(1L, 2L, null, null, WATERMARK))
+        assertThat(pullRequests().syncForRepository(1L, 2L, null, WATERMARK).result())
                 .isEqualTo(SyncResult.completed(0));
 
         assertThat(documents).containsExactly("GetRepositoryPullRequestLatestUpdate");
@@ -174,7 +173,7 @@ class GitHubIncrementalSyncTest extends BaseUnitTest {
                 .thenReturn(List.of(Map.of("number", 1)));
         emptyPullRequestPage();
 
-        pullRequests().syncForRepository(1L, 2L, null, null, WATERMARK);
+        pullRequests().syncForRepository(1L, 2L, null, WATERMARK);
 
         assertThat(documents).containsExactly("GetRepositoryPullRequestLatestUpdate", "GetRepositoryPullRequests");
     }
@@ -183,7 +182,7 @@ class GitHubIncrementalSyncTest extends BaseUnitTest {
     void shouldResumePullRequestPagesWithoutRepeatingTheProbe() {
         emptyPullRequestPage();
 
-        pullRequests().syncForRepository(1L, 2L, null, "resume-cursor", WATERMARK);
+        pullRequests().syncForRepository(1L, 2L, "resume-cursor", WATERMARK);
 
         assertThat(documents).containsExactly("GetRepositoryPullRequests");
         assertThat(variables).containsEntry("after", "resume-cursor");
@@ -194,7 +193,7 @@ class GitHubIncrementalSyncTest extends BaseUnitTest {
         latestPullRequest(Instant.now().minus(Duration.ofDays(6)).toString());
         emptyPullRequestPage();
 
-        pullRequests().syncForRepository(1L, 2L, null, null, null);
+        pullRequests().syncForRepository(1L, 2L, null, null);
 
         assertThat(documents).containsExactly("GetRepositoryPullRequestLatestUpdate", "GetRepositoryPullRequests");
     }
@@ -203,9 +202,20 @@ class GitHubIncrementalSyncTest extends BaseUnitTest {
     void shouldLeaveOlderPullRequestsToHistoricalBackfillOnTheFirstSync() {
         latestPullRequest(Instant.now().minus(Duration.ofDays(8)).toString());
 
-        assertThat(pullRequests().syncForRepository(1L, 2L, null, null, null)).isEqualTo(SyncResult.completed(0));
+        assertThat(pullRequests().syncForRepository(1L, 2L, null, null).result())
+                .isEqualTo(SyncResult.completed(0));
 
         assertThat(documents).containsExactly("GetRepositoryPullRequestLatestUpdate");
+    }
+
+    @Test
+    void shouldNotResumeAWindowThatEndedBeforeThePageCap() {
+        emptyPullRequestPage();
+
+        assertThat(pullRequests()
+                        .syncForRepository(1L, 2L, "resume-cursor", WATERMARK)
+                        .resumeCursor())
+                .isNull();
     }
 
     private void latestPullRequest(String updatedAt) {
@@ -226,7 +236,6 @@ class GitHubIncrementalSyncTest extends BaseUnitTest {
                 mock(GitHubIssueProcessor.class),
                 mock(GitHubIssueCommentProcessor.class),
                 mock(GitHubIssueCommentSyncService.class),
-                mock(BackfillStateProvider.class),
                 transactions,
                 SYNC,
                 SCHEDULE,
@@ -245,7 +254,6 @@ class GitHubIncrementalSyncTest extends BaseUnitTest {
                 mock(GitHubPullRequestReviewCommentSyncService.class),
                 mock(GitHubIssueCommentProcessor.class),
                 mock(GitHubIssueCommentSyncService.class),
-                mock(BackfillStateProvider.class),
                 transactions,
                 SYNC,
                 SCHEDULE,

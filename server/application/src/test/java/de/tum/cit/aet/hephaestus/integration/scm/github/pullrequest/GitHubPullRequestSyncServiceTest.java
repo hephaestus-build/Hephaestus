@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,8 +14,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
-import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
@@ -30,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionCl
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueCommentConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
@@ -58,7 +56,6 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.GraphQlClient.RequestSpec;
 import org.springframework.graphql.client.HttpGraphQlClient;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -96,9 +93,6 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
 
     @Mock
     private GitHubIssueCommentSyncService issueCommentSyncService;
-
-    @Mock
-    private BackfillStateProvider backfillStateProvider;
 
     @Mock
     private TransactionTemplate transactionTemplate;
@@ -155,7 +149,6 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
                 reviewCommentSyncService,
                 issueCommentProcessor,
                 issueCommentSyncService,
-                backfillStateProvider,
                 transactionTemplate,
                 syncProperties,
                 new SyncSchedulerProperties(true, 7, "0 0 3 * * *", 15, null, null),
@@ -234,27 +227,19 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldAbortWhenThePageLimitIsReachedSoTheSyncTimeDoesNotAdvance() {
+    void shouldAbortAtThePageLimitAndReturnWhereTheNextRunResumes() {
         GHPullRequest node = createGHPullRequest(createCommentConnection(List.of(), 0, false, null));
         GHPullRequestConnection connection = stubSinglePrPage(node);
         connection.setTotalCount(MAX_PAGINATION_PAGES + 1);
         when(pullRequestProcessor.process(any(), any())).thenReturn(createPullRequest());
         connection.getPageInfo().setHasNextPage(true);
         connection.getPageInfo().setEndCursor("next");
-        stubCheckpointTransactions();
 
-        SyncResult result = service.syncForRepository(SCOPE_ID, REPO_ID, 52L, null, null);
+        RecentSyncResult pass = service.syncForRepository(SCOPE_ID, REPO_ID, null, null);
 
-        assertThat(result.status()).isEqualTo(SyncResult.Status.ABORTED_ERROR);
-        assertThat(result.isCompleted()).isFalse();
-        verify(backfillStateProvider, atLeastOnce()).updateSyncCursor(52L, SyncCursorKind.PULL_REQUEST, "next");
-        verify(backfillStateProvider, never()).updateSyncCursor(52L, SyncCursorKind.PULL_REQUEST, null);
-    }
-
-    private void stubCheckpointTransactions() {
-        var manager = mock(PlatformTransactionManager.class);
-        when(manager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
-        when(transactionTemplate.getTransactionManager()).thenReturn(manager);
+        assertThat(pass.result().status()).isEqualTo(SyncResult.Status.ABORTED_ERROR);
+        assertThat(pass.result().isCompleted()).isFalse();
+        assertThat(pass.resumeCursor()).isEqualTo("next");
     }
 
     @Nested
@@ -314,7 +299,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
                     "cursor-end");
             stubSinglePrPage(createGHPullRequest(comments));
 
-            service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
+            service.syncForRepository(SCOPE_ID, REPO_ID, null, null);
 
             // Routed through the same processor (and therefore the same issue_comment table) that issue
             // comments use, keyed by the PR's number.
@@ -343,7 +328,8 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
             when(issueCommentSyncService.syncRemainingComments(SCOPE_ID, entity, "cursor-page-1"))
                     .thenReturn(SyncResult.completed(24));
 
-            SyncResult result = service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
+            SyncResult result =
+                    service.syncForRepository(SCOPE_ID, REPO_ID, null, null).result();
 
             assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED);
             verify(pullRequestRepository).recordDiscussionRead(PR_ID, true);
@@ -364,7 +350,8 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
             when(issueCommentSyncService.syncRemainingComments(SCOPE_ID, entity, "cursor-page-1"))
                     .thenReturn(SyncResult.abortedRateLimit(3));
 
-            SyncResult result = service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
+            SyncResult result =
+                    service.syncForRepository(SCOPE_ID, REPO_ID, null, null).result();
 
             assertThat(result.status()).isEqualTo(SyncResult.Status.ABORTED_RATE_LIMIT);
             verify(pullRequestRepository).recordDiscussionRead(PR_ID, false);
@@ -382,7 +369,8 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
             when(issueCommentSyncService.syncRemainingComments(SCOPE_ID, entity, "cursor-page-1"))
                     .thenReturn(SyncResult.completedWithWarnings(3));
 
-            SyncResult result = service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
+            SyncResult result =
+                    service.syncForRepository(SCOPE_ID, REPO_ID, null, null).result();
 
             assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED_WITH_WARNINGS);
             verify(pullRequestRepository, never()).recordDiscussionRead(PR_ID, true);
@@ -398,7 +386,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
                     createCommentConnection(List.of(createGHComment(1001L, "only comment")), 1, false, "cursor-end");
             stubSinglePrPage(createGHPullRequest(comments));
 
-            service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
+            service.syncForRepository(SCOPE_ID, REPO_ID, null, null);
 
             verify(issueCommentSyncService, never()).syncRemainingComments(any(), any(), any());
         }
@@ -410,7 +398,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
             when(pullRequestProcessor.process(any(), any())).thenReturn(entity);
             stubSinglePrPage(createGHPullRequest(createCommentConnection(List.of(), 0, false, null)));
 
-            service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
+            service.syncForRepository(SCOPE_ID, REPO_ID, null, null);
 
             verify(issueCommentProcessor, never()).process(any(), anyInt(), any());
             verify(issueCommentSyncService, never()).syncRemainingComments(any(), any(), any());
