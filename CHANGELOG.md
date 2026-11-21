@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.0.0-rc.13
+
+### Minor Changes
+
+- Every error that the API returns now has one documented shape. The OpenAPI description gives each operation `application/problem+json` error responses with the problem schema. It lists every problem type, so a client that you generate can branch on the type and not on the message text. Each problem always has `status` and `title`. Some errors had an empty body before and now carry a problem too: a request without a valid sign-in, a request that the sign-in check refuses, an ended session refresh, and a request body that is too large. The `WWW-Authenticate` header is unchanged.
+- An out-of-memory kill of one process inside a running container, such as a PostgreSQL backend, now raises an alert. Before, `HephaestusContainerOomKilled` fired only when the kill ended the container, so a killed database backend, which makes PostgreSQL end every session, went unreported. `HephaestusContainerOomKilled` now also reads cAdvisor's per-container OOM counter, and the new `HephaestusNodeOomKill` reads the kernel's count of OOM kills on each node from node-exporter. The bundled monitoring stack loads it when `observability.stack.nodeExporters` lists your node-exporters.
+- An admin's MCP client can now try a practice before anyone relies on it. `save_practice_draft` saves a practice folder as a draft practice, or as a version beside a practice in use. `try_practice` runs it on one pull request, merge request or issue and waits up to 50 seconds. `get_practice_trial` reads a trial later, and `remove_practice_draft` deletes a draft. A trial always gives its status and outcome. It gives its problems and cited lines only if every person whose work it read chose **Cloud**. The trial tools need permission to change practices, and the consent page now says so.
+- The server serves the web app itself, so a release runs one image fewer: the `webapp` image and its Deployment are gone. Every page and file carries the server's one header policy, and the web app reads its settings from the page, without a separate configuration script. Assets are precompressed and cached for a year, and a workspace host still serves only the web app.
+
+  **Operators:** Before you upgrade, move `webapp.securityContact` to `server.securityContact` and `webapp.legalOverrides` to `server.legalOverrides` in your own values, and remove `webapp.replicas`, `webapp.resources` and `images.webapp`. The chart refuses the old keys. Your Gateway sends every path to the server; it needs no route change from you.
+
+### Patch Changes
+
+- Recording activity no longer updates an index that no query reads. The upgrade removes the index without blocking writes.
+- A practice review no longer says that a newer review replaced a practice when none did. A practice whose sources changed before it started is now marked as such, and a practice that the review did not get to before it ended is marked as not yet measured. Hephaestus measures both again: it schedules one follow-up review of the same version of the work, instead of waiting for the work to change.
+- A disconnected integration no longer shows "Check … for what Hephaestus left", and no alert email says that Hephaestus could not confirm a removal. Since rc.8, **Provider removals** records each removal that a provider did not confirm, and an instance admin releases it there. A warning that rc.3 to rc.5 left on a connection stayed until the connection was reconnected. The upgrade clears it.
+
+  **Operators:** If this instance ever ran 1.0.0-rc.3, rc.4 or rc.5, list the connections that still carry the warning before you upgrade, and remove what they left at the provider. See the migration guide.
+
+- Some columns store a fixed set of values, such as a status, a kind or a role. The database now refuses a value in them that the server cannot read. The upgrade checks the rows that are already stored.
+
+  Earlier upgrades corrected each such value that a release stored. Thus, the upgrade usually needs no action. If a row was changed by hand, the upgrade stops before it checks that table. It names each column with its number of such rows.
+
+  **Operators:** Only if the upgrade stops at a table's stored rows: correct them as the migration guide describes. Then start the upgrade again.
+
+- A GitHub repository with more changed pull requests or issues than one sync run reads, for example after a long outage, now catches up over the next runs. Before, every run read the same newest changes again, stopped at its limit, and never reached the rest.
+- When someone uninstalls the GitHub App, Hephaestus now removes the workspace's Outline webhook subscription and Slack bot token before it erases the workspace. Before, these removals waited for an instance admin under **Provider removals**, and Outline kept sending document events that Hephaestus refused.
+- Workspace admins can now disconnect GitLab from **Administration → Integrations → GitLab** with **Disconnect GitLab…**. Before, a GitLab connection could be disconnected only through the API. Like the Slack and Outline dialogs, it says what the disconnect erases and what stays in GitLab. Afterwards, **Reconnect GitLab** connects the workspace again with a new token.
+- A GitLab project with more changed issues or merge requests than one sync run reads, for example on the first sync of a large project, now catches up over the next runs. Before, such a first sync marked the project as synced up to that moment, and later syncs never read the issues and merge requests it had not reached. A later sync with that many changes read the same newest pages on every run.
+
+  After the upgrade, the first sync of each GitLab project reads again the changes since its last complete sync, once.
+
+- The one-host k3s platform now runs Traefik v3.7.19, which fixes known vulnerabilities in its Go runtime and its Go cryptography library. The installer of this release restarts Traefik once.
+- The bundled PostgreSQL metrics exporter runs the v0.21.1 release, which fixes CVE-2026-97054 in its Go runtime. Before, the release shipped an unreleased build of the exporter. No operator action is needed.
+- A push or an edit no longer leaves an earlier automatic review that has not started to run on the old version of the work. The push or edit now waits until that review would start, then replaces it, so a review that has not started does not run on work that has already changed.
+- A practice in feedback mode Off that also reviews when the work is opened, marked ready, merged, closed, published or archived no longer reviews every push to a pull request or merge request, or every edit of an issue or document. It records its observations at those moments only. Reviews of a push are now shorter, so a quick follow-up push is much less likely to throw away the feedback of the practices that you approve or that send automatically. A practice that you switch from Off to Approve first or Automatic is reviewed on the next push that changes what it reads.
+- A practice that a newer review took over no longer goes unmeasured when that review ends without measuring it or a person cancels it. Hephaestus now measures it again at the same version of the work, once every review of that version has ended. A cancelled review also no longer erases a practice that an earlier review still owed.
+
 ## 1.0.0-rc.12
 
 ### Minor Changes
@@ -19,6 +57,14 @@
   **API clients:** The `stopReason` filter of the practice review feedback lists (`/practices/reviews/feedback`, `/feedback/locations`, `/feedback/reasons`) no longer accepts `APPROVAL_NO_LONGER_ELIGIBLE`. Filter by `ITEM_NOT_VISIBLE` or `CONSENT_WITHHELD` instead.
 
   **Operators:** Install this change in the stopped window before the 1.0.0 cut. Stop every runtime role before the migration, then start only the upgraded roles. Use the stopped upgrade procedure. Do not run old and new servers together during this change.
+- The new `HephaestusMetaspaceNearLimit` alert warns when a server's Metaspace stays above 80 % of its maximum for 10 minutes, so you can act before a slow growth stops the server with `OutOfMemoryError: Metaspace`. The heap and container memory alerts do not see Metaspace. A server that runs out of Metaspace soon after each start fires `HephaestusServerRestarting` instead, and its runbook row now points to this alert. No operator action is needed: a Prometheus that already loads the chart's rule file picks it up.
+- Erasure recovery after a database restore now also erases the old words of Slack messages that their authors edited or deleted in Slack after the recovery point. Before, a restore brought those words back. A deleted message is deleted again. An edited message has no words until the next history read of its channel stores the words that Slack shows then.
+
+  **Operators:** A recovery manifest now uses version 4 and lists `slackMessageChanges` beside the other erasures; a manifest of version 3 or earlier stops startup. After each Slack edit or deletion, the server logs a `slack.message_changed` event with the IDs to list. See [Reapply erasures after a restore](https://docs.hephaestus.build/admin/erasure-recovery).
+
+- The server image is now `ghcr.io/hephaestus-build/server`, and the review sandbox image is now `ghcr.io/hephaestus-build/agent`. The chart values `images.application-server` and `images.agent-pi` are now `images.server` and `images.agent`. Earlier releases keep their published images under the old names, so a rollback to them still works. The old packages get no new tags: `application-server:latest` and `agent-pi:latest` stay on 0.95.1, the last stable release under the old names.
+
+  **Operators:** Before you upgrade, rename `images.application-server` and `images.agent-pi` in your own values. Also update every registry mirror, pull-through cache or allowlist that names `application-server` or `agent-pi`. A server outside the chart reads its own image from `HEPHAESTUS_IMAGE_SERVER`, not `HEPHAESTUS_IMAGE_APPLICATION_SERVER`.
 
 ### Patch Changes
 
@@ -54,22 +100,6 @@
 - Hephaestus has a new tagline, _Put good practice to work._, and a clearer description of what it does: it helps your team put good engineering practices into everyday work, with feedback on the work, in a weekly digest, and on your Practice profile. You see it on the sign-in page, in link previews, in the Slack app home, and in the documentation.
 - When a practice review cannot verify that the sources of a practice still hold, it now records why: the practice's withheld detail and the server's `Practice start` log line name the reason, such as an expired occasion record, instead of only that the sources could not be verified.
 - The web app image runs nginx 1.30.7, which fixes CVE-2026-113425, CVE-2026-118899, CVE-2026-121810, CVE-2026-123007, CVE-2026-123633 and CVE-2026-123634 in nginx 1.30.6. No operator action is needed.
-
-## 1.0.0-rc.11
-
-### Minor Changes
-
-- The new `HephaestusMetaspaceNearLimit` alert warns when a server's Metaspace stays above 80 % of its maximum for 10 minutes, so you can act before a slow growth stops the server with `OutOfMemoryError: Metaspace`. The heap and container memory alerts do not see Metaspace. A server that runs out of Metaspace soon after each start fires `HephaestusServerRestarting` instead, and its runbook row now points to this alert. No operator action is needed: a Prometheus that already loads the chart's rule file picks it up.
-- Erasure recovery after a database restore now also erases the old words of Slack messages that their authors edited or deleted in Slack after the recovery point. Before, a restore brought those words back. A deleted message is deleted again. An edited message has no words until the next history read of its channel stores the words that Slack shows then.
-
-  **Operators:** A recovery manifest now uses version 4 and lists `slackMessageChanges` beside the other erasures; a manifest of version 3 or earlier stops startup. After each Slack edit or deletion, the server logs a `slack.message_changed` event with the IDs to list. See [Reapply erasures after a restore](https://docs.hephaestus.build/admin/erasure-recovery).
-
-- The server image is now `ghcr.io/hephaestus-build/server`, and the review sandbox image is now `ghcr.io/hephaestus-build/agent`. The chart values `images.application-server` and `images.agent-pi` are now `images.server` and `images.agent`. Earlier releases keep their published images under the old names, so a rollback to them still works. The old packages get no new tags: `application-server:latest` and `agent-pi:latest` stay on 0.95.1, the last stable release under the old names.
-
-  **Operators:** Before you upgrade, rename `images.application-server` and `images.agent-pi` in your own values. Also update every registry mirror, pull-through cache or allowlist that names `application-server` or `agent-pi`. A server outside the chart reads its own image from `HEPHAESTUS_IMAGE_SERVER`, not `HEPHAESTUS_IMAGE_APPLICATION_SERVER`.
-
-### Patch Changes
-
 - Fewer practice results are withheld when a review searched the repository but described the search in other words. A review now names the word it searched for in what it looked for. When it does not, it is told which searches it ran and which field to fix. Results that claim an absence without a matching search stay withheld.
 - Work that only bots wrote or reviewed no longer shows up as a partial review that "was not ready". Hephaestus starts no review for it, and the event says "Hephaestus does not review work by bots." Work by a person outside the workspace's review scope is handled the same way, with that reason. If someone asks for a review of such work, the answer gives the reason at once. Backfills and scheduled reviews count this work as skipped.
 - The feedback form opens as a panel in the bottom-right corner and no longer blurs or blocks the page, so you can look at and use the page you are reporting on. Minimize it or press Escape to set your draft aside in the corner, and pick it up again later.
