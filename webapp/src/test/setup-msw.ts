@@ -19,7 +19,7 @@ import { toast } from "@/lib/toast";
 import { client } from "@/api/client.gen";
 import environment from "@/environment";
 import { clearDrafts } from "@/lib/composer-drafts";
-import { server, unansweredRequests } from "@/mocks/server";
+import { handlerFailures, server, unansweredRequests } from "@/mocks/server";
 import { FakeEventSource } from "@/test/fake-event-source";
 import { ObserverStub } from "@/test/observers";
 import { unansweredRequestDebt } from "@/test/unanswered-request-debt";
@@ -131,6 +131,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 beforeEach(() => {
 	// A request that an earlier test left in flight belongs to that test, not to this one.
 	unansweredRequests.length = 0;
+	handlerFailures.length = 0;
 });
 afterEach(({ task }) => {
 	server.resetHandlers();
@@ -146,6 +147,14 @@ afterEach(({ task }) => {
 	sessionStorage.clear();
 	FakeEventSource.instances = [];
 	currentFile = task.file;
+	// A handler that throws, such as a fixture lookup that finds no record, answers 500, and the test
+	// would go on with a page that shows the failure instead of the data it meant to check.
+	const failures = handlerFailures.splice(0);
+	if (failures.length > 0) {
+		throw new Error(
+			`An MSW handler threw (docs/contributor/testing.mdx § Web app requests):\n${failures.join("\n")}`,
+		);
+	}
 	const unanswered = unansweredRequests.splice(0);
 	if (unanswered.length === 0) {
 		return;

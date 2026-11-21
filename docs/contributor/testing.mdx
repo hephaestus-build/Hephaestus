@@ -288,6 +288,7 @@ Use the selection command for discovery.
 MSW answers every request of a web app test (`webapp/src/mocks/handlers.ts`).
 A request that no handler answers gets a network error and fails the test that sent it.
 Thus, no test request reaches a real host, such as another checkout's server on the API port.
+A handler that throws also fails the test that sent the request, for example a fixture lookup that finds no record.
 
 - Answer each request in the test that depends on it.
   Use a fixture in the wire shape from `webapp/src/mocks/fixtures`.
