@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
@@ -30,6 +31,7 @@ import tools.jackson.databind.ObjectMapper;
 public class ReviewCompositionContinuation {
     private final ReviewCompositionBasisRepository bases;
     private final JobEvidenceFiles files;
+    private final AttemptCopyReceipts receipts;
     private final ObjectMapper mapper;
     private final ReviewAssignmentStore membership;
     private final FeedbackRepair repairs;
@@ -39,6 +41,7 @@ public class ReviewCompositionContinuation {
     public ReviewCompositionContinuation(
             ReviewCompositionBasisRepository bases,
             JobEvidenceFiles files,
+            AttemptCopyReceipts receipts,
             ObjectMapper mapper,
             ReviewAssignmentStore membership,
             FeedbackRepair repairs,
@@ -46,6 +49,7 @@ public class ReviewCompositionContinuation {
             ReviewRunKind reviewRuns) {
         this.bases = bases;
         this.files = files;
+        this.receipts = receipts;
         this.mapper = mapper;
         this.membership = membership;
         this.repairs = repairs;
@@ -58,7 +62,7 @@ public class ReviewCompositionContinuation {
     }
 
     public void holdRecoveryCustody() {
-        files.holdCopyAdmission();
+        receipts.holdCopyAdmission();
     }
 
     /**
@@ -77,9 +81,9 @@ public class ReviewCompositionContinuation {
         try {
             var basis = bases.findByWorkspaceIdAndJobId(job.getWorkspaceId(), job.getId())
                     .orElseThrow();
-            files.inheritPersonCapture(job, basis.getCopyId(), basis.getAdmissionAttempt());
+            receipts.inheritPersonCapture(job, basis.getCopyId(), basis.getAdmissionAttempt());
             for (var copy : basis.getPayload().path("copies"))
-                files.inheritPersonCapture(
+                receipts.inheritPersonCapture(
                         job,
                         UUID.fromString(copy.path("copyId").asString()),
                         copy.path("attempt").asInt());
@@ -119,7 +123,7 @@ public class ReviewCompositionContinuation {
 
     /** One custody check for restoration and for the exact trace of the same retained inputs. */
     void requireCustody(ReviewJob job, ReviewCompositionBasis basis) {
-        if (!files.vouchesForOriginalCopy(
+        if (!receipts.vouchesForOriginalCopy(
                 basis.getCopyId(), job.getId(), job.getWorkspaceId(), basis.getAdmissionAttempt()))
             throw new InputsUnavailableException("The original capture was erased", true);
         if (!ResultAdmissionService.isAdmitted(job)
@@ -131,7 +135,7 @@ public class ReviewCompositionContinuation {
             throw gone("The original capture no longer permits composition");
         }
         for (var copy : basis.getPayload().path("copies"))
-            if (!files.vouchesForOriginalCopy(
+            if (!receipts.vouchesForOriginalCopy(
                     UUID.fromString(copy.path("copyId").asString()),
                     job.getId(),
                     job.getWorkspaceId(),

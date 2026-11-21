@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptInputs;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
@@ -546,6 +547,7 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                 beans.getBean(ReviewRunKind.class),
                 runs,
                 files,
+                new AttemptCopyReceipts(catalog, files, layout, jobs),
                 beans.getBean(ClusterLock.class));
         return new Replica(gateway(kind, localSessions), kind, custody, layout, job.getId(), preparation);
     }

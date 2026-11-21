@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptInputs;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
@@ -410,6 +411,7 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 reviewRuns,
                 runs,
                 files,
+                context.getBean(AttemptCopyReceipts.class),
                 context.getBean(ClusterLock.class));
     }
 

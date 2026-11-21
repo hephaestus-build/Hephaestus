@@ -9,7 +9,9 @@ import static org.mockito.Mockito.mockStatic;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog.ErasedFolders;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptInputs;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
@@ -201,12 +203,12 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
 
             assertThat(b.folder(recorded)).doesNotExist();
             b.files.ensureAttemptFolder(recorded);
-            assertThat(b.files.readText(recorded, "repos/reviewed/src/App.java", sourceSha))
+            assertThat(b.reads.readText(recorded, "repos/reviewed/src/App.java", sourceSha))
                     .contains(SOURCE);
-            assertThat(b.files.containsUtf8AtLines(
+            assertThat(b.reads.containsUtf8AtLines(
                             recorded, "repos/reviewed/src/App.java", sourceSha, "class App {}", 1, 1))
                     .contains(true);
-            assertThat(b.files.readText(
+            assertThat(b.reads.readText(
                             recorded,
                             "context/item.json",
                             ProvenanceDigest.sha256Hex(RECORD.getBytes(StandardCharsets.UTF_8))))
@@ -272,7 +274,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                                 + ", locks free=" + locksFree(job));
                         checkouts.copy(workspaceId, key, target, verified);
                     });
-            admission = admission(server.files);
+            admission = admission(server.receipts);
         }
     }
 
@@ -359,7 +361,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         try {
             recorded = record(job, captured, null);
             b.files.ensureAttemptFolder(recorded);
-            assertThat(b.files.readText(
+            assertThat(b.reads.readText(
                             recorded,
                             "context/item.json",
                             ProvenanceDigest.sha256Hex(RECORD.getBytes(StandardCharsets.UTF_8))))
@@ -388,7 +390,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         assertThat(a.folder(recorded)).doesNotExist();
         var c = new Server(temporary.resolve("c"), job);
         c.files.ensureAttemptFolder(recorded);
-        assertThat(c.files.readText(
+        assertThat(c.reads.readText(
                         recorded,
                         "context/item.json",
                         ProvenanceDigest.sha256Hex(RECORD.getBytes(StandardCharsets.UTF_8))))
@@ -737,13 +739,13 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
     }
 
     /** This server's admission: its own evidence folders, and the shared PostgreSQL. */
-    private ResultAdmissionService admission(JobEvidenceFiles files) {
+    private ResultAdmissionService admission(AttemptCopyReceipts receipts) {
         return new ResultAdmissionService(
                 jobs,
                 context.getBean(AdmittedResultQuery.class),
                 context.getBean(ReviewJobAssignments.class),
                 context.getBean(AdmittedResultProjectionService.class),
-                files,
+                receipts,
                 context.getBean(ReviewHistoryContentSource.class),
                 mapper,
                 transactions,
@@ -792,6 +794,8 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         final GitTreeSnapshots snapshots;
         final EvidenceFolderPersonDataCatalog catalog;
         final JobEvidenceFiles files;
+        final EvidenceFileReads reads;
+        final AttemptCopyReceipts receipts;
         final RepositoryKey key;
         final ExactPersonDataCopyRecorder recorder = new ExactPersonDataCopyRecorder();
         private final Path root;
@@ -832,6 +836,8 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                             checkouts.apply(new ScmCapturedCheckouts(
                                     git, snapshots, mock(ReviewRepositoryPreparer.class), new SimpleMeterRegistry())),
                             transactions));
+            reads = new EvidenceFileReads(files, new FabricLayout(root.toString()), jobs);
+            receipts = new AttemptCopyReceipts(catalog, files, new FabricLayout(root.toString()), jobs);
         }
 
         /** Captures the attempt as a review does: the checkout with its recorded refs, and an API record. */

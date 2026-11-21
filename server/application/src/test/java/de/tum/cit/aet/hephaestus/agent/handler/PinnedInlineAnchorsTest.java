@@ -6,8 +6,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.FolderSource;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.handler.candidate.CandidateParser;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.PinnedInlineAnchors;
@@ -91,7 +91,7 @@ class PinnedInlineAnchorsTest {
                 List.of(),
                 List.of(new FolderSource(source, file)),
                 List.of(new CitableText(source.value(), path, CitationSide.NEW, commit, file.path(), digest))));
-        var files = mock(JobEvidenceFiles.class);
+        var files = mock(EvidenceFileReads.class);
         var job = new ReviewJob();
         job.setWorkspaceId(1);
         when(files.readText(eq(job), eq(file.path()), any())).thenReturn(Optional.of(text));

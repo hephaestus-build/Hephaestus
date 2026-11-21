@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionIdentity;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.StaleAttemptException;
@@ -46,7 +47,8 @@ public class PracticeResultStaging {
     private final ReviewAssignmentStore membership;
     private final ReviewFreshness freshness;
     private final ReviewJobAssignments assignments;
-    private final JobEvidenceFiles files;
+    private final EvidenceFileReads reads;
+    private final AttemptCopyReceipts receipts;
     private final ReviewCompositionBasisRepository bases;
     private final ObjectMapper mapper;
     private final PracticeCatalogInjector catalog;
@@ -71,9 +73,9 @@ public class PracticeResultStaging {
         if (ResultAdmissionService.isAdmitted(job)) throw new AdmissionConflictException();
         output.prepareStage(job, request, (owned, candidates) -> {
                     var original =
-                            files.originalCompositionInputs(identity).orElseThrow(AdmissionConflictException::new);
-                    var copy = files.completeReceipt(identity).orElseThrow(AdmissionConflictException::new);
-                    if (!files.holdVouchingReceipt(identity, copy)) throw new StaleAttemptException();
+                            reads.originalCompositionInputs(identity).orElseThrow(AdmissionConflictException::new);
+                    var copy = receipts.completeReceipt(identity).orElseThrow(AdmissionConflictException::new);
+                    if (!receipts.holdVouchingReceipt(identity, copy)) throw new StaleAttemptException();
                     var expires = Instant.now().plus(ReviewCompositionBasis.RETENTION);
                     var occasionExpiry = assignments.review(owned).evidenceExpiresAt();
                     if (occasionExpiry != null && occasionExpiry.isBefore(expires)) expires = occasionExpiry;
@@ -183,7 +185,7 @@ public class PracticeResultStaging {
                     .orElse(null);
         }
         if (basis == null) return;
-        if (!files.vouchesForOriginalCopy(
+        if (!receipts.vouchesForOriginalCopy(
                 basis.getCopyId(), job.getId(), job.getWorkspaceId(), basis.getAdmissionAttempt())) {
             bases.deleteForJob(job.getWorkspaceId(), job.getId());
             return;
@@ -207,9 +209,9 @@ public class PracticeResultStaging {
             if (!occasionExpiry.isAfter(now)) return;
             if (occasionExpiry.isBefore(expiresAt)) expiresAt = occasionExpiry;
         }
-        var copy = files.completeReceipt(identity).orElse(null);
-        if (copy == null || !files.holdVouchingReceipt(identity, copy)) return;
-        var original = files.originalCompositionInputs(identity).orElse(null);
+        var copy = receipts.completeReceipt(identity).orElse(null);
+        if (copy == null || !receipts.holdVouchingReceipt(identity, copy)) return;
+        var original = reads.originalCompositionInputs(identity).orElse(null);
         if (original == null) return;
         storeCompositionInputs(job, copy, expiresAt, original);
     }

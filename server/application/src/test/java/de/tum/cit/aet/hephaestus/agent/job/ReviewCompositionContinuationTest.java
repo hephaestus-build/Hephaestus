@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
@@ -25,6 +26,7 @@ class ReviewCompositionContinuationTest extends BaseUnitTest {
     void shouldRefuseExpiredInputsAsGoneBeforeOpeningAReplacementFolder() {
         var bases = mock(ReviewCompositionBasisRepository.class);
         var files = mock(JobEvidenceFiles.class);
+        var receipts = mock(AttemptCopyReceipts.class);
         var job = RuntimeReviewTestData.job();
         RuntimeJobTestData.attempt(job, 1);
         job.setAdmissionAttempt(0);
@@ -36,10 +38,12 @@ class ReviewCompositionContinuationTest extends BaseUnitTest {
         basis.setExpiresAt(Instant.EPOCH);
         basis.setCopyId(UUID.randomUUID());
         when(bases.findByWorkspaceIdAndJobId(1, job.getId())).thenReturn(Optional.of(basis));
-        when(files.vouchesForOriginalCopy(basis.getCopyId(), job.getId(), 1, 0)).thenReturn(true);
+        when(receipts.vouchesForOriginalCopy(basis.getCopyId(), job.getId(), 1, 0))
+                .thenReturn(true);
         var continuation = new ReviewCompositionContinuation(
                 bases,
                 files,
+                receipts,
                 new JsonMapper(),
                 mock(ReviewAssignmentStore.class),
                 mock(FeedbackRepair.class),
@@ -56,6 +60,7 @@ class ReviewCompositionContinuationTest extends BaseUnitTest {
     void shouldRefuseErasedInputsWithoutStagingThem() {
         var bases = mock(ReviewCompositionBasisRepository.class);
         var files = mock(JobEvidenceFiles.class);
+        var receipts = mock(AttemptCopyReceipts.class);
         var job = RuntimeReviewTestData.job();
         RuntimeJobTestData.attempt(job, 1);
         job.setAdmissionAttempt(0);
@@ -69,10 +74,12 @@ class ReviewCompositionContinuationTest extends BaseUnitTest {
         basis.setAdmissionAttempt(0);
         basis.setCopyId(UUID.randomUUID());
         when(bases.findByWorkspaceIdAndJobId(1, job.getId())).thenReturn(Optional.of(basis));
-        when(files.vouchesForOriginalCopy(basis.getCopyId(), job.getId(), 1, 0)).thenReturn(false);
+        when(receipts.vouchesForOriginalCopy(basis.getCopyId(), job.getId(), 1, 0))
+                .thenReturn(false);
         var continuation = new ReviewCompositionContinuation(
                 bases,
                 files,
+                receipts,
                 new JsonMapper(),
                 mock(ReviewAssignmentStore.class),
                 mock(FeedbackRepair.class),

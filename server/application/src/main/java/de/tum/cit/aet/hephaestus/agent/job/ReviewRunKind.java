@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
@@ -69,7 +69,7 @@ public class ReviewRunKind implements AgentRunHandler {
     private final AgentCapacityProperties capacity;
     private final PracticeReviewProperties properties;
     private final ReviewJobAssignments assignments;
-    private final JobEvidenceFiles files;
+    private final AttemptCopyReceipts receipts;
     private final ObjectMapper mapper;
     private final ReviewStart reviewStart;
     private final MeterRegistry meters;
@@ -80,7 +80,7 @@ public class ReviewRunKind implements AgentRunHandler {
             AgentCapacityProperties capacity,
             PracticeReviewProperties properties,
             ReviewJobAssignments assignments,
-            JobEvidenceFiles files,
+            AttemptCopyReceipts receipts,
             ObjectMapper mapper,
             ReviewStart reviewStart,
             MeterRegistry meters) {
@@ -89,7 +89,7 @@ public class ReviewRunKind implements AgentRunHandler {
         this.capacity = capacity;
         this.properties = properties;
         this.assignments = assignments;
-        this.files = files;
+        this.receipts = receipts;
         this.mapper = mapper;
         this.reviewStart = reviewStart;
         this.meters = meters;
@@ -152,7 +152,7 @@ public class ReviewRunKind implements AgentRunHandler {
     /** The copy fence, then the review, then its job, as every recovery, claim and admission takes them. */
     @Override
     public void lock(AgentRunRef run) {
-        files.holdCopyAdmission();
+        receipts.holdCopyAdmission();
         jobs.lockParentByRun(run.id(), run.workspaceId());
         jobs.lockByRun(run.id(), run.workspaceId());
     }
@@ -222,7 +222,7 @@ public class ReviewRunKind implements AgentRunHandler {
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean requeue(
             UUID jobId, AgentRunFence fence, AgentRuns.Charge charge, Duration delay, @Nullable AgentRunHold hold) {
-        files.holdCopyAdmission();
+        receipts.holdCopyAdmission();
         jobs.lockParentOfJob(jobId);
         ReviewJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence)) return false;
@@ -245,7 +245,7 @@ public class ReviewRunKind implements AgentRunHandler {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<AgentRunRef> continueToCompose(UUID jobId, AgentRunFence fence) {
-        files.holdCopyAdmission();
+        receipts.holdCopyAdmission();
         jobs.lockParentOfJob(jobId);
         ReviewJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence)) return Optional.empty();
@@ -267,7 +267,7 @@ public class ReviewRunKind implements AgentRunHandler {
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean retryComposition(
             UUID jobId, AgentRunFence fence, AgentRuns.Charge charge, @Nullable Duration delay) {
-        files.holdCopyAdmission();
+        receipts.holdCopyAdmission();
         jobs.lockParentOfJob(jobId);
         var job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence) || !ResultAdmissionService.isAdmitted(job)) return false;
@@ -291,7 +291,7 @@ public class ReviewRunKind implements AgentRunHandler {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean endProviderUnavailable(UUID jobId, AgentRunFence fence) {
-        files.holdCopyAdmission();
+        receipts.holdCopyAdmission();
         jobs.lockParentOfJob(jobId);
         var job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence) || !ResultAdmissionService.isAdmitted(job)) return false;
@@ -336,7 +336,7 @@ public class ReviewRunKind implements AgentRunHandler {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean resumeComposition(long workspaceId, UUID reviewId) {
-        files.holdCopyAdmission();
+        receipts.holdCopyAdmission();
         if (jobs.lockParentByReview(workspaceId, reviewId).isEmpty()) return false;
         var resumable = jobs.lockResumableComposition(workspaceId, reviewId, capacity.reviewRetries())
                 .orElse(null);

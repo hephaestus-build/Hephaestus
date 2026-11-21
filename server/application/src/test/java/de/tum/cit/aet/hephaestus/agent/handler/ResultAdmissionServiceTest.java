@@ -15,8 +15,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopies;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PublicFeedbackSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
@@ -103,7 +104,8 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     private final AdmittedResultQuery proof = mock(AdmittedResultQuery.class);
     private final ReviewJobAssignments assignments = mock(ReviewJobAssignments.class);
     private final PublicReviewEligibility publicEligibility = mock(PublicReviewEligibility.class);
-    private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
+    private final AttemptCopyReceipts receipts = mock(AttemptCopyReceipts.class);
+    private final EvidenceFileReads reads = mock(EvidenceFileReads.class);
     private final ReviewCompositionBasisRepository bases = mock(ReviewCompositionBasisRepository.class);
     private final FeedbackStore feedback = mock(FeedbackStore.class);
     private final ReviewAssignmentStore members = mock(ReviewAssignmentStore.class);
@@ -128,7 +130,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     void setup() {
         when(manager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         lenient()
-                .when(files.indexLateRead(any(), any(), any()))
+                .when(receipts.indexLateRead(any(), any(), any()))
                 .thenAnswer(call -> ((Supplier<?>) call.getArgument(1)).get());
         lenient()
                 .when(feedback.compositionContext(anyLong(), any(), any()))
@@ -142,7 +144,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                 assignments,
                 new AdmittedResultProjectionService(
                         assignments, publicEligibility, mock(PinnedInlineAnchorQuery.class), mapper),
-                files,
+                receipts,
                 history,
                 mapper,
                 manager,
@@ -154,7 +156,8 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         members,
                         freshness,
                         assignments,
-                        files,
+                        reads,
+                        receipts,
                         bases,
                         mapper,
                         new PracticeCatalogInjector(mapper)),
@@ -337,9 +340,9 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         var deadline = Instant.now().plusSeconds(3600);
         var request = admissionWithRetainedInputs(deadline);
         var copyId = UUID.randomUUID();
-        when(files.completeReceipt(identity())).thenReturn(Optional.of(copyId));
-        when(files.holdVouchingReceipt(identity(), copyId)).thenReturn(true);
-        when(files.originalCompositionInputs(identity()))
+        when(receipts.completeReceipt(identity())).thenReturn(Optional.of(copyId));
+        when(receipts.holdVouchingReceipt(identity(), copyId)).thenReturn(true);
+        when(reads.originalCompositionInputs(identity()))
                 .thenReturn(
                         Optional.of(Map.of("context/original.txt", "Original work".getBytes(StandardCharsets.UTF_8))));
 
@@ -366,9 +369,9 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     void shouldKeepTheExistingWriterRetentionForWorkWithoutARetainedOccasion() {
         var request = admissionWithRetainedInputs(null);
         var copyId = UUID.randomUUID();
-        when(files.completeReceipt(identity())).thenReturn(Optional.of(copyId));
-        when(files.holdVouchingReceipt(identity(), copyId)).thenReturn(true);
-        when(files.originalCompositionInputs(identity()))
+        when(receipts.completeReceipt(identity())).thenReturn(Optional.of(copyId));
+        when(receipts.holdVouchingReceipt(identity(), copyId)).thenReturn(true);
+        when(reads.originalCompositionInputs(identity()))
                 .thenReturn(
                         Optional.of(Map.of("context/current.txt", "Current work".getBytes(StandardCharsets.UTF_8))));
         var before = Instant.now();
@@ -398,14 +401,14 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         Base64.getEncoder().encodeToString(mapper.writeValueAsBytes(snapshot.path("manifest"))));
         basis.setPayload(payload);
         when(bases.findByWorkspaceIdAndJobId(1L, job.getId())).thenReturn(Optional.of(basis));
-        when(files.vouchesForOriginalCopy(basis.getCopyId(), job.getId(), 1L, 0))
+        when(receipts.vouchesForOriginalCopy(basis.getCopyId(), job.getId(), 1L, 0))
                 .thenReturn(true);
 
         service.admit(identity(), request);
 
         assertThat(ResultAdmissionService.isAdmitted(job)).isTrue();
         assertThat(basis.getAdmissionDigest()).isEqualTo(job.getAdmissionDigest());
-        verify(files, never()).ensureAttemptFolder(any(ResultAdmissionService.AdmissionIdentity.class));
+        verify(receipts, never()).ensureAttemptFolder(any(ResultAdmissionService.AdmissionIdentity.class));
     }
 
     private SealResultsRequestDTO admissionWithRetainedInputs(@Nullable Instant deadline) {
@@ -548,7 +551,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         when(stagingStore.staged(1, job.getReviewId(), job.getId()))
                 .thenReturn(List.of(nonResult, stagedCandidate(assignment, candidate, copy, expired)))
                 .thenReturn(List.of(refusedCopy(assignment)));
-        when(files.vouchesForOriginalCopy(copy, job.getId(), 1L, 0)).thenReturn(true);
+        when(receipts.vouchesForOriginalCopy(copy, job.getId(), 1L, 0)).thenReturn(true);
         when(output.seal(job, List.of())).thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
         var response = service.admit(identity(), sealRequest());
@@ -567,7 +570,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         when(stagingStore.staged(1, job.getReviewId(), job.getId()))
                 .thenReturn(List.of(staged))
                 .thenReturn(List.of(refusedCopy(assignment)));
-        when(files.vouchesForOriginalCopy(copy, job.getId(), 1L, 0)).thenReturn(false);
+        when(receipts.vouchesForOriginalCopy(copy, job.getId(), 1L, 0)).thenReturn(false);
         when(output.seal(job, List.of())).thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
         var response = service.admit(identity(), sealRequest());
@@ -584,7 +587,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         var candidate = mock(ResultCandidate.class);
         var staged = stagedCandidate(assignment, candidate, copy, Instant.now().plusSeconds(3600));
         when(stagingStore.staged(1, job.getReviewId(), job.getId())).thenReturn(List.of(staged));
-        when(files.vouchesForOriginalCopy(copy, job.getId(), 1L, 0)).thenReturn(true);
+        when(receipts.vouchesForOriginalCopy(copy, job.getId(), 1L, 0)).thenReturn(true);
         when(output.seal(job, List.of(candidate))).thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
         var response = service.admit(identity(), sealRequest());

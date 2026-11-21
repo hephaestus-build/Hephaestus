@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.handler.candidate.Candidate;
 import de.tum.cit.aet.hephaestus.agent.handler.candidate.CandidateParser;
@@ -57,7 +57,7 @@ public class ReviewOutputService {
     private final CandidateEvidenceVerifier verifier;
     private final ResultStore results;
     private final ReviewAssignmentStore assignmentStore;
-    private final JobEvidenceFiles files;
+    private final EvidenceFileReads files;
     private final ClasspathSourceCatalogRegistry catalogs;
     private final ObjectMapper mapper;
 
@@ -66,7 +66,7 @@ public class ReviewOutputService {
             CandidateEvidenceVerifier verifier,
             ResultStore results,
             ObjectMapper mapper,
-            JobEvidenceFiles files,
+            EvidenceFileReads files,
             ClasspathSourceCatalogRegistry catalogs,
             ReviewAssignmentStore assignmentStore) {
         this.assignments = assignments;

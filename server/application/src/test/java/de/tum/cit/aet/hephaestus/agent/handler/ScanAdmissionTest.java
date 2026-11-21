@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptInputs;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
@@ -216,7 +217,7 @@ class ScanAdmissionTest extends BaseUnitTest {
     }
 
     private void admit(ObjectNode candidate, List<ReadReceipt> receipts) {
-        var files = files();
+        var files = new EvidenceFileReads(files(), new FabricLayout(root.toString()), mock(ReviewJobRepository.class));
         var verifier = new CandidateEvidenceVerifier(files, catalogs, List.of(new ScmCitationVerifier(mapper)));
         var service = new ReviewOutputService(assignments, verifier, results, mapper, files, catalogs, membership);
         var assigned = assignment();
