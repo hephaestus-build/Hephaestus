@@ -37,7 +37,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * The server serves the built web app (ADR 0100): the page with its config record for every client route, the files
  * with their cache rules, the legal pages, the two discovery documents, and the host rules of workspace subdomains.
  * The base class turns workspace subdomains on under {@code hephaestus.build}, and the test profile serves the fixture in
- * {@code src/test/resources/web-app}.
+ * {@code src/test/resources/web-app-fixture}, also when a built web app is on the classpath.
  */
 class WebAppIntegrationTest extends RealAuthIntegrationTest {
 
