@@ -17,7 +17,6 @@ import type {
 	PracticeRepository,
 	SetPracticeRepositoryError,
 	SetPracticeRepositoryRequest,
-	UnsetPracticeRepositoryError,
 } from "@/api/types.gen";
 import type {
 	MoveToRepositoryControl,
@@ -162,9 +161,8 @@ export function usePracticeRepository(workspaceSlug: string, openLevels: readonl
 		endSetting();
 		toast.success(toastText);
 	};
-	const settingRefused = async (
-		error: SetPracticeRepositoryError | UnsetPracticeRepositoryError,
-	) => {
+	// Set and Unset refuse with the same problem shape, so one type covers both.
+	const settingRefused = async (error: SetPracticeRepositoryError) => {
 		const stepUp = stepUpChallengeOf(error);
 		if (stepUp !== undefined) {
 			endSetting();
@@ -228,7 +226,8 @@ export function usePracticeRepository(workspaceSlug: string, openLevels: readonl
 			// A refusal can mean that the practice or the setting changed meanwhile: show them as they
 			// now are. When the practice is edited in the repository already, the move has nothing
 			// left to do, and the dialog closes onto Edit in Hephaestus.
-			await Promise.all([refreshPractice(practiceSlug), refreshSetting()]);
+			await refreshPractice(practiceSlug);
+			await refreshSetting();
 			const now = queryClient.getQueryData(
 				getPracticeOptions({ path: { workspaceSlug, practiceSlug } }).queryKey,
 			);
@@ -277,7 +276,7 @@ export function usePracticeRepository(workspaceSlug: string, openLevels: readonl
 		const monitored = new Map(
 			loadedPages(repositoriesQuery.data)
 				.flatMap((page) => page.content)
-				.filter((item) => item.removedAt === undefined || item.removedAt === null)
+				.filter((item) => item.removedAt === undefined)
 				.map((item) => [
 					item.id,
 					item.provider === undefined ? `Repository ${item.id}` : item.label,
