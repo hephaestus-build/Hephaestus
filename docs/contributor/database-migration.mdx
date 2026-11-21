@@ -143,6 +143,14 @@ The [changelog immutability guard](#ci-validation) checks the rollback, as [Roll
 A change set that has reached `main` keeps a missing safeguard ([immutability policy](#changelog-immutability-policy), rule 1).
 Its release note and migration note then name the changed rows and the backup to restore.
 
+## JSON columns
+
+A JSON column has a `CHECK` that accepts the one JSON type that the server writes there, such as `col IS NULL OR jsonb_typeof(col) = 'object'`.
+A list or an array in Java is a JSON array. Any other mapped type is a JSON object.
+For a `JsonNode` column, read the code that writes it.
+`JsonColumnShapeIntegrationTest` fails for a JSON column without such a check.
+Add the check in the changelog that adds the column.
+
 ## Rollback of raw SQL
 
 Liquibase cannot derive the reverse of raw SQL or a custom change.

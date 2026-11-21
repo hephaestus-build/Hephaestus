@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795273890041-1" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_agent_action_native_recipient_shape'</sqlCheck>
+    </preConditions>
+    <comment>Each JSON column of agent_action accepts only the JSON type that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE agent_action ADD CONSTRAINT ck_agent_action_native_recipient_shape CHECK (native_recipient IS NULL OR jsonb_typeof(native_recipient) = 'object') NOT VALID, ADD CONSTRAINT ck_agent_action_payload_shape CHECK (payload IS NULL OR jsonb_typeof(payload) = 'object') NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE agent_action DROP CONSTRAINT IF EXISTS ck_agent_action_native_recipient_shape, DROP CONSTRAINT IF EXISTS ck_agent_action_payload_shape</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-2" author="hephaestus">
+    <comment>First, count in one scan the rows of agent_action that hold a JSON type the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (native_recipient IS NULL OR jsonb_typeof(native_recipient) = 'object')) AS n1,
+         count(*) FILTER (WHERE NOT (payload IS NULL OR jsonb_typeof(payload) = 'object')) AS n2
+  INTO counted FROM agent_action;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'agent_action', 'native_recipient', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'agent_action', 'payload', counted.n2); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of agent_action. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_native_recipient_shape; ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_payload_shape</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_native_recipient_shape, ADD CONSTRAINT ck_agent_action_native_recipient_shape CHECK (native_recipient IS NULL OR jsonb_typeof(native_recipient) = 'object') NOT VALID, DROP CONSTRAINT ck_agent_action_payload_shape, ADD CONSTRAINT ck_agent_action_payload_shape CHECK (payload IS NULL OR jsonb_typeof(payload) = 'object') NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-3" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_connection_config_shape'</sqlCheck>
+    </preConditions>
+    <comment>Each JSON column of connection accepts only the JSON type that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection ADD CONSTRAINT ck_connection_config_shape CHECK (config IS NULL OR jsonb_typeof(config) = 'object') NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection DROP CONSTRAINT IF EXISTS ck_connection_config_shape</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-4" author="hephaestus">
+    <comment>First, count in one scan the rows of connection that hold a JSON type the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (config IS NULL OR jsonb_typeof(config) = 'object')) AS n1
+  INTO counted FROM connection;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'connection', 'config', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of connection. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection VALIDATE CONSTRAINT ck_connection_config_shape</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection DROP CONSTRAINT ck_connection_config_shape, ADD CONSTRAINT ck_connection_config_shape CHECK (config IS NULL OR jsonb_typeof(config) = 'object') NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-5" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_conversation_turn_admission_shape'</sqlCheck>
+    </preConditions>
+    <comment>Each JSON column of conversation_turn accepts only the JSON type that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE conversation_turn ADD CONSTRAINT ck_conversation_turn_admission_shape CHECK (admission IS NULL OR jsonb_typeof(admission) = 'object') NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE conversation_turn DROP CONSTRAINT IF EXISTS ck_conversation_turn_admission_shape</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-6" author="hephaestus">
+    <comment>First, count in one scan the rows of conversation_turn that hold a JSON type the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (admission IS NULL OR jsonb_typeof(admission) = 'object')) AS n1
+  INTO counted FROM conversation_turn;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'conversation_turn', 'admission', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of conversation_turn. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE conversation_turn VALIDATE CONSTRAINT ck_conversation_turn_admission_shape</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE conversation_turn DROP CONSTRAINT ck_conversation_turn_admission_shape, ADD CONSTRAINT ck_conversation_turn_admission_shape CHECK (admission IS NULL OR jsonb_typeof(admission) = 'object') NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-7" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_issue_head_check_runs_shape'</sqlCheck>
+    </preConditions>
+    <comment>Each JSON column of issue accepts only the JSON type that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue ADD CONSTRAINT ck_issue_head_check_runs_shape CHECK (head_check_runs IS NULL OR jsonb_typeof(head_check_runs) = 'object') NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue DROP CONSTRAINT IF EXISTS ck_issue_head_check_runs_shape</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-8" author="hephaestus">
+    <comment>First, count in one scan the rows of issue that hold a JSON type the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (head_check_runs IS NULL OR jsonb_typeof(head_check_runs) = 'object')) AS n1
+  INTO counted FROM issue;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue', 'head_check_runs', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue VALIDATE CONSTRAINT ck_issue_head_check_runs_shape</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue DROP CONSTRAINT ck_issue_head_check_runs_shape, ADD CONSTRAINT ck_issue_head_check_runs_shape CHECK (head_check_runs IS NULL OR jsonb_typeof(head_check_runs) = 'object') NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-9" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_item_event_evidence_shape'</sqlCheck>
+    </preConditions>
+    <comment>Each JSON column of item_event accepts only the JSON type that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE item_event ADD CONSTRAINT ck_item_event_evidence_shape CHECK (evidence IS NULL OR jsonb_typeof(evidence) = 'object') NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE item_event DROP CONSTRAINT IF EXISTS ck_item_event_evidence_shape</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-10" author="hephaestus">
+    <comment>First, count in one scan the rows of item_event that hold a JSON type the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (evidence IS NULL OR jsonb_typeof(evidence) = 'object')) AS n1
+  INTO counted FROM item_event;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'item_event', 'evidence', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of item_event. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE item_event VALIDATE CONSTRAINT ck_item_event_evidence_shape</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE item_event DROP CONSTRAINT ck_item_event_evidence_shape, ADD CONSTRAINT ck_item_event_evidence_shape CHECK (evidence IS NULL OR jsonb_typeof(evidence) = 'object') NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-11" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_outline_document_collaborator_subjects_shape'</sqlCheck>
+    </preConditions>
+    <comment>Each JSON column of outline_document accepts only the JSON type that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE outline_document ADD CONSTRAINT ck_outline_document_collaborator_subjects_shape CHECK (collaborator_subjects IS NULL OR jsonb_typeof(collaborator_subjects) = 'array') NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE outline_document DROP CONSTRAINT IF EXISTS ck_outline_document_collaborator_subjects_shape</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-12" author="hephaestus">
+    <comment>First, count in one scan the rows of outline_document that hold a JSON type the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (collaborator_subjects IS NULL OR jsonb_typeof(collaborator_subjects) = 'array')) AS n1
+  INTO counted FROM outline_document;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'outline_document', 'collaborator_subjects', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of outline_document. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE outline_document VALIDATE CONSTRAINT ck_outline_document_collaborator_subjects_shape</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE outline_document DROP CONSTRAINT ck_outline_document_collaborator_subjects_shape, ADD CONSTRAINT ck_outline_document_collaborator_subjects_shape CHECK (collaborator_subjects IS NULL OR jsonb_typeof(collaborator_subjects) = 'array') NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-13" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_person_evidence_copy_payload_shape'</sqlCheck>
+    </preConditions>
+    <comment>Each JSON column of person_evidence_copy accepts only the JSON type that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE person_evidence_copy ADD CONSTRAINT ck_person_evidence_copy_payload_shape CHECK (payload IS NULL OR jsonb_typeof(payload) = 'object') NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE person_evidence_copy DROP CONSTRAINT IF EXISTS ck_person_evidence_copy_payload_shape</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-14" author="hephaestus">
+    <comment>First, count in one scan the rows of person_evidence_copy that hold a JSON type the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (payload IS NULL OR jsonb_typeof(payload) = 'object')) AS n1
+  INTO counted FROM person_evidence_copy;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'person_evidence_copy', 'payload', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of person_evidence_copy. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE person_evidence_copy VALIDATE CONSTRAINT ck_person_evidence_copy_payload_shape</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE person_evidence_copy DROP CONSTRAINT ck_person_evidence_copy_payload_shape, ADD CONSTRAINT ck_person_evidence_copy_payload_shape CHECK (payload IS NULL OR jsonb_typeof(payload) = 'object') NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-15" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_provider_event_headers_shape'</sqlCheck>
+    </preConditions>
+    <comment>Each JSON column of provider_event accepts only the JSON type that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_event ADD CONSTRAINT ck_provider_event_headers_shape CHECK (headers IS NULL OR jsonb_typeof(headers) = 'object') NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_event DROP CONSTRAINT IF EXISTS ck_provider_event_headers_shape</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-16" author="hephaestus">
+    <comment>First, count in one scan the rows of provider_event that hold a JSON type the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (headers IS NULL OR jsonb_typeof(headers) = 'object')) AS n1
+  INTO counted FROM provider_event;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'provider_event', 'headers', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of provider_event. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_event VALIDATE CONSTRAINT ck_provider_event_headers_shape</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_event DROP CONSTRAINT ck_provider_event_headers_shape, ADD CONSTRAINT ck_provider_event_headers_shape CHECK (headers IS NULL OR jsonb_typeof(headers) = 'object') NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-17" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_repository_to_monitor_generated_paths_shape'</sqlCheck>
+    </preConditions>
+    <comment>Each JSON column of repository_to_monitor accepts only the JSON type that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_to_monitor ADD CONSTRAINT ck_repository_to_monitor_generated_paths_shape CHECK (generated_paths IS NULL OR jsonb_typeof(generated_paths) = 'array') NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_to_monitor DROP CONSTRAINT IF EXISTS ck_repository_to_monitor_generated_paths_shape</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-18" author="hephaestus">
+    <comment>First, count in one scan the rows of repository_to_monitor that hold a JSON type the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (generated_paths IS NULL OR jsonb_typeof(generated_paths) = 'array')) AS n1
+  INTO counted FROM repository_to_monitor;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'repository_to_monitor', 'generated_paths', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of repository_to_monitor. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_to_monitor VALIDATE CONSTRAINT ck_repository_to_monitor_generated_paths_shape</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_to_monitor DROP CONSTRAINT ck_repository_to_monitor_generated_paths_shape, ADD CONSTRAINT ck_repository_to_monitor_generated_paths_shape CHECK (generated_paths IS NULL OR jsonb_typeof(generated_paths) = 'array') NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-19" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_review_item_staged_payload_shape'</sqlCheck>
+    </preConditions>
+    <comment>Each JSON column of review_item accepts only the JSON type that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE review_item ADD CONSTRAINT ck_review_item_staged_payload_shape CHECK (staged_payload IS NULL OR jsonb_typeof(staged_payload) = 'object') NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE review_item DROP CONSTRAINT IF EXISTS ck_review_item_staged_payload_shape</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-20" author="hephaestus">
+    <comment>First, count in one scan the rows of review_item that hold a JSON type the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (staged_payload IS NULL OR jsonb_typeof(staged_payload) = 'object')) AS n1
+  INTO counted FROM review_item;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'review_item', 'staged_payload', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of review_item. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE review_item VALIDATE CONSTRAINT ck_review_item_staged_payload_shape</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE review_item DROP CONSTRAINT ck_review_item_staged_payload_shape, ADD CONSTRAINT ck_review_item_staged_payload_shape CHECK (staged_payload IS NULL OR jsonb_typeof(staged_payload) = 'object') NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-21" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_review_job_capture_shape'</sqlCheck>
+    </preConditions>
+    <comment>Each JSON column of review_job accepts only the JSON type that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE review_job ADD CONSTRAINT ck_review_job_capture_shape CHECK (capture IS NULL OR jsonb_typeof(capture) = 'object') NOT VALID, ADD CONSTRAINT ck_review_job_output_shape CHECK (output IS NULL OR jsonb_typeof(output) = 'object') NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE review_job DROP CONSTRAINT IF EXISTS ck_review_job_capture_shape, DROP CONSTRAINT IF EXISTS ck_review_job_output_shape</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-22" author="hephaestus">
+    <comment>First, count in one scan the rows of review_job that hold a JSON type the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (capture IS NULL OR jsonb_typeof(capture) = 'object')) AS n1,
+         count(*) FILTER (WHERE NOT (output IS NULL OR jsonb_typeof(output) = 'object')) AS n2
+  INTO counted FROM review_job;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'review_job', 'capture', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'review_job', 'output', counted.n2); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of review_job. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE review_job VALIDATE CONSTRAINT ck_review_job_capture_shape; ALTER TABLE review_job VALIDATE CONSTRAINT ck_review_job_output_shape</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE review_job DROP CONSTRAINT ck_review_job_capture_shape, ADD CONSTRAINT ck_review_job_capture_shape CHECK (capture IS NULL OR jsonb_typeof(capture) = 'object') NOT VALID, DROP CONSTRAINT ck_review_job_output_shape, ADD CONSTRAINT ck_review_job_output_shape CHECK (output IS NULL OR jsonb_typeof(output) = 'object') NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-23" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_sync_job_progress_shape'</sqlCheck>
+    </preConditions>
+    <comment>Each JSON column of sync_job accepts only the JSON type that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job ADD CONSTRAINT ck_sync_job_progress_shape CHECK (progress IS NULL OR jsonb_typeof(progress) = 'object') NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job DROP CONSTRAINT IF EXISTS ck_sync_job_progress_shape</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795273890041-24" author="hephaestus">
+    <comment>First, count in one scan the rows of sync_job that hold a JSON type the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (progress IS NULL OR jsonb_typeof(progress) = 'object')) AS n1
+  INTO counted FROM sync_job;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'sync_job', 'progress', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of sync_job. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job VALIDATE CONSTRAINT ck_sync_job_progress_shape</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job DROP CONSTRAINT ck_sync_job_progress_shape, ADD CONSTRAINT ck_sync_job_progress_shape CHECK (progress IS NULL OR jsonb_typeof(progress) = 'object') NOT VALID</sql>
+    </rollback>
+  </changeSet>
+</databaseChangeLog>
