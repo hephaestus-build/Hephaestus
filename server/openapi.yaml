@@ -4154,7 +4154,7 @@ paths:
       - MCP authorization
   /mcp/oauth/token:
     post:
-      operationId: mcpToken
+      operationId: exchangeMcpToken
       requestBody:
         content:
           application/x-www-form-urlencoded:

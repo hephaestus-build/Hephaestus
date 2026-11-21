@@ -12490,7 +12490,7 @@ export type ApproveMcpConsentRequestResponses = {
 export type ApproveMcpConsentRequestResponse =
 	ApproveMcpConsentRequestResponses[keyof ApproveMcpConsentRequestResponses];
 
-export type McpTokenData = {
+export type ExchangeMcpTokenData = {
 	body?: {
 		client_id?: string;
 		code?: string;
@@ -12506,7 +12506,7 @@ export type McpTokenData = {
 	url: "/mcp/oauth/token";
 };
 
-export type McpTokenErrors = {
+export type ExchangeMcpTokenErrors = {
 	/**
 	 * The grant is refused (RFC 6749 § 5.2)
 	 */
@@ -12521,16 +12521,16 @@ export type McpTokenErrors = {
 	"5XX": ProblemDetail;
 };
 
-export type McpTokenError2 = McpTokenErrors[keyof McpTokenErrors];
+export type ExchangeMcpTokenError = ExchangeMcpTokenErrors[keyof ExchangeMcpTokenErrors];
 
-export type McpTokenResponses = {
+export type ExchangeMcpTokenResponses = {
 	/**
 	 * The tokens (RFC 6749 § 5.1)
 	 */
 	200: McpTokenResponse;
 };
 
-export type McpTokenResponse2 = McpTokenResponses[keyof McpTokenResponses];
+export type ExchangeMcpTokenResponse = ExchangeMcpTokenResponses[keyof ExchangeMcpTokenResponses];
 
 export type UnsubscribeEmailData = {
 	body?: {

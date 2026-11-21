@@ -182,7 +182,7 @@ public class McpAuthorizationController {
 
     @PostMapping(value = "/token", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     @PreAuthorize("permitAll()")
-    @Operation(summary = "Exchange a code or rotate a refresh token (RFC 6749 § 3.2)", operationId = "mcpToken")
+    @Operation(summary = "Exchange a code or rotate a refresh token (RFC 6749 § 3.2)", operationId = "exchangeMcpToken")
     @ApiResponse(
             responseCode = "200",
             description = "The tokens (RFC 6749 § 5.1)",

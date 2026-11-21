@@ -267,6 +267,7 @@ export {
 } from "./react-query/downloadPracticeFiles.gen.js";
 export { editMyProductFeedbackDraftMutation } from "./react-query/editMyProductFeedbackDraft.gen.js";
 export { exchangeClientSignInMutation } from "./react-query/exchangeClientSignIn.gen.js";
+export { exchangeMcpTokenMutation } from "./react-query/exchangeMcpToken.gen.js";
 export {
 	exportScanSarifOptions,
 	exportScanSarifQueryKey,
@@ -843,7 +844,6 @@ export { logoutMutation } from "./react-query/logout.gen.js";
 export { logoutClientSessionMutation } from "./react-query/logoutClientSession.gen.js";
 export { makeMyProductFeedbackPrivateMutation } from "./react-query/makeMyProductFeedbackPrivate.gen.js";
 export { markConversationReadMutation } from "./react-query/markConversationRead.gen.js";
-export { mcpTokenMutation } from "./react-query/mcpToken.gen.js";
 export { moveCatalogPracticeMutation } from "./react-query/moveCatalogPractice.gen.js";
 export { movePracticeMutation } from "./react-query/movePractice.gen.js";
 export {
