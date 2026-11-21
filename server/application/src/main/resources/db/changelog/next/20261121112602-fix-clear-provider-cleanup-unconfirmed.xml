@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795254600000-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="connection" columnName="attention_problem"/>
+        </preConditions>
+        <comment>Releases 1.0.0-rc.3 to rc.5 marked a disconnected connection PROVIDER_CLEANUP_UNCONFIRMED when they could not confirm its removal at the provider. Since rc.8 Provider removals records such a removal, and nothing writes or clears that mark again, except a reconnect. The server no longer knows the value. The migration note lists the marked connections before this change set clears them. The revision and version move as for any attention change, so a stale write of the old value fails its optimistic lock.</comment>
+        <sql>UPDATE connection SET attention_problem = NULL, attention_revision = attention_revision + 1, version = version + 1 WHERE attention_problem = 'PROVIDER_CLEANUP_UNCONFIRMED';</sql>
+        <rollback>
+            <stop>The cleared marks cannot be told apart from connections with no problem. Restore the database backup taken before this upgrade to bring them back.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

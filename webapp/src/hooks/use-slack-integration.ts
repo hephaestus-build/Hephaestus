@@ -282,7 +282,6 @@ export function useSlackIntegration(workspaceSlug: string) {
 		hasConnection,
 		connectionState: entry?.connectionState,
 		credentialsUnreadableSince: entry?.credentialsUnreadableSince,
-		providerCleanupUnconfirmed: entry?.attentionProblem === "PROVIDER_CLEANUP_UNCONFIRMED",
 		isLoading,
 		loadError,
 		connectionRetained,

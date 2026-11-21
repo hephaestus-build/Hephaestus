@@ -67,7 +67,6 @@ function OutlineIntegrationPage() {
 						<WorkspaceConnectionStateNotice
 							connectionState={outline.connectionState}
 							credentialsUnreadableSince={outline.credentialsUnreadableSince}
-							providerCleanupUnconfirmed={outline.providerCleanupUnconfirmed}
 							credentialRecovery={
 								outline.isConnectionActive
 									? "Enter a new key under Replace API key below"

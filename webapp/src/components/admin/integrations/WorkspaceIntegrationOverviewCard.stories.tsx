@@ -255,26 +255,6 @@ export const Disconnected: Story = {
 	},
 };
 
-/** A disconnect could not confirm the removal at Slack, so the card says to check there. */
-export const DisconnectedWithCleanupUnconfirmed: Story = {
-	args: {
-		entry: {
-			kind: "SLACK",
-			displayName: "Slack",
-			connected: false,
-			connectable: true,
-			connectionId: 9,
-			connectionState: "UNINSTALLED",
-			attentionProblem: "PROVIDER_CLEANUP_UNCONFIRMED",
-		},
-		status: undefined,
-	},
-	play: async ({ canvas }) => {
-		canvas.getByText(/not connected/iu);
-		canvas.getByText(/check slack for what hephaestus left/iu);
-	},
-};
-
 /** This instance has not enabled Outline, so the card links to no connect page. */
 export const NotEnabled: Story = {
 	args: {

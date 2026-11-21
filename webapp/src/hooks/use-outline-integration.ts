@@ -66,7 +66,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 	);
 	// With no live connection, the newest uninstalled one still says whether its provider teardown
 	// was confirmed. The integration catalog picks the connection by the same rule.
-	const reportingConnection = outlineConnection ?? newestConnection(outlineConnections);
+	const repairConnection = outlineConnection ?? newestConnection(outlineConnections);
 	const hasConnection = outlineConnection != null;
 	const isConnectionActive = outlineConnection?.state === "ACTIVE";
 	const connectionId = outlineConnection?.id;
@@ -256,13 +256,11 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		// Exposed even when SUSPENDED: reading job history is safe, and a suspended connection is when
 		// an admin most needs to see what the last run did. Sync controls stay gated (isConnectionActive).
 		connectionId,
-		repairConnectionId: reportingConnection?.id,
+		repairConnectionId: repairConnection?.id,
 		hasConnection,
 		isConnectionActive,
 		connectionState: outlineConnection?.state,
 		credentialsUnreadableSince: outlineConnection?.credentialsUnreadableSince,
-		providerCleanupUnconfirmed:
-			reportingConnection?.attentionProblem === "PROVIDER_CLEANUP_UNCONFIRMED",
 		// Until the catalog answers, the page cannot tell a connect form from the not-enabled notice.
 		isLoading: connectionsQuery.isLoading || catalogQuery.isLoading,
 		connectionsError: connectionsQuery.error,

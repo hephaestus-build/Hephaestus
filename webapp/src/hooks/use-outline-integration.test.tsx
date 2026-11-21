@@ -20,34 +20,24 @@ const uninstalled = {
 
 it.each([
 	{
-		name: "the newest uninstalled connection could not confirm its teardown",
+		name: "the newer connection was created last",
 		connections: [
 			{ ...uninstalled, id: 1, createdAt: "2026-10-01T00:00:00Z" },
-			{
-				...uninstalled,
-				id: 2,
-				createdAt: "2026-10-20T00:00:00Z",
-				attentionProblem: "PROVIDER_CLEANUP_UNCONFIRMED",
-			},
+			{ ...uninstalled, id: 2, createdAt: "2026-10-20T00:00:00Z" },
 		],
-		unconfirmed: true,
+		repairConnectionId: 2,
 	},
 	{
-		name: "a newer uninstalled connection finished its teardown",
+		name: "the list names the newer connection first",
 		connections: [
-			{
-				...uninstalled,
-				id: 3,
-				createdAt: "2026-10-01T00:00:00Z",
-				attentionProblem: "PROVIDER_CLEANUP_UNCONFIRMED",
-			},
 			{ ...uninstalled, id: 4, createdAt: "2026-10-20T00:00:00Z" },
+			{ ...uninstalled, id: 3, createdAt: "2026-10-01T00:00:00Z" },
 		],
-		unconfirmed: false,
+		repairConnectionId: 4,
 	},
-] satisfies { name: string; connections: Wire<ConnectionSummary>[]; unconfirmed: boolean }[])(
-	"reports an unconfirmed provider cleanup after a disconnect when $name",
-	async ({ connections, unconfirmed }) => {
+] satisfies { name: string; connections: Wire<ConnectionSummary>[]; repairConnectionId: number }[])(
+	"lists the provider removals of the newest disconnected connection when $name",
+	async ({ connections, repairConnectionId }) => {
 		server.use(
 			http.get("*/workspaces/acme/connections", () => HttpResponse.json(connections)),
 			http.get("*/workspaces/acme/connections/catalog", () =>
@@ -65,7 +55,7 @@ it.each([
 		try {
 			await waitFor(() => expect(result.current.isLoading).toBe(false));
 			expect(result.current.hasConnection).toBe(false);
-			expect(result.current.providerCleanupUnconfirmed).toBe(unconfirmed);
+			expect(result.current.repairConnectionId).toBe(repairConnectionId);
 		} finally {
 			unmount();
 			client.clear();

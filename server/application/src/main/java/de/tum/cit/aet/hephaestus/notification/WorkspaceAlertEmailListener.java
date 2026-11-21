@@ -92,17 +92,6 @@ public class WorkspaceAlertEmailListener implements EmailNotice<WorkspaceAlertEm
                         "The provider suspended this integration. Restore it at the provider to start the sync again.";
                     case WEBHOOK_UNAVAILABLE ->
                         "GitLab accepted no webhook from Hephaestus, so changes show only after each scheduled sync. Give the token the Owner role on the group, or the Maintainer role on its projects.";
-                    case PROVIDER_CLEANUP_UNCONFIRMED ->
-                        switch (change.kind()) {
-                            case GITHUB ->
-                                "We could not confirm that GitHub removed the app from the disconnected account. Uninstall the Hephaestus app in the GitHub settings of that organization or personal account.";
-                            case GITLAB ->
-                                "We could not confirm that GitLab removed the webhook of the disconnected group. Delete the Hephaestus webhook in the group’s GitLab settings, and revoke the token you gave Hephaestus.";
-                            case SLACK ->
-                                "We could not confirm that Slack revoked the token of the disconnected workspace. It may still work. Remove the Hephaestus app in your Slack workspace’s app settings.";
-                            case OUTLINE ->
-                                "We could not confirm that Outline removed the webhook of the disconnected workspace. Delete the Hephaestus webhook in Outline’s settings, and revoke the API key you gave Hephaestus.";
-                        };
                 };
         if (!emails.configured()) {
             return Prepared.withhold(Outcome.NOT_CONFIGURED);

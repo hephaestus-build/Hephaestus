@@ -253,7 +253,6 @@ export function useScmIntegration(workspaceSlug: string) {
 		canReconnectGitLab,
 		connectionState: entry?.connectionState,
 		credentialsUnreadableSince: entry?.credentialsUnreadableSince,
-		providerCleanupUnconfirmed: entry?.attentionProblem === "PROVIDER_CLEANUP_UNCONFIRMED",
 		followsGitLabGroup,
 		projectSelectionProps: {
 			selection: selectionFailed ? undefined : selectionQuery.data?.repositorySelection,
