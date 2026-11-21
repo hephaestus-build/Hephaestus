@@ -46,10 +46,12 @@ export const pushStaticTasks = {
 		"gate:docs-addresses",
 	],
 	extension: [...extensionGates, "gate:adr-confirmation", "gate:no-legacy", "gate:docs-addresses"],
-	// One Gradle invocation: formatting, PMD, test compilation and the architecture tier.
+	// One Gradle invocation: formatting, PMD, test compilation and the architecture tier. Then the
+	// dry-run inventories, which reject a test that is in no tier.
 	server: [
 		...serverStaticGates,
 		"check:push:server",
+		"test:server:selection",
 		"gate:adr-confirmation",
 		"gate:api-pagination",
 		"gate:no-legacy",
