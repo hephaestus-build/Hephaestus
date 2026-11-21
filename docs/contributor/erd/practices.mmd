@@ -159,6 +159,17 @@ erDiagram
         TEXT next_step
     }
 
+    ProblemLineage {
+        UUID id PK
+        UUID prior_problem_id UK
+        UUID prior_result_id "NOT NULL"
+        UUID problem_id UK
+        TIMESTAMPTZ recorded_at "NOT NULL"
+        UUID result_id UK "NOT NULL"
+        VARCHAR(16) state "NOT NULL"
+        BIGINT workspace_id "NOT NULL"
+    }
+
     ResearchDisclosure {
         UUID id PK,UK
         TIMESTAMPTZ closed_at

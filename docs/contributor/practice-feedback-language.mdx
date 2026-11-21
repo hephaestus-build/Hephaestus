@@ -202,17 +202,20 @@ An optional improvement is not a problem.
 Trivial is a real gap.
 It is not advice with no problem behind it.
 
-A problem can compare with the same practice's previous result on the same item.
-This comparison is decided for 1.0 and is not shipped yet ([ADR 0062](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0062-the-item-is-the-review-scope.md)).
+A problem can compare with the same practice's previous result on the same item ([ADR 0062](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0062-the-item-is-the-review-scope.md)).
+Hephaestus records this comparison for each problem of an item review.
+Feedback does not show it yet.
 
 | Problem state | Meaning |
 | --- | --- |
 | New | The previous comparable result did not have this problem. |
 | Unchanged | The previous comparable result had this problem at the same place. |
 | Updated | The previous comparable result had this problem, and its place or text changed. |
-| No longer present | A complete review of a changed version does not find this problem again. |
+| No longer present | A complete review of a changed version does not find this problem again, and the text that the problem quoted is gone from the work. |
 
 A missing problem in an incomplete or failed review is not No longer present.
+A problem whose quoted text is still in the work is not No longer present either.
+The same holds when its file is no longer in the review's capture.
 
 ### Examples and open questions
 

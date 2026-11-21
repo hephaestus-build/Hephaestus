@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795279787201-1" author="hephaestus">
+        <createTable tableName="problem_lineage">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="problem_lineagePK"/>
+            </column>
+            <column name="prior_problem_id" type="UUID"/>
+            <column name="prior_result_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="problem_id" type="UUID"/>
+            <column name="recorded_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="result_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1795279787201-2" author="hephaestus">
+        <addUniqueConstraint columnNames="result_id, prior_problem_id" constraintName="uk_problem_lineage_prior" tableName="problem_lineage"/>
+    </changeSet>
+    <changeSet id="1795279787201-3" author="hephaestus">
+        <addUniqueConstraint columnNames="result_id, problem_id" constraintName="uk_problem_lineage_problem" tableName="problem_lineage"/>
+    </changeSet>
+    <changeSet id="1795279787201-4" author="hephaestus">
+        <comment>A lineage row names a problem of the newer result, of the previous one, or both, as its state says. Its results and problems belong to its workspace, and a row goes with either result.</comment>
+        <sql>ALTER TABLE problem_lineage
+            ADD CONSTRAINT ck_problem_lineage_state CHECK (state IN ('ABSENT', 'NEW', 'UNCHANGED', 'UPDATED')),
+            ADD CONSTRAINT ck_problem_lineage_sides CHECK (
+                (state = 'NEW' AND problem_id IS NOT NULL AND prior_problem_id IS NULL)
+                OR (state = 'ABSENT' AND problem_id IS NULL AND prior_problem_id IS NOT NULL)
+                OR (state IN ('UNCHANGED', 'UPDATED') AND problem_id IS NOT NULL AND prior_problem_id IS NOT NULL)),
+            ADD CONSTRAINT ck_problem_lineage_results CHECK (result_id &lt;&gt; prior_result_id),
+            ADD CONSTRAINT sfk_problem_lineage_result FOREIGN KEY (result_id, workspace_id)
+                REFERENCES result(id, workspace_id) ON DELETE CASCADE,
+            ADD CONSTRAINT sfk_problem_lineage_prior_result FOREIGN KEY (prior_result_id, workspace_id)
+                REFERENCES result(id, workspace_id) ON DELETE CASCADE,
+            ADD CONSTRAINT sfk_problem_lineage_problem FOREIGN KEY (problem_id, result_id, workspace_id)
+                REFERENCES problem(id, result_id, workspace_id) ON DELETE CASCADE,
+            ADD CONSTRAINT sfk_problem_lineage_prior_problem FOREIGN KEY (prior_problem_id, prior_result_id, workspace_id)
+                REFERENCES problem(id, result_id, workspace_id) ON DELETE CASCADE;
+        CREATE INDEX idx_problem_lineage_prior_result ON problem_lineage (prior_result_id, workspace_id);
+        CREATE INDEX idx_problem_lineage_prior_problem ON problem_lineage (prior_problem_id) WHERE prior_problem_id IS NOT NULL;</sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS idx_problem_lineage_prior_problem;
+        DROP INDEX IF EXISTS idx_problem_lineage_prior_result;
+        ALTER TABLE problem_lineage
+            DROP CONSTRAINT IF EXISTS sfk_problem_lineage_prior_problem,
+            DROP CONSTRAINT IF EXISTS sfk_problem_lineage_problem,
+            DROP CONSTRAINT IF EXISTS sfk_problem_lineage_prior_result,
+            DROP CONSTRAINT IF EXISTS sfk_problem_lineage_result,
+            DROP CONSTRAINT IF EXISTS ck_problem_lineage_results,
+            DROP CONSTRAINT IF EXISTS ck_problem_lineage_sides,
+            DROP CONSTRAINT IF EXISTS ck_problem_lineage_state;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

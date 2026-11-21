@@ -294,3 +294,33 @@ Enforced by:
 - `ScmEventReviewIntegrationTest#shouldEndAReviewWhoseEveryPracticeWaitsForAMilestoneWithSourcesMovedWhenAPushReplacesIt`
 - `ScmEventReviewIntegrationTest#shouldFinishAnOffPracticeThatItsVersionOwesOnTheChecksEvent`
 - `ScmEventReviewIntegrationTest#shouldReplaceAQueuedReviewOfOnlyOffPracticesWhenAPushSelectsOthers`
+
+## Update — 2026-11-21: an item review records problem lineage
+
+This update ships the first part of decision 19: problem lineage for item reviews.
+Thread resolution from lineage, repeats by identity and the composer's view of lineage stay decided, not shipped.
+
+- When the seal writes an item review's result, it compares each problem with the previous comparable result.
+  That is the newest earlier result of the same practice version, item and developer, with the same model method.
+  The comparison writes one `problem_lineage` row for each problem: New, Unchanged or Updated.
+- Identity is the scan comparison's: a problem matches by its key, or else by its first citation.
+- A previous problem that the newer result does not find is No longer present only with complete proof.
+  The proof is the scan comparison's: a judged result of a changed version, unmarked, permitted and with trusted coverage.
+  Item reviews add one more condition, because the model chooses the keys and can leave a problem out.
+  Every text that the previous problem quoted must be gone from the newer review's capture.
+- The capture decides as follows:
+  - The capture must hold the cited source whole, and it must hold the cited path.
+  - The quote is searched in every text of the source at the reviewed version.
+    Leading and trailing blanks of each line are ignored.
+  - A renamed file keeps its code at its new path, so the quote is still present.
+  - A deleted file keeps its old text in the capture of a change.
+    So its path is held, and its code is gone.
+  - A file that the change no longer touches is not in the capture, so it proves nothing.
+- Without that proof, the previous problem gets no row. A missing problem never reads as a repair.
+
+Enforced by:
+
+- `ResultAdmissionIntegrationTest#shouldRecordAProblemUnchangedUpdatedOrNewAgainstThePreviousComparableResult`
+- `ResultAdmissionIntegrationTest#shouldRecordAProblemNoLongerPresentWhenItsTextIsGoneFromTheNewerCapture`
+- `ResultAdmissionIntegrationTest#shouldNotRecordAProblemNoLongerPresentWithoutCompleteProof`
+- `CapturedQuoteProbeTest`
