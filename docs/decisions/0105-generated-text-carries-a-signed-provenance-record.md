@@ -39,7 +39,7 @@ It must also hold for an operator who uses a hosted model API, which offers no c
    - The newest key signs. Every key stays to verify, for the life of the instance.
    - `/.well-known/hephaestus-provenance-keys.json` publishes the public keys without sign-in.
    - The re-seal pass of the system key covers the table (`SystemSecretOwner`).
-3. **When it signs.** Text is signed when Hephaestus stores it in its final form: feedback when it is prepared (`FeedbackPreparationStore`). The record is stored on the row that holds the text, so tenancy, retention and erasure follow that row.
+3. **When it signs.** Text is signed when Hephaestus stores it in its final form: feedback when it is prepared (`FeedbackLedgerRecorder`). The record is stored on the row that holds the text, so tenancy, retention and erasure follow that row.
 4. **Where it goes.**
    - On GitHub and GitLab: a hidden line `<!-- hephaestus-provenance:1 <jws> -->` among the trailing markers. Copy comparison ignores it, as it ignores the footer, and a withdrawn copy drops it.
    - The practice page, the conversation, Slack, product-feedback issues and exports follow in later changes. They carry the same string in their own form.

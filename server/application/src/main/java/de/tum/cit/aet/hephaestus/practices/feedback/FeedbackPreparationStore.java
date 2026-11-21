@@ -2,13 +2,10 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
-import de.tum.cit.aet.hephaestus.core.provenance.ProvenanceRecord;
-import de.tum.cit.aet.hephaestus.core.provenance.ProvenanceSigner;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
-import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackLedgerRecorder;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackPreparationService;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
@@ -68,7 +65,6 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
     private static final String PREPARATION_RECEIPTS = "feedbackPreparationReceipts";
     private static final int MAX_REVIEW_CHECK_BYTES = 65_536;
     private final FeedbackRepository feedback;
-    private final FeedbackOutcomes outcomes;
     private final FeedbackBasisRepository basis;
     private final FeedbackCopyRepository copies;
     private final ResultRepository results;
@@ -80,7 +76,6 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
     private final FeedbackLedgerRecorder ledger;
     private final FeedbackContentDigest digests;
     private final FeedbackDeliveryPolicy policy;
-    private final ProvenanceSigner provenance;
 
     @Transactional(readOnly = true)
     public void checkPackage(long workspaceId, UUID reviewId, List<FeedbackDraft> drafts) {
@@ -344,33 +339,12 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
                 throw conflict("This feedback id already has different content.");
             return preparedReceipt(existing.get(), preparedAt);
         }
-        sign(row, planned, draft.model(), preparedAt);
-        ledger.record(row, edges, planned);
-        outcomes.created(row);
+        ledger.record(row, edges, planned, draft.model(), preparedAt);
         policy.prepared(row);
         preparation.recorded(
                 prepared,
                 feedback.findByIdAndWorkspaceId(draft.id(), draft.workspaceId()).orElseThrow());
         return preparedReceipt(row, preparedAt);
-    }
-
-    /**
-     * Signs the words that this preparation fixes: the feedback's body and each note's own words. They do not change
-     * afterwards, so each record holds for every copy that carries them.
-     */
-    private void sign(Feedback row, List<FeedbackCopy> planned, @Nullable String model, Instant preparedAt) {
-        String body = row.getBody();
-        if (body != null)
-            row.setProvenance(provenance
-                    .sign(ProvenanceRecord.Kind.FEEDBACK, body, model, preparedAt)
-                    .jws());
-        for (var copy : planned) {
-            String words = copy.getBody();
-            if (words != null)
-                copy.setProvenance(provenance
-                        .sign(ProvenanceRecord.Kind.FEEDBACK, words, model, preparedAt)
-                        .jws());
-        }
     }
 
     private PreparedFeedback preparedReceipt(Feedback row, Instant preparedAt) {

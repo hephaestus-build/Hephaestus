@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRead;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryPolicy;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackGate;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackHistoryQueryService;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackLedgerRecorder;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackListReadQuery;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackMarkListener;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPreparationStore;
