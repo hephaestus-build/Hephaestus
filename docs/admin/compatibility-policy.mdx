@@ -217,7 +217,7 @@ The chart values and signed joint release lock are part of the [public contract]
 
 **Before 1.0.0, we support the latest release only. A release candidate counts.**
 [Support for 1.x](#support-for-1x) gives the rules for the 1.x releases.
-GitHub marks only a stable release as "Latest". Thus its "Latest" release can be an older release without support.
+GitHub's "Latest" release can be an older release without support, because GitHub marks only a stable release as "Latest".
 
 The 0.95 releases are unsupported from 2026-11-21, and no 0.95 release gets a fix ([GHSA-m2vx-xxgf-3p79](https://github.com/hephaestus-build/Hephaestus/security/advisories/GHSA-m2vx-xxgf-3p79)).
 Upgrade to the latest 1.0.0 release candidate, or to 1.0.0 when it is released. From a release before 1.0.0-rc.1, follow [Database baseline prerequisites](#database-baseline-prerequisites).
@@ -247,8 +247,8 @@ The application images (`webapp`, `server`, `agent`, `postgres`) under
 | Tag             | Meaning                         | Stability                                                    |
 | --------------- | ------------------------------- | ------------------------------------------------------------ |
 | `X.Y.Z`         | Exact release                   | Human-readable label. Production uses the signed digest lock |
-| `X.Y`           | Latest patch of a minor release | Moves on every patch release                                 |
-| `latest`        | Latest release                  | Moves on every release                                       |
+| `X.Y`           | Latest patch of a stable minor release | Moves on every stable patch release                   |
+| `latest`        | Latest stable release           | Moves on every stable release. A release candidate does not move it |
 | `main`, `<sha>` | Unreleased development builds   | **Unsupported** — never deploy these                         |
 
 For digest-pinned release images, see [Release image lock](./release-image-lock.mdx).
