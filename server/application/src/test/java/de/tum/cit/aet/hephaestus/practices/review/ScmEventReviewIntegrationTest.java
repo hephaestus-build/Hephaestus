@@ -2565,6 +2565,55 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     @Test
+    void shouldDecideACloseAtOnceWhileAnEventReviewOfTheItemWaitsToStart() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        long workspace = prepared.item().workspaceId();
+        long onClose = practiceOn(
+                prepared, "delivers-on-close", List.of(ScmItemEvents.PULL_REQUEST_CLOSED), FeedbackMode.APPROVE_FIRST);
+        publish(prepared);
+        var queued = newestReview(prepared);
+        assertThat(queued.getStatus()).isEqualTo(ReviewStatus.QUEUED);
+
+        // A close never joins a window, so it cannot replace the queued review and does not wait for it.
+        deliver(
+                prepared,
+                "closed",
+                pullRequestPayload(prepared, "b".repeat(40), Instant.now().plusSeconds(60), null, "closed"));
+        var closed = occasion(prepared, ScmItemEvents.PULL_REQUEST_CLOSED);
+        assertThat(closed.getState()).as("reason %s", closed.getReason()).isEqualTo(ItemEventState.STARTED);
+        var review =
+                reviews.findByWorkspaceIdAndEventId(workspace, closed.getId()).orElseThrow();
+        assertThat(membersOf(workspace, review.getId())).containsOnlyKeys(onClose);
+    }
+
+    @Test
+    void shouldNotHoldAPushForAReviewThatAlreadyStartedAndWaitsAgain() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        long workspace = prepared.item().workspaceId();
+        long onPush = practiceOn(
+                prepared,
+                "delivers-on-push",
+                List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED),
+                FeedbackMode.APPROVE_FIRST);
+        publish(prepared);
+        var requeued = newestReview(prepared);
+        // It started once and waits again, as after a lost lease: its claim no longer replaces it.
+        jdbc.update(
+                "UPDATE review SET checks = checks || jsonb_build_object('startedAt', now()) WHERE id=?",
+                requeued.getId());
+        assertThat(reviews.findById(requeued.getId()).orElseThrow().getStatus()).isEqualTo(ReviewStatus.QUEUED);
+
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
+        closeWindows(prepared);
+        var pushed = newestReview(prepared);
+        assertThat(pushed.getId()).isNotEqualTo(requeued.getId());
+        assertThat(membersOf(workspace, pushed.getId())).containsOnlyKeys(onPush);
+    }
+
+    @Test
     void shouldMeasureAPracticeRefusedAtStartOnTheNextEdgeThatDoesNotSelectIt() {
         var prepared = prepare(
                 IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
@@ -2879,6 +2928,11 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     private GitHubPullRequestDTO pullRequestPayload(
             Prepared prepared, String head, Instant updatedAt, @Nullable String title) {
+        return pullRequestPayload(prepared, head, updatedAt, title, "open");
+    }
+
+    private GitHubPullRequestDTO pullRequestPayload(
+            Prepared prepared, String head, Instant updatedAt, @Nullable String title, String state) {
         var pull = Objects.requireNonNull(transactions.execute(
                 ignored -> pulls.findById(Objects.requireNonNull(prepared.item().sourceId()))
                         .orElseThrow()));
@@ -2888,7 +2942,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .readValue(
                         """
                         {"id": %d, "node_id": "PR_node", "number": %d, "title": "%s", "body": "%s",
-                         "state": "open", "html_url": "%s", "created_at": "%s", "updated_at": "%s",
+                         "state": "%s", "html_url": "%s", "created_at": "%s", "updated_at": "%s",
                          "draft": false, "merged": false, "locked": false, "commits": 1, "additions": 0,
                          "deletions": 0, "changed_files": 0, "comments": 0, "review_comments": 0,
                          "maintainerCanModify": false,
@@ -2899,6 +2953,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                                         pull.getNumber(),
                                         title != null ? title : pull.getTitle(),
                                         pull.getBody(),
+                                        state,
                                         pull.getHtmlUrl(),
                                         pull.getCreatedAt(),
                                         updatedAt,
@@ -3262,6 +3317,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                     .orElseThrow();
             var context = ProcessingContext.forWebhook(prepared.item().workspaceId(), repository, action);
             if (action.equals("ready_for_review")) pullRequestProcessor.processReadyForReview(payload, context);
+            else if (action.equals("closed")) pullRequestProcessor.processClosed(payload, context);
             else pullRequestProcessor.processSynchronize(payload, before, context);
         }));
     }
