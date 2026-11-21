@@ -91,3 +91,10 @@ We choose option 1.
 - [Fumadocs on Astro](https://fumadocs.dev/docs/astro/manual-installation): the content renders as static HTML inside a layout island.
 - [Astro content collections](https://docs.astro.build/en/guides/content-collections/): the collection schema and the filter of `getCollection()`.
 - [Langfuse docs `package.json`](https://github.com/langfuse/langfuse-docs/blob/main/package.json): Fumadocs 16 on Next.js 16, with a static export.
+
+## Update — 2026-11-21: no upstream report for the `cn` helper
+
+The maintainers decided to make no upstream report for the `cn` helper.
+The helper costs 9.6 KB (gzip) on each page, mostly for `tailwind-merge`. We accept that cost and do not patch the helper.
+With it, a docs page loads 173 KB (gzip), below the 188 KB gate (§ Considered options). The revisit trigger for that gate stays.
+This replaces the `cn` consequence in § Consequences, which said that we report the helper upstream.
