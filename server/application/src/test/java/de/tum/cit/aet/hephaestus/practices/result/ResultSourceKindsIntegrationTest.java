@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.model.ResultSourceKindsChange;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
+import de.tum.cit.aet.hephaestus.practices.spi.CapturedTextProbe;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
@@ -72,7 +73,8 @@ class ResultSourceKindsIntegrationTest extends BaseIntegrationTest {
                                 workspaceId,
                                 pending.review(),
                                 admissions.candidate(pending, ResultOutcome.NOT_MET),
-                                Instant.now())
+                                Instant.now(),
+                                CapturedTextProbe.NONE)
                         .getId()));
         assertThat(kinds(id)).containsExactly(KIND);
         var read = statements.measure(() -> history(workspaceId, pending.developerId()));
@@ -151,7 +153,8 @@ class ResultSourceKindsIntegrationTest extends BaseIntegrationTest {
                                 scenario.workspace().getId(),
                                 pending.review(),
                                 admissions.candidate(pending, ResultOutcome.NOT_MET),
-                                Instant.now())
+                                Instant.now(),
+                                CapturedTextProbe.NONE)
                         .getId()));
     }
 

@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import de.tum.cit.aet.hephaestus.practices.review.report.TrialReport;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
+import de.tum.cit.aet.hephaestus.practices.spi.CapturedTextProbe;
 import de.tum.cit.aet.hephaestus.practices.spi.CitationVerificationStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackModeQuery;
@@ -55,7 +56,12 @@ public class ResultAdmissionWriter {
     private final Clock clock;
 
     public AdmissionReceipt admitLocked(
-            long ws, UUID reviewId, UUID jobId, int attempt, List<ResultCandidate> candidates) {
+            long ws,
+            UUID reviewId,
+            UUID jobId,
+            int attempt,
+            List<ResultCandidate> candidates,
+            CapturedTextProbe captured) {
         var review = fence.lock(ws, reviewId, jobId, attempt);
         var practiceById = practices.lockAssignments(ws, reviewId).stream()
                 .collect(Collectors.toMap(ReviewPractice::getPracticeId, Function.identity()));
@@ -141,7 +147,7 @@ public class ResultAdmissionWriter {
                 member.setDetail(admissionDetail(member, attempt, copyAuthority));
                 continue;
             }
-            var result = claims.write(ws, review, c, at);
+            var result = claims.write(ws, review, c, at, captured);
             // A scan admits its files one by one: the first admission fixes the mode for the review's practice.
             var reviewPractice = Objects.requireNonNull(practiceById.get(c.practiceId()));
             if (reviewPractice.getSealedFeedbackMode() == null)

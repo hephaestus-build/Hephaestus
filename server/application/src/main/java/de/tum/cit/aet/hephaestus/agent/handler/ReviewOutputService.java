@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceAuthority;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
+import de.tum.cit.aet.hephaestus.practices.spi.CapturedTextProbe;
 import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.InapplicabilityWarrant;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemCandidate;
@@ -241,7 +242,26 @@ public class ReviewOutputService {
                     List.of()));
         }
         return results.admit(
-                job.getWorkspaceId(), job.getReviewId(), job.getId(), job.getAttempt(), List.copyOf(admitted));
+                job.getWorkspaceId(),
+                job.getReviewId(),
+                job.getId(),
+                job.getAttempt(),
+                List.copyOf(admitted),
+                quoteProbe(job));
+    }
+
+    /**
+     * Problem lineage asks whether an earlier problem's quoted text is still in this attempt's capture. An attempt
+     * whose capture no longer reads as a whole manifest answers that it cannot say.
+     */
+    private CapturedTextProbe quoteProbe(ReviewJob job) {
+        var capture = job.getCapture();
+        if (capture == null || !capture.path("manifest").isObject()) return CapturedTextProbe.NONE;
+        try {
+            return new CapturedQuoteProbe(job, CapturedEvidence.of(job, mapper), files);
+        } catch (RuntimeException unreadable) {
+            return CapturedTextProbe.NONE;
+        }
     }
 
     /**

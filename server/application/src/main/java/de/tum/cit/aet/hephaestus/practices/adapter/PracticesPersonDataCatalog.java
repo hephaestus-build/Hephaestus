@@ -33,6 +33,7 @@ import tools.jackson.databind.ObjectMapper;
     "result_mark",
     "review_item",
     "problem",
+    "problem_lineage",
     "result",
     "result_mark_created_actor",
     "result_mark_removed_actor",
@@ -222,6 +223,17 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "id,workspace_id",
                                 "",
                                 -170),
+                        // Lineage compares two results; it goes with either one.
+                        new JdbcPersonDataStore(
+                                jdbc,
+                                mapper,
+                                "problem_lineage",
+                                "problem_lineage",
+                                "t.result_id IN(" + RESULT_IDS + ") OR t.prior_result_id IN(" + RESULT_IDS + ")",
+                                "id,workspace_id,result_id,prior_result_id,problem_id,prior_problem_id,comparison,recorded_at",
+                                "id,workspace_id",
+                                "",
+                                -160),
                         // Deleting a result deletes its problems (ON DELETE CASCADE) in the same commit.
                         // A deferred constraint requires a NOT_MET result to keep a problem. Each step commits on its
                         // own, so a problem step that ran before this one could never commit.

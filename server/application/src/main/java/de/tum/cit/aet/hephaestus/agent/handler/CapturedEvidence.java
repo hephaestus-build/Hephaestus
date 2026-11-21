@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -106,6 +107,13 @@ final class CapturedEvidence {
                     && source.state() instanceof SourceCaptureState.Available available
                     && available.completeness() == SourceCompleteness.COMPLETE) return available;
         return null;
+    }
+
+    /** Every citable text that the capture holds for {@code kind}, of either side. */
+    List<CitableText> texts(SourceKind kind) {
+        return manifest.citableTexts().stream()
+                .filter(text -> text.source().equals(kind.value()))
+                .toList();
     }
 
     Map<String, FileProof> files() {

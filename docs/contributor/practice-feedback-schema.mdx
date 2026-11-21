@@ -89,6 +89,21 @@ Readers exclude marked proof when appropriate. They do not resurrect an older cl
 Neither INCORRECT nor ACCEPTED changes `ended_at`.
 Each mark requires a reason and has a remove-mark reverse action.
 
+`problem_lineage` records how each problem of an item review's result compares with the previous comparable result.
+The previous comparable result is the newest earlier result of the same practice version, item and developer.
+It has the same model method, and it is not outranked or marked incorrect.
+
+A row names the newer result, the previous result and the problem on each side.
+New has no previous problem, and No longer present (`ABSENT`) has no newer problem.
+The seal writes the rows in the transaction that writes the result. Rows never change.
+
+There are no rows when there is no previous comparable result.
+A problem matches by its key, as in a scan's comparison.
+A problem with no key matches by the source and the normalized quote of its first citation.
+No longer present needs a judged result of a changed version with trusted coverage.
+It also needs every text that the previous problem quoted to be gone from the newer review's capture.
+The [problem states](./practice-feedback-language.mdx#problems-and-severity) define the four states.
+
 Historical evidence uses `evidence_version=0` and retains unknown fields.
 New admission requires version 1.
 It never constructs strict current proof from missing historical coverage, roles or quotations.

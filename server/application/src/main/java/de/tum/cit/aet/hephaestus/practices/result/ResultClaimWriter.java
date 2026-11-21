@@ -9,11 +9,13 @@ import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewOrder;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
+import de.tum.cit.aet.hephaestus.practices.spi.CapturedTextProbe;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,8 +34,9 @@ public class ResultClaimWriter {
     private final ProblemRepository problems;
     private final JsonMapper json;
     private final PracticeTrustMeters trust;
+    private final ProblemLineageWriter lineage;
 
-    public Result write(long ws, Review review, ResultCandidate c, Instant at) {
+    public Result write(long ws, Review review, ResultCandidate c, Instant at, CapturedTextProbe captured) {
         itemLocks.lock(ws, c.itemId());
         var reviewId = review.getId();
         var result = Result.builder()
@@ -77,8 +80,9 @@ public class ResultClaimWriter {
         results.saveAndFlush(result);
         var outcome = result.getOutcome();
         TransactionCallbacks.afterCommit(() -> trust.recorded(outcome));
+        var written = new ArrayList<Problem>();
         for (var child : c.problems())
-            problems.save(Problem.builder()
+            written.add(problems.save(Problem.builder()
                     .id(UUID.randomUUID())
                     .workspaceId(ws)
                     .resultId(result.getId())
@@ -90,7 +94,8 @@ public class ResultClaimWriter {
                     .citations(json.valueToTree(child.citations()))
                     .basis(json.valueToTree(child.basis()))
                     .nextStep(child.nextStep())
-                    .build());
+                    .build()));
+        lineage.record(ws, review, result, c, written, captured, at);
         return result;
     }
 }

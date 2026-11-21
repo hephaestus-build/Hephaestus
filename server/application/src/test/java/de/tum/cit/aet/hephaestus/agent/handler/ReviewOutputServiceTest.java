@@ -42,6 +42,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeReads;
 import de.tum.cit.aet.hephaestus.practices.ScanDefinition;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
+import de.tum.cit.aet.hephaestus.practices.spi.CapturedTextProbe;
 import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
@@ -1216,11 +1217,16 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         capture.putObject("readiness")
                 .putObject("applicability")
                 .set(assigned.practiceSlug(), mapper.valueToTree(check));
-        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any()))
+        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any(), any()))
                 .thenReturn(new AdmissionReceipt(List.of(), List.of()));
         service.seal(job, List.of());
         ArgumentCaptor<List<ResultCandidate>> candidates = ArgumentCaptor.captor();
-        verify(results).admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), candidates.capture());
+        ArgumentCaptor<CapturedTextProbe> probe = ArgumentCaptor.captor();
+        verify(results)
+                .admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), candidates.capture(), probe.capture());
+        assertThat(probe.getValue())
+                .as("problem lineage reads the attempt's own capture")
+                .isInstanceOf(CapturedQuoteProbe.class);
         assertThat(candidates.getValue()).singleElement().satisfies(candidate -> {
             assertThat(candidate.outcome()).isEqualTo(ResultOutcome.DOES_NOT_APPLY);
             assertThat(candidate.explanation()).isEqualTo(check.otherwise());
@@ -1244,7 +1250,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         capture.putObject("readiness")
                 .putObject("applicability")
                 .set(assigned.practiceSlug(), mapper.valueToTree(check));
-        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any()))
+        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any(), any()))
                 .thenReturn(new AdmissionReceipt(
                         List.of(),
                         List.of(new WithheldItem(
