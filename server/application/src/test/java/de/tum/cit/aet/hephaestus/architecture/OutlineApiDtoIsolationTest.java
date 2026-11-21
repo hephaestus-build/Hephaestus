@@ -19,9 +19,6 @@ import org.junit.jupiter.api.Test;
  */
 class OutlineApiDtoIsolationTest extends HephaestusArchitectureTest {
 
-    private static final JavaClasses OUTLINE_CLASSES =
-            new ClassFileImporter().importPackages("de.tum.cit.aet.hephaestus.integration.outline");
-
     @Test
     void outlineWireModelsStayOnTheExtractSeam() {
         ArchRule rule = classes()
@@ -40,6 +37,9 @@ class OutlineApiDtoIsolationTest extends HephaestusArchitectureTest {
                         "Outline wire models are an implementation detail of the client and its sync, collection-admin, "
                                 + "lifecycle-registrar, and webhook consumers on the extract seam; they must not leak into the "
                                 + "agent read path or any other module");
-        rule.check(OUTLINE_CLASSES);
+        // Its own import: the wire models live in the generated-clients JAR, which the shared import leaves out. Local,
+        // so the architecture JVM drops it after this test.
+        JavaClasses outline = new ClassFileImporter().importPackages("de.tum.cit.aet.hephaestus.integration.outline");
+        rule.check(outline);
     }
 }

@@ -1,10 +1,9 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClass;
-import com.tngtech.archunit.core.domain.JavaClasses;
-import com.tngtech.archunit.core.importer.ClassFileImporter;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceContract;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -29,9 +28,12 @@ class SourceCatalogCoverageTest {
     private static final Set<SourceKind> COLLECTED_KINDS = collectedKinds();
 
     private static Set<SourceKind> collectedKinds() {
-        JavaClasses providers = new ClassFileImporter()
-                .importPackages("de.tum.cit.aet.hephaestus.integration", "de.tum.cit.aet.hephaestus.agent.context");
-        return providers.stream()
+        // The tier's shared import, tests included. A separate import of these packages would sit in the one
+        // architecture JVM next to the shared ones.
+        return HephaestusArchitectureTest.classesWithTests
+                .that(resideInAnyPackage(
+                        "de.tum.cit.aet.hephaestus.integration..", "de.tum.cit.aet.hephaestus.agent.context.."))
+                .stream()
                 .map(JavaClass::reflect)
                 .filter(type -> !type.isInterface() && !Modifier.isAbstract(type.getModifiers()))
                 .flatMap(type -> declaredKinds(type).stream())
