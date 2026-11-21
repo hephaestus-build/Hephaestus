@@ -84,10 +84,10 @@ export function deployedSubjects(
 		const owned = repository.startsWith(`${registry}/`)
 			? repository.slice(registry.length + 1)
 			: undefined;
-		if (owned !== undefined && !FIRST_PARTY_NAME.test(owned)) {
+		const image = upstream.get(repository) ?? owned;
+		if (image === owned && owned !== undefined && !FIRST_PARTY_NAME.test(owned)) {
 			throw new Error(`the deployed first-party image ${repository} has no single-segment name`);
 		}
-		const image = upstream.get(repository) ?? owned;
 		if (image === undefined) {
 			throw new Error(
 				`security/release-images.json does not name the deployed image ${repository}`,
