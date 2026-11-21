@@ -38,12 +38,22 @@ public final class LlmCallPermitsTestFixtures {
     }
 
     /** A model pool with room and no one waiting, for a claim whose test is about something else. */
-    public static LlmCallPermits idle() {
-        var permits = mock(LlmCallPermits.class);
-        when(permits.poolFor(any())).thenReturn(1L);
-        when(permits.poolLabel(anyLong())).thenReturn("test-pool");
-        when(permits.admissionSpacing()).thenReturn(PERMIT_AGING);
-        return permits;
+    public static LlmCallPools idle() {
+        var pools = mock(LlmCallPools.class);
+        when(pools.poolFor(any())).thenReturn(1L);
+        when(pools.poolLabel(anyLong())).thenReturn("test-pool");
+        when(pools.admissionSpacing()).thenReturn(PERMIT_AGING);
+        return pools;
+    }
+
+    /** The model pools as the admission of reviews reads them, over the context's database. */
+    public static LlmCallPools pools(ApplicationContext context) {
+        return new LlmCallPools(
+                context.getBean(LlmCallPoolRepository.class),
+                context.getBean(LlmCallPermitRepository.class),
+                context.getBean(LlmModelResolver.class),
+                PROPERTIES,
+                PERMIT_AGING);
     }
 
     public static LlmCallPermits worker(ApplicationContext context, String workerId) {

@@ -37,7 +37,7 @@ final class LlmPoolMeters {
     /** The label of those pools. */
     static final String WORKSPACE_MODELS_LABEL = "workspace-models";
 
-    /** The answers that lower a pool's limit: {@link LlmCallPermits#throttles}. */
+    /** The answers that lower a pool's limit: {@link LlmPoolLearning#throttles}. */
     static final List<Integer> THROTTLE_STATUSES = List.of(429, 503, 529);
 
     /**

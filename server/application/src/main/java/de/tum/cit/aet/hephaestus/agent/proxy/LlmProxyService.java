@@ -541,9 +541,9 @@ class LlmProxyService {
                     attempt.sourceType() == UsageSourceType.CONVERSATION_TURN || reviewStream ? silenceBounds : null,
                     poolPermit.revoked(),
                     transports,
-                    headers -> callPermits.served(poolPermit, headers, instanceCredential));
+                    headers -> callPermits.learning().served(poolPermit, headers, instanceCredential));
             ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, protocol);
-            tap.onFirstContent(waited -> callPermits.firstToken(poolPermit, waited, instanceCredential));
+            tap.onFirstContent(waited -> callPermits.learning().firstToken(poolPermit, waited, instanceCredential));
             // Both requests below share the attempt's one deadline; the second one does not get a new window.
             Instant deadline = routing.workDeadline();
             if (workTimeOver(routing)) {
@@ -631,7 +631,7 @@ class LlmProxyService {
                 Bounds bounds = exchange.bounds();
                 poolPermit.outcome(bounds != null && ProxyStreamingUtils.readTimedOut(e) ? "stalled" : "error");
                 if (bounds != null && ProxyStreamingUtils.readTimedOut(e)) {
-                    callPermits.unanswered(poolPermit, true, tap.sinceSent(), instanceCredential);
+                    callPermits.learning().unanswered(poolPermit, true, tap.sinceSent(), instanceCredential);
                     accounting.recordError(routing.apiProtocol());
                     accounting.recordUpstreamStalled(routing.apiProtocol());
                     String stall =
@@ -695,12 +695,13 @@ class LlmProxyService {
                 Bounds silence = exchange.bounds();
                 boolean stoppedAnswering = providerEnded
                         || (silence != null && tap.sinceSent() >= silence.idle().toNanos());
-                callPermits.unanswered(poolPermit, stoppedAnswering, tap.sinceSent(), instanceCredential);
+                callPermits.learning().unanswered(poolPermit, stoppedAnswering, tap.sinceSent(), instanceCredential);
             }
             // A spent account says nothing about capacity, so it slows no other call and leaves the limit alone.
-            if (LlmCallPermits.throttles(upstream.status()) && !LlmCallPermits.spentAccount(upstream.body())) {
-                Duration asked =
-                        callPermits.throttled(poolPermit, upstream.status(), upstream.headers(), instanceCredential);
+            if (LlmPoolLearning.throttles(upstream.status()) && !LlmPoolLearning.spentAccount(upstream.body())) {
+                Duration asked = callPermits
+                        .learning()
+                        .throttled(poolPermit, upstream.status(), upstream.headers(), instanceCredential);
                 if (attempt.sourceType() != UsageSourceType.PRODUCT_FEEDBACK_DRAFT
                         && attempt.sourceType() != UsageSourceType.PROBE
                         && asked != null
