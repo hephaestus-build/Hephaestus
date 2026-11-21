@@ -1,0 +1,649 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795259678525-1" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_activity_event_event_type'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of activity_event accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE activity_event ADD CONSTRAINT ck_activity_event_event_type CHECK (event_type IN ('COMMENT_CREATED', 'COMMENT_DELETED', 'COMMENT_UPDATED', 'COMMIT_CREATED', 'ISSUE_CLOSED', 'ISSUE_CREATED', 'ISSUE_DELETED', 'ISSUE_LABELED', 'ISSUE_REOPENED', 'ISSUE_TYPED', 'ISSUE_UNLABELED', 'ISSUE_UNTYPED', 'PULL_REQUEST_CLOSED', 'PULL_REQUEST_DRAFTED', 'PULL_REQUEST_LABELED', 'PULL_REQUEST_MERGED', 'PULL_REQUEST_OPENED', 'PULL_REQUEST_READY', 'PULL_REQUEST_REOPENED', 'PULL_REQUEST_SYNCHRONIZED', 'PULL_REQUEST_UNLABELED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED', 'REVIEW_COMMENT_CREATED', 'REVIEW_COMMENT_DELETED', 'REVIEW_COMMENT_EDITED', 'REVIEW_DISMISSED', 'REVIEW_EDITED', 'REVIEW_THREAD_RESOLVED', 'REVIEW_THREAD_UNRESOLVED', 'REVIEW_UNKNOWN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE activity_event DROP CONSTRAINT IF EXISTS ck_activity_event_event_type</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-2" author="hephaestus">
+    <comment>Validation reads every row of activity_event without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE activity_event VALIDATE CONSTRAINT ck_activity_event_event_type</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE activity_event DROP CONSTRAINT ck_activity_event_event_type, ADD CONSTRAINT ck_activity_event_event_type CHECK (event_type IN ('COMMENT_CREATED', 'COMMENT_DELETED', 'COMMENT_UPDATED', 'COMMIT_CREATED', 'ISSUE_CLOSED', 'ISSUE_CREATED', 'ISSUE_DELETED', 'ISSUE_LABELED', 'ISSUE_REOPENED', 'ISSUE_TYPED', 'ISSUE_UNLABELED', 'ISSUE_UNTYPED', 'PULL_REQUEST_CLOSED', 'PULL_REQUEST_DRAFTED', 'PULL_REQUEST_LABELED', 'PULL_REQUEST_MERGED', 'PULL_REQUEST_OPENED', 'PULL_REQUEST_READY', 'PULL_REQUEST_REOPENED', 'PULL_REQUEST_SYNCHRONIZED', 'PULL_REQUEST_UNLABELED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED', 'REVIEW_COMMENT_CREATED', 'REVIEW_COMMENT_DELETED', 'REVIEW_COMMENT_EDITED', 'REVIEW_DISMISSED', 'REVIEW_EDITED', 'REVIEW_THREAD_RESOLVED', 'REVIEW_THREAD_UNRESOLVED', 'REVIEW_UNKNOWN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-3" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_client_session_client_kind'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of client_session accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_session ADD CONSTRAINT ck_client_session_client_kind CHECK (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT')) NOT VALID, ADD CONSTRAINT ck_client_session_revoked_reason CHECK (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_session DROP CONSTRAINT IF EXISTS ck_client_session_client_kind, DROP CONSTRAINT IF EXISTS ck_client_session_revoked_reason</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-4" author="hephaestus">
+    <comment>Validation reads every row of client_session without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_session VALIDATE CONSTRAINT ck_client_session_client_kind; ALTER TABLE client_session VALIDATE CONSTRAINT ck_client_session_revoked_reason</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_session DROP CONSTRAINT ck_client_session_client_kind, ADD CONSTRAINT ck_client_session_client_kind CHECK (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT')) NOT VALID, DROP CONSTRAINT ck_client_session_revoked_reason, ADD CONSTRAINT ck_client_session_revoked_reason CHECK (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-5" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_client_sign_in_handoff_client_kind'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of client_sign_in_handoff accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_sign_in_handoff ADD CONSTRAINT ck_client_sign_in_handoff_client_kind CHECK (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_sign_in_handoff DROP CONSTRAINT IF EXISTS ck_client_sign_in_handoff_client_kind</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-6" author="hephaestus">
+    <comment>Validation reads every row of client_sign_in_handoff without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_sign_in_handoff VALIDATE CONSTRAINT ck_client_sign_in_handoff_client_kind</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_sign_in_handoff DROP CONSTRAINT ck_client_sign_in_handoff_client_kind, ADD CONSTRAINT ck_client_sign_in_handoff_client_kind CHECK (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-7" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_commit_contributor_role'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of commit_contributor accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_contributor ADD CONSTRAINT ck_commit_contributor_role CHECK (role IN ('AUTHOR', 'COMMITTER', 'CO_AUTHOR')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_contributor DROP CONSTRAINT IF EXISTS ck_commit_contributor_role</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-8" author="hephaestus">
+    <comment>Validation reads every row of commit_contributor without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_contributor VALIDATE CONSTRAINT ck_commit_contributor_role</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_contributor DROP CONSTRAINT ck_commit_contributor_role, ADD CONSTRAINT ck_commit_contributor_role CHECK (role IN ('AUTHOR', 'COMMITTER', 'CO_AUTHOR')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-9" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_commit_file_change_change_type'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of commit_file_change accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_file_change ADD CONSTRAINT ck_commit_file_change_change_type CHECK (change_type IN ('ADDED', 'CHANGED', 'COPIED', 'MODIFIED', 'REMOVED', 'RENAMED', 'UNKNOWN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_file_change DROP CONSTRAINT IF EXISTS ck_commit_file_change_change_type</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-10" author="hephaestus">
+    <comment>Validation reads every row of commit_file_change without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_file_change VALIDATE CONSTRAINT ck_commit_file_change_change_type</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_file_change DROP CONSTRAINT ck_commit_file_change_change_type, ADD CONSTRAINT ck_commit_file_change_change_type CHECK (change_type IN ('ADDED', 'CHANGED', 'COPIED', 'MODIFIED', 'REMOVED', 'RENAMED', 'UNKNOWN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-11" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_commit_identity_resolution_source'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of commit_identity_resolution accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_identity_resolution ADD CONSTRAINT ck_commit_identity_resolution_source CHECK (source IN ('AUTHOR', 'COMMITTER', 'CONTRIBUTOR')) NOT VALID, ADD CONSTRAINT ck_commit_identity_resolution_state CHECK (state IN ('NO_ACCOUNT', 'PENDING', 'RESOLVED', 'UNANSWERED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_identity_resolution DROP CONSTRAINT IF EXISTS ck_commit_identity_resolution_source, DROP CONSTRAINT IF EXISTS ck_commit_identity_resolution_state</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-12" author="hephaestus">
+    <comment>Validation reads every row of commit_identity_resolution without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_identity_resolution VALIDATE CONSTRAINT ck_commit_identity_resolution_source; ALTER TABLE commit_identity_resolution VALIDATE CONSTRAINT ck_commit_identity_resolution_state</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_identity_resolution DROP CONSTRAINT ck_commit_identity_resolution_source, ADD CONSTRAINT ck_commit_identity_resolution_source CHECK (source IN ('AUTHOR', 'COMMITTER', 'CONTRIBUTOR')) NOT VALID, DROP CONSTRAINT ck_commit_identity_resolution_state, ADD CONSTRAINT ck_commit_identity_resolution_state CHECK (state IN ('NO_ACCOUNT', 'PENDING', 'RESOLVED', 'UNANSWERED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-13" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_connection_attention_problem'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of connection accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection ADD CONSTRAINT ck_connection_attention_problem CHECK (attention_problem IN ('CREDENTIAL_EXPIRING', 'CREDENTIAL_REVOKED', 'PROVIDER_SUSPENDED', 'WEBHOOK_UNAVAILABLE')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection DROP CONSTRAINT IF EXISTS ck_connection_attention_problem</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-14" author="hephaestus">
+    <comment>Validation reads every row of connection without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection VALIDATE CONSTRAINT ck_connection_attention_problem</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection DROP CONSTRAINT ck_connection_attention_problem, ADD CONSTRAINT ck_connection_attention_problem CHECK (attention_problem IN ('CREDENTIAL_EXPIRING', 'CREDENTIAL_REVOKED', 'PROVIDER_SUSPENDED', 'WEBHOOK_UNAVAILABLE')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-15" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_connection_audit_from_state'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of connection_audit accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection_audit ADD CONSTRAINT ck_connection_audit_from_state CHECK (from_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED')) NOT VALID, ADD CONSTRAINT ck_connection_audit_to_state CHECK (to_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection_audit DROP CONSTRAINT IF EXISTS ck_connection_audit_from_state, DROP CONSTRAINT IF EXISTS ck_connection_audit_to_state</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-16" author="hephaestus">
+    <comment>Validation reads every row of connection_audit without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection_audit VALIDATE CONSTRAINT ck_connection_audit_from_state; ALTER TABLE connection_audit VALIDATE CONSTRAINT ck_connection_audit_to_state</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection_audit DROP CONSTRAINT ck_connection_audit_from_state, ADD CONSTRAINT ck_connection_audit_from_state CHECK (from_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED')) NOT VALID, DROP CONSTRAINT ck_connection_audit_to_state, ADD CONSTRAINT ck_connection_audit_to_state CHECK (to_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-17" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_identity_provider_type'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of identity_provider accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider ADD CONSTRAINT ck_identity_provider_type CHECK (type IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider DROP CONSTRAINT IF EXISTS ck_identity_provider_type</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-18" author="hephaestus">
+    <comment>Validation reads every row of identity_provider without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider VALIDATE CONSTRAINT ck_identity_provider_type</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider DROP CONSTRAINT ck_identity_provider_type, ADD CONSTRAINT ck_identity_provider_type CHECK (type IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-19" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_issue_head_check_state'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of issue accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue ADD CONSTRAINT ck_issue_head_check_state CHECK (head_check_state IN ('CANCELLED', 'FAILURE', 'NONE', 'NO_PIPELINE', 'PENDING', 'SKIPPED', 'SUCCESS')) NOT VALID, ADD CONSTRAINT ck_issue_state_reason CHECK (state_reason IN ('COMPLETED', 'DUPLICATE', 'NOT_PLANNED', 'REOPENED', 'UNKNOWN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue DROP CONSTRAINT IF EXISTS ck_issue_head_check_state, DROP CONSTRAINT IF EXISTS ck_issue_state_reason</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-20" author="hephaestus">
+    <comment>Validation reads every row of issue without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue VALIDATE CONSTRAINT ck_issue_head_check_state; ALTER TABLE issue VALIDATE CONSTRAINT ck_issue_state_reason</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue DROP CONSTRAINT ck_issue_head_check_state, ADD CONSTRAINT ck_issue_head_check_state CHECK (head_check_state IN ('CANCELLED', 'FAILURE', 'NONE', 'NO_PIPELINE', 'PENDING', 'SKIPPED', 'SUCCESS')) NOT VALID, DROP CONSTRAINT ck_issue_state_reason, ADD CONSTRAINT ck_issue_state_reason CHECK (state_reason IN ('COMPLETED', 'DUPLICATE', 'NOT_PLANNED', 'REOPENED', 'UNKNOWN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-21" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_issue_comment_author_association'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of issue_comment accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_comment ADD CONSTRAINT ck_issue_comment_author_association CHECK (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_comment DROP CONSTRAINT IF EXISTS ck_issue_comment_author_association</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-22" author="hephaestus">
+    <comment>Validation reads every row of issue_comment without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_comment VALIDATE CONSTRAINT ck_issue_comment_author_association</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_comment DROP CONSTRAINT ck_issue_comment_author_association, ADD CONSTRAINT ck_issue_comment_author_association CHECK (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-23" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_issue_type_color'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of issue_type accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_type ADD CONSTRAINT ck_issue_type_color CHECK (color IN ('BLUE', 'GRAY', 'GREEN', 'ORANGE', 'PINK', 'PURPLE', 'RED', 'YELLOW')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_type DROP CONSTRAINT IF EXISTS ck_issue_type_color</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-24" author="hephaestus">
+    <comment>Validation reads every row of issue_type without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_type VALIDATE CONSTRAINT ck_issue_type_color</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_type DROP CONSTRAINT ck_issue_type_color, ADD CONSTRAINT ck_issue_type_color CHECK (color IN ('BLUE', 'GRAY', 'GREEN', 'ORANGE', 'PINK', 'PURPLE', 'RED', 'YELLOW')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-25" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_issued_jwt_revoked_reason'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of issued_jwt accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issued_jwt ADD CONSTRAINT ck_issued_jwt_revoked_reason CHECK (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issued_jwt DROP CONSTRAINT IF EXISTS ck_issued_jwt_revoked_reason</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-26" author="hephaestus">
+    <comment>Validation reads every row of issued_jwt without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issued_jwt VALIDATE CONSTRAINT ck_issued_jwt_revoked_reason</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issued_jwt DROP CONSTRAINT ck_issued_jwt_revoked_reason, ADD CONSTRAINT ck_issued_jwt_revoked_reason CHECK (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-27" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_llm_connection_connection_platform'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of llm_connection accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_connection ADD CONSTRAINT ck_llm_connection_connection_platform CHECK (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_connection DROP CONSTRAINT IF EXISTS ck_llm_connection_connection_platform</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-28" author="hephaestus">
+    <comment>Validation reads every row of llm_connection without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_connection VALIDATE CONSTRAINT ck_llm_connection_connection_platform</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_connection DROP CONSTRAINT ck_llm_connection_connection_platform, ADD CONSTRAINT ck_llm_connection_connection_platform CHECK (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-29" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_llm_model_brand'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of llm_model accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_model ADD CONSTRAINT ck_llm_model_brand CHECK (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI')) NOT VALID, ADD CONSTRAINT ck_llm_model_reasoning_effort CHECK (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_model DROP CONSTRAINT IF EXISTS ck_llm_model_brand, DROP CONSTRAINT IF EXISTS ck_llm_model_reasoning_effort</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-30" author="hephaestus">
+    <comment>Validation reads every row of llm_model without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_model VALIDATE CONSTRAINT ck_llm_model_brand; ALTER TABLE llm_model VALIDATE CONSTRAINT ck_llm_model_reasoning_effort</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_model DROP CONSTRAINT ck_llm_model_brand, ADD CONSTRAINT ck_llm_model_brand CHECK (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI')) NOT VALID, DROP CONSTRAINT ck_llm_model_reasoning_effort, ADD CONSTRAINT ck_llm_model_reasoning_effort CHECK (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-31" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_mcp_client_grant_status'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of mcp_client_grant accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE mcp_client_grant ADD CONSTRAINT ck_mcp_client_grant_status CHECK (status IN ('ACTIVE', 'APPROVED', 'EXPIRED', 'PENDING', 'REFUSED', 'REVOKED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE mcp_client_grant DROP CONSTRAINT IF EXISTS ck_mcp_client_grant_status</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-32" author="hephaestus">
+    <comment>Validation reads every row of mcp_client_grant without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE mcp_client_grant VALIDATE CONSTRAINT ck_mcp_client_grant_status</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE mcp_client_grant DROP CONSTRAINT ck_mcp_client_grant_status, ADD CONSTRAINT ck_mcp_client_grant_status CHECK (status IN ('ACTIVE', 'APPROVED', 'EXPIRED', 'PENDING', 'REFUSED', 'REVOKED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-33" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_milestone_state'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of milestone accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE milestone ADD CONSTRAINT ck_milestone_state CHECK (state IN ('CLOSED', 'OPEN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE milestone DROP CONSTRAINT IF EXISTS ck_milestone_state</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-34" author="hephaestus">
+    <comment>Validation reads every row of milestone without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE milestone VALIDATE CONSTRAINT ck_milestone_state</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE milestone DROP CONSTRAINT ck_milestone_state, ADD CONSTRAINT ck_milestone_state CHECK (state IN ('CLOSED', 'OPEN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-35" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_notification_subscription_kind'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of notification_subscription accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE notification_subscription ADD CONSTRAINT ck_notification_subscription_kind CHECK (kind IN ('PRODUCT_FEEDBACK', 'PRODUCT_FEEDBACK_UPDATES', 'WEEKLY_DIGEST', 'WORKSPACE_ALERTS')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE notification_subscription DROP CONSTRAINT IF EXISTS ck_notification_subscription_kind</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-36" author="hephaestus">
+    <comment>Validation reads every row of notification_subscription without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE notification_subscription VALIDATE CONSTRAINT ck_notification_subscription_kind</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE notification_subscription DROP CONSTRAINT ck_notification_subscription_kind, ADD CONSTRAINT ck_notification_subscription_kind CHECK (kind IN ('PRODUCT_FEEDBACK', 'PRODUCT_FEEDBACK_UPDATES', 'WEEKLY_DIGEST', 'WORKSPACE_ALERTS')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-37" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_organization_membership_role'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of organization_membership accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE organization_membership ADD CONSTRAINT ck_organization_membership_role CHECK (role IN ('ADMIN', 'MEMBER')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE organization_membership DROP CONSTRAINT IF EXISTS ck_organization_membership_role</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-38" author="hephaestus">
+    <comment>Validation reads every row of organization_membership without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE organization_membership VALIDATE CONSTRAINT ck_organization_membership_role</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE organization_membership DROP CONSTRAINT ck_organization_membership_role, ADD CONSTRAINT ck_organization_membership_role CHECK (role IN ('ADMIN', 'MEMBER')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-39" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_product_feedback_kind'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of product_feedback accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback ADD CONSTRAINT ck_product_feedback_kind CHECK (kind IN ('BUG', 'FEEDBACK', 'IDEA')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback DROP CONSTRAINT IF EXISTS ck_product_feedback_kind</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-40" author="hephaestus">
+    <comment>Validation reads every row of product_feedback without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback VALIDATE CONSTRAINT ck_product_feedback_kind</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback DROP CONSTRAINT ck_product_feedback_kind, ADD CONSTRAINT ck_product_feedback_kind CHECK (kind IN ('BUG', 'FEEDBACK', 'IDEA')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-41" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_product_feedback_cleanup_manual_step'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of product_feedback_cleanup accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_cleanup ADD CONSTRAINT ck_product_feedback_cleanup_manual_step CHECK (manual_step IN ('EDIT_HISTORY', 'UNFINISHED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_cleanup DROP CONSTRAINT IF EXISTS ck_product_feedback_cleanup_manual_step</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-42" author="hephaestus">
+    <comment>Validation reads every row of product_feedback_cleanup without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_cleanup VALIDATE CONSTRAINT ck_product_feedback_cleanup_manual_step</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_cleanup DROP CONSTRAINT ck_product_feedback_cleanup_manual_step, ADD CONSTRAINT ck_product_feedback_cleanup_manual_step CHECK (manual_step IN ('EDIT_HISTORY', 'UNFINISHED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-43" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_product_feedback_filing_reason'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of product_feedback_filing accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_filing ADD CONSTRAINT ck_product_feedback_filing_reason CHECK (reason IN ('ABOUT_PERSON', 'ABUSE', 'DESTINATION_CHANGED', 'DESTINATION_UNAVAILABLE', 'GITHUB_REFUSED', 'LOW_CONFIDENCE', 'NONE', 'NO_DRAFT', 'OPTED_OUT', 'REDACTION', 'SECURITY')) NOT VALID, ADD CONSTRAINT ck_product_feedback_filing_route CHECK (route IN ('ADMINS', 'PRIVATE', 'PUBLIC')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_filing DROP CONSTRAINT IF EXISTS ck_product_feedback_filing_reason, DROP CONSTRAINT IF EXISTS ck_product_feedback_filing_route</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-44" author="hephaestus">
+    <comment>Validation reads every row of product_feedback_filing without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_filing VALIDATE CONSTRAINT ck_product_feedback_filing_reason; ALTER TABLE product_feedback_filing VALIDATE CONSTRAINT ck_product_feedback_filing_route</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_filing DROP CONSTRAINT ck_product_feedback_filing_reason, ADD CONSTRAINT ck_product_feedback_filing_reason CHECK (reason IN ('ABOUT_PERSON', 'ABUSE', 'DESTINATION_CHANGED', 'DESTINATION_UNAVAILABLE', 'GITHUB_REFUSED', 'LOW_CONFIDENCE', 'NONE', 'NO_DRAFT', 'OPTED_OUT', 'REDACTION', 'SECURITY')) NOT VALID, DROP CONSTRAINT ck_product_feedback_filing_route, ADD CONSTRAINT ck_product_feedback_filing_route CHECK (route IN ('ADMINS', 'PRIVATE', 'PUBLIC')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-45" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_provider_resource_repair_kind'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of provider_resource_repair accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_resource_repair ADD CONSTRAINT ck_provider_resource_repair_kind CHECK (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID, ADD CONSTRAINT ck_provider_resource_repair_resource_type CHECK (resource_type IN ('BOT_TOKEN', 'BOT_USER', 'GROUP_HOOK', 'INSTALLATION', 'OAUTH_EXCHANGE', 'PROJECT_HOOK', 'REGISTRATION', 'SUBSCRIPTION')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_resource_repair DROP CONSTRAINT IF EXISTS ck_provider_resource_repair_kind, DROP CONSTRAINT IF EXISTS ck_provider_resource_repair_resource_type</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-46" author="hephaestus">
+    <comment>Validation reads every row of provider_resource_repair without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_resource_repair VALIDATE CONSTRAINT ck_provider_resource_repair_kind; ALTER TABLE provider_resource_repair VALIDATE CONSTRAINT ck_provider_resource_repair_resource_type</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_resource_repair DROP CONSTRAINT ck_provider_resource_repair_kind, ADD CONSTRAINT ck_provider_resource_repair_kind CHECK (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID, DROP CONSTRAINT ck_provider_resource_repair_resource_type, ADD CONSTRAINT ck_provider_resource_repair_resource_type CHECK (resource_type IN ('BOT_TOKEN', 'BOT_USER', 'GROUP_HOOK', 'INSTALLATION', 'OAUTH_EXCHANGE', 'PROJECT_HOOK', 'REGISTRATION', 'SUBSCRIPTION')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-47" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_pull_request_requested_reviewers_review_state'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of pull_request_requested_reviewers accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_requested_reviewers ADD CONSTRAINT ck_pull_request_requested_reviewers_review_state CHECK (review_state IN ('APPROVED', 'REQUESTED_CHANGES', 'REVIEWED', 'REVIEW_STARTED', 'UNAPPROVED', 'UNREVIEWED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_requested_reviewers DROP CONSTRAINT IF EXISTS ck_pull_request_requested_reviewers_review_state</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-48" author="hephaestus">
+    <comment>Validation reads every row of pull_request_requested_reviewers without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_requested_reviewers VALIDATE CONSTRAINT ck_pull_request_requested_reviewers_review_state</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_requested_reviewers DROP CONSTRAINT ck_pull_request_requested_reviewers_review_state, ADD CONSTRAINT ck_pull_request_requested_reviewers_review_state CHECK (review_state IN ('APPROVED', 'REQUESTED_CHANGES', 'REVIEWED', 'REVIEW_STARTED', 'UNAPPROVED', 'UNREVIEWED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-49" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_pull_request_review_state'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of pull_request_review accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review ADD CONSTRAINT ck_pull_request_review_state CHECK (state IN ('APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED', 'PENDING', 'UNKNOWN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review DROP CONSTRAINT IF EXISTS ck_pull_request_review_state</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-50" author="hephaestus">
+    <comment>Validation reads every row of pull_request_review without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review VALIDATE CONSTRAINT ck_pull_request_review_state</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review DROP CONSTRAINT ck_pull_request_review_state, ADD CONSTRAINT ck_pull_request_review_state CHECK (state IN ('APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED', 'PENDING', 'UNKNOWN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-51" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_pull_request_review_comment_author_association'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of pull_request_review_comment accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_comment ADD CONSTRAINT ck_pull_request_review_comment_author_association CHECK (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER')) NOT VALID, ADD CONSTRAINT ck_pull_request_review_comment_side CHECK (side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, ADD CONSTRAINT ck_pull_request_review_comment_start_side CHECK (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_comment DROP CONSTRAINT IF EXISTS ck_pull_request_review_comment_author_association, DROP CONSTRAINT IF EXISTS ck_pull_request_review_comment_side, DROP CONSTRAINT IF EXISTS ck_pull_request_review_comment_start_side</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-52" author="hephaestus">
+    <comment>Validation reads every row of pull_request_review_comment without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_comment VALIDATE CONSTRAINT ck_pull_request_review_comment_author_association; ALTER TABLE pull_request_review_comment VALIDATE CONSTRAINT ck_pull_request_review_comment_side; ALTER TABLE pull_request_review_comment VALIDATE CONSTRAINT ck_pull_request_review_comment_start_side</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_comment DROP CONSTRAINT ck_pull_request_review_comment_author_association, ADD CONSTRAINT ck_pull_request_review_comment_author_association CHECK (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER')) NOT VALID, DROP CONSTRAINT ck_pull_request_review_comment_side, ADD CONSTRAINT ck_pull_request_review_comment_side CHECK (side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, DROP CONSTRAINT ck_pull_request_review_comment_start_side, ADD CONSTRAINT ck_pull_request_review_comment_start_side CHECK (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-53" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_pull_request_review_thread_side'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of pull_request_review_thread accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_thread ADD CONSTRAINT ck_pull_request_review_thread_side CHECK (side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, ADD CONSTRAINT ck_pull_request_review_thread_start_side CHECK (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, ADD CONSTRAINT ck_pull_request_review_thread_state CHECK (state IN ('RESOLVED', 'UNRESOLVED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_thread DROP CONSTRAINT IF EXISTS ck_pull_request_review_thread_side, DROP CONSTRAINT IF EXISTS ck_pull_request_review_thread_start_side, DROP CONSTRAINT IF EXISTS ck_pull_request_review_thread_state</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-54" author="hephaestus">
+    <comment>Validation reads every row of pull_request_review_thread without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_thread VALIDATE CONSTRAINT ck_pull_request_review_thread_side; ALTER TABLE pull_request_review_thread VALIDATE CONSTRAINT ck_pull_request_review_thread_start_side; ALTER TABLE pull_request_review_thread VALIDATE CONSTRAINT ck_pull_request_review_thread_state</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_thread DROP CONSTRAINT ck_pull_request_review_thread_side, ADD CONSTRAINT ck_pull_request_review_thread_side CHECK (side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, DROP CONSTRAINT ck_pull_request_review_thread_start_side, ADD CONSTRAINT ck_pull_request_review_thread_start_side CHECK (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, DROP CONSTRAINT ck_pull_request_review_thread_state, ADD CONSTRAINT ck_pull_request_review_thread_state CHECK (state IN ('RESOLVED', 'UNRESOLVED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-55" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_repository_visibility'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of repository accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository ADD CONSTRAINT ck_repository_visibility CHECK (visibility IN ('INTERNAL', 'PRIVATE', 'PUBLIC', 'UNKNOWN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository DROP CONSTRAINT IF EXISTS ck_repository_visibility</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-56" author="hephaestus">
+    <comment>Validation reads every row of repository without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository VALIDATE CONSTRAINT ck_repository_visibility</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository DROP CONSTRAINT ck_repository_visibility, ADD CONSTRAINT ck_repository_visibility CHECK (visibility IN ('INTERNAL', 'PRIVATE', 'PUBLIC', 'UNKNOWN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-57" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_repository_collaborator_permission'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of repository_collaborator accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_collaborator ADD CONSTRAINT ck_repository_collaborator_permission CHECK (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'UNKNOWN', 'WRITE')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_collaborator DROP CONSTRAINT IF EXISTS ck_repository_collaborator_permission</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-58" author="hephaestus">
+    <comment>Validation reads every row of repository_collaborator without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_collaborator VALIDATE CONSTRAINT ck_repository_collaborator_permission</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_collaborator DROP CONSTRAINT ck_repository_collaborator_permission, ADD CONSTRAINT ck_repository_collaborator_permission CHECK (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'UNKNOWN', 'WRITE')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-59" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_sync_job_kind'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of sync_job accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job ADD CONSTRAINT ck_sync_job_kind CHECK (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job DROP CONSTRAINT IF EXISTS ck_sync_job_kind</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-60" author="hephaestus">
+    <comment>Validation reads every row of sync_job without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job VALIDATE CONSTRAINT ck_sync_job_kind</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job DROP CONSTRAINT ck_sync_job_kind, ADD CONSTRAINT ck_sync_job_kind CHECK (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-61" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_team_privacy'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of team accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team ADD CONSTRAINT ck_team_privacy CHECK (privacy IN ('SECRET', 'VISIBLE')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team DROP CONSTRAINT IF EXISTS ck_team_privacy</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-62" author="hephaestus">
+    <comment>Validation reads every row of team without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team VALIDATE CONSTRAINT ck_team_privacy</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team DROP CONSTRAINT ck_team_privacy, ADD CONSTRAINT ck_team_privacy CHECK (privacy IN ('SECRET', 'VISIBLE')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-63" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_team_membership_role'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of team_membership accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_membership ADD CONSTRAINT ck_team_membership_role CHECK (role IN ('MAINTAINER', 'MEMBER')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_membership DROP CONSTRAINT IF EXISTS ck_team_membership_role</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-64" author="hephaestus">
+    <comment>Validation reads every row of team_membership without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_membership VALIDATE CONSTRAINT ck_team_membership_role</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_membership DROP CONSTRAINT ck_team_membership_role, ADD CONSTRAINT ck_team_membership_role CHECK (role IN ('MAINTAINER', 'MEMBER')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-65" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_team_repository_permission_permission'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of team_repository_permission accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_repository_permission ADD CONSTRAINT ck_team_repository_permission_permission CHECK (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'WRITE')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_repository_permission DROP CONSTRAINT IF EXISTS ck_team_repository_permission_permission</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-66" author="hephaestus">
+    <comment>Validation reads every row of team_repository_permission without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_repository_permission VALIDATE CONSTRAINT ck_team_repository_permission_permission</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_repository_permission DROP CONSTRAINT ck_team_repository_permission_permission, ADD CONSTRAINT ck_team_repository_permission_permission CHECK (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'WRITE')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-67" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_user_type'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of user accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE "user" ADD CONSTRAINT ck_user_type CHECK (type IN ('BOT', 'ORGANIZATION', 'USER')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE "user" DROP CONSTRAINT IF EXISTS ck_user_type</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-68" author="hephaestus">
+    <comment>Validation reads every row of user without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE "user" VALIDATE CONSTRAINT ck_user_type</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE "user" DROP CONSTRAINT ck_user_type, ADD CONSTRAINT ck_user_type CHECK (type IN ('BOT', 'ORGANIZATION', 'USER')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-69" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_workspace_account_type'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of workspace accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace ADD CONSTRAINT ck_workspace_account_type CHECK (account_type IN ('ORG', 'USER')) NOT VALID, ADD CONSTRAINT ck_workspace_repository_selection CHECK (repository_selection IN ('ALL', 'SELECTED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace DROP CONSTRAINT IF EXISTS ck_workspace_account_type, DROP CONSTRAINT IF EXISTS ck_workspace_repository_selection</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-70" author="hephaestus">
+    <comment>Validation reads every row of workspace without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace VALIDATE CONSTRAINT ck_workspace_account_type; ALTER TABLE workspace VALIDATE CONSTRAINT ck_workspace_repository_selection</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace DROP CONSTRAINT ck_workspace_account_type, ADD CONSTRAINT ck_workspace_account_type CHECK (account_type IN ('ORG', 'USER')) NOT VALID, DROP CONSTRAINT ck_workspace_repository_selection, ADD CONSTRAINT ck_workspace_repository_selection CHECK (repository_selection IN ('ALL', 'SELECTED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-71" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_workspace_llm_connection_connection_platform'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of workspace_llm_connection accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_connection ADD CONSTRAINT ck_workspace_llm_connection_connection_platform CHECK (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_connection DROP CONSTRAINT IF EXISTS ck_workspace_llm_connection_connection_platform</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-72" author="hephaestus">
+    <comment>Validation reads every row of workspace_llm_connection without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_connection VALIDATE CONSTRAINT ck_workspace_llm_connection_connection_platform</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_connection DROP CONSTRAINT ck_workspace_llm_connection_connection_platform, ADD CONSTRAINT ck_workspace_llm_connection_connection_platform CHECK (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-73" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_workspace_llm_model_brand'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of workspace_llm_model accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_model ADD CONSTRAINT ck_workspace_llm_model_brand CHECK (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI')) NOT VALID, ADD CONSTRAINT ck_workspace_llm_model_reasoning_effort CHECK (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_model DROP CONSTRAINT IF EXISTS ck_workspace_llm_model_brand, DROP CONSTRAINT IF EXISTS ck_workspace_llm_model_reasoning_effort</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-74" author="hephaestus">
+    <comment>Validation reads every row of workspace_llm_model without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_model VALIDATE CONSTRAINT ck_workspace_llm_model_brand; ALTER TABLE workspace_llm_model VALIDATE CONSTRAINT ck_workspace_llm_model_reasoning_effort</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_model DROP CONSTRAINT ck_workspace_llm_model_brand, ADD CONSTRAINT ck_workspace_llm_model_brand CHECK (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI')) NOT VALID, DROP CONSTRAINT ck_workspace_llm_model_reasoning_effort, ADD CONSTRAINT ck_workspace_llm_model_reasoning_effort CHECK (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-75" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_workspace_model_assignment_purpose'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of workspace_model_assignment accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_model_assignment ADD CONSTRAINT ck_workspace_model_assignment_purpose CHECK (purpose IN ('CONVERSATION', 'PRACTICE_REVIEW')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_model_assignment DROP CONSTRAINT IF EXISTS ck_workspace_model_assignment_purpose</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-76" author="hephaestus">
+    <comment>Validation reads every row of workspace_model_assignment without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_model_assignment VALIDATE CONSTRAINT ck_workspace_model_assignment_purpose</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_model_assignment DROP CONSTRAINT ck_workspace_model_assignment_purpose, ADD CONSTRAINT ck_workspace_model_assignment_purpose CHECK (purpose IN ('CONVERSATION', 'PRACTICE_REVIEW')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+</databaseChangeLog>
