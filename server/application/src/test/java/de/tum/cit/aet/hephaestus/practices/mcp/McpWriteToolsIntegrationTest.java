@@ -3,9 +3,12 @@ package de.tum.cit.aet.hephaestus.practices.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpAuthorizationFlow;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.GroupAttributes;
+import de.tum.cit.aet.hephaestus.practices.PracticeFiles;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
+import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogService;
 import de.tum.cit.aet.hephaestus.testconfig.AuditedRequestCheck;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
@@ -63,6 +66,9 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private CatalogService catalog;
+
+    @Autowired
+    private PracticeFiles files;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -183,6 +189,53 @@ class McpWriteToolsIntegrationTest extends RealAuthIntegrationTest {
                         workspace.getId(),
                         grant))
                 .containsExactly("CREATED", "UPDATED", "DELETED");
+    }
+
+    @Test
+    void shouldSaveAndRemoveADraftPracticeAndRecordTheClientOnEachAuditRow() {
+        Map<String, Object> folder = new LinkedHashMap<>(files.write(new CatalogPracticeDocument(
+                new ItemKind("scm.pull_request"), null, DefinitionTestFixtures.definition())));
+
+        JsonNode draft =
+                structured(call(writeToken, "save_practice_draft", Map.of("slug", "mcp-draft", "files", folder)));
+        assertThat(draft.path("state").asString()).isEqualTo("DRAFT");
+        assertThat(draft.path("current").asBoolean()).isTrue();
+        List<String> listed = new ArrayList<>();
+        for (JsonNode practice :
+                structured(call(writeToken, "list_practices", Map.of())).path("practices"))
+            listed.add(practice.path("slug").asString());
+        assertThat(listed).doesNotContain("mcp-draft");
+
+        JsonNode removed = structured(call(writeToken, "remove_practice_draft", Map.of("slug", "mcp-draft")));
+        assertThat(removed.path("removed").asString()).isEqualTo("mcp-draft");
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM practice WHERE workspace_id = ? AND slug = 'mcp-draft'",
+                        Long.class,
+                        workspace.getId()))
+                .isZero();
+        assertThat(jdbc.queryForList(
+                        "SELECT action FROM config_audit_event WHERE workspace_id = ? AND entity_type = 'PRACTICE_DEFINITION'"
+                                + " AND mcp_client_grant_id = ? ORDER BY id",
+                        String.class,
+                        workspace.getId(),
+                        grantOf(writeToken)))
+                .hasSize(2);
+    }
+
+    /** Trial output needs practices:write, although reading a trial changes nothing (ADR 0110, update of 2026-11-16). */
+    @Test
+    void shouldAskForTheWriteScopeBeforeATrialIsRead() {
+        String readToken = flow.connect(cookie, workspace.getWorkspaceSlug()).accessToken();
+
+        flow.callTool(
+                        readToken,
+                        workspace.getWorkspaceSlug(),
+                        request(
+                                "get_practice_trial",
+                                Map.of("trialId", UUID.randomUUID().toString())))
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
     }
 
     @Test

@@ -12,7 +12,10 @@ public interface McpTool {
     /** The tool's name, description and input and output schemas. */
     McpSchema.Tool definition();
 
-    /** Whether the tool changes the workspace, so that a call needs {@code practices:write} (ADR 0110 decision 14). */
+    /**
+     * Whether a call needs {@code practices:write} (ADR 0110 decision 14): the tool changes the workspace, or it returns
+     * what only that scope may read ({@link McpToolFor#needsWriteScope}).
+     */
     default boolean writes() {
         return false;
     }

@@ -22,6 +22,21 @@ The MCP tool `check_practice_files` checks a folder without saving it, and calls
 It returns each problem with its file, line and column.
 The check applies the same rules as a save in the practice editor.
 
+## Try a practice folder
+
+An MCP client with permission to change practices can try a folder on one pull request, merge request or issue:
+
+1. `save_practice_draft` saves the folder.
+   A new slug becomes a draft practice, which reviews nothing until you activate it.
+   For a practice in use, the folder becomes a version beside the current one, and reviews keep using the current version.
+2. `try_practice` runs the saved version on the work and waits up to 50 seconds.
+   A trial records no observation and sends no feedback. It counts against the workspace's AI budget.
+3. `get_practice_trial` reads a trial that is still running.
+
+A trial always gives its status and outcome.
+It gives each problem and the cited lines only if every person whose work it read chose **Cloud**.
+`remove_practice_draft` deletes a draft practice and its trials.
+
 ## The folder
 
 The folder name is the practice's slug: lowercase letters and digits, with single hyphens.

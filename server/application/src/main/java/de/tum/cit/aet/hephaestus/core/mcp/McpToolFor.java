@@ -26,4 +26,11 @@ public @interface McpToolFor {
      * handler's {@code @AuditExempt}.
      */
     boolean savesNothing() default false;
+
+    /**
+     * Whether the tool reads, but returns what only {@code practices:write} may read, as trial output is (ADR 0110, update
+     * of 2026-11-16). The tool then declares that it writes, so its call needs that scope, and repeats no audit
+     * annotation, as a read does.
+     */
+    boolean needsWriteScope() default false;
 }

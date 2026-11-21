@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceAdminAssurance;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
@@ -20,6 +22,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
+import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -45,6 +48,8 @@ public class PracticeTrialService {
     private final ReviewItemRepository memberships;
     private final WorkspaceAdminAssurance adminAssurance;
     private final ItemDescriptorRegistry descriptors;
+    private final MemberAiPreferences preferences;
+    private final PersonProcessingSuppression suppression;
     private final JsonMapper json;
 
     /**
@@ -132,6 +137,45 @@ public class PracticeTrialService {
                 member == null ? null : member.getReason(),
                 candidate == null ? null : outcome(candidate),
                 outcomeRemoved);
+    }
+
+    /**
+     * Whether the admin may read what the trial found through an MCP client, which sends what it reads to the admin's
+     * own model (ADR 0110, update of 2026-11-16): the admin started the trial, and every person whose work it read
+     * chose Cloud and is not suppressed. The people are those the review attributes the item to, as model routing
+     * reads them. Work attributed to nobody, or to an account that is gone, has no one who chose Cloud. It runs with no
+     * transaction: a preference read that finds no account must not mark a surrounding one rollback-only.
+     */
+    public boolean mayReadDetail(long workspaceId, UUID trialId, long accountId) {
+        var review = reviewRows
+                .findByIdAndWorkspaceId(trialId, workspaceId)
+                .filter(found -> found.getOrigin() == ReviewOrigin.TRIAL)
+                .orElse(null);
+        if (review == null || !Objects.equals(review.getRequestedById(), accountId)) return false;
+        var item = items.find(workspaceId, review.getItemId()).orElse(null);
+        if (item == null
+                || (item.sourceId() != null
+                        && suppression.isSourceSuppressed(
+                                workspaceId, item.kind().value(), item.sourceId()))) return false;
+        var members = memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspaceId, trialId);
+        return !members.isEmpty()
+                && members.stream().allMatch(member -> {
+                    var developer = member.getDetail() == null
+                            ? null
+                            : member.getDetail().get("developerId");
+                    return developer != null
+                            && developer.isIntegralNumber()
+                            && chosenCloud(workspaceId, developer.longValue());
+                });
+    }
+
+    private boolean chosenCloud(long workspaceId, long developerId) {
+        if (suppression.isAccountSuppressed(developerId)) return false;
+        try {
+            return preferences.forDeveloper(workspaceId, developerId).choice() == AiChoice.CLOUD;
+        } catch (EntityNotFoundException gone) {
+            return false;
+        }
     }
 
     private static TrialOutcomeDTO outcome(ResultCandidate candidate) {

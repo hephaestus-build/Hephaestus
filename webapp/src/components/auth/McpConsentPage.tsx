@@ -68,7 +68,7 @@ const SCOPE_WORDS: Record<string, string> = {
 	"practices:read":
 		"Read this workspace’s practices, review settings, members’ provider logins and review status.",
 	"practices:write":
-		"Add, change and remove practices, set feedback modes, choose the repositories and people that Hephaestus reviews, and pause feedback.",
+		"Add, change and remove practices, set feedback modes, choose the repositories and people that Hephaestus reviews, and pause feedback. Try practices on work and read what a trial found.",
 };
 
 const REFUSALS: Record<McpConsentRefusal, string> = {

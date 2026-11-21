@@ -27,6 +27,8 @@ The tool runs on the request thread, so the workspace context and the authentica
 4. **Write the input and output JSON Schemas by hand** as text blocks, and build the definition with `McpTools.readTool`.
    A write tool uses `McpTools.writeTool` with the `Effect` that names what it does, and overrides `writes()` to return `true`.
    A call of a write tool then needs `practices:write`: `McpWriteScopeFilter` answers 403 `insufficient_scope` before the tool runs.
+   A read whose result only `practices:write` may read, such as trial output, declares `needsWriteScope = true` and overrides `writes()` to return `true`.
+   It uses `McpTools.readTool` and carries no audit annotation.
    A field whose null value has a meaning, such as "inherit", stays in the schema's `required` list with `null` among its values.
    The server's mapper writes null values (`McpTools.withNulls`), so the SDK checks the arguments with them.
    Every object in the output schema has `"additionalProperties": false` and requires every property.
@@ -63,5 +65,6 @@ From `server/`, run the tests that guard every tool:
 
 The architecture test fails when the tool lacks the admin role or stands for a handler that needs more.
 It also fails when a tool for a mutation does not declare that it writes, or does not carry its handler's audit annotation.
+It also fails when a tool with `needsWriteScope` does not declare that it writes, or stands for a mutation.
 The integration test fails when an output schema leaves an object open or a property optional.
 Your own integration test shows that a client finds the tool when it lists the tools, and that a call returns only contract fields.
