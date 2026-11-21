@@ -328,9 +328,15 @@ await describe("systemDiagramProblems", async () => {
 			"page.mdx:3: Put a table of every connection of the view between <SystemDiagram> and </SystemDiagram>.";
 		assert.deepEqual(checkDiagram(diagram(valid, "The server reaches PostgreSQL.")), [missing]);
 		assert.deepEqual(checkDiagram(`<SystemDiagram ${valid} />\n`), [missing.replace(":3:", ":1:")]);
-		assert.deepEqual(checkDiagram(`<SystemDiagram ${valid}>\n\n${table}\n`), [
-			missing.replace(":3:", ":1:"),
-		]);
+		assert.match(
+			checkDiagram(`<SystemDiagram ${valid}>\n\n${table}\n`).join("\n"),
+			/^page\.mdx:1: The page is not valid MDX: Expected a closing tag for `<SystemDiagram>`/u,
+		);
+		// GFM needs as many delimiter cells as header cells, or the lines are a paragraph.
+		assert.deepEqual(
+			checkDiagram(diagram(valid, "| From | To |\n| --- |\n| Server | PostgreSQL |")),
+			[missing],
+		);
 	});
 
 	await test("reads quoted values that hold a > or a code span, across lines", () => {
@@ -338,6 +344,10 @@ await describe("systemDiagramProblems", async () => {
 			'name="containers"\n  title="Container view: `server`"\n  alt="Server -> PostgreSQL."';
 		assert.deepEqual(checkDiagram(diagram(attributes)), []);
 		assert.deepEqual(checkDiagram(diagram(valid, "From | To\n:-- | --:\nServer | PostgreSQL")), []);
+	});
+
+	await test("reads single-quoted values as literals, but not expressions", () => {
+		assert.deepEqual(checkDiagram(diagram(valid.replaceAll('"', "'"))), []);
 	});
 
 	await test("reports each view on its own line", () => {
@@ -352,7 +362,7 @@ await describe("systemDiagramProblems", async () => {
 	await test("ignores the component in code, where a page only shows it", () => {
 		assert.deepEqual(
 			checkDiagram(
-				'Use `<SystemDiagram name="<name>" title="…">`.\n\n```mdx\n<SystemDiagram name="x">\n```\n',
+				'Use `<SystemDiagram name="<name>">` or ``<SystemDiagram title="`a`">``.\n\n```mdx\n<SystemDiagram name="x">\n```\n',
 			),
 			[],
 		);
