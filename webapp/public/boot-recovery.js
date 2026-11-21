@@ -1,7 +1,7 @@
 // The app's own recovery from a failed chunk (`src/runtime/preload-error.ts`) exists only once the app
 // runs. When a script that the app needs to start fails to load, for example because the network
 // changed or a deploy removed the old chunks, nothing of the app runs and the page stays blank.
-// This classic script runs before the app, as the page's CSP allows no inline code, only scripts that carry its nonce.
+// This classic script runs before the app, and only with the page's script nonce, as every script there does.
 // It reloads the page once, sharing the app's reload marker and window so the two never loop, and
 // otherwise says that the page could not load and offers a reload.
 {
