@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -187,8 +188,14 @@ public class PracticeGroupService {
     public void deleteGroup(WorkspaceContext ctx, String slug) {
         lock(ctx);
         PracticeGroup group = getGroup(ctx, slug);
+        var members = practices.findByWorkspaceIdAndGroupIdOrderByPositionAsc(ctx.id(), group.getId());
+        // Deleting the group would move its practices to Unassigned, and a folder owns its practice's group.
+        if (members.stream().anyMatch(practice -> practice.getEditedIn() == PracticeEditedIn.REPOSITORY))
+            throw new PracticeEditedInRepositoryException(
+                    "A practice in this group is edited in the practice repository. Move it to another group in its"
+                            + " folder, or choose Edit in Hephaestus first.");
         int position = practices.findMaxPosition(ctx.id(), null) + 1;
-        for (Practice practice : practices.findByWorkspaceIdAndGroupIdOrderByPositionAsc(ctx.id(), group.getId())) {
+        for (Practice practice : members) {
             practice.setGroup(null);
             practice.setPosition(position++);
             practices.save(practice);
