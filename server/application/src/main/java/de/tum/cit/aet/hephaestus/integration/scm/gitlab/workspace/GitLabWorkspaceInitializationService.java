@@ -5,17 +5,23 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.RecentWindow;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
+import de.tum.cit.aet.hephaestus.integration.core.sync.RecentWindows;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWatermarks;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSelectedMembershipProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncResult;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
@@ -822,19 +828,40 @@ public class GitLabWorkspaceInitializationService {
                     result = SyncResult.merge(result, SyncResult.abortedError(0));
                 }
             }
+            // Each kind resumes its own open window. The repository's watermark moves only when both are read, and
+            // never past the start of a window (RecentWindows).
+            SyncTarget recent = syncTargetProvider.findSyncTargetById(rtmId).orElse(null);
+            RecentWindow issueWindow = recent == null ? null : recent.issueRecentWindow();
+            RecentWindow mrWindow = recent == null ? null : recent.pullRequestRecentWindow();
+            OffsetDateTime issuesAfter = GitLabWatermarks.updatedAfter(
+                    recent == null ? null : recent.lastIssuesSyncedAt(), repo.getLastSyncAt());
+            OffsetDateTime mrsAfter = GitLabWatermarks.updatedAfter(
+                    recent == null ? null : recent.lastPullRequestsSyncedAt(), repo.getLastSyncAt());
+            Instant passStart = Instant.now();
+            Instant issueMark = null;
+            Instant mrMark = null;
+
             if (issueSyncService != null) {
                 try {
-                    SyncResult r = issueSyncService.syncIssues(workspace.getId(), repo, updatedAfter, read);
+                    RecentSyncResult issuePass = issueSyncService.syncIssues(
+                            workspace.getId(), repo, issuesAfter, RecentWindows.resumeCursor(issueWindow), read);
+                    SyncResult r = issuePass.result();
                     if (!admission.current(read)) continue;
                     totalIssues += r.count();
                     reportIncomplete(handle, r, SyncPhase.ISSUES, "Issue sync", repo.getNameWithOwner());
                     result = SyncResult.merge(result, r);
-                    issuesDone = r.isCompleted();
-                    if (rtmId != null && issuesDone) {
-                        admission.runWrite(
-                                read,
-                                () -> syncTargetProvider.updateSyncTimestamp(rtmId, SyncType.ISSUES, Instant.now()));
-                    }
+                    issueMark = admission
+                            .write(
+                                    read,
+                                    () -> RecentWindows.record(
+                                            syncTargetProvider,
+                                            rtmId,
+                                            SyncCursorKind.ISSUE,
+                                            issueWindow,
+                                            passStart,
+                                            issuePass))
+                            .orElse(null);
+                    issuesDone = issueMark != null;
                 } catch (Exception e) {
                     if (!admission.current(read)) continue;
                     log.warn(
@@ -853,18 +880,25 @@ public class GitLabWorkspaceInitializationService {
             }
             if (mrSyncService != null) {
                 try {
-                    SyncResult r = mrSyncService.syncMergeRequests(workspace.getId(), repo, updatedAfter, read);
+                    RecentSyncResult mrPass = mrSyncService.syncMergeRequests(
+                            workspace.getId(), repo, mrsAfter, RecentWindows.resumeCursor(mrWindow), read);
+                    SyncResult r = mrPass.result();
                     if (!admission.current(read)) continue;
                     totalMRs += r.count();
                     reportIncomplete(handle, r, SyncPhase.PULL_REQUESTS, "Merge request sync", repo.getNameWithOwner());
                     result = SyncResult.merge(result, r);
-                    mrsDone = r.isCompleted();
-                    if (rtmId != null && mrsDone) {
-                        admission.runWrite(
-                                read,
-                                () -> syncTargetProvider.updateSyncTimestamp(
-                                        rtmId, SyncType.PULL_REQUESTS, Instant.now()));
-                    }
+                    mrMark = admission
+                            .write(
+                                    read,
+                                    () -> RecentWindows.record(
+                                            syncTargetProvider,
+                                            rtmId,
+                                            SyncCursorKind.PULL_REQUEST,
+                                            mrWindow,
+                                            passStart,
+                                            mrPass))
+                            .orElse(null);
+                    mrsDone = mrMark != null;
                 } catch (Exception e) {
                     if (!admission.current(read)) continue;
                     log.warn("Failed MR sync: workspaceId={}, repo={}", workspace.getId(), repo.getNameWithOwner(), e);
@@ -962,8 +996,8 @@ public class GitLabWorkspaceInitializationService {
 
             boolean allDone = (issueSyncService == null || issuesDone) && (mrSyncService == null || mrsDone);
             if (allDone) {
+                Instant completedAt = GitLabWatermarks.earliest(passStart, issueMark, mrMark);
                 admission.runWrite(read, () -> {
-                    Instant completedAt = Instant.now();
                     repositoryRepository.updateLastSyncAt(read.repositoryId(), completedAt);
                     syncTargetProvider.updateSyncTimestamp(rtmId, SyncType.FULL_REPOSITORY, completedAt);
                 });

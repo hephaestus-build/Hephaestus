@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
@@ -85,14 +86,22 @@ public class GitLabIssueSyncService {
     public SyncResult syncIssues(Long scopeId, Repository repository, @Nullable OffsetDateTime updatedAfter) {
         return admission
                 .capture(scopeId, repository)
-                .map(read -> syncIssues(scopeId, repository, updatedAfter, read))
+                .map(read -> syncIssues(scopeId, repository, updatedAfter, null, read)
+                        .result())
                 .orElseGet(() -> SyncResult.completed(0));
     }
 
-    public SyncResult syncIssues(
+    /**
+     * Syncs the issues updated after {@code updatedAfter}, newest first. A list longer than one run reads stops at
+     * the page cap; the result then carries the cursor where the next run resumes it.
+     *
+     * @param resumeCursor where an open window resumes, or null to start at the newest issue
+     */
+    public RecentSyncResult syncIssues(
             Long scopeId,
             Repository repository,
             @Nullable OffsetDateTime updatedAfter,
+            @Nullable String resumeCursor,
             GitLabProjectAdmission.ProjectRead read) {
         String projectPath = repository.getNameWithOwner();
         String safeProjectPath = Objects.requireNonNullElse(sanitizeForLog(projectPath), "<unknown>");
@@ -105,12 +114,11 @@ public class GitLabIssueSyncService {
 
         int totalSynced = 0;
         int totalSkipped = 0;
-        String cursor = null;
+        String cursor = resumeCursor;
         String previousCursor = null;
         int page = 0;
         boolean rateLimitAborted = false;
         boolean errorAborted = false;
-        // A list longer than a run reads is a warning: holding the timestamp would read the same pages again.
         boolean capped = false;
         int reportedTotalCount = -1;
 
@@ -263,13 +271,16 @@ public class GitLabIssueSyncService {
         }
 
         SyncResult result;
-        if (!admission.current(read)) return SyncResult.completed(0);
+        if (!admission.current(read)) return new RecentSyncResult(SyncResult.completed(0), null);
         if (errorAborted) {
             result = SyncResult.abortedError(totalSynced);
         } else if (rateLimitAborted) {
             result = SyncResult.abortedRateLimit(totalSynced);
+        } else if (capped) {
+            // Not complete: the watermark must not move past the issues this pass did not reach.
+            result = SyncResult.abortedError(totalSynced);
         } else {
-            result = capped ? SyncResult.completedWithWarnings(totalSynced) : SyncResult.completed(totalSynced);
+            result = SyncResult.completed(totalSynced);
         }
 
         log.info(
@@ -280,7 +291,7 @@ public class GitLabIssueSyncService {
                 totalSynced,
                 reportedTotalCount);
 
-        return result;
+        return new RecentSyncResult(result, capped && !errorAborted && !rateLimitAborted ? cursor : null);
     }
 
     /**

@@ -29,9 +29,12 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.RecentWindow;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
@@ -68,6 +71,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -422,13 +426,46 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldHoldTheWatermarkWhenIssuesStopAtThePageCapAndReadTheRestInTheNextRun() {
+        var holder = mockHolder();
+        var issueSync = mock(GitLabIssueSyncService.class);
+        when(holder.getIssueSyncService()).thenReturn(issueSync);
+        Repository project = prepareProject(holder);
+        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), isNull(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.abortedError(30_000), "cursor-at-cap"));
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(repositoryRepository, never()).updateLastSyncAt(eq(99L), any());
+        var opened = ArgumentCaptor.forClass(RecentWindow.class);
+        verify(syncTargetProvider).updateRecentWindow(eq(77L), eq(SyncCursorKind.ISSUE), opened.capture());
+        assertThat(opened.getValue().resumeCursor()).isEqualTo("cursor-at-cap");
+        Instant windowStart = opened.getValue().startedAt();
+
+        when(syncTargetProvider.findSyncTargetById(77L))
+                .thenReturn(Optional.of(SyncTargetTestBuilder.syncTarget()
+                        .id(77L)
+                        .issueRecentWindow(opened.getValue())
+                        .build()));
+        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), eq("cursor-at-cap"), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.completed(4_000), null));
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(syncTargetProvider).updateRecentWindow(77L, SyncCursorKind.ISSUE, null);
+        verify(repositoryRepository).updateLastSyncAt(99L, windowStart);
+    }
+
+    @Test
     void shouldRecordIncompleteProjectSyncAndClearAfterRecovery() {
         var holder = mockHolder();
         var issueSync = mock(GitLabIssueSyncService.class);
         when(holder.getIssueSyncService()).thenReturn(issueSync);
         Repository project = prepareProject(holder);
-        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), any()))
-                .thenReturn(SyncResult.abortedError(1), SyncResult.completed(2));
+        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), any(), any()))
+                .thenReturn(
+                        new RecentSyncResult(SyncResult.abortedError(1), null),
+                        new RecentSyncResult(SyncResult.completed(2), null));
 
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Issue sync: ABORTED_ERROR");
@@ -445,7 +482,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         when(holder.getIssueSyncService()).thenReturn(issueSync);
         when(holder.getSubIssueSyncService()).thenReturn(subIssueSync);
         Repository project = prepareProject(holder);
-        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), any())).thenReturn(SyncResult.abortedError(1));
+        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.abortedError(1), null));
         when(subIssueSync.syncSubIssuesForRepository(eq(WORKSPACE_ID), eq(project), any()))
                 .thenReturn(SyncResult.completed(1));
 
@@ -497,7 +535,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 .thenReturn(Optional.of(siblingMetadata));
         when(projectSyncService.persistProject(siblingMetadata, sibling.getProvider()))
                 .thenReturn(Optional.of(sibling));
-        when(issueSync.syncIssues(eq(WORKSPACE_ID), any(), any(), any())).thenReturn(SyncResult.completed(1));
+        when(issueSync.syncIssues(eq(WORKSPACE_ID), any(), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.completed(1), null));
         lenient()
                 .doAnswer(invocation -> {
                     doReturn(false).when(projectAdmission).hold(originalRead);

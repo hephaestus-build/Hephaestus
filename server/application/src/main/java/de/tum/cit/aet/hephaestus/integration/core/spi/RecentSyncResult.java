@@ -1,10 +1,9 @@
-package de.tum.cit.aet.hephaestus.integration.scm.github.common;
+package de.tum.cit.aet.hephaestus.integration.core.spi;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A recent issue or pull request pass over GitHub's newest-first list.
+ * A recent issue or pull request pass over a provider's newest-first list.
  *
  * @param result       the pass's outcome
  * @param resumeCursor set only when the pass stopped at the page cap and every item it read is complete: the next

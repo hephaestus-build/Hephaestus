@@ -15,6 +15,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -22,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionCl
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.GitLabNoteSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill.BackfillBatchResult;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabAdmissionTestFixtures;
@@ -201,6 +203,30 @@ class GitLabIssueSyncServiceTest extends BaseUnitTest {
                         event -> event.getFormattedMessage().equals("Mirror write conflicts with another transaction"));
     }
 
+    @Test
+    void shouldNotCompleteAListLongerThanARunAndResumeItWhereItStopped() {
+        Repository repository = new Repository();
+        repository.setId(7L);
+        repository.setNameWithOwner(FULL_PATH);
+        var read = GitLabAdmissionTestFixtures.permit(projectAdmission, SCOPE_ID, repository, 7L);
+        for (int page = 0; page < GitLabSyncConstants.MAX_PAGINATION_PAGES; page++) {
+            scriptedResponses.add(page("GetProjectIssues", "cursor-" + page));
+        }
+        when(issueProcessor.processFromSync(any(), any())).thenReturn(new Issue());
+
+        RecentSyncResult capped = service.syncIssues(SCOPE_ID, repository, null, null, read);
+
+        // Completed with warnings would let the watermark move past the issues this run never reached.
+        assertThat(capped.result().status()).isEqualTo(SyncResult.Status.ABORTED_ERROR);
+        assertThat(capped.resumeCursor()).isEqualTo("cursor-" + (GitLabSyncConstants.MAX_PAGINATION_PAGES - 1));
+
+        scriptedResponses.add(page("GetProjectIssues", false));
+        RecentSyncResult resumed = service.syncIssues(SCOPE_ID, repository, null, capped.resumeCursor(), read);
+
+        assertThat(resumed).isEqualTo(new RecentSyncResult(SyncResult.completed(1), null));
+        verify(requestSpec).variable("after", capped.resumeCursor());
+    }
+
     private void assertConcurrentWriteStayedLocal() {
         verify(graphQlClientProvider, never()).recordFailure(any());
         assertThat(appender.list)
@@ -237,6 +263,29 @@ class GitLabIssueSyncServiceTest extends BaseUnitTest {
 
     private static ClientGraphQlResponse page(String document, boolean hasNextPage) {
         return page(document, hasNextPage, 0);
+    }
+
+    /** One page holding issue #3 whose next page starts at {@code endCursor}. */
+    private static ClientGraphQlResponse page(String document, String endCursor) {
+        List<Map<String, Object>> nodes = List.of(Map.of(
+                "id", "gid://gitlab/Issue/3003",
+                "iid", "3",
+                "title", "Issue #3",
+                "state", "opened",
+                "confidential", false,
+                "userNotesCount", 0));
+        assertVendorCouldReturn(GITLAB, document, "project.issues.nodes", nodes);
+        return GraphQlResponses.of(
+                Map.of(
+                        "project",
+                        Map.of(
+                                "issues",
+                                Map.of(
+                                        "nodes",
+                                        nodes,
+                                        "pageInfo",
+                                        Map.of("hasNextPage", true, "endCursor", endCursor)))),
+                List.of());
     }
 
     /** One page holding issue #3; a nonzero {@code userNotesCount} makes the sync read its notes. */

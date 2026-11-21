@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -24,6 +25,7 @@ import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlInterceptor;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -33,6 +35,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGraphQlConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitLabCredentialHealth;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitLabCredentialHealthFilter;
@@ -674,6 +677,58 @@ class GitLabMergeRequestSyncServiceTest extends BaseUnitTest {
                 ArgumentCaptor.forClass(GitLabMergeRequestProcessor.SyncMergeRequestData.class);
         verify(mergeRequestProcessor).processFromSync(synced.capture(), any());
         return synced.getValue().syncReviewers();
+    }
+
+    @Test
+    void shouldNotCompleteAListLongerThanARunAndReturnWhereTheNextRunResumes() {
+        Repository repository = new Repository();
+        repository.setId(7L);
+        repository.setNameWithOwner(FULL_PATH);
+        var read = GitLabAdmissionTestFixtures.permit(projectAdmission, SCOPE_ID, repository, 7L);
+        scriptCappedListing();
+        when(mergeRequestProcessor.processFromSync(any(), any())).thenReturn(new PullRequest());
+
+        RecentSyncResult capped = service.syncMergeRequests(SCOPE_ID, repository, null, null, read);
+
+        assertThat(capped.result().status()).isEqualTo(SyncResult.Status.ABORTED_ERROR);
+        assertThat(capped.resumeCursor()).isEqualTo("cursor-" + (GitLabSyncConstants.MAX_PAGINATION_PAGES - 1));
+    }
+
+    @Test
+    void shouldResumeACappedListEvenWhenADiscussionWasReadInPart() {
+        Repository repository = new Repository();
+        repository.setId(7L);
+        repository.setNameWithOwner(FULL_PATH);
+        var read = GitLabAdmissionTestFixtures.permit(projectAdmission, SCOPE_ID, repository, 7L);
+        scriptCappedListing();
+        when(mergeRequestProcessor.processFromSync(any(), any())).thenReturn(new PullRequest());
+        when(discussionSyncService.hasUnfinishedReadSince(eq(SCOPE_ID), eq(repository), any()))
+                .thenReturn(true);
+
+        RecentSyncResult capped = service.syncMergeRequests(SCOPE_ID, repository, null, null, read);
+
+        // That merge request stays marked partial on its own row; withholding the cursor would stall the whole list.
+        assertThat(capped.result().status()).isEqualTo(SyncResult.Status.ABORTED_ERROR);
+        assertThat(capped.resumeCursor()).isEqualTo("cursor-" + (GitLabSyncConstants.MAX_PAGINATION_PAGES - 1));
+    }
+
+    /** As many listing pages as one run reads, each with its own next cursor. */
+    private void scriptCappedListing() {
+        List<Map<String, Object>> nodes = nullable(List.of(mergeRequest(3)));
+        assertVendorCouldReturn(GITLAB, LISTING, "project.mergeRequests.nodes", nodes);
+        for (int page = 0; page < GitLabSyncConstants.MAX_PAGINATION_PAGES; page++) {
+            scriptedResponses.add(GraphQlResponses.of(
+                    Map.of(
+                            "project",
+                            Map.of(
+                                    "mergeRequests",
+                                    Map.of(
+                                            "nodes",
+                                            nodes,
+                                            "pageInfo",
+                                            Map.of("hasNextPage", true, "endCursor", "cursor-" + page)))),
+                    List.of()));
+        }
     }
 
     private Repository repository() {

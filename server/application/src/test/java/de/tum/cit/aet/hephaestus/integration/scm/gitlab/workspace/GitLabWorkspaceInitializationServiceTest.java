@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -26,9 +27,13 @@ import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionCha
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.RecentWindow;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -40,6 +45,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuetype.GitLabIssueTyp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupMemberSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncResult;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
@@ -50,6 +56,8 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -62,6 +70,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -697,14 +706,14 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             // The provider refuses the credential while the first repository syncs.
             var refused = new AtomicBoolean();
             when(syncTargetProvider.isScopeActiveForSync(1L)).thenAnswer(invocation -> !refused.get());
-            when(issueSync.syncIssues(eq(1L), eq(first), any(), any())).thenAnswer(invocation -> {
+            when(issueSync.syncIssues(eq(1L), eq(first), any(), any(), any())).thenAnswer(invocation -> {
                 refused.set(true);
-                return SyncResult.abortedError(0);
+                return new RecentSyncResult(SyncResult.abortedError(0), null);
             });
 
             assertThat(initService.syncFullData(workspace).status()).isEqualTo(SyncResult.Status.ABORTED_ERROR);
 
-            verify(issueSync, never()).syncIssues(eq(1L), eq(second), any(), any());
+            verify(issueSync, never()).syncIssues(eq(1L), eq(second), any(), any(), any());
             verify(gitLabSyncServiceHolder, never()).getCommitMergeRequestLinker();
             verify(gitLabSyncServiceHolder, never()).getTeamSyncService();
         }
@@ -732,7 +741,8 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             siblingMonitor.setNativeId(sibling.getNativeId());
             when(repositoryRepository.findAllByWorkspaceMonitors(1L)).thenReturn(List.of(stopped, sibling));
             when(monitors.monitors(1L)).thenReturn(List.of(originalMonitor, siblingMonitor));
-            when(issueSync.syncIssues(eq(1L), any(), any(), any())).thenReturn(SyncResult.completed(1));
+            when(issueSync.syncIssues(eq(1L), any(), any(), any(), any()))
+                    .thenReturn(new RecentSyncResult(SyncResult.completed(1), null));
             doAnswer(invocation -> {
                         doReturn(false).when(projectAdmission).hold(originalRead);
                         return null;
@@ -746,6 +756,104 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             verify(syncTargetProvider).updateSyncTimestamp(eq(78L), eq(SyncType.FULL_REPOSITORY), any());
             verify(repositoryRepository, never()).updateLastSyncAt(eq(10L), any());
             verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.FULL_REPOSITORY), any());
+        }
+
+        @Test
+        void shouldHoldTheWatermarkWhenIssuesStopAtThePageCapAndReadTheRestInTheNextRun() {
+            var issueSync = mock(GitLabIssueSyncService.class);
+            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
+            when(gitLabSyncServiceHolder.getIssueSyncService()).thenReturn(issueSync);
+            Repository large = new Repository();
+            large.setId(10L);
+            large.setNameWithOwner("my-group/subgroup/large-project");
+            GitLabAdmissionTestFixtures.permit(projectAdmission, 1L, large, 77L);
+            var monitor = new RepositoryToMonitor();
+            monitor.setId(77L);
+            monitor.setNameWithOwner(large.getNameWithOwner());
+            monitor.setNativeId(large.getNativeId());
+            when(repositoryRepository.findAllByWorkspaceMonitors(1L)).thenReturn(List.of(large));
+            when(monitors.monitors(1L)).thenReturn(List.of(monitor));
+            when(issueSync.syncIssues(eq(1L), eq(large), any(), isNull(), any()))
+                    .thenReturn(new RecentSyncResult(SyncResult.abortedError(25_000), "cursor-at-cap"));
+
+            initService.syncFullData(workspace);
+
+            // The first run stopped at the page cap: nothing it did not read may fall behind the watermark.
+            verify(repositoryRepository, never()).updateLastSyncAt(eq(10L), any());
+            verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.ISSUES), any());
+            var opened = ArgumentCaptor.forClass(RecentWindow.class);
+            verify(syncTargetProvider).updateRecentWindow(eq(77L), eq(SyncCursorKind.ISSUE), opened.capture());
+            assertThat(opened.getValue().resumeCursor()).isEqualTo("cursor-at-cap");
+            Instant windowStart = opened.getValue().startedAt();
+
+            when(syncTargetProvider.findSyncTargetById(77L))
+                    .thenReturn(Optional.of(SyncTargetTestBuilder.syncTarget()
+                            .id(77L)
+                            .issueRecentWindow(opened.getValue())
+                            .build()));
+            when(issueSync.syncIssues(eq(1L), eq(large), any(), eq("cursor-at-cap"), any()))
+                    .thenReturn(new RecentSyncResult(SyncResult.completed(5_000), null));
+
+            initService.syncFullData(workspace);
+
+            // The next run read the rest; the watermark moves to where the window started, not to now.
+            verify(issueSync).syncIssues(eq(1L), eq(large), any(), eq("cursor-at-cap"), any());
+            verify(syncTargetProvider).updateRecentWindow(77L, SyncCursorKind.ISSUE, null);
+            verify(syncTargetProvider).updateSyncTimestamp(77L, SyncType.ISSUES, windowStart);
+            verify(repositoryRepository).updateLastSyncAt(10L, windowStart);
+        }
+
+        @Test
+        void shouldReadEachKindFromItsOwnWatermarkWhenTheKindsFinishInDifferentRuns() {
+            var issueSync = mock(GitLabIssueSyncService.class);
+            var mrSync = mock(GitLabMergeRequestSyncService.class);
+            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
+            when(gitLabSyncServiceHolder.getIssueSyncService()).thenReturn(issueSync);
+            when(gitLabSyncServiceHolder.getMergeRequestSyncService()).thenReturn(mrSync);
+            Instant projectWatermark = Instant.parse("2026-11-01T00:00:00Z");
+            Repository large = new Repository();
+            large.setId(10L);
+            large.setNameWithOwner("my-group/subgroup/large-project");
+            large.setLastSyncAt(projectWatermark);
+            GitLabAdmissionTestFixtures.permit(projectAdmission, 1L, large, 77L);
+            var monitor = new RepositoryToMonitor();
+            monitor.setId(77L);
+            monitor.setNameWithOwner(large.getNameWithOwner());
+            monitor.setNativeId(large.getNativeId());
+            when(repositoryRepository.findAllByWorkspaceMonitors(1L)).thenReturn(List.of(large));
+            when(monitors.monitors(1L)).thenReturn(List.of(monitor));
+            when(issueSync.syncIssues(eq(1L), eq(large), any(), any(), any()))
+                    .thenReturn(new RecentSyncResult(SyncResult.completed(10), null));
+            when(mrSync.syncMergeRequests(eq(1L), eq(large), any(), isNull(), any()))
+                    .thenReturn(new RecentSyncResult(SyncResult.abortedError(10_000), "mr-cursor"));
+
+            initService.syncFullData(workspace);
+
+            // Issues finished, merge requests did not: the project's watermark holds, the issues' moves.
+            var issuesRead = ArgumentCaptor.forClass(Instant.class);
+            verify(syncTargetProvider).updateSyncTimestamp(eq(77L), eq(SyncType.ISSUES), issuesRead.capture());
+            var mrWindow = ArgumentCaptor.forClass(RecentWindow.class);
+            verify(syncTargetProvider).updateRecentWindow(eq(77L), eq(SyncCursorKind.PULL_REQUEST), mrWindow.capture());
+            verify(repositoryRepository, never()).updateLastSyncAt(eq(10L), any());
+
+            when(syncTargetProvider.findSyncTargetById(77L))
+                    .thenReturn(Optional.of(SyncTargetTestBuilder.syncTarget()
+                            .id(77L)
+                            .lastIssuesSyncedAt(issuesRead.getValue())
+                            .pullRequestRecentWindow(mrWindow.getValue())
+                            .build()));
+            when(mrSync.syncMergeRequests(eq(1L), eq(large), any(), eq("mr-cursor"), any()))
+                    .thenReturn(new RecentSyncResult(SyncResult.completed(2_000), null));
+
+            initService.syncFullData(workspace);
+
+            // Each kind reads from its own watermark, so the issues do not read the project's backlog again.
+            OffsetDateTime issuesAfter = issuesRead.getValue().minusSeconds(300).atOffset(ZoneOffset.UTC);
+            OffsetDateTime mrsAfter = projectWatermark.minusSeconds(300).atOffset(ZoneOffset.UTC);
+            verify(issueSync).syncIssues(eq(1L), eq(large), eq(issuesAfter), isNull(), any());
+            verify(mrSync).syncMergeRequests(eq(1L), eq(large), eq(mrsAfter), eq("mr-cursor"), any());
+            verify(repositoryRepository)
+                    .updateLastSyncAt(10L, mrWindow.getValue().startedAt());
         }
 
         @Test
