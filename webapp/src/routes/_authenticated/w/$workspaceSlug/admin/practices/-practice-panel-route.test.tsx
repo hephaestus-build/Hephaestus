@@ -328,21 +328,27 @@ describe("a practice edited in the practice repository", () => {
 		});
 		server.use(
 			...practicesHandlers([editable]),
+			// The first save finds the practice moved; a save after Edit in Hephaestus goes through.
+			http.patch(
+				"*/workspaces/:workspaceSlug/practices/:practiceSlug",
+				() => {
+					saves += 1;
+					server.use(...practicesHandlers([inRepository]));
+					return HttpResponse.json(
+						{
+							title: "Conflict",
+							status: 409,
+							detail: "This practice is edited in the practice repository.",
+						},
+						{ status: 409 },
+					);
+				},
+				{ once: true },
+			),
 			http.patch("*/workspaces/:workspaceSlug/practices/:practiceSlug", () => {
 				saves += 1;
-				if (saves > 1) {
-					server.use(...practicesHandlers([savedHere]));
-					return HttpResponse.json(savedHere);
-				}
-				server.use(...practicesHandlers([inRepository]));
-				return HttpResponse.json(
-					{
-						title: "Conflict",
-						status: 409,
-						detail: "This practice is edited in the practice repository.",
-					},
-					{ status: 409 },
-				);
+				server.use(...practicesHandlers([savedHere]));
+				return HttpResponse.json(savedHere);
 			}),
 			http.put(editedInUrl, () => {
 				server.use(...practicesHandlers([editable]));
@@ -357,12 +363,8 @@ describe("a practice edited in the practice repository", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
 		// The refusal says why, and the draft stays on screen to copy from, with saving off.
-		const notice = await screen.findByText(
-			"This practice is now edited in acme/practices",
-			{},
-			ROUTE_RENDER_WAIT,
-		);
-		expect(notice.closest("[role=alert]")?.textContent).toContain("Nothing was saved");
+		await screen.findByText("This practice is now edited in acme/practices", {}, ROUTE_RENDER_WAIT);
+		expect(screen.getByRole("alert").textContent).toContain("Nothing was saved");
 		screen.getByDisplayValue("My name");
 		expect(screen.getByRole("button", { name: "Save changes" })).toHaveProperty("disabled", true);
 
@@ -402,12 +404,8 @@ describe("a practice edited in the practice repository", () => {
 		server.use(...practicesHandlers([inRepository]));
 		await queryClient.invalidateQueries();
 
-		const notice = await screen.findByText(
-			"This practice is now edited in acme/practices",
-			{},
-			ROUTE_RENDER_WAIT,
-		);
-		expect(notice.closest("[role=alert]")?.textContent).not.toContain("Nothing was saved");
+		await screen.findByText("This practice is now edited in acme/practices", {}, ROUTE_RENDER_WAIT);
+		expect(screen.getByRole("alert").textContent).not.toContain("Nothing was saved");
 		screen.getByDisplayValue("My name");
 		expect(screen.getByRole("button", { name: "Save changes" })).toHaveProperty("disabled", true);
 	});
