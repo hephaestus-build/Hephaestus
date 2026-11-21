@@ -137,6 +137,14 @@ This is the [transactional outbox](https://microservices.io/patterns/data/transa
 - Work that calls a network service and must run one at a time takes a `ClusterLock`, not `synchronized`.
   More than one server runs, and an in-memory lock serializes only one of them.
   `ClusterLock` holds a session lock on a dedicated connection and has no transaction.
+- Some connections are database sessions, not transactions.
+  Each `LISTEN` listener opens a session of its own, outside the pool.
+  `ClusterLock` and the person-data copy fence hold a pooled connection for a session lock.
+  The migration takes its own connections outside the pool.
+- Other code uses only transaction locks (`pg_advisory_xact_lock`).
+  It changes a setting only with `SET LOCAL` or `set_config(…, true)`.
+  The pool sets its session bounds once, when it connects, and the JDBC driver keeps server-side prepared statements for the session.
+  `DatabaseSessionArchitectureTest` keeps these holders and the chart's count of `LISTEN` sessions in step with the code.
 - A pooled session waits for a lock only for a bounded time.
   The `options` of `spring.datasource.hikari.data-source-properties` in `application.yml` set the bound.
   A lock cycle then fails with SQLState `55P03` instead of hanging.
