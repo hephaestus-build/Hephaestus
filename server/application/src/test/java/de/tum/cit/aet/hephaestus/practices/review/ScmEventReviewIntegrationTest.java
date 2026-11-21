@@ -281,6 +281,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     ReviewService service;
 
     @Autowired
+    ReviewClosure closure;
+
+    @Autowired
     ReviewRequestService requests;
 
     @Autowired
@@ -2489,6 +2492,80 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var members = membersOf(workspace, stale.getId());
         assertThat(reasonOf(members, delivering)).isEqualTo("REPLACED");
         assertThat(reasonOf(members, off)).isEqualTo("REPLACED");
+    }
+
+    /**
+     * A title edit at the same head replaces a queued review, whose practices it takes over. The replaced review asks for
+     * no follow-up, as the edit moved the work to a new version. The edit's review is the last at its version to end:
+     * it alone asks for the follow-up of what it left unmeasured, once.
+     */
+    @Test
+    void shouldAskOnceForAFollowUpFromTheLastReviewToEndWhenATitleEditReplacesAQueuedReview() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_EDITED));
+        var item = prepared.item();
+        long workspace = item.workspaceId();
+        long delivering = practices
+                .findByWorkspaceIdAndSlug(workspace, "event-test")
+                .orElseThrow()
+                .getId();
+        publish(prepared);
+        var stale = newestReview(prepared);
+        assertThat(membersOf(workspace, stale.getId())).containsOnlyKeys(delivering);
+
+        // The author retitles the pull request. The head commit stays.
+        transactions.executeWithoutResult(ignored -> {
+            var pull = pulls.findById(Objects.requireNonNull(item.sourceId())).orElseThrow();
+            pull.setTitle("A retitled change");
+            pulls.saveAndFlush(pull);
+            publisher.publishEvent(new ScmDomainEvent.PullRequestUpdated(
+                    ScmEventPayload.PullRequestData.from(pull),
+                    Set.of("title"),
+                    new EventContext(
+                            UUID.randomUUID(),
+                            Instant.now(),
+                            workspace,
+                            null,
+                            DataSource.WEBHOOK,
+                            "edited",
+                            UUID.randomUUID().toString(),
+                            IdentityProviderType.GITHUB,
+                            Objects.requireNonNull(pull.getAuthor()).getId())));
+        });
+        assertThat(replaced(workspace, stale.getId())).isTrue();
+        assertThat(reasonOf(membersOf(workspace, stale.getId()), delivering)).isEqualTo("REPLACED");
+        assertThat(followUps(prepared)).as("the replaced review asks for none").isEmpty();
+
+        closeWindows(prepared);
+        var edited = newestReview(prepared);
+        assertThat(edited.getId()).isNotEqualTo(stale.getId());
+        assertThat(edited.getItemVersion()).isNotEqualTo(stale.getItemVersion());
+        assertThat(ScmVersion.reviewedHead(new ItemVersion(
+                        Objects.requireNonNull(edited.getItemVersion()),
+                        prepared.version().baseVersion())))
+                .isEqualTo(ScmVersion.reviewedHead(prepared.version()));
+        assertThat(membersOf(workspace, edited.getId())).containsOnlyKeys(delivering);
+
+        // The edit's review ends before it measures the practice.
+        transactions.executeWithoutResult(ignored -> closure.close(
+                reviews.findById(edited.getId()).orElseThrow(),
+                ReviewStatus.PARTIAL,
+                ReviewStopReason.EXECUTION_INCOMPLETE,
+                Instant.now()));
+
+        assertThat(reasonOf(membersOf(workspace, edited.getId()), delivering)).isEqualTo("NOT_RUN");
+        assertThat(followUps(prepared))
+                .singleElement()
+                .extracting(ItemEvent::getItemVersion)
+                .isEqualTo(edited.getItemVersion());
+    }
+
+    /** The follow-up occasions of the prepared item: what a review that ended owing practices asked for. */
+    private List<ItemEvent> followUps(Prepared prepared) {
+        return itemEvents(prepared).stream()
+                .filter(event -> event.getName()
+                        .equals(ItemEventName.carried(prepared.item().kind()).value()))
+                .toList();
     }
 
     @Test

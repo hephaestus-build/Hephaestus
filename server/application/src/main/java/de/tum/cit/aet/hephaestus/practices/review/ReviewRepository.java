@@ -25,18 +25,37 @@ import org.springframework.data.repository.query.Param;
 
 public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQueries, ScanMembershipQueries {
     /**
-     * Whether a later review of the item, not cancelled and not a trial, already judged or reused the practice: it
-     * replaces this review's measurement of it. A later review that only selected it can still withhold it or never run
-     * it.
+     * Whether a later review of the item, not cancelled and not a trial, takes the practice over from this one: it
+     * already judged or reused it, or it is still open with the practice selected. A later review that ended without
+     * measuring the practice takes nothing over.
      */
     @Query(value = """
-        SELECT EXISTS(SELECT 1 FROM review r JOIN review_item m ON m.review_id=r.id AND m.workspace_id=r.workspace_id
-          WHERE r.workspace_id=:workspaceId AND r.item_id=:itemId AND r.kind='ITEM' AND r.origin<>'TRIAL' AND r.id<>:reviewId
-            AND r.ordered_at>:orderedAt AND r.status<>'CANCELLED' AND m.practice_id=:practiceId
-            AND m.item_id=r.item_id AND m.state IN ('JUDGED','REUSED'))
+        SELECT EXISTS(SELECT 1 FROM review o JOIN review r ON r.workspace_id=o.workspace_id AND r.item_id=o.item_id
+          WHERE o.workspace_id=:workspaceId AND o.id=:reviewId AND r.kind='ITEM' AND r.origin<>'TRIAL' AND r.id<>o.id
+            AND r.ordered_at>o.ordered_at AND r.status<>'CANCELLED'
+            AND (EXISTS(SELECT 1 FROM review_item n WHERE n.workspace_id=r.workspace_id AND n.review_id=r.id
+                   AND n.item_id=r.item_id AND n.practice_id=:practiceId AND n.state IN ('JUDGED','REUSED'))
+              OR (r.status IN ('QUEUED','RUNNING') AND EXISTS(SELECT 1 FROM review_practice p
+                   WHERE p.workspace_id=r.workspace_id AND p.review_id=r.id AND p.practice_id=:practiceId
+                     AND p.status IN ('QUEUED','READY','RUNNING')))))
         """, nativeQuery = true)
-    boolean existsNewerMeasurementOfPractice(
-            long workspaceId, long itemId, long practiceId, UUID reviewId, Instant orderedAt);
+    boolean existsNewerReviewTakingOverPractice(long workspaceId, UUID reviewId, long practiceId);
+
+    /** Whether another review of the item at {@code version}, not a trial, is still queued or running. */
+    @Query(value = """
+        SELECT EXISTS(SELECT 1 FROM review r WHERE r.workspace_id=:workspaceId AND r.item_id=:itemId AND r.kind='ITEM'
+          AND r.origin<>'TRIAL' AND r.item_version=:version AND r.id<>:reviewId
+          AND r.status IN ('QUEUED','RUNNING'))
+        """, nativeQuery = true)
+    boolean existsOtherOpenReviewAtVersion(long workspaceId, long itemId, String version, UUID reviewId);
+
+    /** The occasion of the newest event review of the item at {@code version}. */
+    @Query(value = """
+        SELECT r.event_id FROM review r WHERE r.workspace_id=:workspaceId AND r.item_id=:itemId AND r.kind='ITEM'
+          AND r.origin='EVENT' AND r.event_id IS NOT NULL AND r.item_version=:version
+        ORDER BY r.ordered_at DESC, r.id DESC LIMIT 1
+        """, nativeQuery = true)
+    Optional<UUID> newestEventOccasionAtVersion(long workspaceId, long itemId, String version);
 
     /** The result counts of item reviews, per review and practice: the results each review recorded. */
     @Query(value = """

@@ -155,19 +155,20 @@ An item event that waits has one of these reasons:
 - `REVIEW_IN_PROGRESS`: an earlier review of the item still measures a practice that the window selects. An earlier event review that has not started also holds the window. The window closes again one window later, until that review starts, ends, or its claim replaces it.
 
 A practice with the withheld membership reason `REPLACED` was in a review that a newer review of the item replaces.
-A queued review that a newer event stopped at claim writes it. A practice start writes it only when a newer review of the item already measured the practice.
+A queued review that a newer event stopped at claim writes it. A practice start writes it only when a newer review of the item measured the practice or can still measure it.
 The next readiness edge of the item selects it again.
+When the newer review ends without measuring it, the last review of the version to end asks for one follow-up occasion, as for `SOURCES_MOVED`.
 
 A practice with the withheld membership reason `SOURCES_MOVED` did not start, because a source that it reads changed after the capture.
-No newer review of the item measured it.
+No newer review of the item measured it or can still measure it.
 The next readiness edge of the item selects it again.
-An event review of an issue or a pull request can end with it.
-That review asks for one follow-up occasion of the item, at the same version.
+The last review of its version to end asks for one follow-up occasion of the item, at the same version.
 
 A practice with the withheld membership reason `NOT_RUN` is owed: no attempt measured it.
 Its attempt ended before it started or finished, by its deadline, a time-out, a watchdog, or a lost sandbox.
 It says nothing about the work, and the run keeps its own stop reason.
-The next readiness edge of the item selects it again, and an event review that ends with it asks for one follow-up occasion, as for `SOURCES_MOVED`.
+The next readiness edge of the item selects it again.
+The last review of its version to end asks for one follow-up occasion, as for `SOURCES_MOVED`.
 
 A practice in feedback mode Off is the one exception for every carried reason.
 Occasions that all continue leave it out unless its own version still owes it.

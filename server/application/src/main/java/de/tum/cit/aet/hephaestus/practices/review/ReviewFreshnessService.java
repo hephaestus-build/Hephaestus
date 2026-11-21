@@ -101,12 +101,11 @@ public class ReviewFreshnessService implements ReviewFreshness {
             assignment.start();
             return true;
         }
-        // REPLACED only when a newer review already measured this practice: one that only selected it can still
-        // withhold it. Otherwise its own sources moved and it runs again.
+        // REPLACED only when a newer review measured this practice or can still measure it; otherwise its own sources
+        // moved. Either way the last review of the version to end asks for its follow-up: see ReviewClosure.
         var reason = state != Currentness.STALE
                 ? ReviewStopReason.READINESS_REFUSED
-                : reviews.existsNewerMeasurementOfPractice(
-                                workspaceId, review.getItemId(), id.practiceId(), review.getId(), review.getOrderedAt())
+                : reviews.existsNewerReviewTakingOverPractice(workspaceId, review.getId(), id.practiceId())
                         ? ReviewStopReason.REPLACED
                         : ReviewStopReason.SOURCES_MOVED;
         member.withhold(
