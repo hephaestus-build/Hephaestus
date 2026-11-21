@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetPerPersonResultsData, GetPerPersonResultsResponses } from "../types.gen.js";
+import type {
+	GetPerPersonResultsData,
+	GetPerPersonResultsErrors,
+	GetPerPersonResultsResponses,
+} from "../types.gen.js";
 
 /**
  * Whether workspace admins see practice results per person
  */
 export const getPerPersonResults = <ThrowOnError extends boolean = false>(
 	options: Options<GetPerPersonResultsData, ThrowOnError>,
-): RequestResult<GetPerPersonResultsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPerPersonResultsResponses, unknown, ThrowOnError>({
+): RequestResult<GetPerPersonResultsResponses, GetPerPersonResultsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetPerPersonResultsResponses,
+		GetPerPersonResultsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/per-person-results",
 		...options,

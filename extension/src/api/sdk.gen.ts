@@ -497,6 +497,7 @@ import type {
 	GetPasskeyVerificationOptionsErrors,
 	GetPasskeyVerificationOptionsResponses,
 	GetPerPersonResultsData,
+	GetPerPersonResultsErrors,
 	GetPerPersonResultsResponses,
 	GetPracticeData,
 	GetPracticeDefinitionOptionsData,
@@ -5491,8 +5492,12 @@ export const updateWorkspacePasskeyPolicy = <ThrowOnError extends boolean = fals
  */
 export const getPerPersonResults = <ThrowOnError extends boolean = false>(
 	options: Options<GetPerPersonResultsData, ThrowOnError>,
-): RequestResult<GetPerPersonResultsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPerPersonResultsResponses, unknown, ThrowOnError>({
+): RequestResult<GetPerPersonResultsResponses, GetPerPersonResultsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetPerPersonResultsResponses,
+		GetPerPersonResultsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/per-person-results",
 		...options,
