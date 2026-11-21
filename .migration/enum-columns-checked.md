@@ -4,12 +4,12 @@
 - **Action:** If the upgrade stops at a table's stored rows, correct or delete those rows. Then start the upgrade again.
 
 This upgrade adds a check to each column that stores a fixed set of values, such as a status, a kind or a role.
-New writes are checked at once.
-Earlier upgrades corrected each such value that a release stored, so a stop means that a row was changed by hand.
+Writes to a table are checked as soon as the upgrade reaches that table.
+Earlier upgrades corrected each such value that a release stored, so a stop most likely means that a row was changed by hand.
 
 Before it checks the stored rows of a table, the upgrade counts the rows that hold an unknown value.
 If there are any, it stops and names each column with its number of rows.
-The tables before it are complete, and the stop leaves no table half checked.
+The tables before it are complete. The check of a table's stored rows is all or nothing.
 
 List the rows that the stop names. In `psql`, with access to the application database, run:
 
