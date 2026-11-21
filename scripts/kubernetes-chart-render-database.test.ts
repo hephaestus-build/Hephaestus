@@ -755,7 +755,7 @@ await test("every profile's PostgreSQL runs without JIT, in the memory that docs
 		`each connection = ${connectionMi} MiB + shared_buffers / 512 + work_mem × hash_mem_multiplier`,
 		"maintenance     = maintenance_work_mem + autovacuum_max_workers × autovacuum_work_mem",
 		`processes       = ${processesMi} MiB`,
-		"the sum up to a multiple of 128 MiB",
+		"The chart rounds each part up to a whole MiB.",
 		"it also adds 8 parallel workers as connections",
 	]) {
 		assert.ok(sizing.includes(line), `docs/admin/sizing.mdx states: ${line}`);
@@ -788,7 +788,7 @@ await test("every profile's PostgreSQL runs without JIT, in the memory that docs
 			Number(setting("autovacuum_max_workers")) * mib("autovacuum_work_mem");
 		const required =
 			shared + (connections + parallelWorkers) * perConnection + maintenance + processesMi;
-		const memory = `${128 * Math.ceil(required / 128)}Mi`;
+		const memory = `${required}Mi`;
 		const database = container(workload(resources, "postgresql"));
 		assert.equal(get(database, "resources", "limits", "memory"), memory, name);
 		assert.equal(get(database, "resources", "requests", "memory"), memory, name);
@@ -830,11 +830,11 @@ await test("PostgreSQL refuses a memory limit below its derived size, a request 
 	// Equal decimal quantities are equal: only a larger request fails.
 	const decimal = rendered([
 		...layers,
-		{ postgresql: { resources: { requests: { memory: "4G" }, limits: { memory: "4G" } } } },
+		{ postgresql: { resources: { requests: { memory: "5G" }, limits: { memory: "5G" } } } },
 	]);
 	assert.equal(
 		get(container(workload(decimal, "postgresql")), "resources", "requests", "memory"),
-		"4G",
+		"5G",
 	);
 	const missing = render([...layers, { postgresql: { parameters: { work_mem: null } } }]);
 	assert.equal(missing.ok, false);

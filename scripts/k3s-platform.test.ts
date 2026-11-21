@@ -82,6 +82,79 @@ await test("the node policy keeps only hard eviction and bounds logs, images, an
 	assert.match(journal, /^MaxRetentionSec=7day$/mu);
 });
 
+/** Quantities as the platform files and the sizing page write them: millicores and whole MiB. */
+const millicores = (value: unknown) => {
+	const cpu = String(value);
+	return cpu.endsWith("m") ? Number(cpu.slice(0, -1)) : Number(cpu) * 1000;
+};
+const mebibytes = (value: unknown) =>
+	Number(/^(?<count>\d+)Mi$/u.exec(String(value))?.groups?.count);
+await test("the single-node profile reserves the platform's own requests, as the sizing page names them", () => {
+	const traefik = named(documents(read("k3s-platform.yaml")), "HelmChart", "traefik");
+	assert.ok(traefik && isRecord(traefik.spec));
+	const traefikValues: unknown = parse(String(traefik.spec.valuesContent));
+	assert.ok(isRecord(traefikValues) && isRecord(traefikValues.resources));
+	const controller = named(
+		documents(read("k3s-agent-sandbox.yaml")),
+		"Deployment",
+		"agent-sandbox-controller",
+	);
+	const controllerSpec: unknown = isRecord(controller?.spec) ? controller.spec.template : undefined;
+	const container: unknown =
+		isRecord(controllerSpec) &&
+		isRecord(controllerSpec.spec) &&
+		Array.isArray(controllerSpec.spec.containers)
+			? controllerSpec.spec.containers[0]
+			: undefined;
+	assert.ok(isRecord(container) && isRecord(container.resources));
+	const sizing = readFileSync(new URL("../docs/admin/sizing.mdx", import.meta.url), "utf8");
+	const documented = (workload: string) => {
+		const row = new RegExp(
+			`^\\| ${workload} \\| (?<cpu>\\d+m) CPU, (?<memory>\\d+Mi) \\|`,
+			"mu",
+		).exec(sizing)?.groups;
+		assert.ok(
+			row?.cpu !== undefined && row.memory !== undefined,
+			`docs/admin/sizing.mdx names ${workload}`,
+		);
+		return { cpu: millicores(row.cpu), memory: mebibytes(row.memory) };
+	};
+	const fromFile = (resources: Record<string, unknown>) => {
+		assert.ok(isRecord(resources.requests));
+		return {
+			cpu: millicores(resources.requests.cpu),
+			memory: mebibytes(resources.requests.memory),
+		};
+	};
+	const parts = [
+		{ name: "Traefik", requests: fromFile(traefikValues.resources) },
+		{ name: "The agent-sandbox controller", requests: fromFile(container.resources) },
+		// k3s's own manifest at the pinned version: the page states it, and nothing here can read it.
+		{ name: "CoreDNS", requests: documented("CoreDNS") },
+	];
+	for (const part of parts.slice(0, 2)) {
+		assert.deepEqual(documented(part.name), part.requests, part.name);
+	}
+	const small: unknown = parse(
+		readFileSync(
+			new URL("../deploy/chart/hephaestus/profiles/small.yaml", import.meta.url),
+			"utf8",
+		),
+	);
+	const outside =
+		isRecord(small) && isRecord(small.sandbox) && isRecord(small.sandbox.budget)
+			? small.sandbox.budget.outsideRelease
+			: undefined;
+	assert.ok(isRecord(outside));
+	assert.deepEqual(
+		{ cpu: millicores(outside.cpu), memory: mebibytes(outside.memory) },
+		{
+			cpu: parts.reduce((total, part) => total + part.requests.cpu, 0),
+			memory: parts.reduce((total, part) => total + part.requests.memory, 0),
+		},
+	);
+});
+
 await test("a Go duration reads in seconds, and anything else is refused", () => {
 	assert.equal(durationSeconds("5m0s"), durationSeconds("5m"));
 	assert.equal(durationSeconds("1h2m3s"), 3723);

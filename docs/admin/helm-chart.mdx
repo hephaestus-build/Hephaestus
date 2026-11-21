@@ -161,13 +161,15 @@ On each additional sandbox node, also reserve one image-hold Pod of the `agent-i
 The chart passes the resolved count to each server.
 More servers do not add turns.
 The `small` profile uses `auto` and declares 3500m CPU and 14196Mi memory: the allocatable capacity of a 16 GiB node, rounded down.
+Its `sandbox.budget.outsideRelease` states the requests of the one-host platform on the same node ([Node reserve](./sizing#node-reserve)).
 The `cluster` profile declares no budget and uses the default count, 8.
 
 For CPU and memory separately, the chart computes:
 
 ```text
-steady slots  = floor((budget - resident requests - one backup - review requests) / conversation Pod request)
-upgrade slots = floor((budget - resident requests - draining servers and rollout surge - migration/stanza Jobs - one backup) / conversation Pod request)
+room          = budget - 5 % of the budget - outsideRelease
+steady slots  = floor((room - resident requests - one backup - review requests) / conversation Pod request)
+upgrade slots = floor((room - resident requests - draining servers and rollout surge - migration Job) / conversation Pod request)
 auto turns    = min(steady CPU slots, steady memory slots, upgrade CPU slots, upgrade memory slots)
 ```
 
@@ -175,6 +177,7 @@ auto turns    = min(steady CPU slots, steady memory slots, upgrade CPU slots, up
   The monitoring workloads and one image-hold Pod also count. So does the largest init container of each Pod.
 - The review requests are the reviews at once times the review template request, with the RuntimeClass overhead. The reviews at once are `sandbox.reviewMemory` divided by one review's memory request and overhead.
 - Each turn needs one conversation template Pod, with its RuntimeClass overhead.
+- With sandboxes, a backup Pod never preempts, so the upgrade phase does not count it. It waits for room, or the upgrade preempts it ([Node reserve](./sizing#node-reserve)).
 - Requests round up to millicores and MiB. Budget values round down.
 
 The upgrade phase assumes that reviews finish before its peak, and that warm conversation sandboxes stay.

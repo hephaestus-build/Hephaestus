@@ -12,10 +12,10 @@ They are scheduling requests, not measured peaks. Keep room for the operating sy
 
 | Profile | Nodes | Servers | Requests of each server | PostgreSQL requests and volume | Reviews at once | Conversation turns at once |
 | --- | --- | --- | --- | --- | --- | --- |
-| `dev.yaml` | One workstation node | 2 | 250m CPU, 3 GiB memory, 5 GiB Git cache | 100m CPU, 3200 MiB memory, 5 GiB volume | 0: sandboxes are off | 0 |
-| `small.yaml` | One node of 4 vCPU, at least 16 GiB of memory and 150 GiB of disk | 1 | 500m CPU, 3 GiB memory, 20 GiB Git cache | 250m CPU, 3200 MiB memory, 20 GiB volume | 5 | 8, or 4 with backups on (`auto`) |
-| [One host](./k3s): `small.yaml` with `k3s-values.yaml` | The node of `small.yaml` | 1 | As `small.yaml` | As `small.yaml` | 4 | 7, or 3 with backups on (`auto`) |
-| `cluster.yaml` | Several nodes, with sandbox nodes that hold the review and conversation quotas | 2 | 500m CPU, 3 GiB memory, 70 GiB Git cache | 250m CPU, 7 GiB memory, 20 GiB volume | 12 | 8 |
+| `dev.yaml` | One workstation node | 2 | 250m CPU, 3 GiB memory, 5 GiB Git cache | 100m CPU, 4020 MiB memory, 5 GiB volume | 0: sandboxes are off | 0 |
+| `small.yaml` | One node of 4 vCPU, at least 16 GiB of memory and 150 GiB of disk | 1 | 500m CPU, 3 GiB memory, 20 GiB Git cache | 250m CPU, 4020 MiB memory, 20 GiB volume | 5 | 3, or 2 with backups on (`auto`) |
+| [One host](./k3s): `small.yaml` with `k3s-values.yaml` | The node of `small.yaml` | 1 | As `small.yaml` | As `small.yaml` | 4 | 3, or 2 with backups on (`auto`) |
+| `cluster.yaml` | Several nodes, with sandbox nodes that hold the review and conversation quotas | 2 | 500m CPU, 3 GiB memory, 70 GiB Git cache | 250m CPU, 9251 MiB memory, 20 GiB volume | 12 | 8 |
 
 Turn swap off on each node.
 With swap on, the kernel can move the memory of a Pod to disk, and the Pod slows down with no OOM kill.
@@ -24,14 +24,15 @@ Each server's memory request equals its limit, because the JVM sizes its heap fr
 The server's CPU limit is 4 cores, and 2 with `dev.yaml`.
 The Git cache is node storage of each server ([Storage and retention](./helm-chart#storage-and-retention)).
 
-The one host has fewer reviews and turns than `small.yaml` alone, because each gVisor sandbox Pod also takes 48 MiB and 10m CPU of RuntimeClass overhead.
+The one host has fewer reviews than `small.yaml` alone, because each gVisor sandbox Pod also takes 48 MiB and 10m CPU of RuntimeClass overhead.
+With backups, database metrics and the bundled monitoring stack all on, `small.yaml` and the one host each run 1 turn ([Node reserve](#node-reserve)).
 
 The sandbox quotas hold these requests at full load, with any RuntimeClass overhead:
 
 | Profile | Review quota | Conversation quota |
 | --- | --- | --- |
-| `small.yaml` | 5 Pods: 500m CPU, 2560 MiB memory | 8 Pods: 800m CPU, 3072 MiB memory |
-| One host | 4 Pods: 440m CPU, 2240 MiB memory | 7 Pods: 770m CPU, 3024 MiB memory |
+| `small.yaml` | 5 Pods: 500m CPU, 2560 MiB memory | 3 Pods: 300m CPU, 1152 MiB memory |
+| One host | 4 Pods: 440m CPU, 2240 MiB memory | 3 Pods: 330m CPU, 1296 MiB memory |
 | `cluster.yaml` | 12 Pods: 1200m CPU, 6144 MiB memory | 8 Pods: 800m CPU, 3072 MiB memory |
 
 Add the webapp (50m CPU, 64 MiB) and the agent image DaemonSet (1m CPU and 16 MiB on each sandbox node).
@@ -136,23 +137,22 @@ A request below the derived size lets the node hold more sandboxes than the data
 ```text
 memory          = shared memory + max_connections × each connection + maintenance + processes
 shared memory   = shared_buffers + shared_buffers / 16 + 20 MiB + max_connections / 16 MiB
-each connection = 19 MiB + shared_buffers / 512 + work_mem × hash_mem_multiplier
+each connection = 26 MiB + shared_buffers / 512 + work_mem × hash_mem_multiplier
 maintenance     = maintenance_work_mem + autovacuum_max_workers × autovacuum_work_mem
 processes       = 80 MiB
 ```
 
-The chart rounds each part up to a whole MiB and the sum up to a multiple of 128 MiB.
+The chart rounds each part up to a whole MiB.
 With `max_parallel_workers_per_gather` above 0, it also adds 8 parallel workers as connections.
 
 | Part | Value | Source |
 | --- | --- | --- |
 | Shared memory | The formula above | `postgres -C shared_memory_size` on the release image, PostgreSQL 18.6, for `shared_buffers` from 128MB to 1GB and 120 to 480 connections. The formula is at or above each result. |
-| Private memory of each connection | 19 MiB | The mean private memory (`RssAnon`) that a backend of the server's role kept between statements. See the measurement below. |
+| Private memory of each connection | 26 MiB | The 90th percentile of the private memory (`RssAnon`) that a backend of the server's role kept between statements. See the measurement below. |
 | Page tables of each connection | `shared_buffers` / 512 | The kernel's page tables for a backend that has touched all of the shared buffers. |
 | Postmaster and background processes | 80 MiB | The largest sum of the background processes' private memory in the same measurement: 78 MiB. |
 
 The formula counts every connection at once, each with one sort or hash of `work_mem` in flight.
-Thus, it uses the mean of the connections, not the largest: a sum over many connections tends to their mean.
 
 The measurement ran the server's integration tests against the release image with `jit = off`, on 2026-11-21.
 A sampler read each backend's private memory every 5 seconds.
@@ -162,14 +162,19 @@ The run ended after 66 minutes, when one test process stopped, and it gave 61 mi
 Their 90th percentile was 26 MiB, and the largest kept 40 MiB.
 A session that plans every table and index and holds 256 prepared statements keeps 16 MiB.
 
-The figure of 19 MiB is provisional:
+The chart uses the 90th percentile, not the mean.
+A server connection lives up to 30 minutes, six times longer than these backends.
+It sees every statement of the server, so it can keep more.
+A size that is too large costs conversation turns. A size that is too small costs an outage of the database.
 
-- These backends lived at most 5 minutes. A server connection lives up to 30 minutes and sees every statement of the server, so it can keep more.
+The figure of 26 MiB is provisional. A measurement on a production installation with `jit = off` replaces it:
+
+- These backends lived at most 5 minutes.
 - The tests also did work that production does not do, such as emptying every table.
 - `RssAnon` counts pages that a backend still shares with the postmaster. It does not count kernel stacks and socket buffers.
 
 To check the figure on your installation, sample the `RssAnon` line of each backend's `/proc/<pid>/status` while the server is busy.
-Compare the mean of the server's backends with 19 MiB.
+Compare the server's backends with 26 MiB.
 If they keep more, set `postgresql.resources.limits.memory` above the derived size. The chart accepts a larger limit.
 
 The chart starts PostgreSQL with `jit = off`.
@@ -206,12 +211,60 @@ These are the sizes for each profile. A chart test computes them again from this
 
 | Profile | `max_connections` | Memory |
 | --- | --- | --- |
-| `dev` | 120 | 3200 MiB |
-| `small` | 120 | 3200 MiB |
-| `cluster` | 300 | 7168 MiB |
+| `dev` | 120 | 4020 MiB |
+| `small` | 120 | 4020 MiB |
+| `cluster` | 300 | 9251 MiB |
 
 `max_connections` follows the [connection budget](#database-connections), so more servers or a larger pool also raise the memory.
 With backups on, the pgBackRest sidecar also requests its full 512 MiB limit.
+
+## Node reserve
+
+The single-node profiles state `sandbox.budget` as the node's allocatable resources, read from the node.
+Before the chart derives the turns, it keeps a reserve out of the budget:
+
+- The requests of the workloads outside the release on the same node, `sandbox.budget.outsideRelease`.
+- 5 % of the budget as headroom, for memory that no request names, such as cert-manager and the kernel.
+
+The turns come from what remains, at steady state and at the upgrade peak.
+For `small.yaml`, the workloads outside the release are those of the [one-host platform](./k3s), at the pinned k3s version:
+
+| Workload | Requests | Source |
+| --- | --- | --- |
+| Traefik | 100m CPU, 128Mi | `deploy/platform/k3s-platform.yaml` |
+| The agent-sandbox controller | 10m CPU, 64Mi | `deploy/platform/k3s-agent-sandbox.yaml` |
+| CoreDNS | 100m CPU, 70Mi | k3s's `manifests/coredns.yaml` at the version that `k3s-platform.yaml` pins |
+
+cert-manager and the local-path provisioner set no requests, and the headroom covers them.
+`small.yaml` states 210m CPU and 262Mi, and a chart test compares that sum with these files and this table.
+Of the 14196 MiB of a 16 GiB node, the reserve keeps 972 MiB, and the release can use 13224 MiB.
+
+A backup never takes room from the upgrade or from a sandbox.
+
+Its Pods, a scheduled backup and the stanza Job of each upgrade, take the lowest priority, which never preempts.
+A backup that starts during an upgrade waits for room. An upgrade that needs the room preempts a running backup, and its Job runs it again.
+PostgreSQL archives its WAL from its own Pod also meanwhile, so no change is lost.
+Thus, the upgrade peak does not count a backup. The steady state counts one backup, so that a backup gets its room when no upgrade runs.
+
+`postgresql.backup.resources` sizes pgBackRest's TLS server beside PostgreSQL and the backup Jobs, with 256 MiB each.
+On 2026-11-21, a full encrypted backup of a 2.25 GB database was measured.
+It used at most 31 MiB of private memory in the server and 18 MiB in the Job.
+With a 256 MiB limit, it took 22 seconds, as long as with no limit. With 128 MiB, it took 291 seconds, because the kernel reclaimed its page cache.
+The S3 upload adds a buffer of a few MiB that this measurement, to a local repository, did not include.
+
+A restore writes every data file, and the kernel charges the written pages to its limit until they reach the disk.
+It failed with 256 MiB and passed with 512 MiB, so `postgresql.backup.restore.resources` keeps 512 MiB.
+
+On a 16 GiB node, the upgrade peak binds. The free memory is what the node keeps free at that peak with every turn in use, the reserve included:
+
+| Install | Release requests at the upgrade peak, before turns | Conversation turns | Free memory at the peak |
+| --- | --- | --- | --- |
+| `small.yaml` | 11844 MiB | 3 | 1200 MiB |
+| `small.yaml`, backups on | 12100 MiB | 2 | 1328 MiB |
+| `small.yaml`, backups, database metrics and the monitoring stack | 12516 MiB | 1 | 1296 MiB |
+| One host | 11892 MiB | 3 | 1008 MiB |
+| One host, backups on | 12148 MiB | 2 | 1184 MiB |
+| One host, backups, database metrics and the monitoring stack | 12564 MiB | 1 | 1200 MiB |
 
 ## Database connections
 

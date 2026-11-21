@@ -105,7 +105,7 @@ spec:
               value: {{ $backup.restore.time | quote }}
             {{- include "hephaestus.backup.serverEnv" . | nindent 12 }}
           resources:
-            {{- toYaml $backup.resources | nindent 12 }}
+            {{- toYaml $backup.restore.resources | nindent 12 }}
           securityContext:
             {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
           volumeMounts:

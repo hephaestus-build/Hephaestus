@@ -599,7 +599,12 @@ lock-path=/tmp/pgbackrest
 {{- end }}
 {{- end -}}
 
-{{/* The Pod of one backup Job: the pgBackRest client of the release's PostgreSQL image. */}}
+{{/*
+The Pod of one backup Job: the pgBackRest client of the release's PostgreSQL image. With sandboxes, it takes the
+lowest tier, which never preempts: a backup that starts during an upgrade waits for room, and an upgrade that needs
+the room preempts a running backup, which its Job runs again. So the drained-upgrade budget does not count a backup
+beside the upgrade (docs/admin/sizing.mdx § Node reserve). PostgreSQL archives its WAL itself, also meanwhile.
+*/}}
 {{- define "hephaestus.backup.pod" -}}
 {{- $root := .root -}}
 metadata:
@@ -608,7 +613,7 @@ metadata:
 spec:
   restartPolicy: Never
   automountServiceAccountToken: false
-  priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" .root "tier" "roles") }}
+  priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" .root "tier" (ternary "reviews" "roles" .root.Values.sandbox.enabled)) }}
   enableServiceLinks: false
   securityContext:
     {{- include "hephaestus.podSecurityContext" (dict "user" 999 "group" 999) | nindent 4 }}
@@ -798,7 +803,8 @@ The reviews that one server runs at once: the sandbox nodes' reviews.
 {{/*
 Fixed requests from the workload templates themselves. The measurement render disables turn admission,
 so the server's capacity environment cannot recursively ask for its own fixed requests. Resource inputs
-are unchanged. Steady includes one backup; upgrade includes migration/stanza Jobs and rollout surge.
+are unchanged. Steady includes one backup; upgrade includes the migration Job and rollout surge. With sandboxes, backup
+Pods (a scheduled backup and the stanza Job) yield to the upgrade (hephaestus.backup.pod), so upgrade leaves them out.
 */}}
 {{- define "hephaestus.fixedCapacity" -}}
 {{- $values := deepCopy .Values -}}
@@ -835,11 +841,12 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
 {{- end -}}
 {{- else if eq $kind "Job" -}}
 {{- $steady = 0 -}}
+{{- if and $.Values.sandbox.enabled (eq $file "postgresql-backup.yaml") -}}{{- $upgrade = 0 -}}{{- end -}}
 {{- else if eq $kind "CronJob" -}}
 {{- /* Full and differential backups share one pgBackRest stanza; only one backup runs at once. */ -}}
 {{- if or $backup ($spec.suspend | default false) -}}
 {{- $steady = 0 -}}{{- $upgrade = 0 -}}
-{{- else -}}{{- $backup = true -}}{{- end -}}
+{{- else -}}{{- $backup = true -}}{{- if $.Values.sandbox.enabled -}}{{- $upgrade = 0 -}}{{- end -}}{{- end -}}
 {{- $spec = $spec.jobTemplate.spec -}}
 {{- end -}}
 {{- $pod := $spec.template.spec -}}
@@ -859,7 +866,11 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
 {{- $totals | toJson -}}
 {{- end -}}
 
-{{/* The largest turn count within both steady and drained-upgrade budgets. */}}
+{{/*
+The largest turn count within both steady and drained-upgrade budgets. The budget is the nodes' allocatable; the
+chart first keeps a reserve out of it: the requests of workloads outside the release on those nodes
+(sandbox.budget.outsideRelease) and 5 % headroom (docs/admin/sizing.mdx § Node reserve).
+*/}}
 {{- define "hephaestus.conversationTurns" -}}
 {{- $value := .Values.sandbox.conversationTurns -}}
 {{- $auto := eq (toString $value) "auto" -}}
@@ -868,9 +879,13 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
 {{- $help := "Set sandbox.budget.cpu and sandbox.budget.memory to the allocatable budget of the sandbox node pool; see https://docs.hephaestus.build/admin/helm-chart#sandbox-capacity-budget" -}}
 {{- $cpu := required (printf "sandbox.budget.cpu is required for auto capacity or a declared budget. %s" $help) $budget.cpu -}}
 {{- $memory := required (printf "sandbox.budget.memory is required for auto capacity or a declared budget. %s" $help) $budget.memory -}}
-{{- $room := dict
-  "cpu" (include "hephaestus.quantityUnits" (dict "value" $cpu "unit" 0.001 "roundDown" true) | int64)
-  "memory" (include "hephaestus.quantityUnits" (dict "value" $memory "unit" 1048576 "roundDown" true) | int64) -}}
+{{- $outside := $budget.outsideRelease | default dict -}}
+{{- $room := dict -}}
+{{- range $resource, $unit := dict "cpu" 0.001 "memory" 1048576 -}}
+{{- $allocatable := include "hephaestus.quantityUnits" (dict "value" (get $budget $resource) "unit" $unit "roundDown" true) | int64 -}}
+{{- $elsewhere := include "hephaestus.quantityUnits" (dict "value" (get $outside $resource | default "0") "unit" $unit) | int64 -}}
+{{- $_ := set $room $resource (sub (sub $allocatable (divf (mul $allocatable 5) 100 | ceil | int64)) $elsewhere) -}}
+{{- end -}}
 {{- $fixed := include "hephaestus.fixedCapacity" . | fromJson -}}
 {{- $review := include "hephaestus.templateSandbox" (dict "root" . "kind" "review") | fromJson -}}
 {{- $conversation := include "hephaestus.templateSandbox" (dict "root" . "kind" "conversation") | fromJson -}}
@@ -1031,7 +1046,7 @@ measurement behind each constant, and a chart test holds the two together.
 */}}
 {{- define "hephaestus.postgresqlMemory" -}}
 {{- $parameters := .Values.postgresql.parameters -}}
-{{- $connectionMi := 19 -}}
+{{- $connectionMi := 26 -}}
 {{- $processesMi := 80 -}}
 {{- $connections := int (include "hephaestus.databaseConnectionCapacity" . | fromJson).maximum -}}
 {{- if hasKey $parameters "max_connections" -}}{{- $connections = int $parameters.max_connections -}}{{- end -}}
@@ -1051,7 +1066,7 @@ measurement behind each constant, and a chart test holds the two together.
 {{- $total := add $shared $backends $maintenanceTotal $processesMi -}}
 {{- dict "connections" $connections "parallelWorkers" $parallel "sharedMi" $shared "perConnectionMi" $perConnection
   "connectionsMi" $backends "maintenanceMi" $maintenanceTotal "processesMi" $processesMi "requiredMi" $total
-  "limitMi" (mul 128 (divf $total 128 | ceil | int64)) | toJson -}}
+  "limitMi" $total | toJson -}}
 {{- end -}}
 
 {{/*
