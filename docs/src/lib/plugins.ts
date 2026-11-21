@@ -9,6 +9,8 @@ const CALLOUT_LABELS: Record<string, string> = { note: "Note", tip: "Tip", cauti
  */
 export const callouts = defineMdastPlugin({
 	name: "hephaestus-callouts",
+	// It reads `node.position`, which Sätteri fills only for a plugin that asks for it.
+	options: { position: true },
 	containerDirective(node, ctx) {
 		const label = CALLOUT_LABELS[node.name];
 		if (label === undefined) {
@@ -72,6 +74,8 @@ export const rejectUnparsedAdmonitions = defineMdastPlugin({
  */
 export const restoreUnusedDirectives = defineMdastPlugin({
 	name: "hephaestus-restore-unused-directives",
+	// It reads `node.position`, which Sätteri fills only for a plugin that asks for it.
+	options: { position: true },
 	textDirective(node, ctx) {
 		ctx.replaceNode(node, {
 			type: "text",
@@ -108,4 +112,62 @@ function original(
 		return slice;
 	}
 	return label === "" ? marker : `${marker}[${label}]`;
+}
+
+// GitLab's alt text limit; a longer description belongs in the text around the image.
+const MAX_ALT = 155;
+
+/**
+ * Each `<SystemDiagram>` renders a committed source, states its view and scope, describes the image in a literal `alt`,
+ * and holds a table of every connection, because the SVG draws its text as paths. MDX is not type-checked, so the
+ * component's required props hold only here. `hasSource` says whether `docs/diagrams/<name>.hyl` exists.
+ */
+export function systemDiagrams(hasSource: (name: string) => boolean) {
+	return defineMdastPlugin({
+		name: "hephaestus-system-diagrams",
+		// It reads `node.position`, which Sätteri fills only for a plugin that asks for it.
+		options: { position: true },
+		mdxJsxFlowElement(node, ctx) {
+			if (node.name !== "SystemDiagram") {
+				return;
+			}
+			const attribute = (name: string) => {
+				const value = node.attributes.find(
+					(entry) => entry.type === "mdxJsxAttribute" && entry.name === name,
+				)?.value;
+				return typeof value === "string" ? value : undefined;
+			};
+			const problems: string[] = [];
+			// The component puts the name into the image addresses as it is, so it is not trimmed.
+			const name = attribute("name");
+			if (name === undefined || name === "") {
+				problems.push('Give it a literal name, such as name="containers".');
+			} else if (/\s/u.test(name)) {
+				problems.push(`Remove the spaces from name="${name}": it is part of the image addresses.`);
+			} else if (!hasSource(name)) {
+				problems.push(`docs/diagrams/${name}.hyl does not exist. Name the source of the view.`);
+			}
+			if (!/^[^:]+: \S/u.test(attribute("title")?.trim() ?? "")) {
+				problems.push(
+					'Give it a literal title "<view>: <scope>", such as "Container view: Hephaestus".',
+				);
+			}
+			const alt = attribute("alt")?.trim() ?? "";
+			if (alt === "") {
+				problems.push("Give it a literal alt text that says what the diagram shows.");
+			} else if (alt.length > MAX_ALT) {
+				problems.push(`Shorten the alt text to ${MAX_ALT} characters (${alt.length}).`);
+			}
+			if (!node.children.some((child) => child.type === "table")) {
+				problems.push(
+					"Put a table of every connection of the view between <SystemDiagram> and </SystemDiagram>.",
+				);
+			}
+			if (problems.length > 0) {
+				throw new Error(
+					`${ctx.fileURL?.pathname ?? "a page"}: the <SystemDiagram> at line ${node.position?.start.line ?? 0}: ${problems.join(" ")}`,
+				);
+			}
+		},
+	});
 }

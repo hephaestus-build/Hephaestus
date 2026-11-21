@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { cp, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -13,7 +14,12 @@ import { parse } from "yaml";
 
 import { migrationEntries } from "./src/lib/migration-entries.ts";
 import { linksWithBasePath } from "./src/lib/page-tree.ts";
-import { callouts, rejectUnparsedAdmonitions, restoreUnusedDirectives } from "./src/lib/plugins.ts";
+import {
+	callouts,
+	rejectUnparsedAdmonitions,
+	restoreUnusedDirectives,
+	systemDiagrams,
+} from "./src/lib/plugins.ts";
 import { RELEASED_REDIRECTS } from "./src/lib/released-redirects.ts";
 import { GUIDES, REPO_URL, SITE_URL } from "./src/lib/site.ts";
 
@@ -175,6 +181,7 @@ export default defineConfig({
 				rejectUnparsedAdmonitions,
 				callouts,
 				restoreUnusedDirectives,
+				systemDiagrams((name) => existsSync(path.join(root, "diagrams", `${name}.hyl`))),
 				...defaults,
 				remarkMdxMermaid(),
 			],
