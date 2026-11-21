@@ -40,8 +40,11 @@ A problem has the RFC 9457 members `type`, `title`, `status` and `detail`.
 - Each 4xx or 5xx response that an operation lists is `application/problem+json` with `ProblemDetail`.
   An error body that an operation declares itself stays, such as the OAuth error of the MCP token endpoint.
 - Each operation has `4XX` and `5XX` responses with the same schema, for the statuses that it does not list.
-  Do not document a list of statuses for an operation that no test checks.
   Do not use `default`: it also covers redirects.
+- Declare a status only when a client branches on it.
+  Examples are 404 for a missing resource, 409 for a conflict, and 400 or 422 for validation.
+  Declare it with `@ApiResponse` on the controller method that answers it.
+  Do not keep a separate list of statuses for each operation.
 - A controller never answers an error with an empty body.
   Throw an exception that an advice maps, or throw a `ResponseStatusException`.
 - A filter writes its problem with `ProblemResponse` (`core/web`).
