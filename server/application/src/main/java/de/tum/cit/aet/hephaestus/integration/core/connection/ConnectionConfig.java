@@ -143,7 +143,7 @@ public sealed interface ConnectionConfig
                     GitLabProjectExclusions.empty());
         }
 
-        /** The group hook and its ownership. Adopt it through {@code ProviderResourceRepairs.completeRegistration}. */
+        /** The group hook and its ownership. Adopt it through {@code ProviderResourceRegistrations.completeRegistration}. */
         public GitLabConfig withWebhookOwnership(@Nullable Long id, @Nullable String hash, @Nullable String marker) {
             return new GitLabConfig(
                     serverUrl,
@@ -264,7 +264,7 @@ public sealed interface ConnectionConfig
 
         /**
          * Returns a copy with {@link #gitlabWebhookId} replaced, stamped after webhook
-         * registration/adoption. Adopt the result through {@code ProviderResourceRepairs.completeRegistration}, which checks its lifecycle.
+         * registration/adoption. Adopt the result through {@code ProviderResourceRegistrations.completeRegistration}, which checks its lifecycle.
          */
         public GitLabConfig withGitlabWebhookId(@Nullable Long webhookId) {
             return new GitLabConfig(
@@ -403,7 +403,7 @@ public sealed interface ConnectionConfig
             implements ConnectionConfig {
         /**
          * Returns a copy with the change-notification subscription id and route
-         * replaced, stamped after the subscription is registered. Adopt the result through {@code ProviderResourceRepairs.completeRegistration}, which checks its lifecycle.
+         * replaced, stamped after the subscription is registered. Adopt the result through {@code ProviderResourceRegistrations.completeRegistration}, which checks its lifecycle.
          */
         public OutlineConfig withWebhookSubscription(@Nullable String subscriptionId, @Nullable String route) {
             return new OutlineConfig(serverUrl, subscriptionId, route, enabledStreams);

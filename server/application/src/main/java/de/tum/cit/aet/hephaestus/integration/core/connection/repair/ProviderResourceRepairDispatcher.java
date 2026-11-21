@@ -43,6 +43,7 @@ public class ProviderResourceRepairDispatcher {
     private final ProviderResourceRepairRepository repairs;
     private final ConnectionProviderRepairRepository references;
     private final ProviderResourceRepairs coordination;
+    private final ProviderResourceRegistrations registrations;
     private final TransactionTemplate transactions;
     private final Clock clock;
     private final MeterRegistry metrics;
@@ -54,12 +55,14 @@ public class ProviderResourceRepairDispatcher {
             ProviderResourceRepairRepository repairs,
             ConnectionProviderRepairRepository references,
             ProviderResourceRepairs coordination,
+            ProviderResourceRegistrations registrations,
             PlatformTransactionManager transactionManager,
             Clock clock,
             MeterRegistry metrics) {
         this.repairs = repairs;
         this.references = references;
         this.coordination = coordination;
+        this.registrations = registrations;
         this.transactions = new TransactionTemplate(transactionManager);
         this.clock = clock;
         this.metrics = metrics;
@@ -92,7 +95,7 @@ public class ProviderResourceRepairDispatcher {
                 ProviderResourceAdapter adapter =
                         coordination.adapter(attempt.resource().kind()).orElse(null);
                 if (adapter != null)
-                    coordination.recordDiscovered(
+                    registrations.recordDiscovered(
                             repairId, adapter.discoverRegistration(attempt.resource(), attempt.credential()));
             } catch (RuntimeException failure) {
                 metrics.counter(
@@ -197,7 +200,7 @@ public class ProviderResourceRepairDispatcher {
                         && repair.getState() != ProviderResourceRepair.State.DISPATCHING)) return;
         boolean verified = outcome == Removal.VERIFIED_ABSENT || outcome == Removal.DIFFERENT_OWNER;
         boolean terminal = outcome == Removal.TERMINAL_SUCCESS;
-        if (verified || terminal) coordination.clearCompletedHook(id, resource);
+        if (verified || terminal) registrations.clearCompletedHook(id, resource);
         if ((verified && repair.getRemovalAttempts() == 0) || (terminal && repair.getRemovalAttempts() == 1)) {
             // A token removal must not leave its related bot-user guard silently released.
             for (ConnectionProviderRepair ref : references.findByRepair_Id(id)) references.delete(ref);
@@ -220,8 +223,8 @@ public class ProviderResourceRepairDispatcher {
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
     @SchedulerLock(name = "provider-resource-repair", lockAtMostFor = "PT30M", lockAtLeastFor = "PT10S")
     public void reconcile() {
-        for (var candidate : coordination.suspendedOutlineHooks()) {
-            coordination.captureSuspendedHook(candidate.workspaceId(), candidate.connectionId());
+        for (var candidate : registrations.suspendedOutlineHooks()) {
+            registrations.captureSuspendedHook(candidate.workspaceId(), candidate.connectionId());
         }
         for (ProviderResourceRepair repair :
                 repairs.findFirst100ByStateNotAndNextAttemptAtLessThanEqualOrderByNextAttemptAtAsc(

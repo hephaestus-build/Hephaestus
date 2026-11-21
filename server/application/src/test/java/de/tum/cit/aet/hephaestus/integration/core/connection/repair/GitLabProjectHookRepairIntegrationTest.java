@@ -90,7 +90,7 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
     private final Map<Long, Map<Long, String>> gitlab = new ConcurrentHashMap<>();
 
     private final List<UUID> created = new ArrayList<>();
-    private ProviderResourceRepairs repairs;
+    private ProviderResourceRegistrations registrations;
     private ProviderResourceRepairDispatcher dispatcher;
     private TransactionTemplate transactions;
     private long groupId;
@@ -119,7 +119,6 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
                 connections,
                 credentials,
                 adapters.getBeanProvider(ProviderResourceAdapter.class),
-                event -> {},
                 Clock.systemUTC());
         ReflectionTestUtils.setField(coordination, "entityManager", Objects.requireNonNull(entities));
         var transactionsAdvice = new TransactionInterceptor();
@@ -127,9 +126,15 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
         transactionsAdvice.setTransactionAttributeSource(new AnnotationTransactionAttributeSource());
         var proxy = new ProxyFactory(coordination);
         proxy.addAdvice(transactionsAdvice);
-        repairs = (ProviderResourceRepairs) proxy.getProxy();
+        ProviderResourceRepairs repairs = (ProviderResourceRepairs) proxy.getProxy();
+        ProviderResourceRegistrations target = new ProviderResourceRegistrations(
+                rows, references, connections, repairs, event -> {}, Clock.systemUTC());
+        ReflectionTestUtils.setField(target, "entityManager", Objects.requireNonNull(entities));
+        var registrationProxy = new ProxyFactory(target);
+        registrationProxy.addAdvice(transactionsAdvice);
+        registrations = (ProviderResourceRegistrations) registrationProxy.getProxy();
         dispatcher = new ProviderResourceRepairDispatcher(
-                rows, references, repairs, manager, Clock.systemUTC(), new SimpleMeterRegistry());
+                rows, references, repairs, registrations, manager, Clock.systemUTC(), new SimpleMeterRegistry());
         ReflectionTestUtils.setField(dispatcher, "entityManager", Objects.requireNonNull(entities));
         transactions = new TransactionTemplate(manager);
     }
@@ -228,7 +233,7 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
     void shouldRemoveTheHookOfEveryProjectOnDisconnect() {
         Connection owner = owner(Map.of(7L, 40L, 8L, 41L));
 
-        transactions.executeWithoutResult(status -> repairs.requestRemoval(
+        transactions.executeWithoutResult(status -> registrations.requestRemoval(
                 connections
                         .findByIdAndWorkspaceId(
                                 owner.getId(), owner.getWorkspace().getId())
@@ -250,7 +255,7 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
     void shouldReleaseOnlyTheHookOfAProjectThatIsNoLongerMonitored() {
         Connection owner = owner(Map.of(7L, 40L, 8L, 41L));
 
-        repairs.releaseHooks(
+        registrations.releaseHooks(
                 owner.getWorkspace().getId(),
                 owner.getId(),
                 List.of(projectHook(7L, 40L)),
@@ -277,7 +282,7 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
                 GitLabResourceAdapter.projectParent(groupId, 8L),
                 MARKER,
                 HASH);
-        UUID intent = repairs.beginRegistration(owner.getWorkspace().getId(), owner.getId(), registration);
+        UUID intent = registrations.beginRegistration(owner.getWorkspace().getId(), owner.getId(), registration);
         created.add(intent);
         gitlab.computeIfAbsent(8L, ignored -> new ConcurrentHashMap<>()).put(51L, URL);
         // A concurrent change to the connection supersedes the registration.
@@ -290,7 +295,7 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
             connections.saveAndFlush(current);
         });
 
-        boolean adopted = repairs.completeRegistration(
+        boolean adopted = registrations.completeRegistration(
                 owner.getWorkspace().getId(),
                 owner.getId(),
                 intent,
@@ -315,7 +320,7 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
         assertThat(configOf(owner).webhookOwnershipHash()).isNull();
         Long version = versionOf(owner);
 
-        boolean recorded = repairs.recordOwnership(
+        boolean recorded = registrations.recordOwnership(
                 owner.getWorkspace().getId(),
                 owner.getId(),
                 version,
@@ -326,7 +331,7 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
         assertThat(configOf(owner).webhookOwnershipHash()).isEqualTo(HASH);
         assertThat(repairsOf(owner)).isEmpty();
         // A reconcile that read the connection before the first one recorded it records nothing.
-        assertThat(repairs.recordOwnership(
+        assertThat(registrations.recordOwnership(
                         owner.getWorkspace().getId(),
                         owner.getId(),
                         version,
@@ -346,7 +351,7 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
             connections.saveAndFlush(stored);
         });
 
-        assertThat(repairs.recordOwnership(
+        assertThat(registrations.recordOwnership(
                         owner.getWorkspace().getId(),
                         owner.getId(),
                         versionOf(owner),
@@ -359,7 +364,7 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseToReplaceTheHookWhileRecordingItsOwnership() {
         Connection owner = releaseCandidateGroupHook("config - 'webhookOwnershipHash'");
 
-        assertThatThrownBy(() -> repairs.recordOwnership(
+        assertThatThrownBy(() -> registrations.recordOwnership(
                         owner.getWorkspace().getId(),
                         owner.getId(),
                         versionOf(owner),

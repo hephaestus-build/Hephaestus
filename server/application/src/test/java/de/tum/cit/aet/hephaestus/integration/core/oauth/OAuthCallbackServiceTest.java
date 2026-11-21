@@ -18,7 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
-import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.ConnectFinalization;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -66,7 +66,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
     private PlatformTransactionManager transactionManager;
 
     @Mock
-    private ProviderResourceRepairs repairs;
+    private ProviderResourceRegistrations registrations;
 
     private OAuthCallbackService service;
 
@@ -74,7 +74,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         lenient()
-                .when(repairs.prepareCredentialCompletion(any(), any(), any(), any()))
+                .when(registrations.prepareCredentialCompletion(any(), any(), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         service = new OAuthCallbackService(
@@ -84,7 +84,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                 credentialBundleConverter,
                 membershipQuery,
                 transactionManager,
-                repairs,
+                registrations,
                 mock(OAuthExchangeRepair.class));
     }
 

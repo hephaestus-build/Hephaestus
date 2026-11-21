@@ -97,6 +97,7 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
     private final FakeProvider provider = new FakeProvider();
     private final List<UUID> created = new ArrayList<>();
     private ProviderResourceRepairs repairs;
+    private ProviderResourceRegistrations registrations;
     private ProviderResourceRepairDispatcher dispatcher;
     private TransactionTemplate transactions;
 
@@ -111,11 +112,12 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
                 connections,
                 credentials,
                 beans.getBeanProvider(ProviderResourceAdapter.class),
-                event -> {},
                 clock);
         ReflectionTestUtils.setField(repairs, "entityManager", Objects.requireNonNull(entities));
+        registrations = new ProviderResourceRegistrations(rows, references, connections, repairs, event -> {}, clock);
+        ReflectionTestUtils.setField(registrations, "entityManager", Objects.requireNonNull(entities));
         dispatcher = new ProviderResourceRepairDispatcher(
-                rows, references, repairs, manager, clock, new SimpleMeterRegistry());
+                rows, references, repairs, registrations, manager, clock, new SimpleMeterRegistry());
         ReflectionTestUtils.setField(dispatcher, "entityManager", Objects.requireNonNull(entities));
     }
 
@@ -286,8 +288,8 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
                                 .getConfig())
                         .webhookSubscriptionId())
                 .isNull();
-        transactions.executeWithoutResult(status ->
-                repairs.captureSuspendedHook(owner.getId(), ref.getConnection().getId()));
+        transactions.executeWithoutResult(status -> registrations.captureSuspendedHook(
+                owner.getId(), ref.getConnection().getId()));
         assertThat(references.findByWorkspaceIdAndConnection_Id(
                         owner.getId(), ref.getConnection().getId()))
                 .isEmpty();
@@ -404,7 +406,7 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
         UUID captured = transactions.execute(status -> {
             Connection owner = connections.findById(connectionId).orElseThrow();
             var fresh = new ConnectionConfig.OutlineConfig("https://outline.example.test", null, null, Set.of());
-            Connection locked = repairs.prepareCredentialCompletion(owner, fresh, null);
+            Connection locked = registrations.prepareCredentialCompletion(owner, fresh, null);
             locked.setConfig(fresh);
             return references
                     .findByWorkspaceIdAndConnection_Id(owner.getWorkspace().getId(), connectionId)
@@ -551,7 +553,7 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
             ConnectionFixtures.reachState(
                     owner, earlierCallUntracked ? IntegrationState.SUSPENDED : IntegrationState.ACTIVE);
             owner = connections.saveAndFlush(owner);
-            repairs.requestRemoval(owner, true);
+            registrations.requestRemoval(owner, true);
             ConnectionFixtures.reachState(owner, IntegrationState.SUSPENDED);
             return references
                     .findByWorkspaceIdAndConnection_Id(workspace.getId(), owner.getId())

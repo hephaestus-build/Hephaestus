@@ -13,6 +13,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
@@ -62,6 +63,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
     private CredentialBundleConverter credentialConverter;
     private ConnectionService connectionService;
     private final ProviderResourceRepairs resourceRepairs = mock(ProviderResourceRepairs.class);
+    private final ProviderResourceRegistrations resourceRegistrations = mock(ProviderResourceRegistrations.class);
     private Workspace workspace;
 
     @BeforeEach
@@ -77,6 +79,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
                 mock(SourceProviderNamespaces.class),
                 Clock.systemUTC(),
                 resourceRepairs,
+                resourceRegistrations,
                 new ActiveScmConnections(connectionRepository, mock(CredentialReader.class)));
         lenient().when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
@@ -98,7 +101,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
                     tornDownWithCredentials.set(connection.getCredentialsEncrypted() != null);
                     return null;
                 })
-                .when(resourceRepairs)
+                .when(resourceRegistrations)
                 .requestRemoval(eq(connection), eq(false));
 
         contributor(List.of(connectionStrategy)).deleteWorkspaceData(WORKSPACE_ID);
@@ -115,7 +118,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
         Connection connection = activeConnectionWithCredentials();
         when(connectionRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(connection));
         doThrow(new IllegalStateException("cannot record removal intent"))
-                .when(resourceRepairs)
+                .when(resourceRegistrations)
                 .requestRemoval(eq(connection), eq(false));
         assertThatThrownBy(() -> contributor(List.of(connectionStrategy)).deleteWorkspaceData(WORKSPACE_ID))
                 .isInstanceOf(IllegalStateException.class)

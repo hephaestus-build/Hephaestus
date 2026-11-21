@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
@@ -59,6 +60,7 @@ public class ConnectionAdminService {
     private final ConnectionRepository connectionRepository;
     private final ConnectionService connectionService;
     private final ProviderResourceRepairs repairs;
+    private final ProviderResourceRegistrations registrations;
     private final WorkspaceSummaryQuery workspaces;
     private final IntegrationManifestRegistry manifests;
     private final CredentialBundleConverter credentialConverter;
@@ -71,9 +73,11 @@ public class ConnectionAdminService {
             IntegrationManifestRegistry manifests,
             CredentialBundleConverter credentialConverter,
             ProviderResourceRepairs repairs,
+            ProviderResourceRegistrations registrations,
             ApplicationEventPublisher events) {
         this.events = events;
         this.repairs = repairs;
+        this.registrations = registrations;
         this.connectionRepository = connectionRepository;
         this.connectionService = connectionService;
         this.workspaces = workspaces;
@@ -156,7 +160,7 @@ public class ConnectionAdminService {
         Connection connection = connectionRepository
                 .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, kind, instanceKey)
                 .map(existing -> {
-                    Connection locked = repairs.prepareCredentialCompletion(existing, config, credentials);
+                    Connection locked = registrations.prepareCredentialCompletion(existing, config, credentials);
                     locked.setConfig(config);
                     return locked;
                 })

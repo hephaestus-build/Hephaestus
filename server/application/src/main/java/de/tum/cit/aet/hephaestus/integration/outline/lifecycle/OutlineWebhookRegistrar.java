@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -57,7 +57,7 @@ public class OutlineWebhookRegistrar {
     private static final String SUBSCRIPTION_NAME = "Hephaestus documentation sync";
 
     private final ConnectionService connectionService;
-    private final ProviderResourceRepairs repairs;
+    private final ProviderResourceRegistrations registrations;
     private final OutlineWebhookClient outlineApiClient;
     private final OutlineRouteCredential credential;
     private final PublicApiUrls publicApiUrls;
@@ -74,7 +74,7 @@ public class OutlineWebhookRegistrar {
 
     public OutlineWebhookRegistrar(
             ConnectionService connectionService,
-            ProviderResourceRepairs repairs,
+            ProviderResourceRegistrations registrations,
             OutlineWebhookClient outlineApiClient,
             OutlineRouteCredential credential,
             PublicApiUrls publicApiUrls,
@@ -82,7 +82,7 @@ public class OutlineWebhookRegistrar {
             ClusterLock locks,
             MeterRegistry meterRegistry) {
         this.connectionService = connectionService;
-        this.repairs = repairs;
+        this.registrations = registrations;
         this.outlineApiClient = outlineApiClient;
         this.credential = credential;
         this.publicApiUrls = publicApiUrls;
@@ -186,7 +186,7 @@ public class OutlineWebhookRegistrar {
                     storedId,
                     workspaceId);
             // The new subscription first: a failed registration keeps the old one, and the next reconcile retries.
-            repairs.retireCurrentHook(workspaceId, active.get().getId());
+            registrations.retireCurrentHook(workspaceId, active.get().getId());
             register(workspaceId, serverUrl, token);
             return;
         }
@@ -227,7 +227,7 @@ public class OutlineWebhookRegistrar {
                 .findActive(workspaceId, IntegrationKind.OUTLINE)
                 .orElseThrow();
         String marker = UUID.randomUUID().toString();
-        UUID registration = repairs.beginRegistration(
+        UUID registration = registrations.beginRegistration(
                 workspaceId,
                 owner.getId(),
                 new Resource(
@@ -251,7 +251,7 @@ public class OutlineWebhookRegistrar {
                 return false;
             }
             String created = subscriptionId;
-            boolean stored = repairs.completeRegistration(workspaceId, owner.getId(), registration, cfg -> {
+            boolean stored = registrations.completeRegistration(workspaceId, owner.getId(), registration, cfg -> {
                 if (!(cfg instanceof ConnectionConfig.OutlineConfig outlineCfg)) {
                     throw new IllegalStateException("Expected OutlineConfig on workspace=" + workspaceId);
                 }

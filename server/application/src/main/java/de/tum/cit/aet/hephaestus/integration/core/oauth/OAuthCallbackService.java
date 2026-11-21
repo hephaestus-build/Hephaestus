@@ -10,7 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
-import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService.StateBinding;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.ConnectFinalization;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -75,7 +75,7 @@ public class OAuthCallbackService {
 
     private final ConnectionRepository connectionRepository;
     private final ConnectionService connectionService;
-    private final ProviderResourceRepairs repairs;
+    private final ProviderResourceRegistrations registrations;
     private final OAuthExchangeRepair exchangeRepairs;
     private final WorkspaceSummaryQuery workspaces;
     private final CredentialBundleConverter credentialBundleConverter;
@@ -96,9 +96,9 @@ public class OAuthCallbackService {
             CredentialBundleConverter credentialBundleConverter,
             AccountMembershipQuery membershipQuery,
             PlatformTransactionManager transactionManager,
-            ProviderResourceRepairs repairs,
+            ProviderResourceRegistrations registrations,
             OAuthExchangeRepair exchangeRepairs) {
-        this.repairs = repairs;
+        this.registrations = registrations;
         this.exchangeRepairs = exchangeRepairs;
         this.connectionRepository = connectionRepository;
         this.connectionService = connectionService;
@@ -172,7 +172,7 @@ public class OAuthCallbackService {
 
     private Connection complete(
             Connection pending, ConnectFinalization.Completed completed, @Nullable Long actorAccountId) {
-        Connection current = repairs.prepareCredentialCompletion(
+        Connection current = registrations.prepareCredentialCompletion(
                 pending,
                 completed.config() == null ? pending.getConfig() : completed.config(),
                 completed.credentials(),
