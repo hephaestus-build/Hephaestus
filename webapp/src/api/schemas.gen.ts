@@ -8047,6 +8047,21 @@ export const PasskeyStatusSchema = {
 	],
 } as const;
 
+export const PerPersonResultsSchema = {
+	type: "object",
+	properties: {
+		canTurnOn: {
+			type: "boolean",
+			description: "Whether the caller may turn it on: only a workspace owner may",
+		},
+		enabled: {
+			type: "boolean",
+			description: "Whether workspace admins see practice results per person",
+		},
+	},
+	required: ["canTurnOn", "enabled"],
+} as const;
+
 export const PersonDataProviderSchema = {
 	type: "object",
 	properties: {
@@ -9709,10 +9724,10 @@ export const PracticesAcrossWorkspaceTilesSchema = {
 		"The reader's figures over one window beside the middle half of the developers with a standing in it",
 	properties: {
 		developersWithAStandingInWindow: {
-			type: "integer",
+			type: ["null", "integer"],
 			format: "int32",
 			description:
-				"Developers with a standing in a practice group shown in the window, the developers the tiles compare",
+				"Developers with a standing in a practice group shown in the window, the developers the tiles compare. Null for fewer than 3",
 		},
 		includesEarlierReviews: {
 			type: "boolean",
@@ -12717,7 +12732,18 @@ export const ReviewFeedbackSchema = {
 			$ref: "#/components/schemas/FeedbackDestination",
 		},
 		developer: {
-			$ref: "#/components/schemas/ReviewDeveloper",
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewDeveloper",
+					description:
+						"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
+				},
+				{
+					type: "null",
+				},
+			],
+			description:
+				"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
 		},
 		disagreedAt: {
 			type: ["string", "null"],
@@ -12913,7 +12939,18 @@ export const ReviewFeedbackDetailSchema = {
 			$ref: "#/components/schemas/FeedbackDestination",
 		},
 		developer: {
-			$ref: "#/components/schemas/ReviewDeveloper",
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewDeveloper",
+					description:
+						"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
+				},
+				{
+					type: "null",
+				},
+			],
+			description:
+				"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
 		},
 		disagreedAt: {
 			type: ["string", "null"],
@@ -17128,6 +17165,16 @@ export const UpdateOutlineCollectionStateRequestSchema = {
 	required: ["state"],
 } as const;
 
+export const UpdatePerPersonResultsSchema = {
+	type: "object",
+	properties: {
+		enabled: {
+			type: "boolean",
+		},
+	},
+	required: ["enabled"],
+} as const;
+
 export const UpdatePracticeGroupRequestSchema = {
 	type: "object",
 	properties: {
@@ -19000,18 +19047,19 @@ export const WorkspaceReviewScopeSchema = {
 export const WorkspaceSplitSchema = {
 	type: "object",
 	description:
-		"How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total",
+		"How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total. A split with a part of 1 or 2, or with every developer in one part, shows only its total",
 	properties: {
 		developers: {
-			type: "integer",
+			type: ["null", "integer"],
 			format: "int32",
 			description:
-				"Every developer the split counts, the parts and none yet together, the reader included when counted",
+				"Every developer the split counts, the parts and none yet together, the reader included when counted. Null for fewer than 3",
 		},
 		noneYet: {
-			type: "integer",
+			type: ["null", "integer"],
 			format: "int32",
-			description: "Developers with a standing in a group shown but none here",
+			description:
+				"Developers with a standing in a group shown but none here. Null when the split shows only its total",
 		},
 		parts: {
 			type: "array",
@@ -19030,9 +19078,10 @@ export const WorkspaceSplitPartSchema = {
 	description: "The developers at one verdict in a split",
 	properties: {
 		developers: {
-			type: "integer",
+			type: ["null", "integer"],
 			format: "int32",
-			description: "Developers at the verdict, the reader included when counted",
+			description:
+				"Developers at the verdict, the reader included when counted. Null when the split shows only its total",
 		},
 		standing: {
 			$ref: "#/components/schemas/WorkspaceSplitsVerdict",
@@ -19073,13 +19122,15 @@ export const WorkspaceTileSchema = {
 			anyOf: [
 				{
 					$ref: "#/components/schemas/WorkspaceRange",
-					description: "The workspace's middle half; absent while no developer is counted",
+					description:
+						"The workspace's middle half; absent while fewer than 3 other developers are counted, or when its ends meet",
 				},
 				{
 					type: "null",
 				},
 			],
-			description: "The workspace's middle half; absent while no developer is counted",
+			description:
+				"The workspace's middle half; absent while fewer than 3 other developers are counted, or when its ends meet",
 		},
 		yours: {
 			type: "integer",

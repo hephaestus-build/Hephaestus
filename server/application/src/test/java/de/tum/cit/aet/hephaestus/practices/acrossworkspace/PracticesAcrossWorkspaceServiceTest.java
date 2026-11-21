@@ -21,7 +21,6 @@ import de.tum.cit.aet.hephaestus.practices.ReviewedBy;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.WorkspaceSplits.Verdict;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspacePracticeSplitDTO;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceRangeDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitPartDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackService;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -82,6 +81,7 @@ class PracticesAcrossWorkspaceServiceTest {
     private static final long PROLIFIC = 8L;
     private static final long QUIET = 9L;
     private static final long HIDDEN = 10L;
+    private static final long STEADY = 11L;
 
     private final Instant now = Instant.parse("2026-10-20T10:00:00Z");
     private final Clock clock = Clock.fixed(now, ZoneOffset.UTC);
@@ -188,8 +188,10 @@ class PracticesAcrossWorkspaceServiceTest {
         var first = row.practices().getFirst();
         assertThat(first.split().parts())
                 .extracting(WorkspaceSplitPartDTO::standing, WorkspaceSplitPartDTO::developers)
-                .containsExactly(tuple(Verdict.DEVELOPING, 0), tuple(Verdict.MIXED, 1), tuple(Verdict.STRENGTH, 1));
-        assertThat(first.split().developers()).isEqualTo(2);
+                .as("two developers are too few to show how they split")
+                .containsExactly(
+                        tuple(Verdict.DEVELOPING, null), tuple(Verdict.MIXED, null), tuple(Verdict.STRENGTH, null));
+        assertThat(first.split().developers()).isNull();
 
         var profile = standings.getStandingSnapshots(1L, READER, List.of(now)).getFirst();
         var reviewedProfile = Objects.requireNonNull(profile.practices().get(reviewed.getSlug()));
@@ -198,17 +200,18 @@ class PracticesAcrossWorkspaceServiceTest {
         var offStanding = offProfile.dto().standing();
         assertThat(StandingScale.isVerdict(offStanding)).isTrue();
         assertThat(row.practices().get(1).yourStanding()).isEqualTo(offStanding);
-        assertThat(row.practices().get(1).split().noneYet()).isEqualTo(1);
+        assertThat(row.practices().get(1).split().noneYet()).isNull();
         assertThat(row.yourStanding())
                 .isEqualTo(groupStandings
                         .summarize(List.of(group), profile)
                         .getFirst()
                         .standing());
-        assertThat(row.split().developers()).isEqualTo(2);
+        assertThat(row.split().developers()).isNull();
 
         // Counted: the reader, the quiet member and the member who joined through their results; never the hidden one.
         assertThat(overview.openFeedback().yours()).isEqualTo(2);
-        assertThat(overview.openFeedback().middle()).isEqualTo(new WorkspaceRangeDTO(1, 2));
+        // Two others besides the reader are too few for a typical range.
+        assertThat(overview.openFeedback().middle()).isNull();
         assertThat(overview.includesEarlierReviews()).isFalse();
     }
 
@@ -223,7 +226,7 @@ class PracticesAcrossWorkspaceServiceTest {
         assertThat(row.yourBasis()).isNull();
         assertThat(row.practices())
                 .allSatisfy(practice -> assertThat(practice.yourStanding()).isNull());
-        assertThat(row.split().developers()).isEqualTo(1);
+        assertThat(row.split().developers()).isNull();
     }
 
     @Test
@@ -234,20 +237,28 @@ class PracticesAcrossWorkspaceServiceTest {
         assertThat(row.split().developers()).isZero();
         assertThat(row.split().noneYet()).isZero();
         assertThat(row.yourStanding()).isNull();
-        assertThat(overview.openFeedback().middle()).isEqualTo(new WorkspaceRangeDTO(1, 2));
+        // Two others besides the reader are too few for a typical range.
+        assertThat(overview.openFeedback().middle()).isNull();
     }
 
     @Test
     void shouldReadTheTilesOverTheWindowRatherThanTheLastNinetyDays() {
         result(reviewed, READER, 1, 5, ResultOutcome.MET);
         result(reviewed, PROLIFIC, 10, 60, ResultOutcome.MET);
+        result(reviewed, QUIET, 11, 70, ResultOutcome.MET);
+        result(reviewed, STEADY, 12, 80, ResultOutcome.MET);
+        result(reviewed, STEADY, 13, 85, ResultOutcome.MET);
+        when(memberships.isActiveVisibleMember(1L, STEADY)).thenReturn(true);
 
         var recent = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_30);
         var quarter = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_90);
 
-        assertThat(recent.developersWithAStandingInWindow()).isEqualTo(1);
-        assertThat(recent.reviewedWork().middle()).isEqualTo(new WorkspaceRangeDTO(1, 1));
-        assertThat(quarter.developersWithAStandingInWindow()).isEqualTo(2);
+        // One developer in the last 30 days is too few to count or to give a typical range.
+        assertThat(recent.developersWithAStandingInWindow()).isNull();
+        assertThat(recent.reviewedWork().middle()).isNull();
+        // Over 90 days, three developers besides the reader give one.
+        assertThat(quarter.developersWithAStandingInWindow()).isEqualTo(4);
+        assertThat(quarter.reviewedWork().middle()).isNotNull();
         assertThat(quarter.yourPractices()).isEqualTo(2);
         assertThat(quarter.practicesGoingWell().yours()).isEqualTo((int)
                 standings.getStandingSnapshots(1L, READER, List.of(now)).getFirst().practices().values().stream()
@@ -258,11 +269,15 @@ class PracticesAcrossWorkspaceServiceTest {
     @Test
     void shouldNotCountADeveloperWhoseOnlyObservationsWereSealedInFeedbackModeOff() {
         result(reviewed, READER, 1, 5, ResultOutcome.MET);
+        // Two more counted developers keep the count at 3 or more, which the page shows (ADR 0112).
+        result(reviewed, QUIET, 2, 5, ResultOutcome.MET);
+        result(reviewed, STEADY, 3, 5, ResultOutcome.MET);
+        when(memberships.isActiveVisibleMember(1L, STEADY)).thenReturn(true);
         result(reviewed, PROLIFIC, 10, 5, ResultOutcome.MET, FeedbackMode.OFF);
 
         var tiles = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_30);
 
-        assertThat(tiles.developersWithAStandingInWindow()).isEqualTo(1);
+        assertThat(tiles.developersWithAStandingInWindow()).isEqualTo(3);
         var prolific =
                 standings.getStandingSnapshots(1L, PROLIFIC, List.of(now)).getFirst();
         assertThat(Objects.requireNonNull(prolific.practices().get(reviewed.getSlug()))

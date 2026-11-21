@@ -1,6 +1,6 @@
 ---
 title: Practices across the workspace
-description: See where the developers in your workspace stand in each practice group, and what small counts can tell others about you.
+description: See where the developers in your workspace stand in each practice group, and which small counts the page hides.
 page_type: feature
 ---
 
@@ -45,12 +45,29 @@ If your standing includes them, your row reads **Based on earlier reviews, the c
 
 ## Small counts
 
-The page shows every count, however small, and everyone sees the same counts.
-A small count can tell other members where you stand:
+The page does not show a count of 1 or 2 developers.
+It says **fewer than 3**, because a small count can tell other members where a developer stands.
+A count of zero is shown.
 
-- A small part of a bar can identify one or two developers to a member who knows them.
-- A typical range of one or two developers can show their values.
-- A member who compares the page before and after your next review can see the counts change.
+- A bar has four parts: **Needs attention**, **Mixed feedback**, **Going well**, and **No standing yet**.
+  They add up to the total.
+- If any part would hold 1 or 2 developers, or everyone is in one part, the bar shows only its total, with a dotted outline.
+  It does not say which of the two it is, and it hides every part, also the empty ones.
+  Hiding only the small part is not enough: the total minus the parts that you see would give it back.
+- A bar with fewer than 3 developers in all shows no total and no parts.
+- The typical range of a tile leaves you out and shows only when at least 3 other developers are counted.
+  With your own value beside the range of a small group, you could otherwise work out the others' values.
+  A range whose two ends meet is not shown either, because it would say that every other developer has about the same value.
+  The tile does not say which reason applies.
+  The number of developers with a standing does not show 1 or 2 either.
+
+Everyone sees the same counts.
+
+Some things stay possible.
+A part of 3 can be you and 2 others, so you learn that 2 others share your standing, but not who.
+A member who knows how the page combines practices into a group can sometimes infer something about a group from the bars of its practices.
+The tiles can differ between time ranges, which shows how many developers joined or left a range, not where anyone stands.
+A member who compares the page before and after your next review can see the counts change.
 
 The page does not count hidden members.
 A workspace admin can hide you under **Members**.

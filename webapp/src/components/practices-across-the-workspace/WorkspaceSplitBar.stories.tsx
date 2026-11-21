@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { split } from "@/stories/practices-across-the-workspace-story-data";
+import { split, totalOnly } from "@/stories/practices-across-the-workspace-story-data";
 
 import { LevelSplit, WorkspaceSplitBar } from "./WorkspaceSplitBar";
 
@@ -52,33 +52,43 @@ export const Default: Story = {
 /** The parts and the You bracket carry colour meaning, so dark mode is drawn, not assumed. */
 export const Dark: Story = { globals: { theme: "dark" } };
 
-/** Parts of one and two draw like any other part. A part of nobody draws nothing; the text still names it. */
-export const SmallParts: Story = {
-	args: { split: split(1, 0, 2, 25), yourStanding: "STRENGTH" },
+/**
+ * A part would hold 1 or 2, or everyone sits in one part: the server sends the total only, and the
+ * bar is one dotted track that says why without saying which.
+ */
+export const SpreadHidden: Story = {
+	args: { split: totalOnly(28), yourStanding: "STRENGTH" },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByTitle("Needs attention: 1")).toBeVisible();
-		await expect(canvas.queryByTitle("Mixed feedback: 0")).toBeNull();
-		await expect(canvas.getByText("You")).toBeVisible();
+		await expect(canvas.getByRole("img")).toHaveAccessibleName(
+			"28 developers in this workspace. Their split stays hidden to protect small counts.",
+		);
+		await expect(
+			canvas.getByText("Their split stays hidden to protect small counts."),
+		).toBeVisible();
+		await expect(canvas.getByText("28 developers")).toBeVisible();
+		// No part to stand over, so no bracket: the reader's own standing is on their Practice profile.
+		await expect(canvas.queryByText("You")).toBeNull();
 	},
 };
 
-/** One developer, the reader: their one part is the whole bar. */
-export const OneDeveloper: Story = {
-	args: { split: split(0, 0, 1, 0), yourStanding: "STRENGTH" },
+/** Fewer than 3 developers in total: the server sends no cell and no total, so the track stays empty. */
+export const TooFewToSplit: Story = {
+	args: { split: totalOnly(null), yourStanding: undefined },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("img")).toHaveAccessibleName(
-			"1 developer in this workspace: 0 Needs attention, 0 Mixed feedback, 1 Going well, 0 none yet. You are in the Going well part.",
-		);
+		await expect(canvas.queryByRole("img")).toBeNull();
+		await expect(
+			canvas.getByText("Fewer than 3 developers have a standing here, so the split stays hidden."),
+		).toBeVisible();
 	},
 };
 
 /** The reader is not counted: the bar marks nobody. */
 export const ReaderNotCounted: Story = {
-	args: { split: split(1, 0, 1, 0), yourStanding: undefined },
+	args: { yourStanding: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("You")).toBeNull();
 		await expect(canvas.getByRole("img")).toHaveAccessibleName(
-			"2 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 1 Going well, 0 none yet.",
+			"28 developers in this workspace: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet.",
 		);
 	},
 };

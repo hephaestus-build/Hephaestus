@@ -182,6 +182,7 @@ export { getOwnReview } from "./sdk/getOwnReview.gen.js";
 export { getPasskeyRegistrationOptions } from "./sdk/getPasskeyRegistrationOptions.gen.js";
 export { getPasskeyStatus } from "./sdk/getPasskeyStatus.gen.js";
 export { getPasskeyVerificationOptions } from "./sdk/getPasskeyVerificationOptions.gen.js";
+export { getPerPersonResults } from "./sdk/getPerPersonResults.gen.js";
 export { getPractice } from "./sdk/getPractice.gen.js";
 export { getPracticeDefinitionOptions } from "./sdk/getPracticeDefinitionOptions.gen.js";
 export { getPracticeGroup } from "./sdk/getPracticeGroup.gen.js";
@@ -362,6 +363,7 @@ export { updateMemberOnboardingSettings } from "./sdk/updateMemberOnboardingSett
 export { updateNotificationPreferences } from "./sdk/updateNotificationPreferences.gen.js";
 export { updateOutlineCollectionState } from "./sdk/updateOutlineCollectionState.gen.js";
 export { updatePasskeyProtection } from "./sdk/updatePasskeyProtection.gen.js";
+export { updatePerPersonResults } from "./sdk/updatePerPersonResults.gen.js";
 export { updatePractice } from "./sdk/updatePractice.gen.js";
 export { updatePracticeGroup } from "./sdk/updatePracticeGroup.gen.js";
 export { updatePracticeReviewSettings } from "./sdk/updatePracticeReviewSettings.gen.js";

@@ -205,6 +205,34 @@ Workspace admins choose these settings under **Administration**:
 
 To hide members or teams from workspace activity, see [Activity](./activity).
 
+## Choose whether admins see results per person
+
+**Per-person results for admins** decides whether workspace admins see who each practice result, problem and piece of feedback is about.
+It is off for a new workspace.
+Hephaestus gives practice feedback on the work to help developers practice.
+It is not a grade, an appraisal, an allocation or a pay input. [Intended purpose](/admin/intended-purpose) says more.
+
+| | Off | On |
+| --- | --- | --- |
+| Results, problems and feedback on practice pages and in conversations | Admins see no names. Each result still shows the work it is about. | Admins see who each one is about, also for earlier results. |
+| **Practice reviews** lists | No **Developer** filter. | A **Developer** filter. |
+| **Observations** and **Problems** tables | No **Developer** column. | A **Developer** column. |
+| Feedback on the work | It names its developer, because Hephaestus posts it to them on their work and an admin approves it. | Same. |
+
+While the setting is off, the server refuses a filter by person.
+
+1. Under **Administration**, open **Workspace settings**.
+2. Under **Practice results for admins**, find **Per-person results for admins**.
+
+Only a workspace owner can turn the setting on.
+Hephaestus asks the owner to confirm.
+To turn it off, any admin or owner switches it off.
+It takes one step and no confirmation.
+
+Hephaestus records each change in the configuration audit of the workspace, with who changed it and when.
+A workspace that ran practice reviews before this setting existed keeps it on.
+The upgrade records one audit entry for that.
+
 ## Replace a refused token
 
 Hephaestus checks GitLab tokens daily and rotates them, as [Create a workspace](#create-a-workspace) describes.

@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { listMembershipsOptions } from "@/api/@tanstack/react-query.gen";
+import {
+	getPerPersonResultsOptions,
+	listMembershipsOptions,
+} from "@/api/@tanstack/react-query.gen";
 import {
 	MEMBER_PAGE_SIZE,
 	type PersonOption,
@@ -12,6 +15,8 @@ export function useReviewPeople(workspaceSlug: string): ReviewPeople {
 	const membersQuery = useQuery({
 		...listMembershipsOptions({ path: { workspaceSlug }, query: { size: MEMBER_PAGE_SIZE } }),
 	});
+	// Unknown counts as off: a filter the server refuses is worse than one that appears a moment late.
+	const perPersonQuery = useQuery(getPerPersonResultsOptions({ path: { workspaceSlug } }));
 	const options: PersonOption[] = (membersQuery.data?.content ?? []).map(({ account }) => {
 		const login = account.identities.find((identity) => hasText(identity.login))?.login;
 		return {
@@ -26,5 +31,6 @@ export function useReviewPeople(workspaceSlug: string): ReviewPeople {
 		capped: (membersQuery.data?.totalElements ?? 0) > options.length,
 		isLoading: membersQuery.isLoading,
 		isError: membersQuery.isError,
+		named: perPersonQuery.data?.enabled === true,
 	};
 }

@@ -72,14 +72,18 @@ export function ProblemsListPage({
 			/>
 			{problems.status === "error" && (
 				<ProblemRows
+					named={people.named}
 					state={{ status: "error", error: problems.error, onRetry: problems.onRetry }}
 				/>
 			)}
-			{problems.status === "loading" && <ProblemRows state={{ status: "loading" }} />}
+			{problems.status === "loading" && (
+				<ProblemRows named={people.named} state={{ status: "loading" }} />
+			)}
 			{problems.status === "ready" && (
 				<>
 					<ReviewListRefresh failure={problems.refreshFailure} noun="problems" />
 					<ProblemRows
+						named={people.named}
 						state={problemsState(rows, hasProblemFilter(search) ? reset : undefined)}
 						loadingMore={loadingMoreRows(problems)}
 					/>

@@ -84,13 +84,19 @@ export function ResultsListPage({
 			/>
 			{summary}
 			{results.status === "error" && (
-				<ResultRows state={{ status: "error", error: results.error, onRetry: results.onRetry }} />
+				<ResultRows
+					named={people.named}
+					state={{ status: "error", error: results.error, onRetry: results.onRetry }}
+				/>
 			)}
-			{results.status === "loading" && <ResultRows state={{ status: "loading" }} />}
+			{results.status === "loading" && (
+				<ResultRows named={people.named} state={{ status: "loading" }} />
+			)}
 			{results.status === "ready" && (
 				<>
 					<ReviewListRefresh failure={results.refreshFailure} noun="observations" />
 					<ResultRows
+						named={people.named}
 						state={resultsState(rows, hasFilter ? reset : undefined)}
 						byDay={byDay}
 						loadingMore={loadingMoreRows(results)}

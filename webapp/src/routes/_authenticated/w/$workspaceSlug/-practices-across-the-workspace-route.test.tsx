@@ -108,9 +108,9 @@ describe("Practices across the workspace", () => {
 		table.getByRole("img", {
 			name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
 		});
-		// Parts of one and two show as they are; the reader without a verdict sits in none yet.
+		// A split with a part of one or two shows only its total, with no You bracket (ADR 0112).
 		table.getByRole("img", {
-			name: "28 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. You are in the part with no standing yet.",
+			name: "28 developers in this workspace. Their split stays hidden to protect small counts.",
 		});
 		expect(overviewReads()).toHaveLength(1);
 		expect(profileReads()).toStrictEqual([]);

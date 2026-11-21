@@ -30,7 +30,7 @@ import { RecordResults, type RecordResultsWords } from "./RecordResults";
 import { RecordRowActions, ROW_OPEN_COLUMN, rowActionsColumn } from "./RecordRowActions";
 import { developerLabel } from "./review-format";
 import { feedbackLevel } from "./review-levels";
-import { ReviewPerson } from "./ReviewPerson";
+import { FeedbackPerson } from "./ReviewPerson";
 import { useTracked } from "./use-tracked";
 
 /** A filtered empty state has to carry the way out of itself. */
@@ -100,7 +100,8 @@ export interface FeedbackRowProps {
 export function feedbackRowName(feedback: ReviewFeedback): string {
 	const location = definitionFor(FEEDBACK_LOCATION_DEFS, feedback.location).label.toLowerCase();
 	const on = feedback.item === null ? "" : ` on ${feedback.item.label}`;
-	return `for ${developerLabel(feedback.developer)}${on}, ${location}`;
+	const who = feedback.developer === null ? "a developer" : developerLabel(feedback.developer);
+	return `for ${who}${on}, ${location}`;
 }
 
 export function FeedbackRow({ feedback }: FeedbackRowProps) {
@@ -148,7 +149,7 @@ export function FeedbackRow({ feedback }: FeedbackRowProps) {
 				<ReviewItemCell item={feedback.item} linked={false} />
 			)}
 			<TableCell className="align-top whitespace-normal">
-				<ReviewPerson person={feedback.developer} />
+				<FeedbackPerson person={feedback.developer} />
 			</TableCell>
 			<TableCell className="align-top whitespace-normal">
 				<span className="flex min-w-0 flex-col items-start gap-1">

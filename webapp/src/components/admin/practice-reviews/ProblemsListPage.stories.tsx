@@ -19,6 +19,7 @@ const PEOPLE: ReviewPeople = {
 		secondary: account.identities[0]?.login ?? undefined,
 	})),
 	capped: false,
+	named: true,
 	isLoading: false,
 	isError: false,
 };
@@ -75,6 +76,20 @@ export const Default: Story = {
 			canvas.getByRole("combobox", { name });
 		}
 		canvas.getByRole("button", { name: "Recorded" });
+	},
+};
+
+/** While the workspace shows admins results without names: no Developer column, no filter by person. */
+export const WithoutNames: Story = {
+	args: {
+		people: { ...PEOPLE, named: false },
+		problems: loadedList(reviewProblems.map((problem) => ({ ...problem, developer: null }))),
+	},
+	play: async ({ canvas }) => {
+		await canvas.findByText(`${reviewProblems.length} problems.`);
+		await expect(canvas.queryByRole("combobox", { name: "Developer" })).toBeNull();
+		await expect(canvas.queryAllByRole("columnheader", { name: "Developer" })).toHaveLength(0);
+		await expect(canvas.queryByText("Unavailable developer")).toBeNull();
 	},
 };
 
