@@ -69,6 +69,10 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
                 mock(AttemptInputs.class));
     }
 
+    private EvidenceFileReads reads(JobEvidenceFiles files) {
+        return new EvidenceFileReads(files, new FabricLayout(root.toString()), mock(ReviewJobRepository.class));
+    }
+
     private ReviewJob job() {
         var job = RuntimeReviewTestData.job();
         job.setRunId(LEASE);
@@ -104,7 +108,7 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
     @ValueSource(strings = {"invalid", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"})
     void shouldIgnoreReadsWithoutAValidContentDigest(@Nullable String digest) {
         var index = manifest(List.of(), List.of());
-        assertThat(files().registerReadReceipts(job(), index, List.of(receipt("file.txt", digest)), catalogs))
+        assertThat(reads(files()).registerReadReceipts(job(), index, List.of(receipt("file.txt", digest)), catalogs))
                 .isEqualTo(index);
     }
 
@@ -115,8 +119,9 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
         var prepared = files.prepare(job, new PreparedEvidence(Map.of(WITNESS, BYTES), null), null);
         try {
             var index = manifest(List.of(), witness());
-            var updated = files.registerReadReceipts(
-                    job, index, List.of(receipt(WITNESS, DIGEST), receipt(WITNESS, DIGEST)), catalogs);
+            var updated = reads(files)
+                    .registerReadReceipts(
+                            job, index, List.of(receipt(WITNESS, DIGEST), receipt(WITNESS, DIGEST)), catalogs);
             assertThat(updated.citableTexts())
                     .containsExactly(
                             new CitableText(SOURCE.value(), WITNESS, CitationSide.NEW, "commit-one", WITNESS, DIGEST));
@@ -135,8 +140,9 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
         var prepared = files.prepare(
                 job, new PreparedEvidence(Map.of(WITNESS, BYTES, "repository/file.txt", BYTES), null), null);
         try {
-            var updated = files.registerReadReceipts(
-                    job, manifest(List.of(), witness()), List.of(receipt("file.txt", DIGEST)), catalogs);
+            var updated = reads(files)
+                    .registerReadReceipts(
+                            job, manifest(List.of(), witness()), List.of(receipt("file.txt", DIGEST)), catalogs);
             assertThat(updated.citableTexts())
                     .containsExactly(new CitableText(
                             SOURCE.value(), "file.txt", CitationSide.NEW, "commit-one", "repository/file.txt", DIGEST));
@@ -171,7 +177,8 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
             assertThat(prepared.filesOnDisk()).doesNotContainKey("repos/reviewed/.git/HEAD");
             var read = new ReadReceipt(
                     SOURCE, recordPath, "file.txt", commit, ReadReceiptStatus.COMPLETE, DIGEST, 1, 2, null, null);
-            assertThat(files.registerReadReceipts(job, index, List.of(read), catalogs)
+            assertThat(reads(files)
+                            .registerReadReceipts(job, index, List.of(read), catalogs)
                             .citableTexts())
                     .containsExactlyElementsOf(texts);
         }
@@ -188,8 +195,8 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
                 new CitableText(SOURCE.value(), WITNESS, CitationSide.NEW, "commit-two", WITNESS, DIGEST));
         var prepared = files.prepare(job, new PreparedEvidence(Map.of(WITNESS, BYTES), null), null);
         try {
-            var updated = files.registerReadReceipts(
-                    job, manifest(prior, witness()), List.of(receipt(WITNESS, DIGEST)), catalogs);
+            var updated = reads(files)
+                    .registerReadReceipts(job, manifest(prior, witness()), List.of(receipt(WITNESS, DIGEST)), catalogs);
             var expected = new ArrayList<>(prior);
             expected.add(new CitableText(SOURCE.value(), WITNESS, CitationSide.NEW, "commit-one", WITNESS, DIGEST));
             assertThat(updated.citableTexts()).containsExactlyElementsOf(expected);
@@ -270,8 +277,8 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
                 case "changed-text" -> "The host read digest differs from its captured text";
                 default -> "The host read has no unique captured directory";
             };
-            assertThatThrownBy(
-                            () -> files.registerReadReceipts(job, manifest(texts, witnesses), List.of(read), catalogs))
+            assertThatThrownBy(() ->
+                            reads(files).registerReadReceipts(job, manifest(texts, witnesses), List.of(read), catalogs))
                     .isInstanceOf(
                             defect.equals("changed-witness")
                                     ? IllegalStateException.class
@@ -288,9 +295,9 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
         var job = job();
         var prepared = files.prepare(job, new PreparedEvidence(Map.of(WITNESS, BYTES), null), null);
         try {
-            assertThat(files.readText(job, WITNESS, DIGEST)).contains("Captured text\n");
-            assertThat(files.readText(job, "missing.txt", DIGEST)).isEmpty();
-            assertThatThrownBy(() -> files.readText(job, WITNESS, "a".repeat(64)))
+            assertThat(reads(files).readText(job, WITNESS, DIGEST)).contains("Captured text\n");
+            assertThat(reads(files).readText(job, "missing.txt", DIGEST)).isEmpty();
+            assertThatThrownBy(() -> reads(files).readText(job, WITNESS, "a".repeat(64)))
                     .isInstanceOf(IllegalStateException.class);
         } finally {
             prepared.close();

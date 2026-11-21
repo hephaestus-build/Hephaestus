@@ -55,6 +55,14 @@ class JobEvidenceRebuildTest {
         return new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), copies, inputs);
     }
 
+    private EvidenceFileReads reads(JobEvidenceFiles files) {
+        return new EvidenceFileReads(files, new FabricLayout(root.toString()), jobs);
+    }
+
+    private AttemptCopyReceipts receipts(JobEvidenceFiles files) {
+        return new AttemptCopyReceipts(copies, files, new FabricLayout(root.toString()), jobs);
+    }
+
     @Test
     void shouldRebuildTheFolderFromTheRecordedFiles() {
         var job = runningJob();
@@ -65,7 +73,7 @@ class JobEvidenceRebuildTest {
 
         files.ensureAttemptFolder(job);
 
-        assertThat(files.readText(job, "context/item.json", SHA)).contains(RECORD);
+        assertThat(reads(files).readText(job, "context/item.json", SHA)).contains(RECORD);
     }
 
     @Test
@@ -95,12 +103,12 @@ class JobEvidenceRebuildTest {
 
         var first = CompletableFuture.supplyAsync(() -> {
             files.ensureAttemptFolder(job);
-            return files.readText(job, "context/item.json", SHA);
+            return reads(files).readText(job, "context/item.json", SHA);
         });
         assertThat(listed.await(5, TimeUnit.SECONDS)).isTrue();
         var second = CompletableFuture.supplyAsync(() -> {
             files.ensureAttemptFolder(job);
-            return files.readText(job, "context/item.json", SHA);
+            return reads(files).readText(job, "context/item.json", SHA);
         });
         release.countDown();
 
@@ -125,7 +133,7 @@ class JobEvidenceRebuildTest {
 
         files.ensureAttemptFolder(job);
 
-        assertThat(files.readText(job, "context/item.json", SHA)).contains(RECORD);
+        assertThat(reads(files).readText(job, "context/item.json", SHA)).contains(RECORD);
         released.get(5, TimeUnit.SECONDS);
     }
 
@@ -151,7 +159,7 @@ class JobEvidenceRebuildTest {
 
         files().ensureAttemptFolder(job);
 
-        assertThat(files().readText(job, "context/item.json", SHA)).isEmpty();
+        assertThat(reads(files()).readText(job, "context/item.json", SHA)).isEmpty();
     }
 
     @Test
@@ -189,13 +197,13 @@ class JobEvidenceRebuildTest {
         recorded(erased);
         when(copies.vouchesForLiveAttempt(any(), anyLong(), anyInt())).thenReturn(false);
         files().ensureAttemptFolder(erased);
-        assertThat(files().readText(erased, "context/item.json", SHA)).isEmpty();
+        assertThat(reads(files()).readText(erased, "context/item.json", SHA)).isEmpty();
 
         var ended = runningJob();
         ReviewJobFixtures.withStatus(ended, ReviewJobStatus.FAILED);
         recorded(ended);
         files().ensureAttemptFolder(ended);
-        assertThat(files().readText(ended, "context/item.json", SHA)).isEmpty();
+        assertThat(reads(files()).readText(ended, "context/item.json", SHA)).isEmpty();
     }
 
     @Test
@@ -222,21 +230,24 @@ class JobEvidenceRebuildTest {
         recorded(job);
         var files = files();
 
-        files.ensureAttemptFolder(new ResultAdmissionService.AdmissionIdentity(
-                job.getId(), job.getWorkspaceId(), job.getAttempt() + 1, job.getRunId()));
+        receipts(files)
+                .ensureAttemptFolder(new ResultAdmissionService.AdmissionIdentity(
+                        job.getId(), job.getWorkspaceId(), job.getAttempt() + 1, job.getRunId()));
         job.setAdmissionAttempt(job.getAttempt());
         job.setAdmissionDigest(SHA);
-        files.ensureAttemptFolder(new ResultAdmissionService.AdmissionIdentity(
-                job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()));
+        receipts(files)
+                .ensureAttemptFolder(new ResultAdmissionService.AdmissionIdentity(
+                        job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()));
         assertThat(root.resolve("jobs"))
                 .as("a stale or admitted attempt gets no folder")
                 .doesNotExist();
 
         job.setAdmissionAttempt(null);
         job.setAdmissionDigest(null);
-        files.ensureAttemptFolder(new ResultAdmissionService.AdmissionIdentity(
-                job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()));
-        assertThat(files.readText(job, "context/item.json", SHA)).contains(RECORD);
+        receipts(files)
+                .ensureAttemptFolder(new ResultAdmissionService.AdmissionIdentity(
+                        job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()));
+        assertThat(reads(files).readText(job, "context/item.json", SHA)).contains(RECORD);
     }
 
     @Test
@@ -249,10 +260,11 @@ class JobEvidenceRebuildTest {
         var identity = new ResultAdmissionService.AdmissionIdentity(
                 job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId());
 
-        assertThatThrownBy(() -> files().readText(job, "context/item.json", SHA))
+        assertThatThrownBy(() -> reads(files()).readText(job, "context/item.json", SHA))
                 .isInstanceOf(AttemptFolderBusyException.class);
-        assertThatThrownBy(() -> files().verificationDirectory(job)).isInstanceOf(AttemptFolderBusyException.class);
-        assertThatThrownBy(() -> files().originalCompositionInputs(identity))
+        assertThatThrownBy(() -> reads(files()).verificationDirectory(job))
+                .isInstanceOf(AttemptFolderBusyException.class);
+        assertThatThrownBy(() -> reads(files()).originalCompositionInputs(identity))
                 .as("never an empty basis, which admission refuses as a conflict")
                 .isInstanceOf(AttemptFolderBusyException.class);
         assertThat(root.resolve("jobs")).doesNotExist();

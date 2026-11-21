@@ -13,7 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedResults;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ResultsRefusedException;
@@ -85,7 +85,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     private final CandidateEvidenceVerifier verifier = mock(CandidateEvidenceVerifier.class);
     private final ResultStore results = mock(ResultStore.class);
     private final ReviewAssignmentStore membership = mock(ReviewAssignmentStore.class);
-    private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
+    private final EvidenceFileReads files = mock(EvidenceFileReads.class);
     private final ClasspathSourceCatalogRegistry catalogs = mock(ClasspathSourceCatalogRegistry.class);
     private final ReviewJob job = RuntimeReviewTestData.job();
     private List<ResultCandidate> staged = List.of();

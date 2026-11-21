@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.AppliesWhenEvaluator;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
@@ -218,6 +219,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
     RepositoryToMonitorRepository monitors;
 
     private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
+    private final EvidenceFileReads reads = mock(EvidenceFileReads.class);
     private final WorkspaceContextBuilder context = mock(WorkspaceContextBuilder.class);
     private final ItemSource source = mock(ItemSource.class);
 
@@ -494,7 +496,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
             var report = Objects.requireNonNull(prepared.automatedReviewReadinessReport());
             assertThat(report.decisions()).noneMatch(report::runs);
             new ReviewOutputService(
-                            assignments, mock(CandidateEvidenceVerifier.class), store, mapper, files, catalogs, members)
+                            assignments, mock(CandidateEvidenceVerifier.class), store, mapper, reads, catalogs, members)
                     .seal(job, List.of());
         }
         assertThat(results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(
@@ -567,7 +569,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                             inlineCommentPresent ? AppliesWhenCheck.Result.FOUND : AppliesWhenCheck.Result.NOT_FOUND);
             if (!inlineCommentPresent) {
                 var output = new ReviewOutputService(
-                        assignments, mock(CandidateEvidenceVerifier.class), store, mapper, files, catalogs, members);
+                        assignments, mock(CandidateEvidenceVerifier.class), store, mapper, reads, catalogs, members);
                 var receipt = output.seal(job, List.of());
                 assertThat(receipt.withheldItems()).isEmpty();
                 assertThat(receipt.resultIds()).hasSize(1);
@@ -646,7 +648,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
             assertThat(Objects.requireNonNull(job.getCapture()).path("index").isEmpty())
                     .isTrue();
             var output = new ReviewOutputService(
-                    assignments, mock(CandidateEvidenceVerifier.class), store, mapper, files, catalogs, members);
+                    assignments, mock(CandidateEvidenceVerifier.class), store, mapper, reads, catalogs, members);
             var receipt = output.seal(job, List.of());
             ((ObjectNode) Objects.requireNonNull(job.getCapture())).set("admission", mapper.valueToTree(receipt));
         }

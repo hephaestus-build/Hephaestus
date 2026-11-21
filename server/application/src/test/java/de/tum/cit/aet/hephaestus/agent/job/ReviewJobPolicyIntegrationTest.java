@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
@@ -1472,6 +1473,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 reviewRuns,
                 agentRuns,
                 mock(JobEvidenceFiles.class),
+                mock(AttemptCopyReceipts.class),
                 mock(ClusterLock.class));
     }
 

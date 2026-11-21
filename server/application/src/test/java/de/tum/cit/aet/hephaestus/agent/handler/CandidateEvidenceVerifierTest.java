@@ -10,8 +10,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.FolderSource;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.handler.candidate.Candidate;
 import de.tum.cit.aet.hephaestus.agent.handler.candidate.CandidateParser;
@@ -68,7 +68,7 @@ class CandidateEvidenceVerifierTest extends BaseUnitTest {
     private static final String STATE =
             "{\"type\":\"state\",\"explanation\":\"The current file contains these words\"}";
     private final ReviewJob job = new ReviewJob();
-    private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
+    private final EvidenceFileReads files = mock(EvidenceFileReads.class);
     private final ClasspathSourceCatalogRegistry catalogs = mock(ClasspathSourceCatalogRegistry.class);
     private final CitationVerifier domain = mock(CitationVerifier.class);
 

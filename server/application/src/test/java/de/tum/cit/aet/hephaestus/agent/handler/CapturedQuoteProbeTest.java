@@ -6,7 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.evidence.CapturedSource;
@@ -36,7 +36,7 @@ class CapturedQuoteProbeTest extends BaseUnitTest {
     private static final String QUOTE = "if (user == null) return;";
 
     private final ReviewJob job = TestEntities.reviewJob();
-    private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
+    private final EvidenceFileReads files = mock(EvidenceFileReads.class);
 
     private static EvidenceCitation cited(String path) {
         return new EvidenceCitation(

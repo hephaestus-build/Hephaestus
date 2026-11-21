@@ -1,5 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import static de.tum.cit.aet.hephaestus.agent.context.EvidenceFolders.delete;
+import static de.tum.cit.aet.hephaestus.agent.context.EvidenceFolders.directory;
+import static de.tum.cit.aet.hephaestus.agent.context.EvidenceFolders.safePath;
+
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
@@ -10,28 +14,14 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
-import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
-import de.tum.cit.aet.hephaestus.evidence.CapturedSource;
-import de.tum.cit.aet.hephaestus.evidence.CitationRequirement;
-import de.tum.cit.aet.hephaestus.evidence.CitationSide;
-import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.capture.CheckoutKey;
-import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
-import de.tum.cit.aet.hephaestus.practices.spi.ReadReceipt;
-import de.tum.cit.aet.hephaestus.practices.spi.ReadReceiptStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.Reader;
 import java.io.UncheckedIOException;
-import java.io.Writer;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.FileAlreadyExistsException;
@@ -44,21 +34,15 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,9 +56,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,16 +65,10 @@ import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.JsonNodeFactory;
-import tools.jackson.databind.node.ObjectNode;
 
 @Component
 public class JobEvidenceFiles implements SandboxResultListener {
     private static final Logger log = LoggerFactory.getLogger(JobEvidenceFiles.class);
-
-    /** Invalid UTF-8 cannot match a quote: this lone surrogate is rejected by quoteDigest. */
-    private static final String UNDECODABLE = "\uDC00";
 
     /** The most bytes of a checkout that a search proof reads: {@code PROOF_BYTES} in {@code pi-verified-search.ts}. */
     static final long SEARCH_PROOF_BYTES = 512L * 1024 * 1024;
@@ -123,28 +98,15 @@ public class JobEvidenceFiles implements SandboxResultListener {
      */
     public static final String COPIES_EXPIRE_AT = "copiesExpireAt";
 
-    private static final JsonMapper TRACE_RECORDS = new JsonMapper();
-
-    /** Where the gateway runner puts the native session transcripts in a result. */
-    private static final String TRACES = "traces/";
-
-    private static final String TRACE_SUFFIX = ".trace";
-    private static final String TRACE_RECORD = "record.json";
-
-    /**
-     * The collector's manifest (gateway-run.ts). It is sandbox output: a METADATA_ONLY record keeps only what
-     * {@link TraceSummary} rebuilds from it.
-     */
-    private static final String TRACE_MANIFEST = "manifest.json";
-
     public static final long TRACE_BYTE_BUDGET = 8L * 1024 * 1024;
-    private static final int TRACE_FILE_BUDGET = 2 * 1024 * 1024;
 
     private final FabricLayout layout;
     private final ReviewJobRepository jobs;
     private final Clock clock;
     private final EvidenceFolderPersonDataCatalog personCopies;
     private final AttemptInputs attemptInputs;
+    private final AttemptTranscripts transcripts;
+    private final AttemptFolderSweep sweep;
 
     public JobEvidenceFiles(
             FabricLayout layout,
@@ -157,6 +119,8 @@ public class JobEvidenceFiles implements SandboxResultListener {
         this.clock = clock;
         this.personCopies = personCopies;
         this.attemptInputs = attemptInputs;
+        this.transcripts = new AttemptTranscripts(layout, jobs, clock, personCopies);
+        this.sweep = new AttemptFolderSweep(layout, jobs, clock, personCopies);
     }
 
     /** The durable preparation checkpoint; the owning protocol is in the agent-runs guide. */
@@ -193,7 +157,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
         return personCopies.withLiveAttempt(job, () -> {
             JsonNode capture = Objects.requireNonNull(job.getCapture());
             var lease = acquireForRebuild(job);
-            Path root = directory(job);
+            Path root = directory(layout.jobsRoot(), job);
             try {
                 var recorded = attemptInputs.list(job);
                 if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) rebuild(job, root, capture, recorded);
@@ -246,7 +210,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
                             CheckoutUnverifiedException.Reason.UNAVAILABLE, "The frozen inputs expired");
                 lease.shareWithRemovals();
                 return new PreparedJobInputs(
-                        paths, directories, List.of(() -> retire(root), lease), manifest, readiness, expiry);
+                        paths, directories, List.of(() -> sweep.retire(root), lease), manifest, readiness, expiry);
             } catch (IOException failure) {
                 lease.close();
                 throw new UncheckedIOException(failure);
@@ -267,7 +231,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
     /** Rendering scratch belongs to the fenced attempt and has the same cleanup boundary as its frozen folder. */
     public Path renderingDirectory(ReviewJob job) {
-        Path root = directory(job);
+        Path root = directory(layout.jobsRoot(), job);
         try {
             Files.createDirectories(root.getParent());
             return Files.createTempDirectory(root.getParent(), "." + root.getFileName() + ".preparing-");
@@ -284,7 +248,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
             inputs.close();
             throw exception;
         }
-        Path root = directory(job);
+        Path root = directory(layout.jobsRoot(), job);
         Path staging = null;
         try {
             Files.createDirectories(root.getParent());
@@ -344,7 +308,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
             var closed = new AtomicBoolean();
             cleanups.add(() -> {
                 if (closed.compareAndSet(false, true)) {
-                    retire(root);
+                    sweep.retire(root);
                 }
             });
             cleanups.add(personCopies.finishCapture(job));
@@ -429,30 +393,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
         Files.setPosixFilePermissions(target, permissions);
     }
 
-    @FunctionalInterface
-    public interface TextInspection<T> {
-        T inspect(Reader reader) throws IOException;
-    }
-
-    public EvidenceDirectory verificationDirectory(ReviewJob job) {
-        requireAttemptFolder(job);
-        return new EvidenceDirectory("inputs/", directory(job));
-    }
-
-    /**
-     * {@link #ensureAttemptFolder(ReviewJob)} for the attempt that {@code identity} names, when it is still its job's
-     * attempt and not yet admitted. Admission calls it with no transaction or lock held. An admitted attempt reads no
-     * folder there: admission removes it once it commits.
-     */
-    public void ensureAttemptFolder(ResultAdmissionService.AdmissionIdentity identity) {
-        requireNoTransaction();
-        Path root = directory(identity.workspaceId(), identity.jobId(), identity.attempt(), identity.runId());
-        if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
-        jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
-                .filter(job -> directory(job).equals(root) && !ResultAdmissionService.isAdmitted(job))
-                .ifPresent(this::ensureAttemptFolder);
-    }
-
     /**
      * Rebuilds the folder of the job's running attempt on this server when another server captured it: from the
      * attempt's recorded files ({@link AttemptInputs}) and its checkouts, which this server builds from the recorded
@@ -469,7 +409,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
      */
     public void ensureAttemptFolder(ReviewJob job) {
         requireNoTransaction();
-        Path root = directory(job);
+        Path root = directory(layout.jobsRoot(), job);
         if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
         JsonNode capture = job.getCapture();
         if (capture == null) return;
@@ -509,12 +449,14 @@ public class JobEvidenceFiles implements SandboxResultListener {
      * @throws AttemptFolderBusyException when the folder is not on this server: retryable, since the caller builds it
      *     after its transaction ends
      */
-    private void requireAttemptFolder(ReviewJob job) {
-        if (Files.exists(directory(job), LinkOption.NOFOLLOW_LINKS) || job.getCapture() == null || !live(job)) return;
+    void requireAttemptFolder(ReviewJob job) {
+        if (Files.exists(directory(layout.jobsRoot(), job), LinkOption.NOFOLLOW_LINKS)
+                || job.getCapture() == null
+                || !live(job)) return;
         throw new AttemptFolderBusyException("The evidence folder is not on this server");
     }
 
-    private static void requireNoTransaction() {
+    static void requireNoTransaction() {
         if (TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("An evidence folder is rebuilt before any transaction starts");
     }
@@ -601,89 +543,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     /**
-     * Adds host reads only when both their source witness and staged content digest still match. A search's digest
-     * names the checkout it searched, not a file, so admission checks it against {@link #capturedCheckoutDigest}.
-     */
-    public JobFolderIndex registerReadReceipts(
-            ReviewJob job,
-            JobFolderIndex manifest,
-            List<ReadReceipt> receipts,
-            ClasspathSourceCatalogRegistry catalogs) {
-        var texts = new ArrayList<>(manifest.citableTexts());
-        for (var receipt : receipts) {
-            String digest = receipt.contentDigest();
-            if (receipt.status() == ReadReceiptStatus.SEARCHED || digest == null || !digest.matches("[0-9a-f]{64}"))
-                continue;
-            var witness = manifest.files().stream()
-                    .filter(file -> file.kind().equals(receipt.sourceKind())
-                            && file.file().path().equals(receipt.sourcePath()))
-                    .toList();
-            if (witness.size() != 1
-                    || !existsWithDigest(
-                            job, receipt.sourcePath(), witness.getFirst().file().sha256())) {
-                throw new IllegalArgumentException("The host read has no authenticated source witness");
-            }
-            var contract = catalogs.requireSource(receipt.sourceKind());
-            String commit = contract.citation().commit() == CitationRequirement.FORBIDDEN ? null : receipt.version();
-            var existing = texts.stream()
-                    .filter(text -> text.source().equals(receipt.sourceKind().value())
-                            && text.path().equals(receipt.path())
-                            && text.side() == CitationSide.NEW
-                            && Objects.equals(text.commit(), commit))
-                    .toList();
-            String stagedPath;
-            if (existing.size() == 1) stagedPath = existing.getFirst().stagedPath();
-            else if (existing.size() > 1) throw new IllegalArgumentException("Ambiguous host read text");
-            else if (receipt.path().equals(receipt.sourcePath())) stagedPath = receipt.path();
-            else
-                stagedPath = capturedDirectory(job, receipt.sourcePath())
-                                .orElseThrow(() ->
-                                        new IllegalArgumentException("The host read has no unique captured directory"))
-                        + receipt.path();
-            if (!existsWithDigest(job, stagedPath, digest))
-                throw new IllegalArgumentException("The host read content is unavailable");
-            if (existing.isEmpty())
-                texts.add(new CitableText(
-                        receipt.sourceKind().value(), receipt.path(), CitationSide.NEW, commit, stagedPath, digest));
-            else if (!existing.getFirst().sha256().equals(digest))
-                throw new IllegalArgumentException("The host read digest differs from its captured text");
-        }
-        return new JobFolderIndex(
-                manifest.contractVersion(),
-                manifest.catalogDigest(),
-                manifest.itemKind(),
-                manifest.capturedAt(),
-                manifest.sources(),
-                manifest.refusals(),
-                manifest.files(),
-                texts);
-    }
-
-    /** The one captured directory that holds a source witness, such as {@code repos/reviewed/} for its Git HEAD. */
-    private static Optional<String> capturedDirectory(ReviewJob job, String sourcePath) {
-        JsonNode capture = job.getCapture();
-        var roots = new ArrayList<String>();
-        if (capture != null)
-            for (JsonNode directory : capture.path("directories")) {
-                String root = directory.asString();
-                if (root.endsWith("/") && sourcePath.startsWith(root)) roots.add(root);
-            }
-        return roots.size() == 1 ? Optional.of(roots.getFirst()) : Optional.empty();
-    }
-
-    /**
-     * The checkout digest that the capture recorded for the checkout a search receipt of the whole checkout searched
-     * ({@link #checkoutDigests}). Empty for any other receipt, and for a checkout past the bound of a search proof.
-     */
-    public Optional<String> capturedCheckoutDigest(ReviewJob job, ReadReceipt search) {
-        JsonNode capture = job.getCapture();
-        if (capture == null || search.status() != ReadReceiptStatus.SEARCHED || !".".equals(search.path()))
-            return Optional.empty();
-        return capturedDirectory(job, search.sourcePath())
-                .map(root -> capture.path(CHECKOUTS).path(root).asString(null));
-    }
-
-    /**
      * The checkout digest of each staged directory, by its target, for the capture to record before the sandbox
      * starts. It is the digest that the agent's search server computes over the bytes it searched ({@code
      * checkoutDigest} in {@code pi-search-worker.ts}): the SHA-256 of one line {@code <path>\0<SHA-256 of the
@@ -740,119 +599,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
         return Optional.of(ProvenanceDigest.hex(digest));
     }
 
-    public Optional<String> readText(ReviewJob job, String path, String sha) {
-        try {
-            Path file = sourceFile(job, path);
-            if (Files.size(file) > 32 * 1024 * 1024L)
-                throw new IllegalArgumentException("Captured text exceeds its read bound");
-            byte[] bytes = Files.readAllBytes(file);
-            requireDigest(sha, ProvenanceDigest.sha256Hex(bytes));
-            return Optional.of(decoder().decode(ByteBuffer.wrap(bytes)).toString());
-        } catch (NoSuchFileException missing) {
-            return Optional.empty();
-        } catch (IOException failure) {
-            throw new UncheckedIOException(failure);
-        }
-    }
-
-    public <T> Optional<T> inspect(ReviewJob job, String filePath, String sha, TextInspection<T> inspection) {
-        try {
-            MessageDigest digest = ProvenanceDigest.sha256();
-            T result;
-            try (var reader = new InputStreamReader(
-                    new DigestInputStream(Files.newInputStream(sourceFile(job, filePath)), digest), decoder())) {
-                result = inspection.inspect(reader);
-                reader.transferTo(Writer.nullWriter());
-            }
-            requireDigest(sha, ProvenanceDigest.hex(digest));
-            return Optional.of(result);
-        } catch (NoSuchFileException exception) {
-            return Optional.empty();
-        } catch (IOException exception) {
-            throw new UncheckedIOException(exception);
-        }
-    }
-
-    public Optional<Boolean> containsUtf8AtLines(
-            ReviewJob job, String filePath, String sha, String text, int startLine, int endLine) {
-        try {
-            QuoteMatch match = verifyUtf8AtLines(sourceFile(job, filePath), text, startLine, endLine);
-            requireDigest(sha, Objects.requireNonNull(match.fileSha256()));
-            return Optional.of(match.matches());
-        } catch (NoSuchFileException exception) {
-            return Optional.empty();
-        } catch (IOException exception) {
-            throw new UncheckedIOException(exception);
-        }
-    }
-
-    private boolean existsWithDigest(ReviewJob job, String filePath, String sha) {
-        return inspect(job, filePath, sha, reader -> Boolean.TRUE).isPresent();
-    }
-
-    /** @param fileSha256 digest of the raw bytes read, or null when the cited file does not exist */
-    public record QuoteMatch(boolean matches, @Nullable String fileSha256) {
-        public static QuoteMatch absent() {
-            return new QuoteMatch(false, null);
-        }
-    }
-
-    public static QuoteMatch verifyUtf8AtLines(Path file, String text, int startLine, int endLine) throws IOException {
-        if (startLine < 1 || endLine < startLine || text.isEmpty())
-            throw new IllegalArgumentException("Invalid citation quote or line range");
-        MessageDigest digest = ProvenanceDigest.sha256();
-        boolean found = false;
-        try (var reader = new InputStreamReader(new DigestInputStream(Files.newInputStream(file), digest), decoder())) {
-            char[] buffer = new char[8192];
-            StringBuilder window = new StringBuilder();
-            long line = 1;
-            int read;
-            while ((read = reader.read(buffer)) != -1) {
-                if (found) continue;
-                for (int i = 0; i < read; i++) {
-                    char character = buffer[i];
-                    if (line >= startLine && line <= endLine) window.append(character);
-                    if (character == '\n') line++;
-                }
-                found = window.indexOf(text) >= 0;
-                window.delete(0, Math.max(0, window.length() - text.length() + 1));
-            }
-        }
-        return new QuoteMatch(found, ProvenanceDigest.hex(digest));
-    }
-
-    private static CharsetDecoder decoder() {
-        return StandardCharsets.UTF_8
-                .newDecoder()
-                .onMalformedInput(CodingErrorAction.REPLACE)
-                .onUnmappableCharacter(CodingErrorAction.REPLACE)
-                .replaceWith(UNDECODABLE);
-    }
-
-    /**
-     * Removes the folder, with its staging remainder, if no attempt reads it: under the runtime's shared
-     * lease, one removal at a time with admission, or under an exclusive lease of its own. Each claim names a new folder
-     * (its attempt counts the run's leases), so a folder that no attempt reads never becomes read; the decision is
-     * still made from the job as it is recorded under the lease. The folder of a job with an erased copy is erasure's
-     * to remove and count.
-     *
-     * @return false when another holder keeps the lease to itself, and the folder stays for a later pass
-     */
-    private boolean retire(Path root) throws IOException {
-        Path jobDirectory = Objects.requireNonNull(root.getParent());
-        Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
-        long workspaceId = Long.parseLong(
-                Objects.requireNonNull(workspaceDirectory.getFileName()).toString());
-        UUID jobId = UUID.fromString(
-                Objects.requireNonNull(jobDirectory.getFileName()).toString());
-        return EvidenceFolderLease.removeAsOwner(layout.root(), workspaceId, jobId, () -> {
-            if (!present(root)) return;
-            if (!personCopies.erasedJobs(Map.of(jobId, workspaceId)).isEmpty()) return;
-            var job = recordedJob(root);
-            if (job.isEmpty() || !readsFolder(root, job.get())) deleteAttempt(root);
-        });
-    }
-
     /** Admission has committed; recheck ownership before removing the verified bytes. */
     public void discardAdmittedAttempt(ResultAdmissionService.AdmissionIdentity identity) {
         try {
@@ -862,795 +608,34 @@ public class JobEvidenceFiles implements SandboxResultListener {
             if (!ResultAdmissionService.isAdmitted(job)
                     || job.getAttempt() != identity.attempt()
                     || !identity.runId().equals(job.getRunId())) return;
-            // Removed now under the runtime's shared lease, or a new exclusive one. A sweep or an erasure that
-            // holds the job exclusively removes admitted bytes itself.
-            Path root = directory(job);
-            EvidenceFolderLease.removeAsOwner(
-                    layout.root(), identity.workspaceId(), identity.jobId(), () -> deleteAttempt(root));
+            Path root = directory(layout.jobsRoot(), job);
+            sweep.discardAttempt(identity.workspaceId(), identity.jobId(), root);
         } catch (IOException | RuntimeException exception) {
             // Admission is durable. The scheduled cleaner retries a failed local removal.
             log.warn("Could not remove admitted attempt {}", identity.jobId(), exception);
         }
     }
 
-    /** The manifest's rendered companion, which {@link JobFolderIndexBuilder} writes beside it. */
-    private static final String INDEX_MARKDOWN_PATH = "INDEX.md";
-
-    /**
-     * The finite inputs the feedback of this attempt is composed from, exactly as its folder holds them: the manifest
-     * and its rendered index (with every source's recorded bytes, digests, absences and omissions), every captured
-     * context record, the practice index and whole standards, the staged history of earlier results, and the
-     * checkout's recorded HEAD and refs. Sandbox work and the checkout's objects are not among them. Read while the
-     * attempt still owns its folder; a context record the manifest does not list with these exact bytes, or any
-     * unreadable file, leaves nothing to retain rather than a part.
-     */
-    public Optional<Map<String, byte[]>> originalCompositionInputs(ResultAdmissionService.AdmissionIdentity identity) {
-        Path root = directory(identity.workspaceId(), identity.jobId(), identity.attempt(), identity.runId());
-        jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
-                .filter(job -> directory(job).equals(root))
-                .ifPresent(this::requireAttemptFolder);
-        try {
-            var files = new TreeMap<String, byte[]>();
-            byte[] index = Files.readAllBytes(regularFile(root, SandboxLayout.MANIFEST_PATH));
-            files.put(SandboxLayout.MANIFEST_PATH, index);
-            var recordedJob = jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
-                    .orElseThrow();
-            var capture = Objects.requireNonNull(recordedJob.getCapture());
-            var manifest = new JsonMapper().treeToValue(capture.path("manifest"), JobFolderIndex.class);
-            files.put(SandboxLayout.MANIFEST_PATH, new JsonMapper().writeValueAsBytes(manifest));
-            // The rendered index beside the manifest, only as this attempt was staged with it.
-            Path rendered = root.resolve(INDEX_MARKDOWN_PATH);
-            if (Files.isRegularFile(rendered, LinkOption.NOFOLLOW_LINKS))
-                files.put(INDEX_MARKDOWN_PATH, Files.readAllBytes(rendered));
-            for (String prefix : List.of(
-                    SandboxLayout.CONTEXT_PREFIX, SandboxLayout.PRACTICES_PREFIX, SandboxLayout.HISTORY_PREFIX)) {
-                Path directory = root.resolve(prefix);
-                if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) continue;
-                try (var entries = Files.walk(directory)) {
-                    for (Path path : entries.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
-                            .toList()) {
-                        files.put(root.relativize(path).toString(), Files.readAllBytes(path));
-                    }
-                }
-            }
-            var listed = new HashMap<String, CapturedSource>();
-            manifest.files().forEach(sourceFile -> listed.put(sourceFile.file().path(), sourceFile.file()));
-            for (var text : manifest.citableTexts()) {
-                byte[] bytes = Files.readAllBytes(regularFile(root, text.stagedPath()));
-                requireDigest(text.sha256(), ProvenanceDigest.sha256Hex(bytes));
-                files.put(text.stagedPath(), bytes);
-            }
-            for (var file : files.entrySet()) {
-                boolean recorded = file.getKey().startsWith(SandboxLayout.CONTEXT_PREFIX)
-                        || file.getKey().startsWith(SandboxLayout.REPO_MOUNT_RELATIVE);
-                if (!recorded) continue;
-                CapturedSource sourceFile = listed.get(file.getKey());
-                if (sourceFile == null
-                        && manifest.citableTexts().stream()
-                                .anyMatch(text -> text.stagedPath().equals(file.getKey())
-                                        && text.sha256().equals(ProvenanceDigest.sha256Hex(file.getValue())))) continue;
-                if (sourceFile == null
-                        || sourceFile.bytes() != file.getValue().length
-                        || !sourceFile.sha256().equals(ProvenanceDigest.sha256Hex(file.getValue()))) {
-                    return Optional.empty();
-                }
-            }
-            for (String path : listed.keySet()) {
-                if (path.startsWith(SandboxLayout.CONTEXT_PREFIX) && !files.containsKey(path)) return Optional.empty();
-            }
-            return Optional.of(Collections.unmodifiableMap(files));
-        } catch (IOException | RuntimeException exception) {
-            log.warn(
-                    "Original writer inputs unreadable: jobId={}, type={}",
-                    identity.jobId(),
-                    exception.getClass().getSimpleName());
-            return Optional.empty();
-        }
-    }
-
-    private static Path regularFile(Path root, String relative) throws IOException {
-        Path file = safePath(root, relative);
-        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) throw new IOException("Not a captured file");
-        return file;
-    }
-
-    /** See {@link EvidenceFolderPersonDataCatalog#completeReceipt}. */
-    public Optional<UUID> completeReceipt(ResultAdmissionService.AdmissionIdentity identity) {
-        return personCopies.completeReceipt(identity.jobId(), identity.workspaceId(), identity.attempt());
-    }
-
-    /** See {@link EvidenceFolderPersonDataCatalog#holdCopyAdmission}. */
-    public void holdCopyAdmission() {
-        personCopies.holdCopyAdmission();
-    }
-
-    /** See {@link EvidenceFolderPersonDataCatalog#vouchesForLiveAttempt}. */
-    public boolean vouchesForLiveAttempt(ResultAdmissionService.AdmissionIdentity identity) {
-        return personCopies.vouchesForLiveAttempt(identity.jobId(), identity.workspaceId(), identity.attempt());
-    }
-
-    /** See {@link EvidenceFolderPersonDataCatalog#vouchesForOriginalCopy}. */
-    public boolean vouchesForOriginalCopy(UUID copyId, UUID jobId, long workspaceId, int attempt) {
-        return personCopies.vouchesForOriginalCopy(copyId, jobId, workspaceId, attempt);
-    }
-
-    /** See {@link EvidenceFolderPersonDataCatalog#holdVouchingReceipt}. */
-    public boolean holdVouchingReceipt(ResultAdmissionService.AdmissionIdentity identity, UUID copyId) {
-        return personCopies.holdVouchingReceipt(copyId, identity.jobId(), identity.workspaceId(), identity.attempt());
-    }
-
-    /** See {@link EvidenceFolderPersonDataCatalog#inheritReceipt}. */
-    public void inheritPersonCapture(ReviewJob job, UUID originalCopyId, int originalAttempt) {
-        personCopies.inheritReceipt(job, originalCopyId, originalAttempt);
-    }
-
-    /** The exact rows a read during runtime returned, by the tables that own them. */
-    public record LateCopies(List<HistoryCopy> records) {
-        public LateCopies {
-            records = List.copyOf(records);
-        }
-    }
-
-    /** See {@link EvidenceFolderPersonDataCatalog#indexLateRead}. */
-    public <T> T indexLateRead(
-            ResultAdmissionService.AdmissionIdentity identity, Supplier<T> read, Function<T, LateCopies> copies) {
-        return personCopies.indexLateRead(
-                identity.jobId(),
-                identity.workspaceId(),
-                identity.attempt(),
-                read,
-                result -> copies.apply(result).records());
-    }
-
-    /**
-     * What a review attempt was launched as, captured before its sandbox existed.
-     *
-     * @param copiesExpireAt when the occasion record the attempt's inputs copy expires; null when they copy none
-     */
-    private record LaunchedAttempt(
-            long workspaceId,
-            UUID jobId,
-            int attempt,
-            UUID runId,
-            String image,
-            @Nullable String model,
-            @Nullable String promptDigest,
-            @Nullable String inputsDigest,
-            @Nullable Instant copiesExpireAt) {}
-
-    /**
-     * Binds the attempt the executor is launching: the job must be RUNNING as exactly this attempt. Anything else, and
-     * a conversation session, which is never bound, keeps no transcript.
-     */
+    /** See {@link AttemptTranscripts#bind}. */
     @Override
     public Consumer<Map<String, byte[]>> bind(UUID jobId, int attempt, String image) {
-        var launched = jobs.findById(jobId)
-                .filter(job -> job.getStatus() == ReviewJobStatus.RUNNING && job.getAttempt() == attempt)
-                .map(job -> new LaunchedAttempt(
-                        job.getWorkspaceId(),
-                        jobId,
-                        attempt,
-                        job.getRunId(),
-                        image,
-                        job.getConfigSnapshot() == null
-                                ? null
-                                : job.getConfigSnapshot()
-                                        .path("model")
-                                        .path("upstreamModelId")
-                                        .asString(null),
-                        job.getCapture() == null
-                                ? null
-                                : job.getCapture().path("promptDigest").asString(null),
-                        job.getCapture() == null
-                                ? null
-                                : job.getCapture().path("inputsDigest").asString(null),
-                        copiesExpireAt(job.getCapture())));
-        if (launched.isEmpty()) return files -> {};
-        var bound = launched.get();
-        return files -> keepTranscript(bound, files);
-    }
-
-    /** A stated expiry that cannot be read keeps no copy, as if it had passed. */
-    private static @Nullable Instant copiesExpireAt(@Nullable JsonNode capture) {
-        if (capture == null || !capture.has(COPIES_EXPIRE_AT)) return null;
-        try {
-            return Instant.parse(capture.path(COPIES_EXPIRE_AT).asString(""));
-        } catch (DateTimeParseException unreadable) {
-            return Instant.EPOCH;
-        }
-    }
-
-    /**
-     * Keeps the native session transcripts of an admitted upload beside the attempt folder for a day. Only while the
-     * job is still owned as the attempt that was launched, only while copy admission and the local folder lease protect
-     * its READY receipt in this store. A receipt that cannot index every copied dependency keeps a summary the
-     * server rebuilds itself, marked METADATA_ONLY. Never throws into the upload, and never changes the job's status.
-     */
-    private void keepTranscript(LaunchedAttempt launched, Map<String, byte[]> files) {
-        var traces = new TreeMap<String, byte[]>();
-        files.forEach((name, bytes) -> {
-            if (name.startsWith(TRACES) && name.length() > TRACES.length())
-                traces.put(name.substring(TRACES.length()), bytes);
-        });
-        if (traces.isEmpty()) return;
-        try {
-            // A delayed upload of an earlier attempt finds the job requeued under another attempt or owner.
-            var owned = jobs.findByIdAndWorkspaceId(launched.jobId(), launched.workspaceId())
-                    .filter(job -> job.getAttempt() == launched.attempt()
-                            && launched.runId().equals(job.getRunId()));
-            if (owned.isEmpty()) return;
-            Path root = directory(launched.workspaceId(), launched.jobId(), launched.attempt(), launched.runId());
-            Path trace = root.resolveSibling(root.getFileName() + TRACE_SUFFIX);
-            writeTranscript(owned.get(), () -> {
-                var custody = personCopies.traceCustody(launched.jobId(), launched.workspaceId(), launched.attempt());
-                if (custody == EvidenceFolderPersonDataCatalog.TraceCustody.NOT_HELD
-                        || Files.exists(trace, LinkOption.NOFOLLOW_LINKS)) return;
-                Files.createDirectories(root.getParent());
-                Path staging = Files.createTempDirectory(root.getParent(), "." + trace.getFileName() + ".preparing-");
-                try {
-                    Instant now = clock.instant();
-                    Instant expiresAt = now.plus(TRACE_RETENTION);
-                    var occasionExpiry = launched.copiesExpireAt();
-                    boolean occasionKept = occasionExpiry == null || occasionExpiry.isAfter(now);
-                    boolean withinBudget = boundedTraces(traces);
-                    boolean raw = custody == EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED
-                            && withinBudget
-                            && occasionKept;
-                    // The sessions' words may repeat the occasion's record, so they go when it expires. The summary
-                    // that replaces them names no person and copies none of those words.
-                    if (raw && occasionExpiry != null && occasionExpiry.isBefore(expiresAt)) expiresAt = occasionExpiry;
-                    ObjectNode record = JsonNodeFactory.instance.objectNode();
-                    record.put("jobId", launched.jobId().toString());
-                    record.put("workspaceId", launched.workspaceId());
-                    record.put("attempt", launched.attempt());
-                    record.put("image", launched.image());
-                    record.put("model", launched.model());
-                    record.put("promptDigest", launched.promptDigest());
-                    record.put("inputsDigest", launched.inputsDigest());
-                    record.put("retention", raw ? "NATIVE_TRANSCRIPT" : "METADATA_ONLY");
-                    // A copied row whose source cannot vouch for the people it names keeps every session's words out.
-                    if (!raw)
-                        record.put(
-                                "contentUnavailable",
-                                !occasionKept
-                                        ? "OCCASION_EVIDENCE_UNAVAILABLE"
-                                        : withinBudget ? "OWNERSHIP_INCOMPLETE" : "TRACE_OUTPUT_INVALID");
-                    record.put("expiresAt", expiresAt.toString());
-                    if (raw) {
-                        for (var entry : traces.entrySet()) {
-                            Path target = safePath(staging, entry.getKey());
-                            Files.createDirectories(target.getParent());
-                            Files.write(target, entry.getValue(), StandardOpenOption.CREATE_NEW);
-                        }
-                    } else {
-                        var sessions = TraceSummary.of(traces.get(TRACE_MANIFEST));
-                        if (sessions == null) record.putNull("sessions");
-                        else record.set("sessions", sessions);
-                        record.put("sessionScanTruncated", TraceSummary.scanTruncated(traces.get(TRACE_MANIFEST)));
-                    }
-                    Path recordFile = staging.resolve(TRACE_RECORD);
-                    Files.writeString(recordFile, record.toString(), StandardOpenOption.CREATE_NEW);
-                    // The sweep counts the retention from this timestamp, and ends it sooner when the record states an
-                    // earlier expiry.
-                    Files.setLastModifiedTime(recordFile, FileTime.from(now));
-                    Files.move(staging, trace, StandardCopyOption.ATOMIC_MOVE);
-                } finally {
-                    if (Files.exists(staging, LinkOption.NOFOLLOW_LINKS)) delete(staging);
-                }
-            });
-        } catch (RuntimeException exception) {
-            log.warn(
-                    "Could not keep the review transcript of job {}: {}",
-                    launched.jobId(),
-                    exception.getClass().getSimpleName());
-        }
-    }
-
-    /** Copy admission precedes the local folder lock, as it does during restoration and erasure. */
-    private void writeTranscript(ReviewJob job, EvidenceFolderLease.Removal write) {
-        personCopies.withLiveAttempt(job, () -> {
-            try {
-                return EvidenceFolderLease.removeAsOwner(layout.root(), job.getWorkspaceId(), job.getId(), write);
-            } catch (IOException failure) {
-                throw new UncheckedIOException(failure);
-            }
-        });
-    }
-
-    /** The sandbox cannot enlarge debug retention beyond the collector's declared limits. */
-    private static boolean boundedTraces(Map<String, byte[]> traces) {
-        long bytes = 0;
-        if (traces.size() > 1001) return false;
-        for (var entry : traces.entrySet()) {
-            boolean manifest = TRACE_MANIFEST.equals(entry.getKey());
-            if (!manifest && !entry.getKey().matches("[0-9]{4}\\.jsonl")) return false;
-            if (entry.getValue().length > (manifest ? 1024 * 1024 : TRACE_FILE_BUDGET)) return false;
-            bytes += entry.getValue().length;
-            if (bytes > TRACE_BYTE_BUDGET) return false;
-        }
-        return true;
+        return transcripts.bind(jobId, attempt, image);
     }
 
     public void cleanAfterRestart() {
         cleanEndedAttempts();
     }
 
-    /**
-     * Removes every attempt folder that no attempt reads: the folders of ended, admitted and superseded attempts, and
-     * of deleted jobs. Only the running attempt of its job reads its folder; a retry or a composition takes a new one.
-     * The folders of a job with an erased copy are erasure's: the same reconcile pass removes and counts them.
-     *
-     * @return the folders that remain although no attempt reads them, because their lease is held or their removal
-     *     failed, and the expired transcripts that could not be removed: the reconcile counts them, and a later pass
-     *     retries them
-     */
+    /** See {@link AttemptFolderSweep#cleanEndedAttempts}. */
     public int cleanEndedAttempts() {
-        int remaining = layout.spool().reconcile();
-        if (!Files.isDirectory(layout.jobsRoot())) return remaining;
-        try (var paths = Files.walk(layout.jobsRoot(), 3)) {
-            var roots = new HashSet<Path>();
-            var traces = new HashSet<Path>();
-            paths.filter(path -> layout.jobsRoot().relativize(path).getNameCount() == 3)
-                    .forEach(path -> {
-                        String name = path.getFileName().toString();
-                        if (name.endsWith(TRACE_SUFFIX) || name.contains(TRACE_SUFFIX + ".preparing-")) {
-                            traces.add(path);
-                        } else if (name.startsWith(".") && name.contains(".preparing-")) {
-                            roots.add(path.resolveSibling(name.substring(1, name.indexOf(".preparing-"))));
-                        } else if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-                            roots.add(path);
-                        }
-                    });
-            // Erasure removes and counts the folders of a job with an erased copy; this sweep leaves them to it.
-            var erased = erasedJobs(roots, traces);
-            for (Path root : roots) {
-                if (!root.getFileName().toString().matches("[0-9]+-[0-9a-f]{64}")) continue;
-                if (ofErasedJob(erased, root)) continue;
-                // A capture holds this lease until its inputs are released, after retiring its own folder; erasure
-                // and the other sweep take it too. Whoever holds it owns the job's folders, and a later pass retries.
-                Optional<EvidenceFolderLease> acquired;
-                try {
-                    acquired = leaseJob(root);
-                    // The lease is the job's, not the folder's: a later run of the job can hold it while a folder that
-                    // no attempt reads waits. This server removes such a folder under its runtime's shared lease; a
-                    // folder that it cannot remove stays and counts.
-                    if (acquired.isEmpty()) {
-                        var holder = recordedJob(root);
-                        if ((holder.isEmpty() || !readsFolder(root, holder.get())) && !retire(root)) remaining++;
-                        continue;
-                    }
-                } catch (RuntimeException | IOException exception) {
-                    log.warn("Could not clean attempt folder {}", root, exception);
-                    remaining++;
-                    continue;
-                }
-                var lease = acquired.get();
-                try (lease) {
-                    // The holder before this one may have removed it; only a removal of our own is reported.
-                    if (!present(root)) continue;
-                    var job = recordedJob(root);
-                    if (job.isPresent() && readsFolder(root, job.get())) continue;
-                    deleteAttempt(root);
-                    // An ended job's file and text inventory goes with its folder; a running one still reads it.
-                    if (job.isPresent() && job.get().getStatus() != ReviewJobStatus.RUNNING) {
-                        ReviewJob ended = job.get();
-                        jobs.expireCaptureInventory(
-                                ended.getId(), ended.getWorkspaceId(), ended.getAttempt(), ended.getRunId());
-                    }
-                } catch (RuntimeException | IOException exception) {
-                    log.warn("Could not clean attempt folder {}", root, exception);
-                    remaining++;
-                }
-            }
-            for (Path trace : traces) if (!ofErasedJob(erased, trace) && !cleanTrace(trace)) remaining++;
-            removeEmptyJobFolders(erased);
-        } catch (IOException exception) {
-            throw new UncheckedIOException(exception);
-        }
-        return remaining;
-    }
-
-    /** The jobs of these attempt folders and transcripts that have an erased copy. */
-    private Set<UUID> erasedJobs(Set<Path> roots, Set<Path> traces) {
-        var jobs = new HashMap<UUID, Long>();
-        for (Path entry : roots) addJob(jobs, entry);
-        for (Path entry : traces) addJob(jobs, entry);
-        return personCopies.erasedJobs(jobs);
-    }
-
-    private static void addJob(Map<UUID, Long> jobs, Path entry) {
-        Path jobDirectory = Objects.requireNonNull(entry.getParent());
-        Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
-        try {
-            jobs.put(
-                    UUID.fromString(
-                            Objects.requireNonNull(jobDirectory.getFileName()).toString()),
-                    Long.parseLong(Objects.requireNonNull(workspaceDirectory.getFileName())
-                            .toString()));
-        } catch (IllegalArgumentException notAJobFolder) {
-            // Not a job's folder: the sweep skips its entries by their names.
-        }
-    }
-
-    private static boolean ofErasedJob(Set<UUID> erased, Path entry) {
-        try {
-            return erased.contains(UUID.fromString(Objects.requireNonNull(
-                            Objects.requireNonNull(entry.getParent()).getFileName())
-                    .toString()));
-        } catch (IllegalArgumentException notAJobFolder) {
-            return false;
-        }
-    }
-
-    /**
-     * Removes each job folder that holds nothing more: no attempt, staging copy or transcript. A capture holds the job's
-     * lease while it creates the folder, so the folder is removed only under that lease.
-     */
-    private void removeEmptyJobFolders(Set<UUID> erased) throws IOException {
-        try (var workspaces = Files.list(layout.jobsRoot())) {
-            for (Path workspace : workspaces.toList()) {
-                if (!workspace.getFileName().toString().matches("[0-9]+")
-                        || !Files.isDirectory(workspace, LinkOption.NOFOLLOW_LINKS)) continue;
-                try (var jobFolders = Files.list(workspace)) {
-                    for (Path jobFolder : jobFolders.toList()) {
-                        if (!isEmptyDirectory(jobFolder)) continue;
-                        UUID jobId;
-                        try {
-                            jobId = UUID.fromString(jobFolder.getFileName().toString());
-                        } catch (IllegalArgumentException notAJobFolder) {
-                            continue;
-                        }
-                        if (erased.contains(jobId)) continue;
-                        var acquired = EvidenceFolderLease.tryAcquire(
-                                layout.root(),
-                                Long.parseLong(workspace.getFileName().toString()),
-                                jobId);
-                        if (acquired.isEmpty()) continue;
-                        var lease = acquired.get();
-                        try (lease) {
-                            if (isEmptyDirectory(jobFolder)) Files.deleteIfExists(jobFolder);
-                        } catch (DirectoryNotEmptyException written) {
-                            // A capture wrote into it after the check; the next pass sees what it holds.
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private static boolean isEmptyDirectory(Path folder) throws IOException {
-        if (!Files.isDirectory(folder, LinkOption.NOFOLLOW_LINKS)) return false;
-        try (var entries = Files.list(folder)) {
-            return entries.findAny().isEmpty();
-        }
-    }
-
-    /**
-     * Whether the folder is the one that the job's running attempt reads. A composition reads the folder of its own
-     * run; the folder of the run that measured the review is then another run's, and the next sweep removes it.
-     */
-    private boolean readsFolder(Path root, ReviewJob job) {
-        return matches(root, job) && job.getStatus() == ReviewJobStatus.RUNNING;
-    }
-
-    /**
-     * A transcript outlives its attempt, its admitted inputs and a restart, whatever the job's status, until its day
-     * is over, or until the earlier expiry its record states. A staging copy left by a stopped writer goes at once: the
-     * runtime that wrote it no longer holds the job. The first pass after the expiry that gets the job's lease removes
-     * it, so the removal lags the expiry by up to the sweep interval or a lease holder's work.
-     */
-    private boolean cleanTrace(Path trace) {
-        try {
-            var acquired = leaseJob(trace);
-            if (acquired.isEmpty()) return true;
-            var lease = acquired.get();
-            try (lease) {
-                if (!Files.exists(trace, LinkOption.NOFOLLOW_LINKS)) return true;
-                Path record = trace.resolve(TRACE_RECORD);
-                if (trace.getFileName().toString().startsWith(".")
-                        || !Files.isRegularFile(record, LinkOption.NOFOLLOW_LINKS)
-                        || !keptUntil(record).isAfter(clock.instant())) {
-                    delete(trace);
-                }
-            }
-            return true;
-        } catch (RuntimeException | IOException exception) {
-            log.warn("Could not clean review transcript {}", trace, exception);
-            return false;
-        }
-    }
-
-    /** The earlier of the record's day and the expiry it states; a record that states none readably keeps its day. */
-    private static Instant keptUntil(Path record) throws IOException {
-        Instant day = Files.getLastModifiedTime(record, LinkOption.NOFOLLOW_LINKS)
-                .toInstant()
-                .plus(TRACE_RETENTION);
-        Instant stated;
-        try {
-            stated = Instant.parse(TRACE_RECORDS
-                    .readTree(Files.readAllBytes(record))
-                    .path("expiresAt")
-                    .asString(""));
-        } catch (RuntimeException unreadable) {
-            return day;
-        }
-        return stated.isBefore(day) ? stated : day;
-    }
-
-    private Optional<EvidenceFolderLease> leaseJob(Path root) {
-        Path jobDirectory = Objects.requireNonNull(root.getParent());
-        Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
-        return EvidenceFolderLease.tryAcquire(
-                layout.root(),
-                Long.parseLong(
-                        Objects.requireNonNull(workspaceDirectory.getFileName()).toString()),
-                UUID.fromString(
-                        Objects.requireNonNull(jobDirectory.getFileName()).toString()));
-    }
-
-    /** Whether anything of the attempt remains: its folder or a staging folder. */
-    private static boolean present(Path root) throws IOException {
-        if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return true;
-        try (var siblings = Files.list(root.getParent())) {
-            return siblings.anyMatch(
-                    path -> path.getFileName().toString().startsWith("." + root.getFileName() + ".preparing-"));
-        } catch (NoSuchFileException jobRemoved) {
-            // Erasure removes the whole job folder; nothing of this attempt is left.
-            return false;
-        }
-    }
-
-    private Optional<ReviewJob> recordedJob(Path root) {
-        Path jobDirectory = Objects.requireNonNull(root.getParent());
-        Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
-        return jobs.findByIdAndWorkspaceId(
-                UUID.fromString(
-                        Objects.requireNonNull(jobDirectory.getFileName()).toString()),
-                Long.parseLong(
-                        Objects.requireNonNull(workspaceDirectory.getFileName()).toString()));
-    }
-
-    private boolean matches(Path root, ReviewJob job) {
-        return directory(job).equals(root);
-    }
-
-    private static void deleteAttempt(Path root) throws IOException {
-        delete(root);
-        try (var siblings = Files.list(root.getParent())) {
-            for (Path staging : siblings.filter(
-                            path -> path.getFileName().toString().startsWith("." + root.getFileName() + ".preparing-"))
-                    .toList()) delete(staging);
-        }
-    }
-
-    private Path sourceFile(ReviewJob job, String filePath) throws IOException {
-        requireAttemptFolder(job);
-        Path root = directory(job);
-        Path sourceFile = safePath(root, filePath);
-        if (!sourceFile.toRealPath().startsWith(root.toRealPath())
-                || !Files.isRegularFile(sourceFile, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalArgumentException("Evidence path is not a regular captured file");
-        }
-        return sourceFile;
+        return sweep.cleanEndedAttempts();
     }
 
     /** Gateway archives belong to the same durable receipt and folder lease as the frozen attempt. */
     public Path archiveDirectory(ReviewJob job) {
-        Path root = directory(job);
+        Path root = directory(layout.jobsRoot(), job);
         if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS))
             throw new UncheckedIOException(new NoSuchFileException(root.toString()));
         return root.resolve(".archives");
-    }
-
-    private Path directory(ReviewJob job) {
-        return directory(job.getWorkspaceId(), job.getId(), job.getAttempt(), job.getRunId());
-    }
-
-    private Path directory(long workspaceId, UUID jobId, int attempt, UUID runId) {
-        return layout.jobsRoot()
-                .resolve(Long.toString(workspaceId))
-                .resolve(jobId.toString())
-                .resolve(attempt + "-"
-                        + ProvenanceDigest.sha256Hex(runId.toString().getBytes(StandardCharsets.UTF_8)));
-    }
-
-    /**
-     * The collector's manifest is sandbox output: what a METADATA_ONLY record keeps is rebuilt here from it, field by
-     * field, as owned enums, booleans, bounded counts and numeric identifiers. Nothing the manifest carries is copied
-     * as written.
-     */
-    private static final class TraceSummary {
-        private static final JsonMapper MANIFESTS = new JsonMapper();
-        /** The collector's own reserve for its manifest (gateway-run.ts); a larger one was not written by it. */
-        private static final int MAX_MANIFEST_BYTES = 1024 * 1024;
-
-        private static final int MAX_SESSIONS = 1000;
-        private static final long MAX_COUNT = 1_000_000;
-        private static final long MAX_TOKENS = 1_000_000_000_000L;
-        private static final long MAX_BYTES = TRACE_BYTE_BUDGET;
-        private static final Set<String> PHASES = Set.of("practice", "public-review", "private-feedback");
-        private static final Set<String> OMISSIONS = Set.of("oversize", "budget", "unreadable");
-        private static final Set<String> STOP_REASONS =
-                Set.of("stop", "length", "toolUse", "error", "aborted", "other");
-        /** The tools a review session is given (pi-runner.ts); the collector counts any other name as "other". */
-        private static final Set<String> TOOL_NAMES = Set.of(
-                "read",
-                "grep",
-                "find",
-                "ls",
-                "bash",
-                "codemode",
-                "upsert_problem",
-                "remove_problem",
-                "read_problem",
-                "submit_result",
-                "other");
-        /** The provider adapter's closed failure diagnostic (docker/agents/pi/patches), as the collector keeps it. */
-        private static final Set<String> MODEL_FAILURE_KINDS = Set.of(
-                "HTTP_ERROR",
-                "CONNECTION_TIMEOUT",
-                "CONNECTION_ERROR",
-                "STREAM_INCOMPLETE",
-                "FINISH_REASON_ERROR",
-                "STREAM_ERROR_EVENT",
-                "RESPONSE_FAILED",
-                "RESPONSE_STATUS_ERROR",
-                "TOOL_CALL_INCOMPLETE",
-                "ABORTED",
-                "UNKNOWN");
-
-        private static final Set<String> MODEL_FAILURE_PHASES = Set.of("request", "response_body");
-        private static final Set<String> MODEL_FAILURE_SOURCES = Set.of("ADAPTER", "MISSING", "INVALID");
-        /** The adapter's call span totals in milliseconds (gateway-run.ts), each a bounded integer. */
-        private static final List<String> MODEL_CALL_TIMING =
-                List.of("elapsedMs", "failedElapsedMs", "maxElapsedMs", "responseMs");
-
-        private static final long MAX_DURATION_MS = (1L << 53) - 1;
-        /** The largest time a JavaScript Date can hold, in epoch milliseconds. */
-        private static final long MAX_EPOCH_MS = 8_640_000_000_000_000L;
-
-        private TraceSummary() {}
-
-        /** The sessions as the server states them, or null when the manifest is absent, oversize or unreadable. */
-        static @Nullable ArrayNode of(byte @Nullable [] manifest) {
-            if (manifest == null || manifest.length > MAX_MANIFEST_BYTES) return null;
-            JsonNode root;
-            try {
-                root = MANIFESTS.readTree(manifest);
-            } catch (RuntimeException unreadable) {
-                log.warn(
-                        "Unreadable transcript manifest: {}",
-                        unreadable.getClass().getSimpleName());
-                return null;
-            }
-            if (!root.path("sessions").isArray()) return null;
-            ArrayNode sessions = JsonNodeFactory.instance.arrayNode();
-            for (JsonNode session : root.path("sessions")) {
-                if (sessions.size() == MAX_SESSIONS) break;
-                ObjectNode kept = sessions.addObject();
-                kept.put("copied", session.path("file").isString());
-                putBounded(kept, "bytes", session.path("bytes"), MAX_BYTES);
-                putFlag(kept, "redacted", session.path("redacted"));
-                putFlag(kept, "partialLineDropped", session.path("partialLineDropped"));
-                putOwned(kept, "omitted", session.path("omitted"), OMISSIONS);
-                JsonNode summary = session.path("summary");
-                if (!summary.isObject()) continue;
-                ObjectNode facts = kept.putObject("summary");
-                putOwned(facts, "phase", summary.path("phase"), PHASES);
-                putPracticeVersionId(facts, summary.path("practiceVersionId"));
-                for (String count : List.of(
-                        "entries", "assistantCalls", "toolErrors", "compactions", "unattributedModelFailures")) {
-                    putBounded(facts, count, summary.path(count), MAX_COUNT);
-                }
-                ObjectNode usage = facts.putObject("usage");
-                for (String bucket : List.of("input", "output", "cacheRead", "cacheWrite")) {
-                    putBounded(usage, bucket, summary.path("usage").path(bucket), MAX_TOKENS);
-                }
-                putCounts(facts.putObject("stopReasons"), summary.path("stopReasons"), STOP_REASONS);
-                putCounts(facts.putObject("toolCalls"), summary.path("toolCalls"), TOOL_NAMES);
-                putCounts(facts.putObject("modelFailures"), summary.path("modelFailures"), MODEL_FAILURE_KINDS);
-                putBounded(facts, "lastModelFailureAt", summary.path("lastModelFailureAt"), MAX_EPOCH_MS);
-                putModelFailure(facts, summary.path("finalModelFailure"));
-                JsonNode callTiming = summary.path("modelCallTiming");
-                if (callTiming.isObject()) {
-                    ObjectNode timing = facts.putObject("modelCallTiming");
-                    for (String field : List.of("timedCalls", "respondedCalls")) {
-                        putBounded(timing, field, callTiming.path(field), MAX_COUNT);
-                    }
-                    for (String field : MODEL_CALL_TIMING) {
-                        putBounded(timing, field, callTiming.path(field), MAX_DURATION_MS);
-                    }
-                }
-            }
-            return sessions;
-        }
-
-        private static void putPracticeVersionId(ObjectNode facts, JsonNode value) {
-            if (!value.isString()) return;
-            String version = value.asString();
-            if (version.matches("[1-9][0-9]{0,18}")
-                    && (version.length() < 19 || version.compareTo(Long.toString(Long.MAX_VALUE)) <= 0)) {
-                facts.put("practiceVersionId", version);
-            }
-        }
-
-        /** Only an owned kind keeps a final failure; its phase, status (HTTP_ERROR only) and time each on their own. */
-        private static void putModelFailure(ObjectNode facts, JsonNode failure) {
-            JsonNode kind = failure.path("kind");
-            if (!kind.isString() || !MODEL_FAILURE_KINDS.contains(kind.asString())) return;
-            ObjectNode kept = facts.putObject("finalModelFailure");
-            kept.put("kind", kind.asString());
-            putOwned(kept, "source", failure.path("source"), MODEL_FAILURE_SOURCES);
-            putOwned(kept, "phase", failure.path("phase"), MODEL_FAILURE_PHASES);
-            if ("HTTP_ERROR".equals(kind.asString())) putBetween(kept, "status", failure.path("status"), 400, 599);
-            putBounded(kept, "at", failure.path("at"), MAX_EPOCH_MS);
-        }
-
-        static boolean scanTruncated(byte @Nullable [] manifest) {
-            if (manifest == null || manifest.length > MAX_MANIFEST_BYTES) return true;
-            try {
-                var root = MANIFESTS.readTree(manifest);
-                var value = root.path("sessionScanTruncated");
-                return !root.path("sessions").isArray()
-                        || root.path("sessions").size() > MAX_SESSIONS
-                        || !value.isBoolean()
-                        || value.asBoolean();
-            } catch (RuntimeException unreadable) {
-                return true;
-            }
-        }
-
-        private static void putBounded(ObjectNode target, String field, JsonNode value, long max) {
-            putBetween(target, field, value, 0, max);
-        }
-
-        private static void putBetween(ObjectNode target, String field, JsonNode value, long min, long max) {
-            if (value.isIntegralNumber()
-                    && value.canConvertToLong()
-                    && value.asLong() >= min
-                    && value.asLong() <= max) {
-                target.put(field, value.asLong());
-            }
-        }
-
-        private static void putFlag(ObjectNode target, String field, JsonNode value) {
-            if (value.isBoolean()) target.put(field, value.asBoolean());
-        }
-
-        private static void putOwned(ObjectNode target, String field, JsonNode value, Set<String> owned) {
-            if (value.isString() && owned.contains(value.asString())) target.put(field, value.asString());
-        }
-
-        /** Only owned keys, each a bounded count; another key is dropped, not renamed. */
-        private static void putCounts(ObjectNode target, JsonNode counts, Set<String> owned) {
-            for (String key : owned) putBounded(target, key, counts.path(key), MAX_COUNT);
-        }
-    }
-
-    private static Path safePath(Path root, String path) {
-        Path relative = Path.of(path);
-        if (relative.isAbsolute()
-                || !relative.normalize().equals(relative)
-                || path.isBlank()
-                || path.contains("\\")
-                || relative.startsWith("..")) {
-            throw new IllegalArgumentException("Unsafe evidence path: " + path);
-        }
-        Path resolved = root.resolve(relative).normalize();
-        if (!resolved.startsWith(root) || resolved.equals(root))
-            throw new IllegalArgumentException("Unsafe evidence path");
-        return resolved;
-    }
-
-    private static void requireDigest(String expected, String actual) {
-        if (!expected.equals(actual)) throw new IllegalStateException("Captured evidence digest mismatch");
-    }
-
-    private static void delete(Path root) {
-        try {
-            FileUtils.deleteDirectory(root.toFile());
-        } catch (IOException exception) {
-            throw new UncheckedIOException(exception);
-        }
     }
 }

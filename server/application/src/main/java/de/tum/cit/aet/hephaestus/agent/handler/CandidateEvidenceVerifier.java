@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.handler.candidate.Candidate;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
@@ -39,12 +39,12 @@ import org.springframework.stereotype.Component;
 
 @Component
 class CandidateEvidenceVerifier {
-    private final JobEvidenceFiles files;
+    private final EvidenceFileReads files;
     private final ClasspathSourceCatalogRegistry catalogs;
     private final Map<ItemKind, CitationVerifier> verifiers;
 
     CandidateEvidenceVerifier(
-            JobEvidenceFiles files, ClasspathSourceCatalogRegistry catalogs, List<CitationVerifier> verifiers) {
+            EvidenceFileReads files, ClasspathSourceCatalogRegistry catalogs, List<CitationVerifier> verifiers) {
         this.files = files;
         this.catalogs = catalogs;
         var byKind = new HashMap<ItemKind, CitationVerifier>();

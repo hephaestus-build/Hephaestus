@@ -104,8 +104,12 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-09-11T12:00:00Z"), ZoneOffset.UTC);
 
-    private static Optional<byte[]> read(JobEvidenceFiles files, ReviewJob job, String path, String sha) {
-        return files.inspect(job, path, sha, reader -> {
+    private EvidenceFileReads reads(JobEvidenceFiles files) {
+        return new EvidenceFileReads(files, new FabricLayout(root.toString()), jobs);
+    }
+
+    private Optional<byte[]> read(JobEvidenceFiles files, ReviewJob job, String path, String sha) {
+        return reads(files).inspect(job, path, sha, reader -> {
             var output = new StringWriter();
             reader.transferTo(output);
             return output.toString().getBytes(StandardCharsets.UTF_8);
@@ -348,9 +352,9 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         try (var prepared = PreparedJobInputsFixtures.prepare(files, job, raw)) {
             Files.writeString(source, "upstream changed");
             assertThat(read(files, job, "context/source.txt", sha)).contains(content.getBytes(StandardCharsets.UTF_8));
-            assertThat(files.containsUtf8AtLines(job, "context/source.txt", sha, "repeated quote", 2, 2))
+            assertThat(reads(files).containsUtf8AtLines(job, "context/source.txt", sha, "repeated quote", 2, 2))
                     .contains(false);
-            assertThat(files.containsUtf8AtLines(job, "context/source.txt", sha, "repeated quote", 3, 3))
+            assertThat(reads(files).containsUtf8AtLines(job, "context/source.txt", sha, "repeated quote", 3, 3))
                     .contains(true);
             assertThatThrownBy(() -> PreparedJobInputsFixtures.prepare(files, job, raw))
                     .isInstanceOf(IllegalStateException.class);
@@ -395,7 +399,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var prepared = PreparedJobInputsFixtures.prepare(
                 files, job, PreparedJobInputsFixtures.filesOnly(Map.of("inputs/source", bytes)));
         try {
-            assertThat(files.containsUtf8AtLines(job, "inputs/source", sha, quote, 1, 1001))
+            assertThat(reads(files).containsUtf8AtLines(job, "inputs/source", sha, quote, 1, 1001))
                     .contains(true);
             assertThatThrownBy(() -> read(files, job, "inputs/source", "a".repeat(64)))
                     .isInstanceOf(IllegalStateException.class);
@@ -567,9 +571,9 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var prepared = PreparedJobInputsFixtures.prepare(
                 files, job, PreparedJobInputsFixtures.filesOnly(Map.of("inputs/source", bytes)));
         try {
-            assertThat(files.containsUtf8AtLines(job, "inputs/source", sha, "clean line", 2, 2))
+            assertThat(reads(files).containsUtf8AtLines(job, "inputs/source", sha, "clean line", 2, 2))
                     .contains(true);
-            assertThat(files.containsUtf8AtLines(job, "inputs/source", sha, "caf\uFFFD", 1, 1))
+            assertThat(reads(files).containsUtf8AtLines(job, "inputs/source", sha, "caf\uFFFD", 1, 1))
                     .as("a replacement character is not the byte that was there")
                     .contains(false);
             assertThat(read(files, job, "inputs/source", sha))

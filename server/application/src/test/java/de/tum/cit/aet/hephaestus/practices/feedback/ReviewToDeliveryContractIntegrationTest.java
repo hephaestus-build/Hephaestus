@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
@@ -241,6 +242,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private JobEvidenceFiles files;
 
     @Autowired
+    private EvidenceFileReads reads;
+
+    @Autowired
     private PersonDataCopyRecorder recorder;
 
     @Autowired
@@ -431,7 +435,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             admission.stage(review.identity(), request(review));
             var job = jobs.findById(review.identity().jobId()).orElseThrow();
-            Path folder = files.verificationDirectory(job).source();
+            Path folder = reads.verificationDirectory(job).source();
             // This server lost the attempt's folder, and the seal keeps the composition inputs from that folder.
             review.inputs().close();
             try (var paths = Files.walk(folder)) {

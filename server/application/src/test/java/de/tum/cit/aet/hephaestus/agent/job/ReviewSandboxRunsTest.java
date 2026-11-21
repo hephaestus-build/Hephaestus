@@ -20,6 +20,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptFolderBusyException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
@@ -151,6 +152,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 reviewRuns,
                 runs,
                 mock(JobEvidenceFiles.class),
+                mock(AttemptCopyReceipts.class),
                 preparationLocks());
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, "review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
@@ -233,6 +235,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 reviewRuns,
                 runs,
                 mock(JobEvidenceFiles.class),
+                mock(AttemptCopyReceipts.class),
                 preparationLocks());
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
@@ -314,6 +317,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 reviewRuns,
                 runs,
                 mock(JobEvidenceFiles.class),
+                mock(AttemptCopyReceipts.class),
                 preparationLocks());
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
@@ -361,6 +365,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 reviewRuns,
                 mock(AgentRuns.class),
                 mock(JobEvidenceFiles.class),
+                mock(AttemptCopyReceipts.class),
                 mock(ClusterLock.class));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
@@ -386,6 +391,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
     void shouldLockTheParentReviewBeforeItRecordsAProgramCrashOnTheJob() {
         var jobs = mock(ReviewJobRepository.class);
         var evidenceFiles = mock(JobEvidenceFiles.class);
+        var receipts = mock(AttemptCopyReceipts.class);
         var reviewRuns = mock(ReviewRunKind.class);
         var runs = mock(AgentRuns.class);
         var fence = new AgentRunFence(UUID.randomUUID(), 7, 1);
@@ -413,6 +419,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 reviewRuns,
                 runs,
                 evidenceFiles,
+                receipts,
                 mock(ClusterLock.class));
         var run = new SandboxRun(
                 new AgentSandboxes.LiveSandbox(
@@ -425,8 +432,8 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 .isTrue();
 
         // Every writer of a review and its job takes the copy fence, the parent, then the job; another order deadlocks.
-        var order = inOrder(evidenceFiles, jobs, reviewRuns);
-        order.verify(evidenceFiles).holdCopyAdmission();
+        var order = inOrder(receipts, jobs, reviewRuns);
+        order.verify(receipts).holdCopyAdmission();
         order.verify(jobs).lockParentOfJob(jobId);
         order.verify(jobs)
                 .recordProgramFailure(eq(jobId), anyLong(), anyInt(), eq(fence.runId()), contains("init:TypeError"));

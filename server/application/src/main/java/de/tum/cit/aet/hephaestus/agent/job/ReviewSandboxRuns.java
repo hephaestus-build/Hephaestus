@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptFolderBusyException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
@@ -80,6 +81,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     private final ReviewJobRepository jobs;
     private final SandboxWorkspaceManager workspaces;
     private final JobEvidenceFiles evidenceFiles;
+    private final AttemptCopyReceipts receipts;
     private final SandboxGatewaySessions sessions;
     private final TransactionTemplate transactions;
     private final ObjectMapper objectMapper;
@@ -108,6 +110,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
             ReviewRunKind reviewRuns,
             AgentRuns runs,
             JobEvidenceFiles evidenceFiles,
+            AttemptCopyReceipts receipts,
             ClusterLock preparationLocks) {
         this.claims = claims;
         this.preparation = preparation;
@@ -122,6 +125,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         this.reviewRuns = reviewRuns;
         this.runs = runs;
         this.evidenceFiles = evidenceFiles;
+        this.receipts = receipts;
         this.preparationLocks = preparationLocks;
     }
 
@@ -255,7 +259,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                 var attempt = identity(run, job);
                 // The order of every writer of a review and its job (ReviewRunKind#requeue): the copy fence, the
                 // parent, then the job. The requeue below takes them again in this transaction.
-                evidenceFiles.holdCopyAdmission();
+                receipts.holdCopyAdmission();
                 jobs.lockParentOfJob(job.getId());
                 jobs.recordProgramFailure(
                         attempt.jobId(),

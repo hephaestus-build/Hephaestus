@@ -11,7 +11,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionIdentity;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedResults;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
@@ -47,7 +48,8 @@ class PracticeResultStagingTest extends BaseUnitTest {
     private final ReviewOutputService output = mock(ReviewOutputService.class);
     private final PracticeStagingStore store = mock(PracticeStagingStore.class);
     private final ReviewJobAssignments assignments = mock(ReviewJobAssignments.class);
-    private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
+    private final EvidenceFileReads reads = mock(EvidenceFileReads.class);
+    private final AttemptCopyReceipts receipts = mock(AttemptCopyReceipts.class);
     private final ReviewJob job = RuntimeReviewTestData.job();
     private final AdmissionIdentity identity = new AdmissionIdentity(job.getId(), 1, 0, job.getRunId());
     private final PracticeResultStaging staging = new PracticeResultStaging(
@@ -56,7 +58,8 @@ class PracticeResultStagingTest extends BaseUnitTest {
             mock(ReviewAssignmentStore.class),
             mock(ReviewFreshness.class),
             assignments,
-            files,
+            reads,
+            receipts,
             mock(ReviewCompositionBasisRepository.class),
             mapper,
             new PracticeCatalogInjector(mapper));
@@ -180,10 +183,10 @@ class PracticeResultStagingTest extends BaseUnitTest {
         var request = nonResult(SLUG);
         verifiedWithoutCandidates(request);
         var copy = UUID.randomUUID();
-        when(files.originalCompositionInputs(identity)).thenReturn(Optional.empty());
+        when(reads.originalCompositionInputs(identity)).thenReturn(Optional.empty());
         // The receipt holds, so only the missing inputs can refuse the stage, whichever check runs first.
-        lenient().when(files.completeReceipt(identity)).thenReturn(Optional.of(copy));
-        lenient().when(files.holdVouchingReceipt(identity, copy)).thenReturn(true);
+        lenient().when(receipts.completeReceipt(identity)).thenReturn(Optional.of(copy));
+        lenient().when(receipts.holdVouchingReceipt(identity, copy)).thenReturn(true);
 
         assertThatThrownBy(() -> stage(request)).isInstanceOf(AdmissionConflictException.class);
 
@@ -194,8 +197,8 @@ class PracticeResultStagingTest extends BaseUnitTest {
     void shouldRefuseToStageWhenTheAttemptHasNoCompleteReceipt() {
         var request = nonResult(SLUG);
         verifiedWithoutCandidates(request);
-        when(files.originalCompositionInputs(identity)).thenReturn(Optional.of(Map.of()));
-        when(files.completeReceipt(identity)).thenReturn(Optional.empty());
+        when(reads.originalCompositionInputs(identity)).thenReturn(Optional.of(Map.of()));
+        when(receipts.completeReceipt(identity)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> stage(request)).isInstanceOf(AdmissionConflictException.class);
 
@@ -213,9 +216,9 @@ class PracticeResultStagingTest extends BaseUnitTest {
         EvidenceSnapshotFixtures.file(capture, source, "context/body.txt", "a".repeat(64));
         job.setCapture(capture);
         when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, assignment));
-        when(files.originalCompositionInputs(identity)).thenReturn(Optional.of(Map.of()));
-        when(files.completeReceipt(identity)).thenReturn(Optional.of(copy));
-        when(files.holdVouchingReceipt(identity, copy)).thenReturn(true);
+        when(reads.originalCompositionInputs(identity)).thenReturn(Optional.of(Map.of()));
+        when(receipts.completeReceipt(identity)).thenReturn(Optional.of(copy));
+        when(receipts.holdVouchingReceipt(identity, copy)).thenReturn(true);
 
         var receipt = stage(request);
 
@@ -232,9 +235,9 @@ class PracticeResultStagingTest extends BaseUnitTest {
         var request = nonResult(SLUG);
         verifiedWithoutCandidates(request);
         var copy = UUID.randomUUID();
-        when(files.originalCompositionInputs(identity)).thenReturn(Optional.of(Map.of()));
-        when(files.completeReceipt(identity)).thenReturn(Optional.of(copy));
-        when(files.holdVouchingReceipt(identity, copy)).thenReturn(false);
+        when(reads.originalCompositionInputs(identity)).thenReturn(Optional.of(Map.of()));
+        when(receipts.completeReceipt(identity)).thenReturn(Optional.of(copy));
+        when(receipts.holdVouchingReceipt(identity, copy)).thenReturn(false);
 
         assertThatThrownBy(() -> stage(request)).isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
 

@@ -9,8 +9,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopies;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedResultProjectionService;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackCompositionService;
@@ -1118,7 +1118,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                         1,
                         List.of(base.practice())));
         when(assignments.load(any(ReviewJob.class))).thenReturn(List.of(assignment));
-        var files = mock(JobEvidenceFiles.class);
+        var files = mock(AttemptCopyReceipts.class);
         when(files.indexLateRead(any(), any(), any())).thenAnswer(call -> ((Supplier<?>) call.getArgument(1)).get());
         var source = new ReviewHistoryContentSource(
                 mock(ResultHistoryQuery.class),

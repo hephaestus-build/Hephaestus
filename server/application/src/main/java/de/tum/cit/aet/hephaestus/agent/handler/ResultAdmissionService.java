@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptFolderBusyException;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PublicFeedbackSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
@@ -76,7 +76,7 @@ public class ResultAdmissionService {
     private final AdmittedResultQuery proof;
     private final ReviewJobAssignments assignments;
     private final AdmittedResultProjectionService projection;
-    private final JobEvidenceFiles files;
+    private final AttemptCopyReceipts receipts;
     private final ReviewHistoryContentSource history;
     private final ObjectMapper mapper;
     private final TransactionTemplate transactions;
@@ -89,7 +89,7 @@ public class ResultAdmissionService {
             AdmittedResultQuery proof,
             ReviewJobAssignments assignments,
             AdmittedResultProjectionService projection,
-            JobEvidenceFiles files,
+            AttemptCopyReceipts receipts,
             ReviewHistoryContentSource history,
             ObjectMapper mapper,
             PlatformTransactionManager manager,
@@ -102,7 +102,7 @@ public class ResultAdmissionService {
         this.proof = proof;
         this.assignments = assignments;
         this.projection = projection;
-        this.files = files;
+        this.receipts = receipts;
         this.history = history;
         this.mapper = mapper;
         this.transactions = new TransactionTemplate(manager);
@@ -150,9 +150,9 @@ public class ResultAdmissionService {
      * always reads the attempt's folder, so this server builds it first, with no transaction or lock held.
      */
     public StageResponseDTO stage(AdmissionIdentity identity, AdmissionRequestDTO request) {
-        files.ensureAttemptFolder(identity);
+        receipts.ensureAttemptFolder(identity);
         return Objects.requireNonNull(transactions.execute(status -> {
-            files.holdCopyAdmission();
+            receipts.holdCopyAdmission();
             var job = ownedJob(identity);
             requireIdentity(job, request.reviewId(), request.jobId(), request.attempt());
             var receipt = staging.stage(job, identity, request, () -> ownedJob(identity));
@@ -184,7 +184,7 @@ public class ResultAdmissionService {
     private Sealed seal(AdmissionIdentity identity, SealResultsRequestDTO request) {
         String digest = ProvenanceDigest.sha256Hex(mapper.writeValueAsBytes(request));
         return Objects.requireNonNull(transactions.execute(status -> {
-            files.holdCopyAdmission();
+            receipts.holdCopyAdmission();
             ReviewJob owned = ownedJob(identity);
             requireIdentity(owned, request.reviewId(), request.jobId(), request.attempt());
             if (isAdmitted(owned)) {
@@ -197,7 +197,7 @@ public class ResultAdmissionService {
             for (var entry : staged) {
                 if (entry.candidate() == null) continue;
                 var copy = UUID.fromString(entry.evidence().path("copyId").asString());
-                if (!files.vouchesForOriginalCopy(copy, owned.getId(), owned.getWorkspaceId(), entry.attempt())
+                if (!receipts.vouchesForOriginalCopy(copy, owned.getId(), owned.getWorkspaceId(), entry.attempt())
                         || !Instant.parse(entry.evidence().path("expiresAt").asString())
                                 .isAfter(Instant.now())) staging.refuseCopy(owned, entry);
             }
@@ -258,7 +258,7 @@ public class ResultAdmissionService {
         return withAttemptFolder(
                 identity,
                 () -> Boolean.TRUE.equals(transactions.execute(status -> {
-                    files.holdCopyAdmission();
+                    receipts.holdCopyAdmission();
                     var job = ownedJob(identity);
                     if (isAdmitted(job)) return false;
                     var currentness = staging.currentness(job);
@@ -290,7 +290,7 @@ public class ResultAdmissionService {
         withAttemptFolder(
                 identity,
                 () -> Objects.requireNonNull(transactions.execute(status -> {
-                    files.holdCopyAdmission();
+                    receipts.holdCopyAdmission();
                     var job = ownedJob(identity);
                     if (isAdmitted(job)) return job;
                     staging.failOpen(job, ReviewWithholdings.unmeasured(reason));
@@ -314,7 +314,7 @@ public class ResultAdmissionService {
         try {
             return seal.get();
         } catch (AttemptFolderBusyException missing) {
-            files.ensureAttemptFolder(identity);
+            receipts.ensureAttemptFolder(identity);
             return seal.get();
         }
     }
@@ -337,13 +337,13 @@ public class ResultAdmissionService {
         if (assignments.review(job).kind() == ReviewKind.ITEM && !admitted.isEmpty()) {
             progress = composition.privateProgress(job, admitted);
             var identity = new AdmissionIdentity(job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId());
-            privateRead = files.indexLateRead(
+            privateRead = receipts.indexLateRead(
                     identity,
                     () -> Objects.requireNonNull(transactions.execute(status -> {
                         ownedJob(identity);
                         return composition.read(job, admitted);
                     })),
-                    read -> new JobEvidenceFiles.LateCopies(read.copies()));
+                    read -> new AttemptCopyReceipts.LateCopies(read.copies()));
         }
         return new AdmissionResponseDTO(
                 AdmissionResponseDTO.CONTRACT_VERSION,
@@ -407,7 +407,7 @@ public class ResultAdmissionService {
                                     && !entry.withdrawn()
                                     && !entry.bodyUnavailable())) throw new AdmissionConflictException();
         }
-        var context = files.indexLateRead(
+        var context = receipts.indexLateRead(
                 identity,
                 () -> Objects.requireNonNull(transactions.execute(status -> {
                     var owned = ownedJob(identity);
@@ -421,7 +421,7 @@ public class ResultAdmissionService {
                                     owned.getId(),
                                     citationAttempt(owned)));
                 })),
-                read -> new JobEvidenceFiles.LateCopies(read.copies()));
+                read -> new AttemptCopyReceipts.LateCopies(read.copies()));
         return transactions.execute(status -> {
             ReviewJob job = ownedJob(identity);
             if (!isAdmitted(job) || assignments.review(job).kind() != ReviewKind.ITEM)
@@ -519,10 +519,10 @@ public class ResultAdmissionService {
     }
 
     public PublicFeedbackSnapshot publicFeedbackHistory(AdmissionIdentity identity) {
-        var retained = files.indexLateRead(
+        var retained = receipts.indexLateRead(
                 identity,
                 () -> Objects.requireNonNull(transactions.execute(status -> {
-                    files.holdCopyAdmission();
+                    receipts.holdCopyAdmission();
                     var job = ownedJob(identity);
                     if (!isAdmitted(job) || assignments.review(job).kind() != ReviewKind.ITEM)
                         throw new PublicHistoryRefusedException("History requires an admitted item review");
@@ -530,7 +530,7 @@ public class ResultAdmissionService {
                     // falls between reading a copy and indexing it.
                     return history.publicSameItemFeedback(job, assignments.load(job));
                 })),
-                read -> new JobEvidenceFiles.LateCopies(read.copies()));
+                read -> new AttemptCopyReceipts.LateCopies(read.copies()));
         return retained.response();
     }
 

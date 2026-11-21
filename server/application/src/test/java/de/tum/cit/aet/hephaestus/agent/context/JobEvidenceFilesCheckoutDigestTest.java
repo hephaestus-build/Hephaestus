@@ -81,6 +81,10 @@ class JobEvidenceFilesCheckoutDigestTest extends BaseUnitTest {
                 mock(AttemptInputs.class));
     }
 
+    private EvidenceFileReads reads() {
+        return new EvidenceFileReads(files(), new FabricLayout(root.toString()), mock(ReviewJobRepository.class));
+    }
+
     private static ReadReceipt search(String path) {
         return new ReadReceipt(
                 TREE, ROOT + ".git/HEAD", path, "commit", ReadReceiptStatus.SEARCHED, PINNED, null, null, "absent", 0);
@@ -114,10 +118,10 @@ class JobEvidenceFilesCheckoutDigestTest extends BaseUnitTest {
         var job = job(Map.of(ROOT, PINNED));
         var read = new ReadReceipt(
                 TREE, ROOT + ".git/HEAD", "b.txt", "c", ReadReceiptStatus.COMPLETE, PINNED, 1, 1, null, null);
-        assertThat(files().capturedCheckoutDigest(job, search("."))).contains(PINNED);
-        assertThat(files().capturedCheckoutDigest(job, search("a"))).isEmpty();
-        assertThat(files().capturedCheckoutDigest(job, read)).isEmpty();
-        assertThat(files().capturedCheckoutDigest(job(Map.of()), search("."))).isEmpty();
+        assertThat(reads().capturedCheckoutDigest(job, search("."))).contains(PINNED);
+        assertThat(reads().capturedCheckoutDigest(job, search("a"))).isEmpty();
+        assertThat(reads().capturedCheckoutDigest(job, read)).isEmpty();
+        assertThat(reads().capturedCheckoutDigest(job(Map.of()), search("."))).isEmpty();
     }
 
     @Test
@@ -126,7 +130,7 @@ class JobEvidenceFilesCheckoutDigestTest extends BaseUnitTest {
         var manifest = Objects.requireNonNull(new JobFolderIndexBuilder(catalogs, mapper, Clock.systemUTC())
                 .build(new ItemKind("scm.pull_request"), Map.of(TREE, CaptureContribution.empty()))
                 .manifest());
-        assertThat(files().registerReadReceipts(job(Map.of(ROOT, PINNED)), manifest, List.of(search(".")), catalogs))
+        assertThat(reads().registerReadReceipts(job(Map.of(ROOT, PINNED)), manifest, List.of(search(".")), catalogs))
                 .isEqualTo(manifest);
     }
 }

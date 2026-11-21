@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
@@ -36,10 +36,10 @@ final class CapturedQuoteProbe implements CapturedTextProbe {
 
     private final ReviewJob job;
     private final CapturedEvidence captured;
-    private final JobEvidenceFiles files;
+    private final EvidenceFileReads files;
     private long read;
 
-    CapturedQuoteProbe(ReviewJob job, CapturedEvidence captured, JobEvidenceFiles files) {
+    CapturedQuoteProbe(ReviewJob job, CapturedEvidence captured, EvidenceFileReads files) {
         this.job = job;
         this.captured = captured;
         this.files = files;
