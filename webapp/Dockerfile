@@ -29,7 +29,7 @@ COPY server/application/src/main/resources/practices/default-catalog.json /repo/
 RUN pnpm --filter webapp run build && \
     ! find webapp/dist -name '*.map' -print -quit | grep -q .
 
-FROM nginx:1.30.6-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee17884204677702951 AS os-packages
+FROM nginx:1.30.7-alpine@sha256:caf4e1e032a20f9c3c5e28fc7f25ffd768ad8677b4975c54193075997b3a97e3 AS os-packages
 # nginx's upstream package repository is not persisted, so this upgrades distribution packages only.
 RUN apk upgrade --no-cache && apk add --no-cache bash sed grep curl
 
