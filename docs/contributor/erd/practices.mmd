@@ -106,6 +106,8 @@ erDiagram
         UUID copy_id FK "NOT NULL"
         INTEGER generation "NOT NULL"
         BIGINT item_id UK "NOT NULL"
+        VARCHAR(16) provider
+        BOOLEAN reopens
         BOOLEAN resolved "NOT NULL"
         VARCHAR(16) state "NOT NULL"
         VARCHAR(32) stop_reason
