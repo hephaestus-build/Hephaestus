@@ -303,7 +303,7 @@ networkPolicy:
     podLabels:
       app.kubernetes.io/name: traefik
       app.kubernetes.io/instance: traefik-kube-system
-  # The Kubernetes API endpoint, for small.yaml only.
+  # The Kubernetes API endpoint, for sandboxes (small.yaml) or backups.
   kubernetesApi:
     cidr: 192.168.5.15/32
     port: 6443
@@ -323,7 +323,7 @@ config:
 3. Set `route.parentRefs` to your Gateway and its HTTPS listener.
 4. Set `networkPolicy.gateway` to the namespace and the Pod labels of your Gateway Pods.
    The chart refuses a namespace without labels, because it would admit every Pod in that namespace.
-5. For `small.yaml`, find the Kubernetes API endpoint that the network plugin sees:
+5. For `small.yaml`, or with backups, find the Kubernetes API endpoint that the network plugin sees:
 
    ```bash
    kubectl get endpointslices --namespace default --selector kubernetes.io/service-name=kubernetes
@@ -341,7 +341,7 @@ config:
    For an external database, use the backups of its provider.
 
 Do not set `release` or `images`: the release chart sets them.
-For `dev.yaml`, leave out `networkPolicy.kubernetesApi` and `sandbox`.
+For `dev.yaml`, leave out `sandbox`. Leave out `networkPolicy.kubernetesApi` too, unless you turn on backups: the server then reads the backup CronJobs through the API.
 
 ## 7. Install the chart [#install]
 

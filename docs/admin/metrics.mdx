@@ -461,6 +461,23 @@ Metrics contain no workspace, person, token, callback URL or provider resource l
 `HephaestusProviderRemovalNeedsConfirmation` identifies sustained authorization or confirmation needs.
 The [alert response](./production-operations-runbook.mdx#alert-response) states the action.
 
+## Backup metrics
+
+With backups of the bundled PostgreSQL on, the server role reads the two backup CronJobs every five minutes.
+It reads each one by name, with `get` on exactly these two CronJobs ([Pod security](./helm-chart#pod-security)).
+
+| Prometheus name                          | Type    | Meaning                                                                                                   |
+| ---------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `database_backup_age_seconds`            | Gauge   | Seconds since the newest successful backup of either CronJob, or since their creation before the first one |
+| `database_backup_sample_failures_total`  | Counter | Reads of the CronJobs that failed or found a CronJob missing                                              |
+
+The gauge never reports a backup that the server did not see:
+
+- The age is infinite before the first read, after a read that failed, and while a CronJob is missing.
+  `HephaestusBackupStale` fires when that lasts.
+- A backup Job that waits `Pending` never succeeds, so the age grows.
+- Without backups, the server reports no age.
+
 ## WAL archive metrics
 
 The server role reads `pg_stat_archiver` and `archive_mode` from the database every 30 seconds.

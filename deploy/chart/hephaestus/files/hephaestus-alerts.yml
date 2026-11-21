@@ -591,6 +591,18 @@ groups:
         annotations:
           summary: An outbox action ended uncertain, so its write may have reached the provider and nothing confirms it
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The server reads the backup CronJobs of the bundled PostgreSQL (BackupScheduleMonitor): seconds since the newest
+      # successful backup, or since the schedules were created before the first. A backup Job that waits Pending never
+      # succeeds, so its age grows. A failed read or a missing CronJob reports an infinite age, so they fire too.
+      # Fifteen minutes let one failed read pass. Without backups, the server reports no age, and nothing fires.
+      - alert: HephaestusBackupStale
+        expr: max(database_backup_age_seconds{job="hephaestus"}) > 30 * 3600
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: No PostgreSQL backup completed in the last 30 hours, or the server cannot read the backup schedules
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWalArchiveFailing
         expr: >-
           max(database_wal_archive_failing{job="hephaestus"}) == 1
@@ -1024,60 +1036,6 @@ groups:
           severity: warning
         annotations:
           summary: A server replica stayed unavailable for 15 minutes while another serves
-          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      # A release name longer than 34 characters truncates and hashes the CronJob names, which the name match then
-      # misses. The label match finds those CronJobs when kube-state-metrics exports their labels.
-      - alert: HephaestusBackupStale
-        expr: |-
-          time() - max by (namespace, release) (
-            label_replace(
-              kube_cronjob_status_last_successful_time{cronjob=~".+-postgresql-backup-(full|diff)"},
-              "release", "$1", "cronjob", "(.+)-postgresql-backup-(?:full|diff)"
-            )
-            or
-            label_replace(
-              kube_cronjob_status_last_successful_time
-              * on (namespace, cronjob) group_left (label_app_kubernetes_io_instance)
-              kube_cronjob_labels{label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup"},
-              "release", "$1", "label_app_kubernetes_io_instance", "(.+)"
-            )
-          ) > 30 * 3600
-          or
-          # kube-state-metrics exports no last-success time before a CronJob's first success: count from its
-          # creation instead.
-          (
-            time() - min by (namespace, release) (
-              label_replace(
-                kube_cronjob_created{cronjob=~".+-postgresql-backup-(full|diff)"},
-                "release", "$1", "cronjob", "(.+)-postgresql-backup-(?:full|diff)"
-              )
-              or
-              label_replace(
-                kube_cronjob_created
-                * on (namespace, cronjob) group_left (label_app_kubernetes_io_instance)
-                kube_cronjob_labels{label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup"},
-                "release", "$1", "label_app_kubernetes_io_instance", "(.+)"
-              )
-            ) > 30 * 3600
-            unless on (namespace, release)
-            (
-              label_replace(
-                kube_cronjob_status_last_successful_time{cronjob=~".+-postgresql-backup-(full|diff)"},
-                "release", "$1", "cronjob", "(.+)-postgresql-backup-(?:full|diff)"
-              )
-              or
-              label_replace(
-                kube_cronjob_status_last_successful_time
-                * on (namespace, cronjob) group_left (label_app_kubernetes_io_instance)
-                kube_cronjob_labels{label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup"},
-                "release", "$1", "label_app_kubernetes_io_instance", "(.+)"
-              )
-            )
-          )
-        labels:
-          severity: critical
-        annotations:
-          summary: No PostgreSQL backup completed in the last 30 hours
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusPostgresVolumeFilling
         expr: >-

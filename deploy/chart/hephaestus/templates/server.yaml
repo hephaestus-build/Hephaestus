@@ -7,7 +7,8 @@
 {{- $grace := ternary (add $drain 120) 45 $sandbox.enabled }}
 {{- /* The schema wait (HEPHAESTUS_DATABASE_MIGRATION_WAIT, 10 minutes) plus two minutes to boot and finish starting. */}}
 {{- $startupSeconds := 720 }}
-{{- if $sandbox.enabled }}
+{{- $backups := eq (include "hephaestus.backupsRead" .) "true" }}
+{{- if or $sandbox.enabled $backups }}
 {{- include "hephaestus.kubernetesApiCheck" . }}
 {{- end }}
 apiVersion: v1
@@ -59,8 +60,9 @@ spec:
         {{- include "hephaestus.podLabels" (dict "root" . "component" "server") | nindent 8 }}
     spec:
       serviceAccountName: {{ $name }}
-      # The sandboxes need the Kubernetes API, with the Role in sandbox.yaml; nothing else does.
-      automountServiceAccountToken: {{ $sandbox.enabled }}
+      # The Kubernetes API, only for the sandboxes (the Role in sandbox.yaml) and the backup schedules (the Role in
+      # postgresql-backup.yaml). Without either, the server has no token.
+      automountServiceAccountToken: {{ or $sandbox.enabled $backups }}
       priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
       enableServiceLinks: false
       securityContext:
@@ -168,6 +170,13 @@ spec:
             # The volume of the bundled PostgreSQL, which the database size alert compares against.
             - name: HEPHAESTUS_DATABASE_VOLUME_SIZE
               value: {{ printf "%dMB" $volumeMi | quote }}
+            {{- end }}
+            {{- if $backups }}
+            # The backup CronJobs whose newest success the backup staleness alert reads.
+            - name: HEPHAESTUS_DATABASE_BACKUP_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: HEPHAESTUS_DATABASE_BACKUP_CRONJOBS
+              value: {{ include "hephaestus.backupCronJobs" . | fromJsonArray | join "," | quote }}
             {{- end }}
             - name: HEPHAESTUS_AUTH_ISSUER
               value: {{ printf "https://%s" .Values.host | quote }}
