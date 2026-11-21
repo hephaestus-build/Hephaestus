@@ -47,8 +47,8 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
-import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPools;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
@@ -169,7 +169,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     private final ReviewMethodVerifier methods = mock(ReviewMethodVerifier.class);
 
     /** A pool with no one waiting. */
-    private static LlmCallPermits idleCalls() {
+    private static LlmCallPools idleCalls() {
         return LlmCallPermitsTestFixtures.idle();
     }
 
@@ -925,7 +925,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
             String slug,
             WorkspaceModelAssignment selected,
             ReviewJobClaimService claims,
-            LlmCallPermits permits) {}
+            LlmCallPools pools) {}
 
     private PoolScenario poolScenario() {
         var selected = binding(DataHandlingTier.IN_HOUSE);
@@ -940,7 +940,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         when(budgets.decide(anyLong())).thenReturn(LlmBudgetDecision.ALLOWED);
         var assignments = mock(ReviewJobAssignments.class);
         when(assignments.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
-        var permits = LlmCallPermitsTestFixtures.worker(context, "test-worker");
+        var pools = LlmCallPermitsTestFixtures.pools(context);
         var claims = new ReviewJobClaimService(
                 jobs,
                 policy,
@@ -951,10 +951,10 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(new SimpleMeterRegistry(), Tracer.NOOP),
-                permits,
+                pools,
                 agentRuns,
                 reviewRuns);
-        return new PoolScenario(pool.getId(), pool.getSlug(), selected, claims, permits);
+        return new PoolScenario(pool.getId(), pool.getSlug(), selected, claims, pools);
     }
 
     /** A measurement of another workspace that the pool admitted and that runs since {@code started}. */
@@ -1078,7 +1078,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var second = queued(pool.selected());
         var third = queued(pool.selected());
         var meters = new SimpleMeterRegistry();
-        var admission = new ReviewPoolAdmission(jobs, pool.permits(), meters);
+        var admission = new ReviewPoolAdmission(jobs, pool.pools(), meters);
         var reviews = EnumSet.of(AgentRunKind.REVIEW);
 
         var pass = admission.pass(reviews);
@@ -1114,7 +1114,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         jdbc.update(
                 "UPDATE agent_run SET available_at=clock_timestamp() + interval '1 hour' WHERE id=?",
                 budgetHeld.getRunId());
-        var pass = new ReviewPoolAdmission(jobs, pool.permits(), new SimpleMeterRegistry())
+        var pass = new ReviewPoolAdmission(jobs, pool.pools(), new SimpleMeterRegistry())
                 .pass(EnumSet.of(AgentRunKind.REVIEW));
 
         assertThat(pass.admits(due(next)))
@@ -1131,7 +1131,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 "UPDATE review_job SET config_snapshot=jsonb_build_object('schemaVersion', ?) WHERE id=?",
                 ConfigSnapshot.SCHEMA_VERSION,
                 job.getId());
-        var pass = new ReviewPoolAdmission(jobs, pool.permits(), new SimpleMeterRegistry())
+        var pass = new ReviewPoolAdmission(jobs, pool.pools(), new SimpleMeterRegistry())
                 .pass(EnumSet.of(AgentRunKind.REVIEW));
 
         assertThat(pass.admits(due(job))).isTrue();
@@ -1222,7 +1222,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var snapshots = mock(ReviewJobAssignments.class);
         when(snapshots.hasStaged(any())).thenReturn(true);
         var metrics = new SimpleMeterRegistry();
-        var permits = mock(LlmCallPermits.class);
+        var pools = mock(LlmCallPools.class);
         var modelAdmission = mock(LlmAdmissionService.class);
         var claims = new ReviewJobClaimService(
                 jobs,
@@ -1234,7 +1234,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 modelAdmission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                permits,
+                pools,
                 agentRuns,
                 reviewRuns);
         assertThat(claimLeased(job, claims)).isEmpty();
@@ -1255,7 +1255,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         when(snapshots.hasStaged(any())).thenReturn(true);
         when(snapshots.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         var metrics = new SimpleMeterRegistry();
-        var permits = mock(LlmCallPermits.class);
+        var pools = mock(LlmCallPools.class);
         var modelAdmission = mock(LlmAdmissionService.class);
         var claims = new ReviewJobClaimService(
                 jobs,
@@ -1267,14 +1267,14 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 modelAdmission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                permits,
+                pools,
                 agentRuns,
                 reviewRuns);
         assertThat(claimLeased(job, claims)).hasValueSatisfying(claimed -> {
             assertThat(claimed.withholdOnly()).isEqualTo(CompositionStop.RETRIES_EXHAUSTED);
             assertThat(claimed.job().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
         });
-        verifyNoInteractions(budgets, modelAdmission, permits);
+        verifyNoInteractions(budgets, modelAdmission, pools);
     }
 
     @Test

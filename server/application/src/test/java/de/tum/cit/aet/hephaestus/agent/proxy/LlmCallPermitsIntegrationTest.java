@@ -642,10 +642,10 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         Instant asked = databaseNow(jdbc).plusSeconds(30);
         HttpHeaders longPause = new HttpHeaders();
         longPause.set(HttpHeaders.RETRY_AFTER, "30");
-        workerA.throttled(call, 429, longPause, true);
+        workerA.learning().throttled(call, 429, longPause, true);
         HttpHeaders shortPause = new HttpHeaders();
         shortPause.set(HttpHeaders.RETRY_AFTER, "1");
-        workerA.throttled(call, 429, shortPause, true);
+        workerA.learning().throttled(call, 429, shortPause, true);
         call.close();
         assertThat(probe(workerB, pool, AgentRunBand.INTERACTIVE, 2)).isNull();
         var deadline = Objects.requireNonNull(pools.findById(pool).orElseThrow().getNoCallBefore());
@@ -965,7 +965,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         long pool = pool(4);
         int limit = learnedLimit(pool);
         try (var call = admit(workerA, pool, AgentRunBand.BATCH, 1)) {
-            workerA.served(call, noRequestsLeftForAnHour(), true);
+            workerA.learning().served(call, noRequestsLeftForAnHour(), true);
 
             await().atMost(Duration.ofSeconds(3))
                     .untilAsserted(() -> assertThat(pausedMillis(pool)).isPositive());
@@ -1017,7 +1017,12 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
                     LlmCallPermitsTestFixtures.PERMIT_AGING,
                     "wake-a-" + UUID.randomUUID(),
                     workerAMeters,
-                    mock(LlmModelResolver.class),
+                    new LlmCallPools(
+                            pools,
+                            rows,
+                            mock(LlmModelResolver.class),
+                            PROPERTIES,
+                            LlmCallPermitsTestFixtures.PERMIT_AGING),
                     first);
             workerB = new LlmCallPermits(
                     pools,
@@ -1027,7 +1032,12 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
                     LlmCallPermitsTestFixtures.PERMIT_AGING,
                     "wake-b-" + UUID.randomUUID(),
                     new SimpleMeterRegistry(),
-                    mock(LlmModelResolver.class),
+                    new LlmCallPools(
+                            pools,
+                            rows,
+                            mock(LlmModelResolver.class),
+                            PROPERTIES,
+                            LlmCallPermitsTestFixtures.PERMIT_AGING),
                     second);
             workerA.start();
             workerB.start();
@@ -1060,7 +1070,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     void shouldNotPauseASharedPoolForTheHeadersOfAWorkspacesOwnCredential() {
         long pool = pool(4);
         try (var call = admit(workerA, pool, AgentRunBand.BATCH, 1)) {
-            workerA.served(call, noRequestsLeftForAnHour(), false);
+            workerA.learning().served(call, noRequestsLeftForAnHour(), false);
 
             await().during(Duration.ofMillis(500))
                     .atMost(Duration.ofSeconds(2))

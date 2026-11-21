@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.gateway.RunAdmission;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPools;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
@@ -37,13 +37,13 @@ import org.springframework.stereotype.Component;
 @ConditionalOnAgentRuntime
 public class ReviewPoolAdmission implements RunAdmission {
     private final ReviewJobRepository jobs;
-    private final LlmCallPermits permits;
+    private final LlmCallPools pools;
     private final MeterRegistry meters;
     private final Map<String, AtomicLong> held = new ConcurrentHashMap<>();
 
-    public ReviewPoolAdmission(ReviewJobRepository jobs, LlmCallPermits permits, MeterRegistry meters) {
+    public ReviewPoolAdmission(ReviewJobRepository jobs, LlmCallPools pools, MeterRegistry meters) {
         this.jobs = jobs;
-        this.permits = permits;
+        this.pools = pools;
         this.meters = meters;
     }
 
@@ -101,7 +101,7 @@ public class ReviewPoolAdmission implements RunAdmission {
             if (!kinds.contains(AgentRunKind.REVIEW)) return;
             // The pools of workspace models share one label, so their counts add up.
             Map<String, Long> labelled = new HashMap<>();
-            holding.forEach((pool, count) -> labelled.merge(permits.poolLabel(pool), count, Long::sum));
+            holding.forEach((pool, count) -> labelled.merge(pools.poolLabel(pool), count, Long::sum));
             held.forEach((label, gauge) -> gauge.set(labelled.getOrDefault(label, 0L)));
             labelled.forEach((label, count) -> gauge(label).set(count));
         }
@@ -117,7 +117,7 @@ public class ReviewPoolAdmission implements RunAdmission {
                         frozen.getWorkspaceId());
                 Long known = poolOfModel.get(model);
                 if (known != null) return known;
-                long pool = permits.poolFor(model);
+                long pool = pools.poolFor(model);
                 poolOfModel.put(model, pool);
                 return pool;
             } catch (RuntimeException unreadable) {
@@ -128,15 +128,15 @@ public class ReviewPoolAdmission implements RunAdmission {
 
     /** Whether the pool takes another measurement now. */
     public boolean admits(long poolId) {
-        return admits(jobs.poolLoad(poolId), permits, poolId);
+        return admits(jobs.poolLoad(poolId), pools, poolId);
     }
 
     /** The rule, which the claim also applies while it holds the pool's lock. */
-    static boolean admits(ReviewJobRepository.PoolLoad load, LlmCallPermits permits, long poolId) {
+    static boolean admits(ReviewJobRepository.PoolLoad load, LlmCallPools pools, long poolId) {
         if (load.getRunning() == 0) return true;
         Instant newest = load.getNewestStart();
-        return !permits.congested(poolId)
-                && (newest == null || newest.plus(permits.admissionSpacing()).isBefore(Instant.now()));
+        return !pools.congested(poolId)
+                && (newest == null || newest.plus(pools.admissionSpacing()).isBefore(Instant.now()));
     }
 
     private AtomicLong gauge(String label) {

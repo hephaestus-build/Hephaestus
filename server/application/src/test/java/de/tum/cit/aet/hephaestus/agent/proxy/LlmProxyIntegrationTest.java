@@ -1605,6 +1605,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     1, List.of(new ReviewAssignmentId(review, 7, 1), new ReviewAssignmentId(review, 3, 1))));
             jobRepository.saveAndFlush(job);
             var capacity = mock(LlmCallPermits.class);
+            when(capacity.learning()).thenReturn(mock(LlmPoolLearning.class));
             var permit = mock(LlmCallPermits.Permit.class);
             when(permit.revoked()).thenReturn(Mono.never());
             var queued = new AtomicReference<LlmCallPermits.@Nullable Caller>();
@@ -1628,6 +1629,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             ReviewJob waiting = reviewJob(upstream.url("/v1").toString());
             ReviewJob spender = reviewJob(upstream.url("/v1").toString());
             var capacity = mock(LlmCallPermits.class);
+            when(capacity.learning()).thenReturn(mock(LlmPoolLearning.class));
             var permit = mock(LlmCallPermits.Permit.class);
             when(permit.revoked()).thenReturn(Mono.never());
             var service = proxyService(WebClient.create(), capOf("1"), capacity);
@@ -1652,6 +1654,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     /** A pool that admits every call, as a model is always in a pool. */
     private static LlmCallPermits admittingPermits() {
         var permits = mock(LlmCallPermits.class);
+        when(permits.learning()).thenReturn(mock(LlmPoolLearning.class));
         var permit = mock(LlmCallPermits.Permit.class);
         when(permit.revoked()).thenReturn(Mono.never());
         when(permits.acquire(anyLong(), any(), any(), any(), any())).thenReturn(permit);

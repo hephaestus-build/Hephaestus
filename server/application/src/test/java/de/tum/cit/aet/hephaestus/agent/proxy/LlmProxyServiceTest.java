@@ -154,6 +154,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
         lenient().when(permit.revoked()).thenReturn(Mono.never());
         lenient().when(permits.acquire(anyLong(), any(), any(), any(), any())).thenReturn(permit);
         lenient().when(permits.beforeRetry(any(), any(), any())).thenReturn(true);
+        LlmPoolLearning learning = mock(LlmPoolLearning.class);
+        lenient().when(permits.learning()).thenReturn(learning);
         return permits;
     }
 
@@ -1070,11 +1072,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
             when(permit.revoked()).thenReturn(Mono.never());
             AtomicBoolean revoked = new AtomicBoolean();
             when(permit.isRevoked()).thenAnswer(_ -> revoked.get());
+            LlmPoolLearning learning = streamingPermits.learning();
             doAnswer(_ -> {
                         revoked.set(true);
                         return null;
                     })
-                    .when(streamingPermits)
+                    .when(learning)
                     .served(eq(permit), any(), anyBoolean());
             upstream.enqueue(new MockResponse.Builder()
                     .code(200)
@@ -1099,7 +1102,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         private LlmCallPermits.Permit throttledPermit(@Nullable Duration asked) {
             LlmCallPermits.Permit permit = mock(LlmCallPermits.Permit.class);
             when(permit.revoked()).thenReturn(Mono.never());
-            when(streamingPermits.throttled(eq(permit), anyInt(), any(), anyBoolean()))
+            when(streamingPermits.learning().throttled(eq(permit), anyInt(), any(), anyBoolean()))
                     .thenReturn(asked);
             return permit;
         }
@@ -1133,7 +1136,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(answer.status()).isEqualTo(200);
             assertThat(answer.body()).contains("complete");
             assertThat(upstream.getRequestCount()).isEqualTo(2);
-            verify(streamingPermits)
+            verify(streamingPermits.learning())
                     .throttled(
                             eq(permit),
                             eq(429),
@@ -1194,7 +1197,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(answer.status()).isEqualTo(429);
             assertThat(upstream.getRequestCount()).isEqualTo(1);
             // It says nothing about capacity: no other caller slows down, and the limit stays.
-            verify(streamingPermits, never()).throttled(any(), anyInt(), any(), anyBoolean());
+            verify(streamingPermits.learning(), never()).throttled(any(), anyInt(), any(), anyBoolean());
         }
 
         @Test
@@ -1236,7 +1239,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             Answer answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
 
             assertThat(answer.status()).isEqualTo(400);
-            verify(streamingPermits, never()).throttled(any(), anyInt(), any(), anyBoolean());
+            verify(streamingPermits.learning(), never()).throttled(any(), anyInt(), any(), anyBoolean());
             verify(permit, never()).served(anyBoolean());
         }
 

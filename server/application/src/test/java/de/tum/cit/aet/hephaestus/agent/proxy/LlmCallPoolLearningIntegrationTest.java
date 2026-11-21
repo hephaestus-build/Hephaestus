@@ -129,7 +129,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
                     permit.served(true);
                     return;
                 }
-                worker.throttled(permit, 429, pause, true);
+                worker.learning().throttled(permit, 429, pause, true);
                 permit.absorbed();
             }
         }
@@ -273,7 +273,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
                                 () -> false,
                                 Instant.now().plusSeconds(120)))) {
                             long sent = System.nanoTime();
-                            gpu.call(() -> worker.firstToken(permit, System.nanoTime() - sent, true));
+                            gpu.call(() -> worker.learning().firstToken(permit, System.nanoTime() - sent, true));
                             permit.served(true);
                         }
                     }
@@ -341,7 +341,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         long pool = sharedPool();
         var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
 
-        workerA.firstToken(call, Duration.ofMinutes(5).toNanos(), false);
+        workerA.learning().firstToken(call, Duration.ofMinutes(5).toNanos(), false);
         call.close();
 
         await().during(Duration.ofMillis(300))
@@ -375,8 +375,8 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         var first = admit(workerA, pool, AgentRunBand.BATCH, 1);
         var second = admit(workerB, pool, AgentRunBand.BATCH, 1);
 
-        workerA.throttled(first, 429, pause(1), true);
-        workerB.throttled(second, 429, pause(1), true);
+        workerA.learning().throttled(first, 429, pause(1), true);
+        workerB.learning().throttled(second, 429, pause(1), true);
 
         assertThat(limit(pool)).isEqualTo(5);
         first.close();
@@ -384,7 +384,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
 
         clearCooldown(pool);
         var later = admit(workerA, pool, AgentRunBand.BATCH, 1);
-        workerA.throttled(later, 503, pause(1), true);
+        workerA.learning().throttled(later, 503, pause(1), true);
         later.close();
         assertThat(limit(pool)).isEqualTo(3);
         assertThat(meters.get(AgentMetrics.LLM_POOL_LIMIT_DECREASES)
@@ -400,7 +400,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         long pool = ownPool();
         var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
         Instant asked = databaseNow(jdbc).plusSeconds(2);
-        workerA.throttled(call, 429, pause(2), true);
+        workerA.learning().throttled(call, 429, pause(2), true);
         call.close();
         assertThat(noCallBefore(pool)).isAfterOrEqualTo(asked);
 
@@ -475,7 +475,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         setMaximum(pool, 16);
         var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
 
-        workerA.throttled(call, 429, pause(1), true);
+        workerA.learning().throttled(call, 429, pause(1), true);
         call.close();
 
         assertThat(limit(pool)).isEqualTo(11);
@@ -486,7 +486,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         long pool = ownPool();
         var old = admit(workerA, pool, AgentRunBand.BATCH, 1);
         var refused = admit(workerA, pool, AgentRunBand.BATCH, 1);
-        workerA.throttled(refused, 429, pause(1), true);
+        workerA.learning().throttled(refused, 429, pause(1), true);
         refused.close();
         int lowered = limit(pool);
 
@@ -553,7 +553,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
                 .isNull();
 
         // The limit falls to five, while the six reviews stay in flight. Its reserve of two still holds.
-        workerA.throttled(reviews.getFirst(), 429, pause(1), true);
+        workerA.learning().throttled(reviews.getFirst(), 429, pause(1), true);
         clearCooldown(pool);
         assertThat(limit(pool)).isEqualTo(5);
         var firstTurn = admit(workerB, pool, AgentRunBand.INTERACTIVE, 2);
@@ -714,7 +714,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         long pool = sharedPool();
         var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
 
-        assertThat(workerA.throttled(call, 429, pause(30), false)).isNull();
+        assertThat(workerA.learning().throttled(call, 429, pause(30), false)).isNull();
         call.close();
 
         var row = pools.findById(pool).orElseThrow();
@@ -763,7 +763,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         var call = admit(workerA, pool, AgentRunBand.BATCH, 1);
         Instant asked = databaseNow(jdbc).plusSeconds(30);
 
-        assertThat(workerA.throttled(call, 429, pause(30), false)).isEqualTo(Duration.ofSeconds(30));
+        assertThat(workerA.learning().throttled(call, 429, pause(30), false)).isEqualTo(Duration.ofSeconds(30));
         call.close();
 
         var row = pools.findById(pool).orElseThrow();

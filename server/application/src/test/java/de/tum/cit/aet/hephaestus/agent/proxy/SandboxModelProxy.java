@@ -31,6 +31,7 @@ public final class SandboxModelProxy {
 
     public static Object controller(ApplicationContext context) {
         var permits = mock(LlmCallPermits.class);
+        when(permits.learning()).thenReturn(mock(LlmPoolLearning.class));
         var permit = mock(LlmCallPermits.Permit.class);
         when(permit.revoked()).thenReturn(Mono.never());
         when(permits.acquire(anyLong(), any(), any(), any(), any())).thenReturn(permit);
