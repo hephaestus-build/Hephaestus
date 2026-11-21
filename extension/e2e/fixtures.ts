@@ -233,7 +233,35 @@ export async function openInline(page: Page): Promise<Frame> {
 	const frame = await reportFrame(page);
 	const toggle = frame.getByRole("heading", { level: 2 }).getByRole("button");
 	if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-		await toggle.click();
+		// Playwright checks the target in each frame's DOM, but Chromium routes pointer input to the out-of-process
+		// report frame by the page's last drawn frame. Right after the page scrolls or moves the report, a click lands
+		// where the report was drawn. The click waits for a pointer move that reached the toggle after this check began:
+		// a hover state can be left over from before the page moved, and a move to an unchanged point fires nothing.
+		let position = { x: 12, y: 12 };
+		await expect
+			.poll(
+				async () => {
+					position = { x: position.x === 12 ? 13 : 12, y: 12 };
+					await toggle.evaluate((element) => {
+						element.dataset.pointerReached = "false";
+						element.addEventListener(
+							"pointermove",
+							() => {
+								element.dataset.pointerReached = "true";
+							},
+							{ once: true },
+						);
+					});
+					await toggle.hover({ position });
+					return toggle.evaluate((element) => element.dataset.pointerReached);
+				},
+				{ message: "pointer input reaches the report's toggle" },
+			)
+			.toBe("true");
+		await toggle.evaluate((element) => {
+			delete element.dataset.pointerReached;
+		});
+		await toggle.click({ position });
 	}
 	await expect(toggle).toHaveAttribute("aria-expanded", "true");
 	return frame;
