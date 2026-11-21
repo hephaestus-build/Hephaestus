@@ -5,8 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -30,12 +28,14 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkFeedbackThreadChangedEvent;
+import de.tum.cit.aet.hephaestus.practices.adapter.FeedbackThreadStateRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasis;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackVisibilityService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
@@ -66,6 +66,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -83,10 +85,13 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -124,15 +129,21 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
     FeedbackThreadResolutionRepository resolutions;
 
     @Autowired
-    FeedbackThreadSteps steps;
+    FeedbackVisibilityService visibility;
 
-    // Only permitsAll is stubbed: the seal's own admission keeps the real authorization.
-    @MockitoSpyBean
-    EvidenceAuthorization evidence;
+    @Autowired
+    FeedbackThreadEvidence threadEvidence;
 
-    // The scenario's account has no provider identity, which the real fence needs; the send's tests cover the fence.
-    @MockitoSpyBean
-    PersonDataWriteFence privacy;
+    @Autowired
+    FeedbackThreadStateRepository threadStates;
+
+    @Autowired
+    PlatformTransactionManager transactionManager;
+
+    // The steps of this test answer permission and the data hold from mocks. The seal keeps the real authorization,
+    // and the scenario's account has no provider identity, which the real fence needs; the send's tests cover it.
+    private final EvidenceAuthorization evidence = mock(EvidenceAuthorization.class);
+    private final PersonDataWriteFence privacy = mock(PersonDataWriteFence.class);
 
     @Autowired
     ActionExecutor executor;
@@ -161,12 +172,11 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         developer = Objects.requireNonNull(scenario.account().getId());
         when(custody.find(anyLong(), anyList()))
                 .thenAnswer(call -> new HistoryCustody(true, false, List.of(), List.of(), call.getArgument(1)));
-        doReturn(true).when(privacy).holdForAccountWrite(anyLong());
-        doAnswer(call -> call.<Collection<ResultFacts>>getArgument(1).stream()
+        when(privacy.holdForAccountWrite(anyLong())).thenReturn(true);
+        when(evidence.permitsAll(anyLong(), anyCollection(), any()))
+                .thenAnswer(call -> call.<Collection<ResultFacts>>getArgument(1).stream()
                         .map(facts -> facts.id())
-                        .collect(Collectors.toSet()))
-                .when(evidence)
-                .permitsAll(anyLong(), anyCollection(), any());
+                        .collect(Collectors.toSet()));
         var targets = mock(FeedbackTargetResolver.class);
         var target = new FeedbackTarget(
                 new ItemRef(
@@ -179,8 +189,25 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
                 new IntegrationRef(IntegrationKind.GITHUB, scenario.workspace().getId(), "https://example.test"),
                 new ItemVersion("v1", null));
         when(targets.resolveExisting(any())).thenReturn(target);
+        // A proxy applies the steps' own transaction boundaries, as the bean's proxy does.
+        var proxy = new ProxyFactory(new FeedbackThreadSteps(
+                resolutions,
+                copies,
+                feedback,
+                results,
+                visibility,
+                basis,
+                evidence,
+                threadEvidence,
+                privacy,
+                threadStates,
+                new FeedbackThreadMeters(new SimpleMeterRegistry()),
+                Clock.systemUTC()));
+        proxy.setProxyTargetClass(true);
+        proxy.addAdvice(new TransactionInterceptor(transactionManager, new AnnotationTransactionAttributeSource()));
         adapter = new FeedbackThreadResolutionAdapter(
-                new FeedbackThreadResolutionService(steps, targets, List.of(provider)), mapper);
+                new FeedbackThreadResolutionService((FeedbackThreadSteps) proxy.getProxy(), targets, List.of(provider)),
+                mapper);
     }
 
     @Test
@@ -293,7 +320,7 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         var first = sealed("p1", 30, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
         String thread = note(first, problems(first));
         sealed("p2", 20, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);
-        doReturn(Set.of()).when(evidence).permitsAll(anyLong(), anyCollection(), any());
+        when(evidence.permitsAll(anyLong(), anyCollection(), any())).thenReturn(Set.of());
 
         assertThat(run(resolution(thread))).containsInstanceOf(ActionResult.Cancelled.class);
         assertThat(resolution(thread).getStopReason()).isEqualTo(FeedbackThreadStopReason.NOT_PERMITTED);
