@@ -2,7 +2,7 @@ import { FolderInput } from "lucide-react";
 import { type ReactNode, useId } from "react";
 
 import type { PracticeRepository } from "@/api/types.gen";
-import { PracticeRepositoryLink } from "@/components/admin/practices/WorkspacePracticeRepositoryCard";
+import { PracticeRepositoryLink } from "@/components/admin/practices/PracticeRepositoryLink";
 import { Button } from "@/components/ui/button";
 import {
 	Item,

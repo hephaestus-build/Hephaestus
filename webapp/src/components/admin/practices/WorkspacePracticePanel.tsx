@@ -5,6 +5,7 @@ import { currentDefinition } from "@/components/admin/practices/practice-definit
 
 import { cn } from "cn";
 import type { Practice, PracticeDefinitionOptions } from "@/api/types.gen";
+import { LazyMoveToRepositoryDialog } from "@/components/admin/practices/LazyMoveToRepositoryDialog";
 import {
 	PRACTICE_SETUP_LEVEL_LABELS,
 	practiceFormLevel,
@@ -15,10 +16,7 @@ import {
 	type EditInHephaestusControl,
 	WorkspaceEditInHephaestusDialog,
 } from "@/components/admin/practices/WorkspaceEditInHephaestusDialog";
-import {
-	type MoveToRepositoryControl,
-	WorkspaceMoveToRepositoryDialog,
-} from "@/components/admin/practices/WorkspaceMoveToRepositoryDialog";
+import type { MoveToRepositoryControl } from "@/components/admin/practices/WorkspaceMoveToRepositoryDialog";
 import { WorkspacePracticeDefinition } from "@/components/admin/practices/WorkspacePracticeDefinition";
 import { WorkspacePracticeEditedInHephaestusNote } from "@/components/admin/practices/WorkspacePracticeEditedInHephaestusNote";
 import { WorkspacePracticeEditedInNote } from "@/components/admin/practices/WorkspacePracticeEditedInNote";
@@ -196,7 +194,7 @@ export function WorkspacePracticePanel({
 			/>
 			{/* Outside the notes for the same reason: the move ends in the render that shows the practice
 			    read-only, so focus lands on Edit in Hephaestus, and a cancel on Move to repository. */}
-			<WorkspaceMoveToRepositoryDialog
+			<LazyMoveToRepositoryDialog
 				practiceName={definition.name}
 				practiceSlug={practice.slug}
 				// A practice edited in the repository never asks to move there.

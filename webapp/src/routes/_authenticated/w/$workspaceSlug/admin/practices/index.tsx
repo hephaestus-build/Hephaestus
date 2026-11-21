@@ -76,7 +76,6 @@ import {
 	WorkspacePracticePanel,
 	type WorkspacePracticeState,
 } from "@/components/admin/practices/WorkspacePracticePanel";
-import { WorkspacePracticeRepositoryCard } from "@/components/admin/practices/WorkspacePracticeRepositoryCard";
 import { WorkspaceResetToCatalogDialog } from "@/components/admin/practices/WorkspaceResetToCatalogDialog";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { QueryErrorAlert, queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
@@ -113,13 +112,15 @@ import { useEditInHephaestus } from "@/hooks/use-edit-in-hephaestus";
 import { usePracticeCatalogMutations } from "@/hooks/use-practice-catalog-mutations";
 import { usePracticeCatalogReset } from "@/hooks/use-practice-catalog-reset";
 import { usePracticeEditor } from "@/hooks/use-practice-editor";
-import { usePracticeRepository } from "@/hooks/use-practice-repository";
+import { useMoveToRepository } from "@/hooks/use-practice-repository";
 import { isRecord } from "@/lib/is-record";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemStatusOf } from "@/lib/problem-detail";
 import { queryOperationId } from "@/lib/query-operation-id";
 import { useSearchState } from "@/lib/search-params";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
+
+import { LazyPracticeRepositorySetting } from "./-lazy-practice-repository-setting";
 
 type LevelEntry = DetailStackEntry<(typeof DETAIL_LEVEL_KINDS)[number]>;
 
@@ -349,8 +350,8 @@ function PracticeCatalogRoute() {
 		practices?.some((practice) => practice.editedIn === "REPOSITORY") === true ||
 			levelQueries.some((query) => workspacePracticeAt(query)?.editedIn === "REPOSITORY"),
 	);
-	// The setting itself, and Move to repository in each level of a practice edited here.
-	const repositorySetting = usePracticeRepository(
+	// Move to repository in each level of a practice edited here.
+	const moveToRepository = useMoveToRepository(
 		workspaceSlug,
 		detailStack.map((entry) => detailStackKey(entry)),
 	);
@@ -820,7 +821,7 @@ function PracticeCatalogRoute() {
 					state={state}
 					onResetToCatalog={() => catalogReset.open({ kind: "practice", slug: entry.id })}
 					editInHephaestus={practiceRepository.control(detailStackKey(entry), entry.id)}
-					moveToRepository={repositorySetting.move(detailStackKey(entry), entry.id)}
+					moveToRepository={moveToRepository.move(detailStackKey(entry), entry.id)}
 				/>
 			);
 		}
@@ -884,7 +885,7 @@ function PracticeCatalogRoute() {
 					</>
 				}
 			/>
-			<WorkspacePracticeRepositoryCard workspaceSlug={workspaceSlug} {...repositorySetting.card} />
+			<LazyPracticeRepositorySetting workspaceSlug={workspaceSlug} />
 			{catalogTree}
 
 			<DetailDrawerStack
@@ -993,7 +994,7 @@ function PracticeCatalogRoute() {
 				onConfirm={catalogReset.confirm}
 			/>
 			<ConfirmAccessDialog {...practiceRepository.confirmation} />
-			<ConfirmAccessDialog {...repositorySetting.confirmation} />
+			<ConfirmAccessDialog {...moveToRepository.confirmation} />
 		</PageLayout>
 	);
 }
