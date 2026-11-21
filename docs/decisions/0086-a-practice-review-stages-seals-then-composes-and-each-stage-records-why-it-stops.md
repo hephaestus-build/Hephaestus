@@ -270,6 +270,8 @@ This update extends § 5 and § 6:
   The review of the push does not measure it, and `REPLACED` means that a newer review measures the practice.
   When this holds for every practice, the review ends with `SOURCES_MOVED` too, since nothing replaces it.
   When a newer milestone waits, every practice is `REPLACED`, as before.
+- An event review that has not started holds every newer occasion of its item that joins a window, with `REVIEW_IN_PROGRESS`.
+  This holds whatever practices it lists. Thus, its claim replaces it, and no sandbox starts on the old head.
 - The selection reads the effective feedback mode when it decides.
   A practice that changes from Off to an active mode is measured on the next push.
   That push must change what it reads, or the practice stays current.
@@ -290,3 +292,4 @@ Enforced by:
 - `ScmEventReviewIntegrationTest#shouldReplaceOnlyThePracticesThatTheReviewOfANewerPushMeasures`
 - `ScmEventReviewIntegrationTest#shouldEndAReviewWhoseEveryPracticeWaitsForAMilestoneWithSourcesMovedWhenAPushReplacesIt`
 - `ScmEventReviewIntegrationTest#shouldFinishAnOffPracticeThatItsVersionOwesOnTheChecksEvent`
+- `ScmEventReviewIntegrationTest#shouldReplaceAQueuedReviewOfOnlyOffPracticesWhenAPushSelectsOthers`

@@ -155,7 +155,7 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
      * staged result stays the earlier review's until it seals.
      */
     @Query(value = """
-        SELECT m.practice_id AS practiceId, r.id AS reviewId, r.status AS status,
+        SELECT m.practice_id AS practiceId, r.id AS reviewId, r.status AS status, r.origin AS origin,
         CAST(r.checks->>'startedAt' AS timestamptz) AS startedAt FROM review_item m
         JOIN review r ON r.id=m.review_id AND r.workspace_id=m.workspace_id WHERE m.workspace_id=:workspaceId
         AND m.item_id=:itemId AND m.state IN ('LISTED','STAGED') AND r.kind='ITEM' AND r.origin<>'TRIAL'
@@ -169,6 +169,8 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         UUID getReviewId();
 
         String getStatus();
+
+        String getOrigin();
 
         /** When the review started running; null while it is queued. */
         @Nullable

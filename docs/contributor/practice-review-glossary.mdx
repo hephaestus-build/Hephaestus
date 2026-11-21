@@ -152,7 +152,7 @@ The [operations guide](/admin/practice-review-operations#the-trace-line) gives t
 An item event that waits has one of these reasons:
 
 - `QUIET_WINDOW`: the event waits in its item's quiet window.
-- `REVIEW_IN_PROGRESS`: a practice that the window selects is still measured by an earlier review of the item. The window closes again one window later, until that review ends.
+- `REVIEW_IN_PROGRESS`: an earlier review of the item still measures a practice that the window selects. An earlier event review that has not started also holds the window. The window closes again one window later, until that review starts, ends, or its claim replaces it.
 
 A practice with the withheld membership reason `REPLACED` was in a review that a newer review of the item replaces.
 A queued review that a newer event stopped at claim writes it. A practice start writes it only when a newer review of the item already measured the practice.

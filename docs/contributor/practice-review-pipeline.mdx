@@ -171,7 +171,7 @@ Capture would withhold such a practice on every review and leave each review Par
 `ReviewServiceImpl` then removes practices that do not run now:
 
 1. Occasions that all continue leave out a practice in feedback mode Off with a milestone or outcome event. Its feedback reaches no one, so it waits for that moment. A practice that the pinned version still owes, for any carried reason, stays. Thus, it finishes that version but never follows a newer head. A practice in Off with no such event keeps its continuing occasions. If nothing is left, the event is withheld with `FEEDBACK_MODE_OFF`. An earlier review that still measures one of them holds the window first, as in step 2.
-2. A practice that a queued or running review of the item still measures holds the whole window. The events wait with `REVIEW_IN_PROGRESS` and are offered again one window later.
+2. A practice that a queued or running review of the item still measures holds the whole window. The events wait with `REVIEW_IN_PROGRESS` and are offered again one window later. An event review that has not started holds the window whatever it lists. Thus, its claim replaces it while the newer occasion waits, and no sandbox starts on moved work. Merged, closed and a submitted review do not wait for it, because they cannot replace it.
 3. A continuing occasion leaves out each practice with a current result. A [milestone](practice-review-glossary#review-terms) keeps them. If nothing is left, the event is withheld with `ALREADY_CURRENT`.
 4. A practice can need the item's checks source (Required or Complete). If the checks have not settled, it gets a withheld membership. Its [readiness reason](practice-review-glossary#readiness-reasons) says why.
 

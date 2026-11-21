@@ -2536,7 +2536,10 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .getId();
         setFeedbackMode(off, FeedbackMode.OFF);
         long onPush = practiceOn(
-                prepared, "delivers-on-push", List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED), FeedbackMode.APPROVE_FIRST);
+                prepared,
+                "delivers-on-push",
+                List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED),
+                FeedbackMode.APPROVE_FIRST);
         publish(prepared);
         var stale = newestReview(prepared);
         assertThat(membersOf(workspace, stale.getId())).containsOnlyKeys(off);
