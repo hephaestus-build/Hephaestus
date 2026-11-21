@@ -1145,9 +1145,6 @@ drain. docs/admin/kubernetes.mdx § Sandbox prerequisites.
 {{- end -}}
 
 {{/*
-Refuses to render sandboxes without the Kubernetes API endpoint that the network plugin sees.
-*/}}
-{{/*
 "true" when the server reads the backup CronJobs of the bundled PostgreSQL, for the backup staleness alert. It then
 needs the Kubernetes API, with only the Role of templates/postgresql-backup.yaml.
 */}}
@@ -1161,10 +1158,14 @@ needs the Kubernetes API, with only the Role of templates/postgresql-backup.yaml
 {{- list (printf "%s-full" $name) (printf "%s-diff" $name) | toJson -}}
 {{- end -}}
 
+{{/*
+Refuses to render the sandboxes or the backups without the Kubernetes API endpoint that the network plugin sees: the
+server reaches the API for both.
+*/}}
 {{- define "hephaestus.kubernetesApiCheck" -}}
 {{- $api := .Values.networkPolicy.kubernetesApi }}
-{{- $_ := required "networkPolicy.kubernetesApi.cidr is required: state the API endpoint that the network plugin sees" $api.cidr }}
+{{- $_ := required "networkPolicy.kubernetesApi.cidr is required for sandboxes or backups: state the API endpoint that the network plugin sees" $api.cidr }}
 {{- if eq (int $api.port) 0 }}
-{{- fail "networkPolicy.kubernetesApi.port is required: state the API endpoint port that the network plugin sees" }}
+{{- fail "networkPolicy.kubernetesApi.port is required for sandboxes or backups: state the API endpoint port that the network plugin sees" }}
 {{- end }}
 {{- end }}

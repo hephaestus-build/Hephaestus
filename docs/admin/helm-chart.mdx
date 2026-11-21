@@ -370,6 +370,8 @@ The server's service account has two Roles, and only with the feature that needs
   A backup that never runs, such as a Job that waits `Pending`, fails no Job. Only its CronJob shows that no backup succeeded.
 
 Without either feature, the server has no token and no egress to the Kubernetes API.
+The token also carries what the cluster grants to every authenticated identity, by default API discovery and self reviews of access.
+Check it with `kubectl auth can-i --list --as=system:serviceaccount:<namespace>:<release>-server`.
 
 The bundled PostgreSQL runs as the image user 999 and owns its volume through `fsGroup`.
 The volume is at `/var/lib/postgresql` ([ADR 0038](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md)).
