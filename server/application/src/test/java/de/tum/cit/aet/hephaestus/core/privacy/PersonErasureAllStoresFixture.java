@@ -402,6 +402,65 @@ final class PersonErasureAllStoresFixture {
         UUID problemId = Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT id FROM problem WHERE result_id=? AND workspace_id=?", UUID.class, person.result(), workspace));
         seeded.add(new SeededRow("problem", Map.of("id", problemId)));
+        // Lineage compares two results of the person: an ended copy of the subject's result stands for the earlier one.
+        // A review admits one claim per practice, item and developer, so the earlier result has a review of its own.
+        UUID priorReview = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO review SELECT (jsonb_populate_record(NULL::review, to_jsonb(v)
+                  || jsonb_build_object('id', ?::text, 'event_id', NULL, 'request_key', NULL, 'request_digest', NULL))).*
+                FROM review v WHERE v.id=(SELECT review_id FROM result WHERE id=? AND workspace_id=?)
+                """, priorReview.toString(), person.result(), workspace);
+        jdbc.update("""
+                INSERT INTO review_practice SELECT (jsonb_populate_record(NULL::review_practice, to_jsonb(p)
+                  || jsonb_build_object('review_id', ?::text))).*
+                FROM review_practice p WHERE p.review_id=(SELECT review_id FROM result WHERE id=? AND workspace_id=?)
+                """, priorReview.toString(), person.result(), workspace);
+        jdbc.update("""
+                INSERT INTO review_item SELECT (jsonb_populate_record(NULL::review_item, to_jsonb(m)
+                  || jsonb_build_object('review_id', ?::text, 'state', 'LISTED', 'result_id', NULL, 'job_id', NULL,
+                    'staged_payload', NULL, 'staged_attempt', NULL))).*
+                FROM review_item m WHERE m.review_id=(SELECT review_id FROM result WHERE id=? AND workspace_id=?)
+                """, priorReview.toString(), person.result(), workspace);
+        // One statement: a judged result must hold its problem when the statement ends.
+        UUID priorResult = UUID.randomUUID();
+        UUID priorProblem = UUID.randomUUID();
+        jdbc.update(
+                """
+                WITH copied AS (
+                  INSERT INTO result SELECT (jsonb_populate_record(NULL::result, to_jsonb(r)
+                    || jsonb_build_object('id', ?::text, 'review_id', ?::text, 'ended_at', r.recorded_at,
+                      'end_reason', 'REPLACED'))).*
+                  FROM result r WHERE r.id=? AND r.workspace_id=? RETURNING id)
+                INSERT INTO problem SELECT (jsonb_populate_record(NULL::problem, to_jsonb(p)
+                  || jsonb_build_object('id', ?::text, 'result_id', (SELECT id FROM copied)::text))).*
+                FROM problem p WHERE p.result_id=? AND p.workspace_id=?
+                """,
+                priorResult.toString(),
+                priorReview.toString(),
+                person.result(),
+                workspace,
+                priorProblem.toString(),
+                person.result(),
+                workspace);
+        seeded.add(new SeededRow("review", Map.of("id", priorReview)));
+        seeded.add(new SeededRow("result", Map.of("id", priorResult)));
+        seeded.add(new SeededRow("problem", Map.of("id", priorProblem)));
+        row(
+                "problem_lineage",
+                "workspace_id",
+                workspace,
+                "result_id",
+                person.result(),
+                "prior_result_id",
+                priorResult,
+                "problem_id",
+                problemId,
+                "prior_problem_id",
+                priorProblem,
+                "comparison",
+                "UNCHANGED",
+                "recorded_at",
+                Timestamp.from(Instant.now()));
         row(
                 "feedback_basis",
                 "workspace_id",

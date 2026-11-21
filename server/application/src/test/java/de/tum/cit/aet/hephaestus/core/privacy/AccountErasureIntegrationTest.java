@@ -1355,7 +1355,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         .flatMap(derived -> Stream.of(derived.deliveredId(), derived.deliveredId()))
                         .map(UUID::toString)
                         .toList());
-        assertThat(counts.get("result")).isEqualTo(4L);
+        // One of them is the earlier result that the fixture's problem lineage compares with.
+        assertThat(counts.get("result")).isEqualTo(5L);
         assertThat(export.path("stores").path("result"))
                 .allSatisfy(row -> assertThat(row.path("summary").asString()).isEqualTo("Result title"));
         assertThat(export.path("stores").path("feedback"))
