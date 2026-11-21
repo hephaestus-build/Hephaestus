@@ -15,6 +15,10 @@ public record ThreadChange(
         NOT_OWNED,
         /** A person replied after the owned note. Hephaestus does not resolve a conversation that a person continues. */
         REPLIED,
+        /** Another account resolved the thread: a person owns its state now. */
+        TAKEN,
+        /** Silent Mode or a critical rate limit holds outbound writes: nothing was written. */
+        DEFERRED,
         /** The provider did not answer or did not confirm; nothing proves the state. */
         TRANSIENT
     }

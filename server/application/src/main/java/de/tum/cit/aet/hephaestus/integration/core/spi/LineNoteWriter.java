@@ -27,11 +27,13 @@ public interface LineNoteWriter {
     String actor(FeedbackTarget target);
 
     /**
-     * Resolves or reopens the thread of one owned note. The thread must still start with that note, and a resolve needs
-     * the owned note to be the newest one: a person's later reply refuses it. A thread already in the asked state is
+     * Resolves or reopens the thread of one owned note, as {@code actor}, the account that {@link #actor} named. The
+     * thread must still start with that note. A resolve needs the owned note to be the newest one: a person's later
+     * reply refuses it. A thread that another account resolved is {@link ThreadChange.Outcome#TAKEN}: Hephaestus neither
+     * reopens it nor counts it as its own. A thread already in the asked state otherwise is
      * {@link ThreadChange.Outcome#DONE}, so a repeated attempt is safe.
      */
-    ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved);
+    ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved, String actor);
 
     record OwnedEdit(CopyReceipt copy, String previousWriteKey, LineNote note) {}
 

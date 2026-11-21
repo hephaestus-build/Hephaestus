@@ -5,31 +5,27 @@ import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemLineageRecorded;
-import de.tum.cit.aet.hephaestus.practices.result.ProblemLineageRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
-import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkChanged;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import java.time.Clock;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.event.EventListener;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Decides, as the seal records problem lineage, which of the developer's threads on the item Hephaestus resolves or
- * reopens. A thread resolves only when every problem its note cites is No longer present, and it reopens when one of
- * them is present again. A thread that a person took over is never touched.
+ * Decides which of the developer's threads on an item Hephaestus resolves or reopens, after the seal recorded problem
+ * lineage or a person marked a result. A thread resolves only when every problem its note cites is No longer present,
+ * and reopens when one of them is present again. A person who marks the proof incorrect takes back its claim, so a
+ * resolved thread whose problems no longer have proof reopens too. A thread that a person took over is never touched.
+ * The decision runs after the commit, in its own transaction: it can never undo the result it follows.
  */
+@Slf4j
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
@@ -37,44 +33,63 @@ class FeedbackThreadResolver {
     /** Each attempt reads the thread back first, so a repeated change is safe. */
     static final int MAX_ATTEMPTS = 8;
 
-    private static final String LANE = "feedback-thread:";
+    static final String LANE = "feedback-thread:";
 
     private final FeedbackThreadResolutionRepository resolutions;
     private final ResultRepository results;
-    private final ReviewRepository reviews;
-    private final ProblemLineageRepository lineage;
+    private final FeedbackThreadEvidence evidence;
     private final AgentActions actions;
     private final ObjectMapper mapper;
     private final Clock clock;
+    private final TransactionTemplate transactions;
 
     record Payload(UUID resolutionId, int generation) {}
 
-    @EventListener
-    @Transactional(propagation = Propagation.MANDATORY)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void recorded(ProblemLineageRecorded event) {
-        long workspaceId = event.workspaceId();
-        var result = results.findById(event.resultId())
+        decide(event.workspaceId(), event.resultId(), false);
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void marked(ResultMarkChanged mark) {
+        if (mark.kind() == ResultMarkKind.INCORRECT) decide(mark.workspaceId(), mark.resultId(), !mark.removed());
+    }
+
+    /**
+     * Decides in a transaction of its own. A failure is logged and swallowed: the result already committed, and the
+     * next review or mark of the item decides again, so a thread only keeps its state until then.
+     */
+    private void decide(long workspaceId, UUID resultId, boolean reopenWithoutProof) {
+        try {
+            transactions.executeWithoutResult(status -> decideNow(workspaceId, resultId, reopenWithoutProof));
+        } catch (RuntimeException failed) {
+            log.warn(
+                    "Thread resolution decision failed: workspaceId={}, resultId={}, cause={}",
+                    workspaceId,
+                    resultId,
+                    failed.getClass().getSimpleName());
+        }
+    }
+
+    private void decideNow(long workspaceId, UUID resultId, boolean reopenWithoutProof) {
+        var result = results.findById(resultId)
                 .filter(row -> row.getWorkspaceId() == workspaceId)
                 .orElse(null);
         if (result == null || result.getDeveloperId() == null) return;
         long developerId = result.getDeveloperId();
-        var threads = resolutions.findOwnedThreads(workspaceId, result.getItemId(), developerId);
-        if (threads.isEmpty()) return;
-        var cited = new HashMap<String, List<UUID>>();
-        var traces = new HashMap<UUID, Optional<FeedbackCompositionTrace>>();
-        for (var thread : threads) cited.put(thread.getThreadRef(), cited(workspaceId, thread, traces));
-        var all = new HashSet<UUID>();
-        cited.values().forEach(all::addAll);
-        var gone = all.isEmpty() ? List.<UUID>of() : lineage.findGone(workspaceId, all);
-        for (var thread : threads) {
-            if (thread.getHumanControlled()) continue;
-            var problems = Objects.requireNonNull(cited.get(thread.getThreadRef()));
-            boolean resolve = !problems.isEmpty() && gone.containsAll(problems);
-            decide(workspaceId, result.getItemId(), developerId, thread, resolve);
+        long itemId = result.getItemId();
+        for (var thread : resolutions.findOwnedThreads(workspaceId, itemId, developerId)) {
+            if (resolutions.humanControlled(workspaceId, itemId, thread.getThreadRef())) continue;
+            var cited = evidence.cited(
+                    workspaceId, thread.getReviewId(), thread.getFeedbackId(), thread.getKind(), thread.getPosition());
+            var verdict = evidence.standing(workspaceId, cited).verdict();
+            if (verdict == FeedbackThreadEvidence.Verdict.GONE) ask(workspaceId, itemId, developerId, thread, true);
+            else if (verdict == FeedbackThreadEvidence.Verdict.PRESENT || reopenWithoutProof)
+                ask(workspaceId, itemId, developerId, thread, false);
         }
     }
 
-    private void decide(
+    private void ask(
             long workspaceId,
             long itemId,
             long developerId,
@@ -101,34 +116,5 @@ class FeedbackThreadResolver {
                 MAX_ATTEMPTS,
                 null,
                 null));
-    }
-
-    /**
-     * The problems that the thread's note cites, from the composition support its revision was prepared with. Empty
-     * when the support is missing or rests on a result without a problem: such a note never resolves.
-     */
-    private List<UUID> cited(
-            long workspaceId,
-            FeedbackThreadResolutionRepository.OwnedThread thread,
-            Map<UUID, Optional<FeedbackCompositionTrace>> traces) {
-        var trace = traces.computeIfAbsent(
-                        thread.getFeedbackId(),
-                        feedbackId -> reviews.findByIdAndWorkspaceId(thread.getReviewId(), workspaceId)
-                                .map(review -> review.getChecks()
-                                        .path("feedbackComposition")
-                                        .path(feedbackId.toString()))
-                                .filter(node -> node.isObject())
-                                .map(node -> mapper.treeToValue(node, FeedbackCompositionTrace.class)))
-                .orElse(null);
-        if (trace == null) return List.of();
-        var problems = new ArrayList<UUID>();
-        for (var copy : trace.copies()) {
-            if (!copy.kind().name().equals(thread.getKind()) || copy.position() != thread.getPosition()) continue;
-            for (var support : copy.basedOn()) {
-                if (support.problemId() == null) return List.of();
-                problems.add(support.problemId());
-            }
-        }
-        return List.copyOf(problems);
     }
 }

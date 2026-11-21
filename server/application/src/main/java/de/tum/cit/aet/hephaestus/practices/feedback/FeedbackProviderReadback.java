@@ -110,9 +110,12 @@ public class FeedbackProviderReadback {
             if (locked == null || locked.getDeveloperId() != row.getDeveloperId()) return;
             if (!actions.holds(owner)) return;
             var state = (ObjectNode) locked.getComposition().deepCopy();
+            // A thread that Hephaestus resolved from problem lineage is resolved by no person.
+            var resolvedByHephaestus = copies.findResolvedByHephaestus(
+                    workspaceId, retained.stream().map(CopyReadback::copyId).toList());
             if (retained.stream()
-                    .anyMatch(copy -> copy.resolved() || copy.status() == CopyReadback.Status.HUMAN_EDITED))
-                state.put("humanControlled", true);
+                    .anyMatch(copy -> (copy.resolved() && !resolvedByHephaestus.contains(copy.copyId()))
+                            || copy.status() == CopyReadback.Status.HUMAN_EDITED)) state.put("humanControlled", true);
             state.set("readback", mapper.valueToTree(retained));
             state.put("readAt", clock.instant().toString());
             feedback.updateComposition(workspaceId, feedbackId, state);

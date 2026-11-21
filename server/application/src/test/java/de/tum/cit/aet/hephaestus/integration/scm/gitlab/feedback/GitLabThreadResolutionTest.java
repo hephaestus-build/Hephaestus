@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
@@ -64,77 +65,90 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
                 ScmFeedbackFixtures.formatter());
         lenient().when(tokenService.resolveServerUrl(1L)).thenReturn("https://gitlab.example.com");
         lenient().when(tokenService.getAccessToken(1L)).thenReturn("glpat-test");
+        lenient().when(egressGuard.deliveryAllowed(anyString())).thenReturn(true);
     }
 
     @Test
     void shouldResolveAnOwnedDiscussionAndConfirmItsState() {
-        rest.answer(200, Map.of("id", BOT));
         rest.answer(200, discussion(false, BOT));
         rest.answer(200, discussion(true, BOT));
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
+        assertThat(writer.resolveThread(TARGET, copy(), true, "1").outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         var put = rest.calls().getLast();
         assertThat(put.method()).isEqualTo(HttpMethod.PUT);
         assertThat(put.path()).isEqualTo(PATH);
         assertThat(put.json()).containsEntry("resolved", true);
-        verify(egressGuard).requireDeliveryAllowed("gitlab.resolve-feedback-thread");
+        verify(egressGuard).deliveryAllowed("gitlab.resolve-feedback-thread");
     }
 
     @Test
     void shouldReopenADiscussionItResolved() {
-        rest.answer(200, Map.of("id", BOT));
         rest.answer(200, discussion(true, BOT));
         rest.answer(200, discussion(false, BOT));
 
-        assertThat(writer.resolveThread(TARGET, copy(), false).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
+        assertThat(writer.resolveThread(TARGET, copy(), false, "1").outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         assertThat(rest.calls().getLast().json()).containsEntry("resolved", false);
-        verify(egressGuard).requireDeliveryAllowed("gitlab.reopen-feedback-thread");
+        verify(egressGuard).deliveryAllowed("gitlab.reopen-feedback-thread");
     }
 
     @Test
     void shouldCountADiscussionAlreadyInTheAskedStateAsDoneWithoutWriting() {
-        rest.answer(200, Map.of("id", BOT));
         rest.answer(200, discussion(true, BOT));
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
+        assertThat(writer.resolveThread(TARGET, copy(), true, "1").outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         assertThat(rest.calls()).extracting(ScriptedGitLabRest.Call::method).containsOnly(HttpMethod.GET);
-        verify(egressGuard, never()).requireDeliveryAllowed(anyString());
+        verify(egressGuard, never()).deliveryAllowed(anyString());
     }
 
     @Test
     void shouldNotChangeADiscussionThatAnotherAuthorStarted() {
-        rest.answer(200, Map.of("id", BOT));
         rest.answer(200, discussion(false, 2));
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.NOT_OWNED);
+        assertThat(writer.resolveThread(TARGET, copy(), true, "1").outcome()).isEqualTo(ThreadChange.Outcome.NOT_OWNED);
         assertThat(rest.calls()).extracting(ScriptedGitLabRest.Call::method).containsOnly(HttpMethod.GET);
     }
 
     @Test
     void shouldNotResolveADiscussionWhereAPersonRepliedAfterTheNote() {
-        rest.answer(200, Map.of("id", BOT));
         rest.answer(200, replied(false));
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.REPLIED);
+        assertThat(writer.resolveThread(TARGET, copy(), true, "1").outcome()).isEqualTo(ThreadChange.Outcome.REPLIED);
+        assertThat(rest.calls()).extracting(ScriptedGitLabRest.Call::method).containsOnly(HttpMethod.GET);
+    }
+
+    @Test
+    void shouldWriteNothingWhileSilentModeHoldsWrites() {
+        when(egressGuard.deliveryAllowed(anyString())).thenReturn(false);
+        rest.answer(200, discussion(false, BOT));
+
+        assertThat(writer.resolveThread(TARGET, copy(), true, "1").outcome()).isEqualTo(ThreadChange.Outcome.DEFERRED);
+        assertThat(rest.calls()).extracting(ScriptedGitLabRest.Call::method).containsOnly(HttpMethod.GET);
+    }
+
+    @Test
+    void shouldNeitherReopenNorClaimADiscussionThatAPersonResolved() {
+        rest.answer(200, discussion(true, BOT, 2));
+        rest.answer(200, discussion(true, BOT, 2));
+
+        assertThat(writer.resolveThread(TARGET, copy(), false, "1").outcome()).isEqualTo(ThreadChange.Outcome.TAKEN);
+        assertThat(writer.resolveThread(TARGET, copy(), true, "1").outcome()).isEqualTo(ThreadChange.Outcome.TAKEN);
         assertThat(rest.calls()).extracting(ScriptedGitLabRest.Call::method).containsOnly(HttpMethod.GET);
     }
 
     @Test
     void shouldReportARemovedDiscussionGoneOnlyWhenItsMergeRequestIsReadable() {
-        rest.answer(200, Map.of("id", BOT));
         rest.answer(404, "{\"message\":\"404 Not found\"}");
         rest.answer(200, Map.of("iid", 42));
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.GONE);
+        assertThat(writer.resolveThread(TARGET, copy(), true, "1").outcome()).isEqualTo(ThreadChange.Outcome.GONE);
     }
 
     @Test
     void shouldLeaveAnUnconfirmedChangeTransient() {
-        rest.answer(200, Map.of("id", BOT));
         rest.answer(200, discussion(false, BOT));
         rest.answer(200, discussion(false, BOT));
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.TRANSIENT);
+        assertThat(writer.resolveThread(TARGET, copy(), true, "1").outcome()).isEqualTo(ThreadChange.Outcome.TRANSIENT);
     }
 
     @Test
@@ -172,6 +186,10 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
     }
 
     private static Map<String, Object> discussion(boolean resolved, long author) {
+        return discussion(resolved, author, author);
+    }
+
+    private static Map<String, Object> discussion(boolean resolved, long author, long resolver) {
         Map<String, Object> note = new LinkedHashMap<>();
         note.put("id", 5303062);
         note.put("type", "DiffNote");
@@ -180,6 +198,7 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
         note.put("author", Map.of("id", author, "username", "bot"));
         note.put("resolvable", true);
         note.put("resolved", resolved);
+        if (resolved) note.put("resolved_by", Map.of("id", resolver, "username", "bot"));
         return Map.of("id", DISCUSSION, "individual_note", false, "notes", List.of(note));
     }
 }

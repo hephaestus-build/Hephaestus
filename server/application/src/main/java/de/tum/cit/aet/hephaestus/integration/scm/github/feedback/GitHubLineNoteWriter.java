@@ -575,9 +575,11 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     }
 
     @Override
-    public ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved) {
+    public ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved, String actor) {
         targets.subject(target, kind());
         long workspaceId = target.item().workspaceId();
+        if (gitHubProvider.isRateLimitCritical(workspaceId))
+            return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.DEFERRED, "The GitHub rate limit is critical");
         String thread = copy.threadRef();
         String note = copy.externalRef();
         if (thread == null || thread.isBlank() || note == null || note.isBlank())
@@ -586,7 +588,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             var read = gitHubProvider
                     .forScope(workspaceId)
                     .document(
-                            "query ReadFeedbackThread($id:ID!){node(id:$id){__typename ... on PullRequestReviewThread{id isResolved comments(first:1){nodes{id viewerDidAuthor}} latest:comments(last:1){nodes{viewerDidAuthor}}}}}")
+                            "query ReadFeedbackThread($id:ID!){node(id:$id){__typename ... on PullRequestReviewThread{id isResolved resolvedBy{databaseId} comments(first:1){nodes{id viewerDidAuthor}} latest:comments(last:1){nodes{viewerDidAuthor}}}}}")
                     .variable("id", thread)
                     .execute()
                     .block(GRAPHQL_TIMEOUT);
@@ -604,12 +606,20 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                         copy.copyId(),
                         ThreadChange.Outcome.NOT_OWNED,
                         "The thread no longer starts with the owned note");
+            // A bot is no GitHub User, so a resolve by the app's bot names no resolver; a person always has one.
+            boolean resolvedByOther = current
+                    && found.get("resolvedBy") instanceof Map<?, ?> resolver
+                    && !actor.equals(String.valueOf(resolver.get("databaseId")));
+            if (resolvedByOther)
+                return ThreadChange.of(
+                        copy.copyId(), ThreadChange.Outcome.TAKEN, "Another account resolved the thread");
             if (current == resolved) return ThreadChange.done(copy.copyId());
             if (resolved && !endsWithOwn(found))
                 return ThreadChange.of(
                         copy.copyId(), ThreadChange.Outcome.REPLIED, "A person replied after the owned note");
-            egressGuard.requireDeliveryAllowed(
-                    resolved ? "github.resolve-feedback-thread" : "github.reopen-feedback-thread");
+            if (!egressGuard.deliveryAllowed(
+                    resolved ? "github.resolve-feedback-thread" : "github.reopen-feedback-thread"))
+                return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.DEFERRED, "Silent Mode holds the change");
             String field = resolved ? "resolveReviewThread" : "unresolveReviewThread";
             var written = gitHubProvider
                     .forScope(workspaceId)
@@ -629,8 +639,6 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                     ? ThreadChange.done(copy.copyId())
                     : ThreadChange.of(
                             copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider did not confirm the thread state");
-        } catch (OutboundEgressSuppressedException e) {
-            throw e;
         } catch (RuntimeException e) {
             return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider thread change failed");
         }

@@ -27,10 +27,9 @@ public class ScmFeedbackThreadStateListener {
     @Transactional(propagation = Propagation.MANDATORY)
     public void changed(ScmDomainEvent.ReviewThreadEvent event) {
         boolean resolved = event instanceof ScmDomainEvent.ReviewThreadResolved;
-        Long sender = event.context().actorUserId();
-        Long actor = sender == null ? null : rows.nativeId(sender).orElse(null);
-        for (var thread : rows.find(event.thread().id())) {
-            Long changedBy = actor != null ? actor : resolved ? thread.getResolvedBy() : null;
+        for (var thread : rows.find(event.thread().id(), event.context().actorUserId())) {
+            Long sender = thread.getSender();
+            Long changedBy = sender != null ? sender : resolved ? thread.getResolvedBy() : null;
             events.publishEvent(new WorkFeedbackThreadChangedEvent(
                     thread.getWorkspaceId(), thread.getItemId(), thread.getThreadRef(), resolved, text(changedBy)));
         }

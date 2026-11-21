@@ -1,8 +1,11 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.thread;
 
+import de.tum.cit.aet.hephaestus.core.ContinuingLifecycle;
 import de.tum.cit.aet.hephaestus.core.Lifecycle;
 
 /** Where Hephaestus's own change to a thread stands. */
+@ContinuingLifecycle(
+        "A later review can ask again in either direction; a final stop reason, not a state, ends a thread's changes")
 public enum FeedbackThreadResolutionState implements Lifecycle<FeedbackThreadResolutionState> {
     /** An action carries the change out. */
     PENDING,

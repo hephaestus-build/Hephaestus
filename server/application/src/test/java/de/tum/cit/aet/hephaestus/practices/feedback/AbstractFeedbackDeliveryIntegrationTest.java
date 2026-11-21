@@ -72,7 +72,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -594,27 +593,15 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
                     .toList();
         }
 
-        /** The provider account of this fake: the bot that a thread event of its own names. */
-        static final String ACTOR = "4242";
-
-        /** Each thread's state as the provider holds it, and the threads that a change wrote to, in order. */
-        final Map<String, Boolean> threads = new HashMap<>();
-
-        final List<String> threadChanges = new ArrayList<>();
-
+        /** This fake resolves no thread: the thread tests use their own provider. */
         @Override
-        public String actor(FeedbackTarget target) {
-            return ACTOR;
+        public @Nullable String actor(FeedbackTarget target) {
+            return null;
         }
 
         @Override
-        public ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved) {
-            String thread = Objects.requireNonNull(copy.threadRef());
-            if (!Objects.equals(threads.get(thread), resolved)) {
-                threads.put(thread, resolved);
-                threadChanges.add(thread);
-            }
-            return ThreadChange.done(copy.copyId());
+        public ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved, String actor) {
+            throw new UnsupportedOperationException();
         }
     }
 }

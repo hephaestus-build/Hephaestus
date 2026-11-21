@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -34,7 +36,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackVisibilityService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
@@ -58,14 +59,13 @@ import de.tum.cit.aet.hephaestus.practices.spi.IntroducedBasis;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -86,6 +86,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -120,12 +121,17 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
     FeedbackBasisRepository basis;
 
     @Autowired
-    FeedbackVisibilityService visibility;
-
-    @Autowired
     FeedbackThreadResolutionRepository resolutions;
 
     @Autowired
+    FeedbackThreadSteps steps;
+
+    // Only permitsAll is stubbed: the seal's own admission keeps the real authorization.
+    @MockitoSpyBean
+    EvidenceAuthorization evidence;
+
+    // The scenario's account has no provider identity, which the real fence needs; the send's tests cover the fence.
+    @MockitoSpyBean
     PersonDataWriteFence privacy;
 
     @Autowired
@@ -144,7 +150,6 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
     ApplicationEventPublisher events;
 
     private final Threads provider = new Threads();
-    private final EvidenceAuthorization evidence = mock(EvidenceAuthorization.class);
     private ReviewIntegrationData.Scenario scenario;
     private long developer;
     private FeedbackThreadResolutionAdapter adapter;
@@ -156,10 +161,12 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         developer = Objects.requireNonNull(scenario.account().getId());
         when(custody.find(anyLong(), anyList()))
                 .thenAnswer(call -> new HistoryCustody(true, false, List.of(), List.of(), call.getArgument(1)));
-        when(evidence.permitsAll(anyLong(), anyCollection(), any()))
-                .thenAnswer(call -> call.<Collection<ResultFacts>>getArgument(1).stream()
+        doReturn(true).when(privacy).holdForAccountWrite(anyLong());
+        doAnswer(call -> call.<Collection<ResultFacts>>getArgument(1).stream()
                         .map(facts -> facts.id())
-                        .collect(Collectors.toSet()));
+                        .collect(Collectors.toSet()))
+                .when(evidence)
+                .permitsAll(anyLong(), anyCollection(), any());
         var targets = mock(FeedbackTargetResolver.class);
         var target = new FeedbackTarget(
                 new ItemRef(
@@ -173,21 +180,7 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
                 new ItemVersion("v1", null));
         when(targets.resolveExisting(any())).thenReturn(target);
         adapter = new FeedbackThreadResolutionAdapter(
-                new FeedbackThreadResolutionService(
-                        resolutions,
-                        copies,
-                        feedback,
-                        basis,
-                        results,
-                        visibility,
-                        evidence,
-                        privacy,
-                        targets,
-                        List.of(provider),
-                        new FeedbackThreadMeters(new SimpleMeterRegistry()),
-                        transactions,
-                        Clock.systemUTC()),
-                mapper);
+                new FeedbackThreadResolutionService(steps, targets, List.of(provider)), mapper);
     }
 
     @Test
@@ -300,7 +293,7 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         var first = sealed("p1", 30, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
         String thread = note(first, problems(first));
         sealed("p2", 20, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);
-        when(evidence.permitsAll(anyLong(), anyCollection(), any())).thenReturn(Set.of());
+        doReturn(Set.of()).when(evidence).permitsAll(anyLong(), anyCollection(), any());
 
         assertThat(run(resolution(thread))).containsInstanceOf(ActionResult.Cancelled.class);
         assertThat(resolution(thread).getStopReason()).isEqualTo(FeedbackThreadStopReason.NOT_PERMITTED);
@@ -317,6 +310,54 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         assertThat(run(resolution(thread))).containsInstanceOf(ActionResult.Cancelled.class);
         assertThat(resolution(thread).getStopReason()).isEqualTo(FeedbackThreadStopReason.REPLIED);
         assertThat(provider.changes).isEmpty();
+    }
+
+    @Test
+    void shouldWithdrawAResolveThatNeverStartedWhenTheProblemComesBackWithoutTouchingTheThread() {
+        var first = sealed("u1", 30, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+        String thread = note(first, problems(first));
+        sealed("u2", 20, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);
+        var pending = resolution(thread);
+
+        sealed("u3", 10, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+
+        var withdrawn = resolution(thread);
+        assertThat(withdrawn.isResolved()).isFalse();
+        assertThat(withdrawn.getState()).isEqualTo(FeedbackThreadResolutionState.DONE);
+        assertThat(run(pending)).isEmpty();
+        assertThat(provider.changes).isEmpty();
+    }
+
+    @Test
+    void shouldHandAThreadToPeopleWhenItFindsItResolvedByAPersonWithoutAnEvent() {
+        var first = sealed("t1", 30, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+        String thread = note(first, problems(first));
+        sealed("t2", 20, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);
+        provider.taken.add(thread);
+
+        assertThat(run(resolution(thread))).containsInstanceOf(ActionResult.Cancelled.class);
+
+        assertThat(resolution(thread).getStopReason()).isEqualTo(FeedbackThreadStopReason.HUMAN_CONTROLLED);
+        assertThat(humanControlled(thread)).isTrue();
+    }
+
+    @Test
+    void shouldReopenAResolvedThreadWhenAPersonMarksItsProofIncorrect() {
+        var first = sealed("k1", 30, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+        String thread = note(first, problems(first));
+        var proof = sealed(
+                "k2", 20, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);
+        assertThat(run(resolution(thread))).containsInstanceOf(ActionResult.Done.class);
+        // A readback of the resolved thread does not read Hephaestus's own resolve as a person's.
+        assertThat(copies.findResolvedByHephaestus(scenario.workspace().getId(), List.of(copyOf(thread))))
+                .containsExactly(copyOf(thread));
+
+        store.mark(scenario.workspace().getId(), proof, ResultMarkKind.INCORRECT, developer, "The fix is not there.");
+
+        var reopening = resolution(thread);
+        assertThat(reopening.isResolved()).isFalse();
+        assertThat(run(reopening)).containsInstanceOf(ActionResult.Done.class);
+        assertThat(provider.threads).containsEntry(thread, false);
     }
 
     private UUID sealed(
@@ -466,6 +507,11 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         return thread;
     }
 
+    private UUID copyOf(String thread) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT id FROM feedback_copy WHERE thread_ref = ?", UUID.class, thread));
+    }
+
     private FeedbackThreadResolution resolution(String thread) {
         return resolutions.findAll().stream()
                 .filter(row -> row.getThreadRef().equals(thread))
@@ -502,6 +548,9 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         /** Threads where a person replied after the owned note. */
         final Set<String> replied = new HashSet<>();
 
+        /** Threads that a person resolved, with no event that told Hephaestus. */
+        final Set<String> taken = new HashSet<>();
+
         @Nullable
         Runnable during;
 
@@ -516,11 +565,13 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         }
 
         @Override
-        public ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved) {
+        public ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved, String actor) {
             var hook = during;
             during = null;
             if (hook != null) hook.run();
             String thread = Objects.requireNonNull(copy.threadRef());
+            if (taken.contains(thread))
+                return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.TAKEN, "A person resolved it");
             if (resolved && replied.contains(thread))
                 return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.REPLIED, "A person replied");
             if (!Objects.equals(threads.get(thread), resolved)) {

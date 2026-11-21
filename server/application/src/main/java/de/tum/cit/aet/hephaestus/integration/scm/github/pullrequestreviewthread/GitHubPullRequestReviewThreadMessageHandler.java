@@ -98,14 +98,15 @@ public class GitHubPullRequestReviewThreadMessageHandler
             return;
         }
 
-        // The sender resolved or reopened the thread. A listener tells Hephaestus's own change from a person's by it.
+        // Ensure PR exists
+        prProcessor.process(prDto, context);
+
+        // The sender resolved or reopened the thread, not the pull request. A listener tells Hephaestus's own change
+        // from a person's by it.
         User sender = event.sender() == null
                 ? null
                 : userProcessor.ensureExists(event.sender(), Objects.requireNonNull(context.providerId()));
         context = context.withActorUserId(sender == null ? null : sender.getId());
-
-        // Ensure PR exists
-        prProcessor.process(prDto, context);
 
         // Delegate thread state changes to processor
         switch (event.actionType()) {

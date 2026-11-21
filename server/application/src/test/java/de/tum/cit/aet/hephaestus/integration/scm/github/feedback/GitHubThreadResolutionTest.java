@@ -38,6 +38,7 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
             new IntegrationRef(IntegrationKind.GITHUB, 1L, null), "owner/repo#42", "b".repeat(40));
     private static final String THREAD = "PRRT_1";
     private static final String NOTE = "PRRC_1";
+    private static final String BOT = "41898282";
 
     private final GitHubGraphQlClientProvider provider = mock(GitHubGraphQlClientProvider.class);
     private final OutboundEgressGuard guard = mock(OutboundEgressGuard.class);
@@ -64,59 +65,83 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
             return request;
         });
         thread = thread(false, NOTE, true);
+        lenient().when(guard.deliveryAllowed(anyString())).thenReturn(true);
     }
 
     @Test
     void shouldResolveAnOwnedThreadAndConfirmItsState() {
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
+        assertThat(writer.resolveThread(TARGET, copy(), true, BOT).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         assertThat(mutations).containsExactly("ResolveFeedbackThread");
-        verify(guard).requireDeliveryAllowed("github.resolve-feedback-thread");
+        verify(guard).deliveryAllowed("github.resolve-feedback-thread");
     }
 
     @Test
     void shouldReopenAThreadItResolved() {
         thread = thread(true, NOTE, true);
 
-        assertThat(writer.resolveThread(TARGET, copy(), false).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
+        assertThat(writer.resolveThread(TARGET, copy(), false, BOT).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         assertThat(mutations).containsExactly("ReopenFeedbackThread");
-        verify(guard).requireDeliveryAllowed("github.reopen-feedback-thread");
+        verify(guard).deliveryAllowed("github.reopen-feedback-thread");
     }
 
     @Test
     void shouldCountAThreadAlreadyInTheAskedStateAsDoneWithoutWriting() {
         thread = thread(true, NOTE, true);
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
+        assertThat(writer.resolveThread(TARGET, copy(), true, BOT).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         assertThat(mutations).isEmpty();
-        verify(guard, never()).requireDeliveryAllowed(anyString());
+        verify(guard, never()).deliveryAllowed(anyString());
     }
 
     @Test
     void shouldNotChangeAThreadThatDoesNotStartWithTheOwnedNote() {
         thread = thread(false, "PRRC_other", true);
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.NOT_OWNED);
+        assertThat(writer.resolveThread(TARGET, copy(), true, BOT).outcome()).isEqualTo(ThreadChange.Outcome.NOT_OWNED);
 
         thread = thread(false, NOTE, false);
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.NOT_OWNED);
+        assertThat(writer.resolveThread(TARGET, copy(), true, BOT).outcome()).isEqualTo(ThreadChange.Outcome.NOT_OWNED);
         assertThat(mutations).isEmpty();
     }
 
     @Test
     void shouldNotResolveAThreadWhereAPersonRepliedAfterTheNoteButStillReopenOne() {
         thread = thread(false, NOTE, true, false);
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.REPLIED);
+        assertThat(writer.resolveThread(TARGET, copy(), true, BOT).outcome()).isEqualTo(ThreadChange.Outcome.REPLIED);
         assertThat(mutations).isEmpty();
 
         thread = thread(true, NOTE, true, false);
-        assertThat(writer.resolveThread(TARGET, copy(), false).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
+        assertThat(writer.resolveThread(TARGET, copy(), false, BOT).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         assertThat(mutations).containsExactly("ReopenFeedbackThread");
+    }
+
+    @Test
+    void shouldWriteNothingWhileSilentModeHoldsWrites() {
+        when(guard.deliveryAllowed(anyString())).thenReturn(false);
+
+        assertThat(writer.resolveThread(TARGET, copy(), true, BOT).outcome()).isEqualTo(ThreadChange.Outcome.DEFERRED);
+        assertThat(mutations).isEmpty();
+    }
+
+    @Test
+    void shouldNeitherReopenNorClaimAThreadThatAPersonResolved() {
+        thread = thread(true, NOTE, true, true, 7L);
+        assertThat(writer.resolveThread(TARGET, copy(), false, BOT).outcome()).isEqualTo(ThreadChange.Outcome.TAKEN);
+        assertThat(writer.resolveThread(TARGET, copy(), true, BOT).outcome()).isEqualTo(ThreadChange.Outcome.TAKEN);
+        assertThat(mutations).isEmpty();
+    }
+
+    @Test
+    void shouldCountAResolveByTheTokensOwnUserAsItsOwn() {
+        thread = thread(true, NOTE, true, true, Long.parseLong(BOT));
+
+        assertThat(writer.resolveThread(TARGET, copy(), true, BOT).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
     }
 
     @Test
     void shouldReportARemovedThreadGone() {
         thread = null;
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.GONE);
+        assertThat(writer.resolveThread(TARGET, copy(), true, BOT).outcome()).isEqualTo(ThreadChange.Outcome.GONE);
         assertThat(mutations).isEmpty();
     }
 
@@ -124,12 +149,12 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
     void shouldLeaveAnUnconfirmedChangeTransient() {
         confirms = false;
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.TRANSIENT);
+        assertThat(writer.resolveThread(TARGET, copy(), true, BOT).outcome()).isEqualTo(ThreadChange.Outcome.TRANSIENT);
     }
 
     @Test
     void shouldActAsTheViewerOfItsToken() {
-        assertThat(writer.actor(TARGET)).isEqualTo("41898282");
+        assertThat(writer.actor(TARGET)).isEqualTo(BOT);
     }
 
     private static CopyReceipt copy() {
@@ -141,7 +166,15 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
     }
 
     private static Map<String, Object> thread(boolean resolved, String firstNote, boolean ownFirst, boolean ownLatest) {
-        return Map.of(
+        return thread(resolved, firstNote, ownFirst, ownLatest, null);
+    }
+
+    /** {@code resolver} is the resolving User's id; a bot is no User, so its resolve names none. */
+    private static Map<String, Object> thread(
+            boolean resolved, String firstNote, boolean ownFirst, boolean ownLatest, @Nullable Long resolver) {
+        var thread = new HashMap<String, Object>();
+        thread.put("resolvedBy", resolver == null ? null : Map.of("databaseId", resolver));
+        thread.putAll(Map.of(
                 "__typename",
                 "PullRequestReviewThread",
                 "id",
@@ -151,7 +184,8 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
                 "comments",
                 Map.of("nodes", List.of(Map.of("id", firstNote, "viewerDidAuthor", ownFirst))),
                 "latest",
-                Map.of("nodes", List.of(Map.of("viewerDidAuthor", ownLatest))));
+                Map.of("nodes", List.of(Map.of("viewerDidAuthor", ownLatest)))));
+        return thread;
     }
 
     private ClientGraphQlResponse answer(String document) {

@@ -707,7 +707,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
 
     // A discussion is resolved when its resolvable notes are; the owned note starts it, so its flag is the thread's.
     @Override
-    public ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved) {
+    public ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved, String actor) {
         String subject = targets.subject(target, kind());
         long workspaceId = target.item().workspaceId();
         String externalRef = copy.externalRef();
@@ -718,14 +718,14 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         if (ref == null || !ref.matches() || !SEGMENT.matcher(segment).matches())
             return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.NOT_OWNED, "Copy has no GitLab thread identity");
         if (gitLabProvider.isRateLimitCritical(workspaceId))
-            return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.TRANSIENT, "The GitLab rate limit is critical");
+            return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.DEFERRED, "The GitLab rate limit is critical");
         String type = ref.group(1);
         long noteId = Long.parseLong(ref.group(2));
         try {
             MrCoordinates mr = GitLabMrResolver.parseSubjectExternalId(subject);
             String server = tokenService.resolveServerUrl(workspaceId);
-            long author = currentUser(
-                    workspaceId, authorized(workspaceId, URI.create(server.replaceAll("/+$", "") + "/api/v4/user")));
+            // The account that wrote the note is the account that resolves it: the actor recorded before this write.
+            long author = Long.parseLong(actor);
             Answer read = exchange(workspaceId, HttpMethod.GET, request(workspaceId, mr, segment), null);
             if (read.status() == 404 && NOTE_ABSENT.matcher(read.text()).matches()) {
                 Answer parent = exchange(
@@ -749,12 +749,20 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                         copy.copyId(),
                         ThreadChange.Outcome.NOT_OWNED,
                         "The thread no longer starts with the owned note");
+            JsonNode resolver =
+                    Objects.requireNonNull(found).path("notes").get(0).path("resolved_by");
+            if (current
+                    && !(resolver.path("id").isIntegralNumber()
+                            && resolver.path("id").longValue() == author))
+                return ThreadChange.of(
+                        copy.copyId(), ThreadChange.Outcome.TAKEN, "Another account resolved the thread");
             if (current == resolved) return ThreadChange.done(copy.copyId());
-            if (resolved && !endsWithOwn(Objects.requireNonNull(found), author))
+            if (resolved && !endsWithOwn(found, author))
                 return ThreadChange.of(
                         copy.copyId(), ThreadChange.Outcome.REPLIED, "A person replied after the owned note");
-            egressGuard.requireDeliveryAllowed(
-                    resolved ? "gitlab.resolve-feedback-thread" : "gitlab.reopen-feedback-thread");
+            if (!egressGuard.deliveryAllowed(
+                    resolved ? "gitlab.resolve-feedback-thread" : "gitlab.reopen-feedback-thread"))
+                return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.DEFERRED, "Silent Mode holds the change");
             Answer written;
             try {
                 written = exchange(
@@ -768,8 +776,6 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                     ? ThreadChange.done(copy.copyId())
                     : ThreadChange.of(
                             copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider did not confirm the thread state");
-        } catch (OutboundEgressSuppressedException e) {
-            throw e;
         } catch (RuntimeException e) {
             return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider thread change failed");
         }
