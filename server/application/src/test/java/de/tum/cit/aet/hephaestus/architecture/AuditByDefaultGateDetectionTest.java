@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tngtech.archunit.ArchConfiguration;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
@@ -155,6 +156,20 @@ class AuditByDefaultGateDetectionTest {
         assertThat(AuditByDefaultArchTest.reachesRecorder(caller.getMethod("unrecorded")))
                 .isFalse();
         assertThat(AuditByDefaultArchTest.reachesRecorder(caller.getMethod("missing", ConfigAuditEntry.class)))
+                .isFalse();
+    }
+
+    @Test
+    void countsNoTestImplementationOfAnInterfaceWithoutAClassFile() {
+        // MutationPort stays out of this import and unresolved, as an interface from a class file that the import
+        // leaves out would be. Its test implementation records, which must not make the caller count as recorded.
+        JavaClasses withoutPort = ArchConfiguration.withThreadLocalScope(configuration -> {
+            configuration.setResolveMissingDependenciesFromClassPath(false);
+            return new ClassFileImporter().importClasses(AuditedMutation.class, PortCaller.class);
+        });
+        var caller = withoutPort.get(PortCaller.class);
+        assertThat(caller.getField("mutations").getRawType().getSource()).isEmpty();
+        assertThat(AuditByDefaultArchTest.reachesRecorder(caller.getMethod("audited", ConfigAuditEntry.class)))
                 .isFalse();
     }
 
