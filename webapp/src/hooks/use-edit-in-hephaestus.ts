@@ -34,7 +34,7 @@ type EditInHephaestusRequest = { level: string; practiceSlug: string } & (
 export function useEditInHephaestus(workspaceSlug: string, enabled: boolean) {
 	const queryClient = useQueryClient();
 	// The server answers 204 with no body when the workspace has no practice repository, which the
-	// client reads as an empty object, so the name is absent in that case too.
+	// client hands over as `null`, so the name is absent in that case too.
 	const repository = useQuery({
 		...getPracticeRepositoryOptions({ path: { workspaceSlug } }),
 		enabled,
