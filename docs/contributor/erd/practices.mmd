@@ -167,7 +167,7 @@ erDiagram
         TIMESTAMPTZ recorded_at "NOT NULL"
         UUID result_id FK,UK "NOT NULL"
         VARCHAR(16) comparison "NOT NULL"
-        BIGINT workspace_id FK "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
     }
 
     ResearchDisclosure {
