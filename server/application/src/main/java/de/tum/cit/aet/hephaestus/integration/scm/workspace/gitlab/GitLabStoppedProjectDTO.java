@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.integration.scm.workspace;
+package de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;

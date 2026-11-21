@@ -280,7 +280,7 @@
 		"de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest": 34.1,
 		"de.tum.cit.aet.hephaestus.integration.scm.identity.AuthenticatedGitProviderUserServiceSecurityIntegrationTest": 0.2,
 		"de.tum.cit.aet.hephaestus.integration.scm.sync.ScheduledScmSyncShutdownIntegrationTest": 13.8,
-		"de.tum.cit.aet.hephaestus.integration.scm.workspace.GitLabStoppedProjectServiceIntegrationTest": 10.2,
+		"de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabStoppedProjectServiceIntegrationTest": 10.2,
 		"de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamSettingsIntegrationTest": 1.9,
 		"de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceControllerIntegrationTest": 7.7,
 		"de.tum.cit.aet.hephaestus.integration.slack.adapter.SlackAccountAbsorptionIntegrationTest": 0.2,

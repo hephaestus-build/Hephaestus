@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.integration.scm.workspace;
+package de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab;
 
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import io.swagger.v3.oas.annotations.media.Schema;

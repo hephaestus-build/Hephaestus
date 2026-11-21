@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.integration.scm.workspace;
+package de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab;
 
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemQueryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

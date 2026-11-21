@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
 /** The steps that every provider's manual Add shares: ask with the workspace's own credential, lock, and grant. */
 @Component
 @WorkspaceAgnostic("Coordinates workspace repository mapping grants against their own provider authority")
-class ManualMonitorGrants {
+public class ManualMonitorGrants {
     private final RepositoryMonitorCommands monitorCommands;
     private final RepositoryMonitorSources monitorSources;
     private final ConnectionCommands connectionCommands;
@@ -50,7 +50,7 @@ class ManualMonitorGrants {
      * The repository at {@code nameWithOwner} as its provider reports it to this workspace's own credential. A mirror
      * another workspace stored on the same origin is shared data, never this workspace's authority to read it.
      */
-    RepositoryIdentityLookup.RepositoryIdentity confirmWithOwnCredential(
+    public RepositoryIdentityLookup.RepositoryIdentity confirmWithOwnCredential(
             IntegrationKind kind, Workspace workspace, String nameWithOwner) {
         RepositoryIdentityLookup lookup = repositoryIdentityLookups.get(kind);
         if (lookup == null) throw new RepositoryProviderNotConnectedException(workspace.getWorkspaceSlug());
@@ -63,7 +63,7 @@ class ManualMonitorGrants {
      * The workspace's active {@code kind} connection once its lifecycle lock is held, read again rather than taken
      * from this persistence context; refused unless it is still the connection that answered the provider lookup.
      */
-    Connection lockAnsweringConnection(
+    public Connection lockAnsweringConnection(
             long workspaceId, IntegrationKind kind, long answeringConnectionId, String slug) {
         return connectionCommands
                 .holdAnsweringConnection(workspaceId, kind, answeringConnectionId)
@@ -71,7 +71,7 @@ class ManualMonitorGrants {
     }
 
     /** Adds the monitor inside the caller's transaction and announces what it reads. */
-    RepositoryToMonitor grant(long workspaceId, String nameWithOwner, long nativeId) {
+    public RepositoryToMonitor grant(long workspaceId, String nameWithOwner, long nativeId) {
         RepositoryToMonitor saved;
         try {
             saved = monitorCommands.add(workspaceId, nameWithOwner, nativeId);

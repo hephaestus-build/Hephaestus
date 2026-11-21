@@ -11,6 +11,8 @@ import com.tngtech.archunit.lang.ArchRule;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.data.repository.Repository;
 
 /**
@@ -21,14 +23,14 @@ import org.springframework.data.repository.Repository;
  *   <li><b>integration.scm</b> - Shared kernel for git provider data sync (GitHub and GitLab)</li>
  *   <li><b>workspace</b> - Cross-cutting context (multi-tenancy)</li>
  *   <li><b>Feature modules</b> - activity, conversation, practices depend on both</li>
- *   <li><b>Provider subpackages</b> - github/ and (future) gitlab/ isolate provider-specific logic</li>
+ *   <li><b>Provider subpackages</b> - github/ and gitlab/ isolate provider-specific logic</li>
  * </ul>
  *
  * <h2>Key Boundaries Enforced</h2>
  * <ol>
  *   <li><b>integration.scm isolation</b> - Cannot depend on feature modules (uses SPI for callbacks)</li>
  *   <li><b>SPI pattern</b> - integration.spi defines contracts; workspace.adapter implements</li>
- *   <li><b>Provider isolation</b> - GitHub-specific classes must be in github/ subpackages</li>
+ *   <li><b>Provider isolation</b> - GitHub- and GitLab-specific classes must be in github/ and gitlab/ subpackages</li>
  *   <li><b>Domain events</b> - Cross-cutting concerns via events, not direct coupling</li>
  * </ol>
  *
@@ -181,18 +183,20 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
          * logic should be isolated in github/ or gitlab/ subpackages.
          * The sync/ package is allowed to contain orchestrators that dispatch to providers.
          */
-        @Test
-        void githubSpecificClassesAreInGithubPackages() {
+        @ParameterizedTest(name = "{0} classes")
+        @CsvSource({"GitHub, github", "GitLab, gitlab"})
+        void providerSpecificClassesAreInProviderPackages(String provider, String subpackage) {
             ArchRule rule = classes()
                     .that()
-                    .haveSimpleNameStartingWith("GitHub")
+                    .haveSimpleNameStartingWith(provider)
                     .and()
                     .resideInAPackage("..integration.scm..")
                     .and()
                     .resideOutsideOfPackage("..sync..") // Sync orchestrators can dispatch to providers
                     .should()
-                    .resideInAPackage("..github..")
-                    .because("GitHub-specific logic should be in github/ subpackages for multi-provider support");
+                    .resideInAPackage(".." + subpackage + "..")
+                    .because(provider + "-specific logic should be in " + subpackage
+                            + "/ subpackages for multi-provider support");
             rule.check(classes);
         }
     }

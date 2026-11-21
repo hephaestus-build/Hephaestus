@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.integration.scm.workspace;
+package de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;

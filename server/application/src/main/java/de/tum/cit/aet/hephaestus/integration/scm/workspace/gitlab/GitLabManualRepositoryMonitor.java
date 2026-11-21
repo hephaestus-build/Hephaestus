@@ -1,10 +1,14 @@
-package de.tum.cit.aet.hephaestus.integration.scm.workspace;
+package de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.ManualMonitorGrants;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.RepositoryAlreadyMonitoredException;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.RepositoryProviderNotConnectedException;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.RepositorySelectionChangedException;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -22,7 +26,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 @RequiredArgsConstructor
 @WorkspaceAgnostic("Coordinates workspace repository mapping grants against their own provider authority")
-class GitLabManualRepositoryMonitor {
+public class GitLabManualRepositoryMonitor {
     private final ManualMonitorGrants grants;
     private final WorkspaceRepositoryMonitors monitors;
     private final ConnectionService connectionService;
@@ -30,7 +34,7 @@ class GitLabManualRepositoryMonitor {
     private final GitLabRepositorySelectionService selection;
     private final TransactionTemplate transactionTemplate;
 
-    RepositoryToMonitor add(Workspace workspace, String nameWithOwner) {
+    public RepositoryToMonitor add(Workspace workspace, String nameWithOwner) {
         Long workspaceId = workspace.getId();
         var connection = connectionQueries
                 .findActive(workspaceId, IntegrationKind.GITLAB)

@@ -53,10 +53,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectA
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService;
-import de.tum.cit.aet.hephaestus.integration.scm.workspace.GitLabRepositorySelectionService;
-import de.tum.cit.aet.hephaestus.integration.scm.workspace.GitLabStoppedProjectService;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabRepositorySelectionService;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabStoppedProjectService;
 import de.tum.cit.aet.hephaestus.testconfig.ProviderEvents;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceSyncTargetProvider;
