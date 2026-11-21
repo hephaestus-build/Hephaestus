@@ -283,6 +283,8 @@ erDiagram
         UUID scan_call_lease
         TIMESTAMPTZ scan_call_until
         UUID handed_off_run_id FK,UK
+        TIMESTAMPTZ admitted_at
+        BIGINT call_pool_id
     }
 
     ReviewJobScriptRun {

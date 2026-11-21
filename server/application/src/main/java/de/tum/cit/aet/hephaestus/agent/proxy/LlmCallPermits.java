@@ -44,6 +44,8 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
@@ -353,10 +355,32 @@ public class LlmCallPermits {
                 .isPresent();
     }
 
-    /** Whether a review's call waits for the pool: a point-in-time observation that creates no request or grant. */
-    public boolean hasReviewCallsWaiting(long poolId) {
-        return rows.hasReviewCallsWaiting(poolId, properties.permitLease().toSeconds())
-                .orElseThrow(() -> new IllegalStateException("Configured call pool is unavailable"));
+    /**
+     * Locks the pool row until the caller's transaction ends, so the admissions of reviews to one pool take turns on
+     * every server.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockAdmission(long poolId) {
+        if (pools.lockAdmission(poolId).isEmpty())
+            throw new IllegalStateException("Configured call pool is unavailable");
+    }
+
+    /** Whether a measuring review's call has waited for the pool longer than the permit aging: the pool is congested. */
+    public boolean congested(long poolId) {
+        return rows.measurementWaitedLong(
+                poolId, permitAging.toSeconds(), properties.permitLease().toSeconds());
+    }
+
+    /** The pool's label on its metrics: its slug, with the pools of workspace models folded into one. */
+    public String poolLabel(long poolId) {
+        return pools.findById(poolId)
+                .map(pool -> LlmPoolMeters.label(pool.getSlug()))
+                .orElse("unknown");
+    }
+
+    /** How long a pool must stay uncongested after it admitted a measurement before it admits the next one. */
+    public Duration admissionSpacing() {
+        return permitAging;
     }
 
     /**

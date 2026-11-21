@@ -8,6 +8,8 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -32,9 +34,13 @@ public class SandboxDispatcher implements DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(SandboxDispatcher.class);
 
+    /** How many due runs a pass reads at a time. */
+    private static final int PAGE = 64;
+
     private final AgentSandboxes sandboxes;
     private final AgentRuns runs;
     private final ReviewAttemptCustody custody;
+    private final RunAdmission admission;
     private final MeterRegistry meters;
     private final Map<AgentSandboxKind, Set<AgentRunKind>> driven = new EnumMap<>(AgentSandboxKind.class);
     private final Map<AgentSandboxKind, Integer> limits;
@@ -51,10 +57,12 @@ public class SandboxDispatcher implements DisposableBean {
             List<SandboxRunKind> kinds,
             Map<AgentSandboxKind, Integer> limits,
             ReviewAttemptCustody custody,
+            RunAdmission admission,
             MeterRegistry meters) {
         this.sandboxes = sandboxes;
         this.runs = runs;
         this.custody = custody;
+        this.admission = admission;
         this.meters = meters;
         this.limits = Map.copyOf(limits);
         for (SandboxRunKind kind : SandboxRunKind.byKind(kinds).values())
@@ -77,7 +85,11 @@ public class SandboxDispatcher implements DisposableBean {
     public void dispatch() {
         try {
             custody.releaseEnded();
-            for (var entry : driven.entrySet()) {
+            // A person waits on a conversation, so its sandboxes come before a pass over a long queue of reviews.
+            var order = new ArrayList<>(driven.entrySet());
+            order.sort(Map.Entry.comparingByKey(
+                    Comparator.comparing((AgentSandboxKind sandbox) -> sandbox != AgentSandboxKind.CONVERSATION)));
+            for (var entry : order) {
                 Integer limit = limits.get(entry.getKey());
                 if (limit != null) dispatch(entry.getKey(), entry.getValue(), limit);
             }
@@ -94,22 +106,46 @@ public class SandboxDispatcher implements DisposableBean {
     private void dispatch(AgentSandboxKind sandbox, Set<AgentRunKind> kinds, int limit) {
         int room = limit - sandboxes.live(sandbox);
         if (limit <= 0) return;
-        for (AgentRuns.DueRun due : runs.due(kinds, limit)) {
-            long workspace = due.run().workspaceId();
-            if (sandboxes.hasLive(workspace, due.concurrencyKey())) continue;
-            if (room <= 0) {
-                if (sandbox != AgentSandboxKind.CONVERSATION || !sandboxes.releaseIdleConversation()) return;
-                room = limit - sandboxes.live(sandbox);
-                if (room <= 0) return;
+        // A full kind starts nothing, so its pass would hold nothing: the held counts keep the last pass with room.
+        if (room <= 0 && sandbox != AgentSandboxKind.CONVERSATION) return;
+        var pass = admission.pass(kinds);
+        try {
+            dispatchAdmitted(sandbox, kinds, limit, room, pass);
+        } finally {
+            pass.ended();
+        }
+    }
+
+    private void dispatchAdmitted(
+            AgentSandboxKind sandbox, Set<AgentRunKind> kinds, int limit, int free, RunAdmission.Pass pass) {
+        int room = free;
+        // Held runs keep their place, so the pass reads past them, a page at a time, until its room is used or the
+        // queue
+        // ends. A claim between two pages can move a run across them; the next pass reads it.
+        for (int offset = 0; ; offset += PAGE) {
+            var page = runs.due(kinds, offset, PAGE);
+            var live = sandboxes.withLive(page);
+            pass.read(page);
+            for (AgentRuns.DueRun due : page) {
+                long workspace = due.run().workspaceId();
+                if (live.contains(due)) continue;
+                if (room <= 0) {
+                    if (sandbox != AgentSandboxKind.CONVERSATION || !sandboxes.releaseIdleConversation()) return;
+                    room = limit - sandboxes.live(sandbox);
+                    if (room <= 0) return;
+                }
+                // A run that may not start yet keeps its place in the claim order and gets no sandbox.
+                if (!pass.admits(due)) continue;
+                sandboxes.ensure(workspace, due.concurrencyKey(), sandbox);
+                room -= 1;
+                log.atInfo()
+                        .addKeyValue("event.name", "agent.sandbox.dispatched")
+                        .addKeyValue(StructuredLogKeys.SUBJECT_KEY, due.concurrencyKey())
+                        .addKeyValue(StructuredLogKeys.WORKSPACE_ID, workspace)
+                        .addKeyValue(StructuredLogKeys.RUN_ID, due.run().id())
+                        .log("Sandbox requested for a due run");
             }
-            sandboxes.ensure(workspace, due.concurrencyKey(), sandbox);
-            room -= 1;
-            log.atInfo()
-                    .addKeyValue("event.name", "agent.sandbox.dispatched")
-                    .addKeyValue(StructuredLogKeys.SUBJECT_KEY, due.concurrencyKey())
-                    .addKeyValue(StructuredLogKeys.WORKSPACE_ID, workspace)
-                    .addKeyValue(StructuredLogKeys.RUN_ID, due.run().id())
-                    .log("Sandbox requested for a due run");
+            if (page.size() < PAGE) return;
         }
     }
 

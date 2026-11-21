@@ -9,6 +9,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -49,7 +50,9 @@ import tools.jackson.databind.JsonNode;
             @UniqueConstraint(
                     name = "uk_review_job_handed_off_run",
                     columnNames = {"handed_off_run_id", "workspace_id"})
-        })
+        },
+        // The admission of a review counts its pool's running measurements while it holds the pool's lock.
+        indexes = @Index(name = "idx_review_job_call_pool_status", columnList = "call_pool_id, status"))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -82,6 +85,20 @@ public class ReviewJob {
      */
     @Column(name = "run_id", nullable = false)
     private UUID runId;
+
+    /**
+     * The model pool that last admitted this job's measurement. The pool counts its running measurements when it decides
+     * whether to admit another (ReviewPoolAdmission). Null until a measurement is admitted.
+     */
+    @Column(name = "call_pool_id")
+    private @Nullable Long callPoolId;
+
+    /**
+     * When a model pool first admitted this job's measurement. The provider outage window counts from here, so a review
+     * that waited its turn for a busy pool keeps its whole window.
+     */
+    @Column(name = "admitted_at")
+    private @Nullable Instant admittedAt;
 
     /**
      * The measuring run that handed this job on to its composition ({@link ReviewRunKind#continueToCompose}), kept as the

@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Review attempts that a model provider outage stopped. An outage is not the review's fault, so such an attempt goes
  * back to the queue with the backoff of its number and spends no retry. A measurement waits at most the outage window
- * from the review's submission. A composition keeps its run and the run's creation deadline, which bounds it. Past
+ * from its first admission by its model pool. A composition keeps its run and the run's creation deadline, which bounds it. Past
  * its bound, the review ends as provider-unavailable and makes no claim about the work. Each requeue counts under its
  * cause, so a sustained outage stays visible.
  */
@@ -66,7 +66,7 @@ public class ProviderOutages {
      * Hands on a composition that left a destination open for a passing cause. Only a hand-on for a provider failure
      * whose newest failed call shows an outage continues free, on a fresh run with a fresh work deadline; a deadline,
      * routing or capacity hand-on, or an answered failure, spends a retry ({@link ReviewRunKind#retryComposition}). The
-     * outage window from the review's submission bounds the free hand-ons, as it bounds a measurement: past it, the
+     * outage window from its first admission bounds the free hand-ons, as it bounds a measurement: past it, the
      * review ends now as provider-unavailable.
      *
      * @param providerFailure whether the server closed the attempt for a provider failure
@@ -109,9 +109,13 @@ public class ProviderOutages {
         return AgentRuns.backoff(Math.max(1, own));
     }
 
-    /** Whether the review is still inside its outage window, counted from its submission. */
+    /**
+     * Whether the review is still inside its outage window, counted from its pool's first admission, so a review that
+     * waited its turn for a busy pool keeps its whole window. A job that no pool admitted yet counts from its submission.
+     */
     private boolean withinWindow(ReviewJob job) {
-        return Instant.now().isBefore(job.getSubmittedAt().plus(capacity.modelOutageWindow()));
+        Instant from = job.getAdmittedAt() != null ? job.getAdmittedAt() : job.getSubmittedAt();
+        return Instant.now().isBefore(from.plus(capacity.modelOutageWindow()));
     }
 
     private boolean requeue(UUID jobId, AgentRunFence claim, ProviderOutage outage, Duration wait) {

@@ -25,9 +25,13 @@ public final class AgentMetrics {
     public static final String AGENT_RUN_CLAIM_WAIT = "agent.run.claim.wait";
     /**
      * Claims that could not start their run and deferred it, by kind and reason: {@code locked} while a lifecycle write
-     * holds its domain row, {@code model_pool} while its model pool has review calls waiting.
+     * holds its domain row, {@code model_pool} while its model pool has no room for another review.
      */
     public static final String AGENT_RUN_DEFERRED = "agent.run.deferred";
+    /** Due measuring reviews that the last dispatch pass held for their model pool, by pool. */
+    public static final String AGENT_REVIEW_POOL_HELD = "agent.review.pool.held";
+    /** From a measuring review's submission to its first admission by its model pool, by pool. */
+    public static final String AGENT_REVIEW_POOL_ADMISSION_WAIT = "agent.review.pool.admission.wait";
 
     public static final String EVIDENCE_RECONCILE_LAST_SUCCESS = "evidence.reconcile.last.success";
     public static final String EVIDENCE_RECONCILE_FAILURES = "evidence.reconcile.failures";

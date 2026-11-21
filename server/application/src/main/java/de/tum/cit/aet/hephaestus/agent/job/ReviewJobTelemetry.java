@@ -204,4 +204,13 @@ final class ReviewJobTelemetry {
         Duration age = Duration.between(createdAt, Instant.now());
         return age.isNegative() ? Duration.ZERO : age;
     }
+
+    /** How long a measurement waited from its submission until its model pool first admitted it. */
+    void poolAdmitted(String pool, Duration waited) {
+        Timer.builder(AgentMetrics.AGENT_REVIEW_POOL_ADMISSION_WAIT)
+                .description("From a measuring review's submission to its first admission by its model pool")
+                .tag("pool", pool)
+                .register(registry)
+                .record(waited);
+    }
 }

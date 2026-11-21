@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -63,18 +62,6 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     int notifyPool(@Param("channel") String channel, @Param("payload") String payload);
 
     /**
-     * Whether a review's call waits: one that is not interactive and has a workspace. Uses database time and includes
-     * every workspace and server in this endpoint pool.
-     */
-    @Query(value = """
-            SELECT EXISTS (SELECT 1 FROM llm_call_permit q WHERE q.pool_id=p.id
-              AND q.state='WAITING' AND q.band <> 'INTERACTIVE' AND q.workspace_id IS NOT NULL
-              AND q.renewed_at>=clock_timestamp()-make_interval(secs => :staleSeconds))
-            FROM llm_call_pool p WHERE p.id=:poolId
-            """, nativeQuery = true)
-    Optional<Boolean> hasReviewCallsWaiting(@Param("poolId") long poolId, @Param("staleSeconds") long staleSeconds);
-
-    /**
      * Reclaim expired owners without refunding calls that already reached the provider.
      *
      * @return the permits whose owner stopped renewing them while their call was in flight
@@ -113,6 +100,24 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             long productFeedback,
             long rate,
             long notInteractiveRate) {}
+
+    /**
+     * Whether a measuring review's call has waited for this pool longer than {@code :agingSeconds}: the pool is
+     * congested. A composition's, a conversation's and product feedback's calls do not count, and neither does a call
+     * whose server stopped renewing it.
+     */
+    @Query(value = """
+            SELECT EXISTS (SELECT 1 FROM llm_call_permit q
+              JOIN review_job j ON j.id=q.source_id AND j.workspace_id=q.workspace_id
+              JOIN agent_run r ON r.id=j.run_id AND r.workspace_id=j.workspace_id AND r.kind='REVIEW'
+              WHERE q.pool_id=:poolId AND q.state='WAITING' AND q.band <> 'INTERACTIVE'
+                AND q.acquired_at < clock_timestamp()-make_interval(secs => :agingSeconds)
+                AND q.renewed_at >= clock_timestamp()-make_interval(secs => :staleSeconds))
+            """, nativeQuery = true)
+    boolean measurementWaitedLong(
+            @Param("poolId") long poolId,
+            @Param("agingSeconds") long agingSeconds,
+            @Param("staleSeconds") long staleSeconds);
 
     /**
      * One admission round, in one statement: grants the longest prefix of the waiting calls, in grant order, that fits

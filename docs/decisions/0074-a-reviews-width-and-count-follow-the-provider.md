@@ -238,3 +238,22 @@ A rate limit from the provider counts the same.
 The attempt runs again after the backoff of its attempt number.
 `hephaestus.agent.capacity.model-outage-window` bounds these attempts from the submission of the review, 2 hours by default.
 After that bound, the review ends with `PROVIDER_UNAVAILABLE` and makes no claim about the work.
+
+## Update — 2026-11-17: a pool admits a review only when it can serve it
+
+This amends § Pace for the admission of reviews to a model pool.
+A pool used to admit a review whenever no review call waited at that moment.
+Three reviews of one repository started while the pool had room for a moment.
+Then the provider slowed down, the learned limit fell to 2, and all of them ran out of time with almost no practice finished.
+
+A pool with no running measurement still always admits one.
+Otherwise it admits the next one only while no measuring call has waited longer than the permit aging, and only once its newest measurement has run that long.
+The sandbox dispatch applies the rule in the claim's order, so a held review gets no sandbox and the fair order holds.
+The claim applies it again under the pool's lock.
+A held review starts no clock, and its provider outage window counts from its first admission.
+
+When the provider slows down after an admission, a review still finishes what it can and the next attempt continues with the rest.
+That depends on three changes:
+the pool grants a review's oldest practice session first,
+the runner ends its attempt by itself at its budget instead of its watchdog stopping it,
+and the server carries the practices that the attempt did not run to the next one as `NOT_RUN`.

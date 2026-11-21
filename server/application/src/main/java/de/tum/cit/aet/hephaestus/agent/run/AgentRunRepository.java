@@ -129,10 +129,11 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             """ + CLAIMABLE + NOT_DEFERRED + """
                 AND r.kind IN (:kinds)
             """ + ORDER + """
-            LIMIT :limit
+            LIMIT :limit OFFSET :offset
             """, nativeQuery = true)
     List<DueRow> findDue(
             @Param("kinds") Collection<String> kinds,
+            @Param("offset") int offset,
             @Param("limit") int limit,
             @Param("agingSeconds") long agingSeconds);
 
