@@ -255,11 +255,10 @@ describe("the practice repository card", () => {
 			async () => expect(directory.getAttribute("aria-invalid")).toBe("true"),
 			ROUTE_RENDER_WAIT,
 		);
-		const describedBy = (directory.getAttribute("aria-describedby") ?? "").split(" ");
-		const described = describedBy.map((id) => document.getElementById(id)?.textContent).join(" ");
-		expect(described).toContain(
+		const message = within(dialog).getByText(
 			"The directory is a path relative to the repository root, without ., .. or .git segments.",
 		);
+		expect(directory.getAttribute("aria-describedby")?.split(" ")).toContain(message.id);
 		// The field says what to change, so the general words of the 400 stay out of the way.
 		expect(within(dialog).queryByText(/Some fields need changes/u)).toBeNull();
 		expect(within(dialog).getAllByRole("alert")).toHaveLength(1);
