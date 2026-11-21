@@ -817,7 +817,7 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	// The backup's request comes out of the turns too.
 	assert.equal(
 		Number(envValue(workload(resources, "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY")),
-		2,
+		3,
 	);
 	assert.ok(cpu <= node.cpu, `${cpu.toFixed(2)} CPU requested, ${node.cpu} on the node`);
 	assert.ok(
@@ -972,7 +972,7 @@ await test("the small profile fits its declared budget at steady state and the d
 		cpu: reviewSlots * sandboxPods.review.cpu + conversations * sandboxPods.conversation.cpu,
 		memory: (reviewSlots * sandboxGib.review + conversations * sandboxGib.conversation) * 2 ** 30,
 	});
-	assert.equal(turns, 2);
+	assert.equal(turns, 3);
 	assert.equal(reviewSlots, 5);
 	assert.ok(steady.cpu <= node.cpu, `steady: ${steady.cpu.toFixed(2)} CPU of ${node.cpu}`);
 	assert.ok(

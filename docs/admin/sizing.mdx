@@ -13,7 +13,7 @@ They are scheduling requests, not measured peaks. Keep room for the operating sy
 | Profile | Nodes | Servers | Requests of each server | PostgreSQL requests and volume | Reviews at once | Conversation turns at once |
 | --- | --- | --- | --- | --- | --- | --- |
 | `dev.yaml` | One workstation node | 2 | 250m CPU, 3 GiB memory, 5 GiB Git cache | 100m CPU, 4020 MiB memory, 5 GiB volume | 0: sandboxes are off | 0 |
-| `small.yaml` | One node of 4 vCPU, at least 16 GiB of memory and 150 GiB of disk | 1 | 500m CPU, 3 GiB memory, 20 GiB Git cache | 250m CPU, 4020 MiB memory, 20 GiB volume | 5 | 3, or 2 with backups on (`auto`) |
+| `small.yaml` | One node of 4 vCPU, at least 16 GiB of memory and 150 GiB of disk | 1 | 500m CPU, 3 GiB memory, 20 GiB Git cache | 250m CPU, 4020 MiB memory, 20 GiB volume | 5 | 3, also with backups on (`auto`) |
 | [One host](./k3s): `small.yaml` with `k3s-values.yaml` | The node of `small.yaml` | 1 | As `small.yaml` | As `small.yaml` | 4 | 3, or 2 with backups on (`auto`) |
 | `cluster.yaml` | Several nodes, with sandbox nodes that hold the review and conversation quotas | 2 | 500m CPU, 3 GiB memory, 70 GiB Git cache | 250m CPU, 9251 MiB memory, 20 GiB volume | 12 | 8 |
 
@@ -25,7 +25,7 @@ The server's CPU limit is 4 cores, and 2 with `dev.yaml`.
 The Git cache is node storage of each server ([Storage and retention](./helm-chart#storage-and-retention)).
 
 The one host has fewer reviews than `small.yaml` alone, because each gVisor sandbox Pod also takes 48 MiB and 10m CPU of RuntimeClass overhead.
-With backups, database metrics and the bundled monitoring stack all on, `small.yaml` and the one host each run 1 turn ([Node reserve](#node-reserve)).
+With backups, database metrics and the bundled monitoring stack all on, `small.yaml` runs 2 turns and the one host 1 ([Node reserve](#node-reserve)).
 
 The sandbox quotas hold these requests at full load, with any RuntimeClass overhead:
 
@@ -269,12 +269,12 @@ The free memory is what the node keeps free at the peak with every turn in use, 
 
 | Install | Release requests at the upgrade peak, before turns | Conversation turns | Free memory at the peak |
 | --- | --- | --- | --- |
-| `small.yaml` | 11844 MiB | 3 | 938 MiB |
-| `small.yaml`, backups on | 12164 MiB | 2 | 1002 MiB |
-| `small.yaml`, backups, database metrics and the monitoring stack | 12580 MiB | 1 | 970 MiB |
-| One host | 11892 MiB | 3 | 746 MiB |
-| One host, backups on | 12212 MiB | 2 | 858 MiB |
-| One host, backups, database metrics and the monitoring stack | 12628 MiB | 1 | 874 MiB |
+| `small.yaml` | 11716 MiB | 3 | 1066 MiB |
+| `small.yaml`, backups on | 12036 MiB | 3 | 746 MiB |
+| `small.yaml`, backups, database metrics and the monitoring stack | 12452 MiB | 2 | 714 MiB |
+| One host | 11764 MiB | 3 | 874 MiB |
+| One host, backups on | 12084 MiB | 2 | 986 MiB |
+| One host, backups, database metrics and the monitoring stack | 12500 MiB | 1 | 1002 MiB |
 
 A scheduled backup that starts during an upgrade takes 256 MiB of that free memory.
 
