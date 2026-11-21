@@ -8,6 +8,8 @@ import {
 	JVM_RESULT_TYPE,
 	jvmPackages,
 	jvmResult,
+	databaseSearchArguments,
+	mergedMatches,
 	rangeMatches,
 	satisfiesConstraint,
 	withJvmResults,
@@ -136,8 +138,9 @@ void test("a report without JVM results stays byte-identical", () => {
 	assert.equal(withJvmResults(report, []), report);
 });
 
-// The `grype db search --pkg cpe:2.3:a:oracle:openjdk -o json` row of CVE-2026-114938 from Grype v0.121.3's
-// database of 2026-11-21, cut to the fields that the scan reads.
+// Rows in the shape of Grype v0.121.3's `grype db search --pkg cpe:2.3:a:oracle:openjdk -o json`. The
+// CVE-2026-114938 ranges are three of the four in its database of 2026-11-21. The GraalVM package shows that
+// only the JVM's own CPE product counts.
 const searchRow = (id: string, severity: string, ranges: readonly unknown[]) => ({
 	vulnerability: { id, severity },
 	packages: [
@@ -166,7 +169,7 @@ const java4Shell = searchRow("CVE-2026-114938", "high", [
 void test("a build of a fourth-part fix matches the range that Grype reads on three parts", () => {
 	const [jvm] = jvmPackages(sbom([jvmArtifact]));
 	assert.ok(jvm);
-	// Grype v0.121.3 matches none of these for 25.0.5.0.3; it matches 25.0.4.
+	// The second range of CVE-2026-114938, `< 25.0.5.1`, contains 25.0.5.0.3 only by its fourth part.
 	const unfixed = searchRow("CVE-2026-9", "unknown", [
 		{ version: { type: "jvm", constraint: "= 8-update72 || >= 25, <= 25.0.5.0.3" } },
 	]);
@@ -222,4 +225,91 @@ void test("a constraint compares every part of the version", () => {
 	assert.equal(satisfiesConstraint(parts, ">= 26, < 27.0.1.1 || >= 22, <= 25.0.5.0.3"), true);
 	assert.equal(satisfiesConstraint([1, 8, 0, 512], "< 1.8.0_513"), true);
 	assert.throws(() => satisfiesConstraint(parts, "~> 25"), /not a comparison/u);
+});
+
+void test("a range match never replaces Grype's own match of the same vulnerability", () => {
+	const [jvm] = jvmPackages(sbom([jvmArtifact]));
+	assert.ok(jvm);
+	const grype = [
+		grypeMatch("CVE-2026-114938", "Critical", { state: "fixed", versions: ["25.0.5.1"] }),
+	];
+	const ranges = rangeMatches(
+		[java4Shell, searchRow("CVE-2026-8", "medium", [{ version: { constraint: ">= 25" } }])],
+		jvm,
+	);
+	assert.deepEqual(jvmResult({ matches: mergedMatches(grype, ranges) }, jvm).Vulnerabilities, [
+		{
+			VulnerabilityID: "CVE-2026-114938",
+			PkgName: "openjdk",
+			InstalledVersion: "25.0.5.0.3+5-LTS",
+			FixedVersion: "25.0.5.1",
+			Severity: "CRITICAL",
+		},
+		{
+			VulnerabilityID: "CVE-2026-8",
+			PkgName: "openjdk",
+			InstalledVersion: "25.0.5.0.3+5-LTS",
+			Severity: "MEDIUM",
+		},
+	]);
+});
+
+const scored = (id: string, version: string, baseScore: number) => ({
+	...searchRow(id, "unknown", [{ version: { constraint: ">= 25" } }]),
+	vulnerability: {
+		id,
+		severity: "unknown",
+		severities: [{ scheme: "CVSS", value: { version, metrics: { baseScore } } }],
+	},
+});
+
+void test("a range match takes the highest severity of its CVSS scores", () => {
+	const [jvm] = jvmPackages(sbom([jvmArtifact]));
+	assert.ok(jvm);
+	// `grype db search` labels a base score of 10.0 `unknown`.
+	const matches = rangeMatches(
+		[
+			scored("CVE-2026-10", "3.1", 10),
+			scored("CVE-2026-11", "2.0", 10),
+			scored("CVE-2026-12", "3.1", 5.3),
+		],
+		jvm,
+	);
+	assert.deepEqual(
+		jvmResult({ matches }, jvm).Vulnerabilities,
+		[
+			["CVE-2026-10", "CRITICAL"],
+			["CVE-2026-11", "HIGH"],
+			["CVE-2026-12", "MEDIUM"],
+		].map(([id, severity]) => ({
+			VulnerabilityID: id,
+			PkgName: "openjdk",
+			InstalledVersion: "25.0.5.0.3+5-LTS",
+			Severity: severity,
+		})),
+	);
+});
+
+void test("a range for Windows only does not match, and the search names no result limit", () => {
+	const [jvm] = jvmPackages(sbom([jvmArtifact]));
+	assert.ok(jvm);
+	const windows = searchRow("CVE-2026-13", "high", []);
+	windows.packages[0] = {
+		cpe: "cpe:2.3:a:oracle:openjdk:*:*:*:*:*:*:*:*",
+		detail: {
+			ranges: [{ version: { constraint: ">= 25" } }],
+			qualifiers: { platform_cpes: ["cpe:2.3:o:microsoft:windows:-:*:*:*:*:*:*:*"] },
+		},
+	} as (typeof windows.packages)[number];
+	assert.deepEqual(rangeMatches([windows], jvm), []);
+	assert.deepEqual(databaseSearchArguments("oracle:openjdk"), [
+		"db",
+		"search",
+		"--pkg",
+		"cpe:2.3:a:oracle:openjdk",
+		"--limit",
+		"0",
+		"-o",
+		"json",
+	]);
 });
