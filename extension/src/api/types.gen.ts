@@ -17708,6 +17708,19 @@ export type GetPerPersonResultsData = {
 	url: "/workspaces/{workspaceSlug}/per-person-results";
 };
 
+export type GetPerPersonResultsErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type GetPerPersonResultsError = GetPerPersonResultsErrors[keyof GetPerPersonResultsErrors];
+
 export type GetPerPersonResultsResponses = {
 	/**
 	 * OK
@@ -17735,6 +17748,14 @@ export type UpdatePerPersonResultsErrors = {
 	 * The caller is not an owner and asked to turn it on
 	 */
 	403: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdatePerPersonResultsError =

@@ -10289,6 +10289,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/PerPersonResults"
           description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
       summary: Whether workspace admins see practice results per person
       tags:
       - workspace-per-person-results
@@ -10325,6 +10337,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: The caller is not an owner and asked to turn it on
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
       summary: Turn per-person results for admins on or off
       tags:
       - workspace-per-person-results
