@@ -258,12 +258,32 @@ public class ItemEventService {
      */
     @Transactional(readOnly = true)
     public RetainedEvidence evidence(long workspaceId, long itemId, UUID eventId) {
-        return repository
-                .findEvidence(workspaceId, itemId, eventId)
-                .map(row -> row.getItemVersion() == null
-                        ? RetainedEvidence.missing(RetainedEvidence.UNKNOWN)
-                        : row.getRetained() ? retained(row) : RetainedEvidence.missing(RetainedEvidence.NOT_RETAINED))
-                .orElseGet(() -> RetainedEvidence.missing(RetainedEvidence.UNKNOWN));
+        var row = repository.findEvidence(workspaceId, itemId, eventId).orElse(null);
+        if (row == null || row.getItemVersion() == null) return RetainedEvidence.missing(RetainedEvidence.UNKNOWN);
+        // A follow-up keeps no record of its own: it reads its review's occasion, under that occasion's own expiry.
+        var source = carriedFrom(row);
+        if (source != null) {
+            var original = repository.findEvidence(workspaceId, itemId, source).orElse(null);
+            return original == null
+                            || !Objects.equals(original.getItemVersion(), row.getItemVersion())
+                            || !original.getRetained()
+                    ? RetainedEvidence.missing(RetainedEvidence.NOT_RETAINED)
+                    : retained(original);
+        }
+        return row.getRetained() ? retained(row) : RetainedEvidence.missing(RetainedEvidence.NOT_RETAINED);
+    }
+
+    /** The source key of a follow-up occasion ({@link ItemEventName#carried}) that a review's own occasion asked for. */
+    public static String carriedFrom(UUID occasion) {
+        return CARRIED_FROM + occasion;
+    }
+
+    private static final String CARRIED_FROM = "carried-from:";
+
+    private static @Nullable UUID carriedFrom(ItemEventRepository.EvidenceRow row) {
+        var key = row.getSourceKey();
+        if (!row.getName().endsWith(".carried") || key == null || !key.startsWith(CARRIED_FROM)) return null;
+        return UUID.fromString(key.substring(CARRIED_FROM.length()));
     }
 
     private RetainedEvidence retained(ItemEventRepository.EvidenceRow row) {

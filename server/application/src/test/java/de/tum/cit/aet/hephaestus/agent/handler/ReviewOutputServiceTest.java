@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -1122,6 +1123,47 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         assertThat(Objects.requireNonNull(job.getCapture()).path("nonResults"))
                 .isEqualTo(mapper.valueToTree(request.nonResults()));
         verify(membership).fail(eq(1L), eq(second.id()), eq(job.getId()), eq(ReviewStopReason.BUDGET), any());
+    }
+
+    @Test
+    void shouldCarryAPracticeThatTheRuntimeDidNotReachBeforeItsDeadlineAsNotRun() {
+        acceptReadReceipts();
+        when(verifier.verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(3));
+        var first = RuntimeReviewTestData.assignment(5L, null);
+        var second = new ReviewAssignmentSnapshot(
+                new ReviewAssignmentId(job.getReviewId(), 41, 2),
+                first.item(),
+                first.version(),
+                first.developerId(),
+                "other-practice",
+                new PinnedPractice(
+                        41,
+                        42,
+                        first.practice().definition(),
+                        first.practice().reviewDigest(),
+                        first.practice().method()));
+        when(assignments.admissible(job)).thenReturn(List.of(first, second));
+
+        var request = new AdmissionRequestDTO(
+                3,
+                job.getReviewId(),
+                job.getId(),
+                0,
+                submission("clear-names", "docs:one").results(),
+                List.of(new RuntimeNonResultDTO("other-practice", ReviewStopReason.DEADLINE)));
+        var prepared = prepare(job, request);
+        verifyNoInteractions(results, membership);
+        prepared.record(job);
+        verifyNoInteractions(results);
+        assertThat(staged)
+                .singleElement()
+                .satisfies(result -> assertThat(result.practiceId()).isEqualTo(31));
+        assertThat(Objects.requireNonNull(job.getCapture()).path("nonResults"))
+                .isEqualTo(mapper.valueToTree(request.nonResults()));
+        // Owed and never measured: it runs again, and the runtime's own reason stays in the detail.
+        verify(membership)
+                .fail(eq(1L), eq(second.id()), eq(job.getId()), eq(ReviewStopReason.NOT_RUN), contains("DEADLINE"));
     }
 
     @Test

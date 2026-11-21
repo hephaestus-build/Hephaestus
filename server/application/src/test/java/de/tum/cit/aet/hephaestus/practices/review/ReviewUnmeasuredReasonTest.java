@@ -41,6 +41,23 @@ class ReviewUnmeasuredReasonTest {
     }
 
     @Test
+    void shouldEndAsSourcesMovedWhenTheSourcesMovedForEveryWithheldPracticeAndNotEveryOneWasReplaced() {
+        assertThat(ReviewServiceImpl.unmeasuredReason(Set.of(ReviewStopReason.SOURCES_MOVED.name())))
+                .isEqualTo(ReviewStopReason.SOURCES_MOVED);
+        assertThat(ReviewServiceImpl.unmeasuredReason(
+                        Set.of(ReviewStopReason.REPLACED.name(), ReviewStopReason.SOURCES_MOVED.name())))
+                .isEqualTo(ReviewStopReason.SOURCES_MOVED);
+    }
+
+    /** A practice that never ran is owed, not withheld on purpose: its review's execution did not finish. */
+    @Test
+    void shouldEndAsExecutionIncompleteWhenAPracticeNeverRan() {
+        assertThat(ReviewServiceImpl.unmeasuredReason(Set.of(ReviewStopReason.NOT_RUN.name())))
+                .isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE);
+        assertThat(ReviewWithholdings.CARRIED).contains(ReviewStopReason.NOT_RUN.name());
+    }
+
+    @Test
     void shouldEndAsStaleRolloutWhenTheReviewSettingsChangedForEveryWithheldPractice() {
         assertThat(ReviewServiceImpl.unmeasuredReason(Set.of(ReviewWithholdings.STALE_ROLLOUT_REVISION)))
                 .isEqualTo(ReviewStopReason.STALE_ROLLOUT_REVISION);
@@ -50,6 +67,7 @@ class ReviewUnmeasuredReasonTest {
     void shouldEndAsNotReadyForEachOtherReasonThatWithholdsAPracticeOnPurpose() {
         assertThat(ReviewWithholdings.DELIBERATE)
                 .filteredOn(reason -> !reason.equals(ReviewStopReason.REPLACED.name())
+                        && !reason.equals(ReviewStopReason.SOURCES_MOVED.name())
                         && !reason.equals(ReviewWithholdings.STALE_ROLLOUT_REVISION))
                 .allSatisfy(reason -> assertThat(ReviewServiceImpl.unmeasuredReason(Set.of(reason)))
                         .as(reason)

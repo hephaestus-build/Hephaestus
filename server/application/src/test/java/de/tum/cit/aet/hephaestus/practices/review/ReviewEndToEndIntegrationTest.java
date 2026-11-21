@@ -463,13 +463,13 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(reviewed.practice())
                 .as(reviewed.calls())
                 .containsEntry("status", "WITHHELD")
-                .containsEntry("reason", "REPLACED");
+                .containsEntry("reason", "SOURCES_MOVED");
         assertThat(reviewed.outcomes()).isEmpty();
         assertThat(reviewed.modelRequests()).isZero();
         assertThat(reviewed.review())
-                .as("the review says the work changed, not that its runtime fell short")
+                .as("the review says the practice's sources moved, not that its runtime fell short")
                 .containsEntry("status", "PARTIAL")
-                .containsEntry("stop_reason", "REPLACED");
+                .containsEntry("stop_reason", "SOURCES_MOVED");
     }
 
     private void assertMeasured(Reviewed reviewed) {
@@ -824,8 +824,10 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(PROVIDER.getRequestCount()).isEqualTo(providerRequests);
         assertThat(membership(reviewId, practice))
                 .containsEntry("state", "WITHHELD")
-                .containsEntry("reason", "REPLACED");
-        assertThat(reviewRow(reviewId)).containsEntry("status", "PARTIAL").containsEntry("stop_reason", "REPLACED");
+                .containsEntry("reason", "SOURCES_MOVED");
+        assertThat(reviewRow(reviewId))
+                .containsEntry("status", "PARTIAL")
+                .containsEntry("stop_reason", "SOURCES_MOVED");
     }
 
     /**

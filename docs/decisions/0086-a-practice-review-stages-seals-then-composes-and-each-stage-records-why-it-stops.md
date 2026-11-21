@@ -215,3 +215,33 @@ Enforced by:
 
 **Revisit trigger:** the per-process file boundary in the sandbox ([ADR 0079](0079-one-agent-system.md)).
 When the host refuses undeclared reads for `bash` too, the residual risk is gone.
+
+## Update — 2026-11-17: `REPLACED` means a newer review, and owed practices run again
+
+Production showed reviews whose practices were all withheld as `REPLACED`, although no newer review of the item was ever ordered.
+A reason must say what happened, so the reasons split:
+
+- `REPLACED`: a newer review of the item already measured the practice. A newer review that only selected it can still withhold it.
+- `SOURCES_MOVED`: a source that the practice reads changed before it started, and no newer review measured it.
+- `NOT_RUN`: no attempt measured the practice before the run ended, by its deadline, a time-out, a watchdog or a lost sandbox. It says nothing about the work. The run keeps its own stop reason.
+
+All three are carried, so the next readiness edge selects the practice again.
+`NOT_RUN` is not withheld on purpose, so a review that owes it ends with `EXECUTION_INCOMPLETE`.
+
+A moved source or a spent deadline is no provider event, so nothing would measure such a practice before the work changes.
+An event review of an issue or a pull request can end with a `SOURCES_MOVED` or `NOT_RUN` practice while its work is still at its version.
+It then records one follow-up occasion of the item at that version.
+It uses the occasion machinery: the occasion joins the quiet window, selects no practice itself, and its readiness edge measures only the carried practices.
+It keeps no record of the work: it reads the record that the review's own occasion retained, under that occasion's expiry.
+A requested review, a cancelled one, or one of another item kind waits for the item's next event.
+
+An occasion is unique per item, name and version, so a version gets one follow-up.
+A practice that does not fit again stays carried until a real event.
+
+Enforced by:
+
+- `ResultAdmissionIntegrationTest#shouldCallAStalePracticeReplacedOnlyWhenANewerReviewMeasuredIt`
+- `ResultAdmissionIntegrationTest#shouldCallAStalePracticeSourcesMovedWhenTheNewerReviewWithheldIt`
+- `ResultAdmissionIntegrationTest#shouldAskOnceForAFollowUpThatReadsTheReviewsOwnOccasionWhenReviewsEndOwingPractices`
+- `ResultAdmissionServiceTest#shouldStopTheOpenPracticesAsNotRunAndSealWhenTheRetryFindsTheSourcesStale`
+- `ReviewJobCompletionServiceTest#shouldCarryEveryPracticeOfARunThatTimedOutBeforeItMeasuredOne`

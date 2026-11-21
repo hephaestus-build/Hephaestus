@@ -86,13 +86,19 @@ public interface ItemEventRepository extends JpaRepository<ItemEvent, UUID> {
     Optional<EvidenceRow> findEvidence(
             @Param("workspaceId") long workspaceId, @Param("itemId") long itemId, @Param("id") UUID id);
 
-    String EVIDENCE_COLUMNS = "item_version AS itemVersion, evidence IS NOT NULL AS retained, "
+    String EVIDENCE_COLUMNS = "item_version AS itemVersion, name AS name, source_key AS sourceKey, "
+            + "evidence IS NOT NULL AS retained, "
             + "CASE WHEN evidence->'unretained' IS NULL THEN CAST(evidence AS text) END AS evidence, "
             + "evidence->>'unretained' AS unretained, evidence_expires_at AS evidenceExpiresAt";
 
     interface EvidenceRow {
         @Nullable
         String getItemVersion();
+
+        String getName();
+
+        @Nullable
+        String getSourceKey();
 
         /** False for an occasion recorded before its source retained evidence, or by a source that retains none. */
         boolean getRetained();

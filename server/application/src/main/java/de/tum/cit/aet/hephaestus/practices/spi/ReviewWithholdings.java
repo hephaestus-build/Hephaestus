@@ -7,7 +7,9 @@ import java.util.stream.Stream;
 /**
  * The membership reasons for which Hephaestus withholds a practice on purpose, by a policy decision, not a failure.
  * Selection writes the role, bot, scope and checks reasons. Capture writes the readiness and fit reasons. Practice
- * start, a seal at a moved version and a replaced review write {@code REPLACED} or {@code READINESS_REFUSED}. Staging
+ * start writes {@code REPLACED} when a newer review of the item already measured the practice, {@code SOURCES_MOVED} when its own
+ * sources moved and none does, and {@code READINESS_REFUSED} when they cannot be verified. A replaced review writes
+ * {@code REPLACED}. An attempt that ended writes {@code NOT_RUN} for each practice it never measured. Staging
  * and admission write {@code ROLE_UNAVAILABLE} when the developer is no longer eligible, {@code WORKSPACE_INACTIVE}
  * when the workspace is not active, and {@code STALE_ROLLOUT_REVISION} when the workspace's review settings changed
  * while the review waited.
@@ -37,22 +39,42 @@ public final class ReviewWithholdings {
 
     /**
      * Reasons of a practice that was never measured and is still owed: it waits for the item's checks, a newer
-     * occasion replaced its review, it was not ready, or the work's evidence was larger than a sandbox holds. Not ready
-     * covers sources that could not be verified at practice start or seal and too little captured evidence. None of
-     * them says that the practice does not apply. The item's next readiness edge selects it again, whatever that edge's
-     * occasions select.
+     * occasion replaced its review, its own sources moved, it was not ready, it never ran, or the work's evidence was
+     * larger than a sandbox holds. Not ready covers sources that could not be verified at practice start or seal and too
+     * little captured evidence. None of them says that the practice does not apply. The item's next readiness edge
+     * selects it again, whatever that edge's occasions select.
      */
     public static final List<String> CARRIED = List.of(
             CHECKS_PENDING,
             NO_CHECKS_REPORTED,
             CHECKS_AWAITING_APPROVAL,
             ReviewStopReason.REPLACED.name(),
+            ReviewStopReason.SOURCES_MOVED.name(),
             ReviewStopReason.READINESS_REFUSED.name(),
+            ReviewStopReason.NOT_RUN.name(),
             ReviewStopReason.EVIDENCE_TOO_LARGE.name());
 
-    /** Every reason for which Hephaestus withholds a practice on purpose, by a policy decision, not a failure. */
+    /** Carried reasons after which the review asks for its own follow-up occasion, as no newer event may come. */
+    public static final Set<String> FOLLOW_UP =
+            Set.of(ReviewStopReason.SOURCES_MOVED.name(), ReviewStopReason.NOT_RUN.name());
+
+    /**
+     * The reason a practice that the run left unmeasured keeps: a run that ran out of time or ended early leaves it owed
+     * ({@code NOT_RUN}), and any other stop keeps its own reason.
+     */
+    public static ReviewStopReason unmeasured(ReviewStopReason stop) {
+        return switch (stop) {
+            case DEADLINE, TIMED_OUT, EXECUTION_INCOMPLETE -> ReviewStopReason.NOT_RUN;
+            default -> stop;
+        };
+    }
+
+    /**
+     * Every reason for which Hephaestus withholds a practice on purpose, by a policy decision, not a failure. A practice
+     * that never ran ({@code NOT_RUN}) is carried, but its review's execution did not finish.
+     */
     public static final Set<String> DELIBERATE = Set.copyOf(Stream.concat(
-                    CARRIED.stream(),
+                    CARRIED.stream().filter(reason -> !reason.equals(ReviewStopReason.NOT_RUN.name())),
                     Stream.of(
                             ROLE_UNAVAILABLE,
                             ROLE_AMBIGUOUS,
