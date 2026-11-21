@@ -147,6 +147,9 @@ class ProductionSchemaContractIntegrationTest {
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT to_regclass('public.idx_activity_event_workspace_occurred')::text", String.class))
                 .isNull();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT to_regclass('public.idx_activity_event_type_time')::text", String.class))
+                .isNull();
     }
 
     @Test
