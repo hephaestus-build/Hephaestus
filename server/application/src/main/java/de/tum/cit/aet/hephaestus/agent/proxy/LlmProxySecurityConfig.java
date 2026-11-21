@@ -34,6 +34,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.authorization.AuthorizationManagers;
@@ -278,6 +279,12 @@ class LlmProxySecurityConfig {
             @Override
             protected boolean shouldNotFilter(HttpServletRequest request) {
                 return !requests.matches(request);
+            }
+
+            // The gateway is no part of the API, and a route that a sandbox may not see reveals nothing in its body.
+            @Override
+            protected void refuse(HttpServletResponse response, ProblemDetail problem) {
+                response.setStatus(problem.getStatus());
             }
 
             @Override

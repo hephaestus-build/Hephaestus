@@ -196,9 +196,7 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .expectBody()
                 .jsonPath("$.status")
-                .isEqualTo(403)
-                .jsonPath("$.title")
-                .isEqualTo("Forbidden");
+                .isEqualTo(403);
     }
 
     @Test

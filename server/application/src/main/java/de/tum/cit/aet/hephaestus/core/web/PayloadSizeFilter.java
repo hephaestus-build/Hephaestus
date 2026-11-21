@@ -35,7 +35,7 @@ public class PayloadSizeFilter extends OncePerRequestFilter {
         }
         if (contentLength < 0) {
             refused(request, "length-required");
-            ProblemResponse.write(
+            refuse(
                     response,
                     ProblemDetail.forStatusAndDetail(
                             HttpStatus.LENGTH_REQUIRED, "Send the request body with a Content-Length header."));
@@ -43,7 +43,7 @@ public class PayloadSizeFilter extends OncePerRequestFilter {
         }
         if (contentLength > maxBytes) {
             refused(request, "payload-too-large");
-            ProblemResponse.write(
+            refuse(
                     response,
                     ProblemDetail.forStatusAndDetail(
                             HttpStatus.CONTENT_TOO_LARGE,
@@ -62,4 +62,9 @@ public class PayloadSizeFilter extends OncePerRequestFilter {
 
     /** Runs before a refusal is answered, for a surface that meters its own refusals. */
     protected void refused(HttpServletRequest request, String reason) {}
+
+    /** Answers a refusal with its problem, as every error answer of the API is one. */
+    protected void refuse(HttpServletResponse response, ProblemDetail problem) throws IOException {
+        ProblemResponse.write(response, problem);
+    }
 }
