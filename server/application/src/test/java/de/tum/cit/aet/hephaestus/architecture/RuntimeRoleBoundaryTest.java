@@ -163,6 +163,9 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             // not, because every role writes to the trail.
             Map.entry("de.tum.cit.aet.hephaestus.core.audit.ConfigAuditRetentionJob", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
+                    "de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRetentionJob",
+                    RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
                     "de.tum.cit.aet.hephaestus.core.audit.web.AdminConfigAuditController", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.integration.slack.sync.status.SlackIntegrationSyncRunner",
