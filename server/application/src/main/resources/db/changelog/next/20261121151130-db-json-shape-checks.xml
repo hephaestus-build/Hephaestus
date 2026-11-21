@@ -23,7 +23,7 @@ BEGIN
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'agent_action', 'native_recipient', counted.n1); END IF;
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'agent_action', 'payload', counted.n2); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of agent_action. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of agent_action. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_native_recipient_shape; ALTER TABLE agent_action VALIDATE CONSTRAINT ck_agent_action_payload_shape</sql>
@@ -52,7 +52,7 @@ BEGIN
   INTO counted FROM connection;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'connection', 'config', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of connection. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of connection. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection VALIDATE CONSTRAINT ck_connection_config_shape</sql>
@@ -81,7 +81,7 @@ BEGIN
   INTO counted FROM conversation_turn;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'conversation_turn', 'admission', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of conversation_turn. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of conversation_turn. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE conversation_turn VALIDATE CONSTRAINT ck_conversation_turn_admission_shape</sql>
@@ -110,7 +110,7 @@ BEGIN
   INTO counted FROM issue;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue', 'head_check_runs', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue VALIDATE CONSTRAINT ck_issue_head_check_runs_shape</sql>
@@ -139,7 +139,7 @@ BEGIN
   INTO counted FROM item_event;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'item_event', 'evidence', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of item_event. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of item_event. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE item_event VALIDATE CONSTRAINT ck_item_event_evidence_shape</sql>
@@ -168,7 +168,7 @@ BEGIN
   INTO counted FROM outline_document;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'outline_document', 'collaborator_subjects', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of outline_document. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of outline_document. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE outline_document VALIDATE CONSTRAINT ck_outline_document_collaborator_subjects_shape</sql>
@@ -197,7 +197,7 @@ BEGIN
   INTO counted FROM person_evidence_copy;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'person_evidence_copy', 'payload', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of person_evidence_copy. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of person_evidence_copy. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE person_evidence_copy VALIDATE CONSTRAINT ck_person_evidence_copy_payload_shape</sql>
@@ -226,7 +226,7 @@ BEGIN
   INTO counted FROM provider_event;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'provider_event', 'headers', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of provider_event. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of provider_event. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_event VALIDATE CONSTRAINT ck_provider_event_headers_shape</sql>
@@ -255,7 +255,7 @@ BEGIN
   INTO counted FROM repository_to_monitor;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'repository_to_monitor', 'generated_paths', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of repository_to_monitor. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of repository_to_monitor. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_to_monitor VALIDATE CONSTRAINT ck_repository_to_monitor_generated_paths_shape</sql>
@@ -284,7 +284,7 @@ BEGIN
   INTO counted FROM review_item;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'review_item', 'staged_payload', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of review_item. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of review_item. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE review_item VALIDATE CONSTRAINT ck_review_item_staged_payload_shape</sql>
@@ -315,7 +315,7 @@ BEGIN
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'review_job', 'capture', counted.n1); END IF;
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'review_job', 'output', counted.n2); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of review_job. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of review_job. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE review_job VALIDATE CONSTRAINT ck_review_job_capture_shape; ALTER TABLE review_job VALIDATE CONSTRAINT ck_review_job_output_shape</sql>
@@ -344,7 +344,7 @@ BEGIN
   INTO counted FROM sync_job;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'sync_job', 'progress', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of sync_job. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of sync_job. Each column below holds rows with a JSON value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job VALIDATE CONSTRAINT ck_sync_job_progress_shape</sql>

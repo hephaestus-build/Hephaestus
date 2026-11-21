@@ -60,7 +60,8 @@ class JsonShapeChecksMigrationTest {
                                 ", ",
                                 table.getValue().stream().map(c -> c + " jsonb").toList()) + ")");
             }
-            statement.execute("INSERT INTO agent_action (payload) VALUES ('{}'), ('\"text\"'), (NULL), ('[1]')");
+            statement.execute(
+                    "INSERT INTO agent_action (payload) VALUES ('{}'), ('\"text\"'), (NULL), ('[1]'), ('null')");
             connection.commit();
 
             var database =
@@ -72,7 +73,7 @@ class JsonShapeChecksMigrationTest {
                 // The count stops the upgrade with the column and its number of rows, before validation runs.
                 assertThatThrownBy(() -> liquibase.update(contexts, labels))
                         .hasStackTraceContaining("The upgrade stopped before it checks the stored rows of agent_action")
-                        .hasStackTraceContaining("agent_action.payload: 2");
+                        .hasStackTraceContaining("agent_action.payload: 3");
                 connection.rollback();
                 assertThat(allChecks(connection)).isEqualTo(actionChecks);
                 assertThat(validChecks(connection)).isZero();
@@ -89,7 +90,7 @@ class JsonShapeChecksMigrationTest {
                         while (rows.next()) refused.add(rows.getString("payload"));
                     }
                 }
-                assertThat(refused).containsExactlyInAnyOrder("\"text\"", "[1]");
+                assertThat(refused).containsExactlyInAnyOrder("\"text\"", "[1]", "null");
                 connection.rollback();
                 // The check that the stopped upgrade added refuses a new value of the wrong type already.
                 assertThatThrownBy(() -> statement.execute("INSERT INTO agent_action (payload) VALUES ('[2]')"))

@@ -68,6 +68,11 @@ class JsonColumnShapeIntegrationTest extends BaseIntegrationTest {
         }
 
         assertThat(columns).as("JSON columns found").isNotEmpty();
+        // Each mapped column is one that the schema has, so a typed column is checked against its type.
+        assertThat(columns.stream().map(json -> json.table() + "." + json.column()))
+                .as("JSON columns with a mapped type")
+                .containsAll(mapped.keySet());
+        assertThat(mapped).as("JSON columns with a mapped type").isNotEmpty();
         assertThat(mismatches).as("""
                         A JSON column needs a CHECK that names the one JSON type the server stores, such as \
                         jsonb_typeof(col) = 'object'. See docs/contributor/database-migration.mdx § JSON columns.""").isEmpty();

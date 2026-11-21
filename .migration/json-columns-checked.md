@@ -3,7 +3,7 @@
 - **When:** in the window
 - **Action:** If the upgrade stops at a table's stored JSON values, correct or delete those rows. Then start the upgrade again.
 
-This upgrade adds a check to each JSON column that had none. The check accepts only the JSON type that the server writes there: an object, or a list where the server stores a list.
+This upgrade adds a check to each JSON column that had none. The check accepts only the JSON type that the server writes there: an object, or an array where the server stores a list.
 Writes to a table are checked as soon as the upgrade reaches that table.
 The server has always written these types, so a stop most likely means that a row was changed by hand.
 
@@ -22,5 +22,8 @@ WHERE contype = 'c' AND conname LIKE 'ck\_%' AND NOT convalidated
 ```
 
 Each result names the check and shows the rows that it refuses.
-Set each row's column to a JSON value of the type that the check names. Where the column allows it, set it to NULL instead. Or delete the row.
+Set each row's column to a JSON value of the type that the check names. Where the column allows it, set it to NULL instead.
+
+A trigger refuses most changes to the JSON columns of `agent_action`, so delete such an `agent_action` row instead.
+Do not delete a `connection` row: that also deletes the rows that belong to the connection. Correct its `config` instead.
 Then start the upgrade again. It continues at the table where it stopped, and can stop at a later table in the same way.

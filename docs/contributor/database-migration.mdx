@@ -146,7 +146,7 @@ Its release note and migration note then name the changed rows and the backup to
 ## JSON columns
 
 A JSON column has a `CHECK` that accepts the one JSON type that the server writes there, such as `col IS NULL OR jsonb_typeof(col) = 'object'`.
-A list or an array in Java is a JSON array. Any other mapped type is a JSON object.
+A Java collection or array is a JSON array. Any other mapped type is a JSON object.
 For a `JsonNode` column, read the code that writes it.
 `JsonColumnShapeIntegrationTest` fails for a JSON column without such a check.
 Add the check in the changelog that adds the column.
