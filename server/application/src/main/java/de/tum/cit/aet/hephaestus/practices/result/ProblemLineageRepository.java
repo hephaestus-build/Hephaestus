@@ -23,9 +23,9 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
         UUID getResultId();
 
         /**
-         * Whether a newer result of the same practice, item and developer was measured another way: with another
-         * practice version or model method. It compared with nothing, so a problem it found has no row, and the newest
-         * row proves nothing about now.
+         * Whether a newer result of the same practice, item and developer compared with nothing: it was measured with
+         * another practice version or model method, or it ended as it was written. A problem it found has no row, so
+         * the newest row proves nothing about now.
          */
         boolean getUnchained();
     }
@@ -52,6 +52,7 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
             AND l.prior_result_id = c.result_id AND l.prior_problem_id = c.problem_id),
         usable AS (
           SELECT r.id, r.practice_id, r.item_id, r.developer_id, r.practice_version_id, r.recorded_at, v.ordered_at,
+            COALESCE(r.ended_at <= r.recorded_at, false) AS ended_at_once,
             m.method->>'modelDigest' AS digest, m.method->>'epoch' AS epoch
           FROM result r
           JOIN review v ON v.id = r.review_id AND v.workspace_id = r.workspace_id
@@ -74,9 +75,25 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
             AND later.developer_id IS NOT DISTINCT FROM w.developer_id
             AND (later.ordered_at > w.ordered_at OR (later.ordered_at = w.ordered_at AND later.recorded_at > w.recorded_at))
             AND (later.practice_version_id IS DISTINCT FROM w.practice_version_id
-              OR later.digest IS DISTINCT FROM w.digest OR later.epoch IS DISTINCT FROM w.epoch)) AS unchained
+              OR later.digest IS DISTINCT FROM w.digest OR later.epoch IS DISTINCT FROM w.epoch
+              OR later.ended_at_once)) AS unchained
         FROM newest w
         """, nativeQuery = true)
     List<ProblemStanding> findStanding(
             @Param("workspaceId") long workspaceId, @Param("problemIds") Collection<UUID> problemIds);
+
+    /** Whether {@code resultId} wrote a lineage row for the identity of one of {@code problemIds}. */
+    @Query(value = """
+        SELECT EXISTS (
+          SELECT 1 FROM problem_lineage l
+          JOIN problem_lineage named ON named.workspace_id = l.workspace_id AND named.identity = l.identity
+          JOIN problem p ON p.workspace_id = named.workspace_id AND p.id IN (:problemIds)
+            AND ((named.problem_id = p.id AND named.result_id = p.result_id)
+              OR (named.prior_problem_id = p.id AND named.prior_result_id = p.result_id))
+          WHERE l.workspace_id = :workspaceId AND l.result_id = :resultId)
+        """, nativeQuery = true)
+    boolean namesAny(
+            @Param("workspaceId") long workspaceId,
+            @Param("resultId") UUID resultId,
+            @Param("problemIds") Collection<UUID> problemIds);
 }

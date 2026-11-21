@@ -11,21 +11,19 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import java.time.Clock;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
+import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
-import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
  * Decides which of the developer's threads on an item Hephaestus resolves or reopens, after the seal recorded problem
  * lineage or a person marked a result. A thread resolves only when every problem its note cites is No longer present,
  * and reopens when one of them is present again. A person who marks the proof incorrect takes back its claim, so a
- * resolved thread whose problems no longer have proof reopens too. A thread that a person took over is never touched.
- * The decision runs after the commit, in its own transaction: it can never undo the result it follows.
+ * resolved thread whose problems that result proved gone reopens too. A thread that a person took over is never
+ * touched. The decision runs after the commit through the event publication registry: it never undoes the result it
+ * follows, and a failed decision is delivered again.
  */
-@Slf4j
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
@@ -41,37 +39,26 @@ class FeedbackThreadResolver {
     private final AgentActions actions;
     private final ObjectMapper mapper;
     private final Clock clock;
-    private final TransactionTemplate transactions;
 
     record Payload(UUID resolutionId, int generation) {}
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @ApplicationModuleListener
     public void recorded(ProblemLineageRecorded event) {
-        decide(event.workspaceId(), event.resultId(), false);
+        decide(event.workspaceId(), event.resultId(), null);
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @ApplicationModuleListener
     public void marked(ResultMarkChanged mark) {
-        if (mark.kind() == ResultMarkKind.INCORRECT) decide(mark.workspaceId(), mark.resultId(), !mark.removed());
+        if (mark.kind() == ResultMarkKind.INCORRECT)
+            decide(mark.workspaceId(), mark.resultId(), mark.removed() ? null : mark.resultId());
     }
 
     /**
-     * Decides in a transaction of its own. A failure is logged and swallowed: the result already committed, and the
-     * next review or mark of the item decides again, so a thread only keeps its state until then.
+     * Decides for every thread of the developer on the result's item. {@code withdrawnProof} is a result that a person
+     * just marked incorrect: a resolved thread whose problems that result proved gone, and that lost its proof with it,
+     * reopens. A mark on a result that the note itself rests on reopens nothing: the note is retracted instead.
      */
-    private void decide(long workspaceId, UUID resultId, boolean reopenWithoutProof) {
-        try {
-            transactions.executeWithoutResult(status -> decideNow(workspaceId, resultId, reopenWithoutProof));
-        } catch (RuntimeException failed) {
-            log.warn(
-                    "Thread resolution decision failed: workspaceId={}, resultId={}, cause={}",
-                    workspaceId,
-                    resultId,
-                    failed.getClass().getSimpleName());
-        }
-    }
-
-    private void decideNow(long workspaceId, UUID resultId, boolean reopenWithoutProof) {
+    private void decide(long workspaceId, UUID resultId, @Nullable UUID withdrawnProof) {
         var result = results.findById(resultId)
                 .filter(row -> row.getWorkspaceId() == workspaceId)
                 .orElse(null);
@@ -84,7 +71,8 @@ class FeedbackThreadResolver {
                     workspaceId, thread.getReviewId(), thread.getFeedbackId(), thread.getKind(), thread.getPosition());
             var verdict = evidence.standing(workspaceId, cited).verdict();
             if (verdict == FeedbackThreadEvidence.Verdict.GONE) ask(workspaceId, itemId, developerId, thread, true);
-            else if (verdict == FeedbackThreadEvidence.Verdict.PRESENT || reopenWithoutProof)
+            else if (verdict == FeedbackThreadEvidence.Verdict.PRESENT
+                    || (withdrawnProof != null && evidence.proved(workspaceId, withdrawnProof, cited)))
                 ask(workspaceId, itemId, developerId, thread, false);
         }
     }

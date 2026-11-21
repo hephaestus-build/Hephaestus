@@ -341,8 +341,8 @@ This update ships the second part of decision 19: the server resolves a thread f
 Repeats by identity and the composer's view of lineage stay decided, not shipped.
 [ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) keeps the rule: resolution is a server path, not a model tool.
 
-- **When.** The server decides after the seal commits the lineage rows, in a transaction of its own.
-  So a failed decision never undoes a result, and the next review decides again.
+- **When.** The server decides after the seal commits the lineage rows, through the event publication registry.
+  So a failed decision never undoes a result, and the registry delivers it again.
   A person's incorrect mark on a result also starts a decision.
   The server looks at each thread that a posted note of the developer's feedback starts on the item.
   When an edit made a newer revision of the feedback, the newest revision that owns the thread decides.
@@ -360,8 +360,10 @@ Repeats by identity and the composer's view of lineage stay decided, not shipped
 - **Reopen.** When one cited problem is present again, the server reopens the thread.
   A later review finds the problem as New, Unchanged or Updated.
   A problem without standing does not reopen a thread: no proof is no claim.
-  The one exception is a person's incorrect mark on a result.
-  The mark takes back the proof, so a resolved thread whose problems lost their standing reopens.
+  The one exception is a person's incorrect mark on a result whose lineage proved a cited problem gone.
+  The mark takes back the proof, so that resolved thread reopens when its problems lost their standing.
+  A mark on a result that the note itself rests on reopens nothing.
+  The note is retracted, and its thread stops.
   The server reopens only a thread that its own resolve may have reached.
   A resolve that never started is withdrawn instead.
 - **A person's state wins.** A person's resolve, reopen or reply hands the thread to people for good.
@@ -391,6 +393,7 @@ Integrations:
 - **GitHub**: `resolveReviewThread` and `unresolveReviewThread`.
   The writing account is the token's viewer: for a GitHub App, its bot, which webhooks name as the sender.
   A bot is no GitHub User, so a thread that the bot resolved names no resolver.
+  The server takes any resolve without a resolver as its own, also one by another app or workflow.
   The pull request review thread webhook now records its sender as the event's actor.
   The activity of a reopened thread now names that sender, not the pull request's author.
 - **GitLab**: the discussion's `resolved` flag through the REST API.
@@ -398,6 +401,7 @@ Integrations:
   A synced resolve names the discussion's resolver.
   A synced reopen names no actor, so the server's own reopen on GitLab hands the thread to people.
   The server then never changes that thread again, and the note's feedback becomes human-controlled.
+  A synced reopen also records its activity under the pull request's author, as every GitLab reopen does.
 - **A personal access token.** When a connection uses a person's token, the writing account is that person.
   A change that the person makes in the direction that the server asked for then reads as the server's own.
 - **Slack and Outline: not applicable.** Their feedback has no note on the work, and no thread that the server opened.
@@ -415,4 +419,5 @@ Enforced by:
 - `FeedbackThreadResolutionIntegrationTest#shouldWithdrawAResolveThatNeverStartedWhenTheProblemComesBackWithoutTouchingTheThread`
 - `FeedbackThreadResolutionIntegrationTest#shouldHandAThreadToPeopleWhenItFindsItResolvedByAPersonWithoutAnEvent`
 - `FeedbackThreadResolutionIntegrationTest#shouldReopenAResolvedThreadWhenAPersonMarksItsProofIncorrect`
+- `FeedbackThreadResolutionIntegrationTest#shouldNotReopenAThreadWhenAPersonMarksTheResultItsNoteRestsOnIncorrect`
 - `GitHubThreadResolutionTest` and `GitLabThreadResolutionTest`

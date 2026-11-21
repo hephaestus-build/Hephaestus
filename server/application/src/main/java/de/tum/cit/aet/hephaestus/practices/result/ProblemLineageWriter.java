@@ -31,8 +31,8 @@ import org.springframework.stereotype.Component;
  * first citation, and No longer present needs a judged result of a changed version, unmarked and with
  * trusted coverage. An item review adds one condition, because its problems can cite any path and the model chooses
  * their keys: every text that the previous problem quoted must be gone from the newer capture. A renamed key or a
- * problem the model left out is then never mistaken for a repair. Rows written announce {@link ProblemLineageRecorded}
- * in the same transaction, so the threads of the item's feedback follow them.
+ * problem the model left out is then never mistaken for a repair. Rows written publish {@link ProblemLineageRecorded}, so
+ * the threads of the item's feedback follow them after the commit.
  */
 @Component
 @ConditionalOnServerRole

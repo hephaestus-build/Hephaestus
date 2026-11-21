@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
 import java.time.Duration;
 import java.util.List;
@@ -26,7 +25,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class FeedbackThreadResolutionService {
     private static final Duration ACTOR_UNKNOWN = Duration.ofMinutes(1);
-    private static final Duration HELD = Duration.ofMinutes(5);
 
     private final FeedbackThreadSteps steps;
     private final FeedbackTargetResolver targets;
@@ -56,9 +54,7 @@ public class FeedbackThreadResolutionService {
         var refused =
                 steps.begin(workspaceId, ask, actor, attempt, plan.feedback().getDeveloperId());
         if (refused != null) return refused;
-        ThreadChange change = writer.resolveThread(target, plan.copy(), plan.resolved(), actor);
-        if (change.outcome() == ThreadChange.Outcome.DEFERRED) return new ActionResult.Defer(HELD);
-        return steps.settle(workspaceId, ask, change);
+        return steps.settle(workspaceId, ask, writer.resolveThread(target, plan.copy(), plan.resolved(), actor));
     }
 
     /** Ends the ask of an action that ended without confirming it, whoever ended it. */

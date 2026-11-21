@@ -11,10 +11,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
 /** What a note on the work cites, and where those problems stand now. */
+@Slf4j
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
@@ -49,7 +51,8 @@ class FeedbackThreadEvidence {
         try {
             trace = mapper.treeToValue(node, FeedbackCompositionTrace.class);
         } catch (RuntimeException unreadable) {
-            // Support from an older shape cannot say what the note cites.
+            // Support from an older shape cannot say what the note cites, so the note never resolves.
+            log.debug("Composition support is unreadable: feedbackId={}", feedbackId);
             return List.of();
         }
         var problems = new ArrayList<UUID>();
@@ -61,6 +64,11 @@ class FeedbackThreadEvidence {
             }
         }
         return List.copyOf(problems);
+    }
+
+    /** Whether {@code resultId} wrote a lineage row for the identity of one of the cited problems. */
+    boolean proved(long workspaceId, UUID resultId, List<UUID> cited) {
+        return !cited.isEmpty() && lineage.namesAny(workspaceId, resultId, cited);
     }
 
     Standing standing(long workspaceId, List<UUID> cited) {

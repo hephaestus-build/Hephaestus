@@ -843,8 +843,9 @@ Withdrawal and correction address the stored provider references in place.
 
 ### Thread resolution
 
-The seal writes problem lineage, and in the same transaction it decides which of the developer's threads on the item to resolve or reopen.
+The seal writes problem lineage. After the commit, the event publication registry starts a decision: which of the developer's threads on the item to resolve or reopen.
 A thread resolves when every problem that its note cites is No longer present, and it reopens when one of them comes back.
+
 One `RESOLVE_FEEDBACK_THREAD` action changes one thread, on GitHub and GitLab.
 The action records the writing account before it writes, so the thread event of its own write is not read as a person's.
 A person's resolve, reopen or reply, or an event without an actor, ends Hephaestus's changes to that thread.

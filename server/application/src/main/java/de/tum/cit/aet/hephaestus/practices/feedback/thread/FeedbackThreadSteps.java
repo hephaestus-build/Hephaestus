@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
 import de.tum.cit.aet.hephaestus.practices.adapter.FeedbackThreadStateRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
@@ -35,12 +36,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class FeedbackThreadSteps {
     private static final Duration REREAD = Duration.ofSeconds(30);
+    private static final Duration HELD = Duration.ofMinutes(5);
 
     private final FeedbackThreadResolutionRepository resolutions;
     private final FeedbackCopyRepository copies;
     private final FeedbackRepository feedback;
     private final ResultRepository results;
     private final FeedbackVisibilityService visibility;
+    private final FeedbackBasisRepository basis;
     private final EvidenceAuthorization authorization;
     private final FeedbackThreadEvidence evidence;
     private final PersonDataWriteFence privacy;
@@ -129,7 +132,8 @@ class FeedbackThreadSteps {
                 yield new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
             }
             case TAKEN -> {
-                // A person resolved the thread, and its event may never reach Hephaestus: hand it over here.
+                // A person resolved the thread, and its event may never reach Hephaestus: hand it over here. That holds
+                // whichever ask found it, so even a superseded ask hands the thread over.
                 if (row != null) {
                     if (row.current(ask.generation()))
                         meters.record(row.isResolved(), FeedbackThreadStopReason.HUMAN_CONTROLLED);
@@ -138,7 +142,8 @@ class FeedbackThreadSteps {
                 }
                 yield new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
             }
-            case DEFERRED, TRANSIENT -> new ActionResult.Reread(REREAD);
+            case DEFERRED -> new ActionResult.Defer(HELD);
+            case TRANSIENT -> new ActionResult.Reread(REREAD);
         };
     }
 
@@ -147,11 +152,14 @@ class FeedbackThreadSteps {
         resolutions.lockById(ask.resolutionId(), workspaceId).ifPresent(row -> stopped(row, ask, reason));
     }
 
-    /** Why the thread must not change now: a person took it over, or its feedback was withdrawn. */
+    /** Why the thread must not change now: a person took it over, or its feedback was withdrawn or marked incorrect. */
     private @Nullable FeedbackThreadStopReason refusal(FeedbackThreadResolution row, FeedbackCopy copy) {
         if (resolutions.humanControlled(row.getWorkspaceId(), row.getItemId(), row.getThreadRef()))
             return FeedbackThreadStopReason.HUMAN_CONTROLLED;
-        if (visibility.withdrawn(row.getWorkspaceId(), copy.getFeedbackId())) return FeedbackThreadStopReason.WITHDRAWN;
+        // A note whose own evidence a person marked incorrect is being retracted: its thread is no longer the claim.
+        if (visibility.withdrawn(row.getWorkspaceId(), copy.getFeedbackId())
+                || basis.isIncorrect(row.getWorkspaceId(), copy.getFeedbackId()))
+            return FeedbackThreadStopReason.WITHDRAWN;
         return null;
     }
 

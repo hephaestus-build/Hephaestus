@@ -639,6 +639,9 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                     ? ThreadChange.done(copy.copyId())
                     : ThreadChange.of(
                             copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider did not confirm the thread state");
+        } catch (OutboundEgressSuppressedException silenced) {
+            // Silent Mode engaged between the check and the write: nothing was written.
+            return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.DEFERRED, "Silent Mode holds the change");
         } catch (RuntimeException e) {
             return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider thread change failed");
         }

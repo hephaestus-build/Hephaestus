@@ -360,6 +360,23 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         assertThat(provider.threads).containsEntry(thread, false);
     }
 
+    @Test
+    void shouldNotReopenAThreadWhenAPersonMarksTheResultItsNoteRestsOnIncorrect() {
+        var first = sealed("w1", 30, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+        String thread = note(first, problems(first));
+        sealed("w2", 20, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);
+        assertThat(run(resolution(thread))).containsInstanceOf(ActionResult.Done.class);
+        int generation = resolution(thread).getGeneration();
+
+        // The note is wrong, so it is retracted. Its thread must not tell the developer that the problem is back.
+        store.mark(
+                scenario.workspace().getId(), first, ResultMarkKind.INCORRECT, developer, "This was never a problem.");
+
+        assertThat(resolution(thread).getGeneration()).isEqualTo(generation);
+        assertThat(resolution(thread).isResolved()).isTrue();
+        assertThat(provider.threads).containsEntry(thread, true);
+    }
+
     private UUID sealed(
             String version,
             int minutesAgo,
