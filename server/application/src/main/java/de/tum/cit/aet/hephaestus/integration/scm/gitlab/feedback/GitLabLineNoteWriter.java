@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppresse
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyForm;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
-import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateReceipt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteFence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteResult;
@@ -18,7 +17,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
@@ -33,10 +31,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenServic
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrCoordinates;
 import java.net.URI;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -68,13 +63,13 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabLineNoteWriter.class);
 
-    private static final JsonMapper MAPPER = new JsonMapper();
+    static final JsonMapper MAPPER = new JsonMapper();
 
     private static final int DISCUSSIONS_PAGE_SIZE = 100;
 
     private static final int MAX_DISCUSSION_PAGES = 50;
 
-    private static final Pattern COMMIT_SHA = Pattern.compile("[0-9a-fA-F]{7,64}");
+    static final Pattern COMMIT_SHA = Pattern.compile("[0-9a-fA-F]{7,64}");
 
     // Names the placement of a range copy, so readback never mistakes it for an end-line copy written before ranges.
     static final String RANGE_PLACEMENT = "<!-- hephaestus-gitlab-placement=line-range -->";
@@ -219,23 +214,10 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                     || !draft.path("id").isIntegralNumber()
                     || draft.path("id").longValue() <= 0
                     || !draft.path("discussion_id").isNull()
-                    || !sameDraftPosition(draft.path("position"), fields.get("position")))
+                    || !GitLabDiscussionNotes.sameDraftPosition(draft.path("position"), fields.get("position")))
                 throw new FeedbackDeliveryException("Unrelated or changed draft notes prevent bulk publication");
         }
         return found;
-    }
-
-    private static boolean sameDraftPosition(JsonNode actual, @Nullable Object expected) {
-        // GitLab answers a draft without a position with a position whose type is "text" and whose location is null.
-        if (expected == null)
-            return actual.isNull()
-                    || actual.isMissingNode()
-                    || (actual.isObject()
-                            && actual.properties().stream()
-                                    .allMatch(entry -> entry.getValue().isNull()
-                                            || entry.getKey().equals("position_type")));
-        var wanted = MAPPER.valueToTree(expected);
-        return wanted.properties().stream().allMatch(entry -> entry.getValue().equals(actual.path(entry.getKey())));
     }
 
     private List<JsonNode> pages(long workspace, String endpoint) {
@@ -441,8 +423,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             if (item != null
                     && note.get("author") instanceof Map<?, ?> author
                     && currentUserId.equals(author.get("id"))) {
-                copyForm = copyForm(note, body, item, target);
-                rangePending = copyForm == CopyForm.LINE_NOTE && placesRange(body, item);
+                copyForm = GitLabDiscussionNotes.copyForm(note, body, item, target);
+                rangePending = copyForm == CopyForm.LINE_NOTE && GitLabDiscussionNotes.placesRange(body, item);
             }
             String url = note.get("url") instanceof String noteUrl ? noteUrl : null;
             Copy previous = copies.get(key);
@@ -454,42 +436,16 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         }
     }
 
-    private static @Nullable CopyForm copyForm(Map<?, ?> note, String body, LineNote item, FeedbackTarget target) {
-        ItemVersion version = target.version();
-        FeedbackAnchor diff = item.anchor();
-        String revision = diff.side() == CitationSide.OLD ? version.baseVersion() : ScmVersion.reviewedHead(version);
-        if (diff.endLine() != null && diff.side() == null) return null;
-        // Only a position the response answered with null proves an ordinary comment; a missing one
-        // proves nothing.
-        boolean unpositioned = note.containsKey("position") && note.get("position") == null;
-        if (unpositioned && ScmFeedbackFormatter.carries(body, item.writeMarker())) {
-            return CopyForm.FILE_NOTE;
-        }
-        boolean lineCopy = diff.endLine() != null
-                && revision != null
-                && ScmFeedbackFormatter.carries(body, item.writeMarker())
-                && note.get("position") instanceof Map<?, ?> position
-                && diff.path().equals(position.get(diff.side() == CitationSide.OLD ? "oldPath" : "newPath"))
-                && position.get(diff.side() == CitationSide.OLD ? "oldLine" : "newLine") instanceof Number line
-                && line.intValue() == diff.endLine()
-                && position.get("diffRefs") instanceof Map<?, ?> diffRefs
-                && Objects.equals(version.baseVersion(), diffRefs.get("baseSha"))
-                && Objects.equals(ScmVersion.reviewedHead(version), diffRefs.get("headSha"))
-                && diffRefs.get("startSha") instanceof String startSha
-                && COMMIT_SHA.matcher(startSha).matches();
-        return lineCopy ? CopyForm.LINE_NOTE : null;
-    }
-
     // Encode each project segment independently so namespace slashes retain their structure.
     private String projectUrl(long scopeId, MrCoordinates mr) {
         String serverUrl = tokenService.resolveServerUrl(scopeId);
         String base = serverUrl.endsWith("/") ? serverUrl.substring(0, serverUrl.length() - 1) : serverUrl;
-        return base + "/" + encodedPath(mr.projectPath());
+        return base + "/" + GitLabDiscussionNotes.encodedPath(mr.projectPath());
     }
 
     // A range copy names its placement; a body without it is an end-line copy, as written before ranges.
     private String lineBody(Footer footer, LineNote item) {
-        if (!ranged(item.anchor())) return postedBody(footer, item);
+        if (!GitLabDiscussionNotes.ranged(item.anchor())) return postedBody(footer, item);
         return footer.appendLineNotePrompt(PostedText.of(item.body()))
                 + "\n"
                 + ScmFeedbackFormatter.provenanceLine(item.provenance())
@@ -498,18 +454,6 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 + RANGE_PLACEMENT
                 + "\n"
                 + ScmFeedbackFormatter.deliveryTag(item.writeKey());
-    }
-
-    private static boolean placesRange(String body, LineNote item) {
-        return ranged(item.anchor())
-                && ScmFeedbackFormatter.carries(body, RANGE_PLACEMENT)
-                && ScmFeedbackFormatter.carries(body, item.writeMarker());
-    }
-
-    private static boolean ranged(FeedbackAnchor anchor) {
-        Integer start = anchor.startLine();
-        Integer end = anchor.endLine();
-        return start != null && end != null && start < end;
     }
 
     // Only GitLab's record of both ends verifies a placed range; a range it does not hold proves nothing delivered.
@@ -532,8 +476,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         FeedbackAnchor anchor = item.anchor();
         String side = anchor.side() == CitationSide.OLD ? "old_line" : "new_line";
         JsonNode range = note.path("position").path("line_range");
-        return copy.confirmed(Objects.equals(anchor.startLine(), line(range.path("start"), side))
-                && Objects.equals(anchor.endLine(), line(range.path("end"), side)));
+        return copy.confirmed(Objects.equals(anchor.startLine(), GitLabDiscussionNotes.line(range.path("start"), side))
+                && Objects.equals(anchor.endLine(), GitLabDiscussionNotes.line(range.path("end"), side)));
     }
 
     private String postedBody(Footer footer, LineNote item) {
@@ -551,7 +495,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                     + "/-/blob/"
                     + revision
                     + "/"
-                    + encodedPath(diff.path())
+                    + GitLabDiscussionNotes.encodedPath(diff.path())
                     + ")**\n\n"
                     + postedBody(footer, item);
         Integer start = diff.startLine();
@@ -559,15 +503,9 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         String lines = range ? start + "-" + diff.endLine() : String.valueOf(diff.endLine());
         String label =
                 range ? "View code at lines " + start + "–" + diff.endLine() : "View code at line " + diff.endLine();
-        String link = projectUrl + "/-/blob/" + revision + "/" + encodedPath(diff.path()) + "#L" + lines;
+        String link = projectUrl + "/-/blob/" + revision + "/" + GitLabDiscussionNotes.encodedPath(diff.path()) + "#L"
+                + lines;
         return "**[" + label + "](" + link + ")**\n\n" + postedBody(footer, item);
-    }
-
-    private static String encodedPath(String path) {
-        return Arrays.stream(path.split("/", -1))
-                .map(segment ->
-                        URLEncoder.encode(segment, StandardCharsets.UTF_8).replace("+", "%20"))
-                .collect(Collectors.joining("/"));
     }
 
     private record Copy(
@@ -657,7 +595,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             }
             var ref = NOTE_REF.matcher(externalRef);
             if (!ref.matches()) {
-                outcomes.add(unsupported(copy, "Existing copy has no GitLab note identity"));
+                outcomes.add(GitLabDiscussionNotes.unsupported(copy, "Existing copy has no GitLab note identity"));
                 continue;
             }
             if (gitLabProvider.isRateLimitCritical(workspaceId)) {
@@ -704,20 +642,22 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                     outcomes.add(CopyUpdateReceipt.transientFailure(copy.copyId(), "Existing copy could not be read"));
                     continue;
                 }
-                String original = text(found, "body");
-                if (!ownNote(found, noteId, type, author)
+                String original = GitLabDiscussionNotes.text(found, "body");
+                if (!GitLabDiscussionNotes.ownNote(found, noteId, type, author)
                         || original == null
                         || ScmFeedbackFormatter.lastDeliveryKey(original) == null) {
-                    outcomes.add(unsupported(copy, "Existing copy authority could not be verified"));
+                    outcomes.add(
+                            GitLabDiscussionNotes.unsupported(copy, "Existing copy authority could not be verified"));
                     continue;
                 }
                 String rewritten = rewrite.body(copy, type, original);
                 if (rewritten == null) {
-                    outcomes.add(unsupported(copy, "Existing copy authority could not be verified"));
+                    outcomes.add(
+                            GitLabDiscussionNotes.unsupported(copy, "Existing copy authority could not be verified"));
                     continue;
                 }
                 if (original.equals(rewritten)) {
-                    outcomes.add(edited(copy));
+                    outcomes.add(GitLabDiscussionNotes.edited(copy));
                     continue;
                 }
                 egressGuard.requireDeliveryAllowed("gitlab.correct-feedback-copy");
@@ -736,11 +676,11 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 }
                 JsonNode stored = written.status() == 200 ? written.json() : null;
                 boolean confirmed = stored != null
-                        && ownNote(stored, noteId, type, author)
-                        && rewritten.equals(text(stored, "body"));
+                        && GitLabDiscussionNotes.ownNote(stored, noteId, type, author)
+                        && rewritten.equals(GitLabDiscussionNotes.text(stored, "body"));
                 outcomes.add(
                         confirmed
-                                ? edited(copy)
+                                ? GitLabDiscussionNotes.edited(copy)
                                 : CopyUpdateReceipt.transientFailure(
                                         copy.copyId(), "Provider did not confirm the correction"));
             } catch (OutboundEgressSuppressedException e) {
@@ -762,37 +702,5 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 || json.path("id").longValue() <= 0)
             throw new FeedbackDeliveryException("The GitLab account could not be read");
         return json.path("id").longValue();
-    }
-
-    // A reply can turn a plain Note into a DiscussionNote without changing its identity or author.
-    private static boolean ownNote(JsonNode note, long id, String type, long author) {
-        return note.path("id").isIntegralNumber()
-                && note.path("id").longValue() == id
-                && ("Note".equals(type)
-                        ? note.path("type").isNull() || "DiscussionNote".equals(text(note, "type"))
-                        : type.equals(text(note, "type")))
-                && note.path("system").isBoolean()
-                && !note.path("system").booleanValue()
-                && note.path("author").path("id").isIntegralNumber()
-                && note.path("author").path("id").longValue() == author;
-    }
-
-    // The receipt keeps the identity and address the copy was delivered under.
-    private static CopyUpdateReceipt edited(CopyReceipt copy) {
-        return new CopyUpdateReceipt(
-                copy.copyId(), CopyUpdateKind.EDITED, copy.externalRef(), copy.externalUrl(), null);
-    }
-
-    private static CopyUpdateReceipt unsupported(CopyReceipt copy, String reason) {
-        return new CopyUpdateReceipt(
-                copy.copyId(), CopyUpdateKind.UNSUPPORTED, copy.externalRef(), copy.externalUrl(), reason);
-    }
-
-    private static @Nullable Integer line(JsonNode node, String field) {
-        return node.path(field).isIntegralNumber() ? node.path(field).intValue() : null;
-    }
-
-    private static @Nullable String text(JsonNode node, String field) {
-        return node.path(field).isString() ? node.path(field).asString() : null;
     }
 }

@@ -158,7 +158,7 @@ public class IssueDetailSource implements ContentSource {
         RecentAuthoredWorkContentSource.putDates(node, issue);
         String body = issue.getBody();
         if (body != null && !body.isBlank()) {
-            MergeReadinessContentSource.putText(node, "body", body, MAX_BODY_CHARS);
+            ScmContextJson.putText(node, "body", body, MAX_BODY_CHARS);
         }
 
         List<IssueComment> latest =
@@ -172,7 +172,7 @@ public class IssueDetailSource implements ContentSource {
             if (words == null || words.isBlank()) {
                 continue;
             }
-            commentsCut |= MergeReadinessContentSource.putComment(
+            commentsCut |= ScmContextJson.putComment(
                     comments, author, comment.getAuthor(), words, comment.getCreatedAt(), comment.getHtmlUrl());
         }
         Integer expectedComments = issue.getCommentsCount();

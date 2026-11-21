@@ -85,7 +85,6 @@ public class MergeReadinessContentSource implements ContentSource {
     private static final int MAX_NOTES = 10;
     private static final int MAX_REVIEWS_READ = 30;
     private static final int MAX_REVIEWERS = 5;
-    private static final int MAX_BODY_CHARS = 1_000;
     private static final int MAX_THREADS = 5;
     private static final int MAX_THREAD_COMMENTS = 3;
     private static final int MAX_CLOSING_ISSUES = 5;
@@ -290,7 +289,7 @@ public class MergeReadinessContentSource implements ContentSource {
             }
         }
         if (pr.getBody() != null && !pr.getBody().isBlank()) {
-            putText(node, "description", pr.getBody());
+            ScmContextJson.putText(node, "description", pr.getBody());
         }
         // Webhooks advance it without re-reading merge state, so the fields below can be older.
         Instant written = pr.getLastSyncAt();
@@ -350,7 +349,7 @@ public class MergeReadinessContentSource implements ContentSource {
                             .map(manifest -> manifest.reviewCommitFor(review.getCommitId(), pr.getHeadRefOid()))
                             .orElse("UNKNOWN"));
             if (review.getBody() != null && !review.getBody().isBlank()) {
-                reviewsCut |= putBody(entry, review.getBody());
+                reviewsCut |= ScmContextJson.putBody(entry, review.getBody());
             }
         }
         node.put("latestReviewsStatus", reviewsCut || notReadWhole ? "TRUNCATED" : "COMPLETE");
@@ -373,7 +372,7 @@ public class MergeReadinessContentSource implements ContentSource {
         // Newest first from the query; listed oldest first.
         for (IssueComment note :
                 notes.subList(0, Math.min(notes.size(), MAX_NOTES)).reversed()) {
-            notesCut |= putComment(
+            notesCut |= ScmContextJson.putComment(
                     noteArray,
                     pr.getAuthor(),
                     note.getAuthor(),
@@ -429,13 +428,13 @@ public class MergeReadinessContentSource implements ContentSource {
             String hunk = comments.isEmpty() ? null : comments.getFirst().getDiffHunk();
             if (change && hunk != null && !hunk.isBlank()) {
                 // The lines the thread's first comment was written on, as the provider stored them.
-                putText(entry, "diffHunk", hunk, MAX_HUNK_CHARS);
+                ScmContextJson.putText(entry, "diffHunk", hunk, MAX_HUNK_CHARS);
             }
             threadsCut |= comments.size() > MAX_THREAD_COMMENTS;
             ArrayNode shown = entry.putArray("comments");
             for (PullRequestReviewComment comment :
                     comments.subList(0, Math.min(comments.size(), MAX_THREAD_COMMENTS))) {
-                threadsCut |= putComment(
+                threadsCut |= ScmContextJson.putComment(
                         shown,
                         pr.getAuthor(),
                         comment.getAuthor(),
@@ -463,7 +462,7 @@ public class MergeReadinessContentSource implements ContentSource {
             entry.put("state", issue.getState().name());
             entry.put("relation", CLOSING_RELATION);
             if (issue.getBody() != null && !issue.getBody().isBlank()) {
-                closingCut |= putBody(entry, issue.getBody());
+                closingCut |= ScmContextJson.putBody(entry, issue.getBody());
             }
         }
         node.put("closingIssuesStatus", closingCut ? "TRUNCATED" : "COMPLETE");
@@ -583,65 +582,6 @@ public class MergeReadinessContentSource implements ContentSource {
                 return false;
             }
         }
-        return true;
-    }
-
-    /** @return whether the body was clipped */
-    static boolean putComment(
-            ArrayNode into,
-            @Nullable User workAuthor,
-            @Nullable User author,
-            String body,
-            @Nullable Instant createdAt,
-            @Nullable String url) {
-        ObjectNode c = into.addObject();
-        c.put("author", author == null ? null : author.getLogin());
-        c.put("authorRelation", authorRelation(workAuthor, author));
-        if (author != null && author.getType() == User.Type.BOT) {
-            c.put("bot", true);
-        }
-        c.put("createdAt", createdAt == null ? null : createdAt.toString());
-        c.put("url", url);
-        // Not in the ledger yet carrying the marker: Hephaestus's note under an unmatched ref, or a person quoting one.
-        if (body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER)) {
-            c.put("quotesHephaestusMarker", true);
-        }
-        return putBody(c, body);
-    }
-
-    /** Whether {@code author} wrote the work itself, by stored identity; unknown when either identity is missing. */
-    static String authorRelation(@Nullable User workAuthor, @Nullable User author) {
-        Long workAuthorId = workAuthor == null ? null : workAuthor.getId();
-        Long authorId = author == null ? null : author.getId();
-        if (workAuthorId == null || authorId == null) {
-            return "UNKNOWN";
-        }
-        return workAuthorId.equals(authorId) ? "WORK_AUTHOR" : "OTHER_PARTICIPANT";
-    }
-
-    /** @return whether the body was clipped — a condition past the cut is then unseen */
-    private static boolean putBody(ObjectNode entry, String body) {
-        return putText(entry, "body", body);
-    }
-
-    private static boolean putText(ObjectNode entry, String key, String text) {
-        return putText(entry, key, text, MAX_BODY_CHARS);
-    }
-
-    /**
-     * Puts {@code text} under {@code key}, clipped at {@code max} without splitting a surrogate pair, and marks a
-     * clipped one with {@code <key>Truncated}.
-     *
-     * @return whether the text was clipped — a condition past the cut is then unseen
-     */
-    static boolean putText(ObjectNode entry, String key, String text, int max) {
-        if (text.length() <= max) {
-            entry.put(key, text);
-            return false;
-        }
-        int end = Character.isHighSurrogate(text.charAt(max - 1)) ? max - 1 : max;
-        entry.put(key, text.substring(0, end));
-        entry.put(key + "Truncated", true);
         return true;
     }
 
