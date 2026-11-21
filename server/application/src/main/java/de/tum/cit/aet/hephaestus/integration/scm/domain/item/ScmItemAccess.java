@@ -12,7 +12,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -69,8 +68,14 @@ public class ScmItemAccess {
         });
     }
 
+    /**
+     * The item's parent of {@code kind}. A parent that is missing, gone or of another kind makes the item not visible:
+     * no read can be authorized through it. An item without a parent is not visible either, never a crash.
+     */
     public ItemRef parent(ItemRef item, ItemKind kind) {
-        ItemRef parent = find(item.workspaceId(), Objects.requireNonNull(item.parentId(), "Item has no parent"))
+        Long parentId = item.parentId();
+        if (parentId == null) throw new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Item has no parent");
+        ItemRef parent = find(item.workspaceId(), parentId)
                 .orElseThrow(
                         () -> new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Parent item is unavailable"));
         if (!parent.kind().equals(kind))

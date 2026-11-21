@@ -234,6 +234,29 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private FeedbackTargetResolver targets;
 
+    /** A work item indexed without its repository cannot be authorized through one: it is not visible. */
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldRefuseAWorkItemWithoutAParentInsteadOfFailing(IdentityProviderType type) {
+        var fixture = fixture(type);
+        long workspaceId = fixture.workspace().getId();
+        // Only legacy or hand-written rows lack a parent. The check stops at the missing parent, before it reads the
+        // work, so the source id names no pull request.
+        var orphan = writer.upsert(new ItemRegistration(
+                workspaceId, ScmItemEvents.PULL_REQUEST, fixture.repository().getId(), null, null));
+        assertThat(orphan.parentId()).isNull();
+
+        for (var audience : SourceReadAudience.values())
+            assertThat(sourceAccess.permits(orphan, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW, audience))
+                    .as(audience.name())
+                    .isFalse();
+        // A capture of it stops with a capture code, never a crash. With no pull request behind it, that code is
+        // ITEM_REMOVED: the work is checked before its parent.
+        assertThatThrownBy(() -> sources.pin(orphan, null)).isInstanceOf(ItemCaptureException.class);
+    }
+
     @ParameterizedTest
     @EnumSource(
             value = IdentityProviderType.class,
