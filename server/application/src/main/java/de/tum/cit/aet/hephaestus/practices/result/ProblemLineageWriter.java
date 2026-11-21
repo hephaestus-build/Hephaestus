@@ -22,6 +22,7 @@ import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 /**
@@ -30,7 +31,8 @@ import org.springframework.stereotype.Component;
  * first citation, and No longer present needs a judged result of a changed version, unmarked and with
  * trusted coverage. An item review adds one condition, because its problems can cite any path and the model chooses
  * their keys: every text that the previous problem quoted must be gone from the newer capture. A renamed key or a
- * problem the model left out is then never mistaken for a repair.
+ * problem the model left out is then never mistaken for a repair. Rows written announce {@link ProblemLineageRecorded}
+ * in the same transaction, so the threads of the item's feedback follow them.
  */
 @Component
 @ConditionalOnServerRole
@@ -41,6 +43,7 @@ class ProblemLineageWriter {
     private final ProblemComparison comparison;
     private final ScanEvidencePolicy evidence;
     private final ProblemLineageRepository lineage;
+    private final ApplicationEventPublisher events;
 
     void record(
             long ws,
@@ -78,7 +81,10 @@ class ProblemLineageWriter {
                                             entry.getValue().candidate()))
                             ? ProblemBaselineState.UNCHANGED
                             : ProblemBaselineState.UPDATED;
-            recorded.add(row(ws, result, prior, entry.getValue().id(), match == null ? null : match.id(), state, at));
+            recorded.add(
+                    row(result, prior, entry.getValue().id(), match == null ? null : match.id(), state, entry.getKey())
+                            .recordedAt(at)
+                            .build());
         }
         boolean unmarked = evidence.unmarked(review, rows).containsAll(List.of(result.getId(), prior.getId()));
         if (ProblemComparison.provesAbsence(before.candidate(), written, true, true, !unmarked, true))
@@ -88,9 +94,13 @@ class ProblemLineageWriter {
                 if (!cited.isEmpty()
                         && cited.stream()
                                 .allMatch(citation -> captured.presence(citation) == CapturedTextProbe.Presence.GONE))
-                    recorded.add(row(ws, result, prior, null, entry.getValue().id(), ProblemBaselineState.ABSENT, at));
+                    recorded.add(
+                            row(result, prior, null, entry.getValue().id(), ProblemBaselineState.ABSENT, entry.getKey())
+                                    .recordedAt(at)
+                                    .build());
             }
         lineage.saveAll(recorded);
+        if (!recorded.isEmpty()) events.publishEvent(new ProblemLineageRecorded(ws, result.getId()));
     }
 
     /** The written problems with their row ids, in the candidate's order. */
@@ -107,23 +117,21 @@ class ProblemLineageWriter {
         return snapshots;
     }
 
-    private static ProblemLineage row(
-            long ws,
+    private static ProblemLineage.ProblemLineageBuilder row(
             Result result,
             Result prior,
             @Nullable UUID problem,
             @Nullable UUID priorProblem,
             ProblemBaselineState state,
-            Instant at) {
+            String identity) {
         return ProblemLineage.builder()
                 .id(UUID.randomUUID())
-                .workspaceId(ws)
+                .workspaceId(result.getWorkspaceId())
                 .resultId(result.getId())
                 .priorResultId(Objects.requireNonNull(prior.getId()))
                 .problemId(problem)
                 .priorProblemId(priorProblem)
                 .comparison(state)
-                .recordedAt(at)
-                .build();
+                .identity(identity);
     }
 }

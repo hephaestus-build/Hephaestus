@@ -19,6 +19,19 @@ public interface LineNoteWriter {
     /** Changes the words of an owned note in place. The previous delivery key must still be present. */
     List<CopyUpdateReceipt> editOwn(FeedbackTarget target, List<OwnedEdit> notes);
 
+    /**
+     * The provider account this writer acts as, by its provider id, such as the bot of a GitHub App. A thread event with
+     * this actor can be Hephaestus's own. Null when the provider cannot say now.
+     */
+    @Nullable
+    String actor(FeedbackTarget target);
+
+    /**
+     * Resolves or reopens the thread of one owned note. The thread must still start with that note. A thread already in
+     * the asked state counts as {@link CopyUpdateKind#EDITED}, so a repeated attempt is safe.
+     */
+    CopyUpdateReceipt resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved);
+
     record OwnedEdit(CopyReceipt copy, String previousWriteKey, LineNote note) {}
 
     record RetractedNote(CopyReceipt copy, LineNote note) {}

@@ -64,6 +64,13 @@ public class ProblemLineage {
     @Column(name = "prior_problem_id")
     private @Nullable UUID priorProblemId;
 
+    /**
+     * The problem's identity in the comparison: its key, or the source and quote of its first citation. A key is not
+     * unique across practices or items, so a reader matches it within one practice, item and developer.
+     */
+    @Column(name = "identity", nullable = false, columnDefinition = "TEXT")
+    private String identity;
+
     /** How the problem compares: New, Unchanged, Updated, or No longer present ({@code ABSENT}). */
     @Enumerated(EnumType.STRING)
     @Column(name = "comparison", nullable = false, length = 16)

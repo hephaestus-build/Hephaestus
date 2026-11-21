@@ -692,6 +692,89 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         return List.copyOf(outcomes);
     }
 
+    @Override
+    public @Nullable String actor(FeedbackTarget target) {
+        long workspaceId = target.item().workspaceId();
+        try {
+            String server = tokenService.resolveServerUrl(workspaceId);
+            return Long.toString(currentUser(
+                    workspaceId, authorized(workspaceId, URI.create(server.replaceAll("/+$", "") + "/api/v4/user"))));
+        } catch (RuntimeException unavailable) {
+            return null;
+        }
+    }
+
+    // A discussion is resolved when its resolvable notes are; the owned note starts it, so its flag is the thread's.
+    @Override
+    public CopyUpdateReceipt resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved) {
+        String subject = targets.subject(target, kind());
+        long workspaceId = target.item().workspaceId();
+        String externalRef = copy.externalRef();
+        String thread = copy.threadRef();
+        var ref = externalRef == null ? null : NOTE_REF.matcher(externalRef);
+        String segment =
+                thread != null && thread.startsWith(DISCUSSION_GID) ? thread.substring(DISCUSSION_GID.length()) : "";
+        if (ref == null || !ref.matches() || !SEGMENT.matcher(segment).matches())
+            return GitLabDiscussionNotes.unsupported(copy, "Copy has no GitLab thread identity");
+        if (gitLabProvider.isRateLimitCritical(workspaceId))
+            return CopyUpdateReceipt.transientFailure(copy.copyId(), "The GitLab rate limit is critical");
+        String type = ref.group(1);
+        long noteId = Long.parseLong(ref.group(2));
+        try {
+            MrCoordinates mr = GitLabMrResolver.parseSubjectExternalId(subject);
+            String server = tokenService.resolveServerUrl(workspaceId);
+            long author = currentUser(
+                    workspaceId, authorized(workspaceId, URI.create(server.replaceAll("/+$", "") + "/api/v4/user")));
+            Answer read = exchange(workspaceId, HttpMethod.GET, request(workspaceId, mr, segment), null);
+            if (read.status() == 404 && NOTE_ABSENT.matcher(read.text()).matches()) {
+                Answer parent = exchange(
+                        workspaceId,
+                        HttpMethod.GET,
+                        authorized(workspaceId, URI.create(GitLabDiffVersionReader.mergeRequestApi(server, mr))),
+                        null);
+                JsonNode readable = parent.status() == 200 ? parent.json() : null;
+                return readable != null
+                                && readable.path("iid").isIntegralNumber()
+                                && readable.path("iid").longValue() == mr.iid()
+                        ? CopyUpdateReceipt.gone(copy.copyId(), "The provider thread no longer exists")
+                        : CopyUpdateReceipt.transientFailure(copy.copyId(), "The merge request could not be read");
+            }
+            Boolean current = read.status() == 200 ? threadState(read.json(), noteId, type, author) : null;
+            if (current == null)
+                return GitLabDiscussionNotes.unsupported(copy, "The thread no longer starts with the owned note");
+            if (current == resolved) return GitLabDiscussionNotes.edited(copy);
+            egressGuard.requireDeliveryAllowed(
+                    resolved ? "gitlab.resolve-feedback-thread" : "gitlab.reopen-feedback-thread");
+            Answer written;
+            try {
+                written = exchange(
+                        workspaceId, HttpMethod.PUT, request(workspaceId, mr, segment), Map.of("resolved", resolved));
+            } catch (RuntimeException unknown) {
+                return CopyUpdateReceipt.transientFailure(copy.copyId(), "Provider thread change outcome is unknown");
+            }
+            Boolean stored = written.status() == 200 ? threadState(written.json(), noteId, type, author) : null;
+            return Objects.equals(stored, resolved)
+                    ? GitLabDiscussionNotes.edited(copy)
+                    : CopyUpdateReceipt.transientFailure(copy.copyId(), "Provider did not confirm the thread state");
+        } catch (OutboundEgressSuppressedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return CopyUpdateReceipt.transientFailure(copy.copyId(), "Provider thread change failed");
+        }
+    }
+
+    /** Whether the discussion that starts with the owned note is resolved; null when it does not start with it. */
+    private static @Nullable Boolean threadState(@Nullable JsonNode discussion, long noteId, String type, long author) {
+        if (discussion == null
+                || !discussion.path("notes").isArray()
+                || discussion.path("notes").isEmpty()) return null;
+        JsonNode first = discussion.path("notes").get(0);
+        if (!GitLabDiscussionNotes.ownNote(first, noteId, type, author)
+                || !first.path("resolvable").booleanValue()
+                || !first.path("resolved").isBoolean()) return null;
+        return first.path("resolved").booleanValue();
+    }
+
     // The token's own account is the only author whose copy a correction may edit.
     private long currentUser(long scopeId, Request user) {
         Answer answer = exchange(scopeId, HttpMethod.GET, user, null);

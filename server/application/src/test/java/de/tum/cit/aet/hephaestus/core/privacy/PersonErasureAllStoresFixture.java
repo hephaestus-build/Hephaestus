@@ -459,6 +459,8 @@ final class PersonErasureAllStoresFixture {
                 priorProblem,
                 "comparison",
                 "UNCHANGED",
+                "identity",
+                "key:erasure-fixture",
                 "recorded_at",
                 Timestamp.from(Instant.now()));
         row(

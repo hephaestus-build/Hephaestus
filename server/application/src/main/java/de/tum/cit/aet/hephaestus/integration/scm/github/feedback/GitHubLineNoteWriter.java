@@ -556,6 +556,91 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         });
     }
 
+    // An installation token's viewer is the app's bot, whose id a webhook names as the sender of the bot's own changes.
+    @Override
+    public @Nullable String actor(FeedbackTarget target) {
+        try {
+            var response = gitHubProvider
+                    .forScope(target.item().workspaceId())
+                    .document("query FeedbackThreadActor{viewer{databaseId}}")
+                    .execute()
+                    .block(GRAPHQL_TIMEOUT);
+            if (response == null || !response.getErrors().isEmpty()) return null;
+            Object id = response.field("viewer.databaseId").getValue();
+            return id instanceof Number number && number.longValue() > 0 ? Long.toString(number.longValue()) : null;
+        } catch (RuntimeException unavailable) {
+            return null;
+        }
+    }
+
+    @Override
+    public CopyUpdateReceipt resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved) {
+        targets.subject(target, kind());
+        long workspaceId = target.item().workspaceId();
+        String thread = copy.threadRef();
+        String note = copy.externalRef();
+        if (thread == null || thread.isBlank() || note == null || note.isBlank())
+            return new CopyUpdateReceipt(
+                    copy.copyId(), CopyUpdateKind.UNSUPPORTED, note, copy.externalUrl(), "Copy has no provider thread");
+        try {
+            var read = gitHubProvider
+                    .forScope(workspaceId)
+                    .document(
+                            "query ReadFeedbackThread($id:ID!){node(id:$id){__typename ... on PullRequestReviewThread{id isResolved comments(first:1){nodes{id viewerDidAuthor}}}}}")
+                    .variable("id", thread)
+                    .execute()
+                    .block(GRAPHQL_TIMEOUT);
+            if (read == null || !read.getErrors().isEmpty())
+                return CopyUpdateReceipt.transientFailure(copy.copyId(), "The thread could not be read");
+            Object node = read.field("node").getValue();
+            if (node == null) return CopyUpdateReceipt.gone(copy.copyId(), "The provider thread no longer exists");
+            if (!(node instanceof Map<?, ?> found)
+                    || !thread.equals(found.get("id"))
+                    || !(found.get("isResolved") instanceof Boolean current)
+                    || !startsWithOwn(found, note))
+                return new CopyUpdateReceipt(
+                        copy.copyId(),
+                        CopyUpdateKind.UNSUPPORTED,
+                        note,
+                        copy.externalUrl(),
+                        "The thread no longer starts with the owned note");
+            if (current == resolved)
+                return new CopyUpdateReceipt(copy.copyId(), CopyUpdateKind.EDITED, note, copy.externalUrl(), null);
+            egressGuard.requireDeliveryAllowed(
+                    resolved ? "github.resolve-feedback-thread" : "github.reopen-feedback-thread");
+            String field = resolved ? "resolveReviewThread" : "unresolveReviewThread";
+            var written = gitHubProvider
+                    .forScope(workspaceId)
+                    .document(
+                            resolved
+                                    ? "mutation ResolveFeedbackThread($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{id isResolved}}}"
+                                    : "mutation ReopenFeedbackThread($id:ID!){unresolveReviewThread(input:{threadId:$id}){thread{id isResolved}}}")
+                    .variable("id", thread)
+                    .execute()
+                    .block(GRAPHQL_TIMEOUT);
+            if (written == null || !written.getErrors().isEmpty())
+                return CopyUpdateReceipt.transientFailure(copy.copyId(), "Provider did not confirm the thread state");
+            String id = written.field(field + ".thread.id").getValue();
+            Boolean state = written.field(field + ".thread.isResolved").getValue();
+            return thread.equals(id) && Objects.equals(state, resolved)
+                    ? new CopyUpdateReceipt(copy.copyId(), CopyUpdateKind.EDITED, note, copy.externalUrl(), null)
+                    : CopyUpdateReceipt.transientFailure(copy.copyId(), "Provider did not confirm the thread state");
+        } catch (OutboundEgressSuppressedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return CopyUpdateReceipt.transientFailure(copy.copyId(), "Provider thread change failed");
+        }
+    }
+
+    private static boolean startsWithOwn(Map<?, ?> thread, String note) {
+        return thread.get("comments") instanceof Map<?, ?> comments
+                && comments.get("nodes") instanceof List<?> nodes
+                && !nodes.isEmpty()
+                && nodes.getFirst() instanceof Map<?, ?> first
+                && note.equals(first.get("id"))
+                && Boolean.TRUE.equals(first.get("viewerDidAuthor"));
+    }
+
     /** The new text of one of the author's own notes, or null when this note does not belong to the copy. */
     @FunctionalInterface
     private interface Rewrite {
