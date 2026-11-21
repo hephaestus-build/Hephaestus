@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { DownloadPracticeFilesData, DownloadPracticeFilesResponses } from "../types.gen.js";
+import type {
+	DownloadPracticeFilesData,
+	DownloadPracticeFilesErrors,
+	DownloadPracticeFilesResponses,
+} from "../types.gen.js";
 
 /**
  * Download a practice as a folder of files
  */
 export const downloadPracticeFiles = <ThrowOnError extends boolean = false>(
 	options: Options<DownloadPracticeFilesData, ThrowOnError>,
-): RequestResult<DownloadPracticeFilesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<DownloadPracticeFilesResponses, unknown, ThrowOnError>({
+): RequestResult<DownloadPracticeFilesResponses, DownloadPracticeFilesErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		DownloadPracticeFilesResponses,
+		DownloadPracticeFilesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/files",
 		...options,

@@ -3,7 +3,7 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { LogoutData, LogoutResponses } from "../types.gen.js";
+import type { LogoutData, LogoutErrors, LogoutResponses } from "../types.gen.js";
 
 /**
  * Log out — revoke the current token + clear the cookie
@@ -12,8 +12,8 @@ import type { LogoutData, LogoutResponses } from "../types.gen.js";
  */
 export const logout = <ThrowOnError extends boolean = false>(
 	options?: Options<LogoutData, ThrowOnError>,
-): RequestResult<LogoutResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<LogoutResponses, unknown, ThrowOnError>({
+): RequestResult<LogoutResponses, LogoutErrors, ThrowOnError> =>
+	(options?.client ?? client).post<LogoutResponses, LogoutErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/auth/logout",
 		...options,

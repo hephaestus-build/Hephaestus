@@ -4,7 +4,11 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listReviewProblemsResponseTransformer } from "../transformers.gen.js";
-import type { ListReviewProblemsData, ListReviewProblemsResponses } from "../types.gen.js";
+import type {
+	ListReviewProblemsData,
+	ListReviewProblemsErrors,
+	ListReviewProblemsResponses,
+} from "../types.gen.js";
 
 /**
  * List review problems
@@ -13,8 +17,12 @@ import type { ListReviewProblemsData, ListReviewProblemsResponses } from "../typ
  */
 export const listReviewProblems = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewProblemsData, ThrowOnError>,
-): RequestResult<ListReviewProblemsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewProblemsResponses, unknown, ThrowOnError>({
+): RequestResult<ListReviewProblemsResponses, ListReviewProblemsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListReviewProblemsResponses,
+		ListReviewProblemsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listReviewProblemsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/problems",

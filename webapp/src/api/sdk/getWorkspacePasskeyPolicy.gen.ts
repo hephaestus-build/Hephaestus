@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetWorkspacePasskeyPolicyData,
+	GetWorkspacePasskeyPolicyErrors,
 	GetWorkspacePasskeyPolicyResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const getWorkspacePasskeyPolicy = <ThrowOnError extends boolean = false>(
 	options: Options<GetWorkspacePasskeyPolicyData, ThrowOnError>,
-): RequestResult<GetWorkspacePasskeyPolicyResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetWorkspacePasskeyPolicyResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetWorkspacePasskeyPolicyResponses,
+	GetWorkspacePasskeyPolicyErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetWorkspacePasskeyPolicyResponses,
+		GetWorkspacePasskeyPolicyErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/passkey-policy",
 		...options,

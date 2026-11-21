@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetPracticeReviewSettingsData,
+	GetPracticeReviewSettingsErrors,
 	GetPracticeReviewSettingsResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const getPracticeReviewSettings = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeReviewSettingsData, ThrowOnError>,
-): RequestResult<GetPracticeReviewSettingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeReviewSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetPracticeReviewSettingsResponses,
+	GetPracticeReviewSettingsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetPracticeReviewSettingsResponses,
+		GetPracticeReviewSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-settings",
 		...options,

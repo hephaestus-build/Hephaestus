@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { listGitHubInstallationsResponseTransformer } from "../transformers.gen.js";
 import type {
 	ListGitHubInstallationsData,
+	ListGitHubInstallationsErrors,
 	ListGitHubInstallationsResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const listGitHubInstallations = <ThrowOnError extends boolean = false>(
 	options?: Options<ListGitHubInstallationsData, ThrowOnError>,
-): RequestResult<ListGitHubInstallationsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListGitHubInstallationsResponses, unknown, ThrowOnError>({
+): RequestResult<ListGitHubInstallationsResponses, ListGitHubInstallationsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		ListGitHubInstallationsResponses,
+		ListGitHubInstallationsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listGitHubInstallationsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/github-installations",

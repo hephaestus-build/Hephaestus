@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetNotificationPreferencesData,
+	GetNotificationPreferencesErrors,
 	GetNotificationPreferencesResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const getNotificationPreferences = <ThrowOnError extends boolean = false>(
 	options?: Options<GetNotificationPreferencesData, ThrowOnError>,
-): RequestResult<GetNotificationPreferencesResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetNotificationPreferencesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetNotificationPreferencesResponses,
+	GetNotificationPreferencesErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		GetNotificationPreferencesResponses,
+		GetNotificationPreferencesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/notification-preferences",
 		...options,

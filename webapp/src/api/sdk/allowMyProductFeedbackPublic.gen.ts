@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { allowMyProductFeedbackPublicResponseTransformer } from "../transformers.gen.js";
 import type {
 	AllowMyProductFeedbackPublicData,
+	AllowMyProductFeedbackPublicErrors,
 	AllowMyProductFeedbackPublicResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const allowMyProductFeedbackPublic = <ThrowOnError extends boolean = false>(
 	options: Options<AllowMyProductFeedbackPublicData, ThrowOnError>,
-): RequestResult<AllowMyProductFeedbackPublicResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AllowMyProductFeedbackPublicResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AllowMyProductFeedbackPublicResponses,
+	AllowMyProductFeedbackPublicErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		AllowMyProductFeedbackPublicResponses,
+		AllowMyProductFeedbackPublicErrors,
+		ThrowOnError
+	>({
 		responseTransformer: allowMyProductFeedbackPublicResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback/{feedbackId}/allow-public",

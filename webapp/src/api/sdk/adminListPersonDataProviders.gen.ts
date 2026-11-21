@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	AdminListPersonDataProvidersData,
+	AdminListPersonDataProvidersErrors,
 	AdminListPersonDataProvidersResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const adminListPersonDataProviders = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListPersonDataProvidersData, ThrowOnError>,
-): RequestResult<AdminListPersonDataProvidersResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListPersonDataProvidersResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminListPersonDataProvidersResponses,
+	AdminListPersonDataProvidersErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		AdminListPersonDataProvidersResponses,
+		AdminListPersonDataProvidersErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/person-data/providers",
 		...options,

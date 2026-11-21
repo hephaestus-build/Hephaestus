@@ -38,6 +38,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @WorkspaceScopedController
 @Tag(name = "workspace")
@@ -147,7 +148,8 @@ public class ScmWorkspaceController {
         return workspaceTeamLabelService
                 .addLabelToTeam(workspaceContext, teamId, labelId)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "This workspace has no such team or label."));
     }
 
     @RecentSignInExempt(reason = "a workspace admin can add the label again")
@@ -160,6 +162,7 @@ public class ScmWorkspaceController {
         return workspaceTeamLabelService
                 .removeLabelFromTeam(workspaceContext, teamId, labelId)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "This workspace has no such team or label."));
     }
 }

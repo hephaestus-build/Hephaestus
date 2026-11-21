@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetPublicActivityChoiceData,
+	GetPublicActivityChoiceErrors,
 	GetPublicActivityChoiceResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const getPublicActivityChoice = <ThrowOnError extends boolean = false>(
 	options?: Options<GetPublicActivityChoiceData, ThrowOnError>,
-): RequestResult<GetPublicActivityChoiceResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetPublicActivityChoiceResponses, unknown, ThrowOnError>({
+): RequestResult<GetPublicActivityChoiceResponses, GetPublicActivityChoiceErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		GetPublicActivityChoiceResponses,
+		GetPublicActivityChoiceErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/public-activity",
 		...options,

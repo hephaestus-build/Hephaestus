@@ -4,7 +4,11 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { checkResearchRemovalsResponseTransformer } from "../transformers.gen.js";
-import type { CheckResearchRemovalsData, CheckResearchRemovalsResponses } from "../types.gen.js";
+import type {
+	CheckResearchRemovalsData,
+	CheckResearchRemovalsErrors,
+	CheckResearchRemovalsResponses,
+} from "../types.gen.js";
 
 /**
  * Check and record research removal obligations
@@ -13,8 +17,12 @@ import type { CheckResearchRemovalsData, CheckResearchRemovalsResponses } from "
  */
 export const checkResearchRemovals = <ThrowOnError extends boolean = false>(
 	options?: Options<CheckResearchRemovalsData, ThrowOnError>,
-): RequestResult<CheckResearchRemovalsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<CheckResearchRemovalsResponses, unknown, ThrowOnError>({
+): RequestResult<CheckResearchRemovalsResponses, CheckResearchRemovalsErrors, ThrowOnError> =>
+	(options?.client ?? client).post<
+		CheckResearchRemovalsResponses,
+		CheckResearchRemovalsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: checkResearchRemovalsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/research-disclosures/removal-checks",

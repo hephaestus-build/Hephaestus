@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	AdminProbeLlmModelCapabilitiesData,
+	AdminProbeLlmModelCapabilitiesErrors,
 	AdminProbeLlmModelCapabilitiesResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const adminProbeLlmModelCapabilities = <ThrowOnError extends boolean = false>(
 	options: Options<AdminProbeLlmModelCapabilitiesData, ThrowOnError>,
-): RequestResult<AdminProbeLlmModelCapabilitiesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AdminProbeLlmModelCapabilitiesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminProbeLlmModelCapabilitiesResponses,
+	AdminProbeLlmModelCapabilitiesErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		AdminProbeLlmModelCapabilitiesResponses,
+		AdminProbeLlmModelCapabilitiesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/models/{id}/capabilities",
 		...options,

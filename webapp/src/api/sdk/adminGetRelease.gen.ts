@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { adminGetReleaseResponseTransformer } from "../transformers.gen.js";
-import type { AdminGetReleaseData, AdminGetReleaseResponses } from "../types.gen.js";
+import type {
+	AdminGetReleaseData,
+	AdminGetReleaseErrors,
+	AdminGetReleaseResponses,
+} from "../types.gen.js";
 
 /**
  * Get the running release and the last update check
  */
 export const adminGetRelease = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminGetReleaseData, ThrowOnError>,
-): RequestResult<AdminGetReleaseResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminGetReleaseResponses, unknown, ThrowOnError>({
+): RequestResult<AdminGetReleaseResponses, AdminGetReleaseErrors, ThrowOnError> =>
+	(options?.client ?? client).get<AdminGetReleaseResponses, AdminGetReleaseErrors, ThrowOnError>({
 		responseTransformer: adminGetReleaseResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/release",

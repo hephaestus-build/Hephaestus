@@ -5,13 +5,22 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	ReleaseOrphanProviderRepairData,
+	ReleaseOrphanProviderRepairErrors,
 	ReleaseOrphanProviderRepairResponses,
 } from "../types.gen.js";
 
 export const releaseOrphanProviderRepair = <ThrowOnError extends boolean = false>(
 	options: Options<ReleaseOrphanProviderRepairData, ThrowOnError>,
-): RequestResult<ReleaseOrphanProviderRepairResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ReleaseOrphanProviderRepairResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ReleaseOrphanProviderRepairResponses,
+	ReleaseOrphanProviderRepairErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		ReleaseOrphanProviderRepairResponses,
+		ReleaseOrphanProviderRepairErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/provider-resource-repairs/{repairId}/release",
 		...options,

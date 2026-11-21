@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetPasskeyRegistrationOptionsData,
+	GetPasskeyRegistrationOptionsErrors,
 	GetPasskeyRegistrationOptionsResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const getPasskeyRegistrationOptions = <ThrowOnError extends boolean = false>(
 	options?: Options<GetPasskeyRegistrationOptionsData, ThrowOnError>,
-): RequestResult<GetPasskeyRegistrationOptionsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<GetPasskeyRegistrationOptionsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetPasskeyRegistrationOptionsResponses,
+	GetPasskeyRegistrationOptionsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).post<
+		GetPasskeyRegistrationOptionsResponses,
+		GetPasskeyRegistrationOptionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/registration-options",
 		...options,

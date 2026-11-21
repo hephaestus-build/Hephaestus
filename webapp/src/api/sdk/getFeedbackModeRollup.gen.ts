@@ -3,12 +3,20 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetFeedbackModeRollupData, GetFeedbackModeRollupResponses } from "../types.gen.js";
+import type {
+	GetFeedbackModeRollupData,
+	GetFeedbackModeRollupErrors,
+	GetFeedbackModeRollupResponses,
+} from "../types.gen.js";
 
 export const getFeedbackModeRollup = <ThrowOnError extends boolean = false>(
 	options: Options<GetFeedbackModeRollupData, ThrowOnError>,
-): RequestResult<GetFeedbackModeRollupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetFeedbackModeRollupResponses, unknown, ThrowOnError>({
+): RequestResult<GetFeedbackModeRollupResponses, GetFeedbackModeRollupErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetFeedbackModeRollupResponses,
+		GetFeedbackModeRollupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/feedback-modes",
 		...options,

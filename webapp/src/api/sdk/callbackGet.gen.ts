@@ -3,12 +3,12 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { CallbackGetData, CallbackGetResponses } from "../types.gen.js";
+import type { CallbackGetData, CallbackGetErrors, CallbackGetResponses } from "../types.gen.js";
 
 export const callbackGet = <ThrowOnError extends boolean = false>(
 	options: Options<CallbackGetData, ThrowOnError>,
-): RequestResult<CallbackGetResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<CallbackGetResponses, unknown, ThrowOnError>({
+): RequestResult<CallbackGetResponses, CallbackGetErrors, ThrowOnError> =>
+	(options.client ?? client).get<CallbackGetResponses, CallbackGetErrors, ThrowOnError>({
 		querySerializer: { parameters: { allParams: { object: { style: "form" } } } },
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/oauth/callback/{kind}",

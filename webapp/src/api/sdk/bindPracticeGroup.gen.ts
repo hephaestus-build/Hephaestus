@@ -4,18 +4,24 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { bindPracticeGroupResponseTransformer } from "../transformers.gen.js";
-import type { BindPracticeGroupData, BindPracticeGroupResponses } from "../types.gen.js";
+import type {
+	BindPracticeGroupData,
+	BindPracticeGroupErrors,
+	BindPracticeGroupResponses,
+} from "../types.gen.js";
 
 export const bindPracticeGroup = <ThrowOnError extends boolean = false>(
 	options: Options<BindPracticeGroupData, ThrowOnError>,
-): RequestResult<BindPracticeGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<BindPracticeGroupResponses, unknown, ThrowOnError>({
-		responseTransformer: bindPracticeGroupResponseTransformer,
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/group",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
+): RequestResult<BindPracticeGroupResponses, BindPracticeGroupErrors, ThrowOnError> =>
+	(options.client ?? client).put<BindPracticeGroupResponses, BindPracticeGroupErrors, ThrowOnError>(
+		{
+			responseTransformer: bindPracticeGroupResponseTransformer,
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/group",
+			...options,
+			headers: {
+				"Content-Type": "application/json",
+				...options.headers,
+			},
 		},
-	});
+	);

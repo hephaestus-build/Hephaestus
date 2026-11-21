@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { adoptGitHubInstallationResponseTransformer } from "../transformers.gen.js";
 import type {
 	AdoptGitHubInstallationData,
+	AdoptGitHubInstallationErrors,
 	AdoptGitHubInstallationResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const adoptGitHubInstallation = <ThrowOnError extends boolean = false>(
 	options: Options<AdoptGitHubInstallationData, ThrowOnError>,
-): RequestResult<AdoptGitHubInstallationResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdoptGitHubInstallationResponses, unknown, ThrowOnError>({
+): RequestResult<AdoptGitHubInstallationResponses, AdoptGitHubInstallationErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		AdoptGitHubInstallationResponses,
+		AdoptGitHubInstallationErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adoptGitHubInstallationResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/github-installations/{installationId}/adopt",

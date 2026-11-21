@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	RefuseMcpConsentRequestData,
+	RefuseMcpConsentRequestErrors,
 	RefuseMcpConsentRequestResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const refuseMcpConsentRequest = <ThrowOnError extends boolean = false>(
 	options: Options<RefuseMcpConsentRequestData, ThrowOnError>,
-): RequestResult<RefuseMcpConsentRequestResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RefuseMcpConsentRequestResponses, unknown, ThrowOnError>({
+): RequestResult<RefuseMcpConsentRequestResponses, RefuseMcpConsentRequestErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		RefuseMcpConsentRequestResponses,
+		RefuseMcpConsentRequestErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/mcp/oauth/requests/{requestId}",
 		...options,

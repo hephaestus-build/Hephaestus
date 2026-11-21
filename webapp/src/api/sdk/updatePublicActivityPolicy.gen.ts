@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	UpdatePublicActivityPolicyData,
+	UpdatePublicActivityPolicyErrors,
 	UpdatePublicActivityPolicyResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const updatePublicActivityPolicy = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePublicActivityPolicyData, ThrowOnError>,
-): RequestResult<UpdatePublicActivityPolicyResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdatePublicActivityPolicyResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdatePublicActivityPolicyResponses,
+	UpdatePublicActivityPolicyErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		UpdatePublicActivityPolicyResponses,
+		UpdatePublicActivityPolicyErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/settings/public-activity",
 		...options,

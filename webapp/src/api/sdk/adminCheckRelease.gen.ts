@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { adminCheckReleaseResponseTransformer } from "../transformers.gen.js";
-import type { AdminCheckReleaseData, AdminCheckReleaseResponses } from "../types.gen.js";
+import type {
+	AdminCheckReleaseData,
+	AdminCheckReleaseErrors,
+	AdminCheckReleaseResponses,
+} from "../types.gen.js";
 
 /**
  * Check GitHub for a newer release now
  */
 export const adminCheckRelease = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminCheckReleaseData, ThrowOnError>,
-): RequestResult<AdminCheckReleaseResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<AdminCheckReleaseResponses, unknown, ThrowOnError>({
+): RequestResult<AdminCheckReleaseResponses, AdminCheckReleaseErrors, ThrowOnError> =>
+	(options?.client ?? client).post<
+		AdminCheckReleaseResponses,
+		AdminCheckReleaseErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminCheckReleaseResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/release/checks",

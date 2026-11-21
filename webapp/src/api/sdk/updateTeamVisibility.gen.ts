@@ -3,7 +3,11 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { UpdateTeamVisibilityData, UpdateTeamVisibilityResponses } from "../types.gen.js";
+import type {
+	UpdateTeamVisibilityData,
+	UpdateTeamVisibilityErrors,
+	UpdateTeamVisibilityResponses,
+} from "../types.gen.js";
 
 /**
  * Update team visibility
@@ -12,8 +16,12 @@ import type { UpdateTeamVisibilityData, UpdateTeamVisibilityResponses } from "..
  */
 export const updateTeamVisibility = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateTeamVisibilityData, ThrowOnError>,
-): RequestResult<UpdateTeamVisibilityResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateTeamVisibilityResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateTeamVisibilityResponses, UpdateTeamVisibilityErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdateTeamVisibilityResponses,
+		UpdateTeamVisibilityErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/teams/{id}/visibility",
 		...options,

@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GitLabPreflightData, GitLabPreflightResponses } from "../types.gen.js";
+import type {
+	GitLabPreflightData,
+	GitLabPreflightErrors,
+	GitLabPreflightResponses,
+} from "../types.gen.js";
 
 /**
  * Validate a GitLab PAT before workspace creation
  */
 export const gitLabPreflight = <ThrowOnError extends boolean = false>(
 	options: Options<GitLabPreflightData, ThrowOnError>,
-): RequestResult<GitLabPreflightResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<GitLabPreflightResponses, unknown, ThrowOnError>({
+): RequestResult<GitLabPreflightResponses, GitLabPreflightErrors, ThrowOnError> =>
+	(options.client ?? client).post<GitLabPreflightResponses, GitLabPreflightErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/gitlab/preflight",
 		...options,

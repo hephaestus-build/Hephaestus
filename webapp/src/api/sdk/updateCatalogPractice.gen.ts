@@ -3,12 +3,20 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { UpdateCatalogPracticeData, UpdateCatalogPracticeResponses } from "../types.gen.js";
+import type {
+	UpdateCatalogPracticeData,
+	UpdateCatalogPracticeErrors,
+	UpdateCatalogPracticeResponses,
+} from "../types.gen.js";
 
 export const updateCatalogPractice = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateCatalogPracticeData, ThrowOnError>,
-): RequestResult<UpdateCatalogPracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateCatalogPracticeResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateCatalogPracticeResponses, UpdateCatalogPracticeErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		UpdateCatalogPracticeResponses,
+		UpdateCatalogPracticeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}",
 		...options,

@@ -3,12 +3,20 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { SetCatalogGroupStatusData, SetCatalogGroupStatusResponses } from "../types.gen.js";
+import type {
+	SetCatalogGroupStatusData,
+	SetCatalogGroupStatusErrors,
+	SetCatalogGroupStatusResponses,
+} from "../types.gen.js";
 
 export const setCatalogGroupStatus = <ThrowOnError extends boolean = false>(
 	options: Options<SetCatalogGroupStatusData, ThrowOnError>,
-): RequestResult<SetCatalogGroupStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<SetCatalogGroupStatusResponses, unknown, ThrowOnError>({
+): RequestResult<SetCatalogGroupStatusResponses, SetCatalogGroupStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		SetCatalogGroupStatusResponses,
+		SetCatalogGroupStatusErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/groups/{slug}/status",
 		...options,

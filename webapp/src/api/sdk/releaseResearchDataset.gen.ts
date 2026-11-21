@@ -3,7 +3,11 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ReleaseResearchDatasetData, ReleaseResearchDatasetResponses } from "../types.gen.js";
+import type {
+	ReleaseResearchDatasetData,
+	ReleaseResearchDatasetErrors,
+	ReleaseResearchDatasetResponses,
+} from "../types.gen.js";
 
 /**
  * Release and download one consented research dataset
@@ -12,8 +16,12 @@ import type { ReleaseResearchDatasetData, ReleaseResearchDatasetResponses } from
  */
 export const releaseResearchDataset = <ThrowOnError extends boolean = false>(
 	options: Options<ReleaseResearchDatasetData, ThrowOnError>,
-): RequestResult<ReleaseResearchDatasetResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ReleaseResearchDatasetResponses, unknown, ThrowOnError>({
+): RequestResult<ReleaseResearchDatasetResponses, ReleaseResearchDatasetErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		ReleaseResearchDatasetResponses,
+		ReleaseResearchDatasetErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/research-disclosures",
 		...options,

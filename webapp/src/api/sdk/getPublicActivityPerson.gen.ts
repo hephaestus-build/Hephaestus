@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { getPublicActivityPersonResponseTransformer } from "../transformers.gen.js";
 import type {
 	GetPublicActivityPersonData,
+	GetPublicActivityPersonErrors,
 	GetPublicActivityPersonResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const getPublicActivityPerson = <ThrowOnError extends boolean = false>(
 	options: Options<GetPublicActivityPersonData, ThrowOnError>,
-): RequestResult<GetPublicActivityPersonResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPublicActivityPersonResponses, unknown, ThrowOnError>({
+): RequestResult<GetPublicActivityPersonResponses, GetPublicActivityPersonErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetPublicActivityPersonResponses,
+		GetPublicActivityPersonErrors,
+		ThrowOnError
+	>({
 		responseTransformer: getPublicActivityPersonResponseTransformer,
 		url: "/public/workspaces/{slug}/activity/people/{login}",
 		...options,

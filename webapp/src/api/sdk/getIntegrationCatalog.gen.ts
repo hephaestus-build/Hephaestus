@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getIntegrationCatalogResponseTransformer } from "../transformers.gen.js";
-import type { GetIntegrationCatalogData, GetIntegrationCatalogResponses } from "../types.gen.js";
+import type {
+	GetIntegrationCatalogData,
+	GetIntegrationCatalogErrors,
+	GetIntegrationCatalogResponses,
+} from "../types.gen.js";
 
 /**
  * Every integration kind this workspace could connect, joined against existing connections
  */
 export const getIntegrationCatalog = <ThrowOnError extends boolean = false>(
 	options: Options<GetIntegrationCatalogData, ThrowOnError>,
-): RequestResult<GetIntegrationCatalogResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetIntegrationCatalogResponses, unknown, ThrowOnError>({
+): RequestResult<GetIntegrationCatalogResponses, GetIntegrationCatalogErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetIntegrationCatalogResponses,
+		GetIntegrationCatalogErrors,
+		ThrowOnError
+	>({
 		responseTransformer: getIntegrationCatalogResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/catalog",

@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { AdminExportAuthEventsData, AdminExportAuthEventsResponses } from "../types.gen.js";
+import type {
+	AdminExportAuthEventsData,
+	AdminExportAuthEventsErrors,
+	AdminExportAuthEventsResponses,
+} from "../types.gen.js";
 
 /**
  * Export the filtered audit log as CSV (newest first, capped)
  */
 export const adminExportAuthEvents = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminExportAuthEventsData, ThrowOnError>,
-): RequestResult<AdminExportAuthEventsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminExportAuthEventsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminExportAuthEventsResponses, AdminExportAuthEventsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminExportAuthEventsResponses,
+		AdminExportAuthEventsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/audit/export",
 		...options,

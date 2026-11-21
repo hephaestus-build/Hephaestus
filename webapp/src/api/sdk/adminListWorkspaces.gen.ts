@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { adminListWorkspacesResponseTransformer } from "../transformers.gen.js";
-import type { AdminListWorkspacesData, AdminListWorkspacesResponses } from "../types.gen.js";
+import type {
+	AdminListWorkspacesData,
+	AdminListWorkspacesErrors,
+	AdminListWorkspacesResponses,
+} from "../types.gen.js";
 
 /**
  * List all workspaces (metadata only)
  */
 export const adminListWorkspaces = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListWorkspacesData, ThrowOnError>,
-): RequestResult<AdminListWorkspacesResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListWorkspacesResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListWorkspacesResponses, AdminListWorkspacesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListWorkspacesResponses,
+		AdminListWorkspacesErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminListWorkspacesResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/workspaces",

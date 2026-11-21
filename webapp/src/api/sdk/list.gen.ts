@@ -4,12 +4,12 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listResponseTransformer } from "../transformers.gen.js";
-import type { ListData, ListResponses } from "../types.gen.js";
+import type { ListData, ListErrors, ListResponses } from "../types.gen.js";
 
 export const list = <ThrowOnError extends boolean = false>(
 	options: Options<ListData, ThrowOnError>,
-): RequestResult<ListResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListResponses, unknown, ThrowOnError>({
+): RequestResult<ListResponses, ListErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListResponses, ListErrors, ThrowOnError>({
 		responseTransformer: listResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections",

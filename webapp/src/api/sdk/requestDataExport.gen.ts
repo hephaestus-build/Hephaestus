@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { RequestDataExportData, RequestDataExportResponses } from "../types.gen.js";
+import type {
+	RequestDataExportData,
+	RequestDataExportErrors,
+	RequestDataExportResponses,
+} from "../types.gen.js";
 
 /**
  * Request a data export (async)
  */
 export const requestDataExport = <ThrowOnError extends boolean = false>(
 	options?: Options<RequestDataExportData, ThrowOnError>,
-): RequestResult<RequestDataExportResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<RequestDataExportResponses, unknown, ThrowOnError>({
+): RequestResult<RequestDataExportResponses, RequestDataExportErrors, ThrowOnError> =>
+	(options?.client ?? client).post<
+		RequestDataExportResponses,
+		RequestDataExportErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/exports",
 		...options,

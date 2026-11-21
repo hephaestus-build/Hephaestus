@@ -100,7 +100,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 	});
 	// A new request without data clears the error, so the last answer is kept until the next one.
 	// Only a page load leaves the signed-in state (sign-out reloads), so it never needs clearing.
-	const [lastError, setLastError] = useState<Error | null>(null);
+	const [lastError, setLastError] = useState<unknown>(null);
 	if (userQuery.error !== null && userQuery.error !== lastError) {
 		setLastError(userQuery.error);
 	}

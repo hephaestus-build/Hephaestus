@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	FileAllSavedProductFeedbackData,
+	FileAllSavedProductFeedbackErrors,
 	FileAllSavedProductFeedbackResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const fileAllSavedProductFeedback = <ThrowOnError extends boolean = false>(
 	options?: Options<FileAllSavedProductFeedbackData, ThrowOnError>,
-): RequestResult<FileAllSavedProductFeedbackResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<FileAllSavedProductFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<
+	FileAllSavedProductFeedbackResponses,
+	FileAllSavedProductFeedbackErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).post<
+		FileAllSavedProductFeedbackResponses,
+		FileAllSavedProductFeedbackErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/file-saved",
 		...options,

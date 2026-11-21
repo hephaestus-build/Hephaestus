@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetMemberOnboardingData, GetMemberOnboardingResponses } from "../types.gen.js";
+import type {
+	GetMemberOnboardingData,
+	GetMemberOnboardingErrors,
+	GetMemberOnboardingResponses,
+} from "../types.gen.js";
 
 /**
  * Get your first-visit setup and AI choice in this workspace
  */
 export const getMemberOnboarding = <ThrowOnError extends boolean = false>(
 	options: Options<GetMemberOnboardingData, ThrowOnError>,
-): RequestResult<GetMemberOnboardingResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetMemberOnboardingResponses, unknown, ThrowOnError>({
+): RequestResult<GetMemberOnboardingResponses, GetMemberOnboardingErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetMemberOnboardingResponses,
+		GetMemberOnboardingErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/onboarding/me",
 		...options,

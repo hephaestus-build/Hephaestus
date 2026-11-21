@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { UpdateUserSettingsData, UpdateUserSettingsResponses } from "../types.gen.js";
+import type {
+	UpdateUserSettingsData,
+	UpdateUserSettingsErrors,
+	UpdateUserSettingsResponses,
+} from "../types.gen.js";
 
 /**
  * Update user settings
  */
 export const updateUserSettings = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateUserSettingsData, ThrowOnError>,
-): RequestResult<UpdateUserSettingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<UpdateUserSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateUserSettingsResponses, UpdateUserSettingsErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		UpdateUserSettingsResponses,
+		UpdateUserSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/settings",
 		...options,

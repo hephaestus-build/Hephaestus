@@ -4,7 +4,11 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getReviewQueueResponseTransformer } from "../transformers.gen.js";
-import type { GetReviewQueueData, GetReviewQueueResponses } from "../types.gen.js";
+import type {
+	GetReviewQueueData,
+	GetReviewQueueErrors,
+	GetReviewQueueResponses,
+} from "../types.gen.js";
 
 /**
  * Show the practice review queue as it stands now
@@ -13,8 +17,8 @@ import type { GetReviewQueueData, GetReviewQueueResponses } from "../types.gen.j
  */
 export const getReviewQueue = <ThrowOnError extends boolean = false>(
 	options: Options<GetReviewQueueData, ThrowOnError>,
-): RequestResult<GetReviewQueueResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetReviewQueueResponses, unknown, ThrowOnError>({
+): RequestResult<GetReviewQueueResponses, GetReviewQueueErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetReviewQueueResponses, GetReviewQueueErrors, ThrowOnError>({
 		responseTransformer: getReviewQueueResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/queue",

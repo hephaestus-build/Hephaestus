@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetUserViewUserData, GetUserViewUserResponses } from "../types.gen.js";
+import type {
+	GetUserViewUserData,
+	GetUserViewUserErrors,
+	GetUserViewUserResponses,
+} from "../types.gen.js";
 
 /**
  * Confirm access to a workspace user
  */
 export const getUserViewUser = <ThrowOnError extends boolean = false>(
 	options: Options<GetUserViewUserData, ThrowOnError>,
-): RequestResult<GetUserViewUserResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetUserViewUserResponses, unknown, ThrowOnError>({
+): RequestResult<GetUserViewUserResponses, GetUserViewUserErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetUserViewUserResponses, GetUserViewUserErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/user-view/users/{accountId}",
 		...options,

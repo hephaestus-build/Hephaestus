@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { acceptPracticeReleaseResponseTransformer } from "../transformers.gen.js";
-import type { AcceptPracticeReleaseData, AcceptPracticeReleaseResponses } from "../types.gen.js";
+import type {
+	AcceptPracticeReleaseData,
+	AcceptPracticeReleaseErrors,
+	AcceptPracticeReleaseResponses,
+} from "../types.gen.js";
 
 /**
  * Accept selected fields from a practice release
  */
 export const acceptPracticeRelease = <ThrowOnError extends boolean = false>(
 	options: Options<AcceptPracticeReleaseData, ThrowOnError>,
-): RequestResult<AcceptPracticeReleaseResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AcceptPracticeReleaseResponses, unknown, ThrowOnError>({
+): RequestResult<AcceptPracticeReleaseResponses, AcceptPracticeReleaseErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		AcceptPracticeReleaseResponses,
+		AcceptPracticeReleaseErrors,
+		ThrowOnError
+	>({
 		responseTransformer: acceptPracticeReleaseResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/releases/{slug}",

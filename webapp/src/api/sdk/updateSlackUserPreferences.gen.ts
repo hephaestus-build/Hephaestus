@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	UpdateSlackUserPreferencesData,
+	UpdateSlackUserPreferencesErrors,
 	UpdateSlackUserPreferencesResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const updateSlackUserPreferences = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateSlackUserPreferencesData, ThrowOnError>,
-): RequestResult<UpdateSlackUserPreferencesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateSlackUserPreferencesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdateSlackUserPreferencesResponses,
+	UpdateSlackUserPreferencesErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		UpdateSlackUserPreferencesResponses,
+		UpdateSlackUserPreferencesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/slack/me/preferences",
 		...options,

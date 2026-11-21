@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetPracticeWorkspaceTilesData,
+	GetPracticeWorkspaceTilesErrors,
 	GetPracticeWorkspaceTilesResponses,
 } from "../types.gen.js";
 
@@ -15,8 +16,16 @@ import type {
  */
 export const getPracticeWorkspaceTiles = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeWorkspaceTilesData, ThrowOnError>,
-): RequestResult<GetPracticeWorkspaceTilesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeWorkspaceTilesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetPracticeWorkspaceTilesResponses,
+	GetPracticeWorkspaceTilesErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetPracticeWorkspaceTilesResponses,
+		GetPracticeWorkspaceTilesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/tiles",
 		...options,

@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetMemberOnboardingLinkOptionsData,
+	GetMemberOnboardingLinkOptionsErrors,
 	GetMemberOnboardingLinkOptionsResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const getMemberOnboardingLinkOptions = <ThrowOnError extends boolean = false>(
 	options: Options<GetMemberOnboardingLinkOptionsData, ThrowOnError>,
-): RequestResult<GetMemberOnboardingLinkOptionsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetMemberOnboardingLinkOptionsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetMemberOnboardingLinkOptionsResponses,
+	GetMemberOnboardingLinkOptionsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetMemberOnboardingLinkOptionsResponses,
+		GetMemberOnboardingLinkOptionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/onboarding/settings/links",
 		...options,

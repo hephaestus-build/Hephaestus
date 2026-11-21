@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	ConfirmProductFeedbackCleanupData,
+	ConfirmProductFeedbackCleanupErrors,
 	ConfirmProductFeedbackCleanupResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const confirmProductFeedbackCleanup = <ThrowOnError extends boolean = false>(
 	options: Options<ConfirmProductFeedbackCleanupData, ThrowOnError>,
-): RequestResult<ConfirmProductFeedbackCleanupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ConfirmProductFeedbackCleanupResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ConfirmProductFeedbackCleanupResponses,
+	ConfirmProductFeedbackCleanupErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		ConfirmProductFeedbackCleanupResponses,
+		ConfirmProductFeedbackCleanupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/cleanups/{cleanupId}/confirm",
 		...options,

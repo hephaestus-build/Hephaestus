@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	AdminCountConfigAuditEventsData,
+	AdminCountConfigAuditEventsErrors,
 	AdminCountConfigAuditEventsResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const adminCountConfigAuditEvents = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminCountConfigAuditEventsData, ThrowOnError>,
-): RequestResult<AdminCountConfigAuditEventsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminCountConfigAuditEventsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminCountConfigAuditEventsResponses,
+	AdminCountConfigAuditEventsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		AdminCountConfigAuditEventsResponses,
+		AdminCountConfigAuditEventsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/config-audit/count",
 		...options,

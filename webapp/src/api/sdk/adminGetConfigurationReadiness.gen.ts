@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	AdminGetConfigurationReadinessData,
+	AdminGetConfigurationReadinessErrors,
 	AdminGetConfigurationReadinessResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const adminGetConfigurationReadiness = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminGetConfigurationReadinessData, ThrowOnError>,
-): RequestResult<AdminGetConfigurationReadinessResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminGetConfigurationReadinessResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminGetConfigurationReadinessResponses,
+	AdminGetConfigurationReadinessErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		AdminGetConfigurationReadinessResponses,
+		AdminGetConfigurationReadinessErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/configuration-readiness",
 		...options,

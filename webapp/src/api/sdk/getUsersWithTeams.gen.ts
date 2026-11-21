@@ -3,16 +3,22 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetUsersWithTeamsData, GetUsersWithTeamsResponses } from "../types.gen.js";
+import type {
+	GetUsersWithTeamsData,
+	GetUsersWithTeamsErrors,
+	GetUsersWithTeamsResponses,
+} from "../types.gen.js";
 
 /**
  * List workspace users and the teams they belong to
  */
 export const getUsersWithTeams = <ThrowOnError extends boolean = false>(
 	options: Options<GetUsersWithTeamsData, ThrowOnError>,
-): RequestResult<GetUsersWithTeamsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetUsersWithTeamsResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/users",
-		...options,
-	});
+): RequestResult<GetUsersWithTeamsResponses, GetUsersWithTeamsErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetUsersWithTeamsResponses, GetUsersWithTeamsErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/users",
+			...options,
+		},
+	);

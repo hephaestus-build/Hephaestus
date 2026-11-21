@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { listConsumerDeadLettersResponseTransformer } from "../transformers.gen.js";
 import type {
 	ListConsumerDeadLettersData,
+	ListConsumerDeadLettersErrors,
 	ListConsumerDeadLettersResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const listConsumerDeadLetters = <ThrowOnError extends boolean = false>(
 	options: Options<ListConsumerDeadLettersData, ThrowOnError>,
-): RequestResult<ListConsumerDeadLettersResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListConsumerDeadLettersResponses, unknown, ThrowOnError>({
+): RequestResult<ListConsumerDeadLettersResponses, ListConsumerDeadLettersErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListConsumerDeadLettersResponses,
+		ListConsumerDeadLettersErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listConsumerDeadLettersResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/integrations/dead-letters",

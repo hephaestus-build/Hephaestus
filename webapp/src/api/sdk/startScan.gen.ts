@@ -4,15 +4,15 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { startScanResponseTransformer } from "../transformers.gen.js";
-import type { StartScanData, StartScanResponses } from "../types.gen.js";
+import type { StartScanData, StartScanErrors, StartScanResponses } from "../types.gen.js";
 
 /**
  * Start a repository scan
  */
 export const startScan = <ThrowOnError extends boolean = false>(
 	options: Options<StartScanData, ThrowOnError>,
-): RequestResult<StartScanResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<StartScanResponses, unknown, ThrowOnError>({
+): RequestResult<StartScanResponses, StartScanErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartScanResponses, StartScanErrors, ThrowOnError>({
 		responseTransformer: startScanResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/scans",

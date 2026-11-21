@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { PreviewGroupAdoptionData, PreviewGroupAdoptionResponses } from "../types.gen.js";
+import type {
+	PreviewGroupAdoptionData,
+	PreviewGroupAdoptionErrors,
+	PreviewGroupAdoptionResponses,
+} from "../types.gen.js";
 
 /**
  * Preview adoption of a catalog group and its practices
  */
 export const previewGroupAdoption = <ThrowOnError extends boolean = false>(
 	options: Options<PreviewGroupAdoptionData, ThrowOnError>,
-): RequestResult<PreviewGroupAdoptionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<PreviewGroupAdoptionResponses, unknown, ThrowOnError>({
+): RequestResult<PreviewGroupAdoptionResponses, PreviewGroupAdoptionErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		PreviewGroupAdoptionResponses,
+		PreviewGroupAdoptionErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-catalog/adoption/groups/{slug}",
 		...options,

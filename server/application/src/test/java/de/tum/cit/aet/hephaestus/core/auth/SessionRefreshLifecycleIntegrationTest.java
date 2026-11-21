@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -367,7 +368,11 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .isUnauthorized()
                 .expectHeader()
                 .doesNotExist(HttpHeaders.SET_COOKIE)
-                .expectBody(Void.class);
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo(401);
 
         getUser(current).expectStatus().isOk().expectBody(Void.class);
         assertThat(authEventRepository.findByAccountSince(accountId, Instant.EPOCH))

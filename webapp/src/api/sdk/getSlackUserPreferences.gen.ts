@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetSlackUserPreferencesData,
+	GetSlackUserPreferencesErrors,
 	GetSlackUserPreferencesResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const getSlackUserPreferences = <ThrowOnError extends boolean = false>(
 	options?: Options<GetSlackUserPreferencesData, ThrowOnError>,
-): RequestResult<GetSlackUserPreferencesResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetSlackUserPreferencesResponses, unknown, ThrowOnError>({
+): RequestResult<GetSlackUserPreferencesResponses, GetSlackUserPreferencesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		GetSlackUserPreferencesResponses,
+		GetSlackUserPreferencesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/slack/preferences",
 		...options,

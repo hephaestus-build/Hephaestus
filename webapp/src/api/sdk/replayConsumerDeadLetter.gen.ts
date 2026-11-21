@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { replayConsumerDeadLetterResponseTransformer } from "../transformers.gen.js";
 import type {
 	ReplayConsumerDeadLetterData,
+	ReplayConsumerDeadLetterErrors,
 	ReplayConsumerDeadLetterResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const replayConsumerDeadLetter = <ThrowOnError extends boolean = false>(
 	options: Options<ReplayConsumerDeadLetterData, ThrowOnError>,
-): RequestResult<ReplayConsumerDeadLetterResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ReplayConsumerDeadLetterResponses, unknown, ThrowOnError>({
+): RequestResult<ReplayConsumerDeadLetterResponses, ReplayConsumerDeadLetterErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		ReplayConsumerDeadLetterResponses,
+		ReplayConsumerDeadLetterErrors,
+		ThrowOnError
+	>({
 		responseTransformer: replayConsumerDeadLetterResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays",

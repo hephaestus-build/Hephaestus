@@ -6673,6 +6673,41 @@ export const McpConsentRequestMcpConsentRefusalSchema = {
 	enum: ["NOT_ADMIN", "PASSKEY_RECOVERY_PENDING", "INSTANCE_ADMIN_PASSKEY_REQUIRED"],
 } as const;
 
+export const McpTokenErrorSchema = {
+	type: "object",
+	description: "An error response of the token endpoint (RFC 6749 § 5.2).",
+	properties: {
+		error: {
+			type: "string",
+		},
+	},
+	required: ["error"],
+} as const;
+
+export const McpTokenResponseSchema = {
+	type: "object",
+	description: "A successful token response (RFC 6749 § 5.1).",
+	properties: {
+		access_token: {
+			type: "string",
+		},
+		expires_in: {
+			type: "integer",
+			format: "int64",
+		},
+		refresh_token: {
+			type: "string",
+		},
+		scope: {
+			type: "string",
+		},
+		token_type: {
+			type: "string",
+		},
+	},
+	required: ["expires_in", "scope"],
+} as const;
+
 export const MemberReviewReadinessSchema = {
 	type: "object",
 	description:
@@ -9955,8 +9990,7 @@ export const ProblemDetailSchema = {
 			type: "string",
 		},
 		type: {
-			type: "string",
-			format: "uri-reference",
+			$ref: "#/components/schemas/ProblemType",
 		},
 		withholdingReason: {
 			type: "string",
@@ -9970,6 +10004,7 @@ export const ProblemDetailSchema = {
 			format: "int64",
 		},
 	},
+	required: ["status", "title"],
 } as const;
 
 export const ProblemSummarySchema = {
@@ -9987,6 +10022,43 @@ export const ProblemSummarySchema = {
 		},
 	},
 	required: ["id", "severity", "summary"],
+} as const;
+
+export const ProblemTypeSchema = {
+	type: "string",
+	format: "uri-reference",
+	description:
+		"Extensible enum: a client accepts a value that the examples do not name. The problem's kind. A client branches on it, never on the title or the detail. A problem without a type is about:blank: its status is its kind.",
+	examples: [
+		"about:blank",
+		"https://docs.hephaestus.build/contributor/api-error-handling#model-assignment-slot-mismatch",
+		"https://docs.hephaestus.build/contributor/api-error-handling#agent-job-state-conflict",
+		"https://docs.hephaestus.build/contributor/api-error-handling#concurrent-modification",
+		"https://docs.hephaestus.build/contributor/api-error-handling#csrf-token-rejected",
+		"https://docs.hephaestus.build/contributor/api-error-handling#feedback-withheld",
+		"https://docs.hephaestus.build/contributor/api-error-handling#llm-call-pool-in-use",
+		"https://docs.hephaestus.build/contributor/api-error-handling#llm-call-pool-slug-conflict",
+		"https://docs.hephaestus.build/contributor/api-error-handling#llm-connection-in-use",
+		"https://docs.hephaestus.build/contributor/api-error-handling#llm-connection-slug-conflict",
+		"https://docs.hephaestus.build/contributor/api-error-handling#llm-model-in-use",
+		"https://docs.hephaestus.build/contributor/api-error-handling#llm-model-slug-conflict",
+		"https://docs.hephaestus.build/contributor/api-error-handling#llm-model-upstream-id-conflict",
+		"https://docs.hephaestus.build/contributor/api-error-handling#conversation-lease-lost",
+		"https://docs.hephaestus.build/contributor/api-error-handling#conversation-turn-stopped",
+		"https://docs.hephaestus.build/contributor/api-error-handling#conversation-refused",
+		"https://docs.hephaestus.build/contributor/api-error-handling#conversation-rejected",
+		"https://docs.hephaestus.build/contributor/api-error-handling#oauth-callback-failed",
+		"https://docs.hephaestus.build/contributor/api-error-handling#outline-rate-limited",
+		"https://docs.hephaestus.build/contributor/api-error-handling#outline-unreachable",
+		"https://docs.hephaestus.build/contributor/api-error-handling#passkey-required",
+		"https://docs.hephaestus.build/contributor/api-error-handling#review-batch-conflict",
+		"https://docs.hephaestus.build/contributor/api-error-handling#review-schedule-conflict",
+		"https://docs.hephaestus.build/contributor/api-error-handling#step-up-required",
+		"https://docs.hephaestus.build/contributor/api-error-handling#sync-not-supported",
+		"https://docs.hephaestus.build/contributor/api-error-handling#unknown-outline-collection",
+		"https://docs.hephaestus.build/contributor/api-error-handling#workspace-budget-exceeded",
+		"https://docs.hephaestus.build/contributor/api-error-handling#workspace-owner-required",
+	],
 } as const;
 
 export const ProcessingStatusSchema = {

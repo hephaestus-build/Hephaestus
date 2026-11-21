@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	AdminListLlmCallPoolModelsData,
+	AdminListLlmCallPoolModelsErrors,
 	AdminListLlmCallPoolModelsResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const adminListLlmCallPoolModels = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListLlmCallPoolModelsData, ThrowOnError>,
-): RequestResult<AdminListLlmCallPoolModelsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListLlmCallPoolModelsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminListLlmCallPoolModelsResponses,
+	AdminListLlmCallPoolModelsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		AdminListLlmCallPoolModelsResponses,
+		AdminListLlmCallPoolModelsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/call-pools/models",
 		...options,

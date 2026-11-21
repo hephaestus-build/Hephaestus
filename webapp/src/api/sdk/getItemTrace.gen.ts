@@ -4,15 +4,15 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getItemTraceResponseTransformer } from "../transformers.gen.js";
-import type { GetItemTraceData, GetItemTraceResponses } from "../types.gen.js";
+import type { GetItemTraceData, GetItemTraceErrors, GetItemTraceResponses } from "../types.gen.js";
 
 /**
  * Trace reviews of an item
  */
 export const getItemTrace = <ThrowOnError extends boolean = false>(
 	options: Options<GetItemTraceData, ThrowOnError>,
-): RequestResult<GetItemTraceResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetItemTraceResponses, unknown, ThrowOnError>({
+): RequestResult<GetItemTraceResponses, GetItemTraceErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetItemTraceResponses, GetItemTraceErrors, ThrowOnError>({
 		responseTransformer: getItemTraceResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/items/{itemId}/trace",

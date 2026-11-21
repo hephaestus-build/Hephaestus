@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetPublicActivityOnboardingData,
+	GetPublicActivityOnboardingErrors,
 	GetPublicActivityOnboardingResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const getPublicActivityOnboarding = <ThrowOnError extends boolean = false>(
 	options: Options<GetPublicActivityOnboardingData, ThrowOnError>,
-): RequestResult<GetPublicActivityOnboardingResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPublicActivityOnboardingResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetPublicActivityOnboardingResponses,
+	GetPublicActivityOnboardingErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetPublicActivityOnboardingResponses,
+		GetPublicActivityOnboardingErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/public-activity/workspaces/{slug}/onboarding",
 		...options,

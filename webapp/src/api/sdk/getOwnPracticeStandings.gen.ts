@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { getOwnPracticeStandingsResponseTransformer } from "../transformers.gen.js";
 import type {
 	GetOwnPracticeStandingsData,
+	GetOwnPracticeStandingsErrors,
 	GetOwnPracticeStandingsResponses,
 } from "../types.gen.js";
 
@@ -16,8 +17,12 @@ import type {
  */
 export const getOwnPracticeStandings = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnPracticeStandingsData, ThrowOnError>,
-): RequestResult<GetOwnPracticeStandingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnPracticeStandingsResponses, unknown, ThrowOnError>({
+): RequestResult<GetOwnPracticeStandingsResponses, GetOwnPracticeStandingsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetOwnPracticeStandingsResponses,
+		GetOwnPracticeStandingsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: getOwnPracticeStandingsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/standings",

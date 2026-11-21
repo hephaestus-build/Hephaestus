@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	RemoveRepositoryToMonitorData,
+	RemoveRepositoryToMonitorErrors,
 	RemoveRepositoryToMonitorResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const removeRepositoryToMonitor = <ThrowOnError extends boolean = false>(
 	options: Options<RemoveRepositoryToMonitorData, ThrowOnError>,
-): RequestResult<RemoveRepositoryToMonitorResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RemoveRepositoryToMonitorResponses, unknown, ThrowOnError>({
+): RequestResult<
+	RemoveRepositoryToMonitorResponses,
+	RemoveRepositoryToMonitorErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).delete<
+		RemoveRepositoryToMonitorResponses,
+		RemoveRepositoryToMonitorErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/repositories",
 		...options,

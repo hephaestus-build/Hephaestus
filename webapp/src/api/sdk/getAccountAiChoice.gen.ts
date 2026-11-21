@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getAccountAiChoiceResponseTransformer } from "../transformers.gen.js";
-import type { GetAccountAiChoiceData, GetAccountAiChoiceResponses } from "../types.gen.js";
+import type {
+	GetAccountAiChoiceData,
+	GetAccountAiChoiceErrors,
+	GetAccountAiChoiceResponses,
+} from "../types.gen.js";
 
 /**
  * Get your AI choice
  */
 export const getAccountAiChoice = <ThrowOnError extends boolean = false>(
 	options?: Options<GetAccountAiChoiceData, ThrowOnError>,
-): RequestResult<GetAccountAiChoiceResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetAccountAiChoiceResponses, unknown, ThrowOnError>({
+): RequestResult<GetAccountAiChoiceResponses, GetAccountAiChoiceErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		GetAccountAiChoiceResponses,
+		GetAccountAiChoiceErrors,
+		ThrowOnError
+	>({
 		responseTransformer: getAccountAiChoiceResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/ai-choice",

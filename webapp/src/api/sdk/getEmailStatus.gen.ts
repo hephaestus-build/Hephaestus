@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetEmailStatusData, GetEmailStatusResponses } from "../types.gen.js";
+import type {
+	GetEmailStatusData,
+	GetEmailStatusErrors,
+	GetEmailStatusResponses,
+} from "../types.gen.js";
 
 /**
  * Whether this instance can send email at all
  */
 export const getEmailStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetEmailStatusData, ThrowOnError>,
-): RequestResult<GetEmailStatusResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetEmailStatusResponses, unknown, ThrowOnError>({
+): RequestResult<GetEmailStatusResponses, GetEmailStatusErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetEmailStatusResponses, GetEmailStatusErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/email/status",
 		...options,

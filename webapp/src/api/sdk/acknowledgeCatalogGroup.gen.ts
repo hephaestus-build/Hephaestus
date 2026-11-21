@@ -5,13 +5,18 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	AcknowledgeCatalogGroupData,
+	AcknowledgeCatalogGroupErrors,
 	AcknowledgeCatalogGroupResponses,
 } from "../types.gen.js";
 
 export const acknowledgeCatalogGroup = <ThrowOnError extends boolean = false>(
 	options: Options<AcknowledgeCatalogGroupData, ThrowOnError>,
-): RequestResult<AcknowledgeCatalogGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AcknowledgeCatalogGroupResponses, unknown, ThrowOnError>({
+): RequestResult<AcknowledgeCatalogGroupResponses, AcknowledgeCatalogGroupErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		AcknowledgeCatalogGroupResponses,
+		AcknowledgeCatalogGroupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/groups/{slug}/override/acknowledgement",
 		...options,

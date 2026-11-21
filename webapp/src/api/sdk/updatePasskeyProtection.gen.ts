@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	UpdatePasskeyProtectionData,
+	UpdatePasskeyProtectionErrors,
 	UpdatePasskeyProtectionResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const updatePasskeyProtection = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePasskeyProtectionData, ThrowOnError>,
-): RequestResult<UpdatePasskeyProtectionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdatePasskeyProtectionResponses, unknown, ThrowOnError>({
+): RequestResult<UpdatePasskeyProtectionResponses, UpdatePasskeyProtectionErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdatePasskeyProtectionResponses,
+		UpdatePasskeyProtectionErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/protection",
 		...options,

@@ -25,7 +25,7 @@ export function useReviewReadiness(workspaceSlug: string): ReviewReadinessState 
 
 /** The review model's readiness, read off the workspace's model assignments. */
 export function reviewModelOf(
-	bindingsQuery: UseQueryResult<ListModelAssignmentsResponse>,
+	bindingsQuery: UseQueryResult<ListModelAssignmentsResponse, unknown>,
 ): ReviewModelState {
 	if (bindingsQuery.isPending) {
 		return { status: "loading" };

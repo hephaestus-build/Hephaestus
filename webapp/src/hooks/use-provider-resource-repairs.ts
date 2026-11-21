@@ -50,7 +50,7 @@ export function useConnectionProviderResourceRepairs(scope: ConnectionScope) {
 
 function useRepairView(
 	scope: { kind: "instance" } | ({ kind: "workspace" } & ConnectionScope),
-	query: UseQueryResult<OffsetPageDtoProviderResourceRepair>,
+	query: UseQueryResult<OffsetPageDtoProviderResourceRepair, unknown>,
 	queryKey: QueryKey,
 ) {
 	const client = useQueryClient();

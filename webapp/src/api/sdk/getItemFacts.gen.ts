@@ -4,15 +4,15 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getItemFactsResponseTransformer } from "../transformers.gen.js";
-import type { GetItemFactsData, GetItemFactsResponses } from "../types.gen.js";
+import type { GetItemFactsData, GetItemFactsErrors, GetItemFactsResponses } from "../types.gen.js";
 
 /**
  * Get current facts about an item
  */
 export const getItemFacts = <ThrowOnError extends boolean = false>(
 	options: Options<GetItemFactsData, ThrowOnError>,
-): RequestResult<GetItemFactsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetItemFactsResponses, unknown, ThrowOnError>({
+): RequestResult<GetItemFactsResponses, GetItemFactsErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetItemFactsResponses, GetItemFactsErrors, ThrowOnError>({
 		responseTransformer: getItemFactsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/items/{itemId}/facts",

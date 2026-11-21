@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { RegisterPasskeyData, RegisterPasskeyResponses } from "../types.gen.js";
+import type {
+	RegisterPasskeyData,
+	RegisterPasskeyErrors,
+	RegisterPasskeyResponses,
+} from "../types.gen.js";
 
 /**
  * Register a passkey
  */
 export const registerPasskey = <ThrowOnError extends boolean = false>(
 	options: Options<RegisterPasskeyData, ThrowOnError>,
-): RequestResult<RegisterPasskeyResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RegisterPasskeyResponses, unknown, ThrowOnError>({
+): RequestResult<RegisterPasskeyResponses, RegisterPasskeyErrors, ThrowOnError> =>
+	(options.client ?? client).post<RegisterPasskeyResponses, RegisterPasskeyErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys",
 		...options,

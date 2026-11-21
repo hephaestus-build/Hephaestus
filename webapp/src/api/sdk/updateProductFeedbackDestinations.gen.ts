@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { updateProductFeedbackDestinationsResponseTransformer } from "../transformers.gen.js";
 import type {
 	UpdateProductFeedbackDestinationsData,
+	UpdateProductFeedbackDestinationsErrors,
 	UpdateProductFeedbackDestinationsResponses,
 } from "../types.gen.js";
 
@@ -14,16 +15,22 @@ import type {
  */
 export const updateProductFeedbackDestinations = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateProductFeedbackDestinationsData, ThrowOnError>,
-): RequestResult<UpdateProductFeedbackDestinationsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateProductFeedbackDestinationsResponses, unknown, ThrowOnError>(
-		{
-			responseTransformer: updateProductFeedbackDestinationsResponseTransformer,
-			security: [{ scheme: "bearer", type: "http" }],
-			url: "/admin/product-feedback/destinations",
-			...options,
-			headers: {
-				"Content-Type": "application/json",
-				...options.headers,
-			},
+): RequestResult<
+	UpdateProductFeedbackDestinationsResponses,
+	UpdateProductFeedbackDestinationsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		UpdateProductFeedbackDestinationsResponses,
+		UpdateProductFeedbackDestinationsErrors,
+		ThrowOnError
+	>({
+		responseTransformer: updateProductFeedbackDestinationsResponseTransformer,
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/admin/product-feedback/destinations",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
 		},
-	);
+	});

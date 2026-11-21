@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { workspaceListLlmModelsResponseTransformer } from "../transformers.gen.js";
-import type { WorkspaceListLlmModelsData, WorkspaceListLlmModelsResponses } from "../types.gen.js";
+import type {
+	WorkspaceListLlmModelsData,
+	WorkspaceListLlmModelsErrors,
+	WorkspaceListLlmModelsResponses,
+} from "../types.gen.js";
 
 /**
  * List models on your AI provider
  */
 export const workspaceListLlmModels = <ThrowOnError extends boolean = false>(
 	options: Options<WorkspaceListLlmModelsData, ThrowOnError>,
-): RequestResult<WorkspaceListLlmModelsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<WorkspaceListLlmModelsResponses, unknown, ThrowOnError>({
+): RequestResult<WorkspaceListLlmModelsResponses, WorkspaceListLlmModelsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		WorkspaceListLlmModelsResponses,
+		WorkspaceListLlmModelsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: workspaceListLlmModelsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/models",

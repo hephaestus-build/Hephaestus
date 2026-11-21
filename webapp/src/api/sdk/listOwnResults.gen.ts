@@ -4,7 +4,11 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listOwnResultsResponseTransformer } from "../transformers.gen.js";
-import type { ListOwnResultsData, ListOwnResultsResponses } from "../types.gen.js";
+import type {
+	ListOwnResultsData,
+	ListOwnResultsErrors,
+	ListOwnResultsResponses,
+} from "../types.gen.js";
 
 /**
  * List results for current developer
@@ -13,8 +17,8 @@ import type { ListOwnResultsData, ListOwnResultsResponses } from "../types.gen.j
  */
 export const listOwnResults = <ThrowOnError extends boolean = false>(
 	options: Options<ListOwnResultsData, ThrowOnError>,
-): RequestResult<ListOwnResultsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListOwnResultsResponses, unknown, ThrowOnError>({
+): RequestResult<ListOwnResultsResponses, ListOwnResultsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListOwnResultsResponses, ListOwnResultsErrors, ThrowOnError>({
 		responseTransformer: listOwnResultsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/results",

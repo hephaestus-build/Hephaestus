@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { submitInstanceProductFeedbackResponseTransformer } from "../transformers.gen.js";
 import type {
 	SubmitInstanceProductFeedbackData,
+	SubmitInstanceProductFeedbackErrors,
 	SubmitInstanceProductFeedbackResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const submitInstanceProductFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<SubmitInstanceProductFeedbackData, ThrowOnError>,
-): RequestResult<SubmitInstanceProductFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<SubmitInstanceProductFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<
+	SubmitInstanceProductFeedbackResponses,
+	SubmitInstanceProductFeedbackErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		SubmitInstanceProductFeedbackResponses,
+		SubmitInstanceProductFeedbackErrors,
+		ThrowOnError
+	>({
 		responseTransformer: submitInstanceProductFeedbackResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback",

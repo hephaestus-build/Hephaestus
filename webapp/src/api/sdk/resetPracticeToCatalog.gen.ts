@@ -4,12 +4,20 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { resetPracticeToCatalogResponseTransformer } from "../transformers.gen.js";
-import type { ResetPracticeToCatalogData, ResetPracticeToCatalogResponses } from "../types.gen.js";
+import type {
+	ResetPracticeToCatalogData,
+	ResetPracticeToCatalogErrors,
+	ResetPracticeToCatalogResponses,
+} from "../types.gen.js";
 
 export const resetPracticeToCatalog = <ThrowOnError extends boolean = false>(
 	options: Options<ResetPracticeToCatalogData, ThrowOnError>,
-): RequestResult<ResetPracticeToCatalogResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<ResetPracticeToCatalogResponses, unknown, ThrowOnError>({
+): RequestResult<ResetPracticeToCatalogResponses, ResetPracticeToCatalogErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		ResetPracticeToCatalogResponses,
+		ResetPracticeToCatalogErrors,
+		ThrowOnError
+	>({
 		responseTransformer: resetPracticeToCatalogResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/catalog-customization",

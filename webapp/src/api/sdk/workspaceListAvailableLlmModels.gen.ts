@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	WorkspaceListAvailableLlmModelsData,
+	WorkspaceListAvailableLlmModelsErrors,
 	WorkspaceListAvailableLlmModelsResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const workspaceListAvailableLlmModels = <ThrowOnError extends boolean = false>(
 	options: Options<WorkspaceListAvailableLlmModelsData, ThrowOnError>,
-): RequestResult<WorkspaceListAvailableLlmModelsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<WorkspaceListAvailableLlmModelsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	WorkspaceListAvailableLlmModelsResponses,
+	WorkspaceListAvailableLlmModelsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		WorkspaceListAvailableLlmModelsResponses,
+		WorkspaceListAvailableLlmModelsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/available-models",
 		...options,

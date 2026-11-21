@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { adminListProductFeedbackResponseTransformer } from "../transformers.gen.js";
 import type {
 	AdminListProductFeedbackData,
+	AdminListProductFeedbackErrors,
 	AdminListProductFeedbackResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const adminListProductFeedback = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListProductFeedbackData, ThrowOnError>,
-): RequestResult<AdminListProductFeedbackResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListProductFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListProductFeedbackResponses, AdminListProductFeedbackErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListProductFeedbackResponses,
+		AdminListProductFeedbackErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminListProductFeedbackResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback",

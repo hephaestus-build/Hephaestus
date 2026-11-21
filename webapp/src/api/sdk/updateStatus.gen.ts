@@ -4,15 +4,15 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { updateStatusResponseTransformer } from "../transformers.gen.js";
-import type { UpdateStatusData, UpdateStatusResponses } from "../types.gen.js";
+import type { UpdateStatusData, UpdateStatusErrors, UpdateStatusResponses } from "../types.gen.js";
 
 /**
  * Update workspace lifecycle status
  */
 export const updateStatus = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateStatusData, ThrowOnError>,
-): RequestResult<UpdateStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateStatusResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateStatusResponses, UpdateStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<UpdateStatusResponses, UpdateStatusErrors, ThrowOnError>({
 		responseTransformer: updateStatusResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/status",

@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetMcpAuthorizationServerMetadataData,
+	GetMcpAuthorizationServerMetadataErrors,
 	GetMcpAuthorizationServerMetadataResponses,
 } from "../types.gen.js";
 
@@ -13,10 +14,14 @@ import type {
  */
 export const getMcpAuthorizationServerMetadata = <ThrowOnError extends boolean = false>(
 	options?: Options<GetMcpAuthorizationServerMetadataData, ThrowOnError>,
-): RequestResult<GetMcpAuthorizationServerMetadataResponses, unknown, ThrowOnError> =>
+): RequestResult<
+	GetMcpAuthorizationServerMetadataResponses,
+	GetMcpAuthorizationServerMetadataErrors,
+	ThrowOnError
+> =>
 	(options?.client ?? client).get<
 		GetMcpAuthorizationServerMetadataResponses,
-		unknown,
+		GetMcpAuthorizationServerMetadataErrors,
 		ThrowOnError
 	>({
 		security: [{ scheme: "bearer", type: "http" }],

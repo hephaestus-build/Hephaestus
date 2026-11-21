@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getPracticeTrialResponseTransformer } from "../transformers.gen.js";
-import type { GetPracticeTrialData, GetPracticeTrialResponses } from "../types.gen.js";
+import type {
+	GetPracticeTrialData,
+	GetPracticeTrialErrors,
+	GetPracticeTrialResponses,
+} from "../types.gen.js";
 
 /**
  * Read a trial and what it found
  */
 export const getPracticeTrial = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeTrialData, ThrowOnError>,
-): RequestResult<GetPracticeTrialResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeTrialResponses, unknown, ThrowOnError>({
+): RequestResult<GetPracticeTrialResponses, GetPracticeTrialErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetPracticeTrialResponses, GetPracticeTrialErrors, ThrowOnError>({
 		responseTransformer: getPracticeTrialResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-trials/{trialId}",

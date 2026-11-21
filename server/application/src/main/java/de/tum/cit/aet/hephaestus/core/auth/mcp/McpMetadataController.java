@@ -8,12 +8,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Authorization server metadata (RFC 8414) and protected resource metadata (RFC 9728) for the workspace
@@ -25,6 +27,8 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnBooleanProperty("hephaestus.mcp.enabled")
 @Tag(name = "MCP authorization", description = "OAuth endpoints and consent for MCP clients")
 public class McpMetadataController {
+
+    private static final String NO_MCP_ENDPOINT = "No MCP endpoint has this address.";
 
     private final McpResources resources;
 
@@ -61,12 +65,12 @@ public class McpMetadataController {
         // RFC 9728 § 3.1 inserts the resource's path after the well-known prefix.
         String prefix = ApiPath.PREFIX + "/workspaces/";
         if (!resourcePath.startsWith(prefix) || !resourcePath.endsWith("/mcp")) {
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NO_MCP_ENDPOINT);
         }
         String slug = resourcePath.substring(prefix.length(), resourcePath.length() - "/mcp".length());
         String resource = resources.resourceFor(slug);
         if (resources.slugOf(resource).isEmpty()) {
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NO_MCP_ENDPOINT);
         }
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("resource", resource);

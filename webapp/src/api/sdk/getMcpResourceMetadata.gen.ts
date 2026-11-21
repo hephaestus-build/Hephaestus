@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetMcpResourceMetadataData, GetMcpResourceMetadataResponses } from "../types.gen.js";
+import type {
+	GetMcpResourceMetadataData,
+	GetMcpResourceMetadataErrors,
+	GetMcpResourceMetadataResponses,
+} from "../types.gen.js";
 
 /**
  * Protected resource metadata of a workspace MCP endpoint (RFC 9728)
  */
 export const getMcpResourceMetadata = <ThrowOnError extends boolean = false>(
 	options: Options<GetMcpResourceMetadataData, ThrowOnError>,
-): RequestResult<GetMcpResourceMetadataResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetMcpResourceMetadataResponses, unknown, ThrowOnError>({
+): RequestResult<GetMcpResourceMetadataResponses, GetMcpResourceMetadataErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetMcpResourceMetadataResponses,
+		GetMcpResourceMetadataErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/.well-known/oauth-protected-resource/{resourcePath}",
 		...options,

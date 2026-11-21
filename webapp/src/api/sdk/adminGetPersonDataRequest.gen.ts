@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { adminGetPersonDataRequestResponseTransformer } from "../transformers.gen.js";
 import type {
 	AdminGetPersonDataRequestData,
+	AdminGetPersonDataRequestErrors,
 	AdminGetPersonDataRequestResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const adminGetPersonDataRequest = <ThrowOnError extends boolean = false>(
 	options: Options<AdminGetPersonDataRequestData, ThrowOnError>,
-): RequestResult<AdminGetPersonDataRequestResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<AdminGetPersonDataRequestResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminGetPersonDataRequestResponses,
+	AdminGetPersonDataRequestErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		AdminGetPersonDataRequestResponses,
+		AdminGetPersonDataRequestErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminGetPersonDataRequestResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/person-data/{id}",

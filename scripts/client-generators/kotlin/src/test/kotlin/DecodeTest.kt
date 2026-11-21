@@ -2,6 +2,7 @@
 package build.hephaestus.api
 
 import build.hephaestus.api.infrastructure.Serializer
+import build.hephaestus.api.models.ProblemDetail
 import build.hephaestus.api.models.WorkspaceListItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -24,5 +25,13 @@ class DecodeTest {
     fun keepsAValueOfAnOpenEnumThatItDoesNotKnow() {
         val workspace = decodeFixture<WorkspaceListItem>("workspace-list-item-unknown-status")
         assertEquals("PAUSED_IN_A_LATER_RELEASE", workspace.status)
+    }
+
+    @Test
+    fun keepsAProblemTypeThatItDoesNotKnow() {
+        val problem = decodeFixture<ProblemDetail>("problem-unknown-type")
+        assertEquals("https://example.com/problems/added-in-a-later-release", problem.type)
+        assertEquals(409, problem.status)
+        assertEquals("Added in a later release", problem.title)
     }
 }

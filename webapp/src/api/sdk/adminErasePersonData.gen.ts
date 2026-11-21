@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { adminErasePersonDataResponseTransformer } from "../transformers.gen.js";
-import type { AdminErasePersonDataData, AdminErasePersonDataResponses } from "../types.gen.js";
+import type {
+	AdminErasePersonDataData,
+	AdminErasePersonDataErrors,
+	AdminErasePersonDataResponses,
+} from "../types.gen.js";
 
 /**
  * Start or resume the preview's audited erasure job
  */
 export const adminErasePersonData = <ThrowOnError extends boolean = false>(
 	options: Options<AdminErasePersonDataData, ThrowOnError>,
-): RequestResult<AdminErasePersonDataResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdminErasePersonDataResponses, unknown, ThrowOnError>({
+): RequestResult<AdminErasePersonDataResponses, AdminErasePersonDataErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		AdminErasePersonDataResponses,
+		AdminErasePersonDataErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminErasePersonDataResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/person-data/{id}/erase",

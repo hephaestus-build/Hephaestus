@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -122,14 +123,24 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
-    void noCredentialsIsUnauthorized() {
+    void noCredentialsIsUnauthorizedWithTheBearerChallengeAndAProblem() {
         webTestClient
                 .get()
                 .uri("/user")
                 .exchange()
                 .expectStatus()
                 .isUnauthorized()
-                .expectBody(Void.class);
+                .expectHeader()
+                .valueMatches(HttpHeaders.WWW_AUTHENTICATE, "Bearer.*")
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo(401)
+                .jsonPath("$.title")
+                .isEqualTo("Unauthorized")
+                .jsonPath("$.properties")
+                .doesNotExist();
     }
 
     @Test
@@ -154,7 +165,7 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .executeWithoutResult(status -> issuedJwtRepository.revokeAllForAccount(
                         issued.accountId(), Instant.now(), IssuedJwt.RevokedReason.SIGN_OUT_EVERYWHERE));
 
-        // The SAME cookie now fails closed: 401 via the resource-server chain.
+        // The SAME cookie now fails closed: 401 via the resource-server chain, with the challenge and a problem.
         webTestClient
                 .get()
                 .uri("/user")
@@ -162,7 +173,15 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isUnauthorized()
-                .expectBody(Void.class);
+                .expectHeader()
+                .valueMatches(HttpHeaders.WWW_AUTHENTICATE, "Bearer error=\"invalid_token\".*")
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo(401)
+                .jsonPath("$.detail")
+                .isEqualTo("Sign in, then try again.");
     }
 
     @Test

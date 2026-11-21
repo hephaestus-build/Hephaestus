@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { updateProductFeedbackSharingResponseTransformer } from "../transformers.gen.js";
 import type {
 	UpdateProductFeedbackSharingData,
+	UpdateProductFeedbackSharingErrors,
 	UpdateProductFeedbackSharingResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const updateProductFeedbackSharing = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateProductFeedbackSharingData, ThrowOnError>,
-): RequestResult<UpdateProductFeedbackSharingResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateProductFeedbackSharingResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdateProductFeedbackSharingResponses,
+	UpdateProductFeedbackSharingErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		UpdateProductFeedbackSharingResponses,
+		UpdateProductFeedbackSharingErrors,
+		ThrowOnError
+	>({
 		responseTransformer: updateProductFeedbackSharingResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback/sharing",

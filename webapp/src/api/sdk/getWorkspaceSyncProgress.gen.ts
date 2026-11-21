@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetWorkspaceSyncProgressData,
+	GetWorkspaceSyncProgressErrors,
 	GetWorkspaceSyncProgressResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const getWorkspaceSyncProgress = <ThrowOnError extends boolean = false>(
 	options: Options<GetWorkspaceSyncProgressData, ThrowOnError>,
-): RequestResult<GetWorkspaceSyncProgressResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetWorkspaceSyncProgressResponses, unknown, ThrowOnError>({
+): RequestResult<GetWorkspaceSyncProgressResponses, GetWorkspaceSyncProgressErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetWorkspaceSyncProgressResponses,
+		GetWorkspaceSyncProgressErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/sync/progress",
 		...options,

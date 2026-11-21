@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { listConversationEntriesResponseTransformer } from "../transformers.gen.js";
 import type {
 	ListConversationEntriesData,
+	ListConversationEntriesErrors,
 	ListConversationEntriesResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const listConversationEntries = <ThrowOnError extends boolean = false>(
 	options: Options<ListConversationEntriesData, ThrowOnError>,
-): RequestResult<ListConversationEntriesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListConversationEntriesResponses, unknown, ThrowOnError>({
+): RequestResult<ListConversationEntriesResponses, ListConversationEntriesErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListConversationEntriesResponses,
+		ListConversationEntriesErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listConversationEntriesResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/conversation/entries",

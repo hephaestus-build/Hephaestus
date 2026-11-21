@@ -4,7 +4,11 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { markConversationReadResponseTransformer } from "../transformers.gen.js";
-import type { MarkConversationReadData, MarkConversationReadResponses } from "../types.gen.js";
+import type {
+	MarkConversationReadData,
+	MarkConversationReadErrors,
+	MarkConversationReadResponses,
+} from "../types.gen.js";
 
 /**
  * Mark the conversation read
@@ -13,8 +17,12 @@ import type { MarkConversationReadData, MarkConversationReadResponses } from "..
  */
 export const markConversationRead = <ThrowOnError extends boolean = false>(
 	options: Options<MarkConversationReadData, ThrowOnError>,
-): RequestResult<MarkConversationReadResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<MarkConversationReadResponses, unknown, ThrowOnError>({
+): RequestResult<MarkConversationReadResponses, MarkConversationReadErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		MarkConversationReadResponses,
+		MarkConversationReadErrors,
+		ThrowOnError
+	>({
 		responseTransformer: markConversationReadResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/conversation/read",

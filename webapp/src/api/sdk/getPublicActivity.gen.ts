@@ -4,16 +4,22 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getPublicActivityResponseTransformer } from "../transformers.gen.js";
-import type { GetPublicActivityData, GetPublicActivityResponses } from "../types.gen.js";
+import type {
+	GetPublicActivityData,
+	GetPublicActivityErrors,
+	GetPublicActivityResponses,
+} from "../types.gen.js";
 
 /**
  * Read human contributions to public repositories
  */
 export const getPublicActivity = <ThrowOnError extends boolean = false>(
 	options: Options<GetPublicActivityData, ThrowOnError>,
-): RequestResult<GetPublicActivityResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPublicActivityResponses, unknown, ThrowOnError>({
-		responseTransformer: getPublicActivityResponseTransformer,
-		url: "/public/workspaces/{slug}/activity",
-		...options,
-	});
+): RequestResult<GetPublicActivityResponses, GetPublicActivityErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetPublicActivityResponses, GetPublicActivityErrors, ThrowOnError>(
+		{
+			responseTransformer: getPublicActivityResponseTransformer,
+			url: "/public/workspaces/{slug}/activity",
+			...options,
+		},
+	);

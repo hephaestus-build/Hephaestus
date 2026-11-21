@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	CompleteFirstLoginConsentData,
+	CompleteFirstLoginConsentErrors,
 	CompleteFirstLoginConsentResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const completeFirstLoginConsent = <ThrowOnError extends boolean = false>(
 	options: Options<CompleteFirstLoginConsentData, ThrowOnError>,
-): RequestResult<CompleteFirstLoginConsentResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<CompleteFirstLoginConsentResponses, unknown, ThrowOnError>({
+): RequestResult<
+	CompleteFirstLoginConsentResponses,
+	CompleteFirstLoginConsentErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		CompleteFirstLoginConsentResponses,
+		CompleteFirstLoginConsentErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/consent",
 		...options,

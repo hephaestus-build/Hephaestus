@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { adminListLlmConnectionsResponseTransformer } from "../transformers.gen.js";
 import type {
 	AdminListLlmConnectionsData,
+	AdminListLlmConnectionsErrors,
 	AdminListLlmConnectionsResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const adminListLlmConnections = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListLlmConnectionsData, ThrowOnError>,
-): RequestResult<AdminListLlmConnectionsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListLlmConnectionsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListLlmConnectionsResponses, AdminListLlmConnectionsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListLlmConnectionsResponses,
+		AdminListLlmConnectionsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminListLlmConnectionsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/connections",

@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { VerifyPasskeyData, VerifyPasskeyResponses } from "../types.gen.js";
+import type {
+	VerifyPasskeyData,
+	VerifyPasskeyErrors,
+	VerifyPasskeyResponses,
+} from "../types.gen.js";
 
 /**
  * Verify a passkey for this browser session
  */
 export const verifyPasskey = <ThrowOnError extends boolean = false>(
 	options: Options<VerifyPasskeyData, ThrowOnError>,
-): RequestResult<VerifyPasskeyResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<VerifyPasskeyResponses, unknown, ThrowOnError>({
+): RequestResult<VerifyPasskeyResponses, VerifyPasskeyErrors, ThrowOnError> =>
+	(options.client ?? client).post<VerifyPasskeyResponses, VerifyPasskeyErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/verification",
 		...options,

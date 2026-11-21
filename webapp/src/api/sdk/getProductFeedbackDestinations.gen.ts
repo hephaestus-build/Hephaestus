@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { getProductFeedbackDestinationsResponseTransformer } from "../transformers.gen.js";
 import type {
 	GetProductFeedbackDestinationsData,
+	GetProductFeedbackDestinationsErrors,
 	GetProductFeedbackDestinationsResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const getProductFeedbackDestinations = <ThrowOnError extends boolean = false>(
 	options?: Options<GetProductFeedbackDestinationsData, ThrowOnError>,
-): RequestResult<GetProductFeedbackDestinationsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetProductFeedbackDestinationsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetProductFeedbackDestinationsResponses,
+	GetProductFeedbackDestinationsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		GetProductFeedbackDestinationsResponses,
+		GetProductFeedbackDestinationsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: getProductFeedbackDestinationsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/destinations",

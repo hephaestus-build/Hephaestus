@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listOwnReviewsResponseTransformer } from "../transformers.gen.js";
-import type { ListOwnReviewsData, ListOwnReviewsResponses } from "../types.gen.js";
+import type {
+	ListOwnReviewsData,
+	ListOwnReviewsErrors,
+	ListOwnReviewsResponses,
+} from "../types.gen.js";
 
 /**
  * List reviews with results about you
  */
 export const listOwnReviews = <ThrowOnError extends boolean = false>(
 	options: Options<ListOwnReviewsData, ThrowOnError>,
-): RequestResult<ListOwnReviewsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListOwnReviewsResponses, unknown, ThrowOnError>({
+): RequestResult<ListOwnReviewsResponses, ListOwnReviewsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListOwnReviewsResponses, ListOwnReviewsErrors, ThrowOnError>({
 		responseTransformer: listOwnReviewsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-profile/reviews",

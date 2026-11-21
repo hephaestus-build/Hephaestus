@@ -3,15 +3,15 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetJwksData, GetJwksResponses } from "../types.gen.js";
+import type { GetJwksData, GetJwksErrors, GetJwksResponses } from "../types.gen.js";
 
 /**
  * JWK set (public keys only)
  */
 export const getJwks = <ThrowOnError extends boolean = false>(
 	options?: Options<GetJwksData, ThrowOnError>,
-): RequestResult<GetJwksResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetJwksResponses, unknown, ThrowOnError>({
+): RequestResult<GetJwksResponses, GetJwksErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetJwksResponses, GetJwksErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/.well-known/jwks.json",
 		...options,

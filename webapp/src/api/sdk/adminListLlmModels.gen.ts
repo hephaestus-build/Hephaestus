@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { adminListLlmModelsResponseTransformer } from "../transformers.gen.js";
-import type { AdminListLlmModelsData, AdminListLlmModelsResponses } from "../types.gen.js";
+import type {
+	AdminListLlmModelsData,
+	AdminListLlmModelsErrors,
+	AdminListLlmModelsResponses,
+} from "../types.gen.js";
 
 /**
  * List LLM catalog models
  */
 export const adminListLlmModels = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListLlmModelsData, ThrowOnError>,
-): RequestResult<AdminListLlmModelsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListLlmModelsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListLlmModelsResponses, AdminListLlmModelsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListLlmModelsResponses,
+		AdminListLlmModelsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminListLlmModelsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/models",

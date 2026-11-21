@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { removeResultMarkResponseTransformer } from "../transformers.gen.js";
-import type { RemoveResultMarkData, RemoveResultMarkResponses } from "../types.gen.js";
+import type {
+	RemoveResultMarkData,
+	RemoveResultMarkErrors,
+	RemoveResultMarkResponses,
+} from "../types.gen.js";
 
 /**
  * Remove a result mark
  */
 export const removeResultMark = <ThrowOnError extends boolean = false>(
 	options: Options<RemoveResultMarkData, ThrowOnError>,
-): RequestResult<RemoveResultMarkResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RemoveResultMarkResponses, unknown, ThrowOnError>({
+): RequestResult<RemoveResultMarkResponses, RemoveResultMarkErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		RemoveResultMarkResponses,
+		RemoveResultMarkErrors,
+		ThrowOnError
+	>({
 		responseTransformer: removeResultMarkResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/results/{resultId}/marks/{markId}",

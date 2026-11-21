@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	CloseResearchDisclosureData,
+	CloseResearchDisclosureErrors,
 	CloseResearchDisclosureResponses,
 } from "../types.gen.js";
 
@@ -15,8 +16,12 @@ import type {
  */
 export const closeResearchDisclosure = <ThrowOnError extends boolean = false>(
 	options: Options<CloseResearchDisclosureData, ThrowOnError>,
-): RequestResult<CloseResearchDisclosureResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CloseResearchDisclosureResponses, unknown, ThrowOnError>({
+): RequestResult<CloseResearchDisclosureResponses, CloseResearchDisclosureErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CloseResearchDisclosureResponses,
+		CloseResearchDisclosureErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/research-disclosures/{datasetId}/closure",
 		...options,

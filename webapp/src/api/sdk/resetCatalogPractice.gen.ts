@@ -3,12 +3,20 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ResetCatalogPracticeData, ResetCatalogPracticeResponses } from "../types.gen.js";
+import type {
+	ResetCatalogPracticeData,
+	ResetCatalogPracticeErrors,
+	ResetCatalogPracticeResponses,
+} from "../types.gen.js";
 
 export const resetCatalogPractice = <ThrowOnError extends boolean = false>(
 	options: Options<ResetCatalogPracticeData, ThrowOnError>,
-): RequestResult<ResetCatalogPracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<ResetCatalogPracticeResponses, unknown, ThrowOnError>({
+): RequestResult<ResetCatalogPracticeResponses, ResetCatalogPracticeErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		ResetCatalogPracticeResponses,
+		ResetCatalogPracticeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}/override",
 		...options,

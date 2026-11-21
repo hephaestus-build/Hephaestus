@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { listConnectionSyncResourcesResponseTransformer } from "../transformers.gen.js";
 import type {
 	ListConnectionSyncResourcesData,
+	ListConnectionSyncResourcesErrors,
 	ListConnectionSyncResourcesResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const listConnectionSyncResources = <ThrowOnError extends boolean = false>(
 	options: Options<ListConnectionSyncResourcesData, ThrowOnError>,
-): RequestResult<ListConnectionSyncResourcesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListConnectionSyncResourcesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListConnectionSyncResourcesResponses,
+	ListConnectionSyncResourcesErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		ListConnectionSyncResourcesResponses,
+		ListConnectionSyncResourcesErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listConnectionSyncResourcesResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{connectionId}/sync/resources",

@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { listSlackChannelConsentEventsResponseTransformer } from "../transformers.gen.js";
 import type {
 	ListSlackChannelConsentEventsData,
+	ListSlackChannelConsentEventsErrors,
 	ListSlackChannelConsentEventsResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const listSlackChannelConsentEvents = <ThrowOnError extends boolean = false>(
 	options: Options<ListSlackChannelConsentEventsData, ThrowOnError>,
-): RequestResult<ListSlackChannelConsentEventsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListSlackChannelConsentEventsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListSlackChannelConsentEventsResponses,
+	ListSlackChannelConsentEventsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		ListSlackChannelConsentEventsResponses,
+		ListSlackChannelConsentEventsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listSlackChannelConsentEventsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/slack/channels/{slackChannelId}/consent-events",

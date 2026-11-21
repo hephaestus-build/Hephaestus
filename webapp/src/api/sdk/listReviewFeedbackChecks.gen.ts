@@ -6,13 +6,18 @@ import type { Options } from "../sdk.gen.js";
 import { listReviewFeedbackChecksResponseTransformer } from "../transformers.gen.js";
 import type {
 	ListReviewFeedbackChecksData,
+	ListReviewFeedbackChecksErrors,
 	ListReviewFeedbackChecksResponses,
 } from "../types.gen.js";
 
 export const listReviewFeedbackChecks = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewFeedbackChecksData, ThrowOnError>,
-): RequestResult<ListReviewFeedbackChecksResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewFeedbackChecksResponses, unknown, ThrowOnError>({
+): RequestResult<ListReviewFeedbackChecksResponses, ListReviewFeedbackChecksErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListReviewFeedbackChecksResponses,
+		ListReviewFeedbackChecksErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listReviewFeedbackChecksResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/{reviewId}/feedback-checks",

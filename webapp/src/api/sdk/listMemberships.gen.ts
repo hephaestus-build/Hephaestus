@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listMembershipsResponseTransformer } from "../transformers.gen.js";
-import type { ListMembershipsData, ListMembershipsResponses } from "../types.gen.js";
+import type {
+	ListMembershipsData,
+	ListMembershipsErrors,
+	ListMembershipsResponses,
+} from "../types.gen.js";
 
 /**
  * List workspace memberships
  */
 export const listMemberships = <ThrowOnError extends boolean = false>(
 	options: Options<ListMembershipsData, ThrowOnError>,
-): RequestResult<ListMembershipsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListMembershipsResponses, unknown, ThrowOnError>({
+): RequestResult<ListMembershipsResponses, ListMembershipsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListMembershipsResponses, ListMembershipsErrors, ThrowOnError>({
 		responseTransformer: listMembershipsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/members",

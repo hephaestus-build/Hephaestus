@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getPasskeyStatusResponseTransformer } from "../transformers.gen.js";
-import type { GetPasskeyStatusData, GetPasskeyStatusResponses } from "../types.gen.js";
+import type {
+	GetPasskeyStatusData,
+	GetPasskeyStatusErrors,
+	GetPasskeyStatusResponses,
+} from "../types.gen.js";
 
 /**
  * Get passkey settings
  */
 export const getPasskeyStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetPasskeyStatusData, ThrowOnError>,
-): RequestResult<GetPasskeyStatusResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetPasskeyStatusResponses, unknown, ThrowOnError>({
+): RequestResult<GetPasskeyStatusResponses, GetPasskeyStatusErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetPasskeyStatusResponses, GetPasskeyStatusErrors, ThrowOnError>({
 		responseTransformer: getPasskeyStatusResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys",

@@ -12,12 +12,14 @@ import jakarta.validation.Valid;
 import java.security.Principal;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Receives the failures that readers met in the browser, signed in or not: a broken sign-in page is a
@@ -55,7 +57,7 @@ public class BrowserFaultsController {
                     String fetchSite,
             @Parameter(hidden = true) @Nullable Principal reader) {
         if ("cross-site".equals(fetchSite)) {
-            return ResponseEntity.status(403).build();
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "The browser sent this report from another site.");
         }
         report.faults().forEach(fault -> recorder.record(fault, reader != null));
         return ResponseEntity.noContent().build();

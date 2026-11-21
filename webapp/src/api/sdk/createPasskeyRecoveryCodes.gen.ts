@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	CreatePasskeyRecoveryCodesData,
+	CreatePasskeyRecoveryCodesErrors,
 	CreatePasskeyRecoveryCodesResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const createPasskeyRecoveryCodes = <ThrowOnError extends boolean = false>(
 	options?: Options<CreatePasskeyRecoveryCodesData, ThrowOnError>,
-): RequestResult<CreatePasskeyRecoveryCodesResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<CreatePasskeyRecoveryCodesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	CreatePasskeyRecoveryCodesResponses,
+	CreatePasskeyRecoveryCodesErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).post<
+		CreatePasskeyRecoveryCodesResponses,
+		CreatePasskeyRecoveryCodesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/recovery-codes",
 		...options,

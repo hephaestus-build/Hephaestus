@@ -1,10 +1,4 @@
-import {
-	type DefaultError,
-	type UseQueryResult,
-	useMutation,
-	useQuery,
-	useQueryClient,
-} from "@tanstack/react-query";
+import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	retainSearchParams,
@@ -58,6 +52,7 @@ import type {
 	UpdateNotificationPreferences,
 	UpdateUserSettings,
 	UpdateUserSettingsData,
+	UpdateUserSettingsError,
 	UpdateUserSettingsResponse,
 	UserSettings,
 } from "@/api/types.gen";
@@ -206,7 +201,7 @@ function RouteComponent() {
 
 	const updateSettingsMutation = useMutation<
 		UpdateUserSettingsResponse,
-		DefaultError,
+		UpdateUserSettingsError,
 		Options<UpdateUserSettingsData>,
 		{ previousSettings?: UserSettings }
 	>({
@@ -388,7 +383,7 @@ function RouteComponent() {
 			void queryClient.invalidateQueries({ queryKey: getCurrentUserQueryKey() });
 			toast.success("Account disconnected");
 		},
-		onError: (error: DefaultError) => {
+		onError: (error) => {
 			toast.error(problemDetailOf(error, "We could not disconnect that account. Try again."));
 		},
 	});
@@ -419,7 +414,7 @@ function RouteComponent() {
 					: "Slack channel-message use is off.",
 			);
 		},
-		onError: (error: DefaultError) => {
+		onError: (error) => {
 			toast.error(problemDetailOf(error, "We could not update your Slack preferences. Try again."));
 		},
 	});
@@ -630,7 +625,7 @@ function openSignInAfterDeletion() {
  * account's time zone, which decides when the digest arrives.
  */
 function weeklyDigestStateOf(
-	preferencesQuery: UseQueryResult<NotificationPreferences>,
+	preferencesQuery: UseQueryResult<NotificationPreferences, unknown>,
 	settings: UserSettings | undefined,
 	writes: {
 		updatePreferences: (patch: Partial<UpdateNotificationPreferences>) => void;

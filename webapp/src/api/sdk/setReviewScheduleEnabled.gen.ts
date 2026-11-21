@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { setReviewScheduleEnabledResponseTransformer } from "../transformers.gen.js";
 import type {
 	SetReviewScheduleEnabledData,
+	SetReviewScheduleEnabledErrors,
 	SetReviewScheduleEnabledResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const setReviewScheduleEnabled = <ThrowOnError extends boolean = false>(
 	options: Options<SetReviewScheduleEnabledData, ThrowOnError>,
-): RequestResult<SetReviewScheduleEnabledResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<SetReviewScheduleEnabledResponses, unknown, ThrowOnError>({
+): RequestResult<SetReviewScheduleEnabledResponses, SetReviewScheduleEnabledErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		SetReviewScheduleEnabledResponses,
+		SetReviewScheduleEnabledErrors,
+		ThrowOnError
+	>({
 		responseTransformer: setReviewScheduleEnabledResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-schedules/{scheduleId}",

@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { listProductFeedbackNeedsActionResponseTransformer } from "../transformers.gen.js";
 import type {
 	ListProductFeedbackNeedsActionData,
+	ListProductFeedbackNeedsActionErrors,
 	ListProductFeedbackNeedsActionResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const listProductFeedbackNeedsAction = <ThrowOnError extends boolean = false>(
 	options?: Options<ListProductFeedbackNeedsActionData, ThrowOnError>,
-): RequestResult<ListProductFeedbackNeedsActionResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListProductFeedbackNeedsActionResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListProductFeedbackNeedsActionResponses,
+	ListProductFeedbackNeedsActionErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		ListProductFeedbackNeedsActionResponses,
+		ListProductFeedbackNeedsActionErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listProductFeedbackNeedsActionResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/needs-action",

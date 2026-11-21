@@ -4,17 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listSlackChannelsResponseTransformer } from "../transformers.gen.js";
-import type { ListSlackChannelsData, ListSlackChannelsResponses } from "../types.gen.js";
+import type {
+	ListSlackChannelsData,
+	ListSlackChannelsErrors,
+	ListSlackChannelsResponses,
+} from "../types.gen.js";
 
 /**
  * List the workspace's allow-listed Slack channels with their consent state
  */
 export const listSlackChannels = <ThrowOnError extends boolean = false>(
 	options: Options<ListSlackChannelsData, ThrowOnError>,
-): RequestResult<ListSlackChannelsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListSlackChannelsResponses, unknown, ThrowOnError>({
-		responseTransformer: listSlackChannelsResponseTransformer,
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/slack/channels",
-		...options,
-	});
+): RequestResult<ListSlackChannelsResponses, ListSlackChannelsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListSlackChannelsResponses, ListSlackChannelsErrors, ThrowOnError>(
+		{
+			responseTransformer: listSlackChannelsResponseTransformer,
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/slack/channels",
+			...options,
+		},
+	);

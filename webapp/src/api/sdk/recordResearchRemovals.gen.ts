@@ -3,7 +3,11 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { RecordResearchRemovalsData, RecordResearchRemovalsResponses } from "../types.gen.js";
+import type {
+	RecordResearchRemovalsData,
+	RecordResearchRemovalsErrors,
+	RecordResearchRemovalsResponses,
+} from "../types.gen.js";
 
 /**
  * Attest removal of participant keys from retained research copies
@@ -12,8 +16,12 @@ import type { RecordResearchRemovalsData, RecordResearchRemovalsResponses } from
  */
 export const recordResearchRemovals = <ThrowOnError extends boolean = false>(
 	options: Options<RecordResearchRemovalsData, ThrowOnError>,
-): RequestResult<RecordResearchRemovalsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RecordResearchRemovalsResponses, unknown, ThrowOnError>({
+): RequestResult<RecordResearchRemovalsResponses, RecordResearchRemovalsErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		RecordResearchRemovalsResponses,
+		RecordResearchRemovalsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/research-disclosures/{datasetId}/removal-receipts",
 		...options,

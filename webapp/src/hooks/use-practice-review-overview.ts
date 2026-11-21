@@ -224,8 +224,8 @@ export function useDeliveryBreakdown(
 
 /** The delivered feedback by location and the partly delivered count, as one state. */
 function deliveredState(
-	delivered: UseQueryResult<ReasonCount[]>,
-	partlyDelivered: UseQueryResult<ReasonCount[]>,
+	delivered: UseQueryResult<ReasonCount[], unknown>,
+	partlyDelivered: UseQueryResult<ReasonCount[], unknown>,
 ): DeliveredByLocationState {
 	if (!delivered.isSuccess || !partlyDelivered.isSuccess) {
 		const state = combinePanelStates([queryLoadState(delivered), queryLoadState(partlyDelivered)]);

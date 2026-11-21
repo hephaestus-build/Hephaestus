@@ -27,6 +27,31 @@ A problem has the RFC 9457 members `type`, `title`, `status` and `detail`.
   Add the slug to [Problem types](#problem-types) in the same change.
 - The webapp reads the `type` through `isProblemType` and `stepUpChallengeOf` in `webapp/src/lib/problem-detail.ts`.
   It shows `detail`, or `title` when `detail` is absent.
+  A test holds each slug that the webapp names to the `ProblemType` list in `server/openapi.yaml`.
+
+## The published contract
+
+`OpenAPIConfiguration` writes one error contract into `server/openapi.yaml`, and the generated clients take it from there.
+
+- The `ProblemDetail` schema always has `status` and `title`.
+  Spring leaves out `type` for `about:blank`, so `type` is optional.
+- The `ProblemType` schema lists `about:blank` and every `ProblemType` URI, from the enum.
+  It is an open enum (ADR 0103), because a minor release can add a type.
+- Each 4xx or 5xx response that an operation lists is `application/problem+json` with `ProblemDetail`.
+  An error body that an operation declares itself stays, such as the OAuth error of the MCP token endpoint.
+- Each operation has `4XX` and `5XX` responses with the same schema, for the statuses that it does not list.
+  Do not use `default`: it also covers redirects.
+- Declare a status only when a client branches on it.
+  Examples are 404 for a missing resource, 409 for a conflict, and 400 or 422 for validation.
+  Declare it with `@ApiResponse` on the controller method that answers it.
+  Do not keep a separate list of statuses for each operation.
+- A controller never answers an error with an empty body.
+  Throw an exception that an advice maps, or throw a `ResponseStatusException`.
+- A filter writes its problem with `ProblemResponse` (`core/web`).
+  A request without a valid sign-in gets a 401 problem with the `WWW-Authenticate` challenge.
+  A request that the security filters refuse gets a 403 problem.
+- A request that the servlet container rejects before Spring MVC runs gets the Spring Boot error body, not a problem.
+  A firewall rejection is one example.
 
 ## Which message reaches the client
 
@@ -142,6 +167,10 @@ Another LLM model on this connection has this upstream id.
 ### conversation-lease-lost
 
 A Hephaestus host wrote for a turn attempt that lost its lease.
+
+### conversation-turn-stopped
+
+The turn attempt must stop and end: the developer stopped it, or its deadline passed. `stop` names the reason.
 
 ### conversation-refused
 

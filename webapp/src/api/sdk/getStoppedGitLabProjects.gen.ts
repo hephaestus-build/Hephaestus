@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetStoppedGitLabProjectsData,
+	GetStoppedGitLabProjectsErrors,
 	GetStoppedGitLabProjectsResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const getStoppedGitLabProjects = <ThrowOnError extends boolean = false>(
 	options: Options<GetStoppedGitLabProjectsData, ThrowOnError>,
-): RequestResult<GetStoppedGitLabProjectsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetStoppedGitLabProjectsResponses, unknown, ThrowOnError>({
+): RequestResult<GetStoppedGitLabProjectsResponses, GetStoppedGitLabProjectsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetStoppedGitLabProjectsResponses,
+		GetStoppedGitLabProjectsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/repositories/stopped",
 		...options,

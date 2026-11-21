@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getOwnMembershipResponseTransformer } from "../transformers.gen.js";
-import type { GetOwnMembershipData, GetOwnMembershipResponses } from "../types.gen.js";
+import type {
+	GetOwnMembershipData,
+	GetOwnMembershipErrors,
+	GetOwnMembershipResponses,
+} from "../types.gen.js";
 
 /**
  * Get your workspace membership
  */
 export const getOwnMembership = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnMembershipData, ThrowOnError>,
-): RequestResult<GetOwnMembershipResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnMembershipResponses, unknown, ThrowOnError>({
+): RequestResult<GetOwnMembershipResponses, GetOwnMembershipErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetOwnMembershipResponses, GetOwnMembershipErrors, ThrowOnError>({
 		responseTransformer: getOwnMembershipResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/members/me",

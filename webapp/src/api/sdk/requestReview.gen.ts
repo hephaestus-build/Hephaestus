@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { RequestReviewData, RequestReviewResponses } from "../types.gen.js";
+import type {
+	RequestReviewData,
+	RequestReviewErrors,
+	RequestReviewResponses,
+} from "../types.gen.js";
 
 /**
  * Ask for a review of an item
  */
 export const requestReview = <ThrowOnError extends boolean = false>(
 	options: Options<RequestReviewData, ThrowOnError>,
-): RequestResult<RequestReviewResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RequestReviewResponses, unknown, ThrowOnError>({
+): RequestResult<RequestReviewResponses, RequestReviewErrors, ThrowOnError> =>
+	(options.client ?? client).post<RequestReviewResponses, RequestReviewErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-requests",
 		...options,

@@ -99,7 +99,11 @@ class WebVitalsControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
         report(List.of(vital("TTFB", "LOAD", "OTHER", "OTHER", 120), vital("TTFB", "ROUTE", "OTHER", "OTHER", 0)))
                 .expectStatus()
                 .isBadRequest()
-                .expectBody(Void.class);
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.detail")
+                .isEqualTo("The report holds a measurement that no page can produce.");
         report(Collections.nCopies(41, vital("TTFB", "LOAD", "OTHER", "OTHER", 120)))
                 .expectStatus()
                 .isBadRequest()

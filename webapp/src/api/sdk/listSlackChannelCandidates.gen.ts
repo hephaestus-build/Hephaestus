@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	ListSlackChannelCandidatesData,
+	ListSlackChannelCandidatesErrors,
 	ListSlackChannelCandidatesResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const listSlackChannelCandidates = <ThrowOnError extends boolean = false>(
 	options: Options<ListSlackChannelCandidatesData, ThrowOnError>,
-): RequestResult<ListSlackChannelCandidatesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListSlackChannelCandidatesResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListSlackChannelCandidatesResponses,
+	ListSlackChannelCandidatesErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		ListSlackChannelCandidatesResponses,
+		ListSlackChannelCandidatesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/slack/channels/candidates",
 		...options,

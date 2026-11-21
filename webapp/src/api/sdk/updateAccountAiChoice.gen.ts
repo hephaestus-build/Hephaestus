@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { updateAccountAiChoiceResponseTransformer } from "../transformers.gen.js";
-import type { UpdateAccountAiChoiceData, UpdateAccountAiChoiceResponses } from "../types.gen.js";
+import type {
+	UpdateAccountAiChoiceData,
+	UpdateAccountAiChoiceErrors,
+	UpdateAccountAiChoiceResponses,
+} from "../types.gen.js";
 
 /**
  * Change your AI choice for every workspace you are in
  */
 export const updateAccountAiChoice = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateAccountAiChoiceData, ThrowOnError>,
-): RequestResult<UpdateAccountAiChoiceResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateAccountAiChoiceResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateAccountAiChoiceResponses, UpdateAccountAiChoiceErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		UpdateAccountAiChoiceResponses,
+		UpdateAccountAiChoiceErrors,
+		ThrowOnError
+	>({
 		responseTransformer: updateAccountAiChoiceResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/ai-choice",

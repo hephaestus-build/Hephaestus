@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { workspaceListLlmConnectionsResponseTransformer } from "../transformers.gen.js";
 import type {
 	WorkspaceListLlmConnectionsData,
+	WorkspaceListLlmConnectionsErrors,
 	WorkspaceListLlmConnectionsResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const workspaceListLlmConnections = <ThrowOnError extends boolean = false>(
 	options: Options<WorkspaceListLlmConnectionsData, ThrowOnError>,
-): RequestResult<WorkspaceListLlmConnectionsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<WorkspaceListLlmConnectionsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	WorkspaceListLlmConnectionsResponses,
+	WorkspaceListLlmConnectionsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		WorkspaceListLlmConnectionsResponses,
+		WorkspaceListLlmConnectionsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: workspaceListLlmConnectionsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/connections",

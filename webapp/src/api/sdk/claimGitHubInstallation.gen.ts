@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	ClaimGitHubInstallationData,
+	ClaimGitHubInstallationErrors,
 	ClaimGitHubInstallationResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const claimGitHubInstallation = <ThrowOnError extends boolean = false>(
 	options: Options<ClaimGitHubInstallationData, ThrowOnError>,
-): RequestResult<ClaimGitHubInstallationResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ClaimGitHubInstallationResponses, unknown, ThrowOnError>({
+): RequestResult<ClaimGitHubInstallationResponses, ClaimGitHubInstallationErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		ClaimGitHubInstallationResponses,
+		ClaimGitHubInstallationErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/github-installations/{installationId}/claim",
 		...options,

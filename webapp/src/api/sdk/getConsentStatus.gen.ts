@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetConsentStatusData, GetConsentStatusResponses } from "../types.gen.js";
+import type {
+	GetConsentStatusData,
+	GetConsentStatusErrors,
+	GetConsentStatusResponses,
+} from "../types.gen.js";
 
 /**
  * Get the current consent notice and status
  */
 export const getConsentStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetConsentStatusData, ThrowOnError>,
-): RequestResult<GetConsentStatusResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetConsentStatusResponses, unknown, ThrowOnError>({
+): RequestResult<GetConsentStatusResponses, GetConsentStatusErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetConsentStatusResponses, GetConsentStatusErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/consent",
 		...options,

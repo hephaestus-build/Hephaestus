@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { DeclinePracticeReleaseData, DeclinePracticeReleaseResponses } from "../types.gen.js";
+import type {
+	DeclinePracticeReleaseData,
+	DeclinePracticeReleaseErrors,
+	DeclinePracticeReleaseResponses,
+} from "../types.gen.js";
 
 /**
  * Decline this version of a practice release
  */
 export const declinePracticeRelease = <ThrowOnError extends boolean = false>(
 	options: Options<DeclinePracticeReleaseData, ThrowOnError>,
-): RequestResult<DeclinePracticeReleaseResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<DeclinePracticeReleaseResponses, unknown, ThrowOnError>({
+): RequestResult<DeclinePracticeReleaseResponses, DeclinePracticeReleaseErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		DeclinePracticeReleaseResponses,
+		DeclinePracticeReleaseErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/releases/{slug}",
 		...options,

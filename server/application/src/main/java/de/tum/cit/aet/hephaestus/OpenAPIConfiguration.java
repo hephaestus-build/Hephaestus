@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus;
 
 import de.tum.cit.aet.hephaestus.core.UserViewRead;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
@@ -19,12 +20,16 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.Paths;
 import io.swagger.v3.oas.models.media.ArraySchema;
+import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.IntegerSchema;
 import io.swagger.v3.oas.models.media.MapSchema;
+import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.HeaderParameter;
 import io.swagger.v3.oas.models.parameters.Parameter;
+import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.responses.ApiResponses;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayDeque;
@@ -279,29 +284,98 @@ public class OpenAPIConfiguration {
         openApi.setPaths(relative);
     }
 
+    private static final String PROBLEM_MEDIA = "application/problem+json";
+
+    static final String PROBLEM_TYPE = "ProblemType";
+
     /**
-     * Spring writes extension properties at the top level. Every problem names its
-     * request ({@link RequestReference}). With tracing off there is no id, so the field is optional.
+     * One error contract: every error answer is a {@code ProblemDetail}. Spring writes extension properties at the
+     * top level. Every problem names its request ({@link RequestReference}). With tracing off there is no id, so the
+     * field is optional. Spring leaves {@code type} out for {@code about:blank} (RFC 9457 §3.1.1), so it is optional,
+     * and {@code title} and {@code status} are always written.
      */
     private static void declareProblemShape(OpenAPI openApi) {
         Schema<?> problem = openApi.getComponents().getSchemas().get("ProblemDetail");
-        if (problem != null) {
-            var properties = problem.getProperties();
-            if (properties != null) {
-                properties.remove("properties");
-                // RFC 9457 makes both URI references, and Spring fills a missing instance with the request path.
-                for (String reference : List.of("type", "instance")) {
-                    Schema<?> member = properties.get(reference);
-                    if (member != null) member.setFormat("uri-reference");
-                }
-            }
-            problem.addProperty(
-                    RequestReference.PROPERTY,
-                    new StringSchema()
-                            .pattern("^[0-9a-f]{32}$")
-                            .description("The request's trace id, the same as the X-Request-Id header"));
-            declareProblemExtensions(problem);
+        if (problem == null) return;
+        var properties = problem.getProperties();
+        if (properties != null) {
+            properties.remove("properties");
+            // RFC 9457 makes it a URI reference, and Spring fills a missing instance with the request path.
+            Schema<?> instance = properties.get("instance");
+            if (instance != null) instance.setFormat("uri-reference");
         }
+        openApi.getComponents().addSchemas(PROBLEM_TYPE, problemTypeSchema());
+        problem.addProperty("type", new Schema<>().$ref(COMPONENTS + PROBLEM_TYPE));
+        problem.setRequired(List.of("status", "title"));
+        problem.addProperty(
+                RequestReference.PROPERTY,
+                new StringSchema()
+                        .pattern("^[0-9a-f]{32}$")
+                        .description("The request's trace id, the same as the X-Request-Id header"));
+        declareProblemExtensions(problem);
+        declareProblemResponses(openApi);
+    }
+
+    /**
+     * {@link ProblemType} is the registry, so the spec lists its URIs from the enum. A server adds a type in a minor
+     * release, so the list is open (ADR 0103 rule 3).
+     */
+    static Schema<String> problemTypeSchema() {
+        List<String> known = new ArrayList<>();
+        known.add("about:blank");
+        for (ProblemType type : ProblemType.values()) known.add(type.uri().toString());
+        StringSchema schema = new StringSchema();
+        schema.setFormat("uri-reference");
+        schema.setDescription(OPEN_ENUM_NOTE
+                + " The problem's kind. A client branches on it, never on the title or the detail. A problem"
+                + " without a type is about:blank: its status is its kind.");
+        schema.setExamples(known);
+        return schema;
+    }
+
+    /**
+     * Every 4xx and 5xx answer is a problem. An operation lists the statuses that it documents, and the {@code 4XX} and
+     * {@code 5XX} ranges cover the rest. A list of every status for each operation would be a claim that nothing
+     * checks, and {@code default} would also claim the redirects. An error body that an operation declares itself,
+     * such as an OAuth error, stays.
+     */
+    private static void declareProblemResponses(OpenAPI openApi) {
+        if (openApi.getPaths() == null) return;
+        openApi.getPaths()
+                .values()
+                .forEach(item -> item.readOperations().forEach(operation -> {
+                    if (operation.getResponses() == null) operation.setResponses(new ApiResponses());
+                    operation.getResponses().forEach((code, response) -> {
+                        if (isError(code) && isProblemOrEmpty(response.getContent()))
+                            response.setContent(problemContent());
+                    });
+                    for (String range : List.of("4XX", "5XX")) {
+                        operation
+                                .getResponses()
+                                .putIfAbsent(
+                                        range,
+                                        new ApiResponse()
+                                                .description("A problem. Its type names the kind.")
+                                                .content(problemContent()));
+                    }
+                }));
+    }
+
+    private static boolean isError(String code) {
+        return code.startsWith("4") || code.startsWith("5");
+    }
+
+    private static boolean isProblemOrEmpty(Content content) {
+        return content == null
+                || content.values().stream()
+                        .allMatch(media -> media.getSchema() != null
+                                && (COMPONENTS + "ProblemDetail")
+                                        .equals(media.getSchema().get$ref()));
+    }
+
+    private static Content problemContent() {
+        return new Content()
+                .addMediaType(PROBLEM_MEDIA, new MediaType().schema(new Schema<>().$ref(COMPONENTS + "ProblemDetail")));
     }
 
     /**

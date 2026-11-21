@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	AdminProbeLlmConnectionData,
+	AdminProbeLlmConnectionErrors,
 	AdminProbeLlmConnectionResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const adminProbeLlmConnection = <ThrowOnError extends boolean = false>(
 	options: Options<AdminProbeLlmConnectionData, ThrowOnError>,
-): RequestResult<AdminProbeLlmConnectionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdminProbeLlmConnectionResponses, unknown, ThrowOnError>({
+): RequestResult<AdminProbeLlmConnectionResponses, AdminProbeLlmConnectionErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		AdminProbeLlmConnectionResponses,
+		AdminProbeLlmConnectionErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/connections/{id}/probe",
 		...options,

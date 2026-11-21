@@ -4,7 +4,11 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getOwnGroupStandingsResponseTransformer } from "../transformers.gen.js";
-import type { GetOwnGroupStandingsData, GetOwnGroupStandingsResponses } from "../types.gen.js";
+import type {
+	GetOwnGroupStandingsData,
+	GetOwnGroupStandingsErrors,
+	GetOwnGroupStandingsResponses,
+} from "../types.gen.js";
 
 /**
  * List the current developer's practice group standings
@@ -13,8 +17,12 @@ import type { GetOwnGroupStandingsData, GetOwnGroupStandingsResponses } from "..
  */
 export const getOwnGroupStandings = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnGroupStandingsData, ThrowOnError>,
-): RequestResult<GetOwnGroupStandingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnGroupStandingsResponses, unknown, ThrowOnError>({
+): RequestResult<GetOwnGroupStandingsResponses, GetOwnGroupStandingsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetOwnGroupStandingsResponses,
+		GetOwnGroupStandingsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: getOwnGroupStandingsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/standings",

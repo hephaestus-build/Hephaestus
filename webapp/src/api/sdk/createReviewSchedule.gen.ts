@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { createReviewScheduleResponseTransformer } from "../transformers.gen.js";
-import type { CreateReviewScheduleData, CreateReviewScheduleResponses } from "../types.gen.js";
+import type {
+	CreateReviewScheduleData,
+	CreateReviewScheduleErrors,
+	CreateReviewScheduleResponses,
+} from "../types.gen.js";
 
 /**
  * Create a review schedule
  */
 export const createReviewSchedule = <ThrowOnError extends boolean = false>(
 	options: Options<CreateReviewScheduleData, ThrowOnError>,
-): RequestResult<CreateReviewScheduleResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CreateReviewScheduleResponses, unknown, ThrowOnError>({
+): RequestResult<CreateReviewScheduleResponses, CreateReviewScheduleErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CreateReviewScheduleResponses,
+		CreateReviewScheduleErrors,
+		ThrowOnError
+	>({
 		responseTransformer: createReviewScheduleResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-schedules",

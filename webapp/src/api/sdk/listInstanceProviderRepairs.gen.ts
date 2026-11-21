@@ -6,13 +6,22 @@ import type { Options } from "../sdk.gen.js";
 import { listInstanceProviderRepairsResponseTransformer } from "../transformers.gen.js";
 import type {
 	ListInstanceProviderRepairsData,
+	ListInstanceProviderRepairsErrors,
 	ListInstanceProviderRepairsResponses,
 } from "../types.gen.js";
 
 export const listInstanceProviderRepairs = <ThrowOnError extends boolean = false>(
 	options?: Options<ListInstanceProviderRepairsData, ThrowOnError>,
-): RequestResult<ListInstanceProviderRepairsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListInstanceProviderRepairsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListInstanceProviderRepairsResponses,
+	ListInstanceProviderRepairsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		ListInstanceProviderRepairsResponses,
+		ListInstanceProviderRepairsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listInstanceProviderRepairsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/provider-resource-repairs",

@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { getOwnPracticeProfileOverviewResponseTransformer } from "../transformers.gen.js";
 import type {
 	GetOwnPracticeProfileOverviewData,
+	GetOwnPracticeProfileOverviewErrors,
 	GetOwnPracticeProfileOverviewResponses,
 } from "../types.gen.js";
 
@@ -16,8 +17,16 @@ import type {
  */
 export const getOwnPracticeProfileOverview = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnPracticeProfileOverviewData, ThrowOnError>,
-): RequestResult<GetOwnPracticeProfileOverviewResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnPracticeProfileOverviewResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetOwnPracticeProfileOverviewResponses,
+	GetOwnPracticeProfileOverviewErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetOwnPracticeProfileOverviewResponses,
+		GetOwnPracticeProfileOverviewErrors,
+		ThrowOnError
+	>({
 		responseTransformer: getOwnPracticeProfileOverviewResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-profile/overview",

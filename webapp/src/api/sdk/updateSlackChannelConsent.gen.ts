@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { updateSlackChannelConsentResponseTransformer } from "../transformers.gen.js";
 import type {
 	UpdateSlackChannelConsentData,
+	UpdateSlackChannelConsentErrors,
 	UpdateSlackChannelConsentResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const updateSlackChannelConsent = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateSlackChannelConsentData, ThrowOnError>,
-): RequestResult<UpdateSlackChannelConsentResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateSlackChannelConsentResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdateSlackChannelConsentResponses,
+	UpdateSlackChannelConsentErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		UpdateSlackChannelConsentResponses,
+		UpdateSlackChannelConsentErrors,
+		ThrowOnError
+	>({
 		responseTransformer: updateSlackChannelConsentResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/slack/channels/{slackChannelId}",

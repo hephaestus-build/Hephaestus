@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	UpdateWorkspacePasskeyPolicyData,
+	UpdateWorkspacePasskeyPolicyErrors,
 	UpdateWorkspacePasskeyPolicyResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const updateWorkspacePasskeyPolicy = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateWorkspacePasskeyPolicyData, ThrowOnError>,
-): RequestResult<UpdateWorkspacePasskeyPolicyResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateWorkspacePasskeyPolicyResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdateWorkspacePasskeyPolicyResponses,
+	UpdateWorkspacePasskeyPolicyErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		UpdateWorkspacePasskeyPolicyResponses,
+		UpdateWorkspacePasskeyPolicyErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/passkey-policy",
 		...options,

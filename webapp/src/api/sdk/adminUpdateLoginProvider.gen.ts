@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { adminUpdateLoginProviderResponseTransformer } from "../transformers.gen.js";
 import type {
 	AdminUpdateLoginProviderData,
+	AdminUpdateLoginProviderErrors,
 	AdminUpdateLoginProviderResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const adminUpdateLoginProvider = <ThrowOnError extends boolean = false>(
 	options: Options<AdminUpdateLoginProviderData, ThrowOnError>,
-): RequestResult<AdminUpdateLoginProviderResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<AdminUpdateLoginProviderResponses, unknown, ThrowOnError>({
+): RequestResult<AdminUpdateLoginProviderResponses, AdminUpdateLoginProviderErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		AdminUpdateLoginProviderResponses,
+		AdminUpdateLoginProviderErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminUpdateLoginProviderResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/login-providers/{registrationId}",

@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { AdminUpdateLlmSettingsData, AdminUpdateLlmSettingsResponses } from "../types.gen.js";
+import type {
+	AdminUpdateLlmSettingsData,
+	AdminUpdateLlmSettingsErrors,
+	AdminUpdateLlmSettingsResponses,
+} from "../types.gen.js";
 
 /**
  * Update instance-wide LLM governance settings
  */
 export const adminUpdateLlmSettings = <ThrowOnError extends boolean = false>(
 	options: Options<AdminUpdateLlmSettingsData, ThrowOnError>,
-): RequestResult<AdminUpdateLlmSettingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AdminUpdateLlmSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminUpdateLlmSettingsResponses, AdminUpdateLlmSettingsErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		AdminUpdateLlmSettingsResponses,
+		AdminUpdateLlmSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/settings",
 		...options,

@@ -5,13 +5,22 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetCatalogPracticeReleaseData,
+	GetCatalogPracticeReleaseErrors,
 	GetCatalogPracticeReleaseResponses,
 } from "../types.gen.js";
 
 export const getCatalogPracticeRelease = <ThrowOnError extends boolean = false>(
 	options: Options<GetCatalogPracticeReleaseData, ThrowOnError>,
-): RequestResult<GetCatalogPracticeReleaseResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetCatalogPracticeReleaseResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetCatalogPracticeReleaseResponses,
+	GetCatalogPracticeReleaseErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetCatalogPracticeReleaseResponses,
+		GetCatalogPracticeReleaseErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}/release",
 		...options,

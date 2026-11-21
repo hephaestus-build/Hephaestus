@@ -3,7 +3,11 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ListGlobalContributorsData, ListGlobalContributorsResponses } from "../types.gen.js";
+import type {
+	ListGlobalContributorsData,
+	ListGlobalContributorsErrors,
+	ListGlobalContributorsResponses,
+} from "../types.gen.js";
 
 /**
  * List global contributors
@@ -12,8 +16,9 @@ import type { ListGlobalContributorsData, ListGlobalContributorsResponses } from
  */
 export const listGlobalContributors = <ThrowOnError extends boolean = false>(
 	options?: Options<ListGlobalContributorsData, ThrowOnError>,
-): RequestResult<ListGlobalContributorsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListGlobalContributorsResponses, unknown, ThrowOnError>({
-		url: "/contributors",
-		...options,
-	});
+): RequestResult<ListGlobalContributorsResponses, ListGlobalContributorsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		ListGlobalContributorsResponses,
+		ListGlobalContributorsErrors,
+		ThrowOnError
+	>({ url: "/contributors", ...options });
