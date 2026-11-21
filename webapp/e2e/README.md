@@ -67,6 +67,12 @@ colour schemes, a Tab walk, reflow, menus, dialogs and three keyboard-only proce
 `e2e` account and runs on any browser project; `docs/contributor/accessibility-audit-plan.mdx` says what it
 leaves to a person with a screen reader.
 
+## Content security policy
+
+The server's policy for the web app's page allows only the scripts that carry the page's nonce.
+`fixtures.ts` fails every test that uses its `test` when the page reports a violation of that policy, and `journeyCost` watches the browser context it opens for a journey the same way.
+Trusted Types are not enforced: the page only reports a violation, and the test lists it as a `csp-report` annotation. `content-security-policy.spec.ts` proves that such a report arrives, so the reports show what must change before Trusted Types are enforced.
+
 ## Journey budgets
 
 `journeys.spec.ts` holds the journeys that make up most use to what they cost: a cold load of the practice profile, Ask Hephaestus and the feedback that waits for approval, and the step from the practice profile to Ask Hephaestus.

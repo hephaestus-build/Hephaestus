@@ -148,6 +148,14 @@ The server writes the same nonce into `index.html` in place of the placeholder t
 The built-in nonce support of Spring Security 7.2.0 replaces the custom writer.
 Exit condition: Spring Security 7.2.0 is generally available in the Spring Boot version that the server uses (Spring Boot 4.2.0 or later).
 
+## Update — 2026-11-21: stage 3
+
+- **The page's policy.** Each request for the page gets a new 128-bit nonce. The policy of that response replaces `script-src 'self'` with `script-src 'nonce-…' 'strict-dynamic'`. Every other response keeps `script-src 'self'`: Swagger UI's page loads its scripts without a nonce, and a worker runs under the policy of its own response. Vite's build target supports `'strict-dynamic'` in every browser, so the page policy keeps no `'self'` fallback.
+- **Fail closed.** The server does not start when the built page carries no nonce placeholder, or when the policy file has no `script-src 'self'` to replace.
+- **Trusted Types are not enforced.** The page sends `require-trusted-types-for 'script'` only as report-only, so a Trusted Types violation blocks nothing. The browser suite fails on any enforced violation and lists each Trusted Types report on its test. `webapp/e2e/content-security-policy.spec.ts` proves that a report reaches the suite, so a run that lists none means a page that raised none. A later change enforces Trusted Types, once the suite lists no report.
+- **What `'strict-dynamic'` trades.** A script that the page trusts may load a script from any origin, which `'self'` refused. The web app creates no script element itself. A script that a proxy adds to the page no longer runs, so a proxy must pass the page through unchanged (`docs/admin/helm-chart.mdx` § Gateway routes).
+- **The exit condition stays.** When the Spring Boot version brings Spring Security 7.2.0, its nonce support replaces the custom header writer.
+
 ## Sources
 
 The full table with quotes is `lanes/webarch/SOURCES.md` in the 1.0 program notes. These rows decide the outcome:

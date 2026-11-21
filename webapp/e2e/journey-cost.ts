@@ -26,6 +26,7 @@ import {
 import { getResponse } from "msw";
 import type { WorkspaceMembership } from "@/api/types.gen";
 
+import { watchCspViolations } from "./fixtures.ts";
 import { asReturningReader } from "./screenshots/first-visit.ts";
 import { useFixtureApi } from "./screenshots/fixture-api.ts";
 import { handlers, NOW, WORKSPACE } from "./screenshots/workspace.ts";
@@ -101,10 +102,13 @@ export async function journeyCost(
 	});
 	const counted: JourneyCost[] = [];
 	try {
+		// The test's own context has the fixture's watch; this one is the journey's.
+		const violations = await watchCspViolations(inRounds.context(), test.info());
 		const instrumented = await instrument(inRounds, role, "in-rounds");
 		await journey(inRounds, async (content, options) => {
 			counted.push(await instrumented.settle(content, options?.byReader ?? false));
 		});
+		expect(violations(), "content security policy violations").toEqual([]);
 	} finally {
 		// A held read may still wait for its round.
 		await inRounds.context().unrouteAll({ behavior: "ignoreErrors" });
