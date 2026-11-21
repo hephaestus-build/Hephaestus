@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { existsSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -526,6 +527,46 @@ void test("canonical tags are withheld until verification for both image builder
 	assert.doesNotMatch(String(staging.run), /DOCKER_METADATA_OUTPUT_JSON/u);
 });
 
+/** How a scenario's registry answers reads of the pushed index, and the waits that it expects; none by default. */
+function indexReadsOf(scenario: object): { failures: number; error: string; sleeps: string[] } {
+	const field = (name: string): unknown =>
+		name in scenario ? Reflect.get(scenario, name) : undefined;
+	const failures = field("finalFailures");
+	const error = field("finalError");
+	const sleeps = field("sleeps");
+	return {
+		failures: typeof failures === "number" ? failures : 0,
+		error: typeof error === "string" ? error : "",
+		sleeps: Array.isArray(sleeps) ? sleeps.map(String) : [],
+	};
+}
+
+/**
+ * The reads of a pushed index that found nothing: the waits between them, a log line for each, and the annotation when
+ * the time limit is reached.
+ */
+async function assertIndexReads(
+	result: SpawnSyncReturns<string>,
+	sleepLog: string,
+	sleeps: readonly string[],
+	refused: boolean,
+): Promise<void> {
+	const slept = existsSync(sleepLog) ? await readFile(sleepLog, "utf8") : "";
+	assert.deepEqual(slept.trim() === "" ? [] : slept.trim().split("\n"), [...sleeps]);
+	if (sleeps.length > 0) {
+		assert.match(
+			result.stdout,
+			/does not serve \S+ yet, 0 s after its push; reading it again in 1 s/u,
+		);
+	}
+	if (sleeps.length > 0 && refused) {
+		assert.match(
+			result.stdout,
+			/::error title=Manifest::The registry did not serve \S+ within 60 s of its push/u,
+		);
+	}
+}
+
 const armLeaf = `sha256:${"b".repeat(64)}`;
 const buildIndex = `sha256:${"c".repeat(64)}`;
 const mergedIndex = `sha256:${"d".repeat(64)}`;
@@ -536,6 +577,30 @@ const platformLeaf = (architecture: string, selected: string) => ({
 const finalLeaves = [platformLeaf("arm64", armLeaf), platformLeaf("amd64", digest)];
 for (const scenario of [
 	{ name: "Dockerfile index and Buildpacks leaf match the final index", final: finalLeaves },
+	{
+		// GHCR can answer "not found" for an index that it accepted a moment ago.
+		name: "the pushed index is served after two reads that find nothing",
+		final: finalLeaves,
+		finalFailures: 2,
+		finalError: "not found",
+		sleeps: ["1", "2"],
+	},
+	{
+		name: "the pushed index is not served within 60 s",
+		final: finalLeaves,
+		finalFailures: 99,
+		finalError: "not found",
+		sleeps: ["1", "2", "4", "8", "15", "15", "15"],
+		refused: true,
+	},
+	{
+		name: "another registry error is not read again",
+		final: finalLeaves,
+		finalFailures: 1,
+		finalError: "unauthorized: authentication required",
+		sleeps: [],
+		refused: true,
+	},
 	{
 		name: "changed final leaf",
 		final: [platformLeaf("amd64", buildIndex), platformLeaf("arm64", armLeaf)],
@@ -695,10 +760,23 @@ if (args[2] === 'create') {
   process.exit(0);
 }
 const ref = args[3];
+if (ref.endsWith(process.env.MERGED_DIGEST)) {
+  const reads = Number(fs.existsSync(process.env.READ_COUNT) ? fs.readFileSync(process.env.READ_COUNT, 'utf8') : '0') + 1;
+  fs.writeFileSync(process.env.READ_COUNT, String(reads));
+  if (reads <= Number(process.env.FINAL_FAILURES)) {
+    process.stderr.write('ERROR: ' + ref + ': ' + process.env.FINAL_ERROR + '\n');
+    process.exit(1);
+  }
+}
 process.stdout.write(ref.endsWith(process.env.MERGED_DIGEST) ? process.env.FINAL_RAW : ref.endsWith(process.env.BUILD_INDEX) ? process.env.SOURCE_RAW : JSON.stringify({schemaVersion: 2, config: {}, layers: []}));
 `,
 			);
 			await chmod(docker, 0o755);
+			const reads = indexReadsOf(scenario);
+			// The waits between reads are recorded, not slept.
+			const sleepLog = path.join(directory, "sleeps");
+			await writeFile(path.join(directory, "sleep"), `#!/bin/sh\necho "$1" >> "${sleepLog}"\n`);
+			await chmod(path.join(directory, "sleep"), 0o755);
 			const callLog = path.join(directory, "calls");
 			await writeFile(callLog, "");
 			const result = spawnSync("bash", ["-e", "-c", String(create.get("run"))], {
@@ -715,6 +793,9 @@ process.stdout.write(ref.endsWith(process.env.MERGED_DIGEST) ? process.env.FINAL
 					GITHUB_RUN_ID: "77",
 					GITHUB_RUN_ATTEMPT: "1",
 					CALL_LOG: callLog,
+					READ_COUNT: path.join(directory, "reads"),
+					FINAL_FAILURES: String(reads.failures),
+					FINAL_ERROR: reads.error,
 					BUILD_INDEX: buildIndex,
 					MERGED_DIGEST: mergedIndex,
 					SOURCE_RAW: JSON.stringify({
@@ -732,6 +813,7 @@ process.stdout.write(ref.endsWith(process.env.MERGED_DIGEST) ? process.env.FINAL
 				},
 			});
 			assert.equal(result.status === 0, !("refused" in scenario), result.stderr);
+			await assertIndexReads(result, sleepLog, reads.sleeps, "refused" in scenario);
 			const callText = await readFile(callLog, "utf8");
 			const calls = callText
 				.trim()

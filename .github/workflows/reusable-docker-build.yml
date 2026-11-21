@@ -605,6 +605,27 @@ jobs:
           PLATFORMS: ${{ inputs.platforms }}
         run: |
           set -euo pipefail
+          # The step's output, which a function whose output a pipe reads can still log to.
+          exec 3>&1
+          # GHCR can answer "not found" for an index that it accepted a moment ago. So the pushed digest is read
+          # again on "not found" only, after 1, 2, 4 and 8 s and then every 15 s, for at most 60 s.
+          # Any other error fails at once.
+          read_pushed() {
+            local reference=$1 waited=0 delay=1 raw
+            until raw=$(docker buildx imagetools inspect "$reference" --raw 2>"$RUNNER_TEMP/inspect.err"); do
+              cat "$RUNNER_TEMP/inspect.err" >&2
+              grep -q 'not found' "$RUNNER_TEMP/inspect.err" || return 1
+              if (( waited + delay > 60 )); then
+                echo "::error title=Manifest::The registry did not serve $reference within ${waited} s of its push" >&3
+                return 1
+              fi
+              echo "The registry does not serve $reference yet, ${waited} s after its push; reading it again in ${delay} s" >&3
+              sleep "$delay"
+              waited=$(( waited + delay ))
+              delay=$(( delay * 2 > 15 ? 15 : delay * 2 ))
+            done
+            printf '%s\n' "$raw"
+          }
           mapfile -t platforms < <(jq -er '.[]' <<< "$PLATFORMS")
           (( ${#platforms[@]} > 0 ))
           for name in $(jq -r '.[]' <<< "$BUILT"); do
@@ -639,7 +660,7 @@ jobs:
             [[ "$merged" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
             # Each build scanned the digest it handed over in these artifacts.
             # Refuse publication if the index's real platform leaves differ from those scanned subjects.
-            docker buildx imagetools inspect "$repository@$merged" --raw |
+            read_pushed "$repository@$merged" |
               jq -e --argjson expected "$expected" '
                 [.manifests[] | select(.platform.os != "unknown" or .platform.architecture != "unknown")
                   | {platform: (.platform.os + "/" + .platform.architecture), digest: .digest}]
