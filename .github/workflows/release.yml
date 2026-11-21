@@ -810,9 +810,10 @@ jobs:
             for tag in "${tags[@]}"; do flags+=(-t "$ref:$tag"); done
             docker buildx imagetools create "${flags[@]}" "$ref@$digest"
           done < "$RUNNER_TEMP/promotions.tsv"
+          # Each alias moved to the verified digest. The registry can still serve a tag's old digest for a moment,
+          # so the check compares the tag with that digest and waits for it, for at most 60 s.
           while IFS=$'\t' read -r ref digest; do
             for tag in "${tags[@]}"; do
-              promoted=$(docker buildx imagetools inspect "$ref:$tag" --format '{{json .Manifest}}' | jq -r .digest)
-              [ "$promoted" = "$digest" ] || { echo "::error::Promotion changed $ref:$tag digest"; exit 1; }
+              node scripts/wait-for-image-tag.ts "$ref:$tag" "$digest"
             done
           done < "$RUNNER_TEMP/promotions.tsv"

@@ -1014,6 +1014,15 @@ void describe("ci-contract: release", () => {
 		const promoted = publication.indexOf("docker buildx imagetools create");
 		assert.ok(published !== -1 && immutable > published, "publication must verify immutable state");
 		assert.ok(promoted > immutable, "image aliases must only move after immutable publication");
+		// An alias moves by the verified digest, and its check compares the tag with that digest and waits for
+		// the registry: re-reading the tag and trusting its answer reads a stale digest for a moment.
+		assert.match(
+			publication,
+			/docker buildx imagetools create "\$\{flags\[@\]\}" "\$ref@\$digest"/u,
+		);
+		const waited = publication.indexOf('node scripts/wait-for-image-tag.ts "$ref:$tag" "$digest"');
+		assert.ok(waited > promoted, "each alias is checked against its digest after the promotion");
+		assert.doesNotMatch(publication, /imagetools inspect "\$ref:\$tag"/u);
 
 		// A re-run resumes the draft, so uploads must replace assets instead of failing on names.
 		for (const upload of source.matchAll(/gh release upload[\s\S]*?\n\n/gu)) {
