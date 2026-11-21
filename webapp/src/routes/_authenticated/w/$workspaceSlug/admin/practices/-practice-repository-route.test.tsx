@@ -462,6 +462,53 @@ describe("a change to the setting with a practice open", () => {
 	});
 });
 
+describe("changing the practice repository", () => {
+	it("keeps the dialog's words about the old repository while the save reloads the page", async () => {
+		const handbook = {
+			...practiceRepository,
+			repositoryItemId: "8",
+			nameWithOwner: "acme/handbook",
+		};
+		const reload = deferred();
+		const reloading = deferred();
+		server.use(
+			monitoredRepositories(),
+			...practicesHandlers([editable]),
+			servedRepository(practiceRepository),
+			http.put(SETTING_URL, () => {
+				server.use(
+					servedRepository(handbook),
+					http.get("*/workspaces/:workspaceSlug/practices", async () => {
+						reloading.resolve();
+						await reload.promise;
+						return HttpResponse.json([editable]);
+					}),
+				);
+				return HttpResponse.json(handbook);
+			}),
+		);
+
+		renderRouteAt("/w/acme/admin/practices");
+		const card = await cardOf();
+		fireEvent.click(await within(card).findByRole("button", { name: "Change" }, ROUTE_RENDER_WAIT));
+		const dialog = await screen.findByRole("dialog", { name: "Change practice repository" });
+		await chooseRepository(dialog, "acme/handbook");
+		fireEvent.click(within(dialog).getByRole("button", { name: "Change practice repository" }));
+
+		// The answer is in the cache, but the reload still runs: the dialog says what it said.
+		await reloading.promise;
+		await within(dialog).findByRole("button", { name: "Saving…" }, ROUTE_RENDER_WAIT);
+		expect(dialog.textContent).toContain("Practices edited in acme/practices move back");
+		expect(dialog.textContent).not.toContain("Choose another repository or directory first");
+		reload.resolve();
+		await waitFor(
+			async () =>
+				expect(screen.queryByRole("dialog", { name: "Change practice repository" })).toBeNull(),
+			ROUTE_RENDER_WAIT,
+		);
+	});
+});
+
 describe("moving a practice to the practice repository", () => {
 	beforeEach(() => {
 		server.use(...practicesHandlers([editable]), servedRepository(practiceRepository));
@@ -581,6 +628,34 @@ describe("moving a practice to the practice repository", () => {
 		expect(refusal.textContent).toContain("The default branch has no folder for this practice.");
 		expect(within(refusal).queryByRole("list")).toBeNull();
 		screen.getByText("Edited in Hephaestus");
+	});
+
+	it("closes the dialog when the practice is edited in the repository already", async () => {
+		server.use(
+			http.put(EDITED_IN_URL, () => {
+				server.use(...practicesHandlers([inRepository]));
+				return HttpResponse.json(
+					{
+						title: "Conflict",
+						status: 409,
+						detail: "This practice is edited in the practice repository already.",
+					},
+					{ status: 409 },
+				);
+			}),
+		);
+
+		renderRouteAt(PRACTICE_LEVEL);
+		await screen.findByText("Edited in Hephaestus", {}, ROUTE_RENDER_WAIT);
+		await confirmMove();
+
+		// Nothing is left to do: the dialog closes onto the read-only practice, with no refusal.
+		await screen.findByText("Edited in acme/practices", {}, ROUTE_RENDER_WAIT);
+		await waitFor(
+			async () => expect(screen.queryByRole("alertdialog")).toBeNull(),
+			ROUTE_RENDER_WAIT,
+		);
+		screen.getByRole("button", { name: "Edit in Hephaestus" });
 	});
 
 	it("asks for a recent sign-in after one request, then moves it on a fresh try", async () => {

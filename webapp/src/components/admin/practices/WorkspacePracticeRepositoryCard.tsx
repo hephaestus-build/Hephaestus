@@ -276,10 +276,34 @@ function PracticeRepositoryFormDialog({
 const DIRECTORY_RULE =
 	"Enter a path from the repository root, such as .hephaestus/practices, with no slash at either end. Use letters, digits, dots, hyphens and underscores, and no ., .. or .git part.";
 
+/**
+ * A save writes the new setting before its reload ends, so the form keeps the setting it was
+ * submitted from while the request runs and while the dialog fades out. A refusal shows the setting
+ * as it now is, which another admin may have changed meanwhile.
+ */
+function useSettingAsSubmitted(
+	live: PracticeRepository | undefined,
+	request: PracticeRepositoryRequest | undefined,
+) {
+	const [submittedFrom, setSubmittedFrom] = useState<PracticeRepository>();
+	return {
+		current: request?.phase === "refused" ? live : (submittedFrom ?? live),
+		rememberSubmitted: setSubmittedFrom,
+	};
+}
+
+/** Whether the chosen repository and directory are the setting already. */
+function sameSetting(current: PracticeRepository, chosen: string, directory: string) {
+	return (
+		chosen === current.repositoryItemId &&
+		(directory === "" ? DEFAULT_PRACTICE_DIRECTORY : directory) === current.directory
+	);
+}
+
 function PracticeRepositoryForm({
 	workspaceSlug,
 	action,
-	current,
+	current: live,
 	request,
 	setting,
 }: {
@@ -296,6 +320,7 @@ function PracticeRepositoryForm({
 	const directoryHintId = useId();
 	const directoryErrorId = useId();
 	const unchangedId = useId();
+	const { current, rememberSubmitted } = useSettingAsSubmitted(live, request);
 	const [chosen, setChosen] = useState(current?.repositoryItemId ?? "");
 	const [directory, setDirectory] = useState(current?.directory ?? "");
 	const [submitted, setSubmitted] = useState(false);
@@ -307,10 +332,7 @@ function PracticeRepositoryForm({
 	const options = repositories.status === "ready" ? repositories.options : [];
 	const chosenOption = options.find((option) => option.itemId === chosen);
 	const trimmed = directory.trim();
-	const unchanged =
-		changing &&
-		chosen === current.repositoryItemId &&
-		(trimmed === "" ? DEFAULT_PRACTICE_DIRECTORY : trimmed) === current.directory;
+	const unchanged = changing && sameSetting(current, chosen, trimmed);
 	const missingRepository =
 		submitted &&
 		chosenOption === undefined &&
@@ -337,6 +359,7 @@ function PracticeRepositoryForm({
 		) {
 			return;
 		}
+		rememberSubmitted(current);
 		setting.onSave(
 			trimmed === ""
 				? { repositoryItemId: chosenOption.itemId }
@@ -529,7 +552,12 @@ function UnsetPracticeRepositoryDialog({
 				)}
 				<AlertDialogFooter>
 					<AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
-					<AlertDialogAction pending={pending} disabled={pending} onClick={setting.onUnset}>
+					{/* Unset by another admin meanwhile: the card reads Not set, and there is nothing left to unset. */}
+					<AlertDialogAction
+						pending={pending}
+						disabled={pending || current === undefined}
+						onClick={setting.onUnset}
+					>
 						{pending ? "Unsetting…" : "Unset"}
 					</AlertDialogAction>
 				</AlertDialogFooter>
