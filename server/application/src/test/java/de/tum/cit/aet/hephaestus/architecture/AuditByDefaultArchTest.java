@@ -162,7 +162,10 @@ class AuditByDefaultArchTest extends HephaestusArchitectureTest {
     private static Stream<JavaMethod> dispatchTargets(JavaMethodCall call) {
         var declared = call.getTarget().resolveMember().stream();
         if (!call.getTargetOwner().isInterface()) return declared;
+        // A production interface dispatches only to production code; a test fake must not count as its recorder.
+        boolean production = inProduction(call.getTargetOwner());
         var implementations = call.getTargetOwner().getAllSubclasses().stream()
+                .filter(implementation -> !production || inProduction(implementation))
                 .flatMap(implementation -> implementation.getAllMethods().stream())
                 .filter(method -> !method.getModifiers().contains(JavaModifier.ABSTRACT))
                 .filter(method -> method.getName().equals(call.getName()))

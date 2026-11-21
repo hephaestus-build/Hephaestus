@@ -105,6 +105,7 @@ class SpringCorrectnessArchitectureTest extends HephaestusArchitectureTest {
                                                 target.getPackageName().startsWith(BASE_PACKAGE))
                                         .anyMatch(target -> target.isAnnotatedWith(OutboundEgressGateway.class)
                                                 || target.getAllSubclasses().stream()
+                                                        .filter(HephaestusArchitectureTest::inProduction)
                                                         .anyMatch(type ->
                                                                 type.isAnnotatedWith(OutboundEgressGateway.class)));
                             }
