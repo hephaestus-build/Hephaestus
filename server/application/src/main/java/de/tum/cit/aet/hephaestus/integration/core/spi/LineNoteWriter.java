@@ -27,10 +27,11 @@ public interface LineNoteWriter {
     String actor(FeedbackTarget target);
 
     /**
-     * Resolves or reopens the thread of one owned note. The thread must still start with that note. A thread already in
-     * the asked state counts as {@link CopyUpdateKind#EDITED}, so a repeated attempt is safe.
+     * Resolves or reopens the thread of one owned note. The thread must still start with that note, and a resolve needs
+     * the owned note to be the newest one: a person's later reply refuses it. A thread already in the asked state is
+     * {@link ThreadChange.Outcome#DONE}, so a repeated attempt is safe.
      */
-    CopyUpdateReceipt resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved);
+    ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved);
 
     record OwnedEdit(CopyReceipt copy, String previousWriteKey, LineNote note) {}
 

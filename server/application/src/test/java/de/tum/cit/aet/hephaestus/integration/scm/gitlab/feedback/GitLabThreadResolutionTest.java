@@ -9,14 +9,15 @@ import static org.mockito.Mockito.verify;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
-import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,7 +72,7 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
         rest.answer(200, discussion(false, BOT));
         rest.answer(200, discussion(true, BOT));
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).kind()).isEqualTo(CopyUpdateKind.EDITED);
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         var put = rest.calls().getLast();
         assertThat(put.method()).isEqualTo(HttpMethod.PUT);
         assertThat(put.path()).isEqualTo(PATH);
@@ -85,7 +86,7 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
         rest.answer(200, discussion(true, BOT));
         rest.answer(200, discussion(false, BOT));
 
-        assertThat(writer.resolveThread(TARGET, copy(), false).kind()).isEqualTo(CopyUpdateKind.EDITED);
+        assertThat(writer.resolveThread(TARGET, copy(), false).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         assertThat(rest.calls().getLast().json()).containsEntry("resolved", false);
         verify(egressGuard).requireDeliveryAllowed("gitlab.reopen-feedback-thread");
     }
@@ -95,7 +96,7 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
         rest.answer(200, Map.of("id", BOT));
         rest.answer(200, discussion(true, BOT));
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).kind()).isEqualTo(CopyUpdateKind.EDITED);
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         assertThat(rest.calls()).extracting(ScriptedGitLabRest.Call::method).containsOnly(HttpMethod.GET);
         verify(egressGuard, never()).requireDeliveryAllowed(anyString());
     }
@@ -105,7 +106,16 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
         rest.answer(200, Map.of("id", BOT));
         rest.answer(200, discussion(false, 2));
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).kind()).isEqualTo(CopyUpdateKind.UNSUPPORTED);
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.NOT_OWNED);
+        assertThat(rest.calls()).extracting(ScriptedGitLabRest.Call::method).containsOnly(HttpMethod.GET);
+    }
+
+    @Test
+    void shouldNotResolveADiscussionWhereAPersonRepliedAfterTheNote() {
+        rest.answer(200, Map.of("id", BOT));
+        rest.answer(200, replied(false));
+
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.REPLIED);
         assertThat(rest.calls()).extracting(ScriptedGitLabRest.Call::method).containsOnly(HttpMethod.GET);
     }
 
@@ -115,7 +125,7 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
         rest.answer(404, "{\"message\":\"404 Not found\"}");
         rest.answer(200, Map.of("iid", 42));
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).kind()).isEqualTo(CopyUpdateKind.GONE);
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.GONE);
     }
 
     @Test
@@ -124,7 +134,7 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
         rest.answer(200, discussion(false, BOT));
         rest.answer(200, discussion(false, BOT));
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).kind()).isEqualTo(CopyUpdateKind.TRANSIENT);
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.TRANSIENT);
     }
 
     @Test
@@ -143,6 +153,22 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
                 true,
                 null,
                 "gid://gitlab/Discussion/" + DISCUSSION);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> replied(boolean resolved) {
+        Map<String, Object> reply = new LinkedHashMap<>();
+        reply.put("id", 5303063);
+        reply.put("type", "DiffNote");
+        reply.put("body", "I think this is fine.");
+        reply.put("system", false);
+        reply.put("author", Map.of("id", 2, "username", "person"));
+        reply.put("resolvable", true);
+        reply.put("resolved", resolved);
+        var notes = new ArrayList<>(
+                (List<Map<String, Object>>) discussion(resolved, BOT).get("notes"));
+        notes.add(reply);
+        return Map.of("id", DISCUSSION, "individual_note", false, "notes", notes);
     }
 
     private static Map<String, Object> discussion(boolean resolved, long author) {

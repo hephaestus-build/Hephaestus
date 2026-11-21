@@ -8,6 +8,8 @@ public enum FeedbackThreadStopReason {
     GONE,
     /** The thread no longer starts with the owned note. Final. */
     UNSUPPORTED,
+    /** A person replied after the owned note: Hephaestus does not close a conversation that a person continues. Final. */
+    REPLIED,
     /** The feedback was withdrawn. */
     WITHDRAWN,
     /** The workspace does not permit feedback delivery from the evidence the change rests on. */
@@ -19,6 +21,6 @@ public enum FeedbackThreadStopReason {
 
     /** Whether no later decision may change the thread again. */
     public boolean isFinal() {
-        return this == HUMAN_CONTROLLED || this == GONE || this == UNSUPPORTED;
+        return this == HUMAN_CONTROLLED || this == GONE || this == UNSUPPORTED || this == REPLIED;
     }
 }

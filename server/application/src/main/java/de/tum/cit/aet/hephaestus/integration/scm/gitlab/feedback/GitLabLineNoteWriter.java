@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
@@ -706,7 +707,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
 
     // A discussion is resolved when its resolvable notes are; the owned note starts it, so its flag is the thread's.
     @Override
-    public CopyUpdateReceipt resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved) {
+    public ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved) {
         String subject = targets.subject(target, kind());
         long workspaceId = target.item().workspaceId();
         String externalRef = copy.externalRef();
@@ -715,9 +716,9 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         String segment =
                 thread != null && thread.startsWith(DISCUSSION_GID) ? thread.substring(DISCUSSION_GID.length()) : "";
         if (ref == null || !ref.matches() || !SEGMENT.matcher(segment).matches())
-            return GitLabDiscussionNotes.unsupported(copy, "Copy has no GitLab thread identity");
+            return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.NOT_OWNED, "Copy has no GitLab thread identity");
         if (gitLabProvider.isRateLimitCritical(workspaceId))
-            return CopyUpdateReceipt.transientFailure(copy.copyId(), "The GitLab rate limit is critical");
+            return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.TRANSIENT, "The GitLab rate limit is critical");
         String type = ref.group(1);
         long noteId = Long.parseLong(ref.group(2));
         try {
@@ -736,13 +737,22 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 return readable != null
                                 && readable.path("iid").isIntegralNumber()
                                 && readable.path("iid").longValue() == mr.iid()
-                        ? CopyUpdateReceipt.gone(copy.copyId(), "The provider thread no longer exists")
-                        : CopyUpdateReceipt.transientFailure(copy.copyId(), "The merge request could not be read");
+                        ? ThreadChange.of(
+                                copy.copyId(), ThreadChange.Outcome.GONE, "The provider thread no longer exists")
+                        : ThreadChange.of(
+                                copy.copyId(), ThreadChange.Outcome.TRANSIENT, "The merge request could not be read");
             }
-            Boolean current = read.status() == 200 ? threadState(read.json(), noteId, type, author) : null;
+            JsonNode found = read.status() == 200 ? read.json() : null;
+            Boolean current = threadState(found, noteId, type, author);
             if (current == null)
-                return GitLabDiscussionNotes.unsupported(copy, "The thread no longer starts with the owned note");
-            if (current == resolved) return GitLabDiscussionNotes.edited(copy);
+                return ThreadChange.of(
+                        copy.copyId(),
+                        ThreadChange.Outcome.NOT_OWNED,
+                        "The thread no longer starts with the owned note");
+            if (current == resolved) return ThreadChange.done(copy.copyId());
+            if (resolved && !endsWithOwn(Objects.requireNonNull(found), author))
+                return ThreadChange.of(
+                        copy.copyId(), ThreadChange.Outcome.REPLIED, "A person replied after the owned note");
             egressGuard.requireDeliveryAllowed(
                     resolved ? "gitlab.resolve-feedback-thread" : "gitlab.reopen-feedback-thread");
             Answer written;
@@ -750,16 +760,18 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 written = exchange(
                         workspaceId, HttpMethod.PUT, request(workspaceId, mr, segment), Map.of("resolved", resolved));
             } catch (RuntimeException unknown) {
-                return CopyUpdateReceipt.transientFailure(copy.copyId(), "Provider thread change outcome is unknown");
+                return ThreadChange.of(
+                        copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider thread change outcome is unknown");
             }
             Boolean stored = written.status() == 200 ? threadState(written.json(), noteId, type, author) : null;
             return Objects.equals(stored, resolved)
-                    ? GitLabDiscussionNotes.edited(copy)
-                    : CopyUpdateReceipt.transientFailure(copy.copyId(), "Provider did not confirm the thread state");
+                    ? ThreadChange.done(copy.copyId())
+                    : ThreadChange.of(
+                            copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider did not confirm the thread state");
         } catch (OutboundEgressSuppressedException e) {
             throw e;
         } catch (RuntimeException e) {
-            return CopyUpdateReceipt.transientFailure(copy.copyId(), "Provider thread change failed");
+            return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider thread change failed");
         }
     }
 
@@ -773,6 +785,15 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 || !first.path("resolvable").booleanValue()
                 || !first.path("resolved").isBoolean()) return null;
         return first.path("resolved").booleanValue();
+    }
+
+    // A system note, such as "resolved all threads", is no reply.
+    private static boolean endsWithOwn(JsonNode discussion, long author) {
+        JsonNode last = null;
+        for (JsonNode note : discussion.path("notes")) if (!note.path("system").booleanValue()) last = note;
+        return last != null
+                && last.path("author").path("id").isIntegralNumber()
+                && last.path("author").path("id").longValue() == author;
     }
 
     // The token's own account is the only author whose copy a correction may edit.

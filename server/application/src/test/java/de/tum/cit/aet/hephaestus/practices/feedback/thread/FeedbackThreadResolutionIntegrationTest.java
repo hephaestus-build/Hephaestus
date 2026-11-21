@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
-import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateReceipt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteFence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteResult;
@@ -27,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkFeedbackThreadChangedEvent;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasis;
@@ -71,6 +71,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -123,9 +124,6 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
 
     @Autowired
     FeedbackThreadResolutionRepository resolutions;
-
-    @Autowired
-    FeedbackThreadOwnership ownership;
 
     @Autowired
     PersonDataWriteFence privacy;
@@ -309,6 +307,18 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         assertThat(provider.changes).isEmpty();
     }
 
+    @Test
+    void shouldNotResolveAThreadWhereAPersonRepliedAfterTheNote() {
+        var first = sealed("q1", 30, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+        String thread = note(first, problems(first));
+        sealed("q2", 20, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);
+        provider.replied.add(thread);
+
+        assertThat(run(resolution(thread))).containsInstanceOf(ActionResult.Cancelled.class);
+        assertThat(resolution(thread).getStopReason()).isEqualTo(FeedbackThreadStopReason.REPLIED);
+        assertThat(provider.changes).isEmpty();
+    }
+
     private UUID sealed(
             String version,
             int minutesAgo,
@@ -387,7 +397,10 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
     }
 
     private List<UUID> problems(UUID result) {
-        return jdbc.queryForList("SELECT id FROM problem WHERE result_id = ? ORDER BY position", UUID.class, result);
+        return jdbc.query(
+                "SELECT id FROM problem WHERE result_id = ? ORDER BY position",
+                (row, index) -> Objects.requireNonNull(row.getObject(1, UUID.class)),
+                result);
     }
 
     /** Posts a delivered note on the work whose composition cites {@code problems}, and returns its thread. */
@@ -486,6 +499,9 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         final Map<String, Boolean> threads = new HashMap<>();
         final List<String> changes = new ArrayList<>();
 
+        /** Threads where a person replied after the owned note. */
+        final Set<String> replied = new HashSet<>();
+
         @Nullable
         Runnable during;
 
@@ -500,17 +516,18 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         }
 
         @Override
-        public CopyUpdateReceipt resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved) {
+        public ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved) {
             var hook = during;
             during = null;
             if (hook != null) hook.run();
             String thread = Objects.requireNonNull(copy.threadRef());
+            if (resolved && replied.contains(thread))
+                return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.REPLIED, "A person replied");
             if (!Objects.equals(threads.get(thread), resolved)) {
                 threads.put(thread, resolved);
                 changes.add(thread);
             }
-            return new CopyUpdateReceipt(
-                    copy.copyId(), CopyUpdateKind.EDITED, copy.externalRef(), copy.externalUrl(), null);
+            return ThreadChange.done(copy.copyId());
         }
 
         @Override

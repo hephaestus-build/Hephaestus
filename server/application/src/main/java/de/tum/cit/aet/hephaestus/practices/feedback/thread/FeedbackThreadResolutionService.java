@@ -10,9 +10,9 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppressedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
-import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateReceipt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasis;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
@@ -86,13 +86,13 @@ public class FeedbackThreadResolutionService {
         if (actor == null) return new ActionResult.Retry(ACTOR_UNKNOWN);
         var refused = transactions.execute(status -> begin(workspaceId, ask, actor, attempt, plan.feedback()));
         if (refused != null) return refused;
-        CopyUpdateReceipt receipt;
+        ThreadChange change;
         try {
-            receipt = writer.resolveThread(target, plan.copy(), plan.resolved());
+            change = writer.resolveThread(target, plan.copy(), plan.resolved());
         } catch (OutboundEgressSuppressedException silenced) {
             return new ActionResult.Defer(SILENCED);
         }
-        return Objects.requireNonNull(transactions.execute(status -> settle(workspaceId, ask, receipt)));
+        return Objects.requireNonNull(transactions.execute(status -> settle(workspaceId, ask, change)));
     }
 
     /** Ends the ask of an action that ended without confirming it, whoever ended it. */
@@ -160,10 +160,10 @@ public class FeedbackThreadResolutionService {
         return null;
     }
 
-    private ActionResult settle(long workspaceId, FeedbackThreadResolver.Payload ask, CopyUpdateReceipt receipt) {
+    private ActionResult settle(long workspaceId, FeedbackThreadResolver.Payload ask, ThreadChange change) {
         var row = resolutions.lockById(ask.resolutionId(), workspaceId).orElse(null);
-        return switch (receipt.kind()) {
-            case EDITED -> {
+        return switch (change.outcome()) {
+            case DONE -> {
                 if (row != null && row.current(ask.generation())) {
                     row.done(ask.generation(), clock.instant());
                     meters.record(row.isResolved(), null);
@@ -174,9 +174,13 @@ public class FeedbackThreadResolutionService {
                 if (row != null) stopped(row, ask, FeedbackThreadStopReason.GONE);
                 yield new ActionResult.Failed(ActionStopReason.ABSENT);
             }
-            case UNSUPPORTED -> {
+            case NOT_OWNED -> {
                 if (row != null) stopped(row, ask, FeedbackThreadStopReason.UNSUPPORTED);
                 yield new ActionResult.Failed(ActionStopReason.REJECTED);
+            }
+            case REPLIED -> {
+                if (row != null) stopped(row, ask, FeedbackThreadStopReason.REPLIED);
+                yield new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
             }
             case TRANSIENT -> new ActionResult.Reread(REREAD);
         };

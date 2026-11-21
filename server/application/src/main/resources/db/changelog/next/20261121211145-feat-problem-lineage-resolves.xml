@@ -52,7 +52,7 @@
         <comment>A thread resolution belongs to its workspace and goes with the copy whose note starts the thread; an index that leads with that key lets a copy delete find it without a scan. A stopped resolution names its reason and only a stopped one does. Problem lineage is read by identity within a workspace. The outbox accepts the new action kind.</comment>
         <sql>ALTER TABLE feedback_thread_resolution
             ADD CONSTRAINT ck_feedback_thread_resolution_state CHECK (state IN ('DONE', 'PENDING', 'STOPPED')),
-            ADD CONSTRAINT ck_feedback_thread_resolution_stop_reason CHECK (stop_reason IN ('FAILED', 'GONE', 'HUMAN_CONTROLLED', 'NOT_PERMITTED', 'PERSON_SUPPRESSED', 'UNSUPPORTED', 'WITHDRAWN')),
+            ADD CONSTRAINT ck_feedback_thread_resolution_stop_reason CHECK (stop_reason IN ('FAILED', 'GONE', 'HUMAN_CONTROLLED', 'NOT_PERMITTED', 'PERSON_SUPPRESSED', 'REPLIED', 'UNSUPPORTED', 'WITHDRAWN')),
             ADD CONSTRAINT ck_feedback_thread_resolution_stopped CHECK ((state = 'STOPPED') = (stop_reason IS NOT NULL)),
             ADD CONSTRAINT ck_feedback_thread_resolution_generation CHECK (generation &gt; 0),
             ADD CONSTRAINT sfk_feedback_thread_resolution_copy FOREIGN KEY (copy_id, workspace_id)

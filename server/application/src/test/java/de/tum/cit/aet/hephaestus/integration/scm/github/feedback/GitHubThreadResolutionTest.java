@@ -11,10 +11,10 @@ import static org.mockito.Mockito.verify;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
-import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -68,9 +68,7 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
 
     @Test
     void shouldResolveAnOwnedThreadAndConfirmItsState() {
-        var receipt = writer.resolveThread(TARGET, copy(), true);
-
-        assertThat(receipt.kind()).isEqualTo(CopyUpdateKind.EDITED);
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         assertThat(mutations).containsExactly("ResolveFeedbackThread");
         verify(guard).requireDeliveryAllowed("github.resolve-feedback-thread");
     }
@@ -79,7 +77,7 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
     void shouldReopenAThreadItResolved() {
         thread = thread(true, NOTE, true);
 
-        assertThat(writer.resolveThread(TARGET, copy(), false).kind()).isEqualTo(CopyUpdateKind.EDITED);
+        assertThat(writer.resolveThread(TARGET, copy(), false).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         assertThat(mutations).containsExactly("ReopenFeedbackThread");
         verify(guard).requireDeliveryAllowed("github.reopen-feedback-thread");
     }
@@ -88,7 +86,7 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
     void shouldCountAThreadAlreadyInTheAskedStateAsDoneWithoutWriting() {
         thread = thread(true, NOTE, true);
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).kind()).isEqualTo(CopyUpdateKind.EDITED);
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         assertThat(mutations).isEmpty();
         verify(guard, never()).requireDeliveryAllowed(anyString());
     }
@@ -96,18 +94,29 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
     @Test
     void shouldNotChangeAThreadThatDoesNotStartWithTheOwnedNote() {
         thread = thread(false, "PRRC_other", true);
-        assertThat(writer.resolveThread(TARGET, copy(), true).kind()).isEqualTo(CopyUpdateKind.UNSUPPORTED);
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.NOT_OWNED);
 
         thread = thread(false, NOTE, false);
-        assertThat(writer.resolveThread(TARGET, copy(), true).kind()).isEqualTo(CopyUpdateKind.UNSUPPORTED);
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.NOT_OWNED);
         assertThat(mutations).isEmpty();
+    }
+
+    @Test
+    void shouldNotResolveAThreadWhereAPersonRepliedAfterTheNoteButStillReopenOne() {
+        thread = thread(false, NOTE, true, false);
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.REPLIED);
+        assertThat(mutations).isEmpty();
+
+        thread = thread(true, NOTE, true, false);
+        assertThat(writer.resolveThread(TARGET, copy(), false).outcome()).isEqualTo(ThreadChange.Outcome.DONE);
+        assertThat(mutations).containsExactly("ReopenFeedbackThread");
     }
 
     @Test
     void shouldReportARemovedThreadGone() {
         thread = null;
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).kind()).isEqualTo(CopyUpdateKind.GONE);
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.GONE);
         assertThat(mutations).isEmpty();
     }
 
@@ -115,7 +124,7 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
     void shouldLeaveAnUnconfirmedChangeTransient() {
         confirms = false;
 
-        assertThat(writer.resolveThread(TARGET, copy(), true).kind()).isEqualTo(CopyUpdateKind.TRANSIENT);
+        assertThat(writer.resolveThread(TARGET, copy(), true).outcome()).isEqualTo(ThreadChange.Outcome.TRANSIENT);
     }
 
     @Test
@@ -128,6 +137,10 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
     }
 
     private static Map<String, Object> thread(boolean resolved, String firstNote, boolean ownFirst) {
+        return thread(resolved, firstNote, ownFirst, ownFirst);
+    }
+
+    private static Map<String, Object> thread(boolean resolved, String firstNote, boolean ownFirst, boolean ownLatest) {
         return Map.of(
                 "__typename",
                 "PullRequestReviewThread",
@@ -136,7 +149,9 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
                 "isResolved",
                 resolved,
                 "comments",
-                Map.of("nodes", List.of(Map.of("id", firstNote, "viewerDidAuthor", ownFirst))));
+                Map.of("nodes", List.of(Map.of("id", firstNote, "viewerDidAuthor", ownFirst))),
+                "latest",
+                Map.of("nodes", List.of(Map.of("viewerDidAuthor", ownLatest))));
     }
 
     private ClientGraphQlResponse answer(String document) {
