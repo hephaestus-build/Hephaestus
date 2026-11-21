@@ -25,13 +25,22 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * The enum checks reach a populated database: a stored value that the server does not write stops the upgrade at its
- * check, and the upgrade completes once that row is corrected, also on a rerun and after a rollback.
+ * The enum checks reach a populated database: a stored value that the server does not write stops the upgrade with its
+ * column and count before validation, and the upgrade completes once that row is corrected, also on a rerun and after
+ * a rollback.
  */
 @Tag("database")
 class EnumCheckConstraintsMigrationTest {
     private static final TestDatabase DATABASE = PostgreSQLTestContainer.createDatabase("enum_check_constraints");
     private static final String CHANGELOG = "db/changelog/next/20261121133358-db-enum-check-constraints.xml";
+    /** The query in {@code .migration/enum-columns-checked.md}, which psql runs with {@code \gexec}. */
+    private static final String GUIDE_QUERY = """
+            SELECT format('SELECT %L AS check_name, t.* FROM %s t WHERE NOT %s', conname, conrelid::regclass,
+                          regexp_replace(pg_get_constraintdef(oid), '^CHECK (.*) NOT VALID$', '\\1'))
+            FROM pg_constraint
+            WHERE contype = 'c' AND conname LIKE 'ck\\_%' AND NOT convalidated
+            """;
+
     private static final Pattern ADD =
             Pattern.compile("(?:ALTER TABLE (\\S+) |, )ADD CONSTRAINT ck_\\w+ CHECK \\((\\w+) IN");
 
@@ -53,7 +62,8 @@ class EnumCheckConstraintsMigrationTest {
                                         .toList()) + ")");
             }
             statement.execute(
-                    "INSERT INTO activity_event (event_type) VALUES ('ISSUE_CREATED'), ('DISCUSSION_CREATED')");
+                    "INSERT INTO activity_event (event_type) VALUES ('ISSUE_CREATED'), ('DISCUSSION_CREATED'), (NULL),"
+                            + " ('PROJECT_CREATED')");
             connection.commit();
 
             var database =
@@ -62,9 +72,25 @@ class EnumCheckConstraintsMigrationTest {
                 var contexts = new Contexts("prod");
                 var labels = new LabelExpression();
 
+                // The count stops the upgrade with the column and its number of rows, before validation runs.
                 assertThatThrownBy(() -> liquibase.update(contexts, labels))
-                        .hasStackTraceContaining("ck_activity_event_event_type")
-                        .hasStackTraceContaining("is violated by some row");
+                        .hasStackTraceContaining(
+                                "The upgrade stopped before it checks the stored rows of activity_event")
+                        .hasStackTraceContaining("activity_event.event_type: 2");
+                connection.rollback();
+                assertThat(allChecks(connection)).isEqualTo(1);
+                assertThat(validChecks(connection)).isZero();
+                // The query in this release's migration guide entry lists exactly the rows that the stop counted.
+                var listings = new ArrayList<String>();
+                try (var rows = statement.executeQuery(GUIDE_QUERY)) {
+                    while (rows.next()) listings.add(rows.getString(1));
+                }
+                assertThat(listings).hasSize(1);
+                var refused = new ArrayList<String>();
+                try (var rows = statement.executeQuery(listings.getFirst())) {
+                    while (rows.next()) refused.add(rows.getString("event_type"));
+                }
+                assertThat(refused).containsExactlyInAnyOrder("DISCUSSION_CREATED", "PROJECT_CREATED");
                 connection.rollback();
                 // The check that the stopped upgrade added refuses new unknown values already.
                 assertThatThrownBy(() -> statement.execute(
@@ -72,7 +98,8 @@ class EnumCheckConstraintsMigrationTest {
                         .hasMessageContaining("ck_activity_event_event_type");
                 connection.rollback();
 
-                statement.execute("DELETE FROM activity_event WHERE event_type = 'DISCUSSION_CREATED'");
+                statement.execute(
+                        "DELETE FROM activity_event WHERE event_type IN ('DISCUSSION_CREATED', 'PROJECT_CREATED')");
                 connection.commit();
                 liquibase.update(contexts, labels);
                 assertThat(validChecks(connection)).isEqualTo(checks);

@@ -11,7 +11,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-2" author="hephaestus">
-    <comment>Validation reads every row of activity_event without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of activity_event that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM activity_event WHERE NOT (event_type IN ('COMMENT_CREATED', 'COMMENT_DELETED', 'COMMENT_UPDATED', 'COMMIT_CREATED', 'ISSUE_CLOSED', 'ISSUE_CREATED', 'ISSUE_DELETED', 'ISSUE_LABELED', 'ISSUE_REOPENED', 'ISSUE_TYPED', 'ISSUE_UNLABELED', 'ISSUE_UNTYPED', 'PULL_REQUEST_CLOSED', 'PULL_REQUEST_DRAFTED', 'PULL_REQUEST_LABELED', 'PULL_REQUEST_MERGED', 'PULL_REQUEST_OPENED', 'PULL_REQUEST_READY', 'PULL_REQUEST_REOPENED', 'PULL_REQUEST_SYNCHRONIZED', 'PULL_REQUEST_UNLABELED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED', 'REVIEW_COMMENT_CREATED', 'REVIEW_COMMENT_DELETED', 'REVIEW_COMMENT_EDITED', 'REVIEW_DISMISSED', 'REVIEW_EDITED', 'REVIEW_THREAD_RESOLVED', 'REVIEW_THREAD_UNRESOLVED', 'REVIEW_UNKNOWN'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'activity_event', 'event_type', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of activity_event. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE activity_event VALIDATE CONSTRAINT ck_activity_event_event_type</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE activity_event DROP CONSTRAINT ck_activity_event_event_type, ADD CONSTRAINT ck_activity_event_event_type CHECK (event_type IN ('COMMENT_CREATED', 'COMMENT_DELETED', 'COMMENT_UPDATED', 'COMMIT_CREATED', 'ISSUE_CLOSED', 'ISSUE_CREATED', 'ISSUE_DELETED', 'ISSUE_LABELED', 'ISSUE_REOPENED', 'ISSUE_TYPED', 'ISSUE_UNLABELED', 'ISSUE_UNTYPED', 'PULL_REQUEST_CLOSED', 'PULL_REQUEST_DRAFTED', 'PULL_REQUEST_LABELED', 'PULL_REQUEST_MERGED', 'PULL_REQUEST_OPENED', 'PULL_REQUEST_READY', 'PULL_REQUEST_REOPENED', 'PULL_REQUEST_SYNCHRONIZED', 'PULL_REQUEST_UNLABELED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED', 'REVIEW_COMMENT_CREATED', 'REVIEW_COMMENT_DELETED', 'REVIEW_COMMENT_EDITED', 'REVIEW_DISMISSED', 'REVIEW_EDITED', 'REVIEW_THREAD_RESOLVED', 'REVIEW_THREAD_UNRESOLVED', 'REVIEW_UNKNOWN')) NOT VALID</sql>
@@ -28,7 +39,20 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-4" author="hephaestus">
-    <comment>Validation reads every row of client_session without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of client_session that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM client_session WHERE NOT (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'client_session', 'client_kind', n); END IF;
+  SELECT count(*) INTO n FROM client_session WHERE NOT (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'client_session', 'revoked_reason', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of client_session. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_session VALIDATE CONSTRAINT ck_client_session_client_kind; ALTER TABLE client_session VALIDATE CONSTRAINT ck_client_session_revoked_reason</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_session DROP CONSTRAINT ck_client_session_client_kind, ADD CONSTRAINT ck_client_session_client_kind CHECK (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT')) NOT VALID, DROP CONSTRAINT ck_client_session_revoked_reason, ADD CONSTRAINT ck_client_session_revoked_reason CHECK (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED')) NOT VALID</sql>
@@ -45,7 +69,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-6" author="hephaestus">
-    <comment>Validation reads every row of client_sign_in_handoff without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of client_sign_in_handoff that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM client_sign_in_handoff WHERE NOT (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'client_sign_in_handoff', 'client_kind', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of client_sign_in_handoff. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_sign_in_handoff VALIDATE CONSTRAINT ck_client_sign_in_handoff_client_kind</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_sign_in_handoff DROP CONSTRAINT ck_client_sign_in_handoff_client_kind, ADD CONSTRAINT ck_client_sign_in_handoff_client_kind CHECK (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT')) NOT VALID</sql>
@@ -62,7 +97,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-8" author="hephaestus">
-    <comment>Validation reads every row of commit_contributor without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of commit_contributor that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM commit_contributor WHERE NOT (role IN ('AUTHOR', 'COMMITTER', 'CO_AUTHOR'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'commit_contributor', 'role', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of commit_contributor. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_contributor VALIDATE CONSTRAINT ck_commit_contributor_role</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_contributor DROP CONSTRAINT ck_commit_contributor_role, ADD CONSTRAINT ck_commit_contributor_role CHECK (role IN ('AUTHOR', 'COMMITTER', 'CO_AUTHOR')) NOT VALID</sql>
@@ -79,7 +125,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-10" author="hephaestus">
-    <comment>Validation reads every row of commit_file_change without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of commit_file_change that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM commit_file_change WHERE NOT (change_type IN ('ADDED', 'CHANGED', 'COPIED', 'MODIFIED', 'REMOVED', 'RENAMED', 'UNKNOWN'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'commit_file_change', 'change_type', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of commit_file_change. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_file_change VALIDATE CONSTRAINT ck_commit_file_change_change_type</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_file_change DROP CONSTRAINT ck_commit_file_change_change_type, ADD CONSTRAINT ck_commit_file_change_change_type CHECK (change_type IN ('ADDED', 'CHANGED', 'COPIED', 'MODIFIED', 'REMOVED', 'RENAMED', 'UNKNOWN')) NOT VALID</sql>
@@ -96,7 +153,20 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-12" author="hephaestus">
-    <comment>Validation reads every row of commit_identity_resolution without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of commit_identity_resolution that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM commit_identity_resolution WHERE NOT (source IN ('AUTHOR', 'COMMITTER', 'CONTRIBUTOR'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'commit_identity_resolution', 'source', n); END IF;
+  SELECT count(*) INTO n FROM commit_identity_resolution WHERE NOT (state IN ('NO_ACCOUNT', 'PENDING', 'RESOLVED', 'UNANSWERED'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'commit_identity_resolution', 'state', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of commit_identity_resolution. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_identity_resolution VALIDATE CONSTRAINT ck_commit_identity_resolution_source; ALTER TABLE commit_identity_resolution VALIDATE CONSTRAINT ck_commit_identity_resolution_state</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_identity_resolution DROP CONSTRAINT ck_commit_identity_resolution_source, ADD CONSTRAINT ck_commit_identity_resolution_source CHECK (source IN ('AUTHOR', 'COMMITTER', 'CONTRIBUTOR')) NOT VALID, DROP CONSTRAINT ck_commit_identity_resolution_state, ADD CONSTRAINT ck_commit_identity_resolution_state CHECK (state IN ('NO_ACCOUNT', 'PENDING', 'RESOLVED', 'UNANSWERED')) NOT VALID</sql>
@@ -113,7 +183,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-14" author="hephaestus">
-    <comment>Validation reads every row of connection without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of connection that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM connection WHERE NOT (attention_problem IN ('CREDENTIAL_EXPIRING', 'CREDENTIAL_REVOKED', 'PROVIDER_SUSPENDED', 'WEBHOOK_UNAVAILABLE'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'connection', 'attention_problem', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of connection. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection VALIDATE CONSTRAINT ck_connection_attention_problem</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection DROP CONSTRAINT ck_connection_attention_problem, ADD CONSTRAINT ck_connection_attention_problem CHECK (attention_problem IN ('CREDENTIAL_EXPIRING', 'CREDENTIAL_REVOKED', 'PROVIDER_SUSPENDED', 'WEBHOOK_UNAVAILABLE')) NOT VALID</sql>
@@ -130,7 +211,20 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-16" author="hephaestus">
-    <comment>Validation reads every row of connection_audit without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of connection_audit that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM connection_audit WHERE NOT (from_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'connection_audit', 'from_state', n); END IF;
+  SELECT count(*) INTO n FROM connection_audit WHERE NOT (to_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'connection_audit', 'to_state', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of connection_audit. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection_audit VALIDATE CONSTRAINT ck_connection_audit_from_state; ALTER TABLE connection_audit VALIDATE CONSTRAINT ck_connection_audit_to_state</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection_audit DROP CONSTRAINT ck_connection_audit_from_state, ADD CONSTRAINT ck_connection_audit_from_state CHECK (from_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED')) NOT VALID, DROP CONSTRAINT ck_connection_audit_to_state, ADD CONSTRAINT ck_connection_audit_to_state CHECK (to_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED')) NOT VALID</sql>
@@ -147,7 +241,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-18" author="hephaestus">
-    <comment>Validation reads every row of identity_provider without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of identity_provider that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM identity_provider WHERE NOT (type IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'identity_provider', 'type', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of identity_provider. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider VALIDATE CONSTRAINT ck_identity_provider_type</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider DROP CONSTRAINT ck_identity_provider_type, ADD CONSTRAINT ck_identity_provider_type CHECK (type IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID</sql>
@@ -164,7 +269,20 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-20" author="hephaestus">
-    <comment>Validation reads every row of issue without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of issue that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM issue WHERE NOT (head_check_state IN ('CANCELLED', 'FAILURE', 'NONE', 'NO_PIPELINE', 'PENDING', 'SKIPPED', 'SUCCESS'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue', 'head_check_state', n); END IF;
+  SELECT count(*) INTO n FROM issue WHERE NOT (state_reason IN ('COMPLETED', 'DUPLICATE', 'NOT_PLANNED', 'REOPENED', 'UNKNOWN'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue', 'state_reason', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue VALIDATE CONSTRAINT ck_issue_head_check_state; ALTER TABLE issue VALIDATE CONSTRAINT ck_issue_state_reason</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue DROP CONSTRAINT ck_issue_head_check_state, ADD CONSTRAINT ck_issue_head_check_state CHECK (head_check_state IN ('CANCELLED', 'FAILURE', 'NONE', 'NO_PIPELINE', 'PENDING', 'SKIPPED', 'SUCCESS')) NOT VALID, DROP CONSTRAINT ck_issue_state_reason, ADD CONSTRAINT ck_issue_state_reason CHECK (state_reason IN ('COMPLETED', 'DUPLICATE', 'NOT_PLANNED', 'REOPENED', 'UNKNOWN')) NOT VALID</sql>
@@ -181,7 +299,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-22" author="hephaestus">
-    <comment>Validation reads every row of issue_comment without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of issue_comment that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM issue_comment WHERE NOT (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue_comment', 'author_association', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue_comment. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_comment VALIDATE CONSTRAINT ck_issue_comment_author_association</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_comment DROP CONSTRAINT ck_issue_comment_author_association, ADD CONSTRAINT ck_issue_comment_author_association CHECK (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER')) NOT VALID</sql>
@@ -198,7 +327,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-24" author="hephaestus">
-    <comment>Validation reads every row of issue_type without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of issue_type that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM issue_type WHERE NOT (color IN ('BLUE', 'GRAY', 'GREEN', 'ORANGE', 'PINK', 'PURPLE', 'RED', 'YELLOW'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue_type', 'color', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue_type. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_type VALIDATE CONSTRAINT ck_issue_type_color</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_type DROP CONSTRAINT ck_issue_type_color, ADD CONSTRAINT ck_issue_type_color CHECK (color IN ('BLUE', 'GRAY', 'GREEN', 'ORANGE', 'PINK', 'PURPLE', 'RED', 'YELLOW')) NOT VALID</sql>
@@ -215,7 +355,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-26" author="hephaestus">
-    <comment>Validation reads every row of issued_jwt without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of issued_jwt that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM issued_jwt WHERE NOT (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issued_jwt', 'revoked_reason', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issued_jwt. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issued_jwt VALIDATE CONSTRAINT ck_issued_jwt_revoked_reason</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issued_jwt DROP CONSTRAINT ck_issued_jwt_revoked_reason, ADD CONSTRAINT ck_issued_jwt_revoked_reason CHECK (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED')) NOT VALID</sql>
@@ -232,7 +383,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-28" author="hephaestus">
-    <comment>Validation reads every row of llm_connection without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of llm_connection that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM llm_connection WHERE NOT (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'llm_connection', 'connection_platform', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of llm_connection. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_connection VALIDATE CONSTRAINT ck_llm_connection_connection_platform</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_connection DROP CONSTRAINT ck_llm_connection_connection_platform, ADD CONSTRAINT ck_llm_connection_connection_platform CHECK (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM')) NOT VALID</sql>
@@ -249,7 +411,20 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-30" author="hephaestus">
-    <comment>Validation reads every row of llm_model without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of llm_model that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM llm_model WHERE NOT (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'llm_model', 'brand', n); END IF;
+  SELECT count(*) INTO n FROM llm_model WHERE NOT (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'llm_model', 'reasoning_effort', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of llm_model. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_model VALIDATE CONSTRAINT ck_llm_model_brand; ALTER TABLE llm_model VALIDATE CONSTRAINT ck_llm_model_reasoning_effort</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_model DROP CONSTRAINT ck_llm_model_brand, ADD CONSTRAINT ck_llm_model_brand CHECK (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI')) NOT VALID, DROP CONSTRAINT ck_llm_model_reasoning_effort, ADD CONSTRAINT ck_llm_model_reasoning_effort CHECK (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH')) NOT VALID</sql>
@@ -266,7 +441,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-32" author="hephaestus">
-    <comment>Validation reads every row of mcp_client_grant without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of mcp_client_grant that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM mcp_client_grant WHERE NOT (status IN ('ACTIVE', 'APPROVED', 'EXPIRED', 'PENDING', 'REFUSED', 'REVOKED'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'mcp_client_grant', 'status', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of mcp_client_grant. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE mcp_client_grant VALIDATE CONSTRAINT ck_mcp_client_grant_status</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE mcp_client_grant DROP CONSTRAINT ck_mcp_client_grant_status, ADD CONSTRAINT ck_mcp_client_grant_status CHECK (status IN ('ACTIVE', 'APPROVED', 'EXPIRED', 'PENDING', 'REFUSED', 'REVOKED')) NOT VALID</sql>
@@ -283,7 +469,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-34" author="hephaestus">
-    <comment>Validation reads every row of milestone without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of milestone that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM milestone WHERE NOT (state IN ('CLOSED', 'OPEN'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'milestone', 'state', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of milestone. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE milestone VALIDATE CONSTRAINT ck_milestone_state</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE milestone DROP CONSTRAINT ck_milestone_state, ADD CONSTRAINT ck_milestone_state CHECK (state IN ('CLOSED', 'OPEN')) NOT VALID</sql>
@@ -300,7 +497,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-36" author="hephaestus">
-    <comment>Validation reads every row of notification_subscription without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of notification_subscription that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM notification_subscription WHERE NOT (kind IN ('PRODUCT_FEEDBACK', 'PRODUCT_FEEDBACK_UPDATES', 'WEEKLY_DIGEST', 'WORKSPACE_ALERTS'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'notification_subscription', 'kind', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of notification_subscription. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE notification_subscription VALIDATE CONSTRAINT ck_notification_subscription_kind</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE notification_subscription DROP CONSTRAINT ck_notification_subscription_kind, ADD CONSTRAINT ck_notification_subscription_kind CHECK (kind IN ('PRODUCT_FEEDBACK', 'PRODUCT_FEEDBACK_UPDATES', 'WEEKLY_DIGEST', 'WORKSPACE_ALERTS')) NOT VALID</sql>
@@ -317,7 +525,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-38" author="hephaestus">
-    <comment>Validation reads every row of organization_membership without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of organization_membership that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM organization_membership WHERE NOT (role IN ('ADMIN', 'MEMBER'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'organization_membership', 'role', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of organization_membership. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE organization_membership VALIDATE CONSTRAINT ck_organization_membership_role</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE organization_membership DROP CONSTRAINT ck_organization_membership_role, ADD CONSTRAINT ck_organization_membership_role CHECK (role IN ('ADMIN', 'MEMBER')) NOT VALID</sql>
@@ -334,7 +553,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-40" author="hephaestus">
-    <comment>Validation reads every row of product_feedback without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of product_feedback that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM product_feedback WHERE NOT (kind IN ('BUG', 'FEEDBACK', 'IDEA'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'product_feedback', 'kind', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of product_feedback. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback VALIDATE CONSTRAINT ck_product_feedback_kind</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback DROP CONSTRAINT ck_product_feedback_kind, ADD CONSTRAINT ck_product_feedback_kind CHECK (kind IN ('BUG', 'FEEDBACK', 'IDEA')) NOT VALID</sql>
@@ -351,7 +581,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-42" author="hephaestus">
-    <comment>Validation reads every row of product_feedback_cleanup without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of product_feedback_cleanup that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM product_feedback_cleanup WHERE NOT (manual_step IN ('EDIT_HISTORY', 'UNFINISHED'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'product_feedback_cleanup', 'manual_step', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of product_feedback_cleanup. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_cleanup VALIDATE CONSTRAINT ck_product_feedback_cleanup_manual_step</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_cleanup DROP CONSTRAINT ck_product_feedback_cleanup_manual_step, ADD CONSTRAINT ck_product_feedback_cleanup_manual_step CHECK (manual_step IN ('EDIT_HISTORY', 'UNFINISHED')) NOT VALID</sql>
@@ -368,7 +609,20 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-44" author="hephaestus">
-    <comment>Validation reads every row of product_feedback_filing without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of product_feedback_filing that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM product_feedback_filing WHERE NOT (reason IN ('ABOUT_PERSON', 'ABUSE', 'DESTINATION_CHANGED', 'DESTINATION_UNAVAILABLE', 'GITHUB_REFUSED', 'LOW_CONFIDENCE', 'NONE', 'NO_DRAFT', 'OPTED_OUT', 'REDACTION', 'SECURITY'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'product_feedback_filing', 'reason', n); END IF;
+  SELECT count(*) INTO n FROM product_feedback_filing WHERE NOT (route IN ('ADMINS', 'PRIVATE', 'PUBLIC'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'product_feedback_filing', 'route', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of product_feedback_filing. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_filing VALIDATE CONSTRAINT ck_product_feedback_filing_reason; ALTER TABLE product_feedback_filing VALIDATE CONSTRAINT ck_product_feedback_filing_route</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_filing DROP CONSTRAINT ck_product_feedback_filing_reason, ADD CONSTRAINT ck_product_feedback_filing_reason CHECK (reason IN ('ABOUT_PERSON', 'ABUSE', 'DESTINATION_CHANGED', 'DESTINATION_UNAVAILABLE', 'GITHUB_REFUSED', 'LOW_CONFIDENCE', 'NONE', 'NO_DRAFT', 'OPTED_OUT', 'REDACTION', 'SECURITY')) NOT VALID, DROP CONSTRAINT ck_product_feedback_filing_route, ADD CONSTRAINT ck_product_feedback_filing_route CHECK (route IN ('ADMINS', 'PRIVATE', 'PUBLIC')) NOT VALID</sql>
@@ -385,7 +639,20 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-46" author="hephaestus">
-    <comment>Validation reads every row of provider_resource_repair without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of provider_resource_repair that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM provider_resource_repair WHERE NOT (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'provider_resource_repair', 'kind', n); END IF;
+  SELECT count(*) INTO n FROM provider_resource_repair WHERE NOT (resource_type IN ('BOT_TOKEN', 'BOT_USER', 'GROUP_HOOK', 'INSTALLATION', 'OAUTH_EXCHANGE', 'PROJECT_HOOK', 'REGISTRATION', 'SUBSCRIPTION'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'provider_resource_repair', 'resource_type', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of provider_resource_repair. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_resource_repair VALIDATE CONSTRAINT ck_provider_resource_repair_kind; ALTER TABLE provider_resource_repair VALIDATE CONSTRAINT ck_provider_resource_repair_resource_type</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_resource_repair DROP CONSTRAINT ck_provider_resource_repair_kind, ADD CONSTRAINT ck_provider_resource_repair_kind CHECK (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID, DROP CONSTRAINT ck_provider_resource_repair_resource_type, ADD CONSTRAINT ck_provider_resource_repair_resource_type CHECK (resource_type IN ('BOT_TOKEN', 'BOT_USER', 'GROUP_HOOK', 'INSTALLATION', 'OAUTH_EXCHANGE', 'PROJECT_HOOK', 'REGISTRATION', 'SUBSCRIPTION')) NOT VALID</sql>
@@ -402,7 +669,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-48" author="hephaestus">
-    <comment>Validation reads every row of pull_request_requested_reviewers without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of pull_request_requested_reviewers that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM pull_request_requested_reviewers WHERE NOT (review_state IN ('APPROVED', 'REQUESTED_CHANGES', 'REVIEWED', 'REVIEW_STARTED', 'UNAPPROVED', 'UNREVIEWED'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_requested_reviewers', 'review_state', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_requested_reviewers. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_requested_reviewers VALIDATE CONSTRAINT ck_pull_request_requested_reviewers_review_state</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_requested_reviewers DROP CONSTRAINT ck_pull_request_requested_reviewers_review_state, ADD CONSTRAINT ck_pull_request_requested_reviewers_review_state CHECK (review_state IN ('APPROVED', 'REQUESTED_CHANGES', 'REVIEWED', 'REVIEW_STARTED', 'UNAPPROVED', 'UNREVIEWED')) NOT VALID</sql>
@@ -419,7 +697,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-50" author="hephaestus">
-    <comment>Validation reads every row of pull_request_review without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of pull_request_review that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM pull_request_review WHERE NOT (state IN ('APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED', 'PENDING', 'UNKNOWN'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review', 'state', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_review. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review VALIDATE CONSTRAINT ck_pull_request_review_state</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review DROP CONSTRAINT ck_pull_request_review_state, ADD CONSTRAINT ck_pull_request_review_state CHECK (state IN ('APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED', 'PENDING', 'UNKNOWN')) NOT VALID</sql>
@@ -436,7 +725,22 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-52" author="hephaestus">
-    <comment>Validation reads every row of pull_request_review_comment without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of pull_request_review_comment that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM pull_request_review_comment WHERE NOT (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_comment', 'author_association', n); END IF;
+  SELECT count(*) INTO n FROM pull_request_review_comment WHERE NOT (side IN ('LEFT', 'RIGHT', 'UNKNOWN'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_comment', 'side', n); END IF;
+  SELECT count(*) INTO n FROM pull_request_review_comment WHERE NOT (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_comment', 'start_side', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_review_comment. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_comment VALIDATE CONSTRAINT ck_pull_request_review_comment_author_association; ALTER TABLE pull_request_review_comment VALIDATE CONSTRAINT ck_pull_request_review_comment_side; ALTER TABLE pull_request_review_comment VALIDATE CONSTRAINT ck_pull_request_review_comment_start_side</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_comment DROP CONSTRAINT ck_pull_request_review_comment_author_association, ADD CONSTRAINT ck_pull_request_review_comment_author_association CHECK (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER')) NOT VALID, DROP CONSTRAINT ck_pull_request_review_comment_side, ADD CONSTRAINT ck_pull_request_review_comment_side CHECK (side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, DROP CONSTRAINT ck_pull_request_review_comment_start_side, ADD CONSTRAINT ck_pull_request_review_comment_start_side CHECK (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID</sql>
@@ -453,7 +757,22 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-54" author="hephaestus">
-    <comment>Validation reads every row of pull_request_review_thread without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of pull_request_review_thread that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM pull_request_review_thread WHERE NOT (side IN ('LEFT', 'RIGHT', 'UNKNOWN'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_thread', 'side', n); END IF;
+  SELECT count(*) INTO n FROM pull_request_review_thread WHERE NOT (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_thread', 'start_side', n); END IF;
+  SELECT count(*) INTO n FROM pull_request_review_thread WHERE NOT (state IN ('RESOLVED', 'UNRESOLVED'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_thread', 'state', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_review_thread. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_thread VALIDATE CONSTRAINT ck_pull_request_review_thread_side; ALTER TABLE pull_request_review_thread VALIDATE CONSTRAINT ck_pull_request_review_thread_start_side; ALTER TABLE pull_request_review_thread VALIDATE CONSTRAINT ck_pull_request_review_thread_state</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_thread DROP CONSTRAINT ck_pull_request_review_thread_side, ADD CONSTRAINT ck_pull_request_review_thread_side CHECK (side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, DROP CONSTRAINT ck_pull_request_review_thread_start_side, ADD CONSTRAINT ck_pull_request_review_thread_start_side CHECK (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, DROP CONSTRAINT ck_pull_request_review_thread_state, ADD CONSTRAINT ck_pull_request_review_thread_state CHECK (state IN ('RESOLVED', 'UNRESOLVED')) NOT VALID</sql>
@@ -470,7 +789,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-56" author="hephaestus">
-    <comment>Validation reads every row of repository without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of repository that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM repository WHERE NOT (visibility IN ('INTERNAL', 'PRIVATE', 'PUBLIC', 'UNKNOWN'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'repository', 'visibility', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of repository. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository VALIDATE CONSTRAINT ck_repository_visibility</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository DROP CONSTRAINT ck_repository_visibility, ADD CONSTRAINT ck_repository_visibility CHECK (visibility IN ('INTERNAL', 'PRIVATE', 'PUBLIC', 'UNKNOWN')) NOT VALID</sql>
@@ -487,7 +817,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-58" author="hephaestus">
-    <comment>Validation reads every row of repository_collaborator without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of repository_collaborator that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM repository_collaborator WHERE NOT (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'UNKNOWN', 'WRITE'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'repository_collaborator', 'permission', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of repository_collaborator. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_collaborator VALIDATE CONSTRAINT ck_repository_collaborator_permission</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_collaborator DROP CONSTRAINT ck_repository_collaborator_permission, ADD CONSTRAINT ck_repository_collaborator_permission CHECK (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'UNKNOWN', 'WRITE')) NOT VALID</sql>
@@ -504,7 +845,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-60" author="hephaestus">
-    <comment>Validation reads every row of sync_job without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of sync_job that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM sync_job WHERE NOT (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'sync_job', 'kind', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of sync_job. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job VALIDATE CONSTRAINT ck_sync_job_kind</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job DROP CONSTRAINT ck_sync_job_kind, ADD CONSTRAINT ck_sync_job_kind CHECK (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID</sql>
@@ -521,7 +873,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-62" author="hephaestus">
-    <comment>Validation reads every row of team without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of team that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM team WHERE NOT (privacy IN ('SECRET', 'VISIBLE'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'team', 'privacy', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of team. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team VALIDATE CONSTRAINT ck_team_privacy</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team DROP CONSTRAINT ck_team_privacy, ADD CONSTRAINT ck_team_privacy CHECK (privacy IN ('SECRET', 'VISIBLE')) NOT VALID</sql>
@@ -538,7 +901,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-64" author="hephaestus">
-    <comment>Validation reads every row of team_membership without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of team_membership that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM team_membership WHERE NOT (role IN ('MAINTAINER', 'MEMBER'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'team_membership', 'role', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of team_membership. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_membership VALIDATE CONSTRAINT ck_team_membership_role</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_membership DROP CONSTRAINT ck_team_membership_role, ADD CONSTRAINT ck_team_membership_role CHECK (role IN ('MAINTAINER', 'MEMBER')) NOT VALID</sql>
@@ -555,7 +929,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-66" author="hephaestus">
-    <comment>Validation reads every row of team_repository_permission without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of team_repository_permission that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM team_repository_permission WHERE NOT (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'WRITE'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'team_repository_permission', 'permission', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of team_repository_permission. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_repository_permission VALIDATE CONSTRAINT ck_team_repository_permission_permission</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_repository_permission DROP CONSTRAINT ck_team_repository_permission_permission, ADD CONSTRAINT ck_team_repository_permission_permission CHECK (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'WRITE')) NOT VALID</sql>
@@ -572,7 +957,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-68" author="hephaestus">
-    <comment>Validation reads every row of user without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of user that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM "user" WHERE NOT (type IN ('BOT', 'ORGANIZATION', 'USER'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'user', 'type', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of user. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE "user" VALIDATE CONSTRAINT ck_user_type</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE "user" DROP CONSTRAINT ck_user_type, ADD CONSTRAINT ck_user_type CHECK (type IN ('BOT', 'ORGANIZATION', 'USER')) NOT VALID</sql>
@@ -589,7 +985,20 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-70" author="hephaestus">
-    <comment>Validation reads every row of workspace without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of workspace that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM workspace WHERE NOT (account_type IN ('ORG', 'USER'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace', 'account_type', n); END IF;
+  SELECT count(*) INTO n FROM workspace WHERE NOT (repository_selection IN ('ALL', 'SELECTED'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace', 'repository_selection', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace VALIDATE CONSTRAINT ck_workspace_account_type; ALTER TABLE workspace VALIDATE CONSTRAINT ck_workspace_repository_selection</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace DROP CONSTRAINT ck_workspace_account_type, ADD CONSTRAINT ck_workspace_account_type CHECK (account_type IN ('ORG', 'USER')) NOT VALID, DROP CONSTRAINT ck_workspace_repository_selection, ADD CONSTRAINT ck_workspace_repository_selection CHECK (repository_selection IN ('ALL', 'SELECTED')) NOT VALID</sql>
@@ -606,7 +1015,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-72" author="hephaestus">
-    <comment>Validation reads every row of workspace_llm_connection without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of workspace_llm_connection that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM workspace_llm_connection WHERE NOT (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace_llm_connection', 'connection_platform', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace_llm_connection. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_connection VALIDATE CONSTRAINT ck_workspace_llm_connection_connection_platform</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_connection DROP CONSTRAINT ck_workspace_llm_connection_connection_platform, ADD CONSTRAINT ck_workspace_llm_connection_connection_platform CHECK (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM')) NOT VALID</sql>
@@ -623,7 +1043,20 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-74" author="hephaestus">
-    <comment>Validation reads every row of workspace_llm_model without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of workspace_llm_model that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM workspace_llm_model WHERE NOT (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace_llm_model', 'brand', n); END IF;
+  SELECT count(*) INTO n FROM workspace_llm_model WHERE NOT (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace_llm_model', 'reasoning_effort', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace_llm_model. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_model VALIDATE CONSTRAINT ck_workspace_llm_model_brand; ALTER TABLE workspace_llm_model VALIDATE CONSTRAINT ck_workspace_llm_model_reasoning_effort</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_model DROP CONSTRAINT ck_workspace_llm_model_brand, ADD CONSTRAINT ck_workspace_llm_model_brand CHECK (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI')) NOT VALID, DROP CONSTRAINT ck_workspace_llm_model_reasoning_effort, ADD CONSTRAINT ck_workspace_llm_model_reasoning_effort CHECK (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH')) NOT VALID</sql>
@@ -640,7 +1073,18 @@
     </rollback>
   </changeSet>
     <changeSet id="1795259678525-76" author="hephaestus">
-    <comment>Validation reads every row of workspace_model_assignment without blocking reads or writes, and validating a valid check again does nothing. It fails on a row that holds a value the server does not write, and names the check. The upgrade then stops until that row is corrected or deleted.</comment>
+    <comment>First, count the rows of workspace_model_assignment that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  n bigint;
+BEGIN
+  SELECT count(*) INTO n FROM workspace_model_assignment WHERE NOT (purpose IN ('CONVERSATION', 'PRACTICE_REVIEW'));
+  IF n > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace_model_assignment', 'purpose', n); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace_model_assignment. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_model_assignment VALIDATE CONSTRAINT ck_workspace_model_assignment_purpose</sql>
     <rollback>
       <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_model_assignment DROP CONSTRAINT ck_workspace_model_assignment_purpose, ADD CONSTRAINT ck_workspace_model_assignment_purpose CHECK (purpose IN ('CONVERSATION', 'PRACTICE_REVIEW')) NOT VALID</sql>
