@@ -841,6 +841,15 @@ It does not publish again.
 A partial readback does not justify a second notification.
 Withdrawal and correction address the stored provider references in place.
 
+### Thread resolution
+
+The seal writes problem lineage, and in the same transaction it decides which of the developer's threads on the item to resolve or reopen.
+A thread resolves when every problem that its note cites is No longer present, and it reopens when one of them comes back.
+One `RESOLVE_FEEDBACK_THREAD` action changes one thread, on GitHub and GitLab.
+The action records the writing account before it writes, so the thread event of its own write is not read as a person's.
+A person's resolve, reopen or reply, or an event without an actor, ends Hephaestus's changes to that thread.
+[ADR 0086](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) § Update — 2026-11-21: problem lineage resolves and reopens threads owns the rules.
+
 ### Decisions and withholdings
 
 Each destination ends with prepared feedback or a withholding that the server records.

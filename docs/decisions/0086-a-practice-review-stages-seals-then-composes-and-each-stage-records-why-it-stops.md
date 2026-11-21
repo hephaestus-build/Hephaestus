@@ -334,3 +334,65 @@ Enforced by:
 - `ResultAdmissionIntegrationTest#shouldNotRecordAProblemNoLongerPresentWithoutCompleteProof`
 - `ResultAdmissionIntegrationTest#shouldCompareWithNoResultThatAPersonMarkedIncorrect`
 - `CapturedQuoteProbeTest`
+
+## Update — 2026-11-21: problem lineage resolves and reopens threads
+
+This update ships the second part of decision 19: the server resolves a thread from problem lineage, and reopens it.
+Repeats by identity and the composer's view of lineage stay decided, not shipped.
+[ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) keeps the rule: resolution is a server path, not a model tool.
+
+- **When.** The seal decides in the transaction that writes the lineage rows.
+  It looks at each thread that a posted note of the developer's feedback starts on the item.
+  When an edit made a newer revision of the feedback, the newest revision that owns the thread decides.
+- **Which problems.** A note cites the problems that its composition support names for that copy.
+  A note whose support is missing, or rests on a result without a problem, never resolves.
+- **Resolve.** Every problem that the note cites must be No longer present now.
+  Take the newest lineage row with the problem's identity, in the same practice, item and developer.
+  The problem is No longer present now when that row is No longer present.
+  So a note that cites two problems resolves only after both are gone, in one review or in two.
+  A lineage row records the problem's identity for this reason.
+  A key is not unique across practices or items, so the match stays within one practice, item and developer.
+- **Reopen.** When one cited problem is present again, the server reopens the thread.
+  A later review finds the problem as New, Unchanged or Updated.
+  The server reopens only a thread that its own resolve may have reached.
+  A resolve that never started is withdrawn instead.
+- **A person's state wins.** A person's resolve, reopen or reply hands the thread to people for good.
+  - An event is Hephaestus's own only when its actor is the account that writes the open change.
+    That change must also ask for the state that the event reports.
+    The writer records its account before the write starts.
+    So the event of its own write matches even when it arrives before the write is confirmed.
+  - Any other event is a person's.
+    An event without an actor is a person's too.
+    So a person can resolve a thread while Hephaestus's resolve still waits.
+    That person then owns the thread, and Hephaestus never reopens it.
+  - The server never resolves a thread with a reply from a person newer than its note.
+- **Permission.** Before it writes, the server checks that the evidence of the note still permits practice feedback delivery.
+  It also checks that the feedback is not withdrawn and that the developer's data is not held.
+- **Delivery.** One outbox action changes one thread.
+  The provider's thread state is its readback.
+  So an attempt whose write may have started reads the thread before it writes.
+  A thread already in the asked state counts as done.
+
+Integrations:
+
+- **GitHub**: `resolveReviewThread` and `unresolveReviewThread`.
+  The writing account is the token's viewer: for a GitHub App, its bot, which webhooks name as the sender.
+  The pull request review thread webhook now records its sender as the event's actor.
+- **GitLab**: the discussion's `resolved` flag through the REST API.
+  The writing account is the token's user.
+  A synced resolve names the discussion's resolver.
+  A synced reopen names no actor, so the server's own reopen on GitLab hands the thread to people.
+  The server then never changes that thread again.
+- **Slack and Outline: not applicable.** Their feedback has no note on the work, and no thread that the server opened.
+  Their adapters have no line note writer.
+
+Enforced by:
+
+- `FeedbackThreadResolutionIntegrationTest#shouldResolveAThreadWhenItsProblemIsNoLongerPresentAndReopenItWhenTheProblemComesBack`
+- `FeedbackThreadResolutionIntegrationTest#shouldResolveANoteThatCitesTwoProblemsOnlyWhenBothAreNoLongerPresent`
+- `FeedbackThreadResolutionIntegrationTest#shouldHandAThreadToPeopleWhenAPersonResolvesItWhileHephaestusStillWaitsAndNeverReopenIt`
+- `FeedbackThreadResolutionIntegrationTest#shouldTakeTheThreadEventOfItsOwnWriteAsItsOwnEvenWhenItArrivesBeforeTheWriteIsConfirmed`
+- `FeedbackThreadResolutionIntegrationTest#shouldTakeAThreadEventWithoutAnActorAsAPersons`
+- `FeedbackThreadResolutionIntegrationTest#shouldNotResolveAThreadWhereAPersonRepliedAfterTheNote`
+- `FeedbackThreadResolutionIntegrationTest#shouldNotResolveAThreadWhoseEvidenceNoLongerPermitsDelivery`
+- `GitHubThreadResolutionTest` and `GitLabThreadResolutionTest`

@@ -891,6 +891,16 @@ groups:
         annotations:
           summary: Readback could not tell whether feedback reached the work on {{ $labels.provider }}
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A thread that Hephaestus asked to resolve or reopen, where no attempt confirmed the change. The thread keeps its
+      # state, so nothing is wrong on the work, but the provider refused or did not answer every attempt.
+      - alert: HephaestusFeedbackThreadChangeFailing
+        expr: >-
+          sum by (direction) (increase(practice_feedback_thread_changes_total{job="hephaestus",outcome="failed"}[1d])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Hephaestus could not {{ $labels.direction }} a thread on the work
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A review that a push or a request started, and whose feedback no person approves first. The objective is 90 %
       # within 30 minutes; more than 30 % late spends its budget three times as fast.
       - alert: HephaestusFeedbackDeliverySlow

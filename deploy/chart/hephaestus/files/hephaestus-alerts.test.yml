@@ -2385,6 +2385,29 @@ tests:
         alertname: HephaestusFeedbackReadbackUnknown
         exp_alerts: []
 
+  - name: a thread change that no attempt confirmed fires, confirmed and handed-over changes do not
+    interval: 1m
+    input_series:
+      - series: 'practice_feedback_thread_changes_total{job="hephaestus",instance="server:9090",direction="resolve",outcome="failed"}'
+        values: "0 0 0 1x30"
+      - series: 'practice_feedback_thread_changes_total{job="hephaestus",instance="server:9090",direction="resolve",outcome="done"}'
+        values: "0+1x33"
+      - series: 'practice_feedback_thread_changes_total{job="hephaestus",instance="server:9090",direction="reopen",outcome="human_controlled"}'
+        values: "0+1x33"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusFeedbackThreadChangeFailing
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: HephaestusFeedbackThreadChangeFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              direction: resolve
+            exp_annotations:
+              summary: Hephaestus could not resolve a thread on the work
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: three reviews that all end partial stay below the floor of four
     interval: 1m
     input_series:
