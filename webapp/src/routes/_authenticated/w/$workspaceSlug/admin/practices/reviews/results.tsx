@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import {
 	getReviewOverviewOptions,
+	listPracticesOptions,
 	listReviewResultsInfiniteOptions,
 } from "@/api/@tanstack/react-query.gen";
 import { PracticeResultsSummary } from "@/components/admin/practice-reviews/PracticeResultsSummary";
@@ -105,12 +106,15 @@ function PracticeSummaryRead({
 		}),
 		placeholderData: keepSameSubject({ workspaceSlug }),
 	});
+	// The practices the scope filter reads already, so where this one is edited costs no request.
+	const practices = useQuery(listPracticesOptions({ path: { workspaceSlug } }));
 	const range = toDateRange(search);
 	return (
 		<PracticeResultsSummary
 			workspaceSlug={workspaceSlug}
 			practiceSlug={practiceSlug}
 			practiceName={practiceName}
+			editedIn={practices.data?.find((practice) => practice.slug === practiceSlug)?.editedIn}
 			rangeLabel={(range && dateRangeLabel(range)) ?? "All time"}
 			counts={panelState(query, (overview) => ({
 				status: "ready" as const,

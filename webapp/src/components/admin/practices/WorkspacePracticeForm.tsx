@@ -44,6 +44,8 @@ interface PracticeFormEditProps {
 	isPending: boolean;
 	definitionOptions: PracticeDefinitionOptions;
 	notice?: ReactNode;
+	/** Saving is off while the notice says why the server would refuse it; the fields stay to copy from. */
+	isSubmitDisabled?: boolean;
 }
 
 interface PracticeFormHostProps {
@@ -95,6 +97,7 @@ function EditPracticeForm({
 	initialData: practice,
 	onSubmit,
 	notice,
+	isSubmitDisabled,
 }: PracticeFormEditProps & PracticeFormHostProps) {
 	// Pin saves to the version that seeded the draft so background refreshes cannot overwrite newer edits.
 	const [seeded] = useState(practice.currentVersion);
@@ -104,6 +107,7 @@ function EditPracticeForm({
 			initialData={asDefinitionValue(practice, seeded)}
 			groups={groups}
 			isPending={isPending}
+			isSubmitDisabled={isSubmitDisabled}
 			definitionOptions={definitionOptions}
 			cancelAction={cancel}
 			beforeFields={

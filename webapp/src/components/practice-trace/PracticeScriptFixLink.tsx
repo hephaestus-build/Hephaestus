@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRightIcon } from "lucide-react";
 
-import { practiceFormLevel } from "@/components/admin/practices/practice-search";
+import type { PracticeEditedIn } from "@/api/types.gen";
+import { practiceSetupLevelFor } from "@/components/admin/practices/practice-search";
 import { DocLink } from "@/components/common/DocLink";
 import { InlineLink } from "@/components/common/InlineLink";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
@@ -18,6 +19,8 @@ export interface PracticeScriptFixLinkProps {
 	 * practices. Absent where the link sits in the practice's own sentence.
 	 */
 	practiceName?: string;
+	/** A practice edited in the practice repository has its script in its folder there, not an editor here. */
+	editedIn: PracticeEditedIn;
 	fix: PracticeScriptFix;
 }
 
@@ -25,6 +28,7 @@ export function PracticeScriptFixLink({
 	workspaceSlug,
 	practiceSlug,
 	practiceName,
+	editedIn,
 	fix,
 }: PracticeScriptFixLinkProps) {
 	// Place context after the visible label so speech control can match it (WCAG 2.5.3).
@@ -49,12 +53,13 @@ export function PracticeScriptFixLink({
 				<Link
 					to="/w/$workspaceSlug/admin/practices"
 					params={{ workspaceSlug }}
-					search={detailSearch(practiceFormLevel(practiceSlug))}
+					search={detailSearch(practiceSetupLevelFor(practiceSlug, editedIn))}
 				/>
 			}
 			className="inline-flex items-center gap-1 font-medium"
 		>
-			Edit the script{context}
+			{editedIn === "REPOSITORY" ? "Open in Practice setup" : "Edit the script"}
+			{context}
 			<ArrowRightIcon className="size-3 shrink-0" aria-hidden />
 		</InlineLink>
 	);
