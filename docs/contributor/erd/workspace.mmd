@@ -47,6 +47,10 @@ erDiagram
         TIMESTAMPTZ unavailable_since
         INTEGER backfill_repair_provider_count
         TIMESTAMPTZ repository_visibility_confirmed_at
+        VARCHAR(255) issue_recent_cursor
+        TIMESTAMPTZ issue_recent_window_start
+        VARCHAR(255) pull_request_recent_cursor
+        TIMESTAMPTZ pull_request_recent_window_start
     }
 
     ReviewScopeRepository {

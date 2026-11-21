@@ -11,8 +11,6 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
-import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
@@ -31,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSync
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryNameParser;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryNameParser.RepositoryOwnerAndName;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestConnection;
@@ -64,7 +63,6 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -83,9 +81,8 @@ import reactor.util.retry.Retry;
  * GitHub's {@code repository.issues} connection - the issue sync's source - excludes pull requests,
  * so this is the only sync path that can observe them.
  * <p>
- * Supports checkpoint/cursor persistence for resumable sync operations.
- * When a sync target ID is provided, the pagination cursor is persisted after
- * each page, allowing sync to resume from where it left off if interrupted.
+ * A window with more changed pull requests than one run may read stops at the page cap. The result then carries the
+ * cursor where the next run resumes the window, so that each run reads further into it.
  * <p>
  * Supports incremental sync via client-side filtering. Since GitHub's GraphQL API
  * doesn't support filterBy for pull requests, we implement incremental sync by:
@@ -107,7 +104,6 @@ public class GitHubPullRequestSyncService {
     private final GitHubPullRequestReviewCommentSyncService reviewCommentSyncService;
     private final GitHubIssueCommentProcessor issueCommentProcessor;
     private final GitHubIssueCommentSyncService issueCommentSyncService;
-    private final BackfillStateProvider backfillStateProvider;
     private final TransactionTemplate transactionTemplate;
     private final GitHubSyncProperties syncProperties;
     private final SyncSchedulerProperties syncSchedulerProperties;
@@ -144,7 +140,6 @@ public class GitHubPullRequestSyncService {
             GitHubPullRequestReviewCommentSyncService reviewCommentSyncService,
             GitHubIssueCommentProcessor issueCommentProcessor,
             GitHubIssueCommentSyncService issueCommentSyncService,
-            BackfillStateProvider backfillStateProvider,
             TransactionTemplate transactionTemplate,
             GitHubSyncProperties syncProperties,
             SyncSchedulerProperties syncSchedulerProperties,
@@ -159,7 +154,6 @@ public class GitHubPullRequestSyncService {
         this.reviewCommentSyncService = reviewCommentSyncService;
         this.issueCommentProcessor = issueCommentProcessor;
         this.issueCommentSyncService = issueCommentSyncService;
-        this.backfillStateProvider = backfillStateProvider;
         this.transactionTemplate = transactionTemplate;
         this.syncProperties = syncProperties;
         this.syncSchedulerProperties = syncSchedulerProperties;
@@ -174,24 +168,19 @@ public class GitHubPullRequestSyncService {
      *
      * @param scopeId           the scope ID for authentication
      * @param repositoryId      the repository ID to sync pull requests for
-     * @param syncTargetId      the sync target ID for cursor persistence (null to disable)
-     * @param initialCursor     the cursor to resume from (null to start from beginning)
+     * @param resumeCursor      where an open window resumes (null to start at the newest pull request)
      * @param lastSyncTimestamp the timestamp of the last sync for incremental sync (null for the initial sync timeframe)
-     * @return sync result containing status and count of pull requests synced
+     * @return the pass's outcome, and where the next run resumes a capped window
      */
-    public SyncResult syncForRepository(
-            Long scopeId,
-            Long repositoryId,
-            @Nullable Long syncTargetId,
-            @Nullable String initialCursor,
-            @Nullable Instant lastSyncTimestamp) {
+    public RecentSyncResult syncForRepository(
+            Long scopeId, Long repositoryId, @Nullable String resumeCursor, @Nullable Instant lastSyncTimestamp) {
         // Fetch repository outside of transaction to avoid holding locks during API calls
         Optional<Repository> repositoryResult = Objects.requireNonNull(
                 transactionTemplate.execute(status -> repositoryRepository.findById(repositoryId)));
         Repository repository = repositoryResult.orElse(null);
         if (repository == null) {
             log.debug("Skipped pull request sync: reason=repositoryNotFound, repoId={}", repositoryId);
-            return SyncResult.completed(0);
+            return new RecentSyncResult(SyncResult.completed(0), null);
         }
 
         String nameWithOwner = repository.getNameWithOwner();
@@ -199,7 +188,7 @@ public class GitHubPullRequestSyncService {
         Optional<RepositoryOwnerAndName> parsedName = GitHubRepositoryNameParser.parse(nameWithOwner);
         if (parsedName.isEmpty()) {
             log.warn("Skipped pull request sync: reason=invalidRepoNameFormat, repoName={}", safeNameWithOwner);
-            return SyncResult.completed(0);
+            return new RecentSyncResult(SyncResult.completed(0), null);
         }
         RepositoryOwnerAndName ownerAndName = parsedName.get();
 
@@ -231,14 +220,14 @@ public class GitHubPullRequestSyncService {
 
         // Probe the newest PR's updatedAt before running the expensive full query. Mirrors the
         // issue-sync totalCount probe (~1 point vs ~59). A resumed cursor means there are still pages to read.
-        if (initialCursor == null) {
+        if (resumeCursor == null) {
             if (!hasPullRequestsUpdatedSince(
                     client, ownerAndName, effectiveSyncTimestamp, timeout, safeNameWithOwner)) {
                 log.info(
                         "Skipped PR sync: reason=noUpdatedPullRequests, repoName={}, since={}",
                         safeNameWithOwner,
                         effectiveSyncTimestamp);
-                return SyncResult.completed(0);
+                return new RecentSyncResult(SyncResult.completed(0), null);
             }
         }
 
@@ -251,19 +240,20 @@ public class GitHubPullRequestSyncService {
         List<PullRequestWithThreadCursor> prsNeedingThreadPagination = new ArrayList<>();
         DiscussionReads discussionReads = new DiscussionReads();
         List<PullRequestWithCommentCursor> prsNeedingCommentPagination = new ArrayList<>();
-        String cursor = initialCursor;
+        String cursor = resumeCursor;
         boolean hasMore = true;
         int pageCount = 0;
         int retryAttempt = 0;
-        boolean resuming = initialCursor != null;
+        boolean resuming = resumeCursor != null;
         boolean stoppedByIncrementalSync = false;
         SyncResult.Status abortReason = null; // null means completed successfully
+        boolean capped = false;
 
-        if (initialCursor != null) {
+        if (resumeCursor != null) {
             log.info(
                     "Resuming pull request sync from checkpoint: repoName={}, cursor={}",
                     safeNameWithOwner,
-                    initialCursor.substring(0, Math.min(20, initialCursor.length())) + "...");
+                    resumeCursor.substring(0, Math.min(20, resumeCursor.length())) + "...");
         }
 
         while (hasMore) {
@@ -274,6 +264,7 @@ public class GitHubPullRequestSyncService {
                         safeNameWithOwner,
                         MAX_PAGINATION_PAGES);
                 abortReason = SyncResult.Status.ABORTED_ERROR;
+                capped = true;
                 break;
             }
 
@@ -441,11 +432,6 @@ public class GitHubPullRequestSyncService {
                             stoppedByIncrementalSync = true;
                         }
                     }
-                }
-
-                // Persist cursor checkpoint after each successful page (uses REQUIRES_NEW)
-                if (syncTargetId != null && cursor != null && hasMore) {
-                    persistCursorCheckpoint(syncTargetId, cursor);
                 }
 
                 retryAttempt = 0;
@@ -630,12 +616,6 @@ public class GitHubPullRequestSyncService {
             }
         }
 
-        // Every page was read, so nothing resumes from the cursor: a work item whose lists stopped short is read again
-        // from the last sync timestamp, which a rate limit keeps in place.
-        if (syncTargetId != null && !hasMore && abortReason == null) {
-            clearCursorCheckpoint(syncTargetId);
-        }
-
         discussionReads.settle(pullRequestRepository);
         SyncResult.Status finalStatus = abortReason != null ? abortReason : discussionReads.status();
 
@@ -652,7 +632,12 @@ public class GitHubPullRequestSyncService {
                 resuming,
                 stoppedByIncrementalSync,
                 finalStatus);
-        return new SyncResult(finalStatus, totalPRsSynced);
+        // A work item whose lists stopped short is read again only from the watermark, which a resumed window would
+        // move past it, so such a pass does not resume. The rule is the one that moves the watermark.
+        String resumeAt = capped && !discussionReads.status().isWorseThan(SyncResult.Status.COMPLETED_WITH_WARNINGS)
+                ? cursor
+                : null;
+        return new RecentSyncResult(new SyncResult(finalStatus, totalPRsSynced), resumeAt);
     }
 
     private record PageSyncResult(int prsSynced, int reviewsSynced, int reviewCommentsSynced, int commentsSynced) {}
@@ -887,39 +872,5 @@ public class GitHubPullRequestSyncService {
                     e.getClass().getSimpleName());
             return true;
         }
-    }
-
-    /**
-     * Persists the cursor checkpoint in a new transaction.
-     * This ensures the cursor is saved even if the main transaction is rolled back.
-     * <p>
-     * Uses programmatic transaction management with REQUIRES_NEW propagation
-     * to avoid Spring proxy issues with self-invocation.
-     */
-    private void persistCursorCheckpoint(Long syncTargetId, String cursor) {
-        TransactionTemplate requiresNewTemplate =
-                new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
-        requiresNewTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        requiresNewTemplate.executeWithoutResult(status -> {
-            backfillStateProvider.updateSyncCursor(syncTargetId, SyncCursorKind.PULL_REQUEST, cursor);
-            log.debug("Persisted PR sync cursor checkpoint: syncTargetId={}", syncTargetId);
-        });
-    }
-
-    /**
-     * Clears the cursor checkpoint in a new transaction.
-     * Called when sync completes successfully to indicate no resume needed.
-     * <p>
-     * Uses programmatic transaction management with REQUIRES_NEW propagation
-     * to avoid Spring proxy issues with self-invocation.
-     */
-    private void clearCursorCheckpoint(Long syncTargetId) {
-        TransactionTemplate requiresNewTemplate =
-                new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
-        requiresNewTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        requiresNewTemplate.executeWithoutResult(status -> {
-            backfillStateProvider.updateSyncCursor(syncTargetId, SyncCursorKind.PULL_REQUEST, null);
-            log.debug("Cleared PR sync cursor checkpoint: syncTargetId={}", syncTargetId);
-        });
     }
 }

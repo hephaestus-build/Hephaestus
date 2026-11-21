@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795258723058-1" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column name="issue_recent_cursor" type="VARCHAR(255)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795258723058-2" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column name="issue_recent_window_start" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795258723058-3" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column name="pull_request_recent_cursor" type="VARCHAR(255)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795258723058-4" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column name="pull_request_recent_window_start" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

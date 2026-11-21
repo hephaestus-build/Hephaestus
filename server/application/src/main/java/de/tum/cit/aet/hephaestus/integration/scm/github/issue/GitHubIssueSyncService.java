@@ -10,8 +10,6 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.adaptPageSize;
 
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
-import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
@@ -29,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSync
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryNameParser;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryNameParser.RepositoryOwnerAndName;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.EmbeddedCommentsDTO;
@@ -50,7 +49,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -79,7 +77,6 @@ public class GitHubIssueSyncService {
     private final GitHubIssueProcessor issueProcessor;
     private final GitHubIssueCommentProcessor commentProcessor;
     private final GitHubIssueCommentSyncService commentSyncService;
-    private final BackfillStateProvider backfillStateProvider;
     private final TransactionTemplate transactionTemplate;
     private final GitHubSyncProperties syncProperties;
     private final SyncSchedulerProperties syncSchedulerProperties;
@@ -100,7 +97,6 @@ public class GitHubIssueSyncService {
             GitHubIssueProcessor issueProcessor,
             GitHubIssueCommentProcessor commentProcessor,
             GitHubIssueCommentSyncService commentSyncService,
-            BackfillStateProvider backfillStateProvider,
             TransactionTemplate transactionTemplate,
             GitHubSyncProperties syncProperties,
             SyncSchedulerProperties syncSchedulerProperties,
@@ -111,7 +107,6 @@ public class GitHubIssueSyncService {
         this.issueProcessor = issueProcessor;
         this.commentProcessor = commentProcessor;
         this.commentSyncService = commentSyncService;
-        this.backfillStateProvider = backfillStateProvider;
         this.transactionTemplate = transactionTemplate;
         this.syncProperties = syncProperties;
         this.syncSchedulerProperties = syncSchedulerProperties;
@@ -125,11 +120,8 @@ public class GitHubIssueSyncService {
      * When {@code lastSyncTimestamp} is provided,
      * only issues updated after that timestamp are fetched using GitHub's filterBy.since parameter.
      * <p>
-     * When {@code syncTargetId} is provided, the pagination cursor is persisted after
-     * each successfully processed page. This allows sync to resume from where it left
-     * off if the process is interrupted (e.g., crash, timeout, deployment).
-     * <p>
-     * On successful completion, the cursor is cleared to indicate sync finished.
+     * A window with more changed issues than one run may read stops at the page cap. The result then carries the
+     * cursor where the next run resumes the window, so that each run reads further into it.
      * <p>
      * Note: This method intentionally does NOT use @Transactional to avoid long-running
      * transactions. Each page of issues is processed in its own transaction to keep
@@ -138,24 +130,19 @@ public class GitHubIssueSyncService {
      *
      * @param scopeId           the scope ID for authentication
      * @param repositoryId      the repository ID to sync issues for
-     * @param syncTargetId      the sync target ID for cursor persistence (null to disable)
-     * @param initialCursor     the cursor to resume from (null to start from beginning)
+     * @param resumeCursor      where an open window resumes (null to start at the newest issue)
      * @param lastSyncTimestamp the timestamp of the last sync for incremental sync (null for the initial sync timeframe)
-     * @return sync result containing status and count of issues synced
+     * @return the pass's outcome, and where the next run resumes a capped window
      */
-    public SyncResult syncForRepository(
-            Long scopeId,
-            Long repositoryId,
-            @Nullable Long syncTargetId,
-            @Nullable String initialCursor,
-            @Nullable Instant lastSyncTimestamp) {
+    public RecentSyncResult syncForRepository(
+            Long scopeId, Long repositoryId, @Nullable String resumeCursor, @Nullable Instant lastSyncTimestamp) {
         // Fetch repository outside of transaction to avoid holding locks during API calls
         Optional<Repository> repositoryResult =
                 transactionTemplate.execute(status -> repositoryRepository.findById(repositoryId));
         @Nullable Repository repository = repositoryResult == null ? null : repositoryResult.orElse(null);
         if (repository == null) {
             log.debug("Skipped issue sync: reason=repositoryNotFound, repoId={}", repositoryId);
-            return SyncResult.completed(0);
+            return new RecentSyncResult(SyncResult.completed(0), null);
         }
 
         String nameWithOwner = repository.getNameWithOwner();
@@ -163,7 +150,7 @@ public class GitHubIssueSyncService {
         Optional<RepositoryOwnerAndName> parsedName = GitHubRepositoryNameParser.parse(nameWithOwner);
         if (parsedName.isEmpty()) {
             log.warn("Skipped issue sync: reason=invalidRepoNameFormat, repoName={}", safeNameWithOwner);
-            return SyncResult.completed(0);
+            return new RecentSyncResult(SyncResult.completed(0), null);
         }
         RepositoryOwnerAndName ownerAndName = parsedName.get();
 
@@ -195,14 +182,14 @@ public class GitHubIssueSyncService {
         // embedded data (comments, assignees, labels). In our audit, 119 of 122
         // incremental issue syncs returned 0 issues — wasting ~7,000 points per run.
         // This lightweight probe costs ~1 point and lets us skip the expensive query entirely.
-        if (initialCursor == null) {
+        if (resumeCursor == null) {
             int updatedCount = probeIssueCount(client, ownerAndName, sinceDateTime, timeout, safeNameWithOwner);
             if (updatedCount == 0) {
                 log.info(
                         "Skipped issue sync: reason=noUpdatedIssues, repoName={}, since={}",
                         safeNameWithOwner,
                         sinceDateTime);
-                return SyncResult.completed(0);
+                return new RecentSyncResult(SyncResult.completed(0), null);
             }
             log.info(
                     "Issue count probe found {} updated issues, reading issue pages: repoName={}",
@@ -213,18 +200,19 @@ public class GitHubIssueSyncService {
         int totalIssuesSynced = 0;
         int totalCommentsSynced = 0;
         List<IssueWithCommentCursor> issuesNeedingCommentPagination = new ArrayList<>();
-        String cursor = initialCursor;
+        String cursor = resumeCursor;
         boolean hasMore = true;
         int pageCount = 0;
         int retryAttempt = 0;
-        boolean resuming = initialCursor != null;
+        boolean resuming = resumeCursor != null;
         SyncResult.Status abortReason = null; // null means completed successfully
+        boolean capped = false;
 
-        if (initialCursor != null) {
+        if (resumeCursor != null) {
             log.info(
                     "Resuming issue sync from checkpoint: repoName={}, cursor={}",
                     safeNameWithOwner,
-                    initialCursor.substring(0, Math.min(20, initialCursor.length())) + "...");
+                    resumeCursor.substring(0, Math.min(20, resumeCursor.length())) + "...");
         }
 
         while (hasMore) {
@@ -235,6 +223,7 @@ public class GitHubIssueSyncService {
                         safeNameWithOwner,
                         MAX_PAGINATION_PAGES);
                 abortReason = SyncResult.Status.ABORTED_ERROR;
+                capped = true;
                 break;
             }
 
@@ -342,11 +331,6 @@ public class GitHubIssueSyncService {
                 GHPageInfo pageInfo = connection.getPageInfo();
                 hasMore = pageInfo != null && Boolean.TRUE.equals(pageInfo.getHasNextPage());
                 cursor = pageInfo != null ? pageInfo.getEndCursor() : null;
-
-                // Persist cursor checkpoint after each successful page (uses REQUIRES_NEW)
-                if (syncTargetId != null && cursor != null && hasMore) {
-                    persistCursorCheckpoint(syncTargetId, cursor);
-                }
 
                 // Reset retry counter after successful page
                 retryAttempt = 0;
@@ -469,12 +453,6 @@ public class GitHubIssueSyncService {
             }
         }
 
-        // Clear cursor on successful completion (uses REQUIRES_NEW)
-        // Only clear if sync completed without abort
-        if (syncTargetId != null && !hasMore && abortReason == null) {
-            clearCursorCheckpoint(syncTargetId);
-        }
-
         // Determine the final result status
         SyncResult.Status finalStatus = abortReason != null ? abortReason : commentReads;
 
@@ -487,7 +465,11 @@ public class GitHubIssueSyncService {
                 scopeId,
                 resuming,
                 finalStatus);
-        return new SyncResult(finalStatus, totalIssuesSynced);
+        // An issue whose comments stopped short is read again only from the watermark, which a resumed window
+        // would move past it, so such a pass does not resume. The rule is the one that moves the watermark.
+        String resumeAt =
+                capped && !commentReads.isWorseThan(SyncResult.Status.COMPLETED_WITH_WARNINGS) ? cursor : null;
+        return new RecentSyncResult(new SyncResult(finalStatus, totalIssuesSynced), resumeAt);
     }
 
     /**
@@ -537,40 +519,6 @@ public class GitHubIssueSyncService {
         }
 
         return new PageResult(issuesSynced, commentsSynced);
-    }
-
-    /**
-     * Persists the cursor checkpoint in a new transaction.
-     * This ensures the cursor is saved even if the main transaction is rolled back.
-     * <p>
-     * Uses programmatic transaction management with REQUIRES_NEW propagation
-     * to avoid Spring proxy issues with self-invocation.
-     */
-    private void persistCursorCheckpoint(Long syncTargetId, String cursor) {
-        TransactionTemplate requiresNewTemplate =
-                new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
-        requiresNewTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        requiresNewTemplate.executeWithoutResult(status -> {
-            backfillStateProvider.updateSyncCursor(syncTargetId, SyncCursorKind.ISSUE, cursor);
-            log.debug("Persisted issue sync cursor checkpoint: syncTargetId={}", syncTargetId);
-        });
-    }
-
-    /**
-     * Clears the cursor checkpoint in a new transaction.
-     * Called when sync completes successfully to indicate no resume needed.
-     * <p>
-     * Uses programmatic transaction management with REQUIRES_NEW propagation
-     * to avoid Spring proxy issues with self-invocation.
-     */
-    private void clearCursorCheckpoint(Long syncTargetId) {
-        TransactionTemplate requiresNewTemplate =
-                new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
-        requiresNewTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        requiresNewTemplate.executeWithoutResult(status -> {
-            backfillStateProvider.updateSyncCursor(syncTargetId, SyncCursorKind.ISSUE, null);
-            log.debug("Cleared issue sync cursor checkpoint: syncTargetId={}", syncTargetId);
-        });
     }
 
     /**

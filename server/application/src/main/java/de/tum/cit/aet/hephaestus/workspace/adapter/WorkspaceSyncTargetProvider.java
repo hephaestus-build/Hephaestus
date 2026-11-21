@@ -575,6 +575,27 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
 
     @Override
     @Transactional
+    public void updateRecentWindow(
+            Long syncTargetId, SyncCursorKind kind, SyncTargetProvider.@Nullable RecentWindow window) {
+        repositoryToMonitorRepository.findById(syncTargetId).ifPresent(rtm -> {
+            String cursor = window == null ? null : window.resumeCursor();
+            Instant startedAt = window == null ? null : window.startedAt();
+            switch (kind) {
+                case ISSUE -> {
+                    rtm.setIssueRecentCursor(cursor);
+                    rtm.setIssueRecentWindowStart(startedAt);
+                }
+                case PULL_REQUEST -> {
+                    rtm.setPullRequestRecentCursor(cursor);
+                    rtm.setPullRequestRecentWindowStart(startedAt);
+                }
+            }
+            repositoryToMonitorRepository.save(rtm);
+        });
+    }
+
+    @Override
+    @Transactional
     public void updateSyncCursor(Long syncTargetId, SyncCursorKind kind, @Nullable String cursor) {
         repositoryToMonitorRepository
                 .findById(syncTargetId)

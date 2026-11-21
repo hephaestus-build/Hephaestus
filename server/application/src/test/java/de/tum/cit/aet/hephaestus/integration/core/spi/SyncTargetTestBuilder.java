@@ -25,6 +25,8 @@ public final class SyncTargetTestBuilder {
     private @Nullable Instant backfillLastRunAt;
     private @Nullable String issueSyncCursor;
     private @Nullable String pullRequestSyncCursor;
+    private SyncTargetProvider.@Nullable RecentWindow issueRecentWindow;
+    private SyncTargetProvider.@Nullable RecentWindow pullRequestRecentWindow;
     private Long nativeId = 1L;
 
     private SyncTargetTestBuilder() {}
@@ -128,6 +130,16 @@ public final class SyncTargetTestBuilder {
         return this;
     }
 
+    public SyncTargetTestBuilder issueRecentWindow(SyncTargetProvider.@Nullable RecentWindow value) {
+        this.issueRecentWindow = value;
+        return this;
+    }
+
+    public SyncTargetTestBuilder pullRequestRecentWindow(SyncTargetProvider.@Nullable RecentWindow value) {
+        this.pullRequestRecentWindow = value;
+        return this;
+    }
+
     public SyncTargetTestBuilder nativeId(Long value) {
         this.nativeId = value;
         return this;
@@ -154,6 +166,8 @@ public final class SyncTargetTestBuilder {
                 backfillLastRunAt,
                 issueSyncCursor,
                 pullRequestSyncCursor,
+                issueRecentWindow,
+                pullRequestRecentWindow,
                 nativeId);
     }
 }

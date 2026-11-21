@@ -4,7 +4,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
+import java.time.Instant;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
@@ -73,7 +75,14 @@ public final class SyncTargetFactory {
                 rtm.getBackfillLastRunAt(),
                 rtm.getIssueSyncCursor(),
                 rtm.getPullRequestSyncCursor(),
+                recentWindow(rtm.getIssueRecentCursor(), rtm.getIssueRecentWindowStart()),
+                recentWindow(rtm.getPullRequestRecentCursor(), rtm.getPullRequestRecentWindowStart()),
                 rtm.getNativeId()));
+    }
+
+    private static SyncTargetProvider.@Nullable RecentWindow recentWindow(
+            @Nullable String cursor, @Nullable Instant startedAt) {
+        return cursor == null || startedAt == null ? null : new SyncTargetProvider.RecentWindow(cursor, startedAt);
     }
 
     private static @Nullable String resolveBearerToken(

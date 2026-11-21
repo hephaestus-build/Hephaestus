@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerPropert
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener.OrganizationSyncedEvent;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
@@ -32,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionCl
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.Category;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
@@ -322,45 +324,40 @@ public class GitHubDataSyncService {
             // Sync milestones (with cooldown — milestones rarely change)
             int milestonesCount = syncMilestonesIfNeeded(syncTarget, scopeId, repositoryId);
 
-            // Sync issues — always from a fresh cursor, with cursor persistence disabled.
-            // Comments are synced inline with issues via the GraphQL query.
-            //
-            // The issue_sync_cursor / pull_request_sync_cursor columns belong to the historical
-            // backfill (GitHubHistoricalBackfillService), which paginates CREATED_AT DESC. This
-            // incremental path paginates UPDATED_AT DESC, so a backfill cursor points somewhere
-            // meaningless in this ordering: resuming from it lands deep in the list and skips the
-            // newest items, and writing our own cursor back clobbers backfill's checkpoint.
-            // Passing null for both the cursor and the syncTargetId (documented as "null to
-            // disable" cursor persistence) severs the read and the write. Cross-run resume of an
-            // updatedAt window is meaningless anyway — each run recomputes its own `since` from
-            // lastIssuesSyncedAt/lastPullRequestsSyncedAt, which are the real incremental state.
-            // As a bonus, a null cursor re-enables the cheap totalCount probe in issue sync.
-            SyncResult issueResult = issueSyncService.syncForRepository(
-                    scopeId, repositoryId, null, null, syncTarget.lastIssuesSyncedAt());
-
-            // Sync pull requests — same rationale as issues above.
-            // Review threads and comments are synced inline with PRs via the GraphQL query.
-            SyncResult prResult = pullRequestSyncService.syncForRepository(
-                    scopeId, repositoryId, null, null, syncTarget.lastPullRequestsSyncedAt());
-
-            // Update timestamps independently — each sync type tracks its own progress
-            // so completed work isn't wasted when the other sync type hits rate limits
-            if (issueResult.isCompleted()) {
-                syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.ISSUES, Instant.now());
-            } else {
+            // Issues and pull requests page newest-first from the buffered watermark. A window with more changes than
+            // one run may read stops at the page cap; the next run resumes that window where it stopped instead of
+            // reading its newest pages again. The backfill's issue_sync_cursor / pull_request_sync_cursor columns
+            // page CREATED_AT and are a different list, so the window keeps its own cursor.
+            // Comments are synced inline with issues, and review threads and comments with pull requests.
+            Instant passStart = Instant.now();
+            SyncResult issueResult = recentPass(
+                    syncTarget.id(),
+                    SyncCursorKind.ISSUE,
+                    SyncType.ISSUES,
+                    syncTarget.issueRecentWindow(),
+                    passStart,
+                    issueSyncService.syncForRepository(
+                            scopeId,
+                            repositoryId,
+                            resumeCursor(syncTarget.issueRecentWindow()),
+                            syncTarget.lastIssuesSyncedAt()));
+            SyncResult prResult = recentPass(
+                    syncTarget.id(),
+                    SyncCursorKind.PULL_REQUEST,
+                    SyncType.PULL_REQUESTS,
+                    syncTarget.pullRequestRecentWindow(),
+                    passStart,
+                    pullRequestSyncService.syncForRepository(
+                            scopeId,
+                            repositoryId,
+                            resumeCursor(syncTarget.pullRequestRecentWindow()),
+                            syncTarget.lastPullRequestsSyncedAt()));
+            if (!issueResult.isCompleted() || !prResult.isCompleted()) {
                 log.info(
-                        "Skipped issue timestamp update due to incomplete sync: scopeId={}, repoId={}, issueStatus={}",
+                        "Kept a watermark of an incomplete sync: scopeId={}, repoId={}, issueStatus={}, prStatus={}",
                         scopeId,
                         repositoryId,
-                        issueResult.status());
-            }
-            if (prResult.isCompleted()) {
-                syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.PULL_REQUESTS, Instant.now());
-            } else {
-                log.info(
-                        "Skipped PR timestamp update due to incomplete sync: scopeId={}, repoId={}, prStatus={}",
-                        scopeId,
-                        repositoryId,
+                        issueResult.status(),
                         prResult.status());
             }
 
@@ -1195,5 +1192,38 @@ public class GitHubDataSyncService {
                 "Rate limit wait deadline exhausted, proceeding anyway: scopeId={}, remaining={}",
                 scopeId,
                 rateLimitTracker.getRemaining(scopeId));
+    }
+
+    private static @Nullable String resumeCursor(SyncTargetProvider.@Nullable RecentWindow window) {
+        return window == null ? null : window.resumeCursor();
+    }
+
+    /**
+     * Records one recent pass. A completed pass moves the watermark: to the start of the window it finished, or to
+     * the start of this pass. A pass that stopped at the page cap opens the window, or moves it to where it stopped;
+     * the window keeps the start of the run that opened it, because the changes after that start are read again from
+     * the watermark. A resumed pass that failed otherwise closes its window and keeps the watermark: a cursor GitHub
+     * no longer accepts would stop every later run, and reading from the newest item again costs only a re-read.
+     */
+    private SyncResult recentPass(
+            Long syncTargetId,
+            SyncCursorKind kind,
+            SyncType type,
+            SyncTargetProvider.@Nullable RecentWindow window,
+            Instant passStart,
+            RecentSyncResult pass) {
+        if (pass.result().isCompleted()) {
+            syncTargetProvider.updateSyncTimestamp(syncTargetId, type, window == null ? passStart : window.startedAt());
+            if (window != null) syncTargetProvider.updateRecentWindow(syncTargetId, kind, null);
+        } else if (pass.resumeCursor() != null) {
+            syncTargetProvider.updateRecentWindow(
+                    syncTargetId,
+                    kind,
+                    new SyncTargetProvider.RecentWindow(
+                            pass.resumeCursor(), window == null ? passStart : window.startedAt()));
+        } else if (window != null && pass.result().status() == SyncResult.Status.ABORTED_ERROR) {
+            syncTargetProvider.updateRecentWindow(syncTargetId, kind, null);
+        }
+        return pass.result();
     }
 }
