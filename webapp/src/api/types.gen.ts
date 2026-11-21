@@ -18589,6 +18589,14 @@ export type UnsetPracticeRepositoryErrors = {
 	 * The workspace has no practice repository to unset
 	 */
 	404: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UnsetPracticeRepositoryError =
@@ -18615,6 +18623,20 @@ export type GetPracticeRepositoryData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practice-repository";
 };
+
+export type GetPracticeRepositoryErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type GetPracticeRepositoryError =
+	GetPracticeRepositoryErrors[keyof GetPracticeRepositoryErrors];
 
 export type GetPracticeRepositoryResponses = {
 	/**
@@ -18647,6 +18669,14 @@ export type SetPracticeRepositoryErrors = {
 	 * The repository is not one that the workspace monitors, or the directory is not a relative path
 	 */
 	400: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type SetPracticeRepositoryError =
@@ -18684,6 +18714,14 @@ export type ChangePracticeEditedInErrors = {
 	 * The practice folder is not valid: problems lists each problem
 	 */
 	422: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ChangePracticeEditedInError =
