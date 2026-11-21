@@ -127,7 +127,10 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
      * the fewest granted calls, then age. Inside one source, the calls of its oldest practice session go first, so a
      * review with more sessions than grants finishes its practices oldest first instead of all of them at its deadline. A
      * call that is not interactive rises one band for each {@code :agingSeconds} that it waits, but never into the
-     * interactive band, as the agent run claim does. Product feedback is a background call and ages like the others, so
+     * interactive band, as the agent run claim does. The band comes before the session order, so inside a background
+     * review a later session's call that aged can go before an earlier session's fresh call, for at most one {@code
+     * :agingSeconds}: then both share a band, and the session order decides again. Batch calls never rise, so a pull
+     * request's review keeps its session order. Product feedback is a background call and ages like the others, so
      * review calls that keep arriving cannot starve a draft. A draft beyond the product feedback room is no candidate,
      * so it never holds back the calls behind it. A round can grant several calls, so each call counts the calls ahead
      * of it in its own workspace and source as granted: apart from ties, the order is the one that one grant at a time
