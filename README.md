@@ -75,7 +75,7 @@ Each member chooses which models may handle their work: **In-house**, **Cloud**,
 
 > [!IMPORTANT]
 > **Hephaestus is pre-1.0.** Releases are continuous.
-> Only the [latest release](https://github.com/hephaestus-build/Hephaestus/releases/latest) has support.
+> Only the latest release, a release candidate included, has support ([Support statement](https://docs.hephaestus.build/admin/compatibility-policy#support-statement)).
 > Every fix ships in the next release.
 > Until 1.0, a *minor* release can change configuration or the API in ways that need you to act.
 > Read the release notes before every upgrade.

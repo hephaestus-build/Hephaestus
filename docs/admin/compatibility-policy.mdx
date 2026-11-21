@@ -215,9 +215,12 @@ The chart values and signed joint release lock are part of the [public contract]
 
 ## Support statement
 
-**Before 1.0.0, we support the latest release only.** [Support for 1.x](#support-for-1x) gives the rules from 1.0.0.
+**Before 1.0.0, we support the latest release only. A release candidate counts.**
+[Support for 1.x](#support-for-1x) gives the rules for the 1.x releases.
+GitHub marks only a stable release as "Latest". Thus its "Latest" release can be an older release without support.
+
 The 0.95 releases are unsupported from 2026-11-21, and no 0.95 release gets a fix ([GHSA-m2vx-xxgf-3p79](https://github.com/hephaestus-build/Hephaestus/security/advisories/GHSA-m2vx-xxgf-3p79)).
-Move to the latest 1.0 release. From a release before 1.0.0-rc.1, install 1.0.0-rc.1 first ([Database baseline prerequisites](#database-baseline-prerequisites)).
+Upgrade to the latest 1.0.0 release candidate, or to 1.0.0 when it is released. From a release before 1.0.0-rc.1, follow [Database baseline prerequisites](#database-baseline-prerequisites).
 
 Fixes ship as new releases on top of the current version. There are no backport branches.
 If you find a bug on an older version, upgrade to the latest release before you report it.
@@ -228,6 +231,7 @@ From 1.0.0, these rules apply to the Helm chart, the only supported deployment (
 
 The [upgrade guarantee](#upgrade-guarantee) lets you move from any 1.x to the latest 1.y.
 Thus, the latest 1.x release is the supported one, and fixes ship on it.
+From 1.0.0, a release candidate is not a supported release.
 
 When 2.0.0 is released, the last 1.x minor release gets security fixes for 12 months.
 It is the only older release that gets fixes.
