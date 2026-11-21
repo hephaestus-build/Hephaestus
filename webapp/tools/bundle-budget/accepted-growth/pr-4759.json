@@ -1,0 +1,22 @@
+{
+	"accepted": [
+		{
+			"load": "src/components/admin/practices/WorkspaceMoveToRepositoryDialog.tsx",
+			"gzipBytes": 3905,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4759",
+			"reason": "The Move to repository dialog, loaded when a practice's panel opens."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/practices/-PracticeRepositorySetting.tsx",
+			"gzipBytes": 243046,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4759",
+			"reason": "The practice repository card with its Set, Change and Unset dialogs and the monitored repository list, loaded after Practice setup."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/practices/index.tsx?tsr-split=component",
+			"gzipBytes": 233713,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4759",
+			"reason": "Practice setup keeps eager only what a practice's panel shows on open: the Edited in Hephaestus note with Move to repository, and the hook that runs the move. The rest is Vite's preload map for the two lazy imports. The practice repository card, its dialogs, its repository list and the Move dialog load lazily."
+		}
+	]
+}
