@@ -161,13 +161,13 @@ erDiagram
 
     ProblemLineage {
         UUID id PK
-        UUID prior_problem_id UK
-        UUID prior_result_id "NOT NULL"
-        UUID problem_id UK
+        UUID prior_problem_id FK,UK
+        UUID prior_result_id FK "NOT NULL"
+        UUID problem_id FK,UK
         TIMESTAMPTZ recorded_at "NOT NULL"
-        UUID result_id UK "NOT NULL"
-        VARCHAR(16) state "NOT NULL"
-        BIGINT workspace_id "NOT NULL"
+        UUID result_id FK,UK "NOT NULL"
+        VARCHAR(16) comparison "NOT NULL"
+        BIGINT workspace_id FK "NOT NULL"
     }
 
     ResearchDisclosure {
@@ -360,6 +360,7 @@ erDiagram
     %% Relationships
     %% One-to-One relationships
     PracticeVersion ||--|| Practice : references
+    Problem ||--|| ProblemLineage : has
 
     %% One-to-Many relationships
     Membership ||--o{ Feedback : references
@@ -384,6 +385,9 @@ erDiagram
     Workspace ||--o{ PracticeVersion : has
     Result ||--o{ Problem : has
     Workspace ||--o{ Problem : has
+    Problem ||--o{ ProblemLineage : has
+    Result ||--o{ ProblemLineage : prior_result_id
+    Result ||--o{ ProblemLineage : result_id
     Workspace ||--o{ ResearchDisclosure : has
     ResearchDisclosure ||--o{ ResearchDisclosureSubject : has
     Membership ||--o{ Result : references
