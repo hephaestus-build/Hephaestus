@@ -313,8 +313,9 @@ jobs:
 
       - name: Retain complete buildpack diagnostics
         if: ${{ always() && steps.prep.outcome == 'success' && contains(fromJSON(steps.prep.outputs.images), 'server') }}
-        uses: ./.github/actions/retain-reports
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: buildpacks-log-${{ steps.prep.outputs.platform_pair }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/buildpacks.log
           retention-days: 14
@@ -436,7 +437,7 @@ jobs:
       # The policy results name the CVEs; the gate's exit status alone cannot.
       - name: Upload the vulnerability policy results
         if: ${{ !cancelled() && (steps.scan.outcome == 'success' || steps.scan.outcome == 'failure') }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           # Per attempt, so re-running a refused build can record its result again.
           name: vulnerability-policy-${{ steps.prep.outputs.platform_pair }}-${{ github.run_attempt }}
@@ -446,7 +447,7 @@ jobs:
 
       - name: Upload digests
         if: inputs.publish
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: digests-${{ steps.prep.outputs.platform_pair }}
           path: ${{ runner.temp }}/digests

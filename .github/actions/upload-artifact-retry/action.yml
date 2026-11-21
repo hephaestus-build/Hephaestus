@@ -1,9 +1,9 @@
-name: "Retain reports"
+name: "Upload an artifact with retries"
 description: >-
-  Upload a job's own reports, such as raw test results or diagnostics, as an artifact, in up to three attempts. A
-  failed upload does not change the job's verdict, which comes from its tests: after the last attempt, a warning
-  annotation and the job summary name the reports that were not retained. An artifact that a later job or a release
-  reads is not a report: upload it with actions/upload-artifact, so that its loss fails the job.
+  Upload an artifact in up to three attempts. A required artifact, such as the packaged server, the image digests or
+  release evidence, fails the job after the last attempt, with an error that names it. A report that is not required,
+  such as raw test results or diagnostics, does not change the job's verdict, which comes from its tests: after the
+  last attempt, a warning annotation and the job summary name the reports that were not retained.
 inputs:
   name:
     description: "The artifact name"
@@ -11,14 +11,22 @@ inputs:
   path:
     description: "The files to upload"
     required: true
+  required:
+    description: "true: losing the artifact fails the job. false: only for a job's own reports, which a later job or a release never reads"
+    required: false
+    default: "true"
   retention-days:
     description: "How long GitHub keeps the artifact"
     required: false
     default: "14"
   if-no-files-found:
-    description: "warn or ignore. A report is never required, so error, which would only become a warning here, is not offered"
+    description: "warn, error or ignore. error makes sense only for a required artifact: a report's error would only become a warning"
     required: false
     default: "warn"
+  compression-level:
+    description: "The zlib compression level, 0 to 9"
+    required: false
+    default: "6"
 runs:
   using: "composite"
   # GitHub Actions has no retry for a `uses:` step, so the attempts are written out. A failed finalize can leave a
@@ -32,6 +40,7 @@ runs:
         path: ${{ inputs.path }}
         retention-days: ${{ inputs.retention-days }}
         if-no-files-found: ${{ inputs.if-no-files-found }}
+        compression-level: ${{ inputs.compression-level }}
         overwrite: true
     - if: steps.first.outcome == 'failure'
       shell: bash
@@ -49,6 +58,7 @@ runs:
         path: ${{ inputs.path }}
         retention-days: ${{ inputs.retention-days }}
         if-no-files-found: ${{ inputs.if-no-files-found }}
+        compression-level: ${{ inputs.compression-level }}
         overwrite: true
     - if: steps.second.outcome == 'failure'
       shell: bash
@@ -66,8 +76,16 @@ runs:
         path: ${{ inputs.path }}
         retention-days: ${{ inputs.retention-days }}
         if-no-files-found: ${{ inputs.if-no-files-found }}
+        compression-level: ${{ inputs.compression-level }}
         overwrite: true
-    - if: steps.third.outcome == 'failure'
+    - if: steps.third.outcome == 'failure' && inputs.required != 'false'
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+      run: |
+        echo "::error title=Artifact not uploaded::$NAME failed to upload in 3 attempts. A later job or the release needs it, so this job fails. Re-run the job."
+        exit 1
+    - if: steps.third.outcome == 'failure' && inputs.required == 'false'
       shell: bash
       env:
         NAME: ${{ inputs.name }}

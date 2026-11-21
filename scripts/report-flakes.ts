@@ -11,7 +11,7 @@ import { output } from "./lib/process.ts";
 const WINDOW_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
 // The step of a CI job that uploads its `*-reports-<attempt>` artifact. report-flakes.test.ts keeps
-// every such step named this way. The step succeeds even when its upload was lost (retain-reports
+// every such step named this way. The step succeeds even when its upload was lost (upload-artifact-retry
 // warns instead), so the missing artifact, not the step, tells that a job's tests cannot be named.
 export const REPORT_STEP = /^Retain\b.*\btest\b/u;
 // The gate fails because another job failed; it never names a flaky test of its own.

@@ -186,8 +186,9 @@ jobs:
       # The log names a file that PMD could not analyze, not why; its XML report keeps the stack trace.
       - name: Retain the PMD report
         if: env.QUALITY_LEG == 'server' && failure()
-        uses: ./.github/actions/retain-reports
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: server-pmd-report-${{ github.run_attempt }}
           path: server/application/build/reports/pmd
           retention-days: 14
@@ -265,8 +266,9 @@ jobs:
 
       - name: Retain application test reports
         if: (env.QUALITY_LEG == 'webapp-report' || env.QUALITY_LEG == 'extension') && !cancelled()
-        uses: ./.github/actions/retain-reports
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: ${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}-unit-reports-${{ github.run_attempt }}
           path: ${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}/test-results
           retention-days: 14
@@ -668,8 +670,9 @@ jobs:
           fail-on-empty: false
       - name: Retain full Storybook and visual test diagnostics
         if: always()
-        uses: ./.github/actions/retain-reports
+        uses: ./.github/actions/upload-artifact-retry
         with:
+          required: "false"
           name: storybook-reports-${{ github.run_attempt }}
           path: |
             webapp/test-results

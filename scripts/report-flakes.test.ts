@@ -140,7 +140,7 @@ void test("every CI step that uploads attempt reports is recognised as the job's
 				if (
 					typeof upload === "string" &&
 					(upload.startsWith("actions/upload-artifact@") ||
-						upload === "./.github/actions/retain-reports") &&
+						upload === "./.github/actions/upload-artifact-retry") &&
 					isMap(inputs) &&
 					/-reports-\$\{\{ github\.run_attempt \}\}/u.test(String(inputs.get("name")))
 				) {

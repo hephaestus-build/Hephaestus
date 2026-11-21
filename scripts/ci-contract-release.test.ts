@@ -650,7 +650,7 @@ void describe("ci-contract: release", () => {
 		assert.match(source, /run: node scripts\/scan-main-images\.ts reports/u);
 		assert.match(source, /run: node scripts\/report-vulnerability-drift\.ts reports/u);
 		assert.match(source, /uses: \.\/\.github\/actions\/download-trivy-db/u);
-		assert.match(source, /uses: actions\/upload-artifact@/u);
+		assert.match(source, /uses: \.\/\.github\/actions\/upload-artifact-retry$/mu);
 		// Nothing may turn a finding into a red status: no `continue-on-error` fig leaf, and no
 		// second evaluator inline.
 		assert.doesNotMatch(source, /continue-on-error/u);
