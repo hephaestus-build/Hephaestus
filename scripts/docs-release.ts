@@ -4,7 +4,7 @@
  */
 import { execFileSync } from "node:child_process";
 
-import { docsRelease } from "./lib/previous-release.ts";
+import { supportedRelease } from "./lib/previous-release.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 const tags = execFileSync("git", ["tag", "--list", "v*"], {
@@ -13,7 +13,7 @@ const tags = execFileSync("git", ["tag", "--list", "v*"], {
 })
 	.split("\n")
 	.filter(Boolean);
-const release = docsRelease(tags);
+const release = supportedRelease(tags);
 if (release === undefined) {
 	console.error("No release tag: the site root has no release to serve.");
 	process.exit(1);
