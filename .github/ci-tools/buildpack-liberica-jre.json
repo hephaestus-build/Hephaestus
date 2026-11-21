@@ -1,14 +1,14 @@
 {
-	"version": "25.0.5.0.3_5",
-	"url": "https://github.com/bell-sw/Liberica/releases/download/25.0.5.0.3+5/",
+	"version": "25.0.5.1_5",
+	"url": "https://github.com/bell-sw/Liberica/releases/download/25.0.5.1+5/",
 	"assets": {
 		"linux-x64": {
-			"name": "bellsoft-jre25.0.5.0.3+5-linux-amd64.tar.gz",
-			"sha256": "78846aeed480e29ba3c987e61d3c7b437163f005b20e41bb2cdf7cf8ccbe76f3"
+			"name": "bellsoft-jre25.0.5.1+5-linux-amd64.tar.gz",
+			"sha256": "b76a06e75c1910e96eeb32232a14e260b1d374b9433b7e9e3525a65b70cde731"
 		},
 		"linux-arm64": {
-			"name": "bellsoft-jre25.0.5.0.3+5-linux-aarch64.tar.gz",
-			"sha256": "5b7e75b779c3f512a838d7dfe7d841bd20516b5c8049f7667092142bc7cf0071"
+			"name": "bellsoft-jre25.0.5.1+5-linux-aarch64.tar.gz",
+			"sha256": "335eb057b9b9d7e2c2d62c86b3c042be3974808f9592af608542f949accdb3fa"
 		}
 	}
 }
