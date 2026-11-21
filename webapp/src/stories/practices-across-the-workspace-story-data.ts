@@ -50,6 +50,20 @@ export const split = (
 	developers: needs + mixed + well + noneYet,
 });
 
+/**
+ * A split as the server sends it when a part would hold 1 or 2, or everyone sits in one part: its
+ * total only. A null total is fewer than 3 developers.
+ */
+export const totalOnly = (developers: number | null): WorkspaceSplit => ({
+	parts: [
+		{ standing: "DEVELOPING", developers: null },
+		{ standing: "MIXED", developers: null },
+		{ standing: "STRENGTH", developers: null },
+	],
+	noneYet: null,
+	developers,
+});
+
 const practice = (
 	practiceSlug: string,
 	practiceName: string,
@@ -82,13 +96,13 @@ const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
 	practice(
 		"scope-to-one-concern",
 		"Scope the change to one concern",
-		split(1, 0, 2, 25),
+		totalOnly(28),
 		"NOT_OBSERVED",
 	),
 	practice(
 		"mark-ready-and-link",
 		"Mark the change ready and link its issue",
-		split(0, 0, 0, 28),
+		totalOnly(28),
 		"NOT_OBSERVED",
 	),
 	practice(
@@ -143,15 +157,15 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 			"STRENGTH",
 			"CURRENT_REVIEWS",
 		),
-		// Parts of one, two and none draw like any other; the reader has no verdict here.
+		// A part under 3 hides the split: only the total shows; the reader has no verdict here.
 		group(
 			COMMUNICATION,
-			split(1, 0, 2, 25),
+			totalOnly(28),
 			[
 				practice(
 					"write-in-the-open",
 					"Discuss decisions where the team can see them",
-					split(1, 0, 2, 25),
+					totalOnly(28),
 					"NOT_OBSERVED",
 				),
 			],
@@ -202,19 +216,19 @@ export const EARLIER_REVIEWS_WORKSPACE: PracticesAcrossWorkspace = {
 	),
 };
 
-/** The reader is the only developer with a standing. */
+/** The reader is the only developer with a standing: fewer than 3, so the split stays hidden. */
 export const ONE_DEVELOPER_WORKSPACE: PracticesAcrossWorkspace = {
-	openFeedback: { yours: 2, middle: { low: 2, high: 2 } },
+	openFeedback: { yours: 2, middle: null },
 	includesEarlierReviews: false,
 	groups: [
 		group(
 			PACKAGING,
-			split(0, 1, 0, 0),
+			totalOnly(null),
 			[
 				practice(
 					"keep-the-diff-reviewable",
 					"Keep the diff reviewable in one sitting",
-					split(0, 1, 0, 0),
+					totalOnly(null),
 					"MIXED",
 					"CURRENT_REVIEWS",
 				),
@@ -225,19 +239,19 @@ export const ONE_DEVELOPER_WORKSPACE: PracticesAcrossWorkspace = {
 	],
 };
 
-/** Two developers with a standing, the reader one of them. */
+/** Two developers with a standing, the reader one of them: the split stays hidden. */
 export const TWO_DEVELOPERS_WORKSPACE: PracticesAcrossWorkspace = {
-	openFeedback: { yours: 0, middle: { low: 1, high: 2 } },
+	openFeedback: { yours: 0, middle: null },
 	includesEarlierReviews: false,
 	groups: [
 		group(
 			PACKAGING,
-			split(1, 0, 1, 0),
+			totalOnly(null),
 			[
 				practice(
 					"keep-the-diff-reviewable",
 					"Keep the diff reviewable in one sitting",
-					split(1, 0, 1, 0),
+					totalOnly(null),
 					"STRENGTH",
 					"CURRENT_REVIEWS",
 				),
@@ -248,11 +262,10 @@ export const TWO_DEVELOPERS_WORKSPACE: PracticesAcrossWorkspace = {
 	],
 };
 
-/** Two developers are counted, and the reader is not one of them: no You bracket anywhere. */
+/** The reader is not counted: no You bracket anywhere. */
 export const READER_NOT_COUNTED_WORKSPACE: PracticesAcrossWorkspace = {
-	...TWO_DEVELOPERS_WORKSPACE,
-	openFeedback: { yours: 0, middle: { low: 1, high: 2 } },
-	groups: TWO_DEVELOPERS_WORKSPACE.groups.map((each) => ({
+	...ACROSS_WORKSPACE,
+	groups: ACROSS_WORKSPACE.groups.map((each) => ({
 		...each,
 		yourStanding: null,
 		yourBasis: null,
@@ -262,7 +275,7 @@ export const READER_NOT_COUNTED_WORKSPACE: PracticesAcrossWorkspace = {
 
 /** Nobody has a standing yet. */
 export const NOBODY_WORKSPACE: PracticesAcrossWorkspace = {
-	openFeedback: { yours: 0, middle: { low: 0, high: 0 } },
+	openFeedback: { yours: 0, middle: null },
 	includesEarlierReviews: false,
 	groups: ACROSS_WORKSPACE.groups.map((each) => ({
 		...each,
@@ -350,13 +363,13 @@ export const TILES_BY_WINDOW: Record<
 
 export const ACROSS_WORKSPACE_TILES = TILES_BY_WINDOW.DAYS_30;
 
-/** One developer with a standing: the middle half is that one value. */
+/** One developer with a standing: fewer than 3, so the count and every middle half stay hidden. */
 export const ONE_DEVELOPER_TILES: PracticesAcrossWorkspaceTiles = {
 	...ACROSS_WORKSPACE_TILES,
-	developersWithAStandingInWindow: 1,
-	reviewedWork: figure(4, 4, 4),
-	practicesGoingWell: figure(1, 1, 1),
-	practicesNeedingAttention: figure(0, 0, 0),
+	developersWithAStandingInWindow: null,
+	reviewedWork: { yours: 4, middle: null },
+	practicesGoingWell: { yours: 1, middle: null },
+	practicesNeedingAttention: { yours: 0, middle: null },
 };
 
 /** Nobody has a standing in the window, so no tile has a middle half. */

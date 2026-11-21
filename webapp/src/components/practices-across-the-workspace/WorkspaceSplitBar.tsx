@@ -25,6 +25,9 @@ import {
 	NONE_YET_SEGMENT,
 	splitDescription,
 	splitTotalText,
+	TOO_FEW_TO_SPLIT,
+	SPREAD_HIDDEN,
+	spreadHidden,
 } from "./across-workspace-copy";
 
 export interface WorkspaceSplitBarProps {
@@ -55,6 +58,12 @@ function standingPart(standing: PracticeGroupStandingValue): PartDef {
 }
 
 const NONE_YET_PART: PartDef = { key: "none", ...NONE_YET_SEGMENT };
+
+/**
+ * Dotted, so a split shown as its total only reads neither as a part of none yet (filled) nor as an
+ * empty track (dashed); its line says it too.
+ */
+const HIDDEN_SPREAD = cn("h-2 rounded-sm border-2 border-dotted border-current", NEUTRAL_GREY);
 
 /** In the server's order: the verdicts in registry order, then none yet. */
 const SPLIT_PARTS: readonly PartDef[] = [
@@ -87,24 +96,37 @@ function YouBracket() {
  * is a dashed track that says so, at the same width, so the rows line up.
  */
 export function WorkspaceSplitBar({ split, yourStanding }: WorkspaceSplitBarProps) {
-	if (split.developers === 0) {
+	if (split.developers === 0 || split.developers === null) {
 		return (
 			<div className="flex w-full min-w-0 flex-col gap-1">
 				<EmptyTrack />
-				<p className="text-xs text-muted-foreground">{NOBODY_YET}.</p>
+				<p className="text-xs text-muted-foreground">
+					{split.developers === 0 ? NOBODY_YET : TOO_FEW_TO_SPLIT}.
+				</p>
 			</div>
 		);
 	}
 	const description = splitDescription(split, yourStanding);
+	if (spreadHidden(split)) {
+		return (
+			<div className="flex w-full min-w-0 flex-col gap-1">
+				<div role="img" aria-label={description} className={cn("mt-5.5 w-full", HIDDEN_SPREAD)} />
+				<p aria-hidden className="flex justify-between gap-2 text-xs text-muted-foreground">
+					<span>{SPREAD_HIDDEN}.</span>
+					<span className="tabular-nums">{splitTotalText(split)}</span>
+				</p>
+			</div>
+		);
+	}
 	const parts = [
 		...split.parts.map((part) => ({
 			def: standingPart(part.standing),
-			count: part.developers,
+			count: part.developers ?? 0,
 			isYours: part.standing === yourStanding,
 		})),
 		{
 			def: NONE_YET_PART,
-			count: split.noneYet,
+			count: split.noneYet ?? 0,
 			isYours: yourStanding !== undefined && !isSettledStanding(yourStanding),
 		},
 		// `min-w-10` would draw a part of nobody as a coloured block; the text alternative names it.

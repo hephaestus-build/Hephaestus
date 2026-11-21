@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794717841335-1" author="hephaestus">
+        <addColumn tableName="workspace">
+            <column name="per_person_results_for_admins" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794717841335-2" author="hephaestus">
+        <comment>A workspace that already ran practice reviews keeps the per-person results its admins saw before the setting existed. Each one records that as a system change, so its owner can see why the setting is on and turn it off.</comment>
+        <sql>
+            UPDATE workspace SET per_person_results_for_admins = true WHERE EXISTS (SELECT 1 FROM review r WHERE r.workspace_id = workspace.id);
+            INSERT INTO config_audit_event (workspace_id, actor_kind, entity_type, entity_id, action, changed_keys, old_value, new_value)
+            SELECT id, 'SYSTEM', 'WORKSPACE_VISIBILITY', id::text, 'CREATED', ARRAY['perPersonResultsForAdmins', 'keptFromBefore'], NULL,
+                   '{"perPersonResultsForAdmins":true,"keptFromBefore":true}'
+            FROM workspace WHERE per_person_results_for_admins = true;
+        </sql>
+        <rollback>
+            <comment>The config audit trail is append-only, so its rows that record the kept setting stay.</comment>
+            <sql>UPDATE workspace SET per_person_results_for_admins = false;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

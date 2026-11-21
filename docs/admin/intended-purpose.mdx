@@ -1,0 +1,52 @@
+---
+title: Intended purpose
+description: What Hephaestus is designed for, what it is not designed for, and how a workspace owner decides whether admins see results per person.
+page_type: reference
+---
+
+This page states what Hephaestus is designed for.
+Read it before you decide how your organization uses Hephaestus.
+
+## Intended purpose
+
+Hephaestus gives developers practice feedback on their own work.
+The feedback is formative and self-directed.
+It helps a developer see how they apply an engineering practice, and what to do next.
+Developers choose what to do with it.
+
+## Uses outside the intended purpose
+
+Hephaestus is not designed for these uses:
+
+- Grading a person.
+- Appraising the performance of a person.
+- Ranking people.
+- Deciding the allocation of work or other resources to a person.
+- Deciding the pay, promotion, or employment of a person.
+
+A practice result describes one piece of work against one practice.
+It is not a measure of a person.
+Do not use a result, a standing, or feedback as an input to such a decision.
+
+## Per-person views for admins
+
+The workspace setting **Per-person results for admins** controls what workspace admins see.
+
+- For a new workspace, the setting is off.
+  Admins see results, problems and feedback on practice pages and in conversations with no names.
+  Each result still shows the work it is about, and the provider shows who wrote that work.
+  The Practice reviews lists have no **Developer** filter, and the server refuses a filter by person.
+- Feedback on the work always names its developer.
+  Hephaestus posts it to the developer on their work, and an admin approves it.
+- Only a workspace owner can turn the setting on, after a confirmation.
+- Any workspace admin or owner can turn it off, in one step.
+- Hephaestus records each change in the configuration audit of the workspace, with the actor and the time.
+
+A workspace that ran practice reviews before the setting existed keeps it on after the upgrade.
+The upgrade records one audit entry for each such workspace.
+To turn it off, follow [Choose whether admins see results per person](/user/workspace#choose-whether-admins-see-results-per-person).
+
+## Related pages
+
+- [Privacy](/user/privacy#who-can-see-what) lists who sees which data.
+- [Data retention](./data-retention.mdx) lists what Hephaestus stores and for how long.

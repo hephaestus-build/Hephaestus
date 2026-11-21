@@ -2343,6 +2343,11 @@ export const zPasskeyStatus = z.object({
 	workspaceAdminRequired: z.boolean(),
 });
 
+export const zPerPersonResults = z.object({
+	canTurnOn: z.boolean(),
+	enabled: z.boolean(),
+});
+
 export const zPersonDataProvider = z.object({
 	id: z.int(),
 	serverUrl: z.string(),
@@ -3720,7 +3725,7 @@ export const zReviewFeedback = z.object({
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	destination: zFeedbackDestination,
-	developer: zReviewDeveloper,
+	developer: zReviewDeveloper.nullable(),
 	disagreedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	id: z.uuid(),
 	item: zItemRef.nullable(),
@@ -5519,7 +5524,7 @@ export const zReviewFeedbackDetail = z.object({
 	decisions: z.array(zFeedbackDecision),
 	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	destination: zFeedbackDestination,
-	developer: zReviewDeveloper,
+	developer: zReviewDeveloper.nullable(),
 	disagreedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	id: z.uuid(),
 	item: zItemRef.nullable(),
@@ -5777,6 +5782,10 @@ export const zUpdateNotificationPreferences = z.object({
  */
 export const zUpdateOutlineCollectionStateRequest = z.object({
 	state: zOutlineCollectionMirrorState,
+});
+
+export const zUpdatePerPersonResults = z.object({
+	enabled: z.boolean(),
 });
 
 export const zUpdatePracticeGroupRequest = z.object({
@@ -6623,22 +6632,25 @@ export const zWorkspaceSplitPart = z.object({
 	developers: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
 	standing: zWorkspaceSplitsVerdict,
 });
 
 /**
- * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total
+ * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total. A split with a part of 1 or 2, or with every developer in one part, shows only its total
  */
 export const zWorkspaceSplit = z.object({
 	developers: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
 	noneYet: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
 	parts: z.array(zWorkspaceSplitPart),
 });
 
@@ -6730,6 +6742,7 @@ export const zWorkspaceListItem = z.object({
 	displayName: z.string(),
 	id: z.int(),
 	linkHosts: z.array(z.string()),
+	perPersonResultsForAdmins: z.boolean().optional(),
 	practicesEnabled: z.boolean(),
 	providerType: zIdentityProviderType.optional(),
 	publishesPublicActivity: z.boolean(),
@@ -6772,7 +6785,8 @@ export const zPracticesAcrossWorkspaceTiles = z.object({
 	developersWithAStandingInWindow: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
 	includesEarlierReviews: z.boolean(),
 	practicesGoingWell: zWorkspaceTile,
 	practicesNeedingAttention: zWorkspaceTile,

@@ -25,6 +25,7 @@ const workspace: WorkspaceListItem = {
 	id: 1,
 	practicesEnabled: false,
 	publishesPublicActivity: false,
+	perPersonResultsForAdmins: false,
 	linkHosts: [],
 	status: "ACTIVE",
 	workspaceSlug: "acme",

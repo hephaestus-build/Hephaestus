@@ -170,6 +170,7 @@ function PracticeProfile() {
 	const setView = (view: Partial<PracticeProfileSearch>) => stackControls.setView(view);
 
 	const featureState = useWorkspaceFeatures(workspaceSlug);
+	const perPersonResults = featureState.perPersonResultsForAdmins;
 	const focusSwitch = usePracticeFocusSwitch(workspaceSlug);
 	const {
 		groups,
@@ -347,6 +348,7 @@ function PracticeProfile() {
 		<>
 			<PracticeProfilePage
 				{...pageProps}
+				perPersonResults={perPersonResults}
 				firstRun={
 					pageProps.firstRun && {
 						...pageProps.firstRun,

@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceRangeDTO;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitDTO;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitPartDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
 import java.util.Collection;
 import java.util.List;
@@ -30,28 +28,38 @@ public final class WorkspaceSplits {
         }
     }
 
+    /** The developers at each verdict and with none yet, before {@link SmallCounts} decides what members see. */
+    public record Split(int developing, int mixed, int strength, int noneYet) {}
+
     /** How the developers with a standing split over their standings in one group or practice, one each. */
-    public static WorkspaceSplitDTO split(Collection<PracticeStanding> withAStanding) {
-        List<WorkspaceSplitPartDTO> parts = List.of(Verdict.values()).stream()
-                .map(verdict -> new WorkspaceSplitPartDTO(verdict, (int) withAStanding.stream()
-                        .filter(standing -> Verdict.of(standing) == verdict)
-                        .count()))
-                .toList();
-        int withAVerdict =
-                parts.stream().mapToInt(WorkspaceSplitPartDTO::developers).sum();
-        return new WorkspaceSplitDTO(parts, withAStanding.size() - withAVerdict, withAStanding.size());
+    public static Split split(Collection<PracticeStanding> withAStanding) {
+        int developing = count(withAStanding, Verdict.DEVELOPING);
+        int mixed = count(withAStanding, Verdict.MIXED);
+        int strength = count(withAStanding, Verdict.STRENGTH);
+        return new Split(developing, mixed, strength, withAStanding.size() - developing - mixed - strength);
+    }
+
+    private static int count(Collection<PracticeStanding> standings, Verdict verdict) {
+        return (int) standings.stream()
+                .filter(standing -> Verdict.of(standing) == verdict)
+                .count();
     }
 
     /**
-     * The middle half of one figure across the developers counted, or null when nobody is counted. Only the two
-     * quartiles leave, each interpolated linearly and rounded.
+     * The middle half of one figure across the other developers counted, or null when fewer than
+     * {@link SmallCounts#MINIMUM} are. The reader is left out: with their own value beside the two quartiles of a
+     * group they belong to, a reader could rebuild the others' values. A range whose ends meet is null too: it says
+     * that every other developer counted is within one of that value. Only the two quartiles leave, each interpolated
+     * linearly and rounded.
      */
     public static @Nullable WorkspaceRangeDTO middleHalf(List<Integer> values) {
-        if (values.isEmpty()) {
+        if (!SmallCounts.enough(values.size())) {
             return null;
         }
         List<Integer> sorted = values.stream().sorted().toList();
-        return new WorkspaceRangeDTO(quartile(sorted, 0.25), quartile(sorted, 0.75));
+        int low = quartile(sorted, 0.25);
+        int high = quartile(sorted, 0.75);
+        return low == high ? null : new WorkspaceRangeDTO(low, high);
     }
 
     private static int quartile(List<Integer> sorted, double fraction) {

@@ -10,12 +10,14 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 class PracticeReviewOutputControllerIntegrationTest extends BaseIntegrationTest {
@@ -52,6 +54,50 @@ class PracticeReviewOutputControllerIntegrationTest extends BaseIntegrationTest 
 
     @Autowired
     ResultStore resultStore;
+
+    @Autowired
+    JdbcClient jdbc;
+
+    @Test
+    void withPerPersonResultsOffAdminsSeeNoDeveloperAndCannotFilterByPerson() {
+        var r = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
+        jdbc.sql("UPDATE workspace SET per_person_results_for_admins = false WHERE id = :ws")
+                .param("ws", scenario.workspace().getId())
+                .update();
+
+        get("/practices/reviews/results/" + r.getId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.developer")
+                .isEmpty();
+        get("/practices/reviews/results")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].id")
+                .isEqualTo(r.getId().toString())
+                .jsonPath("$.content[0].developer")
+                .isEmpty();
+        get("/practices/reviews/problems?resultId=" + r.getId() + "&openOnly=false")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].developer")
+                .isEmpty();
+        for (var path : List.of(
+                "/practices/reviews",
+                "/practices/reviews/results",
+                "/practices/reviews/problems",
+                "/practices/reviews/feedback",
+                "/practices/reviews/feedback/locations",
+                "/practices/reviews/feedback/reasons")) {
+            get(path + "?developerId=" + scenarioAccountId).expectStatus().isForbidden();
+            get(path + "?disagreed=true&developerId=" + scenarioAccountId)
+                    .expectStatus()
+                    .isForbidden();
+        }
+    }
 
     @Test
     void adminSeesResultAndProblemLedger() {

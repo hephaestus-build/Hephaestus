@@ -308,6 +308,29 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldNameNoRequesterWhilePerPersonResultsAreOff() {
+        var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
+        jdbc.sql("UPDATE workspace SET per_person_results_for_admins = false WHERE id = :ws")
+                .param("ws", scenario.workspace().getId())
+                .update();
+
+        get("/practices/reviews")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].id")
+                .isEqualTo(result.getReviewId().toString())
+                .jsonPath("$.content[0].requestedBy")
+                .doesNotExist();
+        get("/practices/reviews/" + result.getReviewId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.requestedBy")
+                .doesNotExist();
+    }
+
+    @Test
     void shouldRetainPinnedPracticeAndDeveloperFactsAfterRuntimeExpiry() {
         var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
         get("/practices/reviews")
@@ -409,6 +432,32 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(3)
                 .jsonPath("$.head[0].progress.continuing")
                 .isEqualTo(true);
+    }
+
+    @Test
+    void shouldNameNoDeveloperInTheQueueWhilePerPersonResultsAreOff() {
+        var review = data.queuedReviewOfOnePerson(scenario, scenarioAccountId);
+        get("/practices/reviews/queue")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.head[0].reviewId")
+                .isEqualTo(review.getId().toString())
+                .jsonPath("$.head[0].developer.accountId")
+                .isEqualTo(Long.toString(scenarioAccountId));
+
+        jdbc.sql("UPDATE workspace SET per_person_results_for_admins = false WHERE id = :ws")
+                .param("ws", scenario.workspace().getId())
+                .update();
+
+        get("/practices/reviews/queue")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.head[0].reviewId")
+                .isEqualTo(review.getId().toString())
+                .jsonPath("$.head[0].developer")
+                .isEmpty();
     }
 
     @Test

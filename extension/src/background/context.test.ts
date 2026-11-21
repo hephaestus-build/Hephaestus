@@ -37,6 +37,7 @@ function listItem(
 		practicesEnabled: true,
 		providerType,
 		publishesPublicActivity: false,
+		perPersonResultsForAdmins: false,
 		linkHosts: [],
 		status: "ACTIVE",
 		workspaceSlug: slug,

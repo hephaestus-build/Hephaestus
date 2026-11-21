@@ -10,4 +10,5 @@ public record WorkspaceListData(
         String accountLogin,
         Instant createdAt,
         Boolean practicesEnabled,
-        Boolean publicActivityEnabled) {}
+        Boolean publicActivityEnabled,
+        boolean perPersonResultsForAdmins) {}

@@ -19,7 +19,7 @@ import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/revie
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
 
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
-import { ownMembership } from "@/mocks/fixtures/workspaces";
+import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { precedes } from "@/test/dom";
 import { ObserverStub } from "@/test/observers";
@@ -435,6 +435,47 @@ describe("practice review list routes", () => {
 		await screen.findByText(name, undefined, ROUTE_RENDER_WAIT);
 
 		expect(screen.queryByRole("link", { name: `All feedback for ${name}` })).toBeNull();
+	});
+
+	it("offers no filter by person and no Developer column while per-person results are off", async () => {
+		const { resultUrls } = recordRequests();
+		const [result] = reviewResults;
+		assert(result);
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([workspaceListItem("acme", { perPersonResultsForAdmins: false })]),
+			),
+			http.get("*/workspaces/:workspaceSlug/practices/reviews/results", ({ request }) => {
+				resultUrls.push(new URL(request.url));
+				return HttpResponse.json(pageOf([{ ...result, developer: null }]));
+			}),
+		);
+
+		renderRouteAtWithRouter("/w/acme/admin/practices/reviews/results");
+		await screen.findByRole("combobox", { name: "Group" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(resultUrls.length).toBeGreaterThan(0));
+
+		expect(screen.queryByRole("combobox", { name: "Developer" })).toBeNull();
+		expect(screen.queryAllByRole("columnheader", { name: "Developer" })).toHaveLength(0);
+		expect(resultUrls.flatMap((url) => values(url, "developerId"))).toStrictEqual([]);
+	});
+
+	it("drops the person from an old address while per-person results are off", async () => {
+		const { resultUrls } = recordRequests();
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([workspaceListItem("acme", { perPersonResultsForAdmins: false })]),
+			),
+		);
+
+		const { router } = renderRouteAtWithRouter(
+			"/w/acme/admin/practices/reviews/results?developerId=7",
+		);
+		await screen.findByRole("combobox", { name: "Group" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(resultUrls.length).toBeGreaterThan(0));
+
+		expect(router.state.location.search).not.toHaveProperty("developerId");
+		expect(resultUrls.flatMap((url) => values(url, "developerId"))).toStrictEqual([]);
 	});
 
 	/**

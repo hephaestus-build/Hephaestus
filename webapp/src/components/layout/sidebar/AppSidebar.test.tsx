@@ -26,6 +26,7 @@ const workspace = {
 	status: "ACTIVE",
 	practicesEnabled: false,
 	publishesPublicActivity: false,
+	perPersonResultsForAdmins: false,
 	linkHosts: [] as string[],
 } as const;
 

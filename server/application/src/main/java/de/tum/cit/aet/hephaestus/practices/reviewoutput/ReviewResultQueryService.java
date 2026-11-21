@@ -83,7 +83,7 @@ public class ReviewResultQueryService {
                                         Collectors.toList())));
         var feedback = listRows.feedbackCounts(workspaceId, ids).stream()
                 .collect(Collectors.groupingBy(ReviewResultListRepository.FeedbackCount::resultId));
-        var developers = references.developers(
+        var developers = references.namedDevelopers(
                 workspaceId,
                 rows.getContent().stream()
                         .map(Result::getDeveloperId)
@@ -279,7 +279,7 @@ public class ReviewResultQueryService {
         return r.developerId() == null
                 ? null
                 : references
-                        .developers(r.workspaceId(), List.of(r.developerId()))
+                        .namedDevelopers(r.workspaceId(), List.of(r.developerId()))
                         .get(r.developerId());
     }
 }

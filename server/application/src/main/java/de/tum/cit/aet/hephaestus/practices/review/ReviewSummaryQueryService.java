@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
-import de.tum.cit.aet.hephaestus.core.auth.dto.AccountRefDTO;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
@@ -11,7 +10,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ItemEventDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewItemCountsDTO;
@@ -33,7 +31,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewScriptQuery;
-import de.tum.cit.aet.hephaestus.practices.trace.ItemTraceRepository;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -68,9 +65,9 @@ public class ReviewSummaryQueryService {
     private final ReviewRuntimeQuery runtime;
     private final ReviewScriptQuery scripts;
     private final ReviewItemRepository members;
-    private final ItemTraceRepository events;
     private final JsonMapper json;
     private final ReviewProgressService progressService;
+    private final ReviewReferences pageReferences;
 
     public Review require(long ws, UUID id) {
         return reviews.findByIdAndWorkspaceId(id, ws)
@@ -138,21 +135,21 @@ public class ReviewSummaryQueryService {
                     .findFirst()
                     .orElse(null);
             var eventId = review.getEventId();
-            var event = eventId == null ? null : reads.eventById.get(eventId);
+            var event = eventId == null ? null : reads.refs.events().get(eventId);
             var requester = review.getRequestedById();
             summaries.put(
                     review.getId(),
                     new ReviewSummaryDTO(
                             review.getId(),
                             review.getKind(),
-                            Objects.requireNonNull(reads.items.get(review.getItemId())),
+                            Objects.requireNonNull(reads.refs.items().get(review.getItemId())),
                             review.getItemVersion(),
                             review.getOrigin(),
                             review.getStatus(),
                             review.getCreatedAt(),
                             review.getCompletedAt(),
                             event,
-                            requester == null ? null : reads.requesters.get(requester),
+                            requester == null ? null : reads.refs.requesters().get(requester),
                             review.getBatchId(),
                             review.getOrderedAt(),
                             review.getStopReason(),
@@ -180,9 +177,7 @@ public class ReviewSummaryQueryService {
         final Map<UUID, Map<Long, ReviewItemRepository.PracticeCounts>> memberCounts = new HashMap<>();
         final Map<UUID, Map<Long, ReviewRepository.ResultCounts>> results = new HashMap<>();
         final Map<UUID, Map<FeedbackState, Integer>> feedback = new HashMap<>();
-        final Map<Long, ItemRefDTO> items;
-        final Map<UUID, ItemEventDTO> eventById;
-        final Map<Long, AccountRefDTO> requesters;
+        final ReviewReferences.PageRefs refs;
         final Map<UUID, ReviewProgressDTO> progress;
 
         SummaryReads(long ws, List<Review> page) {
@@ -233,24 +228,7 @@ public class ReviewSummaryQueryService {
                     .forEach(row -> feedback.computeIfAbsent(
                                     row.getReviewId(), ignored -> new EnumMap<>(FeedbackState.class))
                             .put(row.getState(), Math.toIntExact(row.getCount())));
-            items = references.items(
-                    ws, page.stream().map(Review::getItemId).distinct().toList());
-            var eventIds = page.stream()
-                    .map(Review::getEventId)
-                    .filter(Objects::nonNull)
-                    .distinct()
-                    .toList();
-            eventById = eventIds.isEmpty()
-                    ? Map.of()
-                    : events.events(ws, eventIds).stream()
-                            .collect(Collectors.toMap(
-                                    ItemTraceRepository.EventRow::getId, ReviewSummaryQueryService::eventOf));
-            var requesterIds = page.stream()
-                    .map(Review::getRequestedById)
-                    .filter(Objects::nonNull)
-                    .distinct()
-                    .toList();
-            requesters = requesterIds.isEmpty() ? Map.of() : references.accounts(ws, requesterIds);
+            refs = pageReferences.read(ws, page);
         }
 
         private void addResults(ReviewRepository.PracticeResultCounts row) {
@@ -278,20 +256,6 @@ public class ReviewSummaryQueryService {
                             .mapToLong(ReviewRepository.ResultCounts::getCouldNotDetermine)
                             .sum()));
         }
-    }
-
-    private static ItemEventDTO eventOf(ItemTraceRepository.EventRow row) {
-        return new ItemEventDTO(
-                row.getId(),
-                Long.toString(row.getItemId()),
-                row.getName(),
-                row.getItemVersion(),
-                row.getOccurredAt(),
-                row.getFoundBy(),
-                row.getState(),
-                row.getReason(),
-                row.getDecidedAt(),
-                row.getReviewId());
     }
 
     public ReviewDetailDTO detail(long ws, UUID id) {

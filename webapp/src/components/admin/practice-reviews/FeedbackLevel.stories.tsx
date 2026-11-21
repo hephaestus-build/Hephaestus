@@ -315,6 +315,22 @@ export const Withheld: Story = {
 };
 
 /** The level's default: delivered feedback, with its sections parted, at one size, and foldable. */
+/**
+ * Feedback on a practice page while the workspace has per-person results for admins off: the server
+ * names nobody, so the sheet says where the feedback goes and not for whom.
+ */
+export const WithoutTheDeveloper: Story = {
+	args: { feedback: ready({ ...practicePageCard, developer: null }) },
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(panel.getByRole("heading", { level: 2 })).toHaveTextContent(
+			`Feedback · ${FEEDBACK_LOCATION_DEFS[practicePageCard.location].label}`,
+		);
+		await expect(panel.getByText("Not shown")).toBeVisible();
+		await expect(panel.queryByText(/^For /u)).toBeNull();
+	},
+};
+
 export const Delivered: Story = {
 	args: { feedback: ready(approvedFeedbackDetail) },
 	play: async ({ userEvent }) => {

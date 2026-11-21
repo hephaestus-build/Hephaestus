@@ -1,10 +1,13 @@
 import {
 	createFileRoute,
 	Outlet,
+	redirect,
 	stripSearchParams,
 	useMatchRoute,
 	useSearch,
 } from "@tanstack/react-router";
+
+import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 
 import { PracticeReviewsLayout } from "@/components/admin/practice-reviews/PracticeReviewsLayout";
 import { recordLevel, type RecordRef } from "@/components/admin/practice-reviews/review-layers";
@@ -46,6 +49,23 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/pra
 				};
 			},
 		],
+	},
+	// An address saved while per-person results were on can carry a person. The server refuses that
+	// filter while they are off, and no facet would be there to clear it, so it is dropped first.
+	beforeLoad: async ({ context, params, location }) => {
+		if (!location.href.includes("developerId=")) {
+			return;
+		}
+		const workspaces = await context.queryClient
+			.query(listWorkspacesOptions())
+			.catch(() => undefined);
+		const workspace = workspaces?.find((item) => item.workspaceSlug === params.workspaceSlug);
+		if (workspace?.perPersonResultsForAdmins !== false) {
+			return;
+		}
+		const url = new URL(location.href, "http://localhost");
+		url.searchParams.delete("developerId");
+		throw redirect({ href: `${url.pathname}${url.search}${url.hash}`, replace: true });
 	},
 	head: practiceReviewsHead("Practice reviews"),
 	component: ReviewsLayoutRoute,

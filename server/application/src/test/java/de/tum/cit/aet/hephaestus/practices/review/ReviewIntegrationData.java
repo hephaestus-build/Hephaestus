@@ -117,6 +117,8 @@ public class ReviewIntegrationData {
     private Scenario scenario(ItemKind kind, PracticeDefinition definition, long sourceId, String practiceSlug) {
         var workspace = WorkspaceTestFixtures.activeWorkspace("s5-" + UUID.randomUUID());
         workspace.getFeatures().setPracticesEnabled(true);
+        // A workspace that ran reviews before the setting existed keeps per-person results for its admins.
+        workspace.setPerPersonResultsForAdmins(true);
         workspaces.saveAndFlush(workspace);
         var account = accounts.saveAndFlush(new Account("S5 developer"));
         var membership = new Membership();
@@ -431,6 +433,31 @@ public class ReviewIntegrationData {
                 .param("ws", s.workspace().getId())
                 .param("review", review.getId())
                 .param("ended", ended)
+                .update();
+        return review;
+    }
+
+    /**
+     * A queued review of one person's work whose job lists its assignments, as a real job does, so the queue can tell
+     * whose work waits.
+     */
+    @Transactional
+    public Review queuedReviewOfOnePerson(Scenario s, long developer) {
+        var review = continuingReview(s, developer, 0, 2);
+        var assignments = jdbc.sql(
+                        "SELECT practice_id, item_id FROM review_item WHERE workspace_id=:ws AND review_id=:review")
+                .param("ws", s.workspace().getId())
+                .param("review", review.getId())
+                .query((row, index) -> Map.of(
+                        "reviewId", review.getId().toString(),
+                        "practiceId", row.getLong(1),
+                        "itemId", row.getLong(2)))
+                .list();
+        jdbc.sql("UPDATE review_job SET input = jsonb_set(input, '{assignments}', CAST(:assignments AS jsonb))"
+                        + " WHERE workspace_id=:ws AND review_id=:review")
+                .param("assignments", json.writeValueAsString(assignments))
+                .param("ws", s.workspace().getId())
+                .param("review", review.getId())
                 .update();
         return review;
     }

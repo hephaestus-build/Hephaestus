@@ -97,7 +97,7 @@ import { ReviewFact, ReviewFactGrid } from "./ReviewFactGrid";
 import { ReviewItemLink } from "./ReviewItem";
 import { ReviewLevelHeader } from "./ReviewLevelHeader";
 import { ReviewPackage } from "./ReviewPackage";
-import { ReviewPerson } from "./ReviewPerson";
+import { FeedbackPerson } from "./ReviewPerson";
 
 type FeedbackRecord = ReviewFeedbackDetail;
 
@@ -140,7 +140,9 @@ function inOrder(copies: readonly FeedbackCopy[]): FeedbackCopy[] {
  */
 function feedbackTitle(feedback: FeedbackRecord): string {
 	const where = definitionFor(FEEDBACK_LOCATION_DEFS, feedback.location).label;
-	return `For ${developerLabel(feedback.developer)} · ${where}`;
+	return feedback.developer === null
+		? `Feedback · ${where}`
+		: `For ${developerLabel(feedback.developer)} · ${where}`;
 }
 
 export function FeedbackLevel({
@@ -342,7 +344,7 @@ function FeedbackWhat({ feedback }: { feedback: FeedbackRecord }) {
 	return (
 		<ReviewFactGrid>
 			<ReviewFact label="Developer">
-				<ReviewPerson person={feedback.developer} />
+				<FeedbackPerson person={feedback.developer} />
 			</ReviewFact>
 			<ReviewFact label="Destination">
 				<FeedbackLocationLabel feedback={feedback} />
@@ -694,7 +696,7 @@ function responseEvent(feedback: FeedbackRecord): SheetEvent | undefined {
 		key: "response",
 		at: response.createdAt,
 		title: DEVELOPER_ANSWER_DEFS[answer].label,
-		by: developerLabel(feedback.developer),
+		by: feedback.developer === null ? "The developer" : developerLabel(feedback.developer),
 		detail: (
 			<>
 				{facts.length > 0 && <span className="block">{facts.join(" · ")}</span>}

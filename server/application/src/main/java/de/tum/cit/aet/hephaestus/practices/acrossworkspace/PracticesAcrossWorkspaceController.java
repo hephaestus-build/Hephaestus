@@ -39,7 +39,8 @@ public class PracticesAcrossWorkspaceController {
     @Operation(
             operationId = "getPracticeWorkspaceTiles",
             summary = "The reader's figures over one window beside the workspace's middle half",
-            description = "A middle half shows whenever one or more developers are counted in the window.")
+            description =
+                    "A middle half shows when at least 3 developers besides the reader are counted in the window and its ends do not meet.")
     public PracticesAcrossWorkspaceTilesDTO tiles(
             WorkspaceContext ws, @RequestParam PracticesAcrossWorkspaceWindow window) {
         return service.readTiles(ws, window);

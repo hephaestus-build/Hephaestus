@@ -6,6 +6,8 @@ import { useAuth } from "@/runtime/auth/AuthContext";
 export interface WorkspaceFeaturesResult {
 	/** Undefined until the workspace list names this workspace. */
 	practicesEnabled?: boolean;
+	/** Whether workspace admins see practice results per person. Undefined until the list names this workspace. */
+	perPersonResultsForAdmins?: boolean;
 	isLoading: boolean;
 	isError: boolean;
 	error: unknown;
@@ -27,6 +29,7 @@ export function useWorkspaceFeatures(workspaceSlug: string | undefined): Workspa
 
 	return {
 		practicesEnabled: activeWorkspace?.practicesEnabled,
+		perPersonResultsForAdmins: activeWorkspace?.perPersonResultsForAdmins,
 		isLoading: authLoading || query.isLoading,
 		isError: query.isError || workspaceMissing,
 		error: query.error ?? (workspaceMissing ? new Error("Workspace not found") : undefined),
