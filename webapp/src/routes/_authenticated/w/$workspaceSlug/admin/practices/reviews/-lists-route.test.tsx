@@ -5,12 +5,15 @@ import { afterEach, assert, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { ReviewSummary } from "@/api/types.gen";
 import {
+	resultDetail,
 	reviewAccounts,
+	reviewDetailCompleted,
 	reviewFeedback,
 	reviewProblems,
 	reviewResults,
 	reviews,
 } from "@/components/admin/practice-reviews/fixtures";
+import { resultSummary } from "@/components/admin/practice-reviews/result-words";
 import { developerLabel } from "@/components/admin/practice-reviews/review-format";
 import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
@@ -343,11 +346,14 @@ describe("practice review list routes", () => {
 
 	it("sends the severity and scope filters to the problems endpoint", async () => {
 		const { problemUrls } = recordRequests();
+		const scopedResult = resultDetail();
 
 		renderRouteAtWithRouter(
-			'/w/acme/admin/practices/reviews/problems?severity=["MAJOR"]&developerId=7&practiceSlug=["thin-controllers"]&groupSlug=["design"]&from=2026-09-01&to=2026-09-10&resultId=3f2b6c1e-8a4d-4f0b-9c7e-2d5a1b0c9e84',
+			`/w/acme/admin/practices/reviews/problems?severity=["MAJOR"]&developerId=7&practiceSlug=["thin-controllers"]&groupSlug=["design"]&from=2026-09-01&to=2026-09-10&resultId=${scopedResult.id}`,
 		);
 		await screen.findByText("No problems match these filters", undefined, ROUTE_RENDER_WAIT);
+		// The scope names the observation it narrows to.
+		await screen.findByText(resultSummary(scopedResult), { exact: false }, ROUTE_RENDER_WAIT);
 
 		const requested = problemUrls.at(-1);
 		expect(values(requested, "severity")).toStrictEqual(["MAJOR"]);
@@ -356,7 +362,7 @@ describe("practice review list routes", () => {
 		expect(values(requested, "groupSlug")).toStrictEqual(["design"]);
 		expect(requested?.searchParams.get("from")).not.toBeNull();
 		expect(requested?.searchParams.get("to")).not.toBeNull();
-		expect(requested?.searchParams.get("resultId")).toBe("3f2b6c1e-8a4d-4f0b-9c7e-2d5a1b0c9e84");
+		expect(requested?.searchParams.get("resultId")).toBe(scopedResult.id);
 	});
 
 	it("asks for the problems of the severity chosen, and for all of them once it is cleared", async () => {
@@ -468,11 +474,14 @@ describe("practice review list routes", () => {
 
 	it("sends the shared developer, practice, group, range and review to the reviews endpoint", async () => {
 		const { reviewUrls } = recordRequests();
+		const scopedReview = reviewDetailCompleted;
 
 		renderRouteAtWithRouter(
-			'/w/acme/admin/practices/reviews?developerId=7&practiceSlug=["thin-controllers"]&groupSlug=["design"]&from=2026-09-01&to=2026-09-10&reviewId=3f2b6c1e-8a4d-4f0b-9c7e-2d5a1b0c9e84',
+			`/w/acme/admin/practices/reviews?developerId=7&practiceSlug=["thin-controllers"]&groupSlug=["design"]&from=2026-09-01&to=2026-09-10&reviewId=${scopedReview.id}`,
 		);
 		await screen.findByText("No reviews match these filters", undefined, ROUTE_RENDER_WAIT);
+		// The scope names the review it narrows to by its work.
+		await screen.findByText(scopedReview.item.label, { exact: false }, ROUTE_RENDER_WAIT);
 
 		const requested = reviewUrls.at(-1);
 		expect(requested?.searchParams.get("developerId")).toBe("7");
@@ -481,7 +490,7 @@ describe("practice review list routes", () => {
 		expect(requested?.searchParams.get("from")).not.toBeNull();
 		expect(requested?.searchParams.get("to")).not.toBeNull();
 		// A review the address filters by narrows the list to itself.
-		expect(requested?.searchParams.get("reviewId")).toBe("3f2b6c1e-8a4d-4f0b-9c7e-2d5a1b0c9e84");
+		expect(requested?.searchParams.get("reviewId")).toBe(scopedReview.id);
 	});
 
 	it("sends the group filter to the feedback endpoint", async () => {
