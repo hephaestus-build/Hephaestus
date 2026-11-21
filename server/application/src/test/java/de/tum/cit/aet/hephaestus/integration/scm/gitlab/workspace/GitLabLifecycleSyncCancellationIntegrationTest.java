@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Bear
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob;
@@ -157,13 +158,14 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
         priorSuccessfulAt = Objects.requireNonNull(
                 statusService.getStatus(workspace.getId(), connection.getId()).lastSuccessfulSyncAt());
 
-        when(issues.syncIssues(anyLong(), any(Repository.class), any(), any())).thenAnswer(invocation -> {
-            Repository repository = invocation.getArgument(1);
-            processedRepositories.add(repository.getId());
-            return SyncResult.completed(1);
-        });
-        when(mergeRequests.syncMergeRequests(anyLong(), any(Repository.class), any(), any()))
-                .thenReturn(SyncResult.completed(1));
+        when(issues.syncIssues(anyLong(), any(Repository.class), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    Repository repository = invocation.getArgument(1);
+                    processedRepositories.add(repository.getId());
+                    return new RecentSyncResult(SyncResult.completed(1), null);
+                });
+        when(mergeRequests.syncMergeRequests(anyLong(), any(Repository.class), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.completed(1), null));
         when(teams.syncTeamsForGroup(workspace.getId(), workspace.getAccountLogin()))
                 .thenReturn(new GitLabTeamSyncService.Result(0, true));
         when(groups.syncGroupProjects(workspace.getId(), workspace.getAccountLogin(), gitLabConfig.serverUrl()))
@@ -177,12 +179,12 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
 
     @Test
     void shouldRecordCancelledWithoutAdvancingSuccessfulTimeWhenNextRepositoryIsSkipped() {
-        when(issues.syncIssues(eq(workspace.getId()), any(Repository.class), any(), any()))
+        when(issues.syncIssues(eq(workspace.getId()), any(Repository.class), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     Repository repository = invocation.getArgument(1);
                     processedRepositories.add(repository.getId());
                     requestCancellation();
-                    return SyncResult.completed(1);
+                    return new RecentSyncResult(SyncResult.completed(1), null);
                 });
 
         trigger.syncAllRepositories(workspace.getId());
@@ -465,12 +467,12 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
     void shouldKeepConsumedCancellationWhenDiscoveryAlreadyReportedWarnings() {
         when(groups.syncGroupProjects(workspace.getId(), workspace.getAccountLogin(), gitLabConfig.serverUrl()))
                 .thenReturn(GitLabSyncResult.withErrors(List.of(first), 1, 1, 0, 0));
-        when(issues.syncIssues(eq(workspace.getId()), any(Repository.class), any(), any()))
+        when(issues.syncIssues(eq(workspace.getId()), any(Repository.class), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     Repository repository = invocation.getArgument(1);
                     processedRepositories.add(repository.getId());
                     requestCancellation();
-                    return SyncResult.completed(1);
+                    return new RecentSyncResult(SyncResult.completed(1), null);
                 });
         trigger = triggerWith(
                 providerFor(new GitLabSyncServiceHolder(

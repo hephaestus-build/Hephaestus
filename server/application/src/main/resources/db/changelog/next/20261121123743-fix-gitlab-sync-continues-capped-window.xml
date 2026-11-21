@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795264663941-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="repository_to_monitor" columnName="issues_synced_at"/>
+            <columnExists tableName="repository_to_monitor" columnName="pull_requests_synced_at"/>
+            <columnExists tableName="repository" columnName="last_sync_at"/>
+        </preConditions>
+        <comment>Before this release a GitLab issue or merge request pass that stopped at the page cap counted as complete, so its monitor's issues_synced_at or pull_requests_synced_at moved to the end of the pass while repository.last_sync_at held. GitLab sync now reads each kind from its own watermark, which would skip what such a pass never reached. So every GitLab monitor starts from its project's last_sync_at, the one watermark the earlier releases kept correct; this costs one extra read and skips nothing.</comment>
+        <sql>UPDATE repository_to_monitor rtm
+SET issues_synced_at = r.last_sync_at, pull_requests_synced_at = r.last_sync_at
+FROM repository r
+JOIN identity_provider p ON p.id = r.provider_id AND p.type = 'GITLAB'
+WHERE rtm.native_id = r.native_id
+  AND rtm.name_with_owner = r.name_with_owner
+  AND EXISTS (SELECT 1 FROM connection c
+              WHERE c.workspace_id = rtm.workspace_id AND c.kind = 'GITLAB' AND c.config ->> 'serverUrl' = p.server_url);</sql>
+        <rollback>
+            <stop>The earlier issue and merge request watermarks of GitLab monitors are not kept. Restore the database backup taken before this upgrade to bring them back.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

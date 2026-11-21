@@ -139,9 +139,11 @@ To hold more at once, raise the memory in `server.resources`.
 
 ## Known limits
 
-- **A very large GitHub sync window takes more than one run.**
-  The daily sync of a GitHub repository reads only the work that changed since its last complete run.
-  One run reads at most 10,000 pull requests and 25,000 issues.
-  If more changed, for example after a long outage, the run stops with an error and records where it stopped.
-  The next run continues from there, until the window is read.
-  Until then, the repository's resource sync table shows the error ([A connection shows a sync error](/user/workspace#a-connection-shows-a-sync-error)).
+- **A very large sync window takes more than one run.**
+  The daily sync of a GitHub or GitLab repository reads only the work that changed since its last complete run.
+  One run reads at most 10,000 pull requests or merge requests.
+  It reads at most 25,000 GitHub issues or 30,000 GitLab issues.
+  More can change, for example after a long outage or in the first sync of a large GitLab project.
+  Then the run records where it stopped, and the next run continues from there.
+  Until the window is read, the repository's resource sync table says **More changed than one run reads. The next run continues.**
+  See [A connection shows a sync error](/user/workspace#a-connection-shows-a-sync-error).

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -107,14 +108,22 @@ public class GitLabMergeRequestSyncService {
     public SyncResult syncMergeRequests(Long scopeId, Repository repository, @Nullable OffsetDateTime updatedAfter) {
         return admission
                 .capture(scopeId, repository)
-                .map(read -> syncMergeRequests(scopeId, repository, updatedAfter, read))
+                .map(read -> syncMergeRequests(scopeId, repository, updatedAfter, null, read)
+                        .result())
                 .orElseGet(() -> SyncResult.completed(0));
     }
 
-    public SyncResult syncMergeRequests(
+    /**
+     * Syncs the merge requests updated after {@code updatedAfter}, newest first. A list longer than one run reads
+     * stops at the page cap; the result then carries the cursor where the next run resumes it.
+     *
+     * @param resumeCursor where an open window resumes, or null to start at the newest merge request
+     */
+    public RecentSyncResult syncMergeRequests(
             Long scopeId,
             Repository repository,
             @Nullable OffsetDateTime updatedAfter,
+            @Nullable String resumeCursor,
             GitLabProjectAdmission.ProjectRead read) {
         String projectPath = repository.getNameWithOwner();
         String safeProjectPath = Objects.requireNonNullElse(sanitizeForLog(projectPath), "<unknown>");
@@ -128,12 +137,11 @@ public class GitLabMergeRequestSyncService {
         Instant runStart = Instant.now();
         int totalSynced = 0;
         int totalSkipped = 0;
-        String cursor = null;
+        String cursor = resumeCursor;
         String previousCursor = null;
         int page = 0;
         boolean rateLimitAborted = false;
         boolean errorAborted = false;
-        // A list longer than a run reads is a warning: holding the timestamp would read the same pages again.
         boolean capped = false;
         int reportedTotalCount = -1;
 
@@ -292,12 +300,19 @@ public class GitLabMergeRequestSyncService {
         }
 
         SyncResult result;
-        if (!admission.current(read)) return SyncResult.completed(0);
+        String resumeAt = null;
+        if (!admission.current(read)) return new RecentSyncResult(SyncResult.completed(0), null);
+        boolean unfinishedDiscussion = discussionSyncService.hasUnfinishedReadSince(scopeId, repository, runStart);
         if (errorAborted) {
             result = SyncResult.abortedError(totalSynced);
         } else if (rateLimitAborted) {
             result = SyncResult.abortedRateLimit(totalSynced);
-        } else if (capped || discussionSyncService.hasUnfinishedReadSince(scopeId, repository, runStart)) {
+        } else if (capped) {
+            // Not complete: the watermark must not move past the merge requests this pass did not reach. A merge
+            // request whose discussion was read in part stays marked partial on its own row, so the window resumes.
+            result = SyncResult.abortedError(totalSynced);
+            resumeAt = cursor;
+        } else if (unfinishedDiscussion) {
             result = SyncResult.completedWithWarnings(totalSynced);
         } else {
             result = SyncResult.completed(totalSynced);
@@ -311,7 +326,7 @@ public class GitLabMergeRequestSyncService {
                 totalSynced,
                 reportedTotalCount);
 
-        return result;
+        return new RecentSyncResult(result, resumeAt);
     }
 
     private record ScalarFields(

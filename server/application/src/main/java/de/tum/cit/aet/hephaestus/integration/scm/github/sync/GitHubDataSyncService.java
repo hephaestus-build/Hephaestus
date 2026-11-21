@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerPropert
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener.OrganizationSyncedEvent;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
@@ -20,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncMet
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
+import de.tum.cit.aet.hephaestus.integration.core.sync.RecentWindows;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -33,7 +35,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionCl
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.Category;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
-import de.tum.cit.aet.hephaestus.integration.scm.github.common.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
@@ -330,28 +331,32 @@ public class GitHubDataSyncService {
             // page CREATED_AT and are a different list, so the window keeps its own cursor.
             // Comments are synced inline with issues, and review threads and comments with pull requests.
             Instant passStart = Instant.now();
-            SyncResult issueResult = recentPass(
+            RecentSyncResult issuePass = issueSyncService.syncForRepository(
+                    scopeId,
+                    repositoryId,
+                    RecentWindows.resumeCursor(syncTarget.issueRecentWindow()),
+                    syncTarget.lastIssuesSyncedAt());
+            RecentWindows.record(
+                    syncTargetProvider,
                     syncTarget.id(),
                     SyncCursorKind.ISSUE,
-                    SyncType.ISSUES,
                     syncTarget.issueRecentWindow(),
                     passStart,
-                    issueSyncService.syncForRepository(
-                            scopeId,
-                            repositoryId,
-                            resumeCursor(syncTarget.issueRecentWindow()),
-                            syncTarget.lastIssuesSyncedAt()));
-            SyncResult prResult = recentPass(
+                    issuePass);
+            RecentSyncResult prPass = pullRequestSyncService.syncForRepository(
+                    scopeId,
+                    repositoryId,
+                    RecentWindows.resumeCursor(syncTarget.pullRequestRecentWindow()),
+                    syncTarget.lastPullRequestsSyncedAt());
+            RecentWindows.record(
+                    syncTargetProvider,
                     syncTarget.id(),
                     SyncCursorKind.PULL_REQUEST,
-                    SyncType.PULL_REQUESTS,
                     syncTarget.pullRequestRecentWindow(),
                     passStart,
-                    pullRequestSyncService.syncForRepository(
-                            scopeId,
-                            repositoryId,
-                            resumeCursor(syncTarget.pullRequestRecentWindow()),
-                            syncTarget.lastPullRequestsSyncedAt()));
+                    prPass);
+            SyncResult issueResult = issuePass.result();
+            SyncResult prResult = prPass.result();
             if (!issueResult.isCompleted() || !prResult.isCompleted()) {
                 log.info(
                         "Kept a watermark of an incomplete sync: scopeId={}, repoId={}, issueStatus={}, prStatus={}",
@@ -387,10 +392,10 @@ public class GitHubDataSyncService {
                     prResult.status());
             String error = null;
             if (error == null && issueResult.status() != SyncResult.Status.COMPLETED) {
-                error = "Issue sync: " + issueResult.status();
+                error = RecentWindows.describe("Issue sync", issuePass);
             }
             if (error == null && prResult.status() != SyncResult.Status.COMPLETED) {
-                error = "Pull request sync: " + prResult.status();
+                error = RecentWindows.describe("Pull request sync", prPass);
             }
             if (error == null && commitsEnriched < 0) {
                 error = "Commit author enrichment failed";
@@ -1192,38 +1197,5 @@ public class GitHubDataSyncService {
                 "Rate limit wait deadline exhausted, proceeding anyway: scopeId={}, remaining={}",
                 scopeId,
                 rateLimitTracker.getRemaining(scopeId));
-    }
-
-    private static @Nullable String resumeCursor(SyncTargetProvider.@Nullable RecentWindow window) {
-        return window == null ? null : window.resumeCursor();
-    }
-
-    /**
-     * Records one recent pass. A completed pass moves the watermark: to the start of the window it finished, or to
-     * the start of this pass. A pass that stopped at the page cap opens the window, or moves it to where it stopped;
-     * the window keeps the start of the run that opened it, because the changes after that start are read again from
-     * the watermark. A resumed pass that failed otherwise closes its window and keeps the watermark: a cursor GitHub
-     * no longer accepts would stop every later run, and reading from the newest item again costs only a re-read.
-     */
-    private SyncResult recentPass(
-            Long syncTargetId,
-            SyncCursorKind kind,
-            SyncType type,
-            SyncTargetProvider.@Nullable RecentWindow window,
-            Instant passStart,
-            RecentSyncResult pass) {
-        if (pass.result().isCompleted()) {
-            syncTargetProvider.updateSyncTimestamp(syncTargetId, type, window == null ? passStart : window.startedAt());
-            if (window != null) syncTargetProvider.updateRecentWindow(syncTargetId, kind, null);
-        } else if (pass.resumeCursor() != null) {
-            syncTargetProvider.updateRecentWindow(
-                    syncTargetId,
-                    kind,
-                    new SyncTargetProvider.RecentWindow(
-                            pass.resumeCursor(), window == null ? passStart : window.startedAt()));
-        } else if (window != null && pass.result().status() == SyncResult.Status.ABORTED_ERROR) {
-            syncTargetProvider.updateRecentWindow(syncTargetId, kind, null);
-        }
-        return pass.result();
     }
 }
