@@ -28,10 +28,10 @@
         <addUniqueConstraint columnNames="result_id, prior_problem_id" constraintName="uk_problem_lineage_prior" tableName="problem_lineage"/>
     </changeSet>
     <changeSet id="1795279787201-3" author="hephaestus">
-        <addUniqueConstraint columnNames="result_id, problem_id" constraintName="uk_problem_lineage_problem" tableName="problem_lineage"/>
+        <addUniqueConstraint columnNames="result_id, workspace_id, problem_id" constraintName="uk_problem_lineage_problem" tableName="problem_lineage"/>
     </changeSet>
     <changeSet id="1795279787201-4" author="hephaestus">
-        <comment>A lineage row names a problem of the newer result, of the previous one, or both, as its comparison says. Its results and problems belong to its workspace, and a row goes with either result.</comment>
+        <comment>A lineage row names a problem of the newer result, of the previous one, or both, as its comparison says. Its results and problems belong to its workspace, and a row goes with either result. Each side has one index that leads with both of its keys: the result key, and the problem key in any column order. So a delete of a result or a problem finds its rows without a scan. On the newer side, that index is uk_problem_lineage_problem.</comment>
         <sql>ALTER TABLE problem_lineage
             ADD CONSTRAINT ck_problem_lineage_comparison CHECK (comparison IN ('ABSENT', 'NEW', 'UNCHANGED', 'UPDATED')),
             ADD CONSTRAINT ck_problem_lineage_sides CHECK (
@@ -47,11 +47,9 @@
                 REFERENCES problem(id, result_id, workspace_id) ON DELETE CASCADE,
             ADD CONSTRAINT sfk_problem_lineage_prior_problem FOREIGN KEY (prior_problem_id, prior_result_id, workspace_id)
                 REFERENCES problem(id, result_id, workspace_id) ON DELETE CASCADE;
-        CREATE INDEX idx_problem_lineage_prior_result ON problem_lineage (prior_result_id, workspace_id);
-        CREATE INDEX idx_problem_lineage_prior_problem ON problem_lineage (prior_problem_id) WHERE prior_problem_id IS NOT NULL;</sql>
+        CREATE INDEX idx_problem_lineage_prior ON problem_lineage (prior_result_id, workspace_id, prior_problem_id);</sql>
         <rollback>
-            <sql>DROP INDEX IF EXISTS idx_problem_lineage_prior_problem;
-        DROP INDEX IF EXISTS idx_problem_lineage_prior_result;
+            <sql>DROP INDEX IF EXISTS idx_problem_lineage_prior;
         ALTER TABLE problem_lineage
             DROP CONSTRAINT IF EXISTS sfk_problem_lineage_prior_problem,
             DROP CONSTRAINT IF EXISTS sfk_problem_lineage_problem,

@@ -30,7 +30,7 @@ import org.jspecify.annotations.Nullable;
         uniqueConstraints = {
             @UniqueConstraint(
                     name = "uk_problem_lineage_problem",
-                    columnNames = {"result_id", "problem_id"}),
+                    columnNames = {"result_id", "workspace_id", "problem_id"}),
             @UniqueConstraint(
                     name = "uk_problem_lineage_prior",
                     columnNames = {"result_id", "prior_problem_id"})
