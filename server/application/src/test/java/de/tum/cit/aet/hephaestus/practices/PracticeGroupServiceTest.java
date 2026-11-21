@@ -1,12 +1,16 @@
 package de.tum.cit.aet.hephaestus.practices;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
@@ -15,6 +19,7 @@ import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -85,5 +90,35 @@ class PracticeGroupServiceTest extends BaseUnitTest {
         assertThat(practice.getPosition()).isEqualTo(4);
         assertThat(practice.getCurrentVersion()).isSameAs(version);
         assertThat(practice.getFeedbackMode()).isEqualTo(FeedbackMode.OFF);
+    }
+
+    @Test
+    void shouldRefuseToDeleteAGroupThatHoldsAPracticeEditedInThePracticeRepository() {
+        var repository = mock(PracticeGroupRepository.class);
+        var practices = mock(PracticeRepository.class);
+        var workspaces = mock(WorkspaceRepository.class);
+        var workspace = new Workspace();
+        workspace.setId(10L);
+        var group = new PracticeGroup();
+        group.setId(20L);
+        var practice = new Practice();
+        practice.setId(40L);
+        practice.setGroup(group);
+        practice.setEditedIn(PracticeEditedIn.REPOSITORY);
+        when(workspaces.findByIdForUpdate(10L)).thenReturn(Optional.of(workspace));
+        when(repository.findByWorkspaceIdAndSlug(10L, "reviews")).thenReturn(Optional.of(group));
+        when(practices.findByWorkspaceIdAndGroupIdOrderByPositionAsc(10L, 20L)).thenReturn(List.of(practice));
+        var service = new PracticeGroupService(
+                repository,
+                practices,
+                WorkspacePortFixtures.queries(workspaces),
+                mock(ConfigAuditPort.class),
+                JsonMapper.builder().build());
+
+        assertThatThrownBy(() -> service.deleteGroup(
+                        new WorkspaceContext(10L, "workspace", "Workspace", null, null, Set.of()), "reviews"))
+                .isInstanceOf(PracticeEditedInRepositoryException.class);
+        assertThat(practice.getGroup()).isSameAs(group);
+        verify(repository, never()).delete(group);
     }
 }
