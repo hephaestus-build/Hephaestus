@@ -9,16 +9,9 @@
 # networkPolicy.kubernetesApi, and the chart refuses to render without them
 # (docs/admin/kubernetes.mdx § Install).
 postgresql:
+  # The memory settings and the memory follow the chart's defaults (docs/admin/sizing.mdx § PostgreSQL memory).
   parameters:
-    shared_buffers: 256MB
-    work_mem: 2MB
-    hash_mem_multiplier: 1.0
-    # max_connections follows the rollout client budget, rounded up with a floor of 120.
-    maintenance_work_mem: 64MB
-    autovacuum_work_mem: 32MB
-    autovacuum_max_workers: 3
     effective_cache_size: 1GB
-    max_parallel_workers_per_gather: 0
     max_wal_size: 1GB
 server:
   databasePool: { minimumIdle: 2 }

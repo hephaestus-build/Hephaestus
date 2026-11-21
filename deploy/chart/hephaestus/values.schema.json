@@ -205,6 +205,43 @@
 			"description": "Positive CPU as a Kubernetes Quantity. 1000m is one CPU.",
 			"type": "string",
 			"pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)(?:m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?$"
+		},
+		"postgresqlResources": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["requests", "limits"],
+			"properties": {
+				"requests": {
+					"$ref": "#/definitions/postgresqlResourceSet"
+				},
+				"limits": {
+					"$ref": "#/definitions/postgresqlResourceSet"
+				}
+			}
+		},
+		"postgresqlResourceSet": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["cpu", "memory", "ephemeral-storage"],
+			"properties": {
+				"cpu": {
+					"$ref": "#/definitions/cpuQuantity"
+				},
+				"memory": {
+					"description": "auto: the chart derives the size from postgresql.parameters and max_connections. A request of auto follows the limit. An explicit limit must hold the derived size.",
+					"oneOf": [
+						{
+							"const": "auto"
+						},
+						{
+							"$ref": "#/definitions/quantity"
+						}
+					]
+				},
+				"ephemeral-storage": {
+					"$ref": "#/definitions/quantity"
+				}
+			}
 		}
 	},
 	"properties": {
@@ -535,7 +572,7 @@
 					"$ref": "#/definitions/volume"
 				},
 				"resources": {
-					"$ref": "#/definitions/resources"
+					"$ref": "#/definitions/postgresqlResources"
 				},
 				"backup": {
 					"type": "object",
