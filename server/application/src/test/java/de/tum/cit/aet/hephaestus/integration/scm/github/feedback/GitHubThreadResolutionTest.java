@@ -158,6 +158,12 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
         assertThat(writer.actor(TARGET)).isEqualTo(BOT);
     }
 
+    @Test
+    void shouldDeclareWhetherItReopensThreads() {
+        // GitHub names the account that reopened a thread.
+        assertThat(writer.reopensThreads()).isTrue();
+    }
+
     private static CopyReceipt copy() {
         return new CopyReceipt(UUID.randomUUID(), CopyDisposition.POSTED, NOTE, null, true, null, THREAD);
     }

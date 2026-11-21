@@ -158,6 +158,12 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
         assertThat(writer.actor(TARGET)).isEqualTo("77");
     }
 
+    @Test
+    void shouldDeclareWhetherItReopensThreads() {
+        // GitLab does not name the account that reopened a discussion.
+        assertThat(writer.reopensThreads()).isFalse();
+    }
+
     private static CopyReceipt copy() {
         return new CopyReceipt(
                 UUID.randomUUID(),

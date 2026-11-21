@@ -36,6 +36,7 @@
                 <constraints nullable="false"/>
             </column>
             <column name="provider" type="VARCHAR(16)"/>
+            <column name="reopens" type="BOOLEAN"/>
             <column name="resolved" type="BOOLEAN">
                 <constraints nullable="false"/>
             </column>
@@ -59,7 +60,8 @@
         <sql>ALTER TABLE feedback_thread_resolution
             ADD CONSTRAINT ck_feedback_thread_resolution_state CHECK (state IN ('DONE', 'PENDING', 'STOPPED')),
             ADD CONSTRAINT ck_feedback_thread_resolution_provider CHECK (provider IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')),
-            ADD CONSTRAINT ck_feedback_thread_resolution_written CHECK ((actor IS NULL) = (provider IS NULL)),
+            ADD CONSTRAINT ck_feedback_thread_resolution_written CHECK ((actor IS NULL) = (provider IS NULL)
+                AND (actor IS NULL) = (reopens IS NULL)),
             ADD CONSTRAINT ck_feedback_thread_resolution_stop_reason CHECK (stop_reason IN ('FAILED', 'GONE', 'HUMAN_CONTROLLED', 'NOT_PERMITTED', 'PERSON_SUPPRESSED', 'REPLIED', 'UNSUPPORTED', 'WITHDRAWN')),
             ADD CONSTRAINT ck_feedback_thread_resolution_stopped CHECK ((state = 'STOPPED') = (stop_reason IS NOT NULL)),
             ADD CONSTRAINT ck_feedback_thread_resolution_generation CHECK (generation &gt; 0),

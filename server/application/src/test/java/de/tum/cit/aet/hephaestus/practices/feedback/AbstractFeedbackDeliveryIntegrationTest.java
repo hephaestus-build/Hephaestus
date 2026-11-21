@@ -37,7 +37,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackOwnCopyEditor;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackReadbackMeters;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendAdapter;
@@ -591,17 +590,6 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
                                 receipt.copyId(), retraction, receipt.externalRef(), receipt.externalUrl(), null);
                     })
                     .toList();
-        }
-
-        /** This fake resolves no thread: the thread tests use their own provider. */
-        @Override
-        public @Nullable String actor(FeedbackTarget target) {
-            return null;
-        }
-
-        @Override
-        public ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved, String actor) {
-            throw new UnsupportedOperationException();
         }
     }
 }

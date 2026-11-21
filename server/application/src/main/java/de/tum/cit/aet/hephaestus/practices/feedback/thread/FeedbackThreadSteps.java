@@ -54,6 +54,9 @@ class FeedbackThreadSteps {
 
     record Plan(Feedback feedback, CopyReceipt copy, boolean resolved) {}
 
+    /** The account that writes a change, its provider, and whether that provider lets Hephaestus reopen a thread. */
+    record Writer(IntegrationKind provider, boolean reopens, String actor) {}
+
     /** The feedback and copy that the current ask changes, or null when the ask stopped or another replaced it. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public @Nullable Plan plan(long workspaceId, FeedbackThreadResolver.Payload ask) {
@@ -94,8 +97,7 @@ class FeedbackThreadSteps {
     public @Nullable ActionResult begin(
             long workspaceId,
             FeedbackThreadResolver.Payload ask,
-            IntegrationKind provider,
-            String actor,
+            Writer writer,
             ActionAttempt attempt,
             long developer) {
         var row = resolutions.lockById(ask.resolutionId(), workspaceId).orElse(null);
@@ -110,7 +112,7 @@ class FeedbackThreadSteps {
             return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
         }
         if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
-        row.begin(ask.generation(), provider, actor, clock.instant());
+        row.begin(ask.generation(), writer, clock.instant());
         return null;
     }
 

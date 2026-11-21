@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
-import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadResolutionWriter;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
 import java.time.Duration;
 import java.util.List;
@@ -28,7 +28,7 @@ public class FeedbackThreadResolutionService {
 
     private final FeedbackThreadSteps steps;
     private final FeedbackTargetResolver targets;
-    private final List<LineNoteWriter> writers;
+    private final List<ThreadResolutionWriter> writers;
 
     ActionResult execute(ActionAttempt attempt, FeedbackThreadResolver.Payload ask) {
         long workspaceId = Objects.requireNonNull(attempt.workspaceId());
@@ -54,8 +54,7 @@ public class FeedbackThreadResolutionService {
         var refused = steps.begin(
                 workspaceId,
                 ask,
-                target.integration().kind(),
-                actor,
+                new FeedbackThreadSteps.Writer(target.integration().kind(), writer.reopensThreads(), actor),
                 attempt,
                 plan.feedback().getDeveloperId());
         if (refused != null) return refused;

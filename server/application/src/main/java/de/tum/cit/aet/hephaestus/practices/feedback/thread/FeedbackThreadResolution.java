@@ -73,6 +73,13 @@ public class FeedbackThreadResolution {
     @Column(name = "provider", length = 16)
     private @Nullable IntegrationKind provider;
 
+    /**
+     * Whether the provider lets Hephaestus reopen the thread, recorded with the writing account. GitLab does not: it
+     * cannot tell Hephaestus's own reopen from a person's.
+     */
+    @Column(name = "reopens")
+    private @Nullable Boolean reopens;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "stop_reason", length = 32)
     private @Nullable FeedbackThreadStopReason stopReason;
@@ -100,15 +107,17 @@ public class FeedbackThreadResolution {
         }
         actor = null;
         provider = null;
+        reopens = null;
         moveTo(FeedbackThreadResolutionState.PENDING);
         return true;
     }
 
     /** Records the writing account just before the write of {@code asked}; false when that ask is no longer current. */
-    boolean begin(int asked, IntegrationKind kind, String writer, Instant at) {
+    boolean begin(int asked, FeedbackThreadSteps.Writer writer, Instant at) {
         if (!current(asked)) return false;
-        provider = kind;
-        actor = writer;
+        provider = writer.provider();
+        reopens = writer.reopens();
+        actor = writer.actor();
         changedAt = at;
         return true;
     }

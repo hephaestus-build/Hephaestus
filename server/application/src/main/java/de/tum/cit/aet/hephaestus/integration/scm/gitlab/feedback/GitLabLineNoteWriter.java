@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadResolutionWriter;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
@@ -60,7 +61,7 @@ import tools.jackson.databind.json.JsonMapper;
 @ConditionalOnServerRole
 @OutboundEgressGateway
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
-public class GitLabLineNoteWriter implements LineNoteWriter {
+public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWriter {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabLineNoteWriter.class);
 

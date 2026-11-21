@@ -437,3 +437,4 @@ Enforced by:
 - `FeedbackThreadResolutionIntegrationTest#shouldKeepAGitLabThreadResolvedWhenItsProblemComesBack`
 - `ReviewOnWorkPriorAdviceTest#shouldRaiseAProblemAgainWhenHephaestusClosedTheNoteThatGaveItsAdviceAsFixed`
 - `GitHubThreadResolutionTest` and `GitLabThreadResolutionTest`
+- `ProblemLineageIdentityMigrationTest`

@@ -15,18 +15,14 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
-import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateReceipt;
-import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteFence;
-import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
-import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
-import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadResolutionWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkFeedbackThreadChangedEvent;
 import de.tum.cit.aet.hephaestus.practices.adapter.FeedbackThreadStateRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -617,7 +613,7 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
     }
 
     /** A provider that holds each thread's state, writing as its bot. */
-    private static final class Threads implements LineNoteWriter {
+    private static final class Threads implements ThreadResolutionWriter {
         static final String BOT = "4242";
 
         final Map<String, Boolean> threads = new HashMap<>();
@@ -661,29 +657,10 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
             return ThreadChange.done(copy.copyId());
         }
 
+        // GitLab cannot tell Hephaestus's own reopen from a person's, as its adapter declares.
         @Override
-        public CopyWriteResult postPackage(FeedbackTarget target, OnWorkPackage publication, CopyWriteFence fence) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public @Nullable List<CopyReceipt> findPosted(FeedbackTarget target, OnWorkPackage publication) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public List<CopyUpdateReceipt> retract(FeedbackTarget target, List<CopyReceipt> copies) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public List<CopyUpdateReceipt> restore(FeedbackTarget target, List<RetractedNote> notes) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public List<CopyUpdateReceipt> editOwn(FeedbackTarget target, List<OwnedEdit> notes) {
-            throw new UnsupportedOperationException();
+        public boolean reopensThreads() {
+            return kind != IntegrationKind.GITLAB;
         }
     }
 }

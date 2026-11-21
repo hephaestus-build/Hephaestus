@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadResolutionWriter;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
@@ -51,7 +52,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnServerRole
 @OutboundEgressGateway
-public class GitHubLineNoteWriter implements LineNoteWriter {
+public class GitHubLineNoteWriter implements LineNoteWriter, ThreadResolutionWriter {
 
     private static final int THREADS_PAGE_SIZE = 100;
 

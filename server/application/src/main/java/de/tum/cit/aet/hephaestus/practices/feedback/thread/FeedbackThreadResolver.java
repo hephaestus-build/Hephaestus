@@ -4,14 +4,11 @@ import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemLineageRecorded;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkChanged;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import java.time.Clock;
-import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -39,7 +36,6 @@ class FeedbackThreadResolver {
     private final FeedbackThreadResolutionRepository resolutions;
     private final ResultRepository results;
     private final FeedbackThreadEvidence evidence;
-    private final List<LineNoteWriter> writers;
     private final AgentActions actions;
     private final ObjectMapper mapper;
     private final Clock clock;
@@ -105,7 +101,7 @@ class FeedbackThreadResolver {
             int asked = row.getGeneration();
             // A reopen that would write where the provider cannot tell it from a person's is never asked: the thread
             // stays resolved, and a problem that came back reaches the developer through a new note.
-            if (!resolve && row.getActor() != null && !reopens(row.getProvider())) return;
+            if (!resolve && row.getActor() != null && !Boolean.TRUE.equals(row.getReopens())) return;
             if (!row.ask(resolve, thread.getCopyId(), now)) {
                 // A withdrawn resolve that never started leaves nothing to undo: its waiting action goes too.
                 if (row.getGeneration() != asked) actions.cancelPending(workspaceId, LANE + row.getId());
@@ -124,12 +120,5 @@ class FeedbackThreadResolver {
                 MAX_ATTEMPTS,
                 null,
                 null));
-    }
-
-    private boolean reopens(@Nullable IntegrationKind provider) {
-        return provider != null
-                && writers.stream()
-                        .filter(writer -> writer.kind() == provider)
-                        .allMatch(LineNoteWriter::reopensThreads);
     }
 }
