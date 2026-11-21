@@ -391,6 +391,8 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
 
     @Test
     void shouldNotReopenAThreadWhenAPersonMarksTheResultItsNoteRestsOnIncorrect() {
+        // An earlier result makes the note's own result write lineage that names its problem.
+        sealed("w0", 40, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
         var first = sealed("w1", 30, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
         String thread = note(first, problems(first));
         sealed("w2", 20, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);

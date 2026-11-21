@@ -10,8 +10,6 @@ import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -31,7 +29,6 @@ import org.jspecify.annotations.Nullable;
         })
 @Getter
 @NoArgsConstructor
-@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class FeedbackThreadResolution {
 
     @Id
@@ -76,22 +73,6 @@ public class FeedbackThreadResolution {
 
     @Column(name = "changed_at", nullable = false)
     private Instant changedAt;
-
-    /** A first ask: resolve the thread. Hephaestus never reopens a thread it did not resolve. */
-    static FeedbackThreadResolution resolve(long workspaceId, long itemId, String threadRef, UUID copyId, Instant at) {
-        return new FeedbackThreadResolution(
-                UUID.randomUUID(),
-                workspaceId,
-                itemId,
-                threadRef,
-                copyId,
-                true,
-                FeedbackThreadResolutionState.PENDING,
-                1,
-                null,
-                null,
-                at);
-    }
 
     /**
      * Asks for the thread resolved or open, with the cited problems of {@code copy}. True when an action must carry the

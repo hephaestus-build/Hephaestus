@@ -72,7 +72,8 @@ class FeedbackThreadResolver {
             var verdict = evidence.standing(workspaceId, cited).verdict();
             if (verdict == FeedbackThreadEvidence.Verdict.GONE) ask(workspaceId, itemId, developerId, thread, true);
             else if (verdict == FeedbackThreadEvidence.Verdict.PRESENT
-                    || (withdrawnProof != null && evidence.proved(workspaceId, withdrawnProof, cited)))
+                    || (withdrawnProof != null
+                            && evidence.proved(workspaceId, withdrawnProof, thread.getFeedbackId(), cited)))
                 ask(workspaceId, itemId, developerId, thread, false);
         }
     }
@@ -89,8 +90,13 @@ class FeedbackThreadResolver {
                 .orElse(null);
         if (row == null) {
             if (!resolve) return;
-            row = resolutions.save(FeedbackThreadResolution.resolve(
-                    workspaceId, itemId, thread.getThreadRef(), thread.getCopyId(), now));
+            // Two decisions can find no row at once; the second sees the first's row and asks it again.
+            int created = resolutions.insertFirstResolve(
+                    UUID.randomUUID(), workspaceId, itemId, thread.getThreadRef(), thread.getCopyId(), now);
+            row = resolutions
+                    .lockThread(workspaceId, itemId, thread.getThreadRef())
+                    .orElseThrow();
+            if (created == 0 && !row.ask(true, thread.getCopyId(), now)) return;
         } else {
             int asked = row.getGeneration();
             if (!row.ask(resolve, thread.getCopyId(), now)) {

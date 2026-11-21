@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback.thread;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemLineageRepository;
+import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemBaselineState;
@@ -23,6 +24,7 @@ import tools.jackson.databind.ObjectMapper;
 class FeedbackThreadEvidence {
     private final ReviewRepository reviews;
     private final ProblemLineageRepository lineage;
+    private final ResultRepository results;
     private final ObjectMapper mapper;
 
     /** What the lineage says about a note's problems now. */
@@ -66,9 +68,15 @@ class FeedbackThreadEvidence {
         return List.copyOf(problems);
     }
 
-    /** Whether {@code resultId} wrote a lineage row for the identity of one of the cited problems. */
-    boolean proved(long workspaceId, UUID resultId, List<UUID> cited) {
-        return !cited.isEmpty() && lineage.namesAny(workspaceId, resultId, cited);
+    /**
+     * Whether {@code resultId} proved one of the cited problems No longer present. A result that the note itself rests on
+     * proves nothing about its repair.
+     */
+    boolean proved(long workspaceId, UUID resultId, UUID feedbackId, List<UUID> cited) {
+        return !cited.isEmpty()
+                && results.findBasisOfFeedback(workspaceId, feedbackId).stream()
+                        .noneMatch(result -> result.getId().equals(resultId))
+                && lineage.namesAny(workspaceId, resultId, cited);
     }
 
     Standing standing(long workspaceId, List<UUID> cited) {

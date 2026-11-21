@@ -82,15 +82,22 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
     List<ProblemStanding> findStanding(
             @Param("workspaceId") long workspaceId, @Param("problemIds") Collection<UUID> problemIds);
 
-    /** Whether {@code resultId} wrote a lineage row for the identity of one of {@code problemIds}. */
+    /**
+     * Whether {@code resultId} proved one of {@code problemIds} No longer present: it wrote an {@code ABSENT} row with
+     * that problem's identity, in the same practice, item and developer.
+     */
     @Query(value = """
         SELECT EXISTS (
           SELECT 1 FROM problem_lineage l
+          JOIN result proving ON proving.id = l.result_id AND proving.workspace_id = l.workspace_id
           JOIN problem_lineage named ON named.workspace_id = l.workspace_id AND named.identity = l.identity
           JOIN problem p ON p.workspace_id = named.workspace_id AND p.id IN (:problemIds)
             AND ((named.problem_id = p.id AND named.result_id = p.result_id)
               OR (named.prior_problem_id = p.id AND named.prior_result_id = p.result_id))
-          WHERE l.workspace_id = :workspaceId AND l.result_id = :resultId)
+          JOIN result cited ON cited.id = p.result_id AND cited.workspace_id = p.workspace_id
+          WHERE l.workspace_id = :workspaceId AND l.result_id = :resultId AND l.comparison = 'ABSENT'
+            AND proving.practice_id = cited.practice_id AND proving.item_id = cited.item_id
+            AND proving.developer_id IS NOT DISTINCT FROM cited.developer_id)
         """, nativeQuery = true)
     boolean namesAny(
             @Param("workspaceId") long workspaceId,

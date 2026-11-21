@@ -1,11 +1,13 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.thread;
 
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -61,4 +63,20 @@ public interface FeedbackThreadResolutionRepository extends JpaRepository<Feedba
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM FeedbackThreadResolution r WHERE r.id = :id AND r.workspaceId = :workspaceId")
     Optional<FeedbackThreadResolution> lockById(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
+
+    /** Records a first ask to resolve the thread, unless a row for it exists. 1 when this call recorded it. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        INSERT INTO feedback_thread_resolution(id, workspace_id, item_id, thread_ref, copy_id, resolved, state,
+          generation, changed_at)
+        VALUES (:id, :workspaceId, :itemId, :threadRef, :copyId, true, 'PENDING', 1, :at)
+        ON CONFLICT ON CONSTRAINT uk_feedback_thread_resolution_thread DO NOTHING
+        """, nativeQuery = true)
+    int insertFirstResolve(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("itemId") long itemId,
+            @Param("threadRef") String threadRef,
+            @Param("copyId") UUID copyId,
+            @Param("at") Instant at);
 }
