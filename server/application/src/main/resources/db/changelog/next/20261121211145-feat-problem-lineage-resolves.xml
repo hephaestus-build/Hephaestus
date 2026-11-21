@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795295506022-1" author="hephaestus">
+        <comment>A lineage row now records the problem's identity, so a thread resolution can tell that a problem came back. Rows recorded before this column exist only on servers that ran an unreleased build, and the comparison can be recorded again by a later review, so they are dropped rather than given an identity that nothing can derive.</comment>
+        <sql>DELETE FROM problem_lineage;</sql>
+        <rollback/>
+    </changeSet>
+    <changeSet id="1795295506022-2" author="hephaestus">
+        <addColumn tableName="problem_lineage">
+            <column name="identity" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795295506022-3" author="hephaestus">
+        <createTable tableName="feedback_thread_resolution">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="feedback_thread_resolutionPK"/>
+            </column>
+            <column name="actor" type="TEXT"/>
+            <column name="changed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="copy_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="generation" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="item_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resolved" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stop_reason" type="VARCHAR(32)"/>
+            <column name="thread_ref" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1795295506022-4" author="hephaestus">
+        <addUniqueConstraint columnNames="workspace_id, item_id, thread_ref" constraintName="uk_feedback_thread_resolution_thread" tableName="feedback_thread_resolution"/>
+    </changeSet>
+    <changeSet id="1795295506022-5" author="hephaestus">
+        <comment>A thread resolution belongs to its workspace and goes with the copy whose note starts the thread; an index that leads with that key lets a copy delete find it without a scan. A stopped resolution names its reason and only a stopped one does. Problem lineage is read by identity within a workspace. The outbox accepts the new action kind.</comment>
+        <sql>ALTER TABLE feedback_thread_resolution
+            ADD CONSTRAINT ck_feedback_thread_resolution_state CHECK (state IN ('DONE', 'PENDING', 'STOPPED')),
+            ADD CONSTRAINT ck_feedback_thread_resolution_stop_reason CHECK (stop_reason IN ('FAILED', 'GONE', 'HUMAN_CONTROLLED', 'NOT_PERMITTED', 'PERSON_SUPPRESSED', 'UNSUPPORTED', 'WITHDRAWN')),
+            ADD CONSTRAINT ck_feedback_thread_resolution_stopped CHECK ((state = 'STOPPED') = (stop_reason IS NOT NULL)),
+            ADD CONSTRAINT ck_feedback_thread_resolution_generation CHECK (generation &gt; 0),
+            ADD CONSTRAINT sfk_feedback_thread_resolution_copy FOREIGN KEY (copy_id, workspace_id)
+                REFERENCES feedback_copy(id, workspace_id) ON DELETE CASCADE;
+        CREATE INDEX idx_feedback_thread_resolution_copy ON feedback_thread_resolution (copy_id, workspace_id);
+        CREATE INDEX idx_problem_lineage_identity ON problem_lineage (workspace_id, identity);
+        ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_kind,
+            ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK','RETRACT_FEEDBACK','RESOLVE_FEEDBACK_THREAD','SLACK_POST','SLACK_NOTICE','SLACK_JOIN','SLACK_CONSENT','PUBLISH_REPORT','CLEANUP_ISSUE','TRANSFER_ISSUE','DRAFT_REPORT'));</sql>
+        <rollback>
+            <sql>ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_kind,
+            ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK','RETRACT_FEEDBACK','SLACK_POST','SLACK_NOTICE','SLACK_JOIN','SLACK_CONSENT','PUBLISH_REPORT','CLEANUP_ISSUE','TRANSFER_ISSUE','DRAFT_REPORT'));
+        DROP INDEX IF EXISTS idx_problem_lineage_identity;
+        DROP INDEX IF EXISTS idx_feedback_thread_resolution_copy;
+        ALTER TABLE feedback_thread_resolution
+            DROP CONSTRAINT IF EXISTS sfk_feedback_thread_resolution_copy,
+            DROP CONSTRAINT IF EXISTS ck_feedback_thread_resolution_generation,
+            DROP CONSTRAINT IF EXISTS ck_feedback_thread_resolution_stopped,
+            DROP CONSTRAINT IF EXISTS ck_feedback_thread_resolution_stop_reason,
+            DROP CONSTRAINT IF EXISTS ck_feedback_thread_resolution_state;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
