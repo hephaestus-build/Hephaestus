@@ -33,11 +33,7 @@ import type { ConfirmAccessDialogProps } from "@/components/auth/ConfirmAccessDi
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { isRecord } from "@/lib/is-record";
 import { ITEM_KIND } from "@/lib/item-kinds";
-import {
-	problemDetailOf,
-	type StepUpChallenge,
-	stepUpChallengeOf,
-} from "@/lib/problem-detail";
+import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
 import { queryOperationId } from "@/lib/query-operation-id";
 import { toast } from "@/lib/toast";
 import { loadedPages, offsetPageParams } from "@/runtime/tanstack-query/list-pages";
@@ -166,7 +162,9 @@ export function usePracticeRepository(workspaceSlug: string, openLevels: readonl
 		endSetting();
 		toast.success(toastText);
 	};
-	const settingRefused = async (error: SetPracticeRepositoryError | UnsetPracticeRepositoryError) => {
+	const settingRefused = async (
+		error: SetPracticeRepositoryError | UnsetPracticeRepositoryError,
+	) => {
 		const stepUp = stepUpChallengeOf(error);
 		if (stepUp !== undefined) {
 			endSetting();
@@ -297,8 +295,7 @@ export function usePracticeRepository(workspaceSlug: string, openLevels: readonl
 		onOpen: (action) => setRequest({ kind: "setting", action, phase: "confirming" }),
 		onCancel: cancel,
 		onSave: (body: SetPracticeRepositoryRequest) => {
-			const action =
-				request?.kind === "setting" && request.action === "change" ? "change" : "set";
+			const action = request?.kind === "setting" && request.action === "change" ? "change" : "set";
 			setRequest({ kind: "setting", action, phase: "pending" });
 			set.mutate({ path: { workspaceSlug }, body });
 		},

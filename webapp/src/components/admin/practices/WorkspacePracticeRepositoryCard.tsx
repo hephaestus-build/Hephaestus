@@ -36,13 +36,7 @@ import {
 	FieldTitle,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-	Item,
-	ItemActions,
-	ItemContent,
-	ItemMedia,
-	ItemTitle,
-} from "@/components/ui/item";
+import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item";
 import {
 	Select,
 	SelectContent,
