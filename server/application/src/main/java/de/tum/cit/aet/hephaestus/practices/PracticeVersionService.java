@@ -38,6 +38,24 @@ public class PracticeVersionService {
 
     @Transactional
     public PracticeVersion append(Practice practice, PracticeDefinition definition, @Nullable Long createdByAccountId) {
+        return appendVersion(practice, definition, createdByAccountId, null);
+    }
+
+    /** As {@link #append(Practice, PracticeDefinition, Long)}, for a definition read from the practice repository. */
+    @Transactional
+    public PracticeVersion append(
+            Practice practice,
+            PracticeDefinition definition,
+            @Nullable Long createdByAccountId,
+            @Nullable String sourceCommit) {
+        return appendVersion(practice, definition, createdByAccountId, sourceCommit);
+    }
+
+    private PracticeVersion appendVersion(
+            Practice practice,
+            PracticeDefinition definition,
+            @Nullable Long createdByAccountId,
+            @Nullable String sourceCommit) {
         Practice locked = practices
                 .findByIdForUpdate(practice.getId())
                 .orElseThrow(() -> new EntityNotFoundException("Practice", practice.getSlug()));
@@ -45,8 +63,8 @@ public class PracticeVersionService {
         int number = versions.findFirstByPracticeIdOrderByNumberDesc(locked.getId())
                 .map(version -> version.getNumber() + 1)
                 .orElse(1);
-        PracticeVersion version = versions.saveAndFlush(
-                new PracticeVersion(locked, number, mapper.valueToTree(definition), createdByAccountId));
+        PracticeVersion version = versions.saveAndFlush(new PracticeVersion(
+                locked, number, mapper.valueToTree(definition), createdByAccountId, false, sourceCommit));
         locked.setCurrentVersion(version);
         practice.setCurrentVersion(version);
         practices.save(locked);

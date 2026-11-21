@@ -120,6 +120,7 @@ public class CatalogOriginPresenter {
                 practice.getPosition(),
                 new FeedbackModeAssignmentDTO(practice.getFeedbackMode(), effective.mode(), effective.source()),
                 origin(practice, effectiveCatalog),
+                practice.getEditedIn(),
                 practice.getCreatedAt(),
                 practice.getUpdatedAt());
     }

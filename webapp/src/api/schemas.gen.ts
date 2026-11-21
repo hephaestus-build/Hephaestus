@@ -864,6 +864,7 @@ export const AuthEventEventTypeSchema = {
 		"WORKSPACE_OWNER_CHANGE",
 		"WORKSPACE_DELETION",
 		"PROVIDER_RESOURCE_RELEASE",
+		"PRACTICE_REPOSITORY_CHANGE",
 		"LLM_CONNECTION_CREATED",
 		"LLM_CONNECTION_UPDATED",
 		"LLM_CONNECTION_DELETED",
@@ -1635,6 +1636,18 @@ export const CatalogPracticeUpdateSchema = {
 	required: ["definition", "groupSlug", "kind", "position"],
 } as const;
 
+export const ChangePracticeEditedInRequestSchema = {
+	type: "object",
+	description:
+		"Where the practice is edited from now on: Move to repository, or Edit in Hephaestus.",
+	properties: {
+		editedIn: {
+			$ref: "#/components/schemas/PracticeEditedIn",
+		},
+	},
+	required: ["editedIn"],
+} as const;
+
 export const ChangePracticeStateRequestSchema = {
 	type: "object",
 	description:
@@ -1833,6 +1846,7 @@ export const ConfigAuditEntityTypeSchema = {
 		"PRACTICE_USAGE",
 		"PRACTICE_DEFINITION",
 		"PRACTICE_GROUP",
+		"PRACTICE_REPOSITORY",
 		"CATALOG_PRACTICE",
 		"CATALOG_GROUP",
 		"WORKSPACE_INSTANCE_LLM_BUDGET",
@@ -8158,6 +8172,11 @@ export const PracticeSchema = {
 		currentVersion: {
 			$ref: "#/components/schemas/PracticeVersion",
 		},
+		editedIn: {
+			$ref: "#/components/schemas/PracticeEditedIn",
+			description:
+				"Where the practice is edited. A practice edited in the practice repository is read-only here, except for its feedback mode and position",
+		},
 		feedbackMode: {
 			$ref: "#/components/schemas/FeedbackModeAssignment",
 		},
@@ -8187,6 +8206,7 @@ export const PracticeSchema = {
 		"catalogOrigin",
 		"createdAt",
 		"currentVersion",
+		"editedIn",
 		"feedbackMode",
 		"groupSlug",
 		"id",
@@ -8426,6 +8446,11 @@ export const PracticeDraftSchema = {
 		},
 	},
 	required: ["current", "kind", "name", "slug", "state", "versionId", "versionNumber", "warnings"],
+} as const;
+
+export const PracticeEditedInSchema = {
+	type: "string",
+	enum: ["HEPHAESTUS", "REPOSITORY"],
 } as const;
 
 export const PracticeFileCheckSchema = {
@@ -9184,6 +9209,29 @@ export const PracticeReleaseProposalSchema = {
 		"offeredDigest",
 		"practiceSlug",
 	],
+} as const;
+
+export const PracticeRepositorySchema = {
+	type: "object",
+	description: "The workspace's practice repository (ADR 0118).",
+	properties: {
+		defaultBranch: {
+			type: "string",
+			description:
+				"the branch whose head holds the practices; null until the provider has named it",
+		},
+		directory: {
+			type: "string",
+		},
+		nameWithOwner: {
+			type: "string",
+			description: "the repository's provider path; null when it is no longer monitored",
+		},
+		repositoryItemId: {
+			type: "string",
+		},
+	},
+	required: ["directory", "repositoryItemId"],
 } as const;
 
 export const PracticeReviewFieldSchema = {
@@ -9971,6 +10019,14 @@ export const ProblemDetailSchema = {
 		maxAgeSeconds: {
 			type: "integer",
 			format: "int64",
+		},
+		problems: {
+			type: "array",
+			description:
+				"Why a practice folder cannot become a practice: each problem with its file and, where known, its line and column",
+			items: {
+				$ref: "#/components/schemas/PracticeFileProblem",
+			},
 		},
 		requestId: {
 			type: "string",
@@ -15889,6 +15945,26 @@ export const SetMemberHiddenRequestSchema = {
 		},
 	},
 	required: ["hidden"],
+} as const;
+
+export const SetPracticeRepositoryRequestSchema = {
+	type: "object",
+	description:
+		"The monitored repository that holds the workspace's practices, and the directory of their folders in it.",
+	properties: {
+		directory: {
+			type: "string",
+			description: "A path relative to the repository root; .hephaestus/practices when absent",
+			maxLength: 255,
+			minLength: 0,
+			pattern: "^(?!/)(?!.*(^|/)(\\.\\.?|\\.git)(/|$))[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$",
+		},
+		repositoryItemId: {
+			type: "string",
+			pattern: "^[1-9][0-9]*$",
+		},
+	},
+	required: ["repositoryItemId"],
 } as const;
 
 export const SetReviewScheduleEnabledRequestSchema = {

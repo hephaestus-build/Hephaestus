@@ -39,7 +39,8 @@ public class ScmMonitoredRepositoryQuery implements MonitoredRepositoryQuery {
                 ScmItemEvents.REPOSITORY.value(),
                 kind.orElseThrow().name())) {
             if (!origin.equals(ScmOrigin.of(row.getServerUrl()))) continue;
-            var ref = new MonitoredRepositoryRef(row.getItemId(), row.getMonitorId(), row.getNameWithOwner());
+            var ref = new MonitoredRepositoryRef(
+                    row.getItemId(), row.getMonitorId(), row.getNameWithOwner(), row.getDefaultBranch());
             if (found.putIfAbsent(ref.repositoryItemId(), ref) != null)
                 throw new IllegalStateException("Repository item has ambiguous monitor identity");
         }

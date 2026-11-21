@@ -33,6 +33,8 @@ public enum ConfigAuditEntityType {
     /** A practice's review definition, excluding its active state and catalog placement. */
     PRACTICE_DEFINITION,
     PRACTICE_GROUP,
+    /** The workspace's practice repository: the repository and the directory that hold its practice folders. */
+    PRACTICE_REPOSITORY,
     CATALOG_PRACTICE,
     CATALOG_GROUP,
 

@@ -296,6 +296,52 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 });
     }
 
+    /**
+     * A stale session must not change where practices come from: pointed at a repository that its holder can merge into,
+     * the practice repository would supply the criteria and scripts of every review (ADR 0118).
+     */
+    @Test
+    void aStaleAdminIsAskedToConfirmAccessBeforeChangingThePracticeRepository() {
+        Workspace workspace = workspace("stale-practice-repository");
+        Account admin = persistUser("Stale Admin Ada");
+        join(workspace, admin, Membership.WorkspaceRole.ADMIN);
+        String stale = tokenFor(admin, staleSignIn());
+        String root = "/workspaces/stale-practice-repository/practice-repository";
+
+        webTestClient
+                .put()
+                .uri(root)
+                .headers(h -> h.setBearerAuth(stale))
+                .bodyValue(Map.of("repositoryItemId", "1"))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+        webTestClient
+                .delete()
+                .uri(root)
+                .headers(h -> h.setBearerAuth(stale))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+        webTestClient
+                .put()
+                .uri(root + "/practices/any-practice/edited-in")
+                .headers(h -> h.setBearerAuth(stale))
+                .bodyValue(Map.of("editedIn", "REPOSITORY"))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+
+        assertThat(authEventRepository.findByAccountSince(
+                        persistedId(admin.getId()), Instant.now().minusSeconds(60)))
+                .filteredOn(event -> event.getEventType() == AuthEvent.EventType.PRACTICE_REPOSITORY_CHANGE)
+                .hasSize(3)
+                .allSatisfy(event -> assertThat(event.getResult()).isEqualTo(AuthEvent.Result.FAILURE));
+    }
+
     @Test
     void aStaleOwnerIsAskedToConfirmAccessBeforeGrantingOwnerAndNothingChanges() {
         Workspace workspace = workspace("stale-owner-grant");

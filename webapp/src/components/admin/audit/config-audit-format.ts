@@ -31,6 +31,7 @@ export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
 	PRACTICE_USAGE: "Practice review participation",
 	PRACTICE_DEFINITION: "Practice",
 	PRACTICE_GROUP: "Practice group",
+	PRACTICE_REPOSITORY: "Practice repository",
 	CATALOG_PRACTICE: "Catalog practice",
 	CATALOG_GROUP: "Catalog group",
 	WORKSPACE_INSTANCE_LLM_BUDGET: "Shared-model AI budget",
