@@ -1203,6 +1203,7 @@ jobs:
           retention-days: 1
           compression-level: 0
           # A re-run of failed jobs keeps this artifact; a re-run of all jobs replaces it.
+          overwrite: true
 
   Build:
     uses: ./.github/workflows/ci-build.yml
@@ -1489,9 +1490,18 @@ jobs:
           docker pull "$APPLICATION_IMAGE"
           node scripts/sandbox-security.ts --image "$IMAGE" --application-image "$APPLICATION_IMAGE" --report "$RUNNER_TEMP/sandbox-security.json"
 
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        if: always()
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Retain sandbox qualification summary
         if: always()
-        uses: ./.github/actions/upload-artifact-retry
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           required: "false"
           name: sandbox-security-preflight-summary
@@ -1500,9 +1510,18 @@ jobs:
           retention-days: 7
 
       # An exit status cannot say which subject carries which finding.
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        if: ${{ !cancelled() }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Upload the evidence bundle
         if: ${{ !cancelled() }}
-        uses: ./.github/actions/upload-artifact-retry
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           name: release-evidence-preflight
           path: evidence

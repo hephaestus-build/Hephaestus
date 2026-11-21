@@ -599,12 +599,13 @@ void describe("ci-contract: server", () => {
 			config,
 			/"gate:server-test-analysis": run\(`\$\{gradlew\} :application:compileTestJava --quiet`, \{\s*dependsOn: \["gate:server"\],/u,
 		);
-		// One upload, through the retries, which overwrite a partial artifact of an earlier attempt.
+		// One upload, through the retries.
 		assert.equal((packageJob.match(/actions\/upload-artifact@/gu) ?? []).length, 0);
 		assert.equal(
 			(packageJob.match(/uses: \.\/\.github\/actions\/upload-artifact-retry$/gmu) ?? []).length,
 			1,
 		);
+		assert.match(packageJob, /overwrite: true/u);
 		for (const name of ["server-api", "server-database", "postgres-drill"]) {
 			const consumer = job(build, name);
 			assert.doesNotMatch(consumer, /needs:/u);

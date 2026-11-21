@@ -35,8 +35,16 @@ jobs:
         uses: ./.github/actions/setup-caches
       - name: Generate OpenAPI spec and client
         run: vp run generate:api
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Upload generated files
-        uses: ./.github/actions/upload-artifact-retry
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           name: generated-openapi-${{ github.run_id }}
           path: |

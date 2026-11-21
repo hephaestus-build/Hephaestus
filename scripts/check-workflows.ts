@@ -241,10 +241,14 @@ export async function checkRepository(
 		return loading;
 	}
 
+	// A job that checks out an older ref puts this workflow's own copy of an action under workflow-actions/.
 	const localAction = async (uses: string) =>
 		cached(uses, async () => {
+			const own = uses.startsWith("./workflow-actions/")
+				? `./${uses.slice("./workflow-actions/".length)}`
+				: uses;
 			for (const file of ["action.yml", "action.yaml"].map((entry) =>
-				path.resolve(root, uses, entry),
+				path.resolve(root, own, entry),
 			)) {
 				let content: string;
 				try {

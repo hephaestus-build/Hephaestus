@@ -109,8 +109,16 @@ jobs:
             --release "$TAG" --architecture "$ARCHITECTURE" \
             --receipt "$RUNNER_TEMP/host-smoke-k3s-$ARCHITECTURE.json"
 
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Upload the k3s qualification receipt
-        uses: ./.github/actions/upload-artifact-retry
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           name: host-smoke-k3s-${{ matrix.architecture }}
           path: ${{ runner.temp }}/host-smoke-k3s-${{ matrix.architecture }}.json

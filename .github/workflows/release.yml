@@ -120,9 +120,18 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.release.outputs.version }}
         run: ./gradlew :application:releaseRatchetTest "-Phephaestus.releaseVersion=$RELEASE_VERSION"
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        if: always() && needs.release.outputs.prerelease != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Keep the ratchet results
         if: always() && needs.release.outputs.prerelease != 'true'
-        uses: ./.github/actions/upload-artifact-retry
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           required: "false"
           name: stable-release-ratchets
@@ -166,10 +175,19 @@ jobs:
           node scripts/plan-release.ts --notes "$PREVIOUS_VERSION" "$NOTES_VERSION" CHANGELOG.md notes.md "$VERSION"
           node scripts/github-release-notes.ts notes.md release-body.md
 
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Keep the complete notes and bounded description
-        uses: ./.github/actions/upload-artifact-retry
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           name: release-notes
+          overwrite: true
           path: |
             notes.md
             release-body.md
@@ -215,10 +233,19 @@ jobs:
           cp "extension/.output/hephaestus-${VERSION}-production-chrome.zip" "$package"
           echo "sha256=$(sha256sum "$package" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Keep the extension package
-        uses: ./.github/actions/upload-artifact-retry
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           name: extension-package
+          overwrite: true
           path: hephaestus-chrome-extension-${{ needs.release.outputs.version }}.zip
           if-no-files-found: error
 
@@ -344,9 +371,18 @@ jobs:
       - wait: sandbox-contract
       - wait: sandbox-security
 
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        if: always()
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Retain sandbox qualification summary
         if: always()
-        uses: ./.github/actions/upload-artifact-retry
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           required: "false"
           name: sandbox-security-summary

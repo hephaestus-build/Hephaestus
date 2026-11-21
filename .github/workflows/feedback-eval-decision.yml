@@ -204,9 +204,18 @@ jobs:
           node scripts/feedback-eval/ichnaea-compose.ts --replicate "$REPLICATE"
           --base "$RUNNER_TEMP/base" --candidate . --out "$RUNNER_TEMP/compositions"
 
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        if: ${{ !cancelled() }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Keep the compositions
         if: ${{ !cancelled() }}
-        uses: ./.github/actions/upload-artifact-retry
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           name: feedback-eval-compositions-r${{ matrix.replicate }}
           path: ${{ runner.temp }}/compositions
@@ -279,9 +288,18 @@ jobs:
             --base-config "$RUNNER_TEMP/base-config.json" --candidate-config "$RUNNER_TEMP/candidate-config.json" \
             --changed "$RUNNER_TEMP/changed-paths" --store "$RUNNER_TEMP/ichnaea" --run "$RUN_ID"
 
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        if: ${{ !cancelled() }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
       - name: Keep the records and the report
         if: ${{ !cancelled() }}
-        uses: ./.github/actions/upload-artifact-retry
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           name: feedback-eval-decision
           path: ${{ runner.temp }}/ichnaea

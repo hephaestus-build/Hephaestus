@@ -164,12 +164,24 @@ void describe("pull request policy", () => {
 		const collectorJobs = asRecord(asRecord(parseYaml(collector), "collector").jobs, "jobs");
 		const trustedJobs = asRecord(asRecord(parseYaml(trusted), "trusted").jobs, "jobs");
 
-		void it("records the pull request with no permissions and no checkout", () => {
+		void it("records the pull request with read access, checking out only the upload action from the base", () => {
 			assert.match(collector, /^ {2}pull_request:$/mu);
+			// On either event a checkout of the pull request would run its code with the base repository's token.
+			assert.doesNotMatch(collector, /pull_request_target|workflow_run/u);
 			assert.match(collector, /^permissions: \{\}$/mu);
 			assert.deepEqual(Object.keys(collectorJobs), ["record"]);
-			assert.equal(asRecord(collectorJobs.record, "record").permissions, undefined);
-			assert.doesNotMatch(collector, /actions\/checkout|secrets\.|vars\./u);
+			const record = asRecord(collectorJobs.record, "record");
+			assert.deepEqual(record.permissions, { contents: "read" });
+			assert.doesNotMatch(collector, /secrets\.|vars\./u);
+			const checkouts = (Array.isArray(record.steps) ? record.steps : [])
+				.map((step) => asRecord(step, "step"))
+				.filter((step) => String(step.uses).startsWith("actions/checkout@"));
+			assert.equal(checkouts.length, 1);
+			assert.deepEqual(asRecord(checkouts[0]?.with, "checkout"), {
+				ref: "${{ github.event.pull_request.base.sha }}",
+				"sparse-checkout": ".github/actions/upload-artifact-retry",
+				"persist-credentials": false,
+			});
 		});
 
 		void it("runs the policy from the default branch, on the completed run, and reads the record as data", () => {
