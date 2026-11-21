@@ -14,7 +14,7 @@
     <a href="https://github.com/hephaestus-build/Hephaestus/discussions"><strong>Discussions</strong></a>
   </p>
   <p>
-    <a href="https://github.com/hephaestus-build/Hephaestus/releases/latest"><img alt="Latest Hephaestus release" height="20" src="https://img.shields.io/github/v/release/hephaestus-build/Hephaestus?display_name=tag&amp;sort=semver"></a>
+    <a href="https://github.com/hephaestus-build/Hephaestus/releases"><img alt="Latest Hephaestus release" height="20" src="https://img.shields.io/github/v/release/hephaestus-build/Hephaestus?display_name=tag&amp;sort=semver&amp;include_prereleases"></a>
     <a href="https://github.com/hephaestus-build/Hephaestus/actions/workflows/cicd.yml?query=branch%3Amain"><img alt="Hephaestus CI status on main" height="20" src="https://github.com/hephaestus-build/Hephaestus/actions/workflows/cicd.yml/badge.svg?branch=main"></a>
     <a href="https://scorecard.dev/viewer/?uri=github.com/hephaestus-build/Hephaestus"><img alt="Hephaestus OpenSSF Scorecard report" height="20" src="https://img.shields.io/ossf-scorecard/github.com/hephaestus-build/Hephaestus?label=OpenSSF%20Scorecard&amp;style=flat"></a>
     <a href="./LICENSE"><img alt="MIT license" height="20" src="https://img.shields.io/github/license/hephaestus-build/Hephaestus?style=flat"></a>
@@ -75,7 +75,7 @@ Each member chooses which models may handle their work: **In-house**, **Cloud**,
 
 > [!IMPORTANT]
 > **Hephaestus is pre-1.0.** Releases are continuous.
-> Only the [latest release](https://github.com/hephaestus-build/Hephaestus/releases/latest) has support.
+> Only the latest release, a release candidate included, has support ([Support statement](https://docs.hephaestus.build/admin/compatibility-policy#support-statement)).
 > Every fix ships in the next release.
 > Until 1.0, a *minor* release can change configuration or the API in ways that need you to act.
 > Read the release notes before every upgrade.

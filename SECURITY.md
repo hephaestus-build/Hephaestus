@@ -29,9 +29,7 @@ We consider good-faith security research conducted under this policy to be autho
 
 ## Supported Versions
 
-Hephaestus is pre-1.0 and released continuously from `main`; **only the latest release is supported**. There are no maintenance branches or backports.
-
-From 1.0.0, the latest 1.x release is supported, and after 2.0.0 the last 1.x minor release gets security fixes for a fixed period, as the [compatibility policy](https://docs.hephaestus.build/admin/compatibility-policy#support-for-1x) states.
+The [support statement](https://docs.hephaestus.build/admin/compatibility-policy#support-statement) of the compatibility policy names the supported releases. The 0.95 releases are unsupported ([GHSA-m2vx-xxgf-3p79](https://github.com/hephaestus-build/Hephaestus/security/advisories/GHSA-m2vx-xxgf-3p79)).
 
 ## Scope
 
