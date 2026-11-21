@@ -166,7 +166,7 @@ For CPU and memory separately, the chart computes:
 ```text
 room          = budget - 5 % of the budget - outsideRelease
 steady slots  = floor((room - resident requests - one backup - review requests) / conversation Pod request)
-upgrade slots = floor((room - resident requests - draining servers and rollout surge - migration Job) / conversation Pod request)
+upgrade slots = floor((room - resident requests - draining servers and rollout surge - migration and stanza Jobs) / conversation Pod request)
 auto turns    = min(steady CPU slots, steady memory slots, upgrade CPU slots, upgrade memory slots)
 ```
 
@@ -174,7 +174,7 @@ auto turns    = min(steady CPU slots, steady memory slots, upgrade CPU slots, up
   The monitoring workloads and one image-hold Pod also count. So does the largest init container of each Pod.
 - The review requests are the reviews at once times the review template request, with the RuntimeClass overhead. The reviews at once are `sandbox.reviewMemory` divided by one review's memory request and overhead.
 - Each turn needs one conversation template Pod, with its RuntimeClass overhead.
-- With sandboxes, a backup Pod never preempts, so the upgrade phase does not count it. It waits for room, or the upgrade preempts it ([Node reserve](./sizing#node-reserve)).
+- The upgrade phase does not count a scheduled backup. It fits in the headroom, or it waits for room, because with sandboxes a backup Pod never preempts ([Node reserve](./sizing#node-reserve)).
 - Requests round up to millicores and MiB. Budget values round down.
 
 The upgrade phase assumes that reviews finish before its peak, and that warm conversation sandboxes stay.

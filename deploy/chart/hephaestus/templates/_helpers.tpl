@@ -600,10 +600,10 @@ lock-path=/tmp/pgbackrest
 {{- end -}}
 
 {{/*
-The Pod of one backup Job: the pgBackRest client of the release's PostgreSQL image. With sandboxes, it takes the
-lowest tier, which never preempts: a backup that starts during an upgrade waits for room, and an upgrade that needs
-the room preempts a running backup, which its Job runs again. So the drained-upgrade budget does not count a backup
-beside the upgrade (docs/admin/sizing.mdx § Node reserve). PostgreSQL archives its WAL itself, also meanwhile.
+The Pod of one backup Job: the pgBackRest client of the release's PostgreSQL image, with postgresql.backup.resources
+or the given resources. With sandboxes, it takes the lowest tier, which never preempts: when the node's requests are
+full, a backup waits for room, and a Pod of a higher tier preempts a running backup, which its Job runs again
+(docs/admin/sizing.mdx § Node reserve).
 */}}
 {{- define "hephaestus.backup.pod" -}}
 {{- $root := .root -}}
@@ -627,7 +627,7 @@ spec:
           value: /etc/pgbackrest/client.conf
         {{- include "hephaestus.backup.env" $root | nindent 8 }}
       resources:
-        {{- toYaml $root.Values.postgresql.backup.resources | nindent 8 }}
+        {{- toYaml (.resources | default $root.Values.postgresql.backup.resources) | nindent 8 }}
       securityContext:
         {{- include "hephaestus.containerSecurityContext" $root | nindent 8 }}
       volumeMounts:
@@ -803,8 +803,8 @@ The reviews that one server runs at once: the sandbox nodes' reviews.
 {{/*
 Fixed requests from the workload templates themselves. The measurement render disables turn admission,
 so the server's capacity environment cannot recursively ask for its own fixed requests. Resource inputs
-are unchanged. Steady includes one backup; upgrade includes the migration Job and rollout surge. With sandboxes, backup
-Pods (a scheduled backup and the stanza Job) yield to the upgrade (hephaestus.backup.pod), so upgrade leaves them out.
+are unchanged. Steady includes one backup; upgrade includes the migration and stanza Jobs and rollout surge. With
+sandboxes, upgrade leaves a scheduled backup out: it fits in the headroom or waits (docs/admin/sizing.mdx § Node reserve).
 */}}
 {{- define "hephaestus.fixedCapacity" -}}
 {{- $values := deepCopy .Values -}}
@@ -841,7 +841,6 @@ Pods (a scheduled backup and the stanza Job) yield to the upgrade (hephaestus.ba
 {{- end -}}
 {{- else if eq $kind "Job" -}}
 {{- $steady = 0 -}}
-{{- if and $.Values.sandbox.enabled (eq $file "postgresql-backup.yaml") -}}{{- $upgrade = 0 -}}{{- end -}}
 {{- else if eq $kind "CronJob" -}}
 {{- /* Full and differential backups share one pgBackRest stanza; only one backup runs at once. */ -}}
 {{- if or $backup ($spec.suspend | default false) -}}
