@@ -319,7 +319,7 @@ async function main(): Promise<void> {
 		),
 		"",
 		"Each SHA-256 is the one that the buildpack's `buildpack.toml` declares, and each file was downloaded and checked against it.",
-		"gate:toolchain decides whether `server/application/project.toml` must keep a JVM mitigation for this JRE.",
+		"gate:toolchain refuses a JRE pin below `JRE_FLOOR` in `scripts/lib/buildpack-descriptor.ts`.",
 		"The changeset is yours to add: name the fixed CVEs in the operator's voice.",
 		"",
 		"Opened by `.github/workflows/jvm-watch.yml` (`scripts/update-buildpack-pins.ts`), which also dispatched CI/CD on this branch. The pull_request runs wait for approval and are not required.",

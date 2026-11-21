@@ -22,8 +22,7 @@ import {
 import {
 	addedModules,
 	buildEnvironment,
-	hasBase64Mitigation,
-	MITIGATED_BELOW,
+	JRE_FLOOR,
 	objectHeaders,
 	versionBelow,
 } from "./lib/buildpack-descriptor.ts";
@@ -679,11 +678,13 @@ void test("a descriptor's build environment is each table's name and value", () 
 	);
 });
 
-void test("a JRE below the CVE-2026-114938 fix runs only with the Base64 decoder intrinsic turned off", () => {
-	assert.equal(versionBelow("25.0.5.0.3_5", MITIGATED_BELOW), true);
-	assert.equal(versionBelow("25.0.5.1_1", MITIGATED_BELOW), false);
-	assert.equal(versionBelow("25.0.6_8", MITIGATED_BELOW), false);
-	assert.equal(versionBelow("25.0.4.1_1", MITIGATED_BELOW), true);
-	assert.equal(hasBase64Mitigation("--add-modules=jdk.jfr -XX:-UseBASE64Intrinsics"), true);
-	assert.equal(hasBase64Mitigation("-XX:-UseBASE64IntrinsicsX", "-XX:-UseBASE64Intrinsics"), false);
+void test("a JRE pin below the fix of the 2026-11-17 OpenJDK advisory is refused", () => {
+	assert.equal(versionBelow("25.0.5.0.3_5", JRE_FLOOR), true);
+	assert.equal(versionBelow("25.0.4.1_1", JRE_FLOOR), true);
+	assert.equal(versionBelow("25.0.5.1_5", JRE_FLOOR), false);
+	assert.equal(versionBelow("25.0.6_8", JRE_FLOOR), false);
+	assert.equal(versionBelow("25.0.10_1", JRE_FLOOR), false);
+	// A pin that the floor cannot judge fails the gate instead of passing it.
+	assert.throws(() => versionBelow("25.0.4+7", JRE_FLOOR), /not <numbers>_<build>/u);
+	assert.throws(() => versionBelow("27.0.1_1", JRE_FLOOR), /not on the Java 25 line/u);
 });
