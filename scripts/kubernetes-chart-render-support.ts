@@ -576,11 +576,31 @@ export function surge(deployment: Resource): number {
 
 export const gib = (bytes: number) => (bytes / 2 ** 30).toFixed(1);
 
-/** The allocatable budget is declared by the profile, not by this test. */
-export const nodeRoom = () => {
-	const budget = get(readValues(profile("small")), "sandbox", "budget");
-	return { cpu: amount(get(budget, "cpu")), memory: amount(get(budget, "memory")) };
+/**
+ * The room that the single-node profile gives the release: its node's allocatable, less 5 % headroom and the requests
+ * of the workloads outside the release (docs/admin/sizing.mdx § Node reserve).
+ */
+export const nodeRoom = (override?: unknown) => {
+	const declared = get(readValues(profile("small")), "sandbox", "budget");
+	const budget = {
+		cpu: get(override, "cpu") ?? get(declared, "cpu"),
+		memory: get(override, "memory") ?? get(declared, "memory"),
+		outsideRelease: get(override, "outsideRelease") ?? get(declared, "outsideRelease"),
+	};
+	const room = (resource: "cpu" | "memory", unit: number) => {
+		const allocatable = Math.floor(amount(get(budget, resource)) / unit);
+		const outside = Math.ceil(amount(get(budget, "outsideRelease", resource) ?? "0") / unit);
+		return (allocatable - Math.ceil((allocatable * 5) / 100) - outside) * unit;
+	};
+	return { cpu: room("cpu", 0.001), memory: room("memory", 2 ** 20) };
 };
+
+/**
+ * A scheduled backup. With sandboxes, the upgrade budget leaves it out: it fits in the reserve's headroom, or it waits,
+ * because it never preempts (docs/admin/sizing.mdx § Node reserve). The stanza Job of each upgrade counts.
+ */
+export const scheduledBackup = (resource: Resource) =>
+	componentOf(resource) === "postgresql-backup" && kindOf(resource) === "CronJob";
 
 /** Independently total the rendered requests at the two supported operating phases. */
 export const fitTotals = (
@@ -611,6 +631,7 @@ export const fitTotals = (
 		add(steady, podSpec(resource), 1);
 		add(upgrade, podSpec(resource), 1);
 	}
+	const sandboxes = resources.some((resource) => kindOf(resource) === "SandboxTemplate");
 	for (const resource of resources.filter((candidate) => kindOf(candidate) === "Job")) {
 		add(upgrade, podSpec(resource), 1);
 	}
@@ -620,7 +641,9 @@ export const fitTotals = (
 	if (backup) {
 		const spec = get(backup, "spec", "jobTemplate", "spec", "template", "spec");
 		add(steady, spec, 1);
-		add(upgrade, spec, 1);
+		if (!sandboxes) {
+			add(upgrade, spec, 1);
+		}
 	}
 	for (const tier of ["reviews", "conversations"] as const) {
 		const hard = get(tierQuota(resources, tier), "spec", "hard");

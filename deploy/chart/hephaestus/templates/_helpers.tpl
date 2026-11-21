@@ -599,7 +599,12 @@ lock-path=/tmp/pgbackrest
 {{- end }}
 {{- end -}}
 
-{{/* The Pod of one backup Job: the pgBackRest client of the release's PostgreSQL image. */}}
+{{/*
+The Pod of one backup Job: the pgBackRest client of the release's PostgreSQL image, with postgresql.backup.resources
+or the given resources. With sandboxes, it takes the lowest tier, which never preempts: when the node's requests are
+full, a backup waits for room, and a Pod of a higher tier preempts a running backup, which its Job runs again
+(docs/admin/sizing.mdx § Node reserve).
+*/}}
 {{- define "hephaestus.backup.pod" -}}
 {{- $root := .root -}}
 metadata:
@@ -608,7 +613,7 @@ metadata:
 spec:
   restartPolicy: Never
   automountServiceAccountToken: false
-  priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" .root "tier" "roles") }}
+  priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" .root "tier" (ternary "reviews" "roles" .root.Values.sandbox.enabled)) }}
   enableServiceLinks: false
   securityContext:
     {{- include "hephaestus.podSecurityContext" (dict "user" 999 "group" 999) | nindent 4 }}
@@ -622,7 +627,7 @@ spec:
           value: /etc/pgbackrest/client.conf
         {{- include "hephaestus.backup.env" $root | nindent 8 }}
       resources:
-        {{- toYaml $root.Values.postgresql.backup.resources | nindent 8 }}
+        {{- toYaml (.resources | default $root.Values.postgresql.backup.resources) | nindent 8 }}
       securityContext:
         {{- include "hephaestus.containerSecurityContext" $root | nindent 8 }}
       volumeMounts:
@@ -798,7 +803,8 @@ The reviews that one server runs at once: the sandbox nodes' reviews.
 {{/*
 Fixed requests from the workload templates themselves. The measurement render disables turn admission,
 so the server's capacity environment cannot recursively ask for its own fixed requests. Resource inputs
-are unchanged. Steady includes one backup; upgrade includes migration/stanza Jobs and rollout surge.
+are unchanged. Steady includes one backup; upgrade includes the migration and stanza Jobs and rollout surge. With
+sandboxes, upgrade leaves a scheduled backup out: it fits in the headroom or waits (docs/admin/sizing.mdx § Node reserve).
 */}}
 {{- define "hephaestus.fixedCapacity" -}}
 {{- $values := deepCopy .Values -}}
@@ -839,7 +845,7 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
 {{- /* Full and differential backups share one pgBackRest stanza; only one backup runs at once. */ -}}
 {{- if or $backup ($spec.suspend | default false) -}}
 {{- $steady = 0 -}}{{- $upgrade = 0 -}}
-{{- else -}}{{- $backup = true -}}{{- end -}}
+{{- else -}}{{- $backup = true -}}{{- if $.Values.sandbox.enabled -}}{{- $upgrade = 0 -}}{{- end -}}{{- end -}}
 {{- $spec = $spec.jobTemplate.spec -}}
 {{- end -}}
 {{- $pod := $spec.template.spec -}}
@@ -859,7 +865,11 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
 {{- $totals | toJson -}}
 {{- end -}}
 
-{{/* The largest turn count within both steady and drained-upgrade budgets. */}}
+{{/*
+The largest turn count within both steady and drained-upgrade budgets. The budget is the nodes' allocatable; the
+chart first keeps a reserve out of it: the requests of workloads outside the release on those nodes
+(sandbox.budget.outsideRelease) and 5 % headroom (docs/admin/sizing.mdx § Node reserve).
+*/}}
 {{- define "hephaestus.conversationTurns" -}}
 {{- $value := .Values.sandbox.conversationTurns -}}
 {{- $auto := eq (toString $value) "auto" -}}
@@ -868,9 +878,13 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
 {{- $help := "Set sandbox.budget.cpu and sandbox.budget.memory to the allocatable budget of the sandbox node pool; see https://docs.hephaestus.build/admin/helm-chart#sandbox-capacity-budget" -}}
 {{- $cpu := required (printf "sandbox.budget.cpu is required for auto capacity or a declared budget. %s" $help) $budget.cpu -}}
 {{- $memory := required (printf "sandbox.budget.memory is required for auto capacity or a declared budget. %s" $help) $budget.memory -}}
-{{- $room := dict
-  "cpu" (include "hephaestus.quantityUnits" (dict "value" $cpu "unit" 0.001 "roundDown" true) | int64)
-  "memory" (include "hephaestus.quantityUnits" (dict "value" $memory "unit" 1048576 "roundDown" true) | int64) -}}
+{{- $outside := $budget.outsideRelease | default dict -}}
+{{- $room := dict -}}
+{{- range $resource, $unit := dict "cpu" 0.001 "memory" 1048576 -}}
+{{- $allocatable := include "hephaestus.quantityUnits" (dict "value" (get $budget $resource) "unit" $unit "roundDown" true) | int64 -}}
+{{- $elsewhere := include "hephaestus.quantityUnits" (dict "value" (get $outside $resource | default "0") "unit" $unit) | int64 -}}
+{{- $_ := set $room $resource (sub (sub $allocatable (divf (mul $allocatable 5) 100 | ceil | int64)) $elsewhere) -}}
+{{- end -}}
 {{- $fixed := include "hephaestus.fixedCapacity" . | fromJson -}}
 {{- $review := include "hephaestus.templateSandbox" (dict "root" . "kind" "review") | fromJson -}}
 {{- $conversation := include "hephaestus.templateSandbox" (dict "root" . "kind" "conversation") | fromJson -}}
@@ -1004,6 +1018,78 @@ The full overlap budget also reserves optional monitoring and backup sessions wh
   (int $capacity.maintenance) (int $capacity.superuserReserved) (int $capacity.operatorMargin)) -}}
 {{- end -}}
 {{- end -}}
+{{- end -}}
+
+{{/* A PostgreSQL size parameter (kB, MB or GB, multiplier 1024) in MiB, rounded up. */}}
+{{- define "hephaestus.postgresqlMi" -}}
+{{- $value := required (printf "postgresql.parameters.%s is required: the chart sizes PostgreSQL's memory from it" .name) .value | toString -}}
+{{- $amount := regexFind "^[0-9]+" $value | int64 -}}
+{{- if hasSuffix "GB" $value -}}{{- mul $amount 1024 -}}
+{{- else if hasSuffix "MB" $value -}}{{- $amount -}}
+{{- else -}}{{- divf $amount 1024 | ceil | int64 -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The bundled PostgreSQL's memory, as JSON in MiB: what it can use at once with every connection open, from its
+parameters and max_connections. docs/admin/sizing.mdx § PostgreSQL memory documents the formula and the
+measurement behind each constant, and a chart test holds the two together.
+- Shared memory: PostgreSQL 18's shared_memory_size is shared_buffers, about 1/16 of it again for the buffer
+  descriptors and WAL buffers, about 20 MiB of fixed tables, and 64 KiB for each connection slot.
+- Each connection: the private memory that a server connection keeps, measured with jit=off, its page tables for
+  shared memory (shared_buffers / 512 once it has touched all of it), and one sort or hash of
+  work_mem x hash_mem_multiplier in flight. A parallel worker is a connection too.
+- Maintenance: one maintenance_work_mem, such as the migration's CREATE INDEX, and every autovacuum worker's
+  autovacuum_work_mem.
+- Processes: the postmaster and the background processes, measured.
+*/}}
+{{- define "hephaestus.postgresqlMemory" -}}
+{{- $parameters := .Values.postgresql.parameters -}}
+{{- $connectionMi := 26 -}}
+{{- $processesMi := 80 -}}
+{{- $connections := int (include "hephaestus.databaseConnectionCapacity" . | fromJson).maximum -}}
+{{- if hasKey $parameters "max_connections" -}}{{- $connections = int $parameters.max_connections -}}{{- end -}}
+{{- $sharedBuffers := include "hephaestus.postgresqlMi" (dict "name" "shared_buffers" "value" $parameters.shared_buffers) | int64 -}}
+{{- $workMem := include "hephaestus.postgresqlMi" (dict "name" "work_mem" "value" $parameters.work_mem) | int64 -}}
+{{- $maintenance := include "hephaestus.postgresqlMi" (dict "name" "maintenance_work_mem" "value" $parameters.maintenance_work_mem) | int64 -}}
+{{- $autovacuum := include "hephaestus.postgresqlMi" (dict "name" "autovacuum_work_mem" "value" $parameters.autovacuum_work_mem) | int64 -}}
+{{- $workers := int (required "postgresql.parameters.autovacuum_max_workers is required: the chart sizes PostgreSQL's memory from it" $parameters.autovacuum_max_workers) -}}
+{{- $hash := float64 (required "postgresql.parameters.hash_mem_multiplier is required: the chart sizes PostgreSQL's memory from it" $parameters.hash_mem_multiplier) -}}
+{{- /* PostgreSQL's default max_parallel_workers, which the chart does not change, once any query may gather. */ -}}
+{{- $parallel := 0 -}}
+{{- if gt (int (default 0 $parameters.max_parallel_workers_per_gather)) 0 -}}{{- $parallel = 8 -}}{{- end -}}
+{{- $shared := add $sharedBuffers (divf $sharedBuffers 16 | ceil | int64) 20 (divf $connections 16 | ceil | int64) -}}
+{{- $perConnection := add $connectionMi (divf $sharedBuffers 512 | ceil | int64) (mulf $workMem $hash | ceil | int64) -}}
+{{- $backends := mul (add $connections $parallel) $perConnection -}}
+{{- $maintenanceTotal := add $maintenance (mul $workers $autovacuum) -}}
+{{- $total := add $shared $backends $maintenanceTotal $processesMi -}}
+{{- dict "connections" $connections "parallelWorkers" $parallel "sharedMi" $shared "perConnectionMi" $perConnection
+  "connectionsMi" $backends "maintenanceMi" $maintenanceTotal "processesMi" $processesMi "requiredMi" $total
+  "limitMi" $total | toJson -}}
+{{- end -}}
+
+{{/*
+The bundled PostgreSQL's resources: memory `auto` takes the derived size, and the request follows the limit. An
+explicit limit below the derived size fails, with its parts, and so does a request above the limit.
+*/}}
+{{- define "hephaestus.postgresqlResources" -}}
+{{- $memory := include "hephaestus.postgresqlMemory" . | fromJson -}}
+{{- $resources := deepCopy .Values.postgresql.resources -}}
+{{- $limit := toString $resources.limits.memory -}}
+{{- if eq $limit "auto" -}}
+{{- $limit = printf "%dMi" (int64 $memory.limitMi) -}}
+{{- else if lt (include "hephaestus.quantityUnits" (dict "value" $limit "unit" 1048576 "roundDown" true) | int64) (int64 $memory.requiredMi) -}}
+{{- fail (printf "postgresql.resources.limits.memory (%s) needs at least %dMi: shared memory=%dMi, %d connections x %dMi=%dMi, maintenance=%dMi, processes=%dMi (docs/admin/sizing.mdx § PostgreSQL memory). Set it to auto, or lower max_connections, shared_buffers or work_mem."
+  $limit (int64 $memory.requiredMi) (int64 $memory.sharedMi) (add (int $memory.connections) (int $memory.parallelWorkers)) (int64 $memory.perConnectionMi)
+  (int64 $memory.connectionsMi) (int64 $memory.maintenanceMi) (int64 $memory.processesMi)) -}}
+{{- end -}}
+{{- $_ := set $resources.limits "memory" $limit -}}
+{{- if eq (toString $resources.requests.memory) "auto" -}}
+{{- $_ := set $resources.requests "memory" $limit -}}
+{{- else if gt (include "hephaestus.quantityUnits" (dict "value" $resources.requests.memory "unit" 1) | int64) (include "hephaestus.quantityUnits" (dict "value" $limit "unit" 1) | int64) -}}
+{{- fail (printf "postgresql.resources.requests.memory (%s) is above the memory limit (%s)" (toString $resources.requests.memory) $limit) -}}
+{{- end -}}
+{{- toYaml $resources -}}
 {{- end -}}
 
 {{/* The ConfigMap of files/database-*: the migration Job and the monitor Job run them from this directory. */}}
