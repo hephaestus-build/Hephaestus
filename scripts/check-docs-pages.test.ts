@@ -333,6 +333,22 @@ await describe("systemDiagramProblems", async () => {
 		]);
 	});
 
+	await test("reads quoted values that hold a > or a code span, across lines", () => {
+		const attributes =
+			'name="containers"\n  title="Container view: `server`"\n  alt="Server -> PostgreSQL."';
+		assert.deepEqual(checkDiagram(diagram(attributes)), []);
+		assert.deepEqual(checkDiagram(diagram(valid, "From | To\n:-- | --:\nServer | PostgreSQL")), []);
+	});
+
+	await test("reports each view on its own line", () => {
+		assert.deepEqual(
+			checkDiagram(diagram(valid) + diagram(valid.replace(' alt="Container diagram."', ""))),
+			[
+				"page.mdx:12: Give the <SystemDiagram> a literal alt text that says what the diagram shows.",
+			],
+		);
+	});
+
 	await test("ignores the component in code, where a page only shows it", () => {
 		assert.deepEqual(
 			checkDiagram(

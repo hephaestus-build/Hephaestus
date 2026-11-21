@@ -273,20 +273,23 @@ export function systemDiagramProblems(
 	source: string,
 	hasSource: (name: string) => boolean,
 ): string[] {
-	// Code fences and code spans show the component without using it.
+	// Code fences and code spans show the component without using it. Blanking keeps every offset, so
+	// a tag found in `prose` reads its attributes from the same place in `text`.
 	const lines = source.split(/\r?\n/u).map(() => "");
 	for (const { number, text } of readPage(source).body) {
-		lines[number - 1] = text.replaceAll(/`[^`]*`/gu, (code) => " ".repeat(code.length));
+		lines[number - 1] = text;
 	}
-	const prose = lines.join("\n");
+	const text = lines.join("\n");
+	const prose = text.replaceAll(/`[^`\n]*`/gu, (code) => " ".repeat(code.length));
 	const problems: string[] = [];
-	for (const match of prose.matchAll(/<SystemDiagram\b(?<attributes>[^>]*)>/gu)) {
+	// A quoted value or an expression may hold a `>`, such as "Server -> PostgreSQL".
+	const tags = /<SystemDiagram\b(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^>"'{])*>/gu;
+	for (const match of prose.matchAll(tags)) {
+		const tag = text.slice(match.index, match.index + match[0].length);
 		const report = (message: string) =>
 			problems.push(`${file}:${prose.slice(0, match.index).split("\n").length}: ${message}`);
 		const attribute = (name: string) =>
-			new RegExp(`\\b${name}="(?<value>[^"]*)"`, "u")
-				.exec(match.groups?.attributes ?? "")
-				?.groups?.value?.trim();
+			new RegExp(`\\s${name}="(?<value>[^"]*)"`, "u").exec(tag)?.groups?.value?.trim();
 		const name = attribute("name");
 		if (name === undefined || name === "") {
 			report('Give the <SystemDiagram> a literal name, such as name="containers".');
@@ -309,7 +312,7 @@ export function systemDiagramProblems(
 		if (
 			match[0].endsWith("/>") ||
 			end === -1 ||
-			!/^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/mu.test(prose.slice(start, end))
+			!/^\s*\|?(?:\s*:?-+:?\s*\|)+(?:\s*:?-+:?\s*)?$/mu.test(prose.slice(start, end))
 		) {
 			report(
 				"Put a table of every connection of the view between <SystemDiagram> and </SystemDiagram>.",

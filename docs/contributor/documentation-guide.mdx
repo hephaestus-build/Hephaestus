@@ -197,7 +197,8 @@ These rules come from the [C4 model](https://c4model.com/diagrams/notation), [ar
 - Label each arrow with what crosses it, such as `SandboxClaim` or `model calls, API key`. Do not write "uses".
 - Put no notes in the diagram. The text gives the responsibilities and the reasons.
 - Map every box and arrow to code or to an ADR. A catalogue table under a structural view names the package.
-- Give each box its element type and, for a container, its technology. The view title names the type of its boxes. A keyword such as `«external»` marks a box of another type. Add a Technology column to the catalogue table of a container view, such as "Spring Boot, Java". Write no versions: the build files own them. A component view states the technology of its container once, in its lead-in.
+- State the element type of each box. The view title names the type of its boxes. A keyword such as `«external»` marks a box of another type.
+- State the technology of each container in the catalogue table, not in the box. Add a Technology column, such as "Spring Boot, Java", with no versions: the build files own them. A component view states the technology of its container once, in its lead-in.
 - Leave out what is implied, such as a standard OAuth flow or an arrow from every part to PostgreSQL.
 - Never mark a meaning by color alone. Add a keyword such as `«cluster admin»`, a word such as "Stop:", or a line style. Show it in the legend or the lead-in.
 
