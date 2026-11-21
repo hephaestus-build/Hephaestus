@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryQuery;
@@ -89,6 +90,7 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
             ResultFreshness.class,
             PracticeItemOptions.class,
             ItemEventService.class,
+            ItemIndexService.class,
             FeedbackModeQuery.class);
 
     // One withBean call per statement: NullAway infers a generic call chain through every receiver, so a long
