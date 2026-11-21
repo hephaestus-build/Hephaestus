@@ -293,7 +293,16 @@ final class PersonErasureAllStoresFixture {
                 "Failure",
                 "replayed_by",
                 account);
-        row("activity_event", "workspace_id", workspace, "actor_id", person.user(), "event_key", CANARY);
+        row(
+                "activity_event",
+                "workspace_id",
+                workspace,
+                "actor_id",
+                person.user(),
+                "event_key",
+                CANARY,
+                "event_type",
+                "PULL_REQUEST_OPENED");
         row("activity_automation", "workspace_id", workspace, "user_id", person.user());
         seedActivityPublication(workspace, person.user(), CANARY);
         row(

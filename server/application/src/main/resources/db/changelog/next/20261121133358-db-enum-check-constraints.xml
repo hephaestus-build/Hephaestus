@@ -1,0 +1,1131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795259678525-1" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_activity_event_event_type'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of activity_event accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE activity_event ADD CONSTRAINT ck_activity_event_event_type CHECK (event_type IN ('COMMENT_CREATED', 'COMMENT_DELETED', 'COMMENT_UPDATED', 'COMMIT_CREATED', 'ISSUE_CLOSED', 'ISSUE_CREATED', 'ISSUE_DELETED', 'ISSUE_LABELED', 'ISSUE_REOPENED', 'ISSUE_TYPED', 'ISSUE_UNLABELED', 'ISSUE_UNTYPED', 'PULL_REQUEST_CLOSED', 'PULL_REQUEST_DRAFTED', 'PULL_REQUEST_LABELED', 'PULL_REQUEST_MERGED', 'PULL_REQUEST_OPENED', 'PULL_REQUEST_READY', 'PULL_REQUEST_REOPENED', 'PULL_REQUEST_SYNCHRONIZED', 'PULL_REQUEST_UNLABELED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED', 'REVIEW_COMMENT_CREATED', 'REVIEW_COMMENT_DELETED', 'REVIEW_COMMENT_EDITED', 'REVIEW_DISMISSED', 'REVIEW_EDITED', 'REVIEW_THREAD_RESOLVED', 'REVIEW_THREAD_UNRESOLVED', 'REVIEW_UNKNOWN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE activity_event DROP CONSTRAINT IF EXISTS ck_activity_event_event_type</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-2" author="hephaestus">
+    <comment>First, count in one scan the rows of activity_event that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (event_type IN ('COMMENT_CREATED', 'COMMENT_DELETED', 'COMMENT_UPDATED', 'COMMIT_CREATED', 'ISSUE_CLOSED', 'ISSUE_CREATED', 'ISSUE_DELETED', 'ISSUE_LABELED', 'ISSUE_REOPENED', 'ISSUE_TYPED', 'ISSUE_UNLABELED', 'ISSUE_UNTYPED', 'PULL_REQUEST_CLOSED', 'PULL_REQUEST_DRAFTED', 'PULL_REQUEST_LABELED', 'PULL_REQUEST_MERGED', 'PULL_REQUEST_OPENED', 'PULL_REQUEST_READY', 'PULL_REQUEST_REOPENED', 'PULL_REQUEST_SYNCHRONIZED', 'PULL_REQUEST_UNLABELED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED', 'REVIEW_COMMENT_CREATED', 'REVIEW_COMMENT_DELETED', 'REVIEW_COMMENT_EDITED', 'REVIEW_DISMISSED', 'REVIEW_EDITED', 'REVIEW_THREAD_RESOLVED', 'REVIEW_THREAD_UNRESOLVED', 'REVIEW_UNKNOWN'))) AS n1
+  INTO counted FROM activity_event;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'activity_event', 'event_type', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of activity_event. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE activity_event VALIDATE CONSTRAINT ck_activity_event_event_type</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE activity_event DROP CONSTRAINT ck_activity_event_event_type, ADD CONSTRAINT ck_activity_event_event_type CHECK (event_type IN ('COMMENT_CREATED', 'COMMENT_DELETED', 'COMMENT_UPDATED', 'COMMIT_CREATED', 'ISSUE_CLOSED', 'ISSUE_CREATED', 'ISSUE_DELETED', 'ISSUE_LABELED', 'ISSUE_REOPENED', 'ISSUE_TYPED', 'ISSUE_UNLABELED', 'ISSUE_UNTYPED', 'PULL_REQUEST_CLOSED', 'PULL_REQUEST_DRAFTED', 'PULL_REQUEST_LABELED', 'PULL_REQUEST_MERGED', 'PULL_REQUEST_OPENED', 'PULL_REQUEST_READY', 'PULL_REQUEST_REOPENED', 'PULL_REQUEST_SYNCHRONIZED', 'PULL_REQUEST_UNLABELED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED', 'REVIEW_COMMENT_CREATED', 'REVIEW_COMMENT_DELETED', 'REVIEW_COMMENT_EDITED', 'REVIEW_DISMISSED', 'REVIEW_EDITED', 'REVIEW_THREAD_RESOLVED', 'REVIEW_THREAD_UNRESOLVED', 'REVIEW_UNKNOWN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-3" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_client_session_client_kind'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of client_session accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_session ADD CONSTRAINT ck_client_session_client_kind CHECK (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT')) NOT VALID, ADD CONSTRAINT ck_client_session_revoked_reason CHECK (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_session DROP CONSTRAINT IF EXISTS ck_client_session_client_kind, DROP CONSTRAINT IF EXISTS ck_client_session_revoked_reason</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-4" author="hephaestus">
+    <comment>First, count in one scan the rows of client_session that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT'))) AS n1,
+         count(*) FILTER (WHERE NOT (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED'))) AS n2
+  INTO counted FROM client_session;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'client_session', 'client_kind', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'client_session', 'revoked_reason', counted.n2); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of client_session. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_session VALIDATE CONSTRAINT ck_client_session_client_kind; ALTER TABLE client_session VALIDATE CONSTRAINT ck_client_session_revoked_reason</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_session DROP CONSTRAINT ck_client_session_client_kind, ADD CONSTRAINT ck_client_session_client_kind CHECK (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT')) NOT VALID, DROP CONSTRAINT ck_client_session_revoked_reason, ADD CONSTRAINT ck_client_session_revoked_reason CHECK (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-5" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_client_sign_in_handoff_client_kind'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of client_sign_in_handoff accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_sign_in_handoff ADD CONSTRAINT ck_client_sign_in_handoff_client_kind CHECK (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_sign_in_handoff DROP CONSTRAINT IF EXISTS ck_client_sign_in_handoff_client_kind</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-6" author="hephaestus">
+    <comment>First, count in one scan the rows of client_sign_in_handoff that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT'))) AS n1
+  INTO counted FROM client_sign_in_handoff;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'client_sign_in_handoff', 'client_kind', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of client_sign_in_handoff. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_sign_in_handoff VALIDATE CONSTRAINT ck_client_sign_in_handoff_client_kind</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_sign_in_handoff DROP CONSTRAINT ck_client_sign_in_handoff_client_kind, ADD CONSTRAINT ck_client_sign_in_handoff_client_kind CHECK (client_kind IN ('BROWSER_EXTENSION', 'MCP_CLIENT')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-7" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_commit_contributor_role'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of commit_contributor accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_contributor ADD CONSTRAINT ck_commit_contributor_role CHECK (role IN ('AUTHOR', 'COMMITTER', 'CO_AUTHOR')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_contributor DROP CONSTRAINT IF EXISTS ck_commit_contributor_role</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-8" author="hephaestus">
+    <comment>First, count in one scan the rows of commit_contributor that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (role IN ('AUTHOR', 'COMMITTER', 'CO_AUTHOR'))) AS n1
+  INTO counted FROM commit_contributor;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'commit_contributor', 'role', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of commit_contributor. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_contributor VALIDATE CONSTRAINT ck_commit_contributor_role</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_contributor DROP CONSTRAINT ck_commit_contributor_role, ADD CONSTRAINT ck_commit_contributor_role CHECK (role IN ('AUTHOR', 'COMMITTER', 'CO_AUTHOR')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-9" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_commit_file_change_change_type'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of commit_file_change accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_file_change ADD CONSTRAINT ck_commit_file_change_change_type CHECK (change_type IN ('ADDED', 'CHANGED', 'COPIED', 'MODIFIED', 'REMOVED', 'RENAMED', 'UNKNOWN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_file_change DROP CONSTRAINT IF EXISTS ck_commit_file_change_change_type</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-10" author="hephaestus">
+    <comment>First, count in one scan the rows of commit_file_change that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (change_type IN ('ADDED', 'CHANGED', 'COPIED', 'MODIFIED', 'REMOVED', 'RENAMED', 'UNKNOWN'))) AS n1
+  INTO counted FROM commit_file_change;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'commit_file_change', 'change_type', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of commit_file_change. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_file_change VALIDATE CONSTRAINT ck_commit_file_change_change_type</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_file_change DROP CONSTRAINT ck_commit_file_change_change_type, ADD CONSTRAINT ck_commit_file_change_change_type CHECK (change_type IN ('ADDED', 'CHANGED', 'COPIED', 'MODIFIED', 'REMOVED', 'RENAMED', 'UNKNOWN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-11" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_commit_identity_resolution_source'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of commit_identity_resolution accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_identity_resolution ADD CONSTRAINT ck_commit_identity_resolution_source CHECK (source IN ('AUTHOR', 'COMMITTER', 'CONTRIBUTOR')) NOT VALID, ADD CONSTRAINT ck_commit_identity_resolution_state CHECK (state IN ('NO_ACCOUNT', 'PENDING', 'RESOLVED', 'UNANSWERED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_identity_resolution DROP CONSTRAINT IF EXISTS ck_commit_identity_resolution_source, DROP CONSTRAINT IF EXISTS ck_commit_identity_resolution_state</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-12" author="hephaestus">
+    <comment>First, count in one scan the rows of commit_identity_resolution that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (source IN ('AUTHOR', 'COMMITTER', 'CONTRIBUTOR'))) AS n1,
+         count(*) FILTER (WHERE NOT (state IN ('NO_ACCOUNT', 'PENDING', 'RESOLVED', 'UNANSWERED'))) AS n2
+  INTO counted FROM commit_identity_resolution;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'commit_identity_resolution', 'source', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'commit_identity_resolution', 'state', counted.n2); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of commit_identity_resolution. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_identity_resolution VALIDATE CONSTRAINT ck_commit_identity_resolution_source; ALTER TABLE commit_identity_resolution VALIDATE CONSTRAINT ck_commit_identity_resolution_state</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_identity_resolution DROP CONSTRAINT ck_commit_identity_resolution_source, ADD CONSTRAINT ck_commit_identity_resolution_source CHECK (source IN ('AUTHOR', 'COMMITTER', 'CONTRIBUTOR')) NOT VALID, DROP CONSTRAINT ck_commit_identity_resolution_state, ADD CONSTRAINT ck_commit_identity_resolution_state CHECK (state IN ('NO_ACCOUNT', 'PENDING', 'RESOLVED', 'UNANSWERED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-13" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_connection_attention_problem'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of connection accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection ADD CONSTRAINT ck_connection_attention_problem CHECK (attention_problem IN ('CREDENTIAL_EXPIRING', 'CREDENTIAL_REVOKED', 'PROVIDER_SUSPENDED', 'WEBHOOK_UNAVAILABLE')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection DROP CONSTRAINT IF EXISTS ck_connection_attention_problem</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-14" author="hephaestus">
+    <comment>First, count in one scan the rows of connection that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (attention_problem IN ('CREDENTIAL_EXPIRING', 'CREDENTIAL_REVOKED', 'PROVIDER_SUSPENDED', 'WEBHOOK_UNAVAILABLE'))) AS n1
+  INTO counted FROM connection;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'connection', 'attention_problem', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of connection. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection VALIDATE CONSTRAINT ck_connection_attention_problem</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection DROP CONSTRAINT ck_connection_attention_problem, ADD CONSTRAINT ck_connection_attention_problem CHECK (attention_problem IN ('CREDENTIAL_EXPIRING', 'CREDENTIAL_REVOKED', 'PROVIDER_SUSPENDED', 'WEBHOOK_UNAVAILABLE')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-15" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_connection_audit_from_state'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of connection_audit accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection_audit ADD CONSTRAINT ck_connection_audit_from_state CHECK (from_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED')) NOT VALID, ADD CONSTRAINT ck_connection_audit_to_state CHECK (to_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection_audit DROP CONSTRAINT IF EXISTS ck_connection_audit_from_state, DROP CONSTRAINT IF EXISTS ck_connection_audit_to_state</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-16" author="hephaestus">
+    <comment>First, count in one scan the rows of connection_audit that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (from_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED'))) AS n1,
+         count(*) FILTER (WHERE NOT (to_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED'))) AS n2
+  INTO counted FROM connection_audit;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'connection_audit', 'from_state', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'connection_audit', 'to_state', counted.n2); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of connection_audit. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection_audit VALIDATE CONSTRAINT ck_connection_audit_from_state; ALTER TABLE connection_audit VALIDATE CONSTRAINT ck_connection_audit_to_state</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection_audit DROP CONSTRAINT ck_connection_audit_from_state, ADD CONSTRAINT ck_connection_audit_from_state CHECK (from_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED')) NOT VALID, DROP CONSTRAINT ck_connection_audit_to_state, ADD CONSTRAINT ck_connection_audit_to_state CHECK (to_state IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'UNINSTALLED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-17" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_identity_provider_type'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of identity_provider accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider ADD CONSTRAINT ck_identity_provider_type CHECK (type IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider DROP CONSTRAINT IF EXISTS ck_identity_provider_type</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-18" author="hephaestus">
+    <comment>First, count in one scan the rows of identity_provider that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (type IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK'))) AS n1
+  INTO counted FROM identity_provider;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'identity_provider', 'type', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of identity_provider. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider VALIDATE CONSTRAINT ck_identity_provider_type</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider DROP CONSTRAINT ck_identity_provider_type, ADD CONSTRAINT ck_identity_provider_type CHECK (type IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-19" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_issue_head_check_state'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of issue accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue ADD CONSTRAINT ck_issue_head_check_state CHECK (head_check_state IN ('CANCELLED', 'FAILURE', 'NONE', 'NO_PIPELINE', 'PENDING', 'SKIPPED', 'SUCCESS')) NOT VALID, ADD CONSTRAINT ck_issue_state_reason CHECK (state_reason IN ('COMPLETED', 'DUPLICATE', 'NOT_PLANNED', 'REOPENED', 'UNKNOWN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue DROP CONSTRAINT IF EXISTS ck_issue_head_check_state, DROP CONSTRAINT IF EXISTS ck_issue_state_reason</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-20" author="hephaestus">
+    <comment>First, count in one scan the rows of issue that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (head_check_state IN ('CANCELLED', 'FAILURE', 'NONE', 'NO_PIPELINE', 'PENDING', 'SKIPPED', 'SUCCESS'))) AS n1,
+         count(*) FILTER (WHERE NOT (state_reason IN ('COMPLETED', 'DUPLICATE', 'NOT_PLANNED', 'REOPENED', 'UNKNOWN'))) AS n2
+  INTO counted FROM issue;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue', 'head_check_state', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue', 'state_reason', counted.n2); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue VALIDATE CONSTRAINT ck_issue_head_check_state; ALTER TABLE issue VALIDATE CONSTRAINT ck_issue_state_reason</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue DROP CONSTRAINT ck_issue_head_check_state, ADD CONSTRAINT ck_issue_head_check_state CHECK (head_check_state IN ('CANCELLED', 'FAILURE', 'NONE', 'NO_PIPELINE', 'PENDING', 'SKIPPED', 'SUCCESS')) NOT VALID, DROP CONSTRAINT ck_issue_state_reason, ADD CONSTRAINT ck_issue_state_reason CHECK (state_reason IN ('COMPLETED', 'DUPLICATE', 'NOT_PLANNED', 'REOPENED', 'UNKNOWN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-21" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_issue_comment_author_association'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of issue_comment accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_comment ADD CONSTRAINT ck_issue_comment_author_association CHECK (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_comment DROP CONSTRAINT IF EXISTS ck_issue_comment_author_association</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-22" author="hephaestus">
+    <comment>First, count in one scan the rows of issue_comment that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER'))) AS n1
+  INTO counted FROM issue_comment;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue_comment', 'author_association', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue_comment. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_comment VALIDATE CONSTRAINT ck_issue_comment_author_association</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_comment DROP CONSTRAINT ck_issue_comment_author_association, ADD CONSTRAINT ck_issue_comment_author_association CHECK (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-23" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_issue_type_color'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of issue_type accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_type ADD CONSTRAINT ck_issue_type_color CHECK (color IN ('BLUE', 'GRAY', 'GREEN', 'ORANGE', 'PINK', 'PURPLE', 'RED', 'YELLOW')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_type DROP CONSTRAINT IF EXISTS ck_issue_type_color</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-24" author="hephaestus">
+    <comment>First, count in one scan the rows of issue_type that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (color IN ('BLUE', 'GRAY', 'GREEN', 'ORANGE', 'PINK', 'PURPLE', 'RED', 'YELLOW'))) AS n1
+  INTO counted FROM issue_type;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue_type', 'color', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue_type. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_type VALIDATE CONSTRAINT ck_issue_type_color</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_type DROP CONSTRAINT ck_issue_type_color, ADD CONSTRAINT ck_issue_type_color CHECK (color IN ('BLUE', 'GRAY', 'GREEN', 'ORANGE', 'PINK', 'PURPLE', 'RED', 'YELLOW')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-25" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_issued_jwt_revoked_reason'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of issued_jwt accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issued_jwt ADD CONSTRAINT ck_issued_jwt_revoked_reason CHECK (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issued_jwt DROP CONSTRAINT IF EXISTS ck_issued_jwt_revoked_reason</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-26" author="hephaestus">
+    <comment>First, count in one scan the rows of issued_jwt that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED'))) AS n1
+  INTO counted FROM issued_jwt;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issued_jwt', 'revoked_reason', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issued_jwt. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issued_jwt VALIDATE CONSTRAINT ck_issued_jwt_revoked_reason</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issued_jwt DROP CONSTRAINT ck_issued_jwt_revoked_reason, ADD CONSTRAINT ck_issued_jwt_revoked_reason CHECK (revoked_reason IN ('ACCOUNT_DELETED', 'ACCOUNT_INACTIVE', 'ADMIN_REVOKE', 'CODE_REUSE', 'IMPERSONATION_EXIT', 'LOGOUT', 'PASSKEY_STEP_UP', 'REFRESH_REUSE', 'ROTATE', 'SELF_REVOKE', 'SIGN_OUT_EVERYWHERE', 'SUPERSEDED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-27" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_llm_connection_connection_platform'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of llm_connection accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_connection ADD CONSTRAINT ck_llm_connection_connection_platform CHECK (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_connection DROP CONSTRAINT IF EXISTS ck_llm_connection_connection_platform</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-28" author="hephaestus">
+    <comment>First, count in one scan the rows of llm_connection that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM'))) AS n1
+  INTO counted FROM llm_connection;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'llm_connection', 'connection_platform', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of llm_connection. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_connection VALIDATE CONSTRAINT ck_llm_connection_connection_platform</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_connection DROP CONSTRAINT ck_llm_connection_connection_platform, ADD CONSTRAINT ck_llm_connection_connection_platform CHECK (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-29" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_llm_model_brand'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of llm_model accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_model ADD CONSTRAINT ck_llm_model_brand CHECK (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI')) NOT VALID, ADD CONSTRAINT ck_llm_model_reasoning_effort CHECK (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_model DROP CONSTRAINT IF EXISTS ck_llm_model_brand, DROP CONSTRAINT IF EXISTS ck_llm_model_reasoning_effort</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-30" author="hephaestus">
+    <comment>First, count in one scan the rows of llm_model that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI'))) AS n1,
+         count(*) FILTER (WHERE NOT (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH'))) AS n2
+  INTO counted FROM llm_model;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'llm_model', 'brand', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'llm_model', 'reasoning_effort', counted.n2); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of llm_model. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_model VALIDATE CONSTRAINT ck_llm_model_brand; ALTER TABLE llm_model VALIDATE CONSTRAINT ck_llm_model_reasoning_effort</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_model DROP CONSTRAINT ck_llm_model_brand, ADD CONSTRAINT ck_llm_model_brand CHECK (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI')) NOT VALID, DROP CONSTRAINT ck_llm_model_reasoning_effort, ADD CONSTRAINT ck_llm_model_reasoning_effort CHECK (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-31" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_mcp_client_grant_status'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of mcp_client_grant accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE mcp_client_grant ADD CONSTRAINT ck_mcp_client_grant_status CHECK (status IN ('ACTIVE', 'APPROVED', 'EXPIRED', 'PENDING', 'REFUSED', 'REVOKED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE mcp_client_grant DROP CONSTRAINT IF EXISTS ck_mcp_client_grant_status</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-32" author="hephaestus">
+    <comment>First, count in one scan the rows of mcp_client_grant that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (status IN ('ACTIVE', 'APPROVED', 'EXPIRED', 'PENDING', 'REFUSED', 'REVOKED'))) AS n1
+  INTO counted FROM mcp_client_grant;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'mcp_client_grant', 'status', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of mcp_client_grant. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE mcp_client_grant VALIDATE CONSTRAINT ck_mcp_client_grant_status</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE mcp_client_grant DROP CONSTRAINT ck_mcp_client_grant_status, ADD CONSTRAINT ck_mcp_client_grant_status CHECK (status IN ('ACTIVE', 'APPROVED', 'EXPIRED', 'PENDING', 'REFUSED', 'REVOKED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-33" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_milestone_state'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of milestone accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE milestone ADD CONSTRAINT ck_milestone_state CHECK (state IN ('CLOSED', 'OPEN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE milestone DROP CONSTRAINT IF EXISTS ck_milestone_state</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-34" author="hephaestus">
+    <comment>First, count in one scan the rows of milestone that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (state IN ('CLOSED', 'OPEN'))) AS n1
+  INTO counted FROM milestone;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'milestone', 'state', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of milestone. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE milestone VALIDATE CONSTRAINT ck_milestone_state</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE milestone DROP CONSTRAINT ck_milestone_state, ADD CONSTRAINT ck_milestone_state CHECK (state IN ('CLOSED', 'OPEN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-35" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_notification_subscription_kind'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of notification_subscription accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE notification_subscription ADD CONSTRAINT ck_notification_subscription_kind CHECK (kind IN ('PRODUCT_FEEDBACK', 'PRODUCT_FEEDBACK_UPDATES', 'WEEKLY_DIGEST', 'WORKSPACE_ALERTS')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE notification_subscription DROP CONSTRAINT IF EXISTS ck_notification_subscription_kind</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-36" author="hephaestus">
+    <comment>First, count in one scan the rows of notification_subscription that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (kind IN ('PRODUCT_FEEDBACK', 'PRODUCT_FEEDBACK_UPDATES', 'WEEKLY_DIGEST', 'WORKSPACE_ALERTS'))) AS n1
+  INTO counted FROM notification_subscription;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'notification_subscription', 'kind', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of notification_subscription. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE notification_subscription VALIDATE CONSTRAINT ck_notification_subscription_kind</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE notification_subscription DROP CONSTRAINT ck_notification_subscription_kind, ADD CONSTRAINT ck_notification_subscription_kind CHECK (kind IN ('PRODUCT_FEEDBACK', 'PRODUCT_FEEDBACK_UPDATES', 'WEEKLY_DIGEST', 'WORKSPACE_ALERTS')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-37" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_organization_membership_role'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of organization_membership accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE organization_membership ADD CONSTRAINT ck_organization_membership_role CHECK (role IN ('ADMIN', 'MEMBER')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE organization_membership DROP CONSTRAINT IF EXISTS ck_organization_membership_role</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-38" author="hephaestus">
+    <comment>First, count in one scan the rows of organization_membership that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (role IN ('ADMIN', 'MEMBER'))) AS n1
+  INTO counted FROM organization_membership;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'organization_membership', 'role', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of organization_membership. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE organization_membership VALIDATE CONSTRAINT ck_organization_membership_role</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE organization_membership DROP CONSTRAINT ck_organization_membership_role, ADD CONSTRAINT ck_organization_membership_role CHECK (role IN ('ADMIN', 'MEMBER')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-39" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_product_feedback_kind'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of product_feedback accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback ADD CONSTRAINT ck_product_feedback_kind CHECK (kind IN ('BUG', 'FEEDBACK', 'IDEA')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback DROP CONSTRAINT IF EXISTS ck_product_feedback_kind</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-40" author="hephaestus">
+    <comment>First, count in one scan the rows of product_feedback that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (kind IN ('BUG', 'FEEDBACK', 'IDEA'))) AS n1
+  INTO counted FROM product_feedback;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'product_feedback', 'kind', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of product_feedback. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback VALIDATE CONSTRAINT ck_product_feedback_kind</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback DROP CONSTRAINT ck_product_feedback_kind, ADD CONSTRAINT ck_product_feedback_kind CHECK (kind IN ('BUG', 'FEEDBACK', 'IDEA')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-41" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_product_feedback_cleanup_manual_step'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of product_feedback_cleanup accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_cleanup ADD CONSTRAINT ck_product_feedback_cleanup_manual_step CHECK (manual_step IN ('EDIT_HISTORY', 'UNFINISHED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_cleanup DROP CONSTRAINT IF EXISTS ck_product_feedback_cleanup_manual_step</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-42" author="hephaestus">
+    <comment>First, count in one scan the rows of product_feedback_cleanup that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (manual_step IN ('EDIT_HISTORY', 'UNFINISHED'))) AS n1
+  INTO counted FROM product_feedback_cleanup;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'product_feedback_cleanup', 'manual_step', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of product_feedback_cleanup. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_cleanup VALIDATE CONSTRAINT ck_product_feedback_cleanup_manual_step</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_cleanup DROP CONSTRAINT ck_product_feedback_cleanup_manual_step, ADD CONSTRAINT ck_product_feedback_cleanup_manual_step CHECK (manual_step IN ('EDIT_HISTORY', 'UNFINISHED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-43" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_product_feedback_filing_reason'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of product_feedback_filing accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_filing ADD CONSTRAINT ck_product_feedback_filing_reason CHECK (reason IN ('ABOUT_PERSON', 'ABUSE', 'DESTINATION_CHANGED', 'DESTINATION_UNAVAILABLE', 'GITHUB_REFUSED', 'LOW_CONFIDENCE', 'NONE', 'NO_DRAFT', 'OPTED_OUT', 'REDACTION', 'SECURITY')) NOT VALID, ADD CONSTRAINT ck_product_feedback_filing_route CHECK (route IN ('ADMINS', 'PRIVATE', 'PUBLIC')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_filing DROP CONSTRAINT IF EXISTS ck_product_feedback_filing_reason, DROP CONSTRAINT IF EXISTS ck_product_feedback_filing_route</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-44" author="hephaestus">
+    <comment>First, count in one scan the rows of product_feedback_filing that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (reason IN ('ABOUT_PERSON', 'ABUSE', 'DESTINATION_CHANGED', 'DESTINATION_UNAVAILABLE', 'GITHUB_REFUSED', 'LOW_CONFIDENCE', 'NONE', 'NO_DRAFT', 'OPTED_OUT', 'REDACTION', 'SECURITY'))) AS n1,
+         count(*) FILTER (WHERE NOT (route IN ('ADMINS', 'PRIVATE', 'PUBLIC'))) AS n2
+  INTO counted FROM product_feedback_filing;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'product_feedback_filing', 'reason', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'product_feedback_filing', 'route', counted.n2); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of product_feedback_filing. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_filing VALIDATE CONSTRAINT ck_product_feedback_filing_reason; ALTER TABLE product_feedback_filing VALIDATE CONSTRAINT ck_product_feedback_filing_route</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_filing DROP CONSTRAINT ck_product_feedback_filing_reason, ADD CONSTRAINT ck_product_feedback_filing_reason CHECK (reason IN ('ABOUT_PERSON', 'ABUSE', 'DESTINATION_CHANGED', 'DESTINATION_UNAVAILABLE', 'GITHUB_REFUSED', 'LOW_CONFIDENCE', 'NONE', 'NO_DRAFT', 'OPTED_OUT', 'REDACTION', 'SECURITY')) NOT VALID, DROP CONSTRAINT ck_product_feedback_filing_route, ADD CONSTRAINT ck_product_feedback_filing_route CHECK (route IN ('ADMINS', 'PRIVATE', 'PUBLIC')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-45" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_provider_resource_repair_kind'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of provider_resource_repair accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_resource_repair ADD CONSTRAINT ck_provider_resource_repair_kind CHECK (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID, ADD CONSTRAINT ck_provider_resource_repair_resource_type CHECK (resource_type IN ('BOT_TOKEN', 'BOT_USER', 'GROUP_HOOK', 'INSTALLATION', 'OAUTH_EXCHANGE', 'PROJECT_HOOK', 'REGISTRATION', 'SUBSCRIPTION')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_resource_repair DROP CONSTRAINT IF EXISTS ck_provider_resource_repair_kind, DROP CONSTRAINT IF EXISTS ck_provider_resource_repair_resource_type</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-46" author="hephaestus">
+    <comment>First, count in one scan the rows of provider_resource_repair that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK'))) AS n1,
+         count(*) FILTER (WHERE NOT (resource_type IN ('BOT_TOKEN', 'BOT_USER', 'GROUP_HOOK', 'INSTALLATION', 'OAUTH_EXCHANGE', 'PROJECT_HOOK', 'REGISTRATION', 'SUBSCRIPTION'))) AS n2
+  INTO counted FROM provider_resource_repair;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'provider_resource_repair', 'kind', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'provider_resource_repair', 'resource_type', counted.n2); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of provider_resource_repair. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_resource_repair VALIDATE CONSTRAINT ck_provider_resource_repair_kind; ALTER TABLE provider_resource_repair VALIDATE CONSTRAINT ck_provider_resource_repair_resource_type</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_resource_repair DROP CONSTRAINT ck_provider_resource_repair_kind, ADD CONSTRAINT ck_provider_resource_repair_kind CHECK (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID, DROP CONSTRAINT ck_provider_resource_repair_resource_type, ADD CONSTRAINT ck_provider_resource_repair_resource_type CHECK (resource_type IN ('BOT_TOKEN', 'BOT_USER', 'GROUP_HOOK', 'INSTALLATION', 'OAUTH_EXCHANGE', 'PROJECT_HOOK', 'REGISTRATION', 'SUBSCRIPTION')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-47" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_pull_request_requested_reviewers_review_state'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of pull_request_requested_reviewers accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_requested_reviewers ADD CONSTRAINT ck_pull_request_requested_reviewers_review_state CHECK (review_state IN ('APPROVED', 'REQUESTED_CHANGES', 'REVIEWED', 'REVIEW_STARTED', 'UNAPPROVED', 'UNREVIEWED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_requested_reviewers DROP CONSTRAINT IF EXISTS ck_pull_request_requested_reviewers_review_state</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-48" author="hephaestus">
+    <comment>First, count in one scan the rows of pull_request_requested_reviewers that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (review_state IN ('APPROVED', 'REQUESTED_CHANGES', 'REVIEWED', 'REVIEW_STARTED', 'UNAPPROVED', 'UNREVIEWED'))) AS n1
+  INTO counted FROM pull_request_requested_reviewers;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_requested_reviewers', 'review_state', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_requested_reviewers. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_requested_reviewers VALIDATE CONSTRAINT ck_pull_request_requested_reviewers_review_state</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_requested_reviewers DROP CONSTRAINT ck_pull_request_requested_reviewers_review_state, ADD CONSTRAINT ck_pull_request_requested_reviewers_review_state CHECK (review_state IN ('APPROVED', 'REQUESTED_CHANGES', 'REVIEWED', 'REVIEW_STARTED', 'UNAPPROVED', 'UNREVIEWED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-49" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_pull_request_review_state'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of pull_request_review accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review ADD CONSTRAINT ck_pull_request_review_state CHECK (state IN ('APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED', 'PENDING', 'UNKNOWN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review DROP CONSTRAINT IF EXISTS ck_pull_request_review_state</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-50" author="hephaestus">
+    <comment>First, count in one scan the rows of pull_request_review that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (state IN ('APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED', 'PENDING', 'UNKNOWN'))) AS n1
+  INTO counted FROM pull_request_review;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review', 'state', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_review. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review VALIDATE CONSTRAINT ck_pull_request_review_state</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review DROP CONSTRAINT ck_pull_request_review_state, ADD CONSTRAINT ck_pull_request_review_state CHECK (state IN ('APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED', 'PENDING', 'UNKNOWN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-51" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_pull_request_review_comment_author_association'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of pull_request_review_comment accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_comment ADD CONSTRAINT ck_pull_request_review_comment_author_association CHECK (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER')) NOT VALID, ADD CONSTRAINT ck_pull_request_review_comment_side CHECK (side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, ADD CONSTRAINT ck_pull_request_review_comment_start_side CHECK (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_comment DROP CONSTRAINT IF EXISTS ck_pull_request_review_comment_author_association, DROP CONSTRAINT IF EXISTS ck_pull_request_review_comment_side, DROP CONSTRAINT IF EXISTS ck_pull_request_review_comment_start_side</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-52" author="hephaestus">
+    <comment>First, count in one scan the rows of pull_request_review_comment that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER'))) AS n1,
+         count(*) FILTER (WHERE NOT (side IN ('LEFT', 'RIGHT', 'UNKNOWN'))) AS n2,
+         count(*) FILTER (WHERE NOT (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN'))) AS n3
+  INTO counted FROM pull_request_review_comment;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_comment', 'author_association', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_comment', 'side', counted.n2); END IF;
+  IF counted.n3 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_comment', 'start_side', counted.n3); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_review_comment. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_comment VALIDATE CONSTRAINT ck_pull_request_review_comment_author_association; ALTER TABLE pull_request_review_comment VALIDATE CONSTRAINT ck_pull_request_review_comment_side; ALTER TABLE pull_request_review_comment VALIDATE CONSTRAINT ck_pull_request_review_comment_start_side</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_comment DROP CONSTRAINT ck_pull_request_review_comment_author_association, ADD CONSTRAINT ck_pull_request_review_comment_author_association CHECK (author_association IN ('COLLABORATOR', 'CONTRIBUTOR', 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'MANNEQUIN', 'MEMBER', 'NONE', 'OWNER')) NOT VALID, DROP CONSTRAINT ck_pull_request_review_comment_side, ADD CONSTRAINT ck_pull_request_review_comment_side CHECK (side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, DROP CONSTRAINT ck_pull_request_review_comment_start_side, ADD CONSTRAINT ck_pull_request_review_comment_start_side CHECK (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-53" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_pull_request_review_thread_side'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of pull_request_review_thread accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_thread ADD CONSTRAINT ck_pull_request_review_thread_side CHECK (side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, ADD CONSTRAINT ck_pull_request_review_thread_start_side CHECK (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, ADD CONSTRAINT ck_pull_request_review_thread_state CHECK (state IN ('RESOLVED', 'UNRESOLVED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_thread DROP CONSTRAINT IF EXISTS ck_pull_request_review_thread_side, DROP CONSTRAINT IF EXISTS ck_pull_request_review_thread_start_side, DROP CONSTRAINT IF EXISTS ck_pull_request_review_thread_state</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-54" author="hephaestus">
+    <comment>First, count in one scan the rows of pull_request_review_thread that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (side IN ('LEFT', 'RIGHT', 'UNKNOWN'))) AS n1,
+         count(*) FILTER (WHERE NOT (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN'))) AS n2,
+         count(*) FILTER (WHERE NOT (state IN ('RESOLVED', 'UNRESOLVED'))) AS n3
+  INTO counted FROM pull_request_review_thread;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_thread', 'side', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_thread', 'start_side', counted.n2); END IF;
+  IF counted.n3 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_thread', 'state', counted.n3); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_review_thread. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_thread VALIDATE CONSTRAINT ck_pull_request_review_thread_side; ALTER TABLE pull_request_review_thread VALIDATE CONSTRAINT ck_pull_request_review_thread_start_side; ALTER TABLE pull_request_review_thread VALIDATE CONSTRAINT ck_pull_request_review_thread_state</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_thread DROP CONSTRAINT ck_pull_request_review_thread_side, ADD CONSTRAINT ck_pull_request_review_thread_side CHECK (side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, DROP CONSTRAINT ck_pull_request_review_thread_start_side, ADD CONSTRAINT ck_pull_request_review_thread_start_side CHECK (start_side IN ('LEFT', 'RIGHT', 'UNKNOWN')) NOT VALID, DROP CONSTRAINT ck_pull_request_review_thread_state, ADD CONSTRAINT ck_pull_request_review_thread_state CHECK (state IN ('RESOLVED', 'UNRESOLVED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-55" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_repository_visibility'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of repository accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository ADD CONSTRAINT ck_repository_visibility CHECK (visibility IN ('INTERNAL', 'PRIVATE', 'PUBLIC', 'UNKNOWN')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository DROP CONSTRAINT IF EXISTS ck_repository_visibility</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-56" author="hephaestus">
+    <comment>First, count in one scan the rows of repository that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (visibility IN ('INTERNAL', 'PRIVATE', 'PUBLIC', 'UNKNOWN'))) AS n1
+  INTO counted FROM repository;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'repository', 'visibility', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of repository. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository VALIDATE CONSTRAINT ck_repository_visibility</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository DROP CONSTRAINT ck_repository_visibility, ADD CONSTRAINT ck_repository_visibility CHECK (visibility IN ('INTERNAL', 'PRIVATE', 'PUBLIC', 'UNKNOWN')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-57" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_repository_collaborator_permission'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of repository_collaborator accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_collaborator ADD CONSTRAINT ck_repository_collaborator_permission CHECK (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'UNKNOWN', 'WRITE')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_collaborator DROP CONSTRAINT IF EXISTS ck_repository_collaborator_permission</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-58" author="hephaestus">
+    <comment>First, count in one scan the rows of repository_collaborator that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'UNKNOWN', 'WRITE'))) AS n1
+  INTO counted FROM repository_collaborator;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'repository_collaborator', 'permission', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of repository_collaborator. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_collaborator VALIDATE CONSTRAINT ck_repository_collaborator_permission</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_collaborator DROP CONSTRAINT ck_repository_collaborator_permission, ADD CONSTRAINT ck_repository_collaborator_permission CHECK (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'UNKNOWN', 'WRITE')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-59" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_sync_job_kind'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of sync_job accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job ADD CONSTRAINT ck_sync_job_kind CHECK (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job DROP CONSTRAINT IF EXISTS ck_sync_job_kind</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-60" author="hephaestus">
+    <comment>First, count in one scan the rows of sync_job that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK'))) AS n1
+  INTO counted FROM sync_job;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'sync_job', 'kind', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of sync_job. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job VALIDATE CONSTRAINT ck_sync_job_kind</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job DROP CONSTRAINT ck_sync_job_kind, ADD CONSTRAINT ck_sync_job_kind CHECK (kind IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-61" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_team_privacy'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of team accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team ADD CONSTRAINT ck_team_privacy CHECK (privacy IN ('SECRET', 'VISIBLE')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team DROP CONSTRAINT IF EXISTS ck_team_privacy</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-62" author="hephaestus">
+    <comment>First, count in one scan the rows of team that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (privacy IN ('SECRET', 'VISIBLE'))) AS n1
+  INTO counted FROM team;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'team', 'privacy', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of team. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team VALIDATE CONSTRAINT ck_team_privacy</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team DROP CONSTRAINT ck_team_privacy, ADD CONSTRAINT ck_team_privacy CHECK (privacy IN ('SECRET', 'VISIBLE')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-63" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_team_membership_role'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of team_membership accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_membership ADD CONSTRAINT ck_team_membership_role CHECK (role IN ('MAINTAINER', 'MEMBER')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_membership DROP CONSTRAINT IF EXISTS ck_team_membership_role</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-64" author="hephaestus">
+    <comment>First, count in one scan the rows of team_membership that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (role IN ('MAINTAINER', 'MEMBER'))) AS n1
+  INTO counted FROM team_membership;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'team_membership', 'role', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of team_membership. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_membership VALIDATE CONSTRAINT ck_team_membership_role</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_membership DROP CONSTRAINT ck_team_membership_role, ADD CONSTRAINT ck_team_membership_role CHECK (role IN ('MAINTAINER', 'MEMBER')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-65" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_team_repository_permission_permission'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of team_repository_permission accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_repository_permission ADD CONSTRAINT ck_team_repository_permission_permission CHECK (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'WRITE')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_repository_permission DROP CONSTRAINT IF EXISTS ck_team_repository_permission_permission</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-66" author="hephaestus">
+    <comment>First, count in one scan the rows of team_repository_permission that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'WRITE'))) AS n1
+  INTO counted FROM team_repository_permission;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'team_repository_permission', 'permission', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of team_repository_permission. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_repository_permission VALIDATE CONSTRAINT ck_team_repository_permission_permission</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_repository_permission DROP CONSTRAINT ck_team_repository_permission_permission, ADD CONSTRAINT ck_team_repository_permission_permission CHECK (permission IN ('ADMIN', 'MAINTAIN', 'READ', 'TRIAGE', 'WRITE')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-67" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_user_type'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of user accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE "user" ADD CONSTRAINT ck_user_type CHECK (type IN ('BOT', 'ORGANIZATION', 'USER')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE "user" DROP CONSTRAINT IF EXISTS ck_user_type</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-68" author="hephaestus">
+    <comment>First, count in one scan the rows of user that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (type IN ('BOT', 'ORGANIZATION', 'USER'))) AS n1
+  INTO counted FROM "user";
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'user', 'type', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of user. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE "user" VALIDATE CONSTRAINT ck_user_type</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE "user" DROP CONSTRAINT ck_user_type, ADD CONSTRAINT ck_user_type CHECK (type IN ('BOT', 'ORGANIZATION', 'USER')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-69" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_workspace_account_type'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of workspace accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace ADD CONSTRAINT ck_workspace_account_type CHECK (account_type IN ('ORG', 'USER')) NOT VALID, ADD CONSTRAINT ck_workspace_repository_selection CHECK (repository_selection IN ('ALL', 'SELECTED')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace DROP CONSTRAINT IF EXISTS ck_workspace_account_type, DROP CONSTRAINT IF EXISTS ck_workspace_repository_selection</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-70" author="hephaestus">
+    <comment>First, count in one scan the rows of workspace that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (account_type IN ('ORG', 'USER'))) AS n1,
+         count(*) FILTER (WHERE NOT (repository_selection IN ('ALL', 'SELECTED'))) AS n2
+  INTO counted FROM workspace;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace', 'account_type', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace', 'repository_selection', counted.n2); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace VALIDATE CONSTRAINT ck_workspace_account_type; ALTER TABLE workspace VALIDATE CONSTRAINT ck_workspace_repository_selection</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace DROP CONSTRAINT ck_workspace_account_type, ADD CONSTRAINT ck_workspace_account_type CHECK (account_type IN ('ORG', 'USER')) NOT VALID, DROP CONSTRAINT ck_workspace_repository_selection, ADD CONSTRAINT ck_workspace_repository_selection CHECK (repository_selection IN ('ALL', 'SELECTED')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-71" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_workspace_llm_connection_connection_platform'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of workspace_llm_connection accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_connection ADD CONSTRAINT ck_workspace_llm_connection_connection_platform CHECK (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_connection DROP CONSTRAINT IF EXISTS ck_workspace_llm_connection_connection_platform</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-72" author="hephaestus">
+    <comment>First, count in one scan the rows of workspace_llm_connection that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM'))) AS n1
+  INTO counted FROM workspace_llm_connection;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace_llm_connection', 'connection_platform', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace_llm_connection. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_connection VALIDATE CONSTRAINT ck_workspace_llm_connection_connection_platform</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_connection DROP CONSTRAINT ck_workspace_llm_connection_connection_platform, ADD CONSTRAINT ck_workspace_llm_connection_connection_platform CHECK (connection_platform IN ('ALIBABA_CLOUD', 'AWS_BEDROCK', 'AZURE', 'CLOUDFLARE_AI_GATEWAY', 'DEEPINFRA', 'FIREWORKS', 'GOOGLE_AI_STUDIO', 'GOOGLE_VERTEX', 'GROQ', 'LOGOS', 'NEBIUS', 'OLLAMA', 'OPENAI', 'OPENROUTER', 'TOGETHER_AI', 'VERCEL_AI_GATEWAY', 'VLLM')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-73" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_workspace_llm_model_brand'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of workspace_llm_model accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_model ADD CONSTRAINT ck_workspace_llm_model_brand CHECK (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI')) NOT VALID, ADD CONSTRAINT ck_workspace_llm_model_reasoning_effort CHECK (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_model DROP CONSTRAINT IF EXISTS ck_workspace_llm_model_brand, DROP CONSTRAINT IF EXISTS ck_workspace_llm_model_reasoning_effort</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-74" author="hephaestus">
+    <comment>First, count in one scan the rows of workspace_llm_model that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI'))) AS n1,
+         count(*) FILTER (WHERE NOT (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH'))) AS n2
+  INTO counted FROM workspace_llm_model;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace_llm_model', 'brand', counted.n1); END IF;
+  IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace_llm_model', 'reasoning_effort', counted.n2); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace_llm_model. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_model VALIDATE CONSTRAINT ck_workspace_llm_model_brand; ALTER TABLE workspace_llm_model VALIDATE CONSTRAINT ck_workspace_llm_model_reasoning_effort</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_model DROP CONSTRAINT ck_workspace_llm_model_brand, ADD CONSTRAINT ck_workspace_llm_model_brand CHECK (brand IN ('ANTHROPIC', 'COHERE', 'DEEPSEEK', 'GEMINI', 'GEMMA', 'META', 'MISTRAL', 'MOONSHOT', 'OPENAI', 'QWEN', 'XAI', 'Z_AI')) NOT VALID, DROP CONSTRAINT ck_workspace_llm_model_reasoning_effort, ADD CONSTRAINT ck_workspace_llm_model_reasoning_effort CHECK (reasoning_effort IN ('HIGH', 'LOW', 'MAX', 'MEDIUM', 'MINIMAL', 'NONE', 'XHIGH')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-75" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_workspace_model_assignment_purpose'</sqlCheck>
+    </preConditions>
+    <comment>Each enum column of workspace_model_assignment accepts only the values that the server writes for it. NOT VALID adds the checks without a table scan, so the table is locked only for a moment. Each table has its own change set, so the upgrade never holds the locks of two tables at once. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the checks and marks it ran.</comment>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_model_assignment ADD CONSTRAINT ck_workspace_model_assignment_purpose CHECK (purpose IN ('CONVERSATION', 'PRACTICE_REVIEW')) NOT VALID</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_model_assignment DROP CONSTRAINT IF EXISTS ck_workspace_model_assignment_purpose</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1795259678525-76" author="hephaestus">
+    <comment>First, count in one scan the rows of workspace_model_assignment that hold a value the server does not write. If there are any, stop the upgrade with each column and its count, before validation. Validation then reads every row without blocking reads or writes, and validating a valid check again does nothing.</comment>
+    <sql splitStatements="false"><![CDATA[DO $$
+DECLARE
+  found text := '';
+  counted record;
+BEGIN
+  SELECT count(*) FILTER (WHERE NOT (purpose IN ('CONVERSATION', 'PRACTICE_REVIEW'))) AS n1
+  INTO counted FROM workspace_model_assignment;
+  IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace_model_assignment', 'purpose', counted.n1); END IF;
+  IF found <> '' THEN
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace_model_assignment. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+  END IF;
+END $$]]></sql>
+    <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_model_assignment VALIDATE CONSTRAINT ck_workspace_model_assignment_purpose</sql>
+    <rollback>
+      <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_model_assignment DROP CONSTRAINT ck_workspace_model_assignment_purpose, ADD CONSTRAINT ck_workspace_model_assignment_purpose CHECK (purpose IN ('CONVERSATION', 'PRACTICE_REVIEW')) NOT VALID</sql>
+    </rollback>
+  </changeSet>
+</databaseChangeLog>

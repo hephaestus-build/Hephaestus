@@ -124,6 +124,28 @@ State conditions as `preConditions` inside the change set.
 Review the result as in step 3.
 Add the database-level test required by the paragraph on populated tables below.
 
+## Enum columns
+
+A column that stores a Java enum has a `CHECK` that lists the enum's values, or the values that its converter writes.
+Name a new check `ck_<table>_<column>`.
+An older check keeps its own name, such as `chk_workspace_practice_delivery_status`. Find it in `pg_constraint`.
+
+The checks make the database refuse a value that the server cannot read.
+`EnumColumnConstraintIntegrationTest` compares each list with its enum, and fails when they differ.
+The JPA diff does not write these checks, so write each one as a [draft](#native-objects-the-jpa-diff-does-not-cover).
+
+- **New enum column.** Add its check in the changelog that adds the column.
+- **New value.** Write a new changelog that drops the check and adds it again with the new list.
+  Add the check `NOT VALID` in one change set, and validate it in a second change set.
+  Give each table its own pair, as `20261121133358-db-enum-check-constraints.xml` does.
+  The previous release writes only values from the old list, so it can run beside the new check.
+- **Removed value.** Take two releases, as [Expand and contract](#expand-and-contract) describes.
+  Release *N* stops writing the value and keeps the constant, so it can still read stored rows.
+  A later release removes the constant and removes the value from the check.
+  That release also corrects the stored rows as a [data correction](#data-corrections).
+
+Never edit the changelog that added a check after it reached `main` ([Changelog immutability policy](#changelog-immutability-policy)).
+
 ## Data corrections
 
 If a fix leaves wrong rows, correct them in the code that writes them.
