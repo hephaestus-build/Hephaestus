@@ -71,7 +71,7 @@ export const ITEM_EVENT_REASON_SENTENCES = {
 	MEMBER_AI_DECLINED: "The developer declined AI review.",
 	PERSON_DATA_ERASED: "The person’s data was erased.",
 	FEEDBACK_MODE_OFF:
-		"Every practice that reviews on this event has feedback mode Off. Those practices review when the work is opened, marked ready, merged, closed, published or archived.",
+		"Every practice that reviews on this event has feedback mode Off. Those practices record observations at a milestone of the work, such as when it is opened, marked ready or merged.",
 	SUBJECT_UNLINKED: "The person the work is about has no account in this workspace.",
 	MERGE_ACTOR_UNAVAILABLE: "Whoever merged the work could not be identified.",
 	MODEL_UNAVAILABLE: "The assigned AI model was unavailable.",

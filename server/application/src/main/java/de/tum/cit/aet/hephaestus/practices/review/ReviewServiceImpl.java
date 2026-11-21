@@ -528,7 +528,8 @@ public class ReviewServiceImpl implements ReviewService {
 
     /**
      * Of the practices the occasions select, those to measure now. Occasions that all continue leave out a practice in
-     * feedback mode Off that reviews at a milestone: it waits for that milestone, carried or not. A practice that an
+     * feedback mode Off that reviews at a milestone: it waits for that milestone and never follows a newer head. One
+     * that this version still owes, such as for its checks or a spent deadline, finishes here. A practice that an
      * earlier review of the item still measures (queued, or running with an unsettled job) holds the whole window until
      * that review ends, so its occasions are never lost. A continuing occasion leaves out every practice whose result
      * is current; a milestone measures them again.
@@ -541,9 +542,12 @@ public class ReviewServiceImpl implements ReviewService {
         long workspaceId = pinned.item().workspaceId();
         long itemId = pinned.item().itemId();
         var kind = pinned.item().kind();
-        var waiting = offMilestones.continuing(kind, occasions)
-                ? offMilestones.waitingForAMilestone(workspaceId, kind, gated)
-                : Set.<Long>of();
+        var waiting = new HashSet<Long>();
+        if (offMilestones.continuing(kind, occasions)) {
+            waiting.addAll(offMilestones.waitingForAMilestone(workspaceId, kind, gated));
+            waiting.removeAll(memberships.owedAtVersion(
+                    workspaceId, itemId, pinned.version().value(), ReviewWithholdings.CARRIED));
+        }
         var selected = gated.stream().filter(p -> !waiting.contains(p.getId())).toList();
         if (selected.isEmpty() && !waiting.isEmpty())
             throw new ReviewRequestRejected(

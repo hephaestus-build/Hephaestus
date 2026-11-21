@@ -9,7 +9,7 @@ import java.util.stream.Stream;
  * Selection writes the role, bot, scope and checks reasons. Capture writes the readiness and fit reasons. Practice
  * start writes {@code REPLACED} when a newer review of the item already measured the practice, {@code SOURCES_MOVED} when its own
  * sources moved and none does, and {@code READINESS_REFUSED} when they cannot be verified. A replaced review writes
- * {@code REPLACED}. An attempt that ended writes {@code NOT_RUN} for each practice it never measured. Staging
+ * {@code REPLACED}, or {@code SOURCES_MOVED} for a practice in feedback mode Off that the newer push leaves out. An attempt that ended writes {@code NOT_RUN} for each practice it never measured. Staging
  * and admission write {@code ROLE_UNAVAILABLE} when the developer is no longer eligible, {@code WORKSPACE_INACTIVE}
  * when the workspace is not active, and {@code STALE_ROLLOUT_REVISION} when the workspace's review settings changed
  * while the review waited.
@@ -42,7 +42,8 @@ public final class ReviewWithholdings {
      * occasion replaced its review, its own sources moved, it was not ready, it never ran, or the work's evidence was
      * larger than a sandbox holds. Not ready covers sources that could not be verified at practice start or seal and too
      * little captured evidence. None of them says that the practice does not apply. The item's next readiness edge
-     * selects it again, whatever that edge's occasions select.
+     * selects it again, whatever that edge's occasions select. The one exception: occasions that all continue leave out a
+     * practice in feedback mode Off that reviews at a milestone, unless its own version still owes it.
      */
     public static final List<String> CARRIED = List.of(
             CHECKS_PENDING,

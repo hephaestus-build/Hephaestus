@@ -258,12 +258,15 @@ This update extends § 5 and § 6:
 
 - Occasions that all continue, such as a push, an edit or a follow-up occasion, leave out a practice in feedback mode Off.
   The practice then waits for a milestone or an outcome of its item, such as opened, ready, merged, closed, published, or a request.
-  This also holds when the practice is carried.
+  This also holds when the practice is carried from an older version, so it never follows a newer head.
+  A practice that its own version still owes, for its checks or a spent deadline, finishes on a continuing occasion at that version.
+  Otherwise a practice that waits for the checks at opened would wait until merged, and the follow-up of a review that ran out of time would measure nothing.
 - A practice in feedback mode Off that reviews on no milestone or outcome of its item kind has no other moment.
   So its continuing occasions keep it. A conversation thread is such a kind: its one event continues.
 - When every practice that a push selects is in Off, the push is withheld with `FEEDBACK_MODE_OFF`.
 - A queued review that a newer push replaces at claim withholds such a practice with `SOURCES_MOVED`, not `REPLACED`.
   The review of the push does not measure it, and `REPLACED` means that a newer review measures the practice.
+  When this holds for every practice of the review, the review ends with `SOURCES_MOVED` too, since nothing replaces it.
   When a newer milestone waits, every practice is `REPLACED`, as before.
 - The selection reads the effective feedback mode when it decides. A practice that changes from Off to Approve first or Automatic is measured on the next push.
 
@@ -281,3 +284,5 @@ Enforced by:
 - `ScmEventReviewIntegrationTest#shouldMeasureAPracticeInFeedbackModeOffAtAMilestoneButNotOnAPushUntilItsFeedbackReachesSomeone`
 - `ScmEventReviewIntegrationTest#shouldWithholdAPushWhoseEverySelectedPracticeIsOffAndKeepAnOffPracticeThatReviewsOnNoMilestone`
 - `ScmEventReviewIntegrationTest#shouldReplaceOnlyThePracticesThatTheReviewOfANewerPushMeasures`
+- `ScmEventReviewIntegrationTest#shouldEndAReviewWhoseEveryPracticeWaitsForAMilestoneWithSourcesMovedWhenAPushReplacesIt`
+- `ScmEventReviewIntegrationTest#shouldFinishAnOffPracticeThatItsVersionOwesOnTheChecksEvent`

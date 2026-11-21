@@ -67,10 +67,11 @@ class ReviewClosure {
     /**
      * Ends a queued event review that newer occasions of its item replace before it starts. A practice that those
      * occasions leave out until a milestone is not replaced, since no newer review measures it: its own sources moved,
-     * and the next readiness edge that measures it selects it again.
+     * and the next milestone selects it again. When that holds for every practice, nothing replaces the review either.
      */
     void replace(Review review, ItemKind kind, Collection<ItemEventName> newer, Instant at) {
         long workspace = review.getWorkspaceId();
+        var stop = ReviewStopReason.REPLACED;
         if (offMilestones.continuing(kind, newer)) {
             var listed =
                     memberships
@@ -96,8 +97,10 @@ class ReviewClosure {
                 if (assignment.getStatus() == ReviewPracticeStatus.QUEUED
                         && waiting.contains(assignment.getPracticeId()))
                     assignment.withhold(ReviewStopReason.SOURCES_MOVED.name());
+            if (!listed.isEmpty() && listed.stream().allMatch(member -> waiting.contains(member.getPracticeId())))
+                stop = ReviewStopReason.SOURCES_MOVED;
         }
-        close(review, ReviewStatus.CANCELLED, ReviewStopReason.REPLACED, at);
+        close(review, ReviewStatus.CANCELLED, stop, at);
     }
 
     /**

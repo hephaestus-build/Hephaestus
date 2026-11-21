@@ -43,8 +43,8 @@ public enum ReviewStopReason {
     EVIDENCE_TOO_LARGE,
     /**
      * A source that the practice reads changed before it started, and no newer review of the item measured it yet. It
-     * is carried: the item's next readiness edge measures the practice again. {@link #REPLACED} names the case where a
-     * newer review already measured it.
+     * is carried: the item's next readiness edge measures the practice again, or the next milestone for a practice in
+     * feedback mode Off. {@link #REPLACED} names the case where a newer review already measured it.
      */
     SOURCES_MOVED,
     /**

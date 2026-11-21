@@ -2400,13 +2400,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var pushed = newestReview(prepared);
         assertThat(pushed.getId()).isNotEqualTo(stale.getId());
         assertThat(membersOf(workspace, pushed.getId())).containsOnlyKeys(delivering);
-        // So a practice start of the older review would call only the delivering practice replaced.
-        assertThat(reviews.existsNewerReviewOfPractice(
-                        workspace, prepared.item().itemId(), delivering, stale.getId(), stale.getOrderedAt()))
-                .isTrue();
-        assertThat(reviews.existsNewerReviewOfPractice(
-                        workspace, prepared.item().itemId(), off, stale.getId(), stale.getOrderedAt()))
-                .isFalse();
+        assertThat(jdbc.queryForList(
+                        "SELECT practice_id FROM review_practice WHERE review_id=?", Long.class, pushed.getId()))
+                .containsExactly(delivering);
 
         // Another push carries it no further. The next milestone measures it.
         cancel(pushed.getId());
@@ -2426,6 +2422,90 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var ready = newestReview(prepared);
         assertThat(ready.getId()).isNotIn(stale.getId(), pushed.getId(), again.getId());
         assertThat(membersOf(workspace, ready.getId())).containsKey(off);
+    }
+
+    @Test
+    void shouldEndAReviewWhoseEveryPracticeWaitsForAMilestoneWithSourcesMovedWhenAPushReplacesIt() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        long workspace = prepared.item().workspaceId();
+        long off = practices
+                .findByWorkspaceIdAndSlug(workspace, "event-test")
+                .orElseThrow()
+                .getId();
+        setFeedbackMode(off, FeedbackMode.OFF);
+        publish(prepared);
+        var stale = newestReview(prepared);
+
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
+        assertThat(replaced(workspace, stale.getId())).isTrue();
+
+        var ended = reviews.findById(stale.getId()).orElseThrow();
+        assertThat(ended.getStatus()).isEqualTo(ReviewStatus.CANCELLED);
+        assertThat(ended.getStopReason()).isEqualTo(ReviewStopReason.SOURCES_MOVED);
+        assertThat(membersOf(workspace, stale.getId()).get(off).getReason()).isEqualTo("SOURCES_MOVED");
+    }
+
+    @Test
+    void shouldReplaceEveryPracticeOfAQueuedReviewWhenANewerMilestoneWaits() {
+        var prepared =
+                prepare(IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_READY));
+        long workspace = prepared.item().workspaceId();
+        long delivering = practices
+                .findByWorkspaceIdAndSlug(workspace, "event-test")
+                .orElseThrow()
+                .getId();
+        long off = practiceOn(
+                prepared,
+                "off-when-ready",
+                List.of(ScmItemEvents.PULL_REQUEST_OPENED, ScmItemEvents.PULL_REQUEST_READY),
+                FeedbackMode.OFF);
+        publish(prepared);
+        var stale = newestReview(prepared);
+
+        deliver(
+                prepared,
+                "ready_for_review",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
+        assertThat(replaced(workspace, stale.getId())).isTrue();
+
+        assertThat(reviews.findById(stale.getId()).orElseThrow().getStopReason())
+                .isEqualTo(ReviewStopReason.REPLACED);
+        var members = membersOf(workspace, stale.getId());
+        assertThat(members.get(delivering).getReason()).isEqualTo("REPLACED");
+        assertThat(members.get(off).getReason()).isEqualTo("REPLACED");
+    }
+
+    @Test
+    void shouldFinishAnOffPracticeThatItsVersionOwesOnTheChecksEvent() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false, Map.of(), false, List.of(), ReadNeed.REQUIRED);
+        long workspace = prepared.item().workspaceId();
+        long off = practices
+                .findByWorkspaceIdAndSlug(workspace, "event-test")
+                .orElseThrow()
+                .getId();
+        setFeedbackMode(off, FeedbackMode.OFF);
+        transactions.executeWithoutResult(ignored -> {
+            var pull = pulls.findById(Objects.requireNonNull(prepared.item().sourceId()))
+                    .orElseThrow();
+            pull.observeHeadChecks(Objects.requireNonNull(pull.getHeadRefOid()), CheckState.PENDING, true);
+            pulls.saveAndFlush(pull);
+        });
+        publish(prepared);
+        var opened = newestReview(prepared);
+        assertThat(membersOf(workspace, opened.getId()).get(off).getReason()).isEqualTo("CHECKS_PENDING");
+
+        // The checks event continues, but this version still owes the practice: it finishes the milestone's
+        // measurement.
+        settleChecks(prepared);
+        var checks = occasion(prepared, ScmItemEvents.PULL_REQUEST_CHECKS_COMPLETED);
+        assertThat(checks.getState()).isEqualTo(ItemEventState.STARTED);
+        var measured =
+                reviews.findByWorkspaceIdAndEventId(workspace, checks.getId()).orElseThrow();
+        assertThat(membersOf(workspace, measured.getId())).containsOnlyKeys(off);
     }
 
     @Test
