@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultClaimWriter;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
+import de.tum.cit.aet.hephaestus.practices.spi.CapturedTextProbe;
 import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.InapplicabilityWarrant;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
@@ -80,7 +81,8 @@ class EvidenceDeliveryAuthorizationIntegrationTest extends BaseIntegrationTest {
                         candidate.example(),
                         candidate.coverage(),
                         candidate.problems()),
-                Instant.now());
+                Instant.now(),
+                CapturedTextProbe.NONE);
         var stored = results.findByIdAndWorkspaceId(result.getId(), result.getWorkspaceId())
                 .orElseThrow();
         when(access.permitsAll(eq(stored.getWorkspaceId()), eq(List.of(stored.facts())), any()))
@@ -128,7 +130,8 @@ class EvidenceDeliveryAuthorizationIntegrationTest extends BaseIntegrationTest {
                         null,
                         new HostCoverage(true, List.of(), 0, 0, 0, List.of()),
                         List.of()),
-                Instant.now());
+                Instant.now(),
+                CapturedTextProbe.NONE);
         var stored = results.findByIdAndWorkspaceId(result.getId(), result.getWorkspaceId())
                 .orElseThrow();
         when(access.permitsAll(eq(stored.getWorkspaceId()), anyCollection(), any()))
@@ -156,7 +159,8 @@ class EvidenceDeliveryAuthorizationIntegrationTest extends BaseIntegrationTest {
                 scenario.workspace().getId(),
                 pending.review(),
                 admissions.candidate(pending, ResultOutcome.NOT_MET),
-                Instant.now());
+                Instant.now(),
+                CapturedTextProbe.NONE);
         var stored = results.findByIdAndWorkspaceId(result.getId(), result.getWorkspaceId())
                 .orElseThrow();
         when(access.permitsAll(eq(stored.getWorkspaceId()), anyCollection(), any()))

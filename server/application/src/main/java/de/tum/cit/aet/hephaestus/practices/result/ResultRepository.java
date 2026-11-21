@@ -102,6 +102,46 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
             @Param("reason") ResultEndReason reason,
             @Param("at") Instant at);
 
+    /**
+     * The result that a newer item review's result compares its problems with: the newest earlier result of the same
+     * practice version, item and developer, measured with the same model method. It is the comparability that reuse
+     * requires, without its currentness: a push ends the earlier claim, and the comparison is about that version. A
+     * result that a newer one outranked was never the previous decision, and a result with an active incorrect mark is
+     * no basis.
+     */
+    @Query(value = """
+        SELECT r.* FROM result r
+        JOIN review_practice prior_method ON prior_method.review_id = r.review_id
+          AND prior_method.practice_id = r.practice_id AND prior_method.workspace_id = r.workspace_id
+        JOIN review_practice requested_method ON requested_method.review_id = :reviewId
+          AND requested_method.practice_id = r.practice_id AND requested_method.workspace_id = r.workspace_id
+        JOIN review prior_review ON prior_review.id=r.review_id AND prior_review.workspace_id=r.workspace_id
+        JOIN review requested_review ON requested_review.id=:reviewId AND requested_review.workspace_id=r.workspace_id
+        WHERE r.workspace_id = :workspaceId AND r.practice_id = :practiceId AND r.item_id = :itemId
+          AND r.practice_version_id = :practiceVersionId AND r.id <> :resultId
+          AND r.developer_id IS NOT DISTINCT FROM :developerId
+          AND prior_review.kind = 'ITEM' AND prior_review.origin <> 'TRIAL'
+          AND r.end_reason IS DISTINCT FROM 'OUTRANKED'
+          AND (prior_review.ordered_at < requested_review.ordered_at
+            OR (prior_review.ordered_at = requested_review.ordered_at AND r.recorded_at < :recordedAt))
+          AND prior_method.method IS NOT NULL
+          AND prior_method.method->>'modelDigest' = requested_method.method->>'modelDigest'
+          AND prior_method.method->>'epoch' = requested_method.method->>'epoch'
+          AND NOT EXISTS (SELECT 1 FROM result_mark m WHERE m.result_id = r.id
+            AND m.workspace_id = r.workspace_id AND m.kind = 'INCORRECT' AND m.removed_at IS NULL)
+        ORDER BY prior_review.ordered_at DESC, r.recorded_at DESC, r.id DESC
+        LIMIT 1
+        """, nativeQuery = true)
+    Optional<Result> findPreviousComparable(
+            @Param("workspaceId") long workspaceId,
+            @Param("reviewId") UUID reviewId,
+            @Param("resultId") UUID resultId,
+            @Param("practiceId") long practiceId,
+            @Param("practiceVersionId") long practiceVersionId,
+            @Param("itemId") long itemId,
+            @Param("developerId") @Nullable Long developerId,
+            @Param("recordedAt") Instant recordedAt);
+
     @Query(value = """
         SELECT r.* FROM result r
         JOIN review_practice prior_method ON prior_method.review_id = r.review_id

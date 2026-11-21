@@ -1216,11 +1216,11 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         capture.putObject("readiness")
                 .putObject("applicability")
                 .set(assigned.practiceSlug(), mapper.valueToTree(check));
-        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any()))
+        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any(), any()))
                 .thenReturn(new AdmissionReceipt(List.of(), List.of()));
         service.seal(job, List.of());
         ArgumentCaptor<List<ResultCandidate>> candidates = ArgumentCaptor.captor();
-        verify(results).admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), candidates.capture());
+        verify(results).admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), candidates.capture(), any());
         assertThat(candidates.getValue()).singleElement().satisfies(candidate -> {
             assertThat(candidate.outcome()).isEqualTo(ResultOutcome.DOES_NOT_APPLY);
             assertThat(candidate.explanation()).isEqualTo(check.otherwise());
@@ -1244,7 +1244,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         capture.putObject("readiness")
                 .putObject("applicability")
                 .set(assigned.practiceSlug(), mapper.valueToTree(check));
-        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any()))
+        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any(), any()))
                 .thenReturn(new AdmissionReceipt(
                         List.of(),
                         List.of(new WithheldItem(

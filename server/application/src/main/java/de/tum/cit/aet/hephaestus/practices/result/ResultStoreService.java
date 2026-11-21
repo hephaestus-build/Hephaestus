@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.result;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
+import de.tum.cit.aet.hephaestus.practices.spi.CapturedTextProbe;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
@@ -33,16 +34,21 @@ public class ResultStoreService implements ResultStore {
 
     @Override
     public AdmissionReceipt admit(
-            long workspaceId, UUID reviewId, UUID jobId, int attempt, List<ResultCandidate> candidates) {
+            long workspaceId,
+            UUID reviewId,
+            UUID jobId,
+            int attempt,
+            List<ResultCandidate> candidates,
+            CapturedTextProbe captured) {
         var frozen = List.copyOf(candidates);
         if (TransactionSynchronizationManager.isActualTransactionActive())
-            return admission.admitLocked(workspaceId, reviewId, jobId, attempt, frozen);
+            return admission.admitLocked(workspaceId, reviewId, jobId, attempt, frozen, captured);
         var retry = new RetryTemplate(RetryPolicy.builder()
                 .maxRetries(3)
                 .predicate(ResultStoreService::retryable)
                 .build());
         return retry.invoke(() -> Objects.requireNonNull(new TransactionTemplate(transactions)
-                .execute(status -> admission.admitLocked(workspaceId, reviewId, jobId, attempt, frozen))));
+                .execute(status -> admission.admitLocked(workspaceId, reviewId, jobId, attempt, frozen, captured))));
     }
 
     private static boolean retryable(Throwable failure) {

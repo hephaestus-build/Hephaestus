@@ -1,0 +1,122 @@
+package de.tum.cit.aet.hephaestus.agent.handler;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
+import de.tum.cit.aet.hephaestus.evidence.CitationSide;
+import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
+import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
+import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
+import de.tum.cit.aet.hephaestus.practices.spi.CapturedTextProbe.Presence;
+import de.tum.cit.aet.hephaestus.practices.spi.EvidenceCitation;
+import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+
+/** The proof of No longer present for one cited text: the capture must hold the path, and no text may hold the quote. */
+class CapturedQuoteProbeTest extends BaseUnitTest {
+    private static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
+    private static final String QUOTE = "if (user == null) return;";
+
+    private final ReviewJob job = mock(ReviewJob.class);
+    private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
+
+    private static EvidenceCitation cited(String path) {
+        return new EvidenceCitation(
+                DIFF, "inputs/sources/scm/diff.patch", path, CitationSide.NEW, "old-head", 3, 3, QUOTE, null);
+    }
+
+    /** A complete capture of the change, with {@code texts} as path and side to content. */
+    private CapturedQuoteProbe probe(SourceCompleteness completeness, Map<String, String> texts) {
+        var citable = new ArrayList<CitableText>();
+        texts.forEach((key, content) -> {
+            var side = key.startsWith("old:") ? CitationSide.OLD : CitationSide.NEW;
+            String path = key.substring(4);
+            String staged = "context/citable/" + key.substring(0, 3) + "/" + path;
+            String sha = Integer.toHexString(staged.hashCode())
+                    .repeat(16)
+                    .substring(0, 64)
+                    .replaceAll("[^0-9a-f]", "0");
+            citable.add(
+                    new CitableText(DIFF.value(), path, side, side == CitationSide.OLD ? "base" : "head", staged, sha));
+            when(files.readText(eq(job), eq(staged), any())).thenReturn(Optional.of(content));
+        });
+        var manifest = new JobFolderIndex(
+                new SourceContractVersion("3.0.0"),
+                "a".repeat(64),
+                "scm.pull_request",
+                Instant.now(),
+                List.of(new SourceCapture(
+                        DIFF,
+                        new SourceCaptureState.Available(
+                                SourceContentState.NON_EMPTY,
+                                completeness,
+                                new SourceCaptureFacts(Instant.now(), null, null, "base:head")),
+                        EvidenceSnapshotFixtures.citation(DIFF),
+                        List.of())),
+                List.of(),
+                List.of(),
+                citable);
+        return new CapturedQuoteProbe(job, CapturedEvidence.of(manifest), files);
+    }
+
+    @Test
+    void shouldFindTheQuoteStillPresentAtItsPathEvenWhenItsLineWasReindented() {
+        var probe = probe(
+                SourceCompleteness.COMPLETE, Map.of("new:src/User.java", "class User {\n        " + QUOTE + "\n}"));
+        assertThat(probe.presence(cited("src/User.java"))).isEqualTo(Presence.PRESENT);
+    }
+
+    @Test
+    void shouldCallTheQuoteGoneWhenTheChangeRemovedItFromItsPath() {
+        var probe =
+                probe(SourceCompleteness.COMPLETE, Map.of("new:src/User.java", "class User {\n    requireUser();\n}"));
+        assertThat(probe.presence(cited("src/User.java"))).isEqualTo(Presence.GONE);
+    }
+
+    /** A renamed file keeps its code at the new path, so the problem's cause is still there. */
+    @Test
+    void shouldFindTheQuoteStillPresentWhenItsFileWasRenamed() {
+        var probe = probe(
+                SourceCompleteness.COMPLETE,
+                Map.of("old:src/User.java", QUOTE, "new:src/Account.java", "class Account {\n    " + QUOTE + "\n}"));
+        assertThat(probe.presence(cited("src/User.java"))).isEqualTo(Presence.PRESENT);
+    }
+
+    /** A deleted file keeps only its old text in the change: its path is still captured, and its code is gone. */
+    @Test
+    void shouldCallTheQuoteGoneWhenItsFileWasDeleted() {
+        var probe = probe(
+                SourceCompleteness.COMPLETE,
+                Map.of("old:src/User.java", QUOTE, "new:src/Other.java", "class Other {}"));
+        assertThat(probe.presence(cited("src/User.java"))).isEqualTo(Presence.GONE);
+    }
+
+    /** A file that the change no longer touches is not in the capture, and its text may still hold the quote. */
+    @Test
+    void shouldNotSayWhenTheCaptureNoLongerHoldsThePath() {
+        var probe = probe(SourceCompleteness.COMPLETE, Map.of("new:src/Other.java", "class Other {}"));
+        assertThat(probe.presence(cited("src/User.java"))).isEqualTo(Presence.UNKNOWN);
+    }
+
+    @Test
+    void shouldNotSayWhenTheSourceWasCapturedOnlyInPart() {
+        var probe = probe(SourceCompleteness.PARTIAL, Map.of("new:src/User.java", "class User {}"));
+        assertThat(probe.presence(cited("src/User.java"))).isEqualTo(Presence.UNKNOWN);
+    }
+}

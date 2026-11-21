@@ -156,6 +156,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
     ResultStore store;
 
     @Autowired
+    ProblemLineageRepository lineage;
+
+    @Autowired
     ResultRepository results;
 
     @Autowired

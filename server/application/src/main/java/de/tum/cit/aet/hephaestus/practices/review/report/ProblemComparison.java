@@ -73,6 +73,29 @@ public class ProblemComparison {
         return keys;
     }
 
+    /**
+     * The problems of an item review's result by identity: the problem's key, or else its first citation, which plays the
+     * part of a scan problem's own-file witness. An item review has no assigned file, and every admitted problem cites.
+     */
+    public Map<String, AdmittedProblemSnapshot> itemIdentities(AdmittedResultSnapshot result) {
+        var ordinals = new HashMap<String, Integer>();
+        var keys = new LinkedHashMap<String, AdmittedProblemSnapshot>();
+        for (var problem : result.problems()) {
+            var first = problem.candidate().citations().getFirst();
+            String quote = normalize(first.quote());
+            int ordinal = problem.candidate().key() == null ? ordinals.merge(quote, 1, Integer::sum) - 1 : 0;
+            keys.put(
+                    identity(
+                            result.candidate().practiceId(),
+                            result.candidate().itemId(),
+                            problem.candidate(),
+                            first.path(),
+                            ordinal),
+                    problem);
+        }
+        return keys;
+    }
+
     public static String normalize(String quote) {
         return Arrays.stream(quote.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1))
                 .map(line -> line.replaceAll("^[ \\t]+|[ \\t]+$", ""))
