@@ -41,11 +41,24 @@ class SandboxArchitectureTest extends HephaestusArchitectureTest {
         void kubernetesClientOnlyInKubernetesPackage() {
             noClasses()
                     .that()
-                    .resideOutsideOfPackage("..agent.sandbox.kubernetes..")
+                    .resideOutsideOfPackages("..agent.sandbox.kubernetes..", "..core.database.backup.kubernetes..")
                     .should()
                     .dependOnClassesThat()
                     .resideInAPackage("io.fabric8..")
-                    .because("Kubernetes API access must be confined to the kubernetes subpackage")
+                    .because("Kubernetes API access must be confined to the kubernetes subpackages: the sandboxes, and"
+                            + " the reads of the backup CronJobs")
+                    .check(classes);
+        }
+
+        @Test
+        void backupScheduleClientNotImportedOutside() {
+            noClasses()
+                    .that()
+                    .resideOutsideOfPackage("..core.database.backup..")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage("..core.database.backup.kubernetes..")
+                    .because("Only the BackupSchedules interface should be used outside the backup package")
                     .check(classes);
         }
 

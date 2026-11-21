@@ -138,6 +138,7 @@ Silences live only until Alertmanager restarts.
 The stack needs no host path and no cluster-wide access, so it does not run the node and cluster exporters.
 It can scrape a node-exporter that runs outside the release: see [Scrape node-exporter](#scrape-node-exporter).
 The stack does not load the group `hephaestus-kubernetes`: it reads kube-state-metrics, the kubelet's volume statistics and cAdvisor metrics, and cert-manager.
+`HephaestusBackupStale` reads the server's metrics, so the stack evaluates it with no further exporter.
 The stack also does not load the group `hephaestus-pull-deploy`, even when it scrapes node-exporter.
 `HephaestusDeployMetricsMissing` would then fire on each installation whose hosts do not run the reconciler.
 

@@ -1615,31 +1615,16 @@ tests:
               summary: A server replica stayed unavailable for 15 minutes while another serves
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  # time() starts at 0, so a value is a time in seconds from the start of the test, and a negative value is before it.
-  # The backup CronJobs are created 28 hours before the start, at -100800. Thus the backup tests evaluate hours 29 to 32
-  # of their life, and not the 28 hours that come before. The rule has no `for`, so the shift changes no result.
-  - name: a release whose newest backup is 31 hours old fires, a release with a daily backup does not
+  # database_backup_age_seconds is the server's age of the newest backup, which grows by 60 seconds a minute until a
+  # backup succeeds. 100000 seconds is 27.8 hours: the age passes 30 hours (108000) at minute 134, and the rule's 15
+  # minutes end at minute 149.
+  - name: a backup Job that waits Pending, and so never succeeds, fires once the newest backup is 30 hours old
     interval: 1m
     input_series:
-      - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-full"}'
-        values: "-100800x180"
-      - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
-        values: "-100800x180"
-      # The weekly full backup is old; the daily differential backup of hour 24 is recent.
-      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-full"}'
-        values: "-100800x180"
-      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
-        values: "-14400x180"
-      # A second release in the same namespace: its last backup is from the start.
-      - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="staging-postgresql-backup-diff"}'
-        values: "-100800x180"
-      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="staging-postgresql-backup-diff"}'
-        values: "-100800x180"
-      # Another CronJob of the namespace is not a backup.
-      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="report"}'
-        values: "-100800x180"
+      - series: 'database_backup_age_seconds{job="hephaestus",instance="server-a:8081"}'
+        values: "100000+60x240"
     alert_rule_test:
-      - eval_time: 1h
+      - eval_time: 2h
         alertname: HephaestusBackupStale
         exp_alerts: []
       - eval_time: 3h
@@ -1647,115 +1632,60 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: critical
-              namespace: hephaestus
-              release: staging
             exp_annotations:
-              summary: No PostgreSQL backup completed in the last 30 hours
+              summary: No PostgreSQL backup completed in the last 30 hours, or the server cannot read the backup schedules
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  # With sandboxes, a backup Pod never preempts: on a full node its Job stays active and Pending, and nothing fails.
-  # The rule reads only the last success, so a backup that never runs fires like one that fails. This case keeps it
-  # so: a rule that left out CronJobs with an active Job would stay silent here.
-  - name: a backup Job that waits Pending past 30 hours fires
+  # Before the first success, the server counts from the creation of the backup schedules, the same series shape.
+  - name: a first backup that never runs fires 30 hours after the schedules were created
     interval: 1m
     input_series:
-      - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
-        values: "-100800x180"
-      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
-        values: "-100800x180"
-      - series: 'kube_cronjob_status_active{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
-        values: "1x180"
+      - series: 'database_backup_age_seconds{job="hephaestus",instance="server-a:8081"}'
+        values: "0+60x2000"
     alert_rule_test:
-      - eval_time: 1h
+      - eval_time: 30h
         alertname: HephaestusBackupStale
         exp_alerts: []
-      - eval_time: 3h
+      - eval_time: 31h
         alertname: HephaestusBackupStale
         exp_alerts:
           - exp_labels:
               severity: critical
-              namespace: hephaestus
-              release: hephaestus
             exp_annotations:
-              summary: No PostgreSQL backup completed in the last 30 hours
+              summary: No PostgreSQL backup completed in the last 30 hours, or the server cannot read the backup schedules
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  - name: backup CronJobs with no successful run for 30 hours fire
+  # A failed read and a missing CronJob report an infinite age. One failed read passes; a failure that lasts fires.
+  - name: a read of the schedules that keeps failing fires after 15 minutes, one failed read does not
     interval: 1m
     input_series:
-      - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-full"}'
-        values: "-100800x180"
-      - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
-        values: "-100800x180"
+      - series: 'database_backup_age_seconds{job="hephaestus",instance="server-a:8081"}'
+        values: "3600x10 Inf Inf Inf Inf Inf Inf 3900x9 Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf Inf"
     alert_rule_test:
-      - eval_time: 1h
+      - eval_time: 20m
         alertname: HephaestusBackupStale
         exp_alerts: []
-      - eval_time: 3h
+      - eval_time: 40m
+        alertname: HephaestusBackupStale
+        exp_alerts: []
+      - eval_time: 50m
         alertname: HephaestusBackupStale
         exp_alerts:
           - exp_labels:
               severity: critical
-              namespace: hephaestus
-              release: hephaestus
             exp_annotations:
-              summary: No PostgreSQL backup completed in the last 30 hours
+              summary: No PostgreSQL backup completed in the last 30 hours, or the server cannot read the backup schedules
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  # A release name of more than 34 characters: the chart truncates and hashes the CronJob names, so only their labels
-  # tell the release. The full backup is old, the differential one is recent: the newest backup counts.
-  - name: backup CronJobs of a long release name are found by their labels
+  - name: a daily backup keeps the age under 30 hours, and an installation without backups reports no age
     interval: 1m
     input_series:
-      - series: 'kube_cronjob_labels{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-full",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup",label_app_kubernetes_io_instance="hephaestus-production-for-the-whole-faculty"}'
-        values: "1x240"
-      - series: 'kube_cronjob_labels{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-diff",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup",label_app_kubernetes_io_instance="hephaestus-production-for-the-whole-faculty"}'
-        values: "1x240"
-      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-full"}'
-        values: "-100800x240"
-      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-diff"}'
-        values: "-10800x240"
-    alert_rule_test:
-      - eval_time: 1h
-        alertname: HephaestusBackupStale
-        exp_alerts: []
-      - eval_time: 3h
-        alertname: HephaestusBackupStale
-        exp_alerts: []
-      - eval_time: 4h
-        alertname: HephaestusBackupStale
-        exp_alerts: []
-
-  - name: a stale backup of a long release name fires under its release
-    interval: 1m
-    input_series:
-      - series: 'kube_cronjob_labels{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-full",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup",label_app_kubernetes_io_instance="hephaestus-production-for-the-whole-faculty"}'
-        values: "1x180"
-      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-full"}'
-        values: "-100800x180"
-      # A name match and a label match of one ordinary CronJob count once.
-      - series: 'kube_cronjob_labels{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup",label_app_kubernetes_io_instance="hephaestus"}'
-        values: "1x180"
-      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
-        values: "-100800x180"
+      - series: 'database_backup_age_seconds{job="hephaestus",instance="server-a:8081"}'
+        values: "86000+60x30 60+60x200"
     alert_rule_test:
       - eval_time: 3h
         alertname: HephaestusBackupStale
-        exp_alerts:
-          - exp_labels:
-              severity: critical
-              namespace: hephaestus
-              release: hephaestus
-            exp_annotations:
-              summary: No PostgreSQL backup completed in the last 30 hours
-              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-          - exp_labels:
-              severity: critical
-              namespace: hephaestus
-              release: hephaestus-production-for-the-whole-faculty
-            exp_annotations:
-              summary: No PostgreSQL backup completed in the last 30 hours
-              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+        exp_alerts: []
 
   - name: a PostgreSQL volume below 15 % free warns, below 5 % only the critical alert fires, more space is quiet
     interval: 1m

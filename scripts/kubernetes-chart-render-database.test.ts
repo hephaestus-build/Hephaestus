@@ -21,6 +21,7 @@ import {
 	installNotes,
 	javaCapacityConstant,
 	kindOf,
+	kubernetesApi,
 	type Layer,
 	layersFor,
 	list,
@@ -478,9 +479,12 @@ await test("PostgreSQL containers reserve their full memory limits in bundled pr
 			clientTlsSecret: "backup-tls",
 			s3: { bucket: "test-backups", endpoint: "s3.example.com", region: "eu-central-1" },
 		};
-		const resources = rendered([...layersFor(name), { postgresql: { backup } }]);
+		// With backups on, the server reads the backup CronJobs through the API that the operator states.
+		const api = { networkPolicy: { kubernetesApi } };
+		const resources = rendered([...layersFor(name), api, { postgresql: { backup } }]);
 		const restoring = rendered([
 			...layersFor(name),
+			api,
 			{ postgresql: { backup: { ...backup, restore: { enabled: true } } } },
 		]);
 		const stanza = resources.find(
@@ -1077,4 +1081,108 @@ await test("server.stopped stops the servers and changes no PostgreSQL value, at
 			);
 		}
 	}
+});
+
+const backupsOn = {
+	postgresql: {
+		backup: {
+			clientTlsSecret: "hephaestus-postgresql-backup-tls",
+			enabled: true,
+			s3: { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" },
+		},
+	},
+};
+
+/** What the server can reach of the Kubernetes API: its token, its egress to the API, and its RBAC rules. */
+const serverApiAccess = (resources: Resource[]) => {
+	const server = workload(resources, "server");
+	const serverAccount = String(get(podSpec(server), "serviceAccountName"));
+	const policy = resources.find(
+		(resource) => kindOf(resource) === "NetworkPolicy" && nameOf(resource) === nameOf(server),
+	);
+	const apiEgress = list(get(policy, "spec", "egress")).some((rule) =>
+		list(get(rule, "to")).some((peer) => get(peer, "ipBlock", "cidr") === kubernetesApi.cidr),
+	);
+	const boundRoles = new Set(
+		resources
+			.filter(
+				(resource) =>
+					kindOf(resource) === "RoleBinding" &&
+					list(get(resource, "subjects")).some((subject) => get(subject, "name") === serverAccount),
+			)
+			.map((binding) => String(get(binding, "roleRef", "name"))),
+	);
+	const rules = resources
+		.filter((resource) => kindOf(resource) === "Role" && boundRoles.has(nameOf(resource)))
+		.flatMap((role) => list(get(role, "rules")));
+	return {
+		token: get(podSpec(server), "automountServiceAccountToken"),
+		apiEgress,
+		cronJobs: envValue(server, "HEPHAESTUS_DATABASE_BACKUP_CRONJOBS"),
+		namespace: envValue(server, "HEPHAESTUS_DATABASE_BACKUP_NAMESPACE"),
+		rules,
+	};
+};
+
+await test("with backups on, the server may get exactly the two backup CronJobs, and nothing else of the release namespace", () => {
+	const resources = rendered([...layersFor("small"), backupsOn]);
+	const cronJobs = resources
+		.filter(
+			(resource) => kindOf(resource) === "CronJob" && componentOf(resource) === "postgresql-backup",
+		)
+		.map(nameOf)
+		.toSorted();
+	assert.equal(cronJobs.length, 2);
+	const reader = resources.find(
+		(resource) => kindOf(resource) === "Role" && nameOf(resource).endsWith("-backup-reader"),
+	);
+	assert.ok(reader, "the backup reader Role");
+	// The exact rules: widening a verb, a resource or the names fails here.
+	assert.deepEqual(get(reader, "rules"), [
+		{
+			apiGroups: ["batch"],
+			resources: ["cronjobs"],
+			resourceNames: [...cronJobs].toSorted((left, right) => right.localeCompare(left)),
+			verbs: ["get"],
+		},
+	]);
+	const access = serverApiAccess(resources);
+	assert.equal(access.token, true);
+	assert.equal(access.apiEgress, true);
+	assert.deepEqual(String(access.cronJobs).split(",").toSorted(), cronJobs);
+	assert.equal(
+		access.namespace,
+		get(workload(resources, "server"), "metadata", "namespace") ?? "hephaestus",
+	);
+});
+
+await test("the server has the Kubernetes API only for the sandboxes or the backups, and no backup access without backups", () => {
+	// Without sandboxes and without backups: no token, no API egress, no Role, no backup schedules.
+	const neither = serverApiAccess(rendered(layersFor("dev")));
+	assert.deepEqual(neither, {
+		token: false,
+		apiEgress: false,
+		cronJobs: undefined,
+		namespace: undefined,
+		rules: [],
+	});
+	// Backups alone: the token, the egress and the backup reader only.
+	const backupsOnly = serverApiAccess(
+		rendered([...layersFor("dev"), backupsOn, { networkPolicy: { kubernetesApi } }]),
+	);
+	assert.equal(backupsOnly.token, true);
+	assert.equal(backupsOnly.apiEgress, true);
+	assert.deepEqual(
+		backupsOnly.rules.map((rule) => get(rule, "resources")),
+		[["cronjobs"]],
+	);
+	// Sandboxes alone: their own Role, and no backup reader or backup schedules.
+	const sandboxesOnly = serverApiAccess(rendered(layersFor("small")));
+	assert.equal(sandboxesOnly.token, true);
+	assert.equal(sandboxesOnly.cronJobs, undefined);
+	assert.ok(!sandboxesOnly.rules.some((rule) => list(get(rule, "resources")).includes("cronjobs")));
+	// Backups need the API endpoint that the network plugin sees.
+	const unstated = render([...layersFor("dev"), backupsOn]);
+	assert.equal(unstated.ok, false);
+	assert.match(unstated.stderr, /networkPolicy\.kubernetesApi\.cidr is required/u);
 });

@@ -341,7 +341,7 @@ config:
    For an external database, use the backups of its provider.
 
 Do not set `release` or `images`: the release chart sets them.
-For `dev.yaml`, leave out `networkPolicy.kubernetesApi` and `sandbox`.
+For `dev.yaml`, leave out `sandbox`. Leave out `networkPolicy.kubernetesApi` too, unless you turn on backups: the server then reads the backup CronJobs through the API.
 
 ## 7. Install the chart [#install]
 
