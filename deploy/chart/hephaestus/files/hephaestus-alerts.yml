@@ -964,12 +964,17 @@ groups:
     rules:
       # All namespaces: the cluster serves only this release, and a killed cert-manager or exporter also needs a person.
       # A restarted container shows in last_terminated_reason. A sandbox never restarts, so it shows in terminated_reason.
+      # A kernel that kills one process of a container, such as a PostgreSQL backend, leaves the container running, so
+      # neither reason shows it. cAdvisor counts that kill when it can read the kernel log; HephaestusNodeOomKill
+      # catches it when cAdvisor cannot.
       - alert: HephaestusContainerOomKilled
         expr: >-
           max by (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}) == 1
           and on (namespace, pod, container) increase(kube_pod_container_status_restarts_total[15m]) > 0
           or
           max by (namespace, pod, container) (kube_pod_container_status_terminated_reason{reason="OOMKilled"}) == 1
+          or
+          max by (namespace, pod, container) (increase(container_oom_events_total{container!="",container!="POD"}[15m])) > 0
         labels:
           severity: warning
         annotations:
@@ -1125,6 +1130,15 @@ groups:
           severity: warning
         annotations:
           summary: A node-exporter target cannot be scraped, so the node disk and memory alerts cannot fire for it
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The kernel's own count of OOM kills on the node: every kill, also of one process in a container that keeps running,
+      # which no container metric shows when cAdvisor cannot read the kernel log.
+      - alert: HephaestusNodeOomKill
+        expr: increase(node_vmstat_oom_kill[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: The kernel killed a process on a node for its memory
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusNodeDiskFilling
         expr: >-

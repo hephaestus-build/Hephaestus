@@ -150,7 +150,7 @@ The stack's requests and limits follow these numbers.
 
 ### Scrape node-exporter
 
-The node disk and memory alerts, `HephaestusNodeDiskFilling` and `HephaestusNodeMemoryLow`, read [node-exporter](https://github.com/prometheus/node_exporter) on each node.
+The node disk and memory alerts, `HephaestusNodeDiskFilling`, `HephaestusNodeMemoryLow` and `HephaestusNodeOomKill`, read [node-exporter](https://github.com/prometheus/node_exporter) on each node.
 The stack loads them only when it scrapes node-exporter.
 Without them, no alert tells you that a node runs out of disk or memory.
 

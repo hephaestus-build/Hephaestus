@@ -3290,6 +3290,67 @@ tests:
         alertname: HephaestusContainerOomKilled
         exp_alerts: []
 
+  - name: a kernel kill of one process in a running container fires, the 2026-11-14 PostgreSQL backend kill
+    interval: 1m
+    input_series:
+      # The container keeps running: no restart and no terminated reason. cAdvisor counts the kill.
+      - series: 'container_oom_events_total{namespace="hephaestus",pod="hephaestus-postgresql-0",container="postgresql"}'
+        values: "0x4 1x25"
+      - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="hephaestus-postgresql-0",container="postgresql"}'
+        values: "0x30"
+      # A container whose counter stays still does not fire.
+      - series: 'container_oom_events_total{namespace="hephaestus",pod="hephaestus-server-0",container="server"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HephaestusContainerOomKilled
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: HephaestusContainerOomKilled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: hephaestus
+              pod: hephaestus-postgresql-0
+              container: postgresql
+            exp_annotations:
+              summary: The kernel killed a container for its memory
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 25m
+        alertname: HephaestusContainerOomKilled
+        exp_alerts: []
+
+  - name: a kernel OOM kill on a node fires when no container metric shows it, a quiet node does not
+    interval: 1m
+    input_series:
+      # cAdvisor could not read the kernel log, so its counter stays at 0; the kernel's own count rises.
+      - series: 'container_oom_events_total{namespace="hephaestus",pod="hephaestus-postgresql-0",container="postgresql"}'
+        values: "0x30"
+      - series: 'node_vmstat_oom_kill{job="node",instance="node-a:9100"}'
+        values: "7x4 8x25"
+      - series: 'node_vmstat_oom_kill{job="node",instance="node-b:9100"}'
+        values: "3x30"
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: HephaestusContainerOomKilled
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HephaestusNodeOomKill
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: HephaestusNodeOomKill
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: node-a:9100
+            exp_annotations:
+              summary: The kernel killed a process on a node for its memory
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 25m
+        alertname: HephaestusNodeOomKill
+        exp_alerts: []
+
   - name: a sandbox that the kernel killed fires, one that exited with an error does not
     interval: 1m
     input_series:
