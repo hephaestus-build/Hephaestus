@@ -208,8 +208,8 @@ If Hephaestus cannot be sure that a removal finished, it blocks the old resource
 Workspace admins see the blocks on their integration page, and only instance admins can release them.
 
 A workspace removal sends these removals before it erases the credentials, for up to 30 seconds. A removal in progress then finishes.
+A GitHub uninstall removes its workspace in the same way, so it also removes the workspace's Slack and Outline resources first.
 A removal that is not complete keeps its block. Its credential is gone, so its removal waits for authorization.
-A removal from a GitHub uninstall waits for authorization in the same way.
 
 1. Check at the provider that the old resource is gone and its removal is complete.
    A timeout, a `202` answer, or a missing resource alone does not prove it. GitHub answers `202` when it accepts an uninstall.

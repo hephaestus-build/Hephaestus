@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.Install
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.dto.GitHubInstallationEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -39,6 +40,9 @@ import tools.jackson.databind.ObjectMapper;
 class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private IdentityProviderLookup providerLookup;
+
+    @Autowired
+    private GitHubInstallationLifecycle installationLifecycle;
 
     private GitHubInstallationMessageHandler handler;
 
@@ -81,6 +85,7 @@ class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTes
                 organizationService,
                 appTokens,
                 providerLookup,
+                installationLifecycle,
                 deserializer,
                 transactionTemplate);
     }

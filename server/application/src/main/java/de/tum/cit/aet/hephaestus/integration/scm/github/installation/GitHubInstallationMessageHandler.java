@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenServic
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.dto.GitHubInstallationEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -40,12 +41,14 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
     private final OrganizationService organizationService;
     private final GitHubAppTokenService gitHubAppTokenService;
     private final IdentityProviderLookup identityProviders;
+    private final GitHubInstallationLifecycle installationLifecycle;
 
     GitHubInstallationMessageHandler(
             ProvisioningListener provisioningListener,
             OrganizationService organizationService,
             GitHubAppTokenService gitHubAppTokenService,
             IdentityProviderLookup identityProviders,
+            GitHubInstallationLifecycle installationLifecycle,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -58,6 +61,7 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
         this.organizationService = organizationService;
         this.gitHubAppTokenService = gitHubAppTokenService;
         this.identityProviders = identityProviders;
+        this.installationLifecycle = installationLifecycle;
     }
 
     /** Every action handles here: the default dispatch would hold its transaction across the GitHub status read. */
@@ -67,8 +71,9 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
     }
 
     /**
-     * Reads GitHub's current installation status first, with no transaction open, then changes the workspace in one
-     * short transaction. A slow GitHub API therefore holds no database connection and no workspace row lock.
+     * Calls GitHub and the other providers first, with no transaction open: it reads GitHub's current installation
+     * status, or before a deletion sends the workspace's provider removals. Then it changes the workspace in one short
+     * transaction. A slow provider API therefore holds no database connection and no workspace row lock.
      */
     @Override
     protected void handleEvent(GitHubInstallationEventDTO event) {
@@ -79,6 +84,8 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
         }
         GitHubEventAction.Installation action = event.actionType();
         ProviderStatus status = readsStatus(action) ? readStatus(installation.id(), action) : ProviderStatus.NOT_READ;
+        if (action == GitHubEventAction.Installation.DELETED)
+            installationLifecycle.removeAtProvidersBeforePurge(installation.id());
         handleOnce(() -> apply(event, installation, action, status));
     }
 
