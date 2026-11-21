@@ -74,6 +74,11 @@ spec:
             {{- end }}
             - -c
             - {{ printf "superuser_reserved_connections=%d" (int $connections.superuserReserved) | quote }}
+            # JIT compiles a plan whose estimated cost passes jit_above_cost. The server's queries are short, so
+            # compiling buys no time, and each backend keeps the compiler's memory until it ends: production
+            # measured about 37 MiB for each backend with JIT on (docs/admin/sizing.mdx § PostgreSQL memory).
+            - -c
+            - jit=off
             {{- range $key, $value := .Values.postgresql.parameters }}
             - -c
             - {{ printf "%s=%v" $key $value | quote }}
@@ -112,7 +117,7 @@ spec:
             timeoutSeconds: 10
             failureThreshold: 3
           resources:
-            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+            {{- include "hephaestus.postgresqlResources" . | nindent 12 }}
           securityContext:
             {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
           # ADR 0038 mounts persistence at /var/lib/postgresql. The image keeps its own versioned

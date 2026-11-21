@@ -498,7 +498,7 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 		assert.equal(mirrors + snapshots, volume, name);
 		assert.ok(mirrors >= 1024 ** 3, `${name}: the mirrors keep at least 1Gi`);
 	}
-	assert.equal(capacity(layersFor("small")), "11");
+	assert.equal(capacity(layersFor("small")), "8");
 	assert.equal(capacity([...layersFor("small"), { sandbox: { conversationTurns: 5 } }]), "5");
 	const exhausted = render([
 		...layersFor("small"),
@@ -702,7 +702,7 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	// The backup's request comes out of the turns too.
 	assert.equal(
 		Number(envValue(workload(resources, "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY")),
-		7,
+		4,
 	);
 	assert.ok(cpu <= node.cpu, `${cpu.toFixed(2)} CPU requested, ${node.cpu} on the node`);
 	assert.ok(
@@ -850,7 +850,7 @@ await test("the small profile fits its declared budget at steady state and the d
 		cpu: reviewSlots * sandboxPods.review.cpu + conversations * sandboxPods.conversation.cpu,
 		memory: (reviewSlots * sandboxGib.review + conversations * sandboxGib.conversation) * 2 ** 30,
 	});
-	assert.equal(turns, 7);
+	assert.equal(turns, 4);
 	assert.equal(reviewSlots, 5);
 	assert.ok(steady.cpu <= node.cpu, `steady: ${steady.cpu.toFixed(2)} CPU of ${node.cpu}`);
 	assert.ok(

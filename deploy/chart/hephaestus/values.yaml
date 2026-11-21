@@ -89,9 +89,18 @@ postgresql:
   # true runs the release's PostgreSQL image as one StatefulSet. false uses `external`.
   bundled: true
   database: hephaestus
-  # Explicit PostgreSQL -c overrides, after the image memory calculator. Without max_connections, the
-  # chart sets what the role pools need.
-  parameters: {}
+  # PostgreSQL -c settings, after the image memory calculator. The chart derives the memory of the bundled
+  # PostgreSQL from the memory settings here and from max_connections, so each of them must stay set
+  # (docs/admin/sizing.mdx § PostgreSQL memory). Without max_connections, the chart sets what the role pools need.
+  parameters:
+    shared_buffers: 256MB
+    work_mem: 2MB
+    hash_mem_multiplier: 1.0
+    maintenance_work_mem: 64MB
+    autovacuum_work_mem: 32MB
+    autovacuum_max_workers: 3
+    # The server's queries are short: a parallel plan buys nothing and adds a backend for each worker.
+    max_parallel_workers_per_gather: 0
   # Every role connects with sslmode=verify-full. Required: an existing Secret in the release
   # namespace with ca.crt, the CA that signed the server certificate. The bundled server also reads
   # its certificate and key from the same Secret (tls.crt, tls.key). That certificate must name
@@ -101,9 +110,11 @@ postgresql:
   persistence:
     size: 20Gi
     storageClassName: ""
+  # memory: auto takes the size derived from postgresql.parameters and max_connections, for the request and the
+  # limit. The chart refuses an explicit limit below that size.
   resources:
-    requests: { cpu: 250m, memory: 2Gi, ephemeral-storage: 256Mi }
-    limits: { cpu: "2", memory: 2Gi, ephemeral-storage: 1Gi }
+    requests: { cpu: 250m, memory: auto, ephemeral-storage: 256Mi }
+    limits: { cpu: "2", memory: auto, ephemeral-storage: 1Gi }
   # Optional: pgBackRest for the bundled server. PostgreSQL archives its WAL to one S3-compatible
   # bucket, and CronJobs take a full backup each week and a differential backup on the other days.
   # Needs BACKUP_S3_KEY, BACKUP_S3_KEY_SECRET and BACKUP_CIPHER_PASS in secret.name.

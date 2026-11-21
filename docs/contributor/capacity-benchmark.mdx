@@ -245,7 +245,8 @@ Compare total charge with inactive file cache, memory pressure and OOM counters 
 
 ### Qualify a lower PostgreSQL limit
 
-The `small` profile keeps a PostgreSQL limit of 2 GiB. A limit of 1536 MiB is a qualification target, not a setting.
+The chart derives the PostgreSQL limit from its memory settings and `max_connections` ([PostgreSQL memory](/admin/sizing#postgresql-memory)).
+To lower it, qualify a smaller measured figure for each connection, then change that figure in the chart and on that page together.
 Count the pgBackRest server sidecar separately, and count a backup or stanza Job in addition.
 Do not add the p95 values of single containers to claim a synchronized node peak.
 

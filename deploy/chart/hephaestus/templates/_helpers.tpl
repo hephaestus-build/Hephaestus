@@ -1006,6 +1006,73 @@ The full overlap budget also reserves optional monitoring and backup sessions wh
 {{- end -}}
 {{- end -}}
 
+{{/* A PostgreSQL size parameter (kB, MB or GB, multiplier 1024) in MiB, rounded up. */}}
+{{- define "hephaestus.postgresqlMi" -}}
+{{- $value := required (printf "postgresql.parameters.%s is required: the chart sizes PostgreSQL's memory from it" .name) .value | toString -}}
+{{- $amount := regexFind "^[0-9]+" $value | int64 -}}
+{{- if hasSuffix "GB" $value -}}{{- mul $amount 1024 -}}
+{{- else if hasSuffix "MB" $value -}}{{- $amount -}}
+{{- else -}}{{- divf $amount 1024 | ceil | int64 -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The bundled PostgreSQL's memory, as JSON in MiB: what it can use at once with every connection open, from its
+parameters and max_connections. docs/admin/sizing.mdx § PostgreSQL memory documents the formula and the
+measurement behind each constant, and a chart test holds the two together.
+- Shared memory: PostgreSQL 18's shared_memory_size is shared_buffers, about 1/16 of it again for the buffer
+  descriptors and WAL buffers, about 20 MiB of fixed tables, and 64 KiB for each connection slot.
+- Each connection: the private memory that a server connection keeps, measured with jit=off, plus one sort or
+  hash of work_mem x hash_mem_multiplier in flight. A parallel worker is a connection too.
+- Maintenance: one maintenance_work_mem, such as the migration's CREATE INDEX, and every autovacuum worker's
+  autovacuum_work_mem.
+- Processes: the postmaster and the background processes, measured.
+*/}}
+{{- define "hephaestus.postgresqlMemory" -}}
+{{- $parameters := .Values.postgresql.parameters -}}
+{{- $connectionMi := 19 -}}
+{{- $processesMi := 80 -}}
+{{- $connections := int (include "hephaestus.databaseConnectionCapacity" . | fromJson).maximum -}}
+{{- if hasKey $parameters "max_connections" -}}{{- $connections = int $parameters.max_connections -}}{{- end -}}
+{{- $sharedBuffers := include "hephaestus.postgresqlMi" (dict "name" "shared_buffers" "value" $parameters.shared_buffers) | int64 -}}
+{{- $workMem := include "hephaestus.postgresqlMi" (dict "name" "work_mem" "value" $parameters.work_mem) | int64 -}}
+{{- $maintenance := include "hephaestus.postgresqlMi" (dict "name" "maintenance_work_mem" "value" $parameters.maintenance_work_mem) | int64 -}}
+{{- $autovacuum := include "hephaestus.postgresqlMi" (dict "name" "autovacuum_work_mem" "value" $parameters.autovacuum_work_mem) | int64 -}}
+{{- $workers := int (required "postgresql.parameters.autovacuum_max_workers is required: the chart sizes PostgreSQL's memory from it" $parameters.autovacuum_max_workers) -}}
+{{- $hash := float64 (required "postgresql.parameters.hash_mem_multiplier is required: the chart sizes PostgreSQL's memory from it" $parameters.hash_mem_multiplier) -}}
+{{- /* PostgreSQL's default max_parallel_workers, which the chart does not change, once any query may gather. */ -}}
+{{- $parallel := 0 -}}
+{{- if gt (int (default 0 $parameters.max_parallel_workers_per_gather)) 0 -}}{{- $parallel = 8 -}}{{- end -}}
+{{- $shared := add $sharedBuffers (divf $sharedBuffers 16 | ceil | int64) 20 (divf $connections 16 | ceil | int64) -}}
+{{- $perConnection := add $connectionMi (mulf $workMem $hash | ceil | int64) -}}
+{{- $backends := mul (add $connections $parallel) $perConnection -}}
+{{- $maintenanceTotal := add $maintenance (mul $workers $autovacuum) -}}
+{{- $total := add $shared $backends $maintenanceTotal $processesMi -}}
+{{- dict "connections" $connections "parallelWorkers" $parallel "sharedMi" $shared "perConnectionMi" $perConnection
+  "connectionsMi" $backends "maintenanceMi" $maintenanceTotal "processesMi" $processesMi "requiredMi" $total
+  "limitMi" (mul 128 (divf $total 128 | ceil | int64)) | toJson -}}
+{{- end -}}
+
+{{/*
+The bundled PostgreSQL's resources: memory `auto` takes the derived size, and the request follows the limit. An
+explicit limit below the derived size fails, with its parts.
+*/}}
+{{- define "hephaestus.postgresqlResources" -}}
+{{- $memory := include "hephaestus.postgresqlMemory" . | fromJson -}}
+{{- $resources := deepCopy .Values.postgresql.resources -}}
+{{- $limit := toString $resources.limits.memory -}}
+{{- if eq $limit "auto" -}}
+{{- $limit = printf "%dMi" (int64 $memory.limitMi) -}}
+{{- else if lt (include "hephaestus.quantityUnits" (dict "value" $limit "unit" 1048576 "roundDown" true) | int64) (int64 $memory.requiredMi) -}}
+{{- fail (printf "postgresql.resources.limits.memory (%s) needs at least %dMi: shared memory=%dMi, %d connections x %dMi=%dMi, maintenance=%dMi, processes=%dMi (docs/admin/sizing.mdx § PostgreSQL memory). Set it to auto, or lower max_connections, shared_buffers or work_mem."
+  $limit (int64 $memory.requiredMi) (int64 $memory.sharedMi) (add (int $memory.connections) (int $memory.parallelWorkers)) (int64 $memory.perConnectionMi)
+  (int64 $memory.connectionsMi) (int64 $memory.maintenanceMi) (int64 $memory.processesMi)) -}}
+{{- end -}}
+{{- $_ := set $resources.limits "memory" $limit -}}
+{{- if eq (toString $resources.requests.memory) "auto" -}}{{- $_ := set $resources.requests "memory" $limit -}}{{- end -}}
+{{- toYaml $resources -}}
+{{- end -}}
+
 {{/* The ConfigMap of files/database-*: the migration Job and the monitor Job run them from this directory. */}}
 {{- define "hephaestus.databaseSetupDirectory" -}}/etc/hephaestus/database{{- end -}}
 

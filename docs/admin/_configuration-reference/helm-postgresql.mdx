@@ -35,22 +35,22 @@
 | `postgresql.metrics.resources.requests.ephemeral-storage` | string | `"16Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `postgresql.metrics.resources.requests.memory` | string | `"32Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `postgresql.metrics.statementLimit` | integer | `20` | yes | The statements with the most total execution time that the exporter reports, by query id only.<br />`minimum: 1. maximum: 100` |
-| `postgresql.parameters.autovacuum_max_workers` | integer | `supplied by release or operator` |  | `minimum: 1. maximum: 16` |
-| `postgresql.parameters.autovacuum_work_mem` | string | `supplied by release or operator` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.autovacuum_max_workers` | integer | `3` |  | `minimum: 1. maximum: 16` |
+| `postgresql.parameters.autovacuum_work_mem` | string | `"32MB"` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
 | `postgresql.parameters.effective_cache_size` | string | `supplied by release or operator` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
-| `postgresql.parameters.hash_mem_multiplier` | number | `supplied by release or operator` |  | `minimum: 1. maximum: 10` |
-| `postgresql.parameters.maintenance_work_mem` | string | `supplied by release or operator` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.hash_mem_multiplier` | number | `1` |  | `minimum: 1. maximum: 10` |
+| `postgresql.parameters.maintenance_work_mem` | string | `"64MB"` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
 | `postgresql.parameters.max_connections` | integer | `supplied by release or operator` |  | `minimum: 4` |
-| `postgresql.parameters.max_parallel_workers_per_gather` | integer | `supplied by release or operator` |  | `minimum: 0. maximum: 16` |
+| `postgresql.parameters.max_parallel_workers_per_gather` | integer | `0` |  | `minimum: 0. maximum: 16` |
 | `postgresql.parameters.max_wal_size` | string | `supplied by release or operator` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
-| `postgresql.parameters.shared_buffers` | string | `supplied by release or operator` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
-| `postgresql.parameters.work_mem` | string | `supplied by release or operator` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.shared_buffers` | string | `"256MB"` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.work_mem` | string | `"2MB"` |  | Bytes, parsed by PostgreSQL. Use whole kB, MB or GB; their multiplier is 1024.<br />`pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
 | `postgresql.persistence.size` | string | `"20Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `postgresql.persistence.storageClassName` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
 | `postgresql.resources.limits.cpu` | string | `"2"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `postgresql.resources.limits.ephemeral-storage` | string | `"1Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
-| `postgresql.resources.limits.memory` | string | `"2Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.resources.limits.memory` | string or value | `"auto"` | yes | auto takes the size that the chart derives from postgresql.parameters and max_connections. An explicit limit must hold that size.<br />`oneOf: [{"const":"auto"},{"$ref":"#/definitions/quantity"}]` |
 | `postgresql.resources.requests.cpu` | string | `"250m"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `postgresql.resources.requests.ephemeral-storage` | string | `"256Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
-| `postgresql.resources.requests.memory` | string | `"2Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
+| `postgresql.resources.requests.memory` | string or value | `"auto"` | yes | auto takes the size that the chart derives from postgresql.parameters and max_connections. An explicit limit must hold that size.<br />`oneOf: [{"const":"auto"},{"$ref":"#/definitions/quantity"}]` |
 | `postgresql.tls.existingSecret` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?)?$"` |

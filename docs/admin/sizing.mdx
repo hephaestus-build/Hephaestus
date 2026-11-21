@@ -12,10 +12,10 @@ They are scheduling requests, not measured peaks. Keep room for the operating sy
 
 | Profile | Nodes | Servers | Requests of each server | PostgreSQL requests and volume | Reviews at once | Conversation turns at once |
 | --- | --- | --- | --- | --- | --- | --- |
-| `dev.yaml` | One workstation node | 2 | 250m CPU, 3 GiB memory, 5 GiB Git cache | 100m CPU, 1 GiB memory, 5 GiB volume | 0: sandboxes are off | 0 |
-| `small.yaml` | One node of 4 vCPU, at least 16 GiB of memory and 150 GiB of disk | 1 | 500m CPU, 3 GiB memory, 20 GiB Git cache | 250m CPU, 2 GiB memory, 20 GiB volume | 5 | 11, or 7 with backups on (`auto`) |
-| [One host](./k3s): `small.yaml` with `k3s-values.yaml` | The node of `small.yaml` | 1 | As `small.yaml` | As `small.yaml` | 4 | 9, or 6 with backups on (`auto`) |
-| `cluster.yaml` | Several nodes, with sandbox nodes that hold the review and conversation quotas | 2 | 500m CPU, 3 GiB memory, 70 GiB Git cache | 250m CPU, 2 GiB memory, 20 GiB volume | 12 | 8 |
+| `dev.yaml` | One workstation node | 2 | 250m CPU, 3 GiB memory, 5 GiB Git cache | 100m CPU, 3 GiB memory, 5 GiB volume | 0: sandboxes are off | 0 |
+| `small.yaml` | One node of 4 vCPU, at least 16 GiB of memory and 150 GiB of disk | 1 | 500m CPU, 3 GiB memory, 20 GiB Git cache | 250m CPU, 3 GiB memory, 20 GiB volume | 5 | 8, or 4 with backups on (`auto`) |
+| [One host](./k3s): `small.yaml` with `k3s-values.yaml` | The node of `small.yaml` | 1 | As `small.yaml` | As `small.yaml` | 4 | 7, or 3 with backups on (`auto`) |
+| `cluster.yaml` | Several nodes, with sandbox nodes that hold the review and conversation quotas | 2 | 500m CPU, 3 GiB memory, 70 GiB Git cache | 250m CPU, 6.75 GiB memory, 20 GiB volume | 12 | 8 |
 
 Turn swap off on each node.
 With swap on, the kernel can move the memory of a Pod to disk, and the Pod slows down with no OOM kill.
@@ -127,31 +127,70 @@ These signals show that a capacity limit holds work back:
 
 ## PostgreSQL memory
 
-The bundled image calculates starting settings from its container limit.
+The chart sizes the memory of the bundled PostgreSQL from its memory settings and `max_connections`.
+With `memory: auto` in `postgresql.resources`, the default, the request and the limit both take that size.
+The chart refuses an explicit limit below it, and names each part in the error.
+An explicit request stays as you set it.
+
+```text
+memory         = shared memory + max_connections × each connection + maintenance + processes
+shared memory  = shared_buffers + shared_buffers / 16 + 20 MiB + max_connections / 16 MiB
+each connection = 19 MiB + work_mem × hash_mem_multiplier
+maintenance    = maintenance_work_mem + autovacuum_max_workers × autovacuum_work_mem
+processes      = 80 MiB
+```
+
+The chart rounds the sum up to a multiple of 128 MiB.
+With `max_parallel_workers_per_gather` above 0, it also adds 8 parallel workers as connections.
+
+| Part | Value | Source |
+| --- | --- | --- |
+| Shared memory | The formula above | `postgres -C shared_memory_size` on the release image, PostgreSQL 18.6, for `shared_buffers` from 128MB to 1GB and 120 to 480 connections. The formula is at or above each result. |
+| Private memory of each connection | 19 MiB | The server's integration tests ran with `jit = off` on 2026-11-21. Between statements, the 93 backends of the server's role that ran statements kept a mean of 19 MiB of private memory (`RssAnon`). The 90th percentile was 26 MiB and the largest 40 MiB. A session that plans every table and index and holds 256 prepared statements keeps 16 MiB. |
+| Postmaster and background processes | 80 MiB | The largest sum of the background processes' private memory in the same run: 78 MiB. |
+
+The formula counts every connection at once, each with one sort or hash of `work_mem` in flight.
+Thus, it uses the mean, not the largest connection: a sum over many connections tends to their mean.
+`RssAnon` also counts pages that a backend still shares with the postmaster, so the measurement errs high.
+
+The chart starts PostgreSQL with `jit = off`.
+JIT compiles a query plan whose estimated cost passes `jit_above_cost`.
+The server's queries are short, so the compilation buys no time, and each backend keeps the compiler's memory until it ends.
+In production, the backends used about 37 MiB each with JIT on.
+On 2026-11-14, 47 backends and 282 MiB of shared memory filled the 2 GiB limit of 1.0.0-rc.8.
+The kernel then ended two backends.
+
+An [external PostgreSQL](./external-database) keeps its own settings. Set `jit = off` there for the same reason.
+
+The bundled image still sizes `effective_cache_size` and `max_wal_size` from its container limit.
 `postgresql.parameters` adds explicit `-c` arguments after that calculation.
-The `small` profile uses these values for a shared node:
+These are the memory settings of `values.yaml`, and the chart refuses to render without one of them:
 
 | Setting | Value |
 | --- | --- |
 | `shared_buffers` | `256MB` |
 | `work_mem` | `2MB` |
 | `hash_mem_multiplier` | `1.0` |
-| `max_connections` | `120`, derived from the [connection budget](#database-connections) |
 | `maintenance_work_mem` | `64MB` |
 | `autovacuum_work_mem` | `32MB` |
 | `autovacuum_max_workers` | `3` |
-| `effective_cache_size` | `1GB` |
 | `max_parallel_workers_per_gather` | `0` |
-| `max_wal_size` | `1GB` |
 
+The `small` profile adds `effective_cache_size: 1GB` and `max_wal_size: 1GB`.
 `work_mem` applies to each sort or hash operation and can multiply across concurrent queries.
 `effective_cache_size` is a planner estimate. It allocates no memory.
 See [PostgreSQL resource consumption](https://www.postgresql.org/docs/18/runtime-config-resource.html).
 
-The PostgreSQL container requests its full 2 GiB memory limit.
-With backups on, its pgBackRest sidecar also requests its full 512 MiB limit.
-At 120 connections, an allowance of 5 MiB for each backend, the shared buffers, autovacuum, maintenance memory and other memory total about 1512 MiB.
-Two work operations for each connection bring the estimate to about 1752 MiB. Both estimates fit the 2 GiB limit.
+These are the sizes for each profile. A chart test computes them again from this page and compares them with the rendered chart:
+
+| Profile | `max_connections` | Memory |
+| --- | --- | --- |
+| `dev` | 120 | 3072 MiB |
+| `small` | 120 | 3072 MiB |
+| `cluster` | 300 | 6912 MiB |
+
+`max_connections` follows the [connection budget](#database-connections), so more servers or a larger pool also raise the memory.
+With backups on, the pgBackRest sidecar also requests its full 512 MiB limit.
 
 ## Database connections
 
