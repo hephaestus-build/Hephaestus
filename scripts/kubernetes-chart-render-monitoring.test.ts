@@ -331,9 +331,11 @@ const stackFor = (values: Layer) => {
 				key,
 			),
 		);
-	const groups = list(
+	const loaded = list(
 		get(parseAllDocuments(config("vmalert", "hephaestus-alerts.yml"))[0]?.toJS(), "groups"),
-	).map((group) => String(get(group, "name")));
+	);
+	const groups = loaded.map((group) => String(get(group, "name")));
+	const rules = loaded.flatMap((group) => list(get(group, "rules")));
 	const jobs = list(
 		get(parseAllDocuments(config("victoria-metrics", "scrape.yml"))[0]?.toJS(), "scrape_configs"),
 	);
@@ -343,7 +345,7 @@ const stackFor = (values: Layer) => {
 			get(resource, "spec", "podSelector", "matchLabels", "app.kubernetes.io/component") ===
 				"victoria-metrics",
 	);
-	return { groups, jobs, egress: list(get(policy, "spec", "egress")) };
+	return { groups, rules, jobs, egress: list(get(policy, "spec", "egress")) };
 };
 
 await test("the monitoring stack loads every shipped alert group whose exporter it scrapes", () => {
@@ -387,6 +389,14 @@ await test("the monitoring stack loads every shipped alert group whose exporter 
 			address,
 		);
 	}
+	// The kernel's OOM count only grows: without Prometheus's first-sample rule, a new node fires for old kills.
+	assert.equal(
+		get(
+			scraped.rules.find((rule) => get(rule, "alert") === "HephaestusNodeOomKill"),
+			"expr",
+		),
+		"increase_prometheus(node_vmstat_oom_kill[15m]) > 0",
+	);
 	// Without node-exporters, the node rules stay out: they would have no series.
 	const unscraped = stackFor({});
 	assert.ok(!unscraped.groups.includes("hephaestus-node"));

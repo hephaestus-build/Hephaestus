@@ -24,8 +24,11 @@ here, and an absent() rule among them, such as HephaestusDeployMetricsMissing, w
 {{- $groups := list }}
 {{- range (fromYaml (.Files.Get "files/hephaestus-alerts.yml")).groups }}
 {{- if not (has .name $unscraped) }}
-{{- /* PostgreSQL counters survive exporter restarts. MetricsQL must skip their first sample, as Prometheus does. */}}
-{{- if eq .name "hephaestus-postgresql" }}
+{{- /*
+PostgreSQL's and the kernel's counters survive exporter restarts. MetricsQL must skip their first sample, as Prometheus
+does, or a new or returning target reports its whole count as an increase.
+*/}}
+{{- if has .name (list "hephaestus-postgresql" "hephaestus-node") }}
 {{- range .rules }}
 {{- $_ := set . "expr" (regexReplaceAll "\\bincrease\\s*\\(" .expr "increase_prometheus(") }}
 {{- end }}
