@@ -10,9 +10,11 @@ public final class PracticeEditedInRepositoryException extends ResponseStatusExc
     private static final long serialVersionUID = 1L;
 
     PracticeEditedInRepositoryException() {
-        super(
-                HttpStatus.CONFLICT,
-                "This practice is edited in the practice repository. Change its folder there, or choose Edit in"
-                        + " Hephaestus first.");
+        this("This practice is edited in the practice repository. Change its folder there, or choose Edit in"
+                + " Hephaestus first.");
+    }
+
+    PracticeEditedInRepositoryException(String reason) {
+        super(HttpStatus.CONFLICT, reason);
     }
 }
