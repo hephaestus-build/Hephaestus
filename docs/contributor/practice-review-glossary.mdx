@@ -154,11 +154,11 @@ An item event that waits has one of these reasons:
 - `REVIEW_IN_PROGRESS`: a practice that the window selects is still measured by an earlier review of the item. The window closes again one window later, until that review ends.
 
 A practice with the withheld membership reason `REPLACED` was in a review that a newer review of the item replaces.
-A queued review that a newer event stopped at claim writes it. A practice start writes it only when a newer review of the item measures the practice.
+A queued review that a newer event stopped at claim writes it. A practice start writes it only when a newer review of the item already measured the practice.
 The next readiness edge of the item selects it again.
 
 A practice with the withheld membership reason `SOURCES_MOVED` did not start, because a source that it reads changed after the capture.
-No newer review of the item measures it.
+No newer review of the item measured it.
 The next readiness edge of the item selects it again.
 An event review of an issue or a pull request can end with it.
 That review asks for one follow-up occasion of the item, at the same version.

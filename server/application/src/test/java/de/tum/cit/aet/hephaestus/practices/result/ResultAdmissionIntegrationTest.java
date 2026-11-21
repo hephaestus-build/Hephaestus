@@ -1379,50 +1379,63 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
     }
 
     @Test
-    void shouldCallAStalePracticeReplacedOnlyWhenANewerReviewOfTheItemExists() {
+    void shouldCallAStalePracticeReplacedOnlyWhenANewerReviewMeasuredIt() {
         var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
         running(pending, 0);
-        var ref = productItems.require(
-                pending.review().getWorkspaceId(), scenario.item().getId());
-        var kind = new SourceKind("scm.pull-request.core");
-        var capture = pinnedPractices
-                .findByWorkspaceIdAndReviewIdAndPracticeId(
-                        pending.review().getWorkspaceId(),
-                        pending.review().getId(),
-                        scenario.practice().getId())
-                .orElseThrow();
-        var facts = json.createObjectNode();
-        facts.putObject("sourceFingerprints").put(kind.value(), "a".repeat(64));
-        capture.setCaptureDecision(facts);
-        pinnedPractices.saveAndFlush(capture);
-        doReturn(new ProductItemQuery.FingerprintRead(Map.of(kind, "b".repeat(64)), null))
-                .when(productItems)
-                .read(eq(ref), anySet(), any());
-        // A push ordered a newer review of the same work.
+        // A push ordered a newer review of the same work, which judged the practice.
+        var newer = admissions.pending(scenario, pending.review().getOrderedAt().plusSeconds(60), scenarioAccountId);
+        admit(newer, ResultOutcome.MET);
+
+        assertThat(staleStartReason(pending)).isEqualTo("REPLACED");
+    }
+
+    @Test
+    void shouldCallAStalePracticeSourcesMovedWhileTheNewerReviewHasNotMeasuredIt() {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        running(pending, 0);
+        // A push ordered a newer review of the same work, which selected the practice and can still withhold it.
         admissions.pending(scenario, pending.review().getOrderedAt().plusSeconds(60), scenarioAccountId);
-        var id = new ReviewAssignmentId(
-                pending.review().getId(), scenario.practice().getId(), ref.itemId());
 
-        assertThat(reviewFreshness.start(
-                        ref.workspaceId(),
-                        id,
-                        pending.jobId(),
-                        0,
-                        reviewFreshness.startCurrentness(ref.workspaceId(), id)))
-                .isFalse();
-
-        assertThat(memberRows
-                        .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
-                                ref.workspaceId(), id.reviewId(), id.practiceId(), id.itemId())
-                        .orElseThrow()
-                        .getReason())
-                .isEqualTo("REPLACED");
+        assertThat(staleStartReason(pending)).isEqualTo("SOURCES_MOVED");
     }
 
     @Test
     void shouldCallAStalePracticeSourcesMovedWhenTheNewerReviewWasCancelled() {
         var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
         running(pending, 0);
+        // A newer review of the same work was ordered, then cancelled: it measures nothing.
+        var newer = admissions.pending(scenario, pending.review().getOrderedAt().plusSeconds(60), scenarioAccountId);
+        jdbcTemplate.update(
+                "UPDATE review SET status='CANCELLED', stop_reason='CANCELLED', completed_at=now() WHERE id=?",
+                newer.review().getId());
+
+        assertThat(staleStartReason(pending)).isEqualTo("SOURCES_MOVED");
+    }
+
+    @Test
+    void shouldCallAStalePracticeSourcesMovedWhenTheNewerReviewWithheldIt() {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        running(pending, 0);
+        // A newer review of the same work selected the practice, then withheld it: it measures nothing.
+        var newer = admissions.pending(scenario, pending.review().getOrderedAt().plusSeconds(60), scenarioAccountId);
+        long workspace = newer.review().getWorkspaceId();
+        jdbcTemplate.update(
+                "UPDATE review_practice SET status='WITHHELD', reason='CHECKS_PENDING' WHERE workspace_id=? AND review_id=?",
+                workspace,
+                newer.review().getId());
+        jdbcTemplate.update(
+                "UPDATE review_item SET state='WITHHELD', reason='CHECKS_PENDING', job_id=NULL"
+                        + " WHERE workspace_id=? AND review_id=?",
+                workspace,
+                newer.review().getId());
+
+        assertThat(staleStartReason(pending))
+                .as("the newer review still selects the practice but never measures it")
+                .isEqualTo("SOURCES_MOVED");
+    }
+
+    /** Starts the review's practice after its pinned source moved and returns the reason that withholds it. */
+    private @Nullable String staleStartReason(ReviewAdmissionData.Pending pending) {
         var ref = productItems.require(
                 pending.review().getWorkspaceId(), scenario.item().getId());
         var kind = new SourceKind("scm.pull-request.core");
@@ -1439,11 +1452,6 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         doReturn(new ProductItemQuery.FingerprintRead(Map.of(kind, "b".repeat(64)), null))
                 .when(productItems)
                 .read(eq(ref), anySet(), any());
-        // A newer review of the same work was ordered, then cancelled: it measures nothing.
-        var newer = admissions.pending(scenario, pending.review().getOrderedAt().plusSeconds(60), scenarioAccountId);
-        jdbcTemplate.update(
-                "UPDATE review SET status='CANCELLED', stop_reason='CANCELLED', completed_at=now() WHERE id=?",
-                newer.review().getId());
         var id = new ReviewAssignmentId(
                 pending.review().getId(), scenario.practice().getId(), ref.itemId());
 
@@ -1454,13 +1462,11 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         0,
                         reviewFreshness.startCurrentness(ref.workspaceId(), id)))
                 .isFalse();
-
-        assertThat(memberRows
-                        .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
-                                ref.workspaceId(), id.reviewId(), id.practiceId(), id.itemId())
-                        .orElseThrow()
-                        .getReason())
-                .isEqualTo("SOURCES_MOVED");
+        return memberRows
+                .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                        ref.workspaceId(), id.reviewId(), id.practiceId(), id.itemId())
+                .orElseThrow()
+                .getReason();
     }
 
     /**

@@ -221,8 +221,8 @@ When the host refuses undeclared reads for `bash` too, the residual risk is gone
 Production showed reviews whose practices were all withheld as `REPLACED`, although no newer review of the item was ever ordered.
 A reason must say what happened, so the reasons split:
 
-- `REPLACED`: a newer review of the item measures the practice.
-- `SOURCES_MOVED`: a source that the practice reads changed before it started, and no newer review measures it.
+- `REPLACED`: a newer review of the item already measured the practice. A newer review that only selected it can still withhold it.
+- `SOURCES_MOVED`: a source that the practice reads changed before it started, and no newer review measured it.
 - `NOT_RUN`: no attempt measured the practice before the run ended, by its deadline, a time-out, a watchdog or a lost sandbox. It says nothing about the work. The run keeps its own stop reason.
 
 All three are carried, so the next readiness edge selects the practice again.
@@ -240,7 +240,8 @@ A practice that does not fit again stays carried until a real event.
 
 Enforced by:
 
-- `ResultAdmissionIntegrationTest#shouldCallAStalePracticeReplacedOnlyWhenANewerReviewOfTheItemExists`
+- `ResultAdmissionIntegrationTest#shouldCallAStalePracticeReplacedOnlyWhenANewerReviewMeasuredIt`
+- `ResultAdmissionIntegrationTest#shouldCallAStalePracticeSourcesMovedWhenTheNewerReviewWithheldIt`
 - `ResultAdmissionIntegrationTest#shouldAskOnceForAFollowUpThatReadsTheReviewsOwnOccasionWhenReviewsEndOwingPractices`
 - `ResultAdmissionServiceTest#shouldStopTheOpenPracticesAsNotRunAndSealWhenTheRetryFindsTheSourcesStale`
 - `ReviewJobCompletionServiceTest#shouldCarryEveryPracticeOfARunThatTimedOutBeforeItMeasuredOne`

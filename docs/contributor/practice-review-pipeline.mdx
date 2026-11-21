@@ -188,7 +188,7 @@ A retry that seals at a moved version writes `NOT_RUN` for what it did not measu
 A refusal that can pass, such as an exhausted budget, keeps every event of the window waiting, so that the retry still selects their union.
 
 A practice that starts after its own sources changed is withheld.
-Its reason is `REPLACED` when a newer review of the item measures it, and `SOURCES_MOVED` otherwise.
+Its reason is `REPLACED` when a newer review of the item already measured it, and `SOURCES_MOVED` otherwise.
 A practice that no attempt measured before the run ended, by its deadline, a time-out, a watchdog or a lost sandbox, is withheld with `NOT_RUN`.
 All three reasons are carried: the next readiness edge selects the practice again.
 A run that withheld every practice at its start ends with an empty result, not as a failed run.
@@ -327,7 +327,7 @@ A capture whose fetch failed records no linked-work fingerprint, so a later read
 
 A missing capture record makes the result unverifiable with `RECORD_MISSING` ([Currentness](./practice-review-glossary.mdx#currentness)).
 Neither reason establishes a change to the work.
-The practice-start gateway records `REPLACED` for changed sources when a newer review measures the practice, `SOURCES_MOVED` when none does, and `READINESS_REFUSED` for sources it cannot verify.
+The practice-start gateway records `REPLACED` for changed sources when a newer review already measured the practice, `SOURCES_MOVED` when none does, and `READINESS_REFUSED` for sources it cannot verify.
 
 A start that cannot verify its sources always names why, on its `Practice start` log line as `unreadReason` and in the withheld membership's message.
 The reason is the capture code of the read that failed, such as `OCCASION_EVIDENCE_UNAVAILABLE`.
