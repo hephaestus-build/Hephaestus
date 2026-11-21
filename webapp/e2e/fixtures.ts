@@ -10,7 +10,12 @@ import { E2E_BASE_URL } from "./urls.ts";
 
 declare global {
 	interface Window {
-		reportCspViolation: (disposition: string, directive: string, blocked: string) => void;
+		reportCspViolation: (
+			disposition: string,
+			directive: string,
+			blocked: string,
+			source: string,
+		) => void;
 	}
 }
 
@@ -52,8 +57,8 @@ export async function watchCspViolations(
 	const violations: string[] = [];
 	await context.exposeFunction(
 		"reportCspViolation",
-		(disposition: string, directive: string, blocked: string) => {
-			const violation = `${directive}: ${blocked}`;
+		(disposition: string, directive: string, blocked: string, source: string) => {
+			const violation = `${directive}: ${blocked} at ${source}`;
 			if (disposition === "enforce") {
 				violations.push(violation);
 			} else if (!testInfo.annotations.some(({ description }) => description === violation)) {
@@ -63,7 +68,12 @@ export async function watchCspViolations(
 	);
 	await context.addInitScript(() => {
 		document.addEventListener("securitypolicyviolation", (event) => {
-			window.reportCspViolation(event.disposition, event.effectiveDirective, event.blockedURI);
+			window.reportCspViolation(
+				event.disposition,
+				event.effectiveDirective,
+				event.blockedURI,
+				`${event.sourceFile}:${event.lineNumber}:${event.columnNumber}`,
+			);
 		});
 	});
 	return () => violations;
