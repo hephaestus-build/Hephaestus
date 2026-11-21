@@ -35,6 +35,14 @@ public interface LineNoteWriter {
      */
     ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved, String actor);
 
+    /**
+     * Whether Hephaestus may reopen a thread that it resolved here. Only when the provider can tell the thread event of
+     * Hephaestus's own reopen from a person's: otherwise its own write would hand the thread to people.
+     */
+    default boolean reopensThreads() {
+        return true;
+    }
+
     record OwnedEdit(CopyReceipt copy, String previousWriteKey, LineNote note) {}
 
     record RetractedNote(CopyReceipt copy, LineNote note) {}

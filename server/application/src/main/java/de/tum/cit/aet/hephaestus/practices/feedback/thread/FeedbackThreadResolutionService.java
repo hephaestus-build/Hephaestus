@@ -51,8 +51,13 @@ public class FeedbackThreadResolutionService {
         var writer = matching.getFirst();
         String actor = writer.actor(target);
         if (actor == null) return new ActionResult.Retry(ACTOR_UNKNOWN);
-        var refused =
-                steps.begin(workspaceId, ask, actor, attempt, plan.feedback().getDeveloperId());
+        var refused = steps.begin(
+                workspaceId,
+                ask,
+                target.integration().kind(),
+                actor,
+                attempt,
+                plan.feedback().getDeveloperId());
         if (refused != null) return refused;
         return steps.settle(workspaceId, ask, writer.resolveThread(target, plan.copy(), plan.resolved(), actor));
     }

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.thread;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -67,6 +68,11 @@ public class FeedbackThreadResolution {
     @Column(name = "actor", columnDefinition = "TEXT")
     private @Nullable String actor;
 
+    /** The provider of the thread, recorded with the writing account. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "provider", length = 16)
+    private @Nullable IntegrationKind provider;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "stop_reason", length = 32)
     private @Nullable FeedbackThreadStopReason stopReason;
@@ -93,13 +99,15 @@ public class FeedbackThreadResolution {
             return false;
         }
         actor = null;
+        provider = null;
         moveTo(FeedbackThreadResolutionState.PENDING);
         return true;
     }
 
     /** Records the writing account just before the write of {@code asked}; false when that ask is no longer current. */
-    boolean begin(int asked, String writer, Instant at) {
+    boolean begin(int asked, IntegrationKind kind, String writer, Instant at) {
         if (!current(asked)) return false;
+        provider = kind;
         actor = writer;
         changedAt = at;
         return true;
@@ -134,6 +142,14 @@ public class FeedbackThreadResolution {
                 && eventActor.equals(actor)
                 && resolvedEvent == resolved
                 && state != FeedbackThreadResolutionState.STOPPED;
+    }
+
+    /**
+     * Whether an event that {@link #owns} refused looks like the event of this row's own write: it reports the asked
+     * state while a write of that ask may have reached the provider, but names another account or none.
+     */
+    boolean resembles(boolean resolvedEvent) {
+        return actor != null && resolvedEvent == resolved && state != FeedbackThreadResolutionState.STOPPED;
     }
 
     boolean current(int asked) {

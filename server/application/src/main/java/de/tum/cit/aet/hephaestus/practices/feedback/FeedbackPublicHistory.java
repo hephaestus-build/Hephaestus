@@ -43,6 +43,7 @@ public class FeedbackPublicHistory {
     private final ObjectMapper mapper;
     private final ResultSourceAuthorization sourceAuthorization;
     private final PracticeRepository practices;
+    private final FeedbackCopyRepository copies;
 
     public record AuthorizedSupport(UUID resultId, String practiceSlug, HistoryCustody custody) {}
 
@@ -110,6 +111,13 @@ public class FeedbackPublicHistory {
                         : row.getBody() != null,
                 freshness,
                 withdrawn,
+                !confirmed.isEmpty()
+                        && !copies.findResolvedByHephaestus(
+                                        row.getWorkspaceId(),
+                                        confirmed.stream()
+                                                .map(FeedbackCopy::getId)
+                                                .toList())
+                                .isEmpty(),
                 support.stream()
                         .map(result -> new PublicBasis(
                                 result.getId(),
@@ -162,6 +170,8 @@ public class FeedbackPublicHistory {
             boolean bodyUnavailable,
             Currentness currentness,
             boolean withdrawn,
+            // A note of this piece started a thread that Hephaestus resolved as fixed, and it is still resolved.
+            boolean closedAsFixed,
             List<PublicBasis> basedOn,
             List<PublicCopy> copies) {}
 

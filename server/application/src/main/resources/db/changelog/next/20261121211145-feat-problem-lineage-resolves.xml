@@ -1,16 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
     <changeSet id="1795295506022-1" author="hephaestus">
-        <comment>A lineage row now records the problem's identity, so a thread resolution can tell that a problem came back. Rows recorded before this column exist only on servers that ran an unreleased build, and the comparison can be recorded again by a later review, so they are dropped rather than given an identity that nothing can derive.</comment>
-        <sql>DELETE FROM problem_lineage;</sql>
-        <rollback/>
+        <addColumn tableName="problem_lineage">
+            <column name="identity" type="TEXT"/>
+        </addColumn>
     </changeSet>
     <changeSet id="1795295506022-2" author="hephaestus">
-        <addColumn tableName="problem_lineage">
-            <column name="identity" type="TEXT">
-                <constraints nullable="false"/>
-            </column>
-        </addColumn>
+        <comment>A lineage row now records the problem's identity, so a thread resolution can tell that a problem came back. A problem with a key has the identity "key:" and its key, which the row's problem holds. A problem without a key has a hash of the server's serialized source kind, normalized quote and ordinal among the result's problems. SQL cannot reproduce that serialization exactly, and a near match would split one problem across two identities. Rows of such problems exist only on servers that ran an unreleased build, and a later review compares again, so they are dropped.</comment>
+        <sql>UPDATE problem_lineage l SET identity = 'key:' || p.key
+            FROM problem p
+            WHERE p.workspace_id = l.workspace_id AND p.id = COALESCE(l.problem_id, l.prior_problem_id)
+              AND p.key IS NOT NULL;
+        DELETE FROM problem_lineage WHERE identity IS NULL;</sql>
+        <rollback/>
+    </changeSet>
+    <changeSet id="1795295506022-6" author="hephaestus">
+        <addNotNullConstraint tableName="problem_lineage" columnName="identity" columnDataType="TEXT"/>
     </changeSet>
     <changeSet id="1795295506022-3" author="hephaestus">
         <createTable tableName="feedback_thread_resolution">
@@ -30,6 +35,7 @@
             <column name="item_id" type="BIGINT">
                 <constraints nullable="false"/>
             </column>
+            <column name="provider" type="VARCHAR(16)"/>
             <column name="resolved" type="BOOLEAN">
                 <constraints nullable="false"/>
             </column>
@@ -52,6 +58,8 @@
         <comment>A thread resolution belongs to its workspace and goes with the copy whose note starts the thread; an index that leads with that key lets a copy delete find it without a scan. A stopped resolution names its reason and only a stopped one does. Problem lineage is read by identity within a workspace. The outbox accepts the new action kind.</comment>
         <sql>ALTER TABLE feedback_thread_resolution
             ADD CONSTRAINT ck_feedback_thread_resolution_state CHECK (state IN ('DONE', 'PENDING', 'STOPPED')),
+            ADD CONSTRAINT ck_feedback_thread_resolution_provider CHECK (provider IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')),
+            ADD CONSTRAINT ck_feedback_thread_resolution_written CHECK ((actor IS NULL) = (provider IS NULL)),
             ADD CONSTRAINT ck_feedback_thread_resolution_stop_reason CHECK (stop_reason IN ('FAILED', 'GONE', 'HUMAN_CONTROLLED', 'NOT_PERMITTED', 'PERSON_SUPPRESSED', 'REPLIED', 'UNSUPPORTED', 'WITHDRAWN')),
             ADD CONSTRAINT ck_feedback_thread_resolution_stopped CHECK ((state = 'STOPPED') = (stop_reason IS NOT NULL)),
             ADD CONSTRAINT ck_feedback_thread_resolution_generation CHECK (generation &gt; 0),
@@ -71,6 +79,8 @@
             DROP CONSTRAINT IF EXISTS ck_feedback_thread_resolution_generation,
             DROP CONSTRAINT IF EXISTS ck_feedback_thread_resolution_stopped,
             DROP CONSTRAINT IF EXISTS ck_feedback_thread_resolution_stop_reason,
+            DROP CONSTRAINT IF EXISTS ck_feedback_thread_resolution_written,
+            DROP CONSTRAINT IF EXISTS ck_feedback_thread_resolution_provider,
             DROP CONSTRAINT IF EXISTS ck_feedback_thread_resolution_state;</sql>
         </rollback>
     </changeSet>

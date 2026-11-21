@@ -356,6 +356,8 @@ Repeats by identity and the composer's view of lineage stay decided, not shipped
   Then the newest row proves nothing about now, and the problem has no standing.
   So a note that cites two problems resolves only after both are gone, in one review or in two.
   A lineage row records the problem's identity for this reason.
+  The migration derives it for rows of a problem with a key: `key:` and the key.
+  It drops the rows of a problem without a key, whose identity is a hash that SQL cannot reproduce exactly.
   A key is not unique across practices or items, so the match stays within one practice, item and developer.
 - **Reopen.** When one cited problem is present again, the server reopens the thread.
   A later review finds the problem as New, Unchanged or Updated.
@@ -366,6 +368,12 @@ Repeats by identity and the composer's view of lineage stay decided, not shipped
   The note is retracted, and its thread stops.
   The server reopens only a thread that its own resolve may have reached.
   A resolve that never started is withdrawn instead.
+  The server reopens only where the provider can tell its own reopen from a person's: on GitHub, not on GitLab.
+- **A note closed as fixed.** While a thread that the server resolved stays resolved, its note no longer stands as advice.
+  The history that the next review on the work reads marks that piece `closedAsFixed`.
+  It is then no witness for `ALREADY_SAID` or `NO_MATERIAL_CHANGE`.
+  So a problem that came back is raised again in a new note.
+  The closed note does not hold it back.
 - **A person's state wins.** A person's resolve, reopen or reply hands the thread to people for good.
   - An event is Hephaestus's own only when its actor is the account that writes the open change.
     That change must also ask for the state that the event reports.
@@ -375,6 +383,12 @@ Repeats by identity and the composer's view of lineage stay decided, not shipped
     An event without an actor is a person's too.
     So a person can resolve a thread while Hephaestus's resolve still waits.
     That person then owns the thread, and Hephaestus never reopens it.
+  - The event of an earlier own write can arrive after the next change asked for the other state.
+    It then reads as a person's, and the thread goes to people. That errs toward people.
+  - The writing account and the event's actor can fail to match.
+    Then Hephaestus's own changes read as a person's, and it stops.
+    That is safe, but it would silence the feature.
+    `practice_feedback_thread_actor_mismatch_total` counts each event that matches an open change but names another actor or none.
   - The server never resolves a thread with a reply from a person newer than its note.
     A person can still reply between the server's read and its write. That window is inherent.
   - The writer reads who resolved a thread.
@@ -396,12 +410,12 @@ Integrations:
   The server takes any resolve without a resolver as its own, also one by another app or workflow.
   The pull request review thread webhook now records its sender as the event's actor.
   The activity of a reopened thread now names that sender, not the pull request's author.
-- **GitLab**: the discussion's `resolved` flag through the REST API.
-  The writing account is the token's user.
+- **GitLab: resolve only, no reopen.** The server resolves the discussion through its `resolved` flag, as the token's user.
   A synced resolve names the discussion's resolver.
-  A synced reopen names no actor, so the server's own reopen on GitLab hands the thread to people.
-  The server then never changes that thread again, and the note's feedback becomes human-controlled.
-  A synced reopen also records its activity under the pull request's author, as every GitLab reopen does.
+  A synced reopen names no actor, so GitLab cannot tell the server's own reopen from a person's.
+  A reopen of its own would hand the thread to people and mark its own feedback human-controlled.
+  So the server never reopens on GitLab, and the thread stays resolved.
+  A problem that comes back reaches the developer in a new note.
 - **A personal access token.** When a connection uses a person's token, the writing account is that person.
   A change that the person makes in the direction that the server asked for then reads as the server's own.
 - **Slack and Outline: not applicable.** Their feedback has no note on the work, and no thread that the server opened.
@@ -420,4 +434,6 @@ Enforced by:
 - `FeedbackThreadResolutionIntegrationTest#shouldHandAThreadToPeopleWhenItFindsItResolvedByAPersonWithoutAnEvent`
 - `FeedbackThreadResolutionIntegrationTest#shouldReopenAResolvedThreadWhenAPersonMarksItsProofIncorrect`
 - `FeedbackThreadResolutionIntegrationTest#shouldNotReopenAThreadWhenAPersonMarksTheResultItsNoteRestsOnIncorrect`
+- `FeedbackThreadResolutionIntegrationTest#shouldKeepAGitLabThreadResolvedWhenItsProblemComesBack`
+- `ReviewOnWorkPriorAdviceTest#shouldRaiseAProblemAgainWhenHephaestusClosedTheNoteThatGaveItsAdviceAsFixed`
 - `GitHubThreadResolutionTest` and `GitLabThreadResolutionTest`

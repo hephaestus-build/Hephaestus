@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
 import de.tum.cit.aet.hephaestus.practices.adapter.FeedbackThreadStateRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -91,7 +92,12 @@ class FeedbackThreadSteps {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public @Nullable ActionResult begin(
-            long workspaceId, FeedbackThreadResolver.Payload ask, String actor, ActionAttempt attempt, long developer) {
+            long workspaceId,
+            FeedbackThreadResolver.Payload ask,
+            IntegrationKind provider,
+            String actor,
+            ActionAttempt attempt,
+            long developer) {
         var row = resolutions.lockById(ask.resolutionId(), workspaceId).orElse(null);
         if (row == null || !row.current(ask.generation()))
             return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
@@ -104,7 +110,7 @@ class FeedbackThreadSteps {
             return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
         }
         if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();
-        row.begin(ask.generation(), actor, clock.instant());
+        row.begin(ask.generation(), provider, actor, clock.instant());
         return null;
     }
 

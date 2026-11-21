@@ -242,7 +242,10 @@ final class ReviewOnWork {
             boolean recorded = witnessId != null
                     && ((body.isString() && !Js.blank(body.asString())) || !notes.isEmpty())
                     && ("CURRENT".equals(currentness) || "STALE".equals(currentness))
-                    && !isTrue(entry.path("withdrawn"));
+                    && !isTrue(entry.path("withdrawn"))
+                    // Hephaestus closed a note of it as fixed: it no longer stands as advice, so a problem that came
+                    // back is raised again, not withheld behind it.
+                    && !isTrue(entry.path("closedAsFixed"));
             var own = JSON.objectNode();
             own.put("witnessId", witnessId);
             putDefined(own, "id", id);
@@ -253,6 +256,7 @@ final class ReviewOnWork {
             if (!notes.isEmpty()) own.set("notes", notes);
             putDefined(own, "recordedClaimCurrentness", entry.path("recordedClaimCurrentness"));
             putDefined(own, "withdrawn", entry.path("withdrawn"));
+            putDefined(own, "closedAsFixed", entry.path("closedAsFixed"));
             if ("COPY_AUTHORITY_UNAVAILABLE".equals(string(entry.path("wordsUnavailable"))))
                 own.put("wordsUnavailable", "COPY_AUTHORITY_UNAVAILABLE");
             own.put(

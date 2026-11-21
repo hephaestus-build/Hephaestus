@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.thread;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -21,6 +22,20 @@ public class FeedbackThreadMeters {
             counter(resolved, null);
             for (FeedbackThreadStopReason reason : FeedbackThreadStopReason.values()) counter(resolved, reason);
         }
+        for (IntegrationKind provider : new IntegrationKind[] {IntegrationKind.GITHUB, IntegrationKind.GITLAB})
+            registry.counter(
+                    PracticeMetrics.FEEDBACK_THREAD_ACTOR_MISMATCH,
+                    "provider",
+                    provider.name().toLowerCase(Locale.ROOT));
+    }
+
+    /** A thread event that resembled Hephaestus's own write but named another account or none. */
+    void actorMismatch(@Nullable IntegrationKind provider) {
+        registry.counter(
+                        PracticeMetrics.FEEDBACK_THREAD_ACTOR_MISMATCH,
+                        "provider",
+                        provider == null ? "unknown" : provider.name().toLowerCase(Locale.ROOT))
+                .increment();
     }
 
     /** One change that ended: confirmed when {@code stopped} is null. */

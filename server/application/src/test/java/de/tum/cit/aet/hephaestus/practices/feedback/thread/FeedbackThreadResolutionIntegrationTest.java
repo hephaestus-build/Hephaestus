@@ -162,6 +162,7 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
     ApplicationEventPublisher events;
 
     private final Threads provider = new Threads();
+    private FeedbackTarget target;
     private ReviewIntegrationData.Scenario scenario;
     private long developer;
     private FeedbackThreadResolutionAdapter adapter;
@@ -179,7 +180,7 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
                         .map(facts -> facts.id())
                         .collect(Collectors.toSet()));
         var targets = mock(FeedbackTargetResolver.class);
-        var target = new FeedbackTarget(
+        target = new FeedbackTarget(
                 new ItemRef(
                         scenario.workspace().getId(),
                         scenario.item().getId(),
@@ -189,7 +190,7 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
                         null),
                 new IntegrationRef(IntegrationKind.GITHUB, scenario.workspace().getId(), "https://example.test"),
                 new ItemVersion("v1", null));
-        when(targets.resolveExisting(any())).thenReturn(target);
+        when(targets.resolveExisting(any())).thenAnswer(call -> target);
         // A proxy applies the steps' own transaction boundaries, as the bean's proxy does.
         var proxy = new ProxyFactory(new FeedbackThreadSteps(
                 resolutions,
@@ -408,6 +409,35 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         assertThat(provider.threads).containsEntry(thread, true);
     }
 
+    @Test
+    void shouldKeepAGitLabThreadResolvedWhenItsProblemComesBack() {
+        target = new FeedbackTarget(
+                target.item(),
+                new IntegrationRef(IntegrationKind.GITLAB, scenario.workspace().getId(), "https://gitlab.example.com"),
+                target.version());
+        provider.kind = IntegrationKind.GITLAB;
+        var first = sealed("g1", 30, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+        String thread = note(first, problems(first));
+        sealed("g2", 20, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);
+        assertThat(run(resolution(thread))).containsInstanceOf(ActionResult.Done.class);
+        assertThat(resolution(thread).getProvider()).isEqualTo(IntegrationKind.GITLAB);
+        int generation = resolution(thread).getGeneration();
+
+        // GitLab cannot tell Hephaestus's own reopen from a person's, so Hephaestus does not reopen there.
+        sealed("g3", 10, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+
+        var kept = resolution(thread);
+        assertThat(kept.isResolved()).isTrue();
+        assertThat(kept.getState()).isEqualTo(FeedbackThreadResolutionState.DONE);
+        assertThat(kept.getGeneration()).isEqualTo(generation);
+        assertThat(run(kept)).isEmpty();
+        assertThat(provider.changes).containsExactly(thread);
+        // The note stays closed as fixed: a readback does not read it as a person's, and the history that the next
+        // review on the work reads no longer offers it as advice, so the problem is raised again in a new note.
+        assertThat(copies.findResolvedByHephaestus(scenario.workspace().getId(), List.of(copyOf(thread))))
+                .containsExactly(copyOf(thread));
+    }
+
     private UUID sealed(
             String version,
             int minutesAgo,
@@ -602,9 +632,11 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         @Nullable
         Runnable during;
 
+        IntegrationKind kind = IntegrationKind.GITHUB;
+
         @Override
         public IntegrationKind kind() {
-            return IntegrationKind.GITHUB;
+            return kind;
         }
 
         @Override
