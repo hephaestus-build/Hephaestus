@@ -29,7 +29,7 @@ func decodeFixture<T: Decodable>(_ name: String, as type: T.Type) throws -> T {
 
 @Test func keepsAProblemTypeThatItDoesNotKnow() throws {
   let problem = try decodeFixture("problem-unknown-type", as: Components.Schemas.ProblemDetail.self)
-  #expect(problem._type == "https://docs.hephaestus.build/contributor/api-error-handling#added-in-a-later-release")
+  #expect(problem._type == "https://example.com/problems/added-in-a-later-release")
   #expect(problem.status == 409)
   #expect(problem.title == "Added in a later release")
 }

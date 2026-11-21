@@ -168,6 +168,10 @@ Another LLM model on this connection has this upstream id.
 
 A Hephaestus host wrote for a turn attempt that lost its lease.
 
+### conversation-turn-stopped
+
+The turn attempt must stop and end: the developer stopped it, or its deadline passed. `stop` names the reason.
+
 ### conversation-refused
 
 Hephaestus does not reply to this member. The `detail` names the setting that changes it.

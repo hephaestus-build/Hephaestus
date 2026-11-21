@@ -30,7 +30,7 @@ class DecodeTest {
     @Test
     fun keepsAProblemTypeThatItDoesNotKnow() {
         val problem = decodeFixture<ProblemDetail>("problem-unknown-type")
-        assertEquals("https://docs.hephaestus.build/contributor/api-error-handling#added-in-a-later-release", problem.type)
+        assertEquals("https://example.com/problems/added-in-a-later-release", problem.type)
         assertEquals(409, problem.status)
         assertEquals("Added in a later release", problem.title)
     }
