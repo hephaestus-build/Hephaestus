@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.mcp;
 
+import de.tum.cit.aet.hephaestus.core.auth.mcp.McpAuthorizationService;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpCallGrant;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpGrantGuard;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -76,12 +77,15 @@ class McpServerConfiguration {
             JsonMapper jsonMapper,
             List<McpTool> tools,
             ApplicationContext applicationContext,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            McpAuthorizationService grants) {
         McpRefusals refusals = new McpRefusals(applicationContext);
         McpToolMetrics metrics = new McpToolMetrics(meterRegistry, tools);
+        Runnable recordUse =
+                () -> McpCallGrant.current().ifPresent(grant -> grants.recordUse(grant.workspaceId(), grant.grantId()));
         List<McpStatelessServerFeatures.SyncToolSpecification> specifications = tools.stream()
                 .map(tool -> new McpStatelessServerFeatures.SyncToolSpecification(
-                        tool.definition(), (context, request) -> invoke(tool, request, refusals, metrics)))
+                        tool.definition(), (context, request) -> invoke(tool, request, refusals, metrics, recordUse)))
                 .toList();
         return McpServer.sync(mcpTransport)
                 .jsonMapper(new JacksonMcpJsonMapper(McpTools.withNulls(jsonMapper)))
@@ -96,10 +100,15 @@ class McpServerConfiguration {
 
     /**
      * A refusal is a tool error that names its reason, never a protocol failure: the client must see why
-     * the tool did not do what it asked.
+     * the tool did not do what it asked. Only a call that succeeds records the grant's use, so a client that the
+     * policy refuses does not look busy in the console.
      */
     static McpSchema.CallToolResult invoke(
-            McpTool tool, McpSchema.CallToolRequest request, McpRefusals refusals, McpToolMetrics metrics) {
+            McpTool tool,
+            McpSchema.CallToolRequest request,
+            McpRefusals refusals,
+            McpToolMetrics metrics,
+            Runnable recordUse) {
         String name = tool.definition().name();
         // The write-scope filter answers the challenge; this check is the one that a write never passes without the
         // scope.
@@ -108,10 +117,10 @@ class McpServerConfiguration {
             return error(
                     "This client may only read this workspace. Ask an admin to connect it again and allow changes.");
         }
+        McpSchema.CallToolResult result;
         try {
-            McpSchema.CallToolResult result = tool.call(request.arguments() == null ? Map.of() : request.arguments());
+            result = tool.call(request.arguments() == null ? Map.of() : request.arguments());
             metrics.record(name, McpToolMetrics.Outcome.OK);
-            return result;
         } catch (AccessDeniedException refused) {
             metrics.record(name, McpToolMetrics.Outcome.REFUSED);
             return error("Your role in this workspace does not allow this tool.");
@@ -130,6 +139,13 @@ class McpServerConfiguration {
             }
             return failed(name, failed, metrics);
         }
+        // The tool's work is done and committed; a failure to record the use must not report it as refused.
+        try {
+            recordUse.run();
+        } catch (RuntimeException unrecorded) {
+            log.warn("mcp: could not record the use of the grant after tool {}", name, unrecorded);
+        }
+        return result;
     }
 
     /** A server error's message may name internals, so the client gets none of it. */

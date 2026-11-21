@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.core.auth.mcp;
 import de.tum.cit.aet.hephaestus.core.auth.spi.McpWorkspaceDirectory;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Clock;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -36,16 +34,13 @@ public class McpGrantGuard implements HandlerFilterFunction<ServerResponse, Serv
     private final McpWorkspaceDirectory workspaces;
     private final McpResources resources;
     private final McpChallenges challenges;
-    private final Clock clock;
 
     McpGrantGuard(
             McpClientGrantRepository grants,
             McpWorkspaceDirectory workspaces,
             McpResources resources,
-            MeterRegistry meterRegistry,
-            Clock clock) {
+            MeterRegistry meterRegistry) {
         this.grants = grants;
-        this.clock = clock;
         this.workspaces = workspaces;
         this.resources = resources;
         this.challenges = new McpChallenges(resources, meterRegistry);
@@ -74,13 +69,11 @@ public class McpGrantGuard implements HandlerFilterFunction<ServerResponse, Serv
         if (!grant.get().grants(McpScope.READ)) {
             return refuse(slug, HttpStatus.FORBIDDEN, "insufficient_scope", McpScope.READ.value());
         }
-        // The console shows when a client was last used, so an admin can tell an idle grant from a busy one.
-        Instant now = clock.instant();
-        grants.markUsed(workspaceId.get(), grant.get().getId(), now, now.minus(McpClientGrant.LAST_USED_PRECISION));
         request.attributes()
                 .put(
                         McpCallGrant.ATTRIBUTE,
                         new McpCallGrant(
+                                workspaceId.get(),
                                 grant.get().getId(),
                                 grant.get().grants(McpScope.WRITE),
                                 grant.get().getPasskeyVerifiedAt()));

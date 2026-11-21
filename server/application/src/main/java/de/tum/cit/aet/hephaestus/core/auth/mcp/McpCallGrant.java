@@ -11,13 +11,17 @@ import org.springframework.web.context.request.RequestContextHolder;
  * The grant that a workspace MCP request passed {@link McpGrantGuard} with. The guard leaves it on the request, so
  * the write-scope check and the config audit trail read the grant that was checked, not one they look up again.
  *
+ * @param workspaceId the workspace whose endpoint the request reached, which the grant belongs to
  * @param grantId the grant's id, which the config audit trail records as the client that made a change
  * @param writes whether the grant holds {@link McpScope#WRITE}
  * @param passkeyVerifiedAt when the approving account confirmed with a passkey at consent, or null when the grant holds
  *     no passkey proof
  */
 public record McpCallGrant(
-        UUID grantId, boolean writes, @Nullable Instant passkeyVerifiedAt) {
+        long workspaceId,
+        UUID grantId,
+        boolean writes,
+        @Nullable Instant passkeyVerifiedAt) {
 
     /** The request attribute that holds the checked grant. */
     public static final String ATTRIBUTE = McpCallGrant.class.getName();

@@ -6568,7 +6568,8 @@ export const McpClientGrantSchema = {
 		lastUsedAt: {
 			type: "string",
 			format: "date-time",
-			description: "When the client last signed in, refreshed or called, to within an hour",
+			description:
+				"When the client last signed in, refreshed, or made a call that succeeded, to within an hour",
 		},
 		passkeyBacked: {
 			type: "boolean",

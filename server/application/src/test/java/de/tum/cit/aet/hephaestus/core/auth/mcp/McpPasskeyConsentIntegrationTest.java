@@ -264,6 +264,24 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo("invalid_grant");
     }
 
+    /** A refresh that arrives after the idle deadline, before any cleanup ran, is refused and ends the grant as lapsed. */
+    @Test
+    void shouldRefuseARefreshAfterTheIdleDeadlineAndExpireTheGrant() {
+        McpAuthorizationFlow.Tokens tokens = connect(passkeyCookie(Instant.now()));
+        UUID grant = grantOf(tokens);
+        jdbc.update(
+                "UPDATE client_session SET session_expires_at = ? WHERE id = (SELECT client_session_id FROM"
+                        + " mcp_client_grant WHERE id = ?)",
+                Timestamp.from(Instant.now().minusSeconds(60)),
+                grant);
+
+        assertThat(flow.tokenError(flow.token(flow.refreshForm(tokens.refreshToken()))))
+                .isEqualTo("invalid_grant");
+
+        assertThat(grantColumn(grant, "status")).isEqualTo("EXPIRED");
+        assertThat(grantColumn(grant, "ended_at")).isNotNull();
+    }
+
     /** A refresh secret presented twice means two holders: the whole grant ends, and the record says why. */
     @Test
     void shouldRevokeTheGrantAndRecordWhyWhenARefreshSecretIsReused() {
@@ -300,6 +318,9 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
 
         workspace.setAdminPasskeyRequired(true);
         workspaceRepository.save(workspace);
+        Timestamp lastUsed =
+                Timestamp.from(Instant.now().minus(Duration.ofDays(3)).truncatedTo(ChronoUnit.SECONDS));
+        jdbc.update("UPDATE mcp_client_grant SET last_used_at = ? WHERE id = ?", lastUsed, grantOf(tokens));
 
         JsonNode refused = call(tokens.accessToken(), GET_REVIEW_SETTINGS);
         assertThat(refused.path("isError").asBoolean()).isTrue();
@@ -308,6 +329,11 @@ class McpPasskeyConsentIntegrationTest extends RealAuthIntegrationTest {
                 tokens.accessToken(),
                 tool("set_feedback_delivery", Map.of("etag", "\"any\"", "deliveryStatus", "PAUSED")));
         assertThat(write.path("isError").asBoolean()).isTrue();
+        assertThat(text(write)).contains("passkey");
+        // A refused call is not a use: the console must not show a refused client as busy.
+        assertThat(jdbc.queryForObject(
+                        "SELECT last_used_at FROM mcp_client_grant WHERE id = ?", Timestamp.class, grantOf(tokens)))
+                .isEqualTo(lastUsed);
 
         // A refresh would move its idle deadline, so it ends the grant instead, with the reason.
         UUID grant = grantOf(tokens);

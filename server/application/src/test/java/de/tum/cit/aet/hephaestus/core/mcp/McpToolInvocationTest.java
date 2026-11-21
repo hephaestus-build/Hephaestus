@@ -16,10 +16,12 @@ import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -30,6 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 class McpToolInvocationTest {
 
     private final AtomicInteger calls = new AtomicInteger();
+    private final AtomicInteger uses = new AtomicInteger();
     private final McpTool write = new McpTool() {
         @Override
         public McpSchema.Tool definition() {
@@ -60,12 +63,13 @@ class McpToolInvocationTest {
 
     @Test
     void shouldRefuseAWriteToolWithoutRunningItWhenTheGrantOnlyReads() {
-        onRequest(new McpCallGrant(UUID.randomUUID(), false, null));
+        onRequest(new McpCallGrant(1L, UUID.randomUUID(), false, null));
 
         var result = invoke();
 
         assertThat(result.isError()).isTrue();
         assertThat(calls).hasValue(0);
+        assertThat(uses).as("a refused call is not a use").hasValue(0);
     }
 
     @Test
@@ -80,18 +84,19 @@ class McpToolInvocationTest {
 
     @Test
     void shouldRunAWriteToolWhenTheGrantMayWrite() {
-        onRequest(new McpCallGrant(UUID.randomUUID(), true, null));
+        onRequest(new McpCallGrant(1L, UUID.randomUUID(), true, null));
 
         var result = invoke();
 
         assertThat(result.isError()).isNotEqualTo(true);
         assertThat(calls).hasValue(1);
+        assertThat(uses).as("a call that succeeds records the grant's use").hasValue(1);
     }
 
     /** Spring matches an advice handler by an exception's cause, so the handler must get the cause. */
     @Test
     void shouldAnswerWithTheReasonOfTheHandlerThatMatchesTheCause() {
-        onRequest(new McpCallGrant(UUID.randomUUID(), true, null));
+        onRequest(new McpCallGrant(1L, UUID.randomUUID(), true, null));
         McpTool wrapping = new McpTool() {
             @Override
             public McpSchema.Tool definition() {
@@ -111,10 +116,79 @@ class McpToolInvocationTest {
                 wrapping,
                 new McpSchema.CallToolRequest("change_something", Map.of(), Map.of()),
                 new McpRefusals(context),
-                new McpToolMetrics(new SimpleMeterRegistry(), List.of(wrapping)));
+                new McpToolMetrics(new SimpleMeterRegistry(), List.of(wrapping)),
+                uses::incrementAndGet);
 
         assertThat(result.isError()).isTrue();
         assertThat(((McpSchema.TextContent) result.content().getFirst()).text()).isEqualTo("Someone changed it first.");
+        assertThat(uses).as("a call that its handler refuses is not a use").hasValue(0);
+    }
+
+    @Test
+    void shouldRecordNoUseWhenTheRoleRefusesTheTool() {
+        onRequest(new McpCallGrant(1L, UUID.randomUUID(), true, null));
+
+        var result = invokeThrowing(new AccessDeniedException("not an admin"));
+
+        assertThat(result.isError()).isTrue();
+        assertThat(uses).hasValue(0);
+    }
+
+    @Test
+    void shouldRecordNoUseWhenTheToolFails() {
+        onRequest(new McpCallGrant(1L, UUID.randomUUID(), true, null));
+
+        var result = invokeThrowing(new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR));
+
+        assertThat(result.isError()).isTrue();
+        assertThat(uses).hasValue(0);
+    }
+
+    /** The tool's change is committed, so a failure to record the use must not report the call as refused. */
+    @Test
+    void shouldAnswerWithTheToolResultWhenRecordingTheUseFails() {
+        onRequest(new McpCallGrant(1L, UUID.randomUUID(), true, null));
+        var context = new StaticApplicationContext();
+        context.refresh();
+
+        var result = McpServerConfiguration.invoke(
+                write,
+                new McpSchema.CallToolRequest("change_something", Map.of(), Map.of()),
+                new McpRefusals(context),
+                new McpToolMetrics(new SimpleMeterRegistry(), List.of(write)),
+                () -> {
+                    throw new IllegalStateException("lock timeout");
+                });
+
+        assertThat(result.isError()).isNotEqualTo(true);
+        assertThat(calls).hasValue(1);
+    }
+
+    private McpSchema.CallToolResult invokeThrowing(RuntimeException refusal) {
+        McpTool throwing = new McpTool() {
+            @Override
+            public McpSchema.Tool definition() {
+                return write.definition();
+            }
+
+            @Override
+            public boolean writes() {
+                return true;
+            }
+
+            @Override
+            public McpSchema.CallToolResult call(Map<String, Object> arguments) {
+                throw refusal;
+            }
+        };
+        var context = new StaticApplicationContext();
+        context.refresh();
+        return McpServerConfiguration.invoke(
+                throwing,
+                new McpSchema.CallToolRequest("change_something", Map.of(), Map.of()),
+                new McpRefusals(context),
+                new McpToolMetrics(new SimpleMeterRegistry(), List.of(throwing)),
+                uses::incrementAndGet);
     }
 
     static final class ConflictingChange extends RuntimeException {
@@ -136,7 +210,8 @@ class McpToolInvocationTest {
                 write,
                 new McpSchema.CallToolRequest("change_something", Map.of(), Map.of()),
                 new McpRefusals(context),
-                new McpToolMetrics(new SimpleMeterRegistry(), List.of(write)));
+                new McpToolMetrics(new SimpleMeterRegistry(), List.of(write)),
+                uses::incrementAndGet);
     }
 
     private static void onRequest(McpCallGrant grant) {

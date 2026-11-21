@@ -17,7 +17,7 @@ export interface McpClientGrantView {
 	approvedAt?: Date;
 	/** The approving admin confirmed with a passkey, as the workspace's admin passkey policy asked. */
 	passkeyBacked: boolean;
-	/** When the client last signed in, refreshed or called, to within an hour. */
+	/** When the client last signed in, refreshed, or made a call that succeeded, to within an hour. */
 	lastUsedAt?: Date;
 	/** When the access lapses unless the client is used before then; each use moves it. */
 	expiresAt: Date;
