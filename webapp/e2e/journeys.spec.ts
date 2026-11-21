@@ -64,6 +64,8 @@ const read = (path) => fetch("${API}/control/" + path, { mode: "no-cors" });
 (async () => {
 	await read("a");
 	await Promise.all([read("b"), read("c")]);
+	// A read after a short timer, as after React's reveal delay, is one more round, not part of the last.
+	await new Promise((resolve) => setTimeout(resolve, 300));
 	await read("d");
 	const inserted = document.createElement("div");
 	inserted.style.height = "200px";

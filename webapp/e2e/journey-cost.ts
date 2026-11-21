@@ -32,7 +32,8 @@ import { E2E_BASE_URL } from "./urls.ts";
 
 declare global {
 	interface Window {
-		journeyShifts: string[];
+		/** Each layout shift's landmark, with the time Chrome gives the shift. */
+		journeyShifts: { landmark: string; at: number }[];
 		journeySettled: () => Promise<boolean>;
 	}
 	/** Chromium's layout-shift entry, which TypeScript's DOM types do not describe yet. */
@@ -103,6 +104,8 @@ export async function journeyCost(
 			counted.push(await instrumented.settle(content, options?.byReader ?? false));
 		});
 	} finally {
+		// A held read may still wait for its round.
+		await inRounds.context().unrouteAll({ behavior: "ignoreErrors" });
 		await inRounds.context().close();
 	}
 	const timed: JourneyCost[] = [];
@@ -241,7 +244,9 @@ async function instrument(page: Page, role: WorkspaceMembership["role"], answer:
 		new PerformanceObserver((list) => {
 			for (const shift of list.getEntriesByType("layout-shift")) {
 				if (!shift.hadRecentInput) {
-					window.journeyShifts.push(...shift.sources.map(({ node }) => landmark(node)));
+					window.journeyShifts.push(
+						...shift.sources.map(({ node }) => ({ landmark: landmark(node), at: shift.startTime })),
+					);
 				}
 			}
 		}).observe({ type: "layout-shift", buffered: true });
@@ -267,6 +272,10 @@ async function instrument(page: Page, role: WorkspaceMembership["role"], answer:
 		reads.push(
 			`${request.method()} ${url.pathname.replace(`/workspaces/${WORKSPACE}`, "/w")}${url.search}`,
 		);
+		// Together with the read: a listed read that is not yet unanswered would let a step end early.
+		if (answer === "after-latency") {
+			unanswered += 1;
+		}
 		const response = await getResponse(
 			handlers(role),
 			new Request(request.url(), { method: request.method(), headers: request.headers() }),
@@ -283,7 +292,6 @@ async function instrument(page: Page, role: WorkspaceMembership["role"], answer:
 				}
 			});
 		} else {
-			unanswered += 1;
 			await setTimeout(LATENCY_MS);
 		}
 		try {
@@ -381,26 +389,26 @@ async function instrument(page: Page, role: WorkspaceMembership["role"], answer:
 		 * What the step cost, once the page shows `content`, and then forgets it, so the next step is
 		 * measured alone. In rounds, the rounds are those that answered before the first quiet moment that
 		 * showed the content, and the step ends once the page is quiet with no read waiting. With the
-		 * fixed latency, it ends once it has answered `expected`, the reads the step made in rounds. Two
-		 * frames then let the last layout shifts be reported. In a step `byReader`, the page forgets the
-		 * shifts before the frame that showed the content.
+		 * fixed latency, it ends once it has answered `expected`, the reads the step made in rounds, and
+		 * the page is quiet. Two frames then let the last layout shifts be reported. In a step
+		 * `byReader`, the shifts from before the frame that showed the content do not count.
 		 */
 		settle: async (
 			content: string,
 			byReader = false,
 			expected?: string[],
 		): Promise<JourneyCost> => {
-			await page.waitForFunction(
-				({ text, reader }) => {
-					const shown = document.body.textContent.includes(text);
-					if (shown && reader) {
-						window.journeyShifts = [];
-					}
-					return shown;
-				},
+			// Chrome delivers a shift to the observer after its frame, so the shifts before the content
+			// showed are told apart by their time, not by when they arrived.
+			const showing = await page.waitForFunction(
+				({ text, reader }) =>
+					document.body.textContent.includes(text) && { since: reader ? performance.now() : 0 },
 				{ text: content, reader: byReader },
 				{ polling: "raf" },
 			);
+			// `waitForFunction` resolves only on a truthy value, which its type does not express.
+			const value = await showing.jsonValue();
+			const since = value === false ? 0 : value.since;
 			await expect(page.getByText(content).first()).toBeVisible();
 			let shown = rounds;
 			if (answer === "in-rounds") {
@@ -414,8 +422,10 @@ async function instrument(page: Page, role: WorkspaceMembership["role"], answer:
 						message: "The step answers the reads that it made in rounds",
 					})
 					.toStrictEqual(expected);
+				// The last answer reaches the page and renders after the route fulfils it.
+				await quiet(() => unanswered === 0);
 			}
-			const moved = await page.evaluate(async () => {
+			const moved = await page.evaluate(async (after) => {
 				for (const frame of [1, 2]) {
 					// oxlint-disable-next-line promise/avoid-new -- `requestAnimationFrame` has no promise form.
 					await new Promise<number>((resolve) => {
@@ -426,8 +436,8 @@ async function instrument(page: Page, role: WorkspaceMembership["role"], answer:
 				}
 				const shifts = window.journeyShifts;
 				window.journeyShifts = [];
-				return shifts;
-			});
+				return shifts.filter(({ at }) => at >= after).map(({ landmark }) => landmark);
+			}, since);
 			const cost = {
 				reads: reads.toSorted(),
 				rounds: shown - base,
