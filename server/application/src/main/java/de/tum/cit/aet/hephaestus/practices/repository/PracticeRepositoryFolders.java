@@ -15,11 +15,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -47,10 +49,17 @@ public class PracticeRepositoryFolders {
     /**
      * A practice folder at one commit: its files by their path in the folder, and the setting it was read under.
      *
-     * @param revision the setting's revision, which a set or unset changes
+     * @param revision the setting's revision, which a change of the setting raises
+     * @param settingUpdatedAt when the setting was last written: a setting unset and set again is a new row whose
+     *     revision starts at 0 again, so this tells it apart from the one the folder came from
      */
     public record Folder(
-            String commit, Map<String, String> files, long repositoryItemId, String directory, long revision) {}
+            String commit,
+            Map<String, String> files,
+            long repositoryItemId,
+            String directory,
+            long revision,
+            @Nullable Instant settingUpdatedAt) {}
 
     /**
      * The folder of {@code slug} at the head of the default branch, or empty when the branch has no such folder.
@@ -83,7 +92,8 @@ public class PracticeRepositoryFolders {
                     files(folder),
                     setting.getRepositoryItemId(),
                     setting.getDirectory(),
-                    setting.getRevision()));
+                    setting.getRevision(),
+                    setting.getUpdatedAt()));
         } catch (RepositoryCheckoutException unavailable) {
             log.warn(
                     "Could not read the practice repository: workspaceId={}, code={}", workspaceId, unavailable.code());

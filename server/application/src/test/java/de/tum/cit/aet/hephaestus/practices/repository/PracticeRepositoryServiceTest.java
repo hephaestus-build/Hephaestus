@@ -32,7 +32,7 @@ class PracticeRepositoryServiceTest extends BaseUnitTest {
     private static final WorkspaceContext CONTEXT = new WorkspaceContext(7L, "acme", "Acme", null, null, Set.of());
     private static final Map<String, String> FILES = Map.of("practice.md", "---\n---\n");
     private static final PracticeRepositoryFolders.Folder FOLDER =
-            new PracticeRepositoryFolders.Folder(COMMIT, FILES, 42, ".hephaestus/practices", 0);
+            new PracticeRepositoryFolders.Folder(COMMIT, FILES, 42, ".hephaestus/practices", 0, null);
 
     private final PracticeRepositoryFolders folders = mock(PracticeRepositoryFolders.class);
     private final PracticeFiles files = mock(PracticeFiles.class);

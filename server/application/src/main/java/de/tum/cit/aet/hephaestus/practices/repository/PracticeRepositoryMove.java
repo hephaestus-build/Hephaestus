@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeService;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -15,8 +16,9 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * Applies Move to repository, once its folder was read outside a transaction. The setting the folder came from must
  * still be the workspace's: a set or unset in between would leave the practice bound to a repository that does not hold
- * its folder, and the next sync would take it for removed. Set, unset and this move each lock the workspace row first,
- * so they run one after another.
+ * its folder, and the next sync would take it for removed. A setting unset and set again is a new row whose revision
+ * starts at 0 again, so its update time tells it apart. Set, unset and this move each lock the workspace row first, so
+ * they run one after another.
  */
 @Service
 @ConditionalOnServerRole
@@ -38,7 +40,8 @@ class PracticeRepositoryMove {
         if (setting == null
                 || setting.getRepositoryItemId() != folder.repositoryItemId()
                 || !setting.getDirectory().equals(folder.directory())
-                || setting.getRevision() != folder.revision())
+                || setting.getRevision() != folder.revision()
+                || !Objects.equals(setting.getUpdatedAt(), folder.settingUpdatedAt()))
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "The practice repository changed while its folder was read. Try again.");
         practices.moveToRepository(ctx, slug, document, folder.commit());
