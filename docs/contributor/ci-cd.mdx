@@ -1186,6 +1186,9 @@ Before publishing verified tags, it checks that the final index leaves equal tho
 A scan therefore costs no job and no runner queue wait of its own.
 It does not run in the manifest job, because that job holds the signing token and runs no repository code.
 
+GHCR can answer "not found" for an index that it accepted a moment ago.
+On that answer only, the job reads the pushed index again, for at most 60 s.
+
 The platform jobs run independently, so one platform's refusal keeps the other platform's scan and evidence.
 A broken build thus lets its sibling finish, which costs a runner for that time.
 
