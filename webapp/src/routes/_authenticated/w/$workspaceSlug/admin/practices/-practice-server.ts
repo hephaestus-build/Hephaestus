@@ -108,6 +108,11 @@ export function practiceSetupHandlers() {
 			HttpResponse.json(mockDefinitionOptions),
 		),
 		http.get("*/workspaces/:workspaceSlug/practices/releases", () => HttpResponse.json([])),
+		// Practice setup shows the practice repository; a workspace has none unless a test sets one.
+		http.get(
+			"*/workspaces/:workspaceSlug/practice-repository",
+			() => new HttpResponse(null, { status: 204 }),
+		),
 	];
 }
 

@@ -40,6 +40,7 @@ export const DOC_TARGETS = {
 	membersAiChoices: { path: "user/ai-models", anchor: "data-handling-and-ai-choices" },
 	modelSetup: { path: "admin/ai-providers", anchor: "1-the-staged-flow-and-why-it-is-staged" },
 	practiceGuideWriting: { path: "user/practices", anchor: "add-a-guide" },
+	practiceRepository: { path: "user/practice-files", anchor: "keep-practices-in-a-repository" },
 
 	// Errors whose fix the docs give.
 	practiceScriptTraceLine: { path: "admin/practice-review-operations", anchor: "the-trace-line" },

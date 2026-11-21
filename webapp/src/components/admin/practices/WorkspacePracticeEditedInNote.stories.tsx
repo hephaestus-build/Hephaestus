@@ -9,6 +9,7 @@ const meta = {
 	component: WorkspacePracticeEditedInNote,
 	tags: ["autodocs"],
 	args: {
+		workspaceSlug: "acme",
 		repositoryName: "acme/practices",
 		sourceCommit: "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39",
 		onEditInHephaestus: fn(),
@@ -32,6 +33,16 @@ export const AsksToEditInHephaestus: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Edit in Hephaestus" }));
 		await expect(args.onEditInHephaestus).toHaveBeenCalledOnce();
+	},
+};
+
+/** The note links to the setting on Practice setup, where the repository can change or be unset. */
+export const LinksToTheSetting: Story = {
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "practice repository setting" })).toHaveAttribute(
+			"href",
+			"/w/acme/admin/practices#practice-repository",
+		);
 	},
 };
 

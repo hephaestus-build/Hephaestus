@@ -13,9 +13,11 @@ import type { ReactNode } from "react";
 import { afterEach, expect, vi } from "vitest";
 
 import { loadFeedbackMarkdown } from "@/components/admin/practice-reviews/FeedbackBody";
+import { loadMoveToRepositoryDialog } from "@/components/admin/practices/LazyMoveToRepositoryDialog";
 import { loadMarkdownRenderer } from "@/components/common/UntrustedMarkdown";
 import { PageSkeleton } from "@/components/layout/PageSkeleton";
 import { ROUTER_SEARCH } from "@/lib/router-search";
+import { loadPracticeRepositorySetting } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/-lazy-practice-repository-setting";
 import { routeTree } from "@/routeTree.gen";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
 
@@ -103,10 +105,13 @@ export function testQueryClient(queries: DefaultOptions["queries"] = {}): QueryC
  */
 export async function loadRouteCode(...paths: string[]): Promise<void> {
 	// These React.lazy modules load outside the router's split route chunks: the root layout mounts
-	// the conversation panel, and any page that shows Markdown mounts the renderers.
+	// the conversation panel, any page that shows Markdown mounts the renderers, and Practice setup
+	// mounts the practice repository card.
 	await import("@/routes/-GlobalConversationPanel");
 	await loadMarkdownRenderer();
 	await loadFeedbackMarkdown();
+	await loadPracticeRepositorySetting();
+	await loadMoveToRepositoryDialog();
 	const router = createRouter({
 		...ROUTER_SEARCH,
 		routeTree,
