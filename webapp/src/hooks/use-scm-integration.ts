@@ -14,6 +14,7 @@ import {
 	removeRepositoryToMonitorMutation,
 	removeStoppedGitLabProjectMutation,
 	readOptions,
+	updateConnectionStatusMutation,
 	updateGitLabRepositorySelectionMutation,
 	updateTokenMutation,
 } from "@/api/@tanstack/react-query.gen";
@@ -23,6 +24,7 @@ import type {
 	IntegrationCatalogEntry,
 	Workspace,
 } from "@/api/types.gen";
+import type { WorkspaceGitLabDisconnect } from "@/components/admin/integrations/WorkspaceGitLabDisconnect";
 import type { WorkspaceGitLabProjectSelection } from "@/components/admin/integrations/WorkspaceGitLabProjectSelection";
 import type { WorkspaceRepositoriesSettings } from "@/components/admin/integrations/WorkspaceRepositoriesSettings";
 import type { WorkspaceScmTokenSettings } from "@/components/admin/integrations/WorkspaceScmTokenSettings";
@@ -196,15 +198,18 @@ export function useScmIntegration(workspaceSlug: string) {
 		}
 	};
 
+	const invalidateConnection = async () =>
+		Promise.all([
+			queryClient.invalidateQueries({ queryKey: workspaceQueryOptions.queryKey }),
+			queryClient.invalidateQueries({ queryKey: catalogQueryOptions.queryKey }),
+			queryClient.invalidateQueries({ queryKey: connectionQueryOptions.queryKey }),
+		]);
+
 	const replaceToken = useMutation({
 		...updateTokenMutation(),
 		gcTime: 0,
 		onSuccess: async () => {
-			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: workspaceQueryOptions.queryKey }),
-				queryClient.invalidateQueries({ queryKey: catalogQueryOptions.queryKey }),
-				queryClient.invalidateQueries({ queryKey: connectionQueryOptions.queryKey }),
-			]);
+			await invalidateConnection();
 			sync.invalidateSyncActivity();
 			toast.success("Personal access token replaced");
 		},
@@ -213,16 +218,17 @@ export function useScmIntegration(workspaceSlug: string) {
 		...initiateMutation(),
 		gcTime: 0,
 		onSuccess: async () => {
-			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: workspaceQueryOptions.queryKey }),
-				queryClient.invalidateQueries({ queryKey: catalogQueryOptions.queryKey }),
-				queryClient.invalidateQueries({ queryKey: connectionQueryOptions.queryKey }),
-			]);
+			await invalidateConnection();
 			invalidateRepositorySet();
 			toast.success("GitLab reconnected");
 		},
 	});
 	const tokenWrite = canReconnectGitLab ? reconnectGitLab : replaceToken;
+
+	const gitLabDisconnectProps = useGitLabDisconnect(workspaceSlug, entry, async () => {
+		await invalidateConnection();
+		invalidateRepositorySet();
+	});
 
 	const handleReplaceToken = async (personalAccessToken: string) => {
 		try {
@@ -255,6 +261,7 @@ export function useScmIntegration(workspaceSlug: string) {
 		credentialsUnreadableSince: entry?.credentialsUnreadableSince,
 		providerCleanupUnconfirmed: entry?.attentionProblem === "PROVIDER_CLEANUP_UNCONFIRMED",
 		followsGitLabGroup,
+		gitLabDisconnectProps,
 		projectSelectionProps: {
 			selection: selectionFailed ? undefined : selectionQuery.data?.repositorySelection,
 			isLoading: selectionQuery.isLoading,
@@ -345,5 +352,42 @@ export function useScmIntegration(workspaceSlug: string) {
 				});
 			},
 		} satisfies ComponentProps<typeof WorkspaceStoppedGitLabProjects>,
+	};
+}
+
+/**
+ * The GitLab Disconnect, for an active connection only. A GitHub App workspace is its installation, and a GitHub
+ * token connection has no reconnect, so neither offers one.
+ */
+function useGitLabDisconnect(
+	workspaceSlug: string,
+	entry: IntegrationCatalogEntry | undefined,
+	onDisconnected: () => Promise<void>,
+): ComponentProps<typeof WorkspaceGitLabDisconnect> | undefined {
+	const disconnect = useMutation({
+		...updateConnectionStatusMutation(),
+		onSuccess: async () => {
+			await onDisconnected();
+			toast.success("GitLab disconnected");
+		},
+		onError: (e) => {
+			toast.error("We could not disconnect GitLab", { description: problemDetailOf(e) });
+		},
+	});
+	const activeGitLabConnectionId =
+		entry?.kind === "GITLAB" && entry.connected && entry.connectionState === "ACTIVE"
+			? entry.connectionId
+			: undefined;
+	if (activeGitLabConnectionId === undefined) {
+		return undefined;
+	}
+	return {
+		onDisconnect: async () => {
+			await disconnect.mutateAsync({
+				path: { workspaceSlug, id: activeGitLabConnectionId },
+				body: { state: "UNINSTALLED" },
+			});
+		},
+		isDisconnecting: disconnect.isPending,
 	};
 }

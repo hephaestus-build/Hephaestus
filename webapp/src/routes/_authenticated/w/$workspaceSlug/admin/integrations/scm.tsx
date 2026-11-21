@@ -6,6 +6,7 @@ import { WorkspaceProviderRepairs } from "@/routes/_authenticated/-provider-repa
 import { getWorkspaceOptions } from "@/api/@tanstack/react-query.gen";
 
 import { WorkspaceConnectionStateNotice } from "@/components/admin/integrations/WorkspaceConnectionStateNotice";
+import { WorkspaceGitLabDisconnect } from "@/components/admin/integrations/WorkspaceGitLabDisconnect";
 import { WorkspaceGitLabProjectSelection } from "@/components/admin/integrations/WorkspaceGitLabProjectSelection";
 import { WorkspaceIntegrationCardHeading } from "@/components/admin/integrations/WorkspaceIntegrationCardHeading";
 import { WorkspaceJobHistoryCard } from "@/components/admin/integrations/WorkspaceJobHistoryCard";
@@ -122,6 +123,7 @@ function ScmIntegrationPage() {
 			{scm.followsGitLabGroup && <WorkspaceStoppedGitLabProjects {...scm.stoppedProjectsProps} />}
 
 			{hasConnection && <WorkspaceJobHistoryCard {...scm.jobHistoryProps} />}
+			{scm.gitLabDisconnectProps && <WorkspaceGitLabDisconnect {...scm.gitLabDisconnectProps} />}
 			{typeof repairId === "number" && (
 				<WorkspaceProviderRepairs
 					key={`${slug}/${repairId}`}

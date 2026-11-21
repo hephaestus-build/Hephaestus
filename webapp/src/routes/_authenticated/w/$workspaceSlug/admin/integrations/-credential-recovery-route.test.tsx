@@ -425,6 +425,127 @@ describe("source-control credential recovery", () => {
 	});
 });
 
+describe("GitLab disconnect", () => {
+	it("sends nothing on Cancel, disconnects on confirmation, and then offers Reconnect GitLab", async () => {
+		const { entry, workspace } = mockConnection("GITLAB");
+		const requests: string[] = [];
+		server.use(
+			http.patch("*/workspaces/acme/connections/7/status", async ({ request }) => {
+				requests.push(`${apiPathOf(new URL(request.url))} ${JSON.stringify(await request.json())}`);
+				server.use(
+					http.get("*/workspaces/acme", () => HttpResponse.json({ ...workspace, kind: undefined })),
+					http.get("*/workspaces/acme/connections/catalog", () =>
+						HttpResponse.json([
+							{
+								...entry,
+								connected: false,
+								connectionState: "UNINSTALLED",
+								credentialsUnreadableSince: undefined,
+							},
+						]),
+					),
+				);
+				return HttpResponse.json({ id: 7, kind: "GITLAB", state: "UNINSTALLED" });
+			}),
+		);
+		renderRouteAt("/w/acme/admin/integrations/scm");
+		const user = userEvent.setup();
+		const open = await screen.findByRole(
+			"button",
+			{ name: "Disconnect GitLab…" },
+			ROUTE_RENDER_WAIT,
+		);
+
+		await user.click(open);
+		await user.click(
+			within(await screen.findByRole("alertdialog", { name: "Disconnect GitLab?" })).getByRole(
+				"button",
+				{ name: "Cancel" },
+			),
+		);
+		expect(requests).toStrictEqual([]);
+
+		await user.click(open);
+		await user.click(
+			within(await screen.findByRole("alertdialog", { name: "Disconnect GitLab?" })).getByRole(
+				"button",
+				{ name: "Disconnect GitLab" },
+			),
+		);
+		await screen.findByRole("button", { name: "Reconnect GitLab" }, ROUTE_RENDER_WAIT);
+		expect(requests).toStrictEqual([
+			'/workspaces/acme/connections/7/status {"state":"UNINSTALLED"}',
+		]);
+		expect(screen.queryByRole("button", { name: "Disconnect GitLab…" })).toBeNull();
+	});
+
+	it("keeps the dialog open and says why when the server refuses the disconnect", async () => {
+		mockConnection("GITLAB");
+		const refused = vi.spyOn(toast, "error");
+		server.use(
+			http.patch("*/workspaces/acme/connections/7/status", () =>
+				HttpResponse.json(
+					{
+						status: 409,
+						title: "Conflict",
+						detail: "A sync job still holds the connection. Try again shortly.",
+					},
+					{ status: 409 },
+				),
+			),
+		);
+		renderRouteAt("/w/acme/admin/integrations/scm");
+		const user = userEvent.setup();
+		await user.click(
+			await screen.findByRole("button", { name: "Disconnect GitLab…" }, ROUTE_RENDER_WAIT),
+		);
+		const dialog = await screen.findByRole("alertdialog", { name: "Disconnect GitLab?" });
+		await user.click(within(dialog).getByRole("button", { name: "Disconnect GitLab" }));
+
+		await waitFor(() =>
+			expect(refused).toHaveBeenCalledWith("We could not disconnect GitLab", {
+				description: "A sync job still holds the connection. Try again shortly.",
+			}),
+		);
+		expect(screen.queryByRole("alertdialog", { name: "Disconnect GitLab?" })).not.toBeNull();
+		refused.mockRestore();
+	});
+
+	it.each(["SUSPENDED", "PENDING"] as const)(
+		"offers no disconnect for a %s GitLab connection",
+		async (connectionState) => {
+			const { entry } = mockConnection("GITLAB");
+			server.use(
+				http.get("*/workspaces/acme/connections/catalog", () =>
+					HttpResponse.json([{ ...entry, connectionState, credentialsUnreadableSince: undefined }]),
+				),
+			);
+			const queryClient = testQueryClient();
+			renderRouteAt("/w/acme/admin/integrations/scm", queryClient);
+
+			await waitFor(
+				() =>
+					expect(
+						queryClient.getQueryData(
+							getIntegrationCatalogQueryKey({ path: { workspaceSlug: "acme" } }),
+						),
+					).toBeDefined(),
+				ROUTE_RENDER_WAIT,
+			);
+			await screen.findByText("Repository sync state", undefined, ROUTE_RENDER_WAIT);
+			expect(screen.queryByRole("button", { name: /^Disconnect/u })).toBeNull();
+		},
+	);
+
+	it("offers no disconnect for a GitHub connection", async () => {
+		mockConnection("GITHUB");
+		renderRouteAt("/w/acme/admin/integrations/scm");
+
+		await screen.findByLabelText("New personal access token", undefined, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("button", { name: /^Disconnect/u })).toBeNull();
+	});
+});
+
 /** The workspace's monitored paths as the server lists them, and every Stop and Add it receives. */
 function serveMonitored(initial: string[]) {
 	const monitored = [...initial];
