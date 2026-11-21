@@ -86,40 +86,8 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         return lookups.receipts.computeIfAbsent(job, ignored -> custody.find(result.workspaceId(), List.of(job)));
     }
 
-    private static boolean produced(ResultFacts result, ReviewItem assignment) {
+    static boolean produced(ResultFacts result, ReviewItem assignment) {
         return result.id().equals(assignment.getResultId());
-    }
-
-    /**
-     * The job that produced each of {@code rows}: the job of the assignment that the row's own review made for its
-     * practice and item, when that assignment records exactly this result. A legacy assignment that records none, or
-     * an assignment without a job, names no job. The custody's {@code sourceJobIds} also list copied dependencies, so
-     * they cannot name it. The rows' assignments load in a bounded number of queries.
-     */
-    Map<UUID, UUID> producingJobs(long workspaceId, Collection<ResultFacts> rows) {
-        var owned = rows.stream()
-                .filter(result -> result.workspaceId() == workspaceId)
-                .toList();
-        var byAssignment = assignmentsOf(workspaceId, owned);
-        Map<UUID, UUID> jobs = new HashMap<>();
-        for (var result : owned) {
-            var producer = byAssignment.get(new ReviewItem.Id(result.reviewId(), result.practiceId(), result.itemId()));
-            if (producer == null || !produced(result, producer)) continue;
-            var job = producer.getJobId();
-            if (job != null) jobs.put(result.id(), job);
-        }
-        return jobs;
-    }
-
-    private Map<ReviewItem.Id, ReviewItem> assignmentsOf(long workspaceId, List<ResultFacts> owned) {
-        Map<ReviewItem.Id, ReviewItem> byAssignment = new HashMap<>();
-        for (var chunk :
-                chunks(owned.stream().map(ResultFacts::reviewId).distinct().toList()))
-            assignments
-                    .findByWorkspaceIdAndReviewIdIn(workspaceId, chunk)
-                    .forEach(m ->
-                            byAssignment.put(new ReviewItem.Id(m.getReviewId(), m.getPracticeId(), m.getItemId()), m));
-        return byAssignment;
     }
 
     public boolean authorized(ResultFacts result, HistoryCustody facts, SourceUsePurpose purpose) {
@@ -475,7 +443,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     /** A bounded number of ids per collection query, well below the driver's bind-parameter limit. */
     private static final int PREFETCH_CHUNK = 1000;
 
-    private static <T> List<List<T>> chunks(List<T> values) {
+    static <T> List<List<T>> chunks(List<T> values) {
         List<List<T>> chunks = new ArrayList<>();
         for (int from = 0; from < values.size(); from += PREFETCH_CHUNK)
             chunks.add(values.subList(from, Math.min(values.size(), from + PREFETCH_CHUNK)));

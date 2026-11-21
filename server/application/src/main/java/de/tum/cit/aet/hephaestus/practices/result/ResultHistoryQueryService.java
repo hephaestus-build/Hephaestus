@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
-import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
@@ -48,10 +47,10 @@ public class ResultHistoryQueryService implements ResultHistoryQuery {
     private final ReviewRepository reviews;
     private final ProductItemQuery items;
     private final ResultSourceAuthorization authorization;
+    private final ResultCaptureTimes captureTimes;
     private final ResultHistoryRepository historyRows;
     private final ReviewAssignmentQuery assignments;
     private final AccountMembershipQuery memberships;
-    private final HistoryCustodyQuery custody;
 
     @Override
     @Transactional(readOnly = true)
@@ -312,29 +311,10 @@ public class ResultHistoryQueryService implements ResultHistoryQuery {
         Instant capturedAt(Result result) {
             var known = captured;
             if (known == null) {
-                known = captureTimes();
+                known = captureTimes.of(workspaceId, rows, checks);
                 captured = known;
             }
             return known.get(result.getId());
-        }
-
-        private Map<UUID, Instant> captureTimes() {
-            var producers = authorization.producingJobs(
-                    workspaceId, rows.stream().map(Result::facts).toList());
-            Map<UUID, HistoryCustodyQuery.Receipt> receipts = new HashMap<>();
-            for (var row : rows) {
-                var check = checks.get(row.getId());
-                var job = producers.get(row.getId());
-                if (check != null && check.permitted() && job != null)
-                    receipts.put(row.getId(), new HistoryCustodyQuery.Receipt(row.getReviewId(), job));
-            }
-            var times = custody.capturedAt(workspaceId, Set.copyOf(receipts.values()));
-            Map<UUID, Instant> byResult = new HashMap<>();
-            receipts.forEach((resultId, receipt) -> {
-                var at = times.get(receipt);
-                if (at != null) byResult.put(resultId, at);
-            });
-            return byResult;
         }
     }
 

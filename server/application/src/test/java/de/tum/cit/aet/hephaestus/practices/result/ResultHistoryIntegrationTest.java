@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -143,6 +144,9 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
 
     @MockitoBean
     ResultSourceAuthorization authorization;
+
+    @MockitoSpyBean
+    ResultCaptureTimes captureTimes;
 
     @MockitoBean
     HistoryCustodyQuery custody;
@@ -587,7 +591,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         assertThat(row.storedWorkVersion()).isEqualTo(ResultHistoryEntry.StoredWorkVersion.UNKNOWN);
         assertThat(row.capturedAt()).isNull();
         verify(productItems, never()).currentWorkVersion(anyLong(), anyLong());
-        verify(authorization, never()).producingJobs(anyLong(), any());
+        verify(captureTimes, never()).producingJobs(anyLong(), any());
         verify(custody, never()).capturedAt(anyLong(), any());
         assertStillAsRecorded(recorded);
     }
@@ -615,7 +619,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
     }
 
     /**
-     * The producer lookup and the capture receipt are controlled here; {@code ResultSourceAuthorizationTest} and
+     * The producer lookup and the capture receipt are controlled here; {@code ResultCaptureTimesTest} and
      * {@code HistoryCustodyQueryAdapterTest} prove what they answer.
      */
     @Test
@@ -630,8 +634,9 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         var job = UUID.randomUUID();
         var capturedAt = recordedAt.minusSeconds(3600);
         long workspace = own.getWorkspaceId();
-        when(authorization.producingJobs(eq(workspace), any()))
-                .thenReturn(Map.of(own.getId(), job, other.getId(), job));
+        doReturn(Map.of(own.getId(), job, other.getId(), job))
+                .when(captureTimes)
+                .producingJobs(eq(workspace), any());
         // The job belongs to the first result's review, so the second review's receipt names no time.
         var dated = new HistoryCustodyQuery.Receipt(own.getReviewId(), job);
         var undated = new HistoryCustodyQuery.Receipt(other.getReviewId(), job);
@@ -648,7 +653,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
                 .containsOnly(ResultHistoryEntry.StoredWorkVersion.SAME);
         // One read compares the shared work once, and finds the producers and capture times of all its rows at once.
         verify(productItems).currentWorkVersion(workspace, work.item().getId());
-        verify(authorization).producingJobs(eq(workspace), any());
+        verify(captureTimes).producingJobs(eq(workspace), any());
         verify(custody).capturedAt(workspace, Set.of(dated, undated));
         var detail = history.find(workspace, own.getId(), scenarioAccountId, SourceUsePurpose.CONVERSATIONAL_MENTORING)
                 .orElseThrow();
