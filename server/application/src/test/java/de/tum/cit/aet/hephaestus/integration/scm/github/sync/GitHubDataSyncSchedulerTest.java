@@ -97,6 +97,8 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
     @Mock
     private GitHubHeadCheckRunsReread headCheckRunsReread;
 
+    private GitHubScopeSync scopeSync;
+
     private GitHubDataSyncScheduler scheduler;
 
     @BeforeEach
@@ -111,7 +113,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
                 new BackfillProperties(false, 50, 100, 60),
                 new FilterProperties(Set.of(), Set.of()));
 
-        scheduler = new GitHubDataSyncScheduler(
+        scopeSync = new GitHubScopeSync(
                 syncTargetProvider,
                 syncContextProvider,
                 dataSyncService,
@@ -120,12 +122,15 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
                 issueTypeSyncService,
                 issueDependencySyncService,
                 teamSyncService,
-                properties,
                 rateLimitTracker,
+                headCheckRunsReread);
+        scheduler = new GitHubDataSyncScheduler(
+                syncTargetProvider,
+                properties,
                 Runnable::run, // synchronous executor — deterministic assertions, no timing flakiness
                 connectionQueries,
                 syncJobService,
-                headCheckRunsReread);
+                scopeSync);
 
         lenient().when(syncTargetProvider.getSyncStatistics()).thenReturn(new SyncStatistics(1, 0, 0, 1, false));
         // Skip the sub-issue/dependency gate — irrelevant to job-recording behavior, avoids stubbing
@@ -257,12 +262,12 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
         void shouldLeaveTrackedFailureLoggingToTheJobBoundary() {
             var failure = new IllegalStateException("synthetic sync failure");
             doThrow(failure).when(syncContextProvider).setContext(any());
-            Logger logger = (Logger) LoggerFactory.getLogger(GitHubDataSyncScheduler.class);
+            Logger logger = (Logger) LoggerFactory.getLogger(GitHubScopeSync.class);
             var appender = new ListAppender<ILoggingEvent>();
             appender.start();
             logger.addAppender(appender);
             try {
-                assertThatThrownBy(() -> scheduler.syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.INITIAL))
+                assertThatThrownBy(() -> scopeSync.syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.INITIAL))
                         .isInstanceOf(IllegalStateException.class)
                         .hasCause(failure);
                 assertThat(appender.list).noneMatch(event -> event.getThrowableProxy() != null);
@@ -277,7 +282,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
             when(deletionSweepService.sweepScope(WORKSPACE_ID, handle))
                     .thenReturn(new GitHubDeletionSweepService.SweepOutcome(2, 1, false, 0));
 
-            scheduler.syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
+            scopeSync.syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
 
             verify(deletionSweepService).sweepScope(WORKSPACE_ID, handle);
             // A sweep that verified every repository is a clean pass, not a degraded one.
@@ -288,7 +293,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
         void shouldNotSweepForDeletionsWhenInitial() {
             // A first sync has nothing stale to retire, and every row it has not fetched yet would look
             // deleted to a set difference — sweeping here would delete the mirror it is building.
-            scheduler.syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.INITIAL);
+            scopeSync.syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.INITIAL);
 
             verify(deletionSweepService, never()).sweepScope(anyLong(), any());
         }
@@ -298,7 +303,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
             when(deletionSweepService.sweepScope(WORKSPACE_ID, handle))
                     .thenReturn(new GitHubDeletionSweepService.SweepOutcome(0, 0, true, 0));
 
-            scheduler.syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
+            scopeSync.syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
 
             // A reconciliation that could not verify a repository has not fully reconciled; saying so
             // is the difference between a degraded pass and a false clean bill of health.

@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitHubInstallationDecisionAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationProvisioning;
 import de.tum.cit.aet.hephaestus.integration.scm.github.workspace.GitHubWorkspaceDataSyncTrigger;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
@@ -33,7 +33,7 @@ public class GitHubInstallationAdoptionService {
     private final GitHubInstallationRequestRepository requests;
     private final GitHubInstallationRequests gate;
     private final GitHubInstallationReader github;
-    private final GitHubInstallationLifecycle lifecycle;
+    private final GitHubInstallationProvisioning provisioning;
     private final GitHubInstallationDecisionAudit audit;
     private final GitHubWorkspaceDataSyncTrigger dataSync;
     private final AsyncTaskExecutor monitoringExecutor;
@@ -43,7 +43,7 @@ public class GitHubInstallationAdoptionService {
             GitHubInstallationRequestRepository requests,
             GitHubInstallationRequests gate,
             GitHubInstallationReader github,
-            GitHubInstallationLifecycle lifecycle,
+            GitHubInstallationProvisioning provisioning,
             GitHubInstallationDecisionAudit audit,
             GitHubWorkspaceDataSyncTrigger dataSync,
             @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor,
@@ -51,7 +51,7 @@ public class GitHubInstallationAdoptionService {
         this.requests = requests;
         this.gate = gate;
         this.github = github;
-        this.lifecycle = lifecycle;
+        this.provisioning = provisioning;
         this.audit = audit;
         this.dataSync = dataSync;
         this.monitoringExecutor = monitoringExecutor;
@@ -89,7 +89,7 @@ public class GitHubInstallationAdoptionService {
                         HttpStatus.CONFLICT,
                         "This installation is now on another GitHub account. Ask the account owner to install the app again.");
             }
-            Workspace adopted = lifecycle.adoptInstallation(
+            Workspace adopted = provisioning.adoptInstallation(
                     installationId, live.account(), live.repositorySelection(), adminAccountId);
             if (adopted == null) {
                 throw new ResponseStatusException(

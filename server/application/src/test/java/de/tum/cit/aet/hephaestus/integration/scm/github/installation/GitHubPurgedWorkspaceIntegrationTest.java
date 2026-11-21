@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.installation.dto.GitHubI
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.dto.GitHubInstallationRepositoriesEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.dto.GitHubInstallationTargetEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationLifecycle;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubInstallationProvisioning;
 import de.tum.cit.aet.hephaestus.integration.scm.github.workspace.GitHubInstallationReconciler;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -86,6 +87,9 @@ class GitHubPurgedWorkspaceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private GitHubInstallationLifecycle installationLifecycle;
+
+    @Autowired
+    private GitHubInstallationProvisioning installationProvisioning;
 
     @Autowired
     private WorkspaceService workspaceService;
@@ -263,6 +267,7 @@ class GitHubPurgedWorkspaceIntegrationTest extends BaseIntegrationTest {
         return new GitHubInstallationReconciler(
                 tokens,
                 installationLifecycle,
+                installationProvisioning,
                 workspaceStates,
                 workspaceService,
                 scopeFilter,

@@ -127,7 +127,8 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
                     "integration.scm.github.commit.CommitEnrichmentEventListener.onCommitCreated",
                     new Repair(
                             RepairKind.POLL,
-                            "GitHubDataSyncScheduler runs GitHubDataSyncService enrichment, which selects commits still missing contributor rows.",
+                            "GitHubDataSyncScheduler runs each scope's GitHubScopeSync, whose GitHubDataSyncService enrichment selects commits"
+                                    + " still missing contributor rows.",
                             "integration.scm.github.sync.GitHubDataSyncScheduler.syncDataCron",
                             true)),
             Map.entry(

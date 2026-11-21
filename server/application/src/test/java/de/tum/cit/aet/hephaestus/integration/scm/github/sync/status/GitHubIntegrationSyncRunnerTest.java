@@ -24,7 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTar
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobHandle;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
-import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncScheduler;
+import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.backfill.BackfillPageObserver;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.backfill.GitHubHistoricalBackfillService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -41,7 +41,7 @@ class GitHubIntegrationSyncRunnerTest extends BaseUnitTest {
     private static final long WORKSPACE_ID = 1L;
 
     @Mock
-    private GitHubDataSyncScheduler dataSyncScheduler;
+    private GitHubScopeSync scopeSync;
 
     @Mock
     private SyncTargetProvider syncTargetProvider;
@@ -64,7 +64,7 @@ class GitHubIntegrationSyncRunnerTest extends BaseUnitTest {
                 15,
                 new BackfillProperties(true, 50, 100, 60),
                 new FilterProperties(Set.of(), Set.of()));
-        runner = new GitHubIntegrationSyncRunner(dataSyncScheduler, syncTargetProvider, backfillService, properties);
+        runner = new GitHubIntegrationSyncRunner(scopeSync, syncTargetProvider, backfillService, properties);
         ref = new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, "100");
     }
 
@@ -87,7 +87,7 @@ class GitHubIntegrationSyncRunnerTest extends BaseUnitTest {
 
             runner.reconcile(ref, handle, SyncJobType.RECONCILIATION);
 
-            verify(dataSyncScheduler).syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
+            verify(scopeSync).syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
             verify(handle).reportCancelled();
         }
 
@@ -96,7 +96,7 @@ class GitHubIntegrationSyncRunnerTest extends BaseUnitTest {
             // The scheduler decides the sweep off this value; dropping it makes INITIAL sweep like RECONCILIATION.
             runner.reconcile(ref, handle, SyncJobType.INITIAL);
 
-            verify(dataSyncScheduler).syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.INITIAL);
+            verify(scopeSync).syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.INITIAL);
         }
     }
 
@@ -112,8 +112,8 @@ class GitHubIntegrationSyncRunnerTest extends BaseUnitTest {
                     15,
                     new BackfillProperties(false, 50, 100, 60),
                     new FilterProperties(Set.of(), Set.of()));
-            GitHubIntegrationSyncRunner runnerWithCycleDisabled = new GitHubIntegrationSyncRunner(
-                    dataSyncScheduler, syncTargetProvider, backfillService, cycleDisabled);
+            GitHubIntegrationSyncRunner runnerWithCycleDisabled =
+                    new GitHubIntegrationSyncRunner(scopeSync, syncTargetProvider, backfillService, cycleDisabled);
 
             // hephaestus.sync.backfill.enabled gates the scheduled cycle, not the capability —
             // GitHubHistoricalBackfillService#runBackfillBatch deliberately ignores it, so an
