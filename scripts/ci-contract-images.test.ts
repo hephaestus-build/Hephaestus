@@ -683,4 +683,8 @@ void test("a JRE pin below the fix of the 2026-11-17 OpenJDK advisory is refused
 	assert.equal(versionBelow("25.0.4.1_1", JRE_FLOOR), true);
 	assert.equal(versionBelow("25.0.5.1_5", JRE_FLOOR), false);
 	assert.equal(versionBelow("25.0.6_8", JRE_FLOOR), false);
+	assert.equal(versionBelow("25.0.10_1", JRE_FLOOR), false);
+	// A pin that the floor cannot judge fails the gate instead of passing it.
+	assert.throws(() => versionBelow("25.0.4+7", JRE_FLOOR), /not <numbers>_<build>/u);
+	assert.throws(() => versionBelow("27.0.1_1", JRE_FLOOR), /not on the Java 25 line/u);
 });

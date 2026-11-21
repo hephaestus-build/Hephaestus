@@ -50,7 +50,7 @@ If the advisory or the vendor names a mitigation, ship it before the fix.
 A mitigation needs no upstream release, so it is the fastest change.
 For a JVM option, set it in `server/application/project.toml` for the training run and every launch.
 Then make gate:toolchain refuse a JRE pin below the fixed build without it. #4682 did this for CVE-2026-114938.
-When the fixed build is the pin, remove the option in the next release, and keep the fixed build as the floor (`JRE_FLOOR` in `scripts/lib/buildpack-descriptor.ts`).
+Remove the option in the release that ships the fixed build, and keep the fixed build as the floor (`JRE_FLOOR` in `scripts/lib/buildpack-descriptor.ts`).
 
 ## Ship the change
 
@@ -67,7 +67,8 @@ When the fixed build is the pin, remove the option in the next release, and keep
 ## Deploy
 
 1. Run **Release / Promote** for Staging and the new release.
-2. Confirm the version on Staging, and any security setting of the mitigation in the server log.
+2. Confirm the version on Staging. For a JRE fix, the server's startup line `Starting … using Java <version>` names the fixed build.
+   For a mitigation, confirm its setting in the server log.
 3. Run **Release / Promote** for Production. Its required reviewer approves it.
 4. Confirm the version on Production.
 

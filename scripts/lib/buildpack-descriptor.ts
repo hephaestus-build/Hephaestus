@@ -33,13 +33,25 @@ export function addedModules(options: string): readonly string[] {
 
 /**
  * The first JRE build that fixes the OpenJDK advisory of 2026-11-17 (CVE-2026-114938 to CVE-2026-114947).
- * gate:toolchain refuses a pin below it, without waiting for an image scan to match the runtime.
+ * gate:toolchain refuses a pin below it, without waiting for an image scan to match the runtime. It names
+ * the Java 25 line, so a pin of another line is refused until the floor names that line's fixed build.
  */
 export const JRE_FLOOR = [25, 0, 5, 1] as const;
 
-/** Whether a Liberica version such as `25.0.5.0.3_5` is below `fixed`, compared part by part. */
+/**
+ * Whether a pin version such as `25.0.5.0.3_5` is below `fixed`, compared part by part. A pin of another
+ * Java line than `fixed`, or a version that is not `<numbers>_<build>`, throws instead of passing.
+ */
 export function versionBelow(version: string, fixed: readonly number[]): boolean {
+	if (!/^\d+(?:\.\d+)*_\d+$/u.test(version)) {
+		throw new Error(`the JRE pin version ${version} is not <numbers>_<build>`);
+	}
 	const parts = (version.split("_")[0] ?? "").split(".").map(Number);
+	if (parts[0] !== fixed[0]) {
+		throw new Error(
+			`the JRE pin ${version} is not on the Java ${String(fixed[0])} line of the floor; update the floor`,
+		);
+	}
 	for (let index = 0; index < Math.max(parts.length, fixed.length); index += 1) {
 		const left = parts[index] ?? 0;
 		const right = fixed[index] ?? 0;
