@@ -11,7 +11,12 @@ import { problemType } from "@/lib/problem-detail";
 import { stringifySearch } from "@/lib/router-search";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	ROUTE_RENDER_WAIT,
+	renderRouteAt,
+	renderRouteAtWithRouter,
+} from "@/test/router-harness";
 
 import { practiceSetupHandlers, practicesHandlers, wirePractice } from "./-practice-server";
 
@@ -656,6 +661,86 @@ describe("moving a practice to the practice repository", () => {
 			ROUTE_RENDER_WAIT,
 		);
 		screen.getByRole("button", { name: "Edit in Hephaestus" });
+	});
+
+	it("asks for no recent sign-in for a move whose level closed while it ran", async () => {
+		const answer = deferred();
+		server.use(
+			http.put(EDITED_IN_URL, async () => {
+				await answer.promise;
+				return stepUpRequired();
+			}),
+		);
+
+		const { router, queryClient } = renderRouteAtWithRouter(PRACTICE_LEVEL);
+		await screen.findByText("Edited in Hephaestus", {}, ROUTE_RENDER_WAIT);
+		const dialog = await confirmMove();
+		await within(dialog).findByRole("button", { name: "Moving it to the repository…" });
+		// The reader leaves, as with the browser's Back, while the move runs.
+		await router.navigate({
+			to: "/w/$workspaceSlug/admin/practices",
+			params: { workspaceSlug: "acme" },
+		});
+		await waitFor(
+			async () => expect(screen.queryByRole("alertdialog")).toBeNull(),
+			ROUTE_RENDER_WAIT,
+		);
+		answer.resolve();
+
+		// Once the answer has been handled, nothing asks the reader to sign in again.
+		await waitFor(async () => expect(queryClient.isMutating()).toBe(0), ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("dialog", { name: "Confirm access" })).toBeNull();
+	});
+
+	it("keeps a move confirmed again after its level reopened apart from the earlier move's answer", async () => {
+		const first = deferred();
+		const second = deferred();
+		let requests = 0;
+		server.use(
+			http.put(
+				EDITED_IN_URL,
+				async () => {
+					requests += 1;
+					await first.promise;
+					return HttpResponse.json(
+						{ title: "Conflict", status: 409, detail: "The earlier move was refused." },
+						{ status: 409 },
+					);
+				},
+				{ once: true },
+			),
+			http.put(EDITED_IN_URL, async () => {
+				requests += 1;
+				await second.promise;
+				server.use(...practicesHandlers([inRepository]));
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+
+		const { router, queryClient } = renderRouteAtWithRouter(PRACTICE_LEVEL);
+		await screen.findByText("Edited in Hephaestus", {}, ROUTE_RENDER_WAIT);
+		await confirmMove();
+		await router.navigate({
+			to: "/w/$workspaceSlug/admin/practices",
+			params: { workspaceSlug: "acme" },
+		});
+		await waitFor(
+			async () => expect(screen.queryByRole("alertdialog")).toBeNull(),
+			ROUTE_RENDER_WAIT,
+		);
+		await router.navigate({ href: PRACTICE_LEVEL });
+		await screen.findByText("Edited in Hephaestus", {}, ROUTE_RENDER_WAIT);
+		const dialog = await confirmMove();
+		await waitFor(async () => expect(requests).toBe(2), ROUTE_RENDER_WAIT);
+
+		// The earlier move's refusal arrives while the later one runs: the later dialog stays busy.
+		first.resolve();
+		await waitFor(async () => expect(queryClient.isMutating()).toBe(1), ROUTE_RENDER_WAIT);
+		within(dialog).getByRole("button", { name: "Moving it to the repository…" });
+		expect(within(dialog).queryByRole("alert")).toBeNull();
+
+		second.resolve();
+		await screen.findByText("Edited in acme/practices", {}, ROUTE_RENDER_WAIT);
 	});
 
 	it("asks for a recent sign-in after one request, then moves it on a fresh try", async () => {

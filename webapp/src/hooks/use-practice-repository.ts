@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import {
 	changePracticeEditedInMutation,
@@ -99,8 +99,11 @@ export function useRecentSignIn() {
 	};
 }
 
-/** The one Move to repository this page may have open, in one drawer level. */
-type OpenMove = { level: string; practiceSlug: string } & MoveToRepositoryRequest;
+/**
+ * The one Move to repository this page may have open, in one drawer level. `id` names the request
+ * that a confirmation sent, so an answer to an earlier one never ends a later one.
+ */
+type OpenMove = { level: string; practiceSlug: string; id: number } & MoveToRepositoryRequest;
 
 /**
  * Move to repository in each practice's level on Practice setup. The practice repository card has
@@ -112,6 +115,12 @@ type OpenMove = { level: string; practiceSlug: string } & MoveToRepositoryReques
 export function useMoveToRepository(workspaceSlug: string, openLevels: readonly string[]) {
 	const queryClient = useQueryClient();
 	const [request, setRequest] = useState<OpenMove>();
+	// The id of the last confirmed move, and the request on screen as the mutation's callbacks see it.
+	const lastMove = useRef(0);
+	const latest = useRef(request);
+	useLayoutEffect(() => {
+		latest.current = request;
+	});
 	const recentSignIn = useRecentSignIn();
 	const { repository } = usePracticeRepositoryRead(workspaceSlug);
 	const { refreshSetting, refreshPractice } = usePracticeRepositoryRefresh(workspaceSlug);
@@ -122,24 +131,25 @@ export function useMoveToRepository(workspaceSlug: string, openLevels: readonly 
 	}
 
 	// The move keeps its dialog open and busy until the page shows the result, then ends the
-	// request: a dialog closed earlier would hand focus to a control that the reload replaces. Only a
-	// pending request ends, so a level that closed meanwhile, which ended its own, stays closed.
+	// request: a dialog closed earlier would hand focus to a control that the reload replaces. Only the
+	// pending request that this answer belongs to ends, so a level that closed meanwhile stays closed,
+	// and a move confirmed again after it keeps its own dialog.
 	const endMove = (
-		practiceSlug: string,
+		id: number | undefined,
 		refusal?: { reason: string; problems: PracticeFileProblem[] },
 	) =>
 		setRequest((current) => {
-			if (current?.practiceSlug !== practiceSlug || current.phase !== "pending") {
+			if (current === undefined || current.id !== id || current.phase !== "pending") {
 				return current;
 			}
-			return refusal === undefined
-				? undefined
-				: { level: current.level, practiceSlug, phase: "refused", ...refusal };
+			return refusal === undefined ? undefined : { ...current, phase: "refused", ...refusal };
 		});
 
 	const move = useMutation({
 		...changePracticeEditedInMutation(),
-		onSuccess: async (_data, variables) => {
+		// The id of the move that this request sent, which each answer below hands to `endMove`.
+		onMutate: () => lastMove.current,
+		onSuccess: async (_data, variables, id) => {
 			const { practiceSlug } = variables.path;
 			await refreshPractice(practiceSlug);
 			// A failed reload leaves a practice that still reads as editable here, so the dialog keeps
@@ -148,7 +158,7 @@ export function useMoveToRepository(workspaceSlug: string, openLevels: readonly 
 				getPracticeQueryKey({ path: { workspaceSlug, practiceSlug } }),
 			);
 			if (reload?.status === "error") {
-				endMove(practiceSlug, {
+				endMove(id, {
 					reason: problemDetailOf(
 						reload.error,
 						"The practice moved, but it did not reload. Try again to reload it.",
@@ -159,15 +169,20 @@ export function useMoveToRepository(workspaceSlug: string, openLevels: readonly 
 			}
 			// The reload is in the cache, so the render this schedules shows the practice read-only:
 			// the dialog closes in the same render that shows Edit in Hephaestus, and focus finds it.
-			endMove(practiceSlug);
+			endMove(id);
 			toast.success("This practice is now edited in the practice repository");
 		},
-		onError: async (error, variables) => {
+		onError: async (error, variables, id) => {
 			const { practiceSlug } = variables.path;
 			const stepUp = stepUpChallengeOf(error);
 			if (stepUp !== undefined) {
-				endMove(practiceSlug);
-				recentSignIn.ask(stepUp);
+				// A move the reader left, by closing its level, asks for nothing.
+				const open = latest.current;
+				const stillOpen = open !== undefined && open.id === id && open.phase === "pending";
+				endMove(id);
+				if (stillOpen) {
+					recentSignIn.ask(stepUp);
+				}
 				return;
 			}
 			// A refusal can mean that the practice or the setting changed meanwhile: show them as they
@@ -179,10 +194,10 @@ export function useMoveToRepository(workspaceSlug: string, openLevels: readonly 
 				getPracticeOptions({ path: { workspaceSlug, practiceSlug } }).queryKey,
 			);
 			if (now?.editedIn === "REPOSITORY") {
-				endMove(practiceSlug);
+				endMove(id);
 				return;
 			}
-			endMove(practiceSlug, { reason: problemDetailOf(error), problems: error.problems ?? [] });
+			endMove(id, { reason: problemDetailOf(error), problems: error.problems ?? [] });
 		},
 	});
 
@@ -197,10 +212,11 @@ export function useMoveToRepository(workspaceSlug: string, openLevels: readonly 
 		move: (level: string, practiceSlug: string): MoveToRepositoryControl => ({
 			repository,
 			request: request?.level === level ? request : undefined,
-			onOpen: () => setRequest({ level, practiceSlug, phase: "confirming" }),
+			onOpen: () => setRequest({ level, practiceSlug, id: lastMove.current, phase: "confirming" }),
 			onCancel: cancel,
 			onConfirm: () => {
-				setRequest({ level, practiceSlug, phase: "pending" });
+				lastMove.current += 1;
+				setRequest({ level, practiceSlug, id: lastMove.current, phase: "pending" });
 				move.mutate({ path: { workspaceSlug, practiceSlug }, body: { editedIn: "REPOSITORY" } });
 			},
 		}),

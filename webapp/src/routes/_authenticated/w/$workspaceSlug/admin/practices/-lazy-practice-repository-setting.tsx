@@ -21,7 +21,8 @@ export function LazyPracticeRepositorySetting({ workspaceSlug }: { workspaceSlug
 		<Suspense
 			fallback={<Skeleton id={PRACTICE_REPOSITORY_SECTION_ID} className="h-14 w-full rounded-lg" />}
 		>
-			<Setting workspaceSlug={workspaceSlug} />
+			{/* The route stays mounted across a workspace switch: a new workspace starts with no draft. */}
+			<Setting key={workspaceSlug} workspaceSlug={workspaceSlug} />
 		</Suspense>
 	);
 }
