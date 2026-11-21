@@ -1653,6 +1653,34 @@ tests:
               summary: No PostgreSQL backup completed in the last 30 hours
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  # With sandboxes, a backup Pod never preempts: on a full node its Job stays active and Pending, and nothing fails.
+  # The rule reads the last success, so a backup that never runs fires like one that fails.
+  - name: a backup Job that waits Pending past 30 hours fires, with no failed Job
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
+        values: "-200000x180"
+      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
+        values: "-100800x180"
+      - series: 'kube_cronjob_status_active{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
+        values: "1x180"
+      - series: 'kube_job_status_failed{namespace="hephaestus",job_name="hephaestus-postgresql-backup-diff-29400000"}'
+        values: "0x180"
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: HephaestusBackupStale
+        exp_alerts: []
+      - eval_time: 3h
+        alertname: HephaestusBackupStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: hephaestus
+              release: hephaestus
+            exp_annotations:
+              summary: No PostgreSQL backup completed in the last 30 hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: backup CronJobs with no successful run for 30 hours fire
     interval: 1m
     input_series:
