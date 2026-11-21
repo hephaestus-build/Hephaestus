@@ -84,7 +84,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
                     "gitlab-event-routing"),
             assignment(
-                    "integration.scm.workspace.GitLabStoppedProjectServiceIntegrationTest", "gitlab-stopped-project"),
+                    "integration.scm.workspace.gitlab.GitLabStoppedProjectServiceIntegrationTest",
+                    "gitlab-stopped-project"),
             assignment("integration.slack.SlackConsentLifecycleE2EIntegrationTest", "slack-lifecycle"),
             assignment("integration.slack.channel.SlackChannelAdminControllerIntegrationTest", "slack-signed"),
             assignment("integration.slack.connect.SlackScopesControllerIntegrationTest", "slack-signed"),
@@ -396,7 +397,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "practices.profile.PracticeProfileOverviewIntegrationTest",
             "integration.scm.gitlab.credentials.GitLabTokenLifecycleIntegrationTest",
             "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
-            "integration.scm.workspace.GitLabStoppedProjectServiceIntegrationTest",
+            "integration.scm.workspace.gitlab.GitLabStoppedProjectServiceIntegrationTest",
             "integration.slack.SlackConsentLifecycleE2EIntegrationTest",
             "practices.acrossworkspace.PracticesAcrossWorkspaceIntegrationTest",
             "practices.feedback.AbstractFeedbackDeliveryIntegrationTest",

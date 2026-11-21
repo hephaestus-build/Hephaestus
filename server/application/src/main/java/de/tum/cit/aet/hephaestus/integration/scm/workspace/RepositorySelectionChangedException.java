@@ -5,11 +5,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 /** The connection, the project selection or the monitored projects changed while a request checked them. */
-final class RepositorySelectionChangedException extends ResponseStatusException {
+public final class RepositorySelectionChangedException extends ResponseStatusException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    RepositorySelectionChangedException() {
+    public RepositorySelectionChangedException() {
         super(
                 HttpStatus.CONFLICT,
                 "The connection, project selection or monitored projects changed while we checked them. Try again.");

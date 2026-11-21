@@ -22,6 +22,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserTeamsDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabStoppedProjectDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabStoppedProjectService;
 import de.tum.cit.aet.hephaestus.testconfig.AuditedRequestCheck;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;

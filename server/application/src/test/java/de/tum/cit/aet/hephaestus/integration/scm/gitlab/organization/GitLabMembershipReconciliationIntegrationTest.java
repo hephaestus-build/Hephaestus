@@ -58,7 +58,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectA
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
-import de.tum.cit.aet.hephaestus.integration.scm.workspace.GitLabRepositorySelectionService;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabRepositorySelectionService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;

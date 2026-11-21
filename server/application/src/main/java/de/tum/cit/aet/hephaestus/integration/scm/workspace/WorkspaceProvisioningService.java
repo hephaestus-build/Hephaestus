@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.GITHUB_API_BASE_URL;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
@@ -19,6 +18,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProviderAvailabil
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubAuthenticatedUserDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabRestGroupResponse;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabTokenUserResponse;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
@@ -366,12 +367,12 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         }
 
         log.info("Falling back to group API for token validation: serverUrl={}, groupPath={}", serverUrl, groupPath);
-        GitLabGroupResponse groupInfo = gitlabClient
+        GitLabRestGroupResponse groupInfo = gitlabClient
                 .get()
                 .uri(serverUrl + "/api/v4/groups/{groupPath}?with_projects=false", groupPath)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + patToken)
                 .retrieve()
-                .bodyToMono(GitLabGroupResponse.class)
+                .bodyToMono(GitLabRestGroupResponse.class)
                 .block(Duration.ofSeconds(10));
 
         if (groupInfo == null || groupInfo.id() == null) {
@@ -527,18 +528,4 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         if (TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("Workspace bootstrap cannot hold a transaction across provider reads");
     }
-
-    private record GitLabTokenUserResponse(
-            Long id,
-            String username,
-            String name,
-            @JsonProperty("avatar_url") String avatarUrl,
-            @JsonProperty("web_url") String webUrl,
-            @Nullable Boolean bot) {}
-
-    private record GitLabGroupResponse(
-            Long id,
-            String name,
-            @JsonProperty("avatar_url") String avatarUrl,
-            @JsonProperty("web_url") String webUrl) {}
 }
