@@ -64,25 +64,31 @@ describe("resolveLegalContent", () => {
 		]);
 	});
 
-	it("cancels the body of a candidate it does not read, so its request ends", async () => {
-		let cancelled = false;
-		const answers: Record<string, () => Response> = {
-			"/legal-overrides/imprint.md": () =>
-				new Response(
-					new ReadableStream({
-						cancel: () => {
-							cancelled = true;
-						},
-					}),
-					{ status: 404 },
-				),
-			"/legal/_disclaimer/imprint.md": () => new Response("# fallback", { status: 200 }),
-		};
-		mockAnswers(answers);
-		const resolved = await resolveLegalContent("imprint");
-		expect(resolved.source).toBe("disclaimer");
-		expect(cancelled).toBe(true);
-	});
+	it.each([
+		{ answer: "a missing file", init: { status: 404 } },
+		{ answer: "the page itself", init: { status: 200, headers: { "content-type": "text/html" } } },
+	])(
+		"cancels the body of $answer, which it does not read, so its request ends",
+		async ({ init }) => {
+			let cancelled = false;
+			const answers: Record<string, () => Response> = {
+				"/legal-overrides/imprint.md": () =>
+					new Response(
+						new ReadableStream({
+							cancel: () => {
+								cancelled = true;
+							},
+						}),
+						init,
+					),
+				"/legal/_disclaimer/imprint.md": () => new Response("# fallback", { status: 200 }),
+			};
+			mockAnswers(answers);
+			const resolved = await resolveLegalContent("imprint");
+			expect(resolved.source).toBe("disclaimer");
+			expect(cancelled).toBe(true);
+		},
+	);
 
 	it("rejects SPA-fallback HTML responses so the cascade continues", async () => {
 		mockResponses({
