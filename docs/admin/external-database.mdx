@@ -103,6 +103,9 @@ It has no setting for a connection without TLS or without certificate verificati
 Helm does not check the connection limit of your server.
 [Database connections](./sizing#database-connections) gives the clients that a release needs, and what your server must add to them.
 
+A connection pooler between the release and the database must use session pooling.
+The server holds `LISTEN` sessions, session advisory locks and server-side prepared statements, and transaction pooling cannot keep them.
+
 ## Check that it worked
 
 1. Read the log of the migration Job of the revision. It logs `Database migration completed`.
