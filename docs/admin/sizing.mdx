@@ -240,14 +240,15 @@ cert-manager and the local-path provisioner set no requests, and the headroom co
 Of the 14196 MiB of a 16 GiB node, the reserve keeps 972 MiB, and the release can use 13224 MiB.
 
 Every upgrade with backups on runs the stanza Job beside the migration, so the upgrade peak counts it, with 64 MiB.
-`stanza-create` and `check` used at most 5 MiB of memory together.
 The upgrade peak does not count a scheduled backup that starts during an upgrade, for 256 MiB.
 Such a backup fits in the headroom, or it waits for room.
 
 With sandboxes, backup Pods take the lowest priority, which never preempts.
 This decides who yields when the requests on the node are full.
-A backup waits for room, and a Pod of a higher priority preempts a running backup before a sandbox.
-A preemption does not count as a failed attempt, so the Job runs the backup again.
+A backup waits for room, and a Pod of a higher priority preempts a running backup before a conversation sandbox.
+A backup and a review sandbox share the lowest priority.
+
+A preemption or an eviction does not count as a failed attempt, so the Job runs the backup again.
 PostgreSQL archives its WAL from its own Pod while a backup waits, so no change is lost.
 The steady state counts one backup, so that a backup gets its room when no upgrade runs.
 
@@ -255,6 +256,8 @@ The steady state counts one backup, so that a backup gets its room when no upgra
 
 On 2026-11-21, a full encrypted backup of a 2.25 GB database was measured.
 It used at most 31 MiB of private memory in the server and 18 MiB in the Job.
+`stanza-create` and `check` used at most 5 MiB of memory together.
+
 With a 256 MiB limit, it took 22 seconds, as long as with no limit. With 128 MiB, it took 291 seconds, because the kernel reclaimed its page cache.
 The measurement wrote to a local repository. An S3 repository was not measured.
 

@@ -59,7 +59,7 @@ metadata:
 spec:
   backoffLimit: 6
   ttlSecondsAfterFinished: 86400
-  # A preemption is not a failed attempt.
+  # A preemption or an eviction is not a failed attempt.
   podFailurePolicy:
     rules:
       - action: Ignore
@@ -160,7 +160,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
-      # A preemption is not a failed attempt: a backup in the lowest tier yields its room.
+      # A preemption or an eviction is not a failed attempt: a backup in the lowest tier yields its room.
       podFailurePolicy:
         rules:
           - action: Ignore
