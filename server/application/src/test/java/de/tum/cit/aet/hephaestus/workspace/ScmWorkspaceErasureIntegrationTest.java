@@ -163,14 +163,13 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
 
         for (Path root : roots) {
             var properties = new GitRepositoryProperties(true, 1, 1024, 1L << 40);
+            var locks = new GitRepositoryLockManager();
+            var layout = new FabricLayout(root.toString());
             var retention = new GitMirrorRetention(
                     new GitRepositoryManager(
-                            properties,
-                            new GitRepositoryLockManager(),
-                            new FabricLayout(root.toString()),
-                            GitTransportFixtures.guarded(),
-                            GitTransportFixtures.copyFence(),
-                            new SimpleMeterRegistry()),
+                            properties, locks, layout, GitTransportFixtures.guarded(), new SimpleMeterRegistry()),
+                    locks,
+                    layout,
                     repositoryRepository,
                     properties,
                     new SimpleMeterRegistry());
@@ -201,14 +200,13 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
                 repositoryId);
         repositoryToMonitorRepository.deleteAllByWorkspaceId(workspaceId);
         var properties = new GitRepositoryProperties(true, 1, 1024, 1L << 40);
+        var locks = new GitRepositoryLockManager();
+        var layout = new FabricLayout(mirrorRoot.toString());
         var retention = new GitMirrorRetention(
                 new GitRepositoryManager(
-                        properties,
-                        new GitRepositoryLockManager(),
-                        new FabricLayout(mirrorRoot.toString()),
-                        GitTransportFixtures.guarded(),
-                        GitTransportFixtures.copyFence(),
-                        new SimpleMeterRegistry()),
+                        properties, locks, layout, GitTransportFixtures.guarded(), new SimpleMeterRegistry()),
+                locks,
+                layout,
                 repositoryRepository,
                 properties,
                 new SimpleMeterRegistry());

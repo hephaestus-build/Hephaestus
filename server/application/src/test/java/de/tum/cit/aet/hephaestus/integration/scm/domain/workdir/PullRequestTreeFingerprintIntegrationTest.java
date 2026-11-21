@@ -93,17 +93,17 @@ class PullRequestTreeFingerprintIntegrationTest extends BaseIntegrationTest {
             Files.writeString(upstreamPath.resolve("change.txt"), "The reviewed change.\n");
             upstream.add().addFilepattern(".").call();
             String head = commit(upstream, "The reviewed change");
-            var worker = manager("worker");
-            worker.ensureRepository(scope.key(), upstreamPath.toUri().toString(), null);
+            var worker = mirror("worker");
+            worker.manager().ensureRepository(scope.key(), upstreamPath.toUri().toString(), null);
             var kind = RepositoryTreeContentSource.KIND;
             jdbc.update(
                     "UPDATE issue SET head_ref_oid=?, base_ref_oid=? WHERE id=?",
                     head,
                     base,
                     scope.item().sourceId());
-            try (var capture = worker.readTreeSnapshot(scope.key(), head, base)) {
-                String captured = SourceFingerprint.git(kind, GitRepositoryManager.treeIdentity(head, base));
-                var otherHost = manager("other-host");
+            try (var capture = worker.snapshots().readTreeSnapshot(scope.key(), head, base)) {
+                String captured = SourceFingerprint.git(kind, GitTreeSnapshots.treeIdentity(head, base));
+                var otherHost = mirror("other-host").manager();
                 assertThat(otherHost.isRepositoryCloned(scope.key())).isFalse();
                 assertThat(items.fingerprints(scope.item(), Set.of(kind), null))
                         .as("the server reads what the capture read, from the pull request's commits alone")
@@ -147,13 +147,17 @@ class PullRequestTreeFingerprintIntegrationTest extends BaseIntegrationTest {
                 .name();
     }
 
-    private GitRepositoryManager manager(String role) {
-        return new GitRepositoryManager(
-                new GitRepositoryProperties(true, 2, 1L << 28, 1L << 40),
-                new GitRepositoryLockManager(),
-                new FabricLayout(root.resolve(role).toString()),
-                GitTransportFixtures.guarded(),
-                GitTransportFixtures.copyFence(),
-                new SimpleMeterRegistry());
+    /** One role's mirrors and the snapshots that share their lock and their root. */
+    private record Mirror(GitRepositoryManager manager, GitTreeSnapshots snapshots) {}
+
+    private Mirror mirror(String role) {
+        var properties = new GitRepositoryProperties(true, 2, 1L << 28, 1L << 40);
+        var locks = new GitRepositoryLockManager();
+        var layout = new FabricLayout(root.resolve(role).toString());
+        var transports = GitTransportFixtures.guarded();
+        var manager = new GitRepositoryManager(properties, locks, layout, transports, new SimpleMeterRegistry());
+        return new Mirror(
+                manager,
+                new GitTreeSnapshots(manager, properties, locks, layout, transports, GitTransportFixtures.copyFence()));
     }
 }

@@ -57,6 +57,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLoc
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -428,19 +429,17 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
             requested.countDown();
             return fence.capture();
         });
-        var manager = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 2, 1L << 30, 1L << 40),
-                locks,
-                new FabricLayout(temporary.resolve("checkout-lock-order").toString()),
-                GitTransportFixtures.guarded(),
-                admission,
-                new SimpleMeterRegistry());
+        var properties = new GitRepositoryProperties(true, 2, 1L << 30, 1L << 40);
+        var layout = new FabricLayout(temporary.resolve("checkout-lock-order").toString());
+        var transports = GitTransportFixtures.guarded();
+        var manager = new GitRepositoryManager(properties, locks, layout, transports, new SimpleMeterRegistry());
+        var snapshots = new GitTreeSnapshots(manager, properties, locks, layout, transports, admission);
         manager.ensureRepository(key, upstream.toUri().toString(), null);
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            Future<GitRepositoryManager.GitTreeSnapshot> copy;
+            Future<GitTreeSnapshots.GitTreeSnapshot> copy;
             var erasure = fence.erase();
             try (erasure) {
-                copy = executor.submit(() -> manager.readTreeSnapshot(key, head, head));
+                copy = executor.submit(() -> snapshots.readTreeSnapshot(key, head, head));
                 assertThat(requested.await(30, TimeUnit.SECONDS)).isTrue();
                 // A blocked database admission must not prevent a mirror writer from completing.
                 assertThat(executor.submit(() -> locks.withWriteLock(key, () -> true))
@@ -464,13 +463,18 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         // A regression that requests another session must fail rather than hang this test indefinitely.
         options.setProperty("options", "-c lock_timeout=5s");
         guardedSource.setConnectionProperties(options);
-        var manager = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 2, 1L << 30, 1L << 40),
-                new GitRepositoryLockManager(),
-                new FabricLayout(temporary.resolve("checkout-transaction").toString()),
-                GitTransportFixtures.guarded(),
-                new PostgresPersonDataCopyFence(guardedSource, new JdbcTemplate(guardedSource)),
-                new SimpleMeterRegistry());
+        var properties = new GitRepositoryProperties(true, 2, 1L << 30, 1L << 40);
+        var locks = new GitRepositoryLockManager();
+        var layout = new FabricLayout(temporary.resolve("checkout-transaction").toString());
+        var transports = GitTransportFixtures.guarded();
+        var manager = new GitRepositoryManager(properties, locks, layout, transports, new SimpleMeterRegistry());
+        var snapshots = new GitTreeSnapshots(
+                manager,
+                properties,
+                locks,
+                layout,
+                transports,
+                new PostgresPersonDataCopyFence(guardedSource, new JdbcTemplate(guardedSource)));
         manager.ensureRepository(key, upstream.toUri().toString(), null);
         String tree;
         try (var git = Git.open(upstream.toFile())) {
@@ -496,11 +500,11 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                                             + " AND classid=2165 AND objid=1 AND NOT granted)",
                                     Boolean.class,
                                     eraserPid.get())));
-                    assertThat(manager.copyCheckout(key, head, tree, null, target))
+                    assertThat(snapshots.copyCheckout(key, head, tree, null, target))
                             .isTrue();
-                    assertThat(manager.copyCheckout(key, head, tree, null, temporary.resolve("cached-copy")))
+                    assertThat(snapshots.copyCheckout(key, head, tree, null, temporary.resolve("cached-copy")))
                             .isFalse();
-                    assertThat(manager.copyCheckout(
+                    assertThat(snapshots.copyCheckout(
                                     key, head, tree, List.of("src/App.java"), temporary.resolve("scan-copy")))
                             .isTrue();
                     assertThat(target.resolve("src/App.java")).hasContent(SOURCE);
@@ -785,6 +789,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
     /** One server: its own disk, mirror, checkout cache and evidence folders, and the shared PostgreSQL. */
     private final class Server {
         final GitRepositoryManager git;
+        final GitTreeSnapshots snapshots;
         final EvidenceFolderPersonDataCatalog catalog;
         final JobEvidenceFiles files;
         final RepositoryKey key;
@@ -798,13 +803,12 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         Server(Path root, ReviewJob job, UnaryOperator<CapturedCheckouts> checkouts) {
             this.root = root;
             key = new RepositoryKey(job.getWorkspaceId(), 4242L);
-            git = new GitRepositoryManager(
-                    new GitRepositoryProperties(true, 2, 1L << 30, 1L << 40),
-                    new GitRepositoryLockManager(),
-                    new FabricLayout(root.toString()),
-                    GitTransportFixtures.guarded(),
-                    fence,
-                    new SimpleMeterRegistry());
+            var properties = new GitRepositoryProperties(true, 2, 1L << 30, 1L << 40);
+            var locks = new GitRepositoryLockManager();
+            var layout = new FabricLayout(root.toString());
+            var transports = GitTransportFixtures.guarded();
+            git = new GitRepositoryManager(properties, locks, layout, transports, new SimpleMeterRegistry());
+            snapshots = new GitTreeSnapshots(git, properties, locks, layout, transports, fence);
             // The server's sync has mirrored the monitored repository.
             git.ensureRepository(key, upstream.toUri().toString(), null);
             catalog = new EvidenceFolderPersonDataCatalog(
@@ -826,7 +830,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                     new AttemptInputs(
                             inputRows,
                             checkouts.apply(new ScmCapturedCheckouts(
-                                    git, mock(ReviewRepositoryPreparer.class), new SimpleMeterRegistry())),
+                                    git, snapshots, mock(ReviewRepositoryPreparer.class), new SimpleMeterRegistry())),
                             transactions));
         }
 
@@ -837,7 +841,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
 
         PreparedJobInputs capture(ReviewJob job, Map<String, Path> filesOnDisk) {
             files.beginPersonCapture(job);
-            try (var snapshot = git.readTreeSnapshot(key, head, head)) {
+            try (var snapshot = snapshots.readTreeSnapshot(key, head, head)) {
                 var directory = new EvidenceDirectory(
                         "repos/reviewed/",
                         snapshot.stagingDir(),

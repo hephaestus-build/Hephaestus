@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLoc
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -517,16 +518,15 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                     .call()
                     .name();
         }
-        var manager = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 1, 1L << 20, 1L << 40),
-                new GitRepositoryLockManager(),
-                layout,
-                GitTransportFixtures.guarded(),
-                GitTransportFixtures.copyFence(),
-                new SimpleMeterRegistry());
+        var properties = new GitRepositoryProperties(true, 1, 1L << 20, 1L << 40);
+        var locks = new GitRepositoryLockManager();
+        var transports = GitTransportFixtures.guarded();
+        var manager = new GitRepositoryManager(properties, locks, layout, transports, new SimpleMeterRegistry());
+        var snapshots =
+                new GitTreeSnapshots(manager, properties, locks, layout, transports, GitTransportFixtures.copyFence());
         manager.ensureRepository(key, source.toUri().toString(), null);
         Path staging;
-        try (var snapshot = manager.readTreeSnapshot(key, sha, sha)) {
+        try (var snapshot = snapshots.readTreeSnapshot(key, sha, sha)) {
             staging = snapshot.stagingDir();
             Files.setLastModifiedTime(staging, FileTime.from(clock.instant()));
             cleaner.cleanEndedAttempts();

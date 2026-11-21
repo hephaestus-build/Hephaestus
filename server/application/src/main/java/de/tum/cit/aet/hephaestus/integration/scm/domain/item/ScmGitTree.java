@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -31,6 +32,7 @@ import org.springframework.stereotype.Component;
 public class ScmGitTree {
     static final int MAX_FILE_BYTES = 2 * 1024 * 1024;
     private final GitRepositoryManager git;
+    private final GitTreeSnapshots snapshots;
     // Git objects are immutable. Callers still authorize repository access before each lookup.
     private final AsyncCache<PinnedTree, Inventory> inventories = Caffeine.newBuilder()
             .maximumWeight(200_000)
@@ -96,8 +98,8 @@ public class ScmGitTree {
         }
     }
 
-    public GitRepositoryManager.GitTreeSnapshot snapshot(RepositoryKey key, String sha, Set<String> paths) {
-        return git.readScanSnapshot(key, sha, paths);
+    public GitTreeSnapshots.GitTreeSnapshot snapshot(RepositoryKey key, String sha, Set<String> paths) {
+        return snapshots.readScanSnapshot(key, sha, paths);
     }
 
     public String resolve(RepositoryKey key, String ref) {

@@ -229,7 +229,6 @@ class GitLabCommitBackfillServiceTest extends BaseUnitTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
-                GitTransportFixtures.copyFence(),
                 new SimpleMeterRegistry());
     }
 

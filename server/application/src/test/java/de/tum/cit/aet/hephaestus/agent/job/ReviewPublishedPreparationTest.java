@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLoc
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -97,6 +98,7 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
     Path root;
 
     private GitRepositoryManager git;
+    private GitTreeSnapshots snapshots;
     private String head;
     private JobEvidenceFiles first;
     private AgentRunFence fence;
@@ -125,13 +127,12 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
                     .name();
             repository.branchCreate().setName("other-work").setStartPoint(head).call();
         }
-        git = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 2, 1L << 30, 1L << 40),
-                new GitRepositoryLockManager(),
-                new FabricLayout(root.resolve("mirror").toString()),
-                GitTransportFixtures.guarded(),
-                GitTransportFixtures.copyFence(),
-                new SimpleMeterRegistry());
+        var properties = new GitRepositoryProperties(true, 2, 1L << 30, 1L << 40);
+        var locks = new GitRepositoryLockManager();
+        var layout = new FabricLayout(root.resolve("mirror").toString());
+        var transports = GitTransportFixtures.guarded();
+        git = new GitRepositoryManager(properties, locks, layout, transports, new SimpleMeterRegistry());
+        snapshots = new GitTreeSnapshots(git, properties, locks, layout, transports, GitTransportFixtures.copyFence());
         git.ensureRepository(KEY, source.toUri().toString(), null);
         first = files("first");
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
@@ -170,7 +171,7 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
                     CheckoutKey key = invocation.getArgument(1);
                     Path target = invocation.getArgument(2);
                     Predicate<Path> verified = invocation.getArgument(3);
-                    git.copyCheckout(KEY, key.commit(), key.tree(), key.paths(), target);
+                    snapshots.copyCheckout(KEY, key.commit(), key.tree(), key.paths(), target);
                     if (!verified.test(target))
                         throw new CheckoutUnverifiedException(
                                 CheckoutUnverifiedException.Reason.MISMATCH, "Checkout content differs");
@@ -198,7 +199,7 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
 
     private PreparedJobInputs capture() {
         captures.incrementAndGet();
-        var snapshot = git.readTreeSnapshot(KEY, head, head);
+        var snapshot = snapshots.readTreeSnapshot(KEY, head, head);
         var evidence = new JobFolderIndexBuilder(
                         new ClasspathSourceCatalogRegistry(mapper, Clock.systemUTC()), mapper, Clock.systemUTC())
                 .build(

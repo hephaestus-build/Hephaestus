@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLoc
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamRepositorySettings;
@@ -140,13 +141,13 @@ class ScmRepositoryCheckoutsIntegrationTest extends BaseIntegrationTest {
         when(tokens.kind()).thenReturn(IntegrationKind.GITLAB);
         when(tokens.serverUrl(anyLong())).thenReturn(Optional.of(SERVER_URL));
         when(tokens.accessToken(anyLong())).thenReturn(Optional.of(TOKEN));
-        var mirrors = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 1, 1024 * 1024, 1L << 40),
-                new GitRepositoryLockManager(),
-                new FabricLayout(temporary.resolve("fabric").toString()),
-                GitTransportFixtures.guarded(),
-                GitTransportFixtures.copyFence(),
-                new SimpleMeterRegistry());
+        var properties = new GitRepositoryProperties(true, 1, 1024 * 1024, 1L << 40);
+        var locks = new GitRepositoryLockManager();
+        var layout = new FabricLayout(temporary.resolve("fabric").toString());
+        var transports = GitTransportFixtures.guarded();
+        var mirrors = new GitRepositoryManager(properties, locks, layout, transports, new SimpleMeterRegistry());
+        var snapshots =
+                new GitTreeSnapshots(mirrors, properties, locks, layout, transports, GitTransportFixtures.copyFence());
         // The provider URL has no Git server behind it: the mirror fetches from the local upstream instead.
         git = mock(GitRepositoryManager.class, AdditionalAnswers.delegatesTo(mirrors));
         doAnswer(invocation -> {
@@ -157,7 +158,7 @@ class ScmRepositoryCheckoutsIntegrationTest extends BaseIntegrationTest {
                 .when(git)
                 .ensureRepository(any(), anyString(), any(), any());
         var preparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);
-        checkouts = new ScmRepositoryCheckouts(git, preparer, pullRequests, teamRepositorySettings);
+        checkouts = new ScmRepositoryCheckouts(git, snapshots, preparer, pullRequests, teamRepositorySettings);
         loader = new ScmContextLoader(checkouts, preparer, teamRepositorySettings, pullRequests, work, authoredWork);
     }
 

@@ -155,7 +155,6 @@ class GitRepositoryFetchBoundTest extends BaseUnitTest {
                 locks,
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 simulatorPort == 0 ? GitTransportFixtures.guarded() : GitTransportFixtures.simulator(simulatorPort),
-                GitTransportFixtures.copyFence(),
                 meters,
                 transportTimeoutSeconds,
                 mirrorWait);

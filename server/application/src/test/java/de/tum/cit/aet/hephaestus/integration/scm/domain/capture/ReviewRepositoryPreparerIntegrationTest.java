@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLoc
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
@@ -179,7 +180,6 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.simulator(upstream.getPort()),
-                GitTransportFixtures.copyFence(),
                 new SimpleMeterRegistry());
         var realPreparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);
 
@@ -194,17 +194,17 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldKeepDescriptionAndDiscussionWhenGitLabCannotSupplyGitObjects() throws Exception {
         upstream.enqueue(new MockResponse.Builder().code(404).build());
-        var git = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 1, 1024 * 1024, 1L << 40),
-                new GitRepositoryLockManager(),
-                new FabricLayout(temporary.resolve("fabric").toString()),
-                GitTransportFixtures.simulator(upstream.getPort()),
-                GitTransportFixtures.copyFence(),
-                new SimpleMeterRegistry());
+        var properties = new GitRepositoryProperties(true, 1, 1024 * 1024, 1L << 40);
+        var locks = new GitRepositoryLockManager();
+        var layout = new FabricLayout(temporary.resolve("fabric").toString());
+        var transports = GitTransportFixtures.simulator(upstream.getPort());
+        var git = new GitRepositoryManager(properties, locks, layout, transports, new SimpleMeterRegistry());
+        var snapshots =
+                new GitTreeSnapshots(git, properties, locks, layout, transports, GitTransportFixtures.copyFence());
         var realPreparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);
         var content =
                 new PullRequestContentSource(new JsonMapper(), git, pullRequests, comments, realPreparer, delivered);
-        var tree = new RepositoryTreeContentSource(git, realPreparer, personCopies);
+        var tree = new RepositoryTreeContentSource(git, snapshots, realPreparer, personCopies);
         var capture = new ScmCaptureContext(
                 context.pinned(), context.request(), context.work(), new ScmCapturePreparation(), context.capturedAt());
         var remote = realPreparer.remote(capture.pinned(), capture.work());

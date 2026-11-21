@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedExceptio
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException.Reason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitCloneUrl;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.metrics.ScmMetrics;
 import io.micrometer.core.instrument.Counter;
@@ -26,11 +27,17 @@ import org.springframework.util.FileSystemUtils;
 @ConditionalOnServerRole
 public class ScmCapturedCheckouts implements CapturedCheckouts {
     private final GitRepositoryManager git;
+    private final GitTreeSnapshots snapshots;
     private final ReviewRepositoryPreparer preparer;
     private final MeterRegistry meters;
 
-    public ScmCapturedCheckouts(GitRepositoryManager git, ReviewRepositoryPreparer preparer, MeterRegistry meters) {
+    public ScmCapturedCheckouts(
+            GitRepositoryManager git,
+            GitTreeSnapshots snapshots,
+            ReviewRepositoryPreparer preparer,
+            MeterRegistry meters) {
         this.git = git;
+        this.snapshots = snapshots;
         this.preparer = preparer;
         this.meters = meters;
         // Registered at start, so an alert on a count that is still zero has a series to read.
@@ -47,12 +54,12 @@ public class ScmCapturedCheckouts implements CapturedCheckouts {
             boolean built;
             try {
                 if (!holds(repository, key.commit())) fetch(repository, key);
-                built = git.copyCheckout(repository, key.commit(), key.tree(), key.paths(), target);
+                built = snapshots.copyCheckout(repository, key.commit(), key.tree(), key.paths(), target);
             } catch (GitRepositoryManager.MirrorUnavailableException evicted) {
                 // An eviction under disk pressure took the mirror after the check: fetch it once more.
                 FileSystemUtils.deleteRecursively(target);
                 fetch(repository, key);
-                built = git.copyCheckout(repository, key.commit(), key.tree(), key.paths(), target);
+                built = snapshots.copyCheckout(repository, key.commit(), key.tree(), key.paths(), target);
             }
             if (!verified.test(target)) {
                 FileSystemUtils.deleteRecursively(target);
