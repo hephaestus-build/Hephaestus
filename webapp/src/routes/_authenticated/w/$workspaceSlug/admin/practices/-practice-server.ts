@@ -5,6 +5,7 @@ import type {
 	FeedbackModeAssignment,
 	Practice,
 	PracticeDefinition,
+	PracticeEditedIn,
 	PracticeGroup,
 	PracticeGuidanceDto,
 } from "@/api/types.gen";
@@ -34,6 +35,8 @@ interface WirePracticeInput {
 	versionId?: string;
 	versionNumber?: number;
 	catalogOrigin?: CatalogOrigin;
+	editedIn?: PracticeEditedIn;
+	sourceCommit?: string | null;
 }
 
 export function wirePractice({
@@ -45,6 +48,8 @@ export function wirePractice({
 	versionId = "501",
 	versionNumber = 1,
 	catalogOrigin = OWN_ORIGIN,
+	editedIn = "HEPHAESTUS",
+	sourceCommit = null,
 }: WirePracticeInput): Wire<Practice> {
 	return toWire({
 		...mockPracticeOf({
@@ -62,8 +67,10 @@ export function wirePractice({
 				reviewDigest: `sha256:${versionId}`,
 				createdAt: new Date("2026-10-01T09:00:00Z"),
 				createdBy: mockAdmin,
+				sourceCommit,
 			},
 		}),
+		editedIn,
 		createdAt: new Date("2026-09-01T09:00:00Z"),
 		updatedAt: new Date("2026-10-01T09:00:00Z"),
 	});

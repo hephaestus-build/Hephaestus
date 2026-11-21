@@ -29,6 +29,7 @@ const meta = {
 		workspaceSlug: "acme",
 		state: { status: "ready", proposals: [proposal, second] },
 		pending: null,
+		editedInRepositorySlugs: new Set<string>(),
 		onAccept: fn(),
 		onDecline: fn(),
 	},
@@ -61,6 +62,29 @@ export const Waiting: Story = {
 		);
 		await userEvent.click(canvas.getByRole("button", { name: "Decline this update" }));
 		await expect(args.onDecline).toHaveBeenCalledWith(second);
+	},
+};
+
+/**
+ * Its folder in the practice repository holds the practice's definition, so the update can only be
+ * declined here. Accept stays in view, unavailable, with the reason beside it.
+ */
+export const EditedInRepository: Story = {
+	args: { editedInRepositorySlugs: new Set([proposal.practiceSlug]) },
+	play: async ({ canvas, args }) => {
+		const accept = canvas.getByRole("button", { name: "Accept selected fields" });
+		await expect(accept).toHaveAttribute("aria-disabled", "true");
+		await expect(accept).toHaveAccessibleDescription(/edited in the practice repository/u);
+		await expect(canvas.queryByText(/Reset to catalog stays available/u)).toBeNull();
+		await userEvent.click(canvas.getByRole("button", { name: "Decline this update" }));
+		await expect(args.onDecline).toHaveBeenCalledWith(proposal);
+
+		// Another practice in the list is edited in Hephaestus, so its update can be accepted.
+		const list = within(canvas.getByRole("navigation", { name: "Pending catalog updates" }));
+		await userEvent.click(list.getByRole("button", { name: /Small commits/u }));
+		await expect(
+			canvas.getByRole("button", { name: "Accept selected fields" }),
+		).not.toHaveAttribute("aria-disabled", "true");
 	},
 };
 

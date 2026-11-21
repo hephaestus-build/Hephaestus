@@ -68,6 +68,7 @@ export function practiceVersion(
 		createdBy: mockAdmin,
 		changed: [],
 		reviewChanged: false,
+		sourceCommit: null,
 		...overrides,
 	};
 }
