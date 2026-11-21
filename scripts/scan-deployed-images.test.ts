@@ -84,6 +84,25 @@ void test("an image without a digest or a policy name is refused, not scanned un
 			),
 		/does not name the deployed image docker\.io\/library\/redis/u,
 	);
+	// A look-alike registry is not first-party, and a nested repository under the registry is no image name.
+	assert.throws(
+		() =>
+			deployedSubjects(
+				[`ghcr.io/hephaestus-build-evil/server@${digest}`],
+				inventory,
+				"ghcr.io/hephaestus-build",
+			),
+		/does not name the deployed image ghcr\.io\/hephaestus-build-evil\/server/u,
+	);
+	assert.throws(
+		() =>
+			deployedSubjects(
+				[`ghcr.io/hephaestus-build/charts/server@${digest}`],
+				inventory,
+				"ghcr.io/hephaestus-build",
+			),
+		/does not name the deployed image ghcr\.io\/hephaestus-build\/charts\/server/u,
+	);
 });
 
 const gitEnvironment = environmentForGitFixture();
