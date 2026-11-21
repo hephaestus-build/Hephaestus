@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { adminGetLlmUsageReportResponseTransformer } from "../transformers.gen.js";
-import type { AdminGetLlmUsageReportData, AdminGetLlmUsageReportResponses } from "../types.gen.js";
+import type {
+	AdminGetLlmUsageReportData,
+	AdminGetLlmUsageReportErrors,
+	AdminGetLlmUsageReportResponses,
+} from "../types.gen.js";
 
 /**
  * Per-workspace LLM spend rollup for one month (all workspaces)
  */
 export const adminGetLlmUsageReport = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminGetLlmUsageReportData, ThrowOnError>,
-): RequestResult<AdminGetLlmUsageReportResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminGetLlmUsageReportResponses, unknown, ThrowOnError>({
+): RequestResult<AdminGetLlmUsageReportResponses, AdminGetLlmUsageReportErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminGetLlmUsageReportResponses,
+		AdminGetLlmUsageReportErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminGetLlmUsageReportResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/usage",

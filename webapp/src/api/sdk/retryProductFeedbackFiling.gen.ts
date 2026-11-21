@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	RetryProductFeedbackFilingData,
+	RetryProductFeedbackFilingErrors,
 	RetryProductFeedbackFilingResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const retryProductFeedbackFiling = <ThrowOnError extends boolean = false>(
 	options: Options<RetryProductFeedbackFilingData, ThrowOnError>,
-): RequestResult<RetryProductFeedbackFilingResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RetryProductFeedbackFilingResponses, unknown, ThrowOnError>({
+): RequestResult<
+	RetryProductFeedbackFilingResponses,
+	RetryProductFeedbackFilingErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		RetryProductFeedbackFilingResponses,
+		RetryProductFeedbackFilingErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/{feedbackId}/retry",
 		...options,

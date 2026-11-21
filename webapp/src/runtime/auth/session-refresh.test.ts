@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { refresh } from "@/api/sdk.gen";
+import type { ProblemDetail } from "@/api/types.gen";
 import { deferred } from "@/test/async";
 
 import {
@@ -87,7 +88,11 @@ describe("refreshAccessToken", () => {
 		await expect(refreshAccessToken()).resolves.toBe("unavailable");
 	});
 	it("reports unavailable when the generated client returns a transport error without a response", async () => {
-		refreshMock.mockResolvedValue({ data: undefined, error: new Error("offline") });
+		refreshMock.mockResolvedValue({
+			data: undefined,
+			// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The generated type names the server's problem body. On a transport failure the client returns the thrown error instead, which this test reproduces.
+			error: new Error("offline") as unknown as ProblemDetail,
+		});
 		await expect(refreshAccessToken()).resolves.toBe("unavailable");
 	});
 

@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
+// oxlint-disable-next-line import/no-relative-parent-imports -- The API description is the contract under test, and no `@/` alias reaches it.
+import spec from "../../../server/openapi.yaml?raw";
 
 import { zProblemDetail } from "@/api/zod.gen";
 
-import { problemDetailOf, problemStatusOf, stepUpChallengeOf, problemType } from "./problem-detail";
+import {
+	PROBLEM_TYPE_SLUGS,
+	problemDetailOf,
+	problemStatusOf,
+	stepUpChallengeOf,
+	problemType,
+} from "./problem-detail";
 
 describe("the generated problem contract", () => {
 	it("preserves validation and request extensions at the top level", () => {
@@ -17,6 +25,21 @@ describe("the generated problem contract", () => {
 
 		expect(zProblemDetail.parse(wire)).toStrictEqual(wire);
 		expect(zProblemDetail.safeParse({ ...wire, status: "400" }).success).toBe(false);
+	});
+});
+
+describe("the problem types the SPA branches on", () => {
+	it("are each a type that the API description lists", () => {
+		const start = spec.indexOf("\n    ProblemType:\n");
+		expect(start).toBeGreaterThan(-1);
+		const end = spec.slice(start + 1).search(/\n {4}\S/u);
+		const listed = spec
+			.slice(start, start + 1 + end)
+			.split("\n")
+			.map((line) => /^\s*- "?(?<listed>[^"]+)"?$/u.exec(line)?.groups?.listed);
+		for (const slug of PROBLEM_TYPE_SLUGS) {
+			expect(listed).toContain(problemType(slug));
+		}
 	});
 });
 

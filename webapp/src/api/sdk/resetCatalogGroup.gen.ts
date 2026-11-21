@@ -3,12 +3,20 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ResetCatalogGroupData, ResetCatalogGroupResponses } from "../types.gen.js";
+import type {
+	ResetCatalogGroupData,
+	ResetCatalogGroupErrors,
+	ResetCatalogGroupResponses,
+} from "../types.gen.js";
 
 export const resetCatalogGroup = <ThrowOnError extends boolean = false>(
 	options: Options<ResetCatalogGroupData, ThrowOnError>,
-): RequestResult<ResetCatalogGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<ResetCatalogGroupResponses, unknown, ThrowOnError>({
+): RequestResult<ResetCatalogGroupResponses, ResetCatalogGroupErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		ResetCatalogGroupResponses,
+		ResetCatalogGroupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/groups/{slug}/override",
 		...options,

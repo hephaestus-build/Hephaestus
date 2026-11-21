@@ -5,13 +5,18 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	SetCatalogPracticeStatusData,
+	SetCatalogPracticeStatusErrors,
 	SetCatalogPracticeStatusResponses,
 } from "../types.gen.js";
 
 export const setCatalogPracticeStatus = <ThrowOnError extends boolean = false>(
 	options: Options<SetCatalogPracticeStatusData, ThrowOnError>,
-): RequestResult<SetCatalogPracticeStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<SetCatalogPracticeStatusResponses, unknown, ThrowOnError>({
+): RequestResult<SetCatalogPracticeStatusResponses, SetCatalogPracticeStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		SetCatalogPracticeStatusResponses,
+		SetCatalogPracticeStatusErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}/status",
 		...options,

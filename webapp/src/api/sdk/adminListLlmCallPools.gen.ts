@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { adminListLlmCallPoolsResponseTransformer } from "../transformers.gen.js";
-import type { AdminListLlmCallPoolsData, AdminListLlmCallPoolsResponses } from "../types.gen.js";
+import type {
+	AdminListLlmCallPoolsData,
+	AdminListLlmCallPoolsErrors,
+	AdminListLlmCallPoolsResponses,
+} from "../types.gen.js";
 
 /**
  * List the pools of provider capacity
  */
 export const adminListLlmCallPools = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListLlmCallPoolsData, ThrowOnError>,
-): RequestResult<AdminListLlmCallPoolsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListLlmCallPoolsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListLlmCallPoolsResponses, AdminListLlmCallPoolsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListLlmCallPoolsResponses,
+		AdminListLlmCallPoolsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminListLlmCallPoolsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/llm/call-pools",

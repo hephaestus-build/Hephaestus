@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getScanReportResponseTransformer } from "../transformers.gen.js";
-import type { GetScanReportData, GetScanReportResponses } from "../types.gen.js";
+import type {
+	GetScanReportData,
+	GetScanReportErrors,
+	GetScanReportResponses,
+} from "../types.gen.js";
 
 /**
  * Read a scan report
  */
 export const getScanReport = <ThrowOnError extends boolean = false>(
 	options: Options<GetScanReportData, ThrowOnError>,
-): RequestResult<GetScanReportResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetScanReportResponses, unknown, ThrowOnError>({
+): RequestResult<GetScanReportResponses, GetScanReportErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetScanReportResponses, GetScanReportErrors, ThrowOnError>({
 		responseTransformer: getScanReportResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/report",

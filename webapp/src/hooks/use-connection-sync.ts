@@ -35,7 +35,7 @@ const JOBS_PAGE_SIZE = 10;
  * A sync read as its table shows it. A retryable failed refresh keeps the rows this key last read,
  * with the failure beside them. A refusal, or a read that never succeeded, shows no rows.
  */
-function syncRead<TData>(query: UseQueryResult<TData>) {
+function syncRead<TData>(query: UseQueryResult<TData, unknown>) {
 	if (query.isRefetchError && queryErrorIsRetryable(query.error)) {
 		const refreshFailure: RefreshFailure = {
 			error: query.error,

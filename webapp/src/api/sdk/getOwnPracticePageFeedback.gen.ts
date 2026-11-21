@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { getOwnPracticePageFeedbackResponseTransformer } from "../transformers.gen.js";
 import type {
 	GetOwnPracticePageFeedbackData,
+	GetOwnPracticePageFeedbackErrors,
 	GetOwnPracticePageFeedbackResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const getOwnPracticePageFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnPracticePageFeedbackData, ThrowOnError>,
-): RequestResult<GetOwnPracticePageFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnPracticePageFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetOwnPracticePageFeedbackResponses,
+	GetOwnPracticePageFeedbackErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetOwnPracticePageFeedbackResponses,
+		GetOwnPracticePageFeedbackErrors,
+		ThrowOnError
+	>({
 		responseTransformer: getOwnPracticePageFeedbackResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/feedback/practice-page",

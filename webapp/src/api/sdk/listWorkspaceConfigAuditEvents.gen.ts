@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { listWorkspaceConfigAuditEventsResponseTransformer } from "../transformers.gen.js";
 import type {
 	ListWorkspaceConfigAuditEventsData,
+	ListWorkspaceConfigAuditEventsErrors,
 	ListWorkspaceConfigAuditEventsResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const listWorkspaceConfigAuditEvents = <ThrowOnError extends boolean = false>(
 	options: Options<ListWorkspaceConfigAuditEventsData, ThrowOnError>,
-): RequestResult<ListWorkspaceConfigAuditEventsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListWorkspaceConfigAuditEventsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ListWorkspaceConfigAuditEventsResponses,
+	ListWorkspaceConfigAuditEventsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		ListWorkspaceConfigAuditEventsResponses,
+		ListWorkspaceConfigAuditEventsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listWorkspaceConfigAuditEventsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/config-audit",

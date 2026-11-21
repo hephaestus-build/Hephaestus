@@ -3,12 +3,20 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ReorderCatalogGroupsData, ReorderCatalogGroupsResponses } from "../types.gen.js";
+import type {
+	ReorderCatalogGroupsData,
+	ReorderCatalogGroupsErrors,
+	ReorderCatalogGroupsResponses,
+} from "../types.gen.js";
 
 export const reorderCatalogGroups = <ThrowOnError extends boolean = false>(
 	options: Options<ReorderCatalogGroupsData, ThrowOnError>,
-): RequestResult<ReorderCatalogGroupsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<ReorderCatalogGroupsResponses, unknown, ThrowOnError>({
+): RequestResult<ReorderCatalogGroupsResponses, ReorderCatalogGroupsErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		ReorderCatalogGroupsResponses,
+		ReorderCatalogGroupsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/groups/reorder",
 		...options,

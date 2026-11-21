@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getConversationResponseTransformer } from "../transformers.gen.js";
-import type { GetConversationData, GetConversationResponses } from "../types.gen.js";
+import type {
+	GetConversationData,
+	GetConversationErrors,
+	GetConversationResponses,
+} from "../types.gen.js";
 
 /**
  * The developer's conversation: what runs now, its threads and how far it reached
  */
 export const getConversation = <ThrowOnError extends boolean = false>(
 	options: Options<GetConversationData, ThrowOnError>,
-): RequestResult<GetConversationResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetConversationResponses, unknown, ThrowOnError>({
+): RequestResult<GetConversationResponses, GetConversationErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetConversationResponses, GetConversationErrors, ThrowOnError>({
 		responseTransformer: getConversationResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/conversation",

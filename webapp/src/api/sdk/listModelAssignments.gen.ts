@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ListModelAssignmentsData, ListModelAssignmentsResponses } from "../types.gen.js";
+import type {
+	ListModelAssignmentsData,
+	ListModelAssignmentsErrors,
+	ListModelAssignmentsResponses,
+} from "../types.gen.js";
 
 /**
  * List the workspace's model assignments
  */
 export const listModelAssignments = <ThrowOnError extends boolean = false>(
 	options: Options<ListModelAssignmentsData, ThrowOnError>,
-): RequestResult<ListModelAssignmentsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListModelAssignmentsResponses, unknown, ThrowOnError>({
+): RequestResult<ListModelAssignmentsResponses, ListModelAssignmentsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListModelAssignmentsResponses,
+		ListModelAssignmentsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/model-assignments",
 		...options,

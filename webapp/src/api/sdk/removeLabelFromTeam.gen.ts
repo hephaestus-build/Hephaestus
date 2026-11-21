@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { removeLabelFromTeamResponseTransformer } from "../transformers.gen.js";
-import type { RemoveLabelFromTeamData, RemoveLabelFromTeamResponses } from "../types.gen.js";
+import type {
+	RemoveLabelFromTeamData,
+	RemoveLabelFromTeamErrors,
+	RemoveLabelFromTeamResponses,
+} from "../types.gen.js";
 
 /**
  * Remove a repository label from a team
  */
 export const removeLabelFromTeam = <ThrowOnError extends boolean = false>(
 	options: Options<RemoveLabelFromTeamData, ThrowOnError>,
-): RequestResult<RemoveLabelFromTeamResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RemoveLabelFromTeamResponses, unknown, ThrowOnError>({
+): RequestResult<RemoveLabelFromTeamResponses, RemoveLabelFromTeamErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		RemoveLabelFromTeamResponses,
+		RemoveLabelFromTeamErrors,
+		ThrowOnError
+	>({
 		responseTransformer: removeLabelFromTeamResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}",

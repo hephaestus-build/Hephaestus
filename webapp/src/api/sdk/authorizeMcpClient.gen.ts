@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { AuthorizeMcpClientData, AuthorizeMcpClientResponses } from "../types.gen.js";
+import type {
+	AuthorizeMcpClientData,
+	AuthorizeMcpClientErrors,
+	AuthorizeMcpClientResponses,
+} from "../types.gen.js";
 
 /**
  * Start an MCP client authorization (RFC 6749 § 4.1.1)
  */
 export const authorizeMcpClient = <ThrowOnError extends boolean = false>(
 	options?: Options<AuthorizeMcpClientData, ThrowOnError>,
-): RequestResult<AuthorizeMcpClientResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AuthorizeMcpClientResponses, unknown, ThrowOnError>({
+): RequestResult<AuthorizeMcpClientResponses, AuthorizeMcpClientErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AuthorizeMcpClientResponses,
+		AuthorizeMcpClientErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/mcp/oauth/authorize",
 		...options,

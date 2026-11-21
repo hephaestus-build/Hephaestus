@@ -4,7 +4,11 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { updateConnectionStatusResponseTransformer } from "../transformers.gen.js";
-import type { UpdateConnectionStatusData, UpdateConnectionStatusResponses } from "../types.gen.js";
+import type {
+	UpdateConnectionStatusData,
+	UpdateConnectionStatusErrors,
+	UpdateConnectionStatusResponses,
+} from "../types.gen.js";
 
 /**
  * Resource-oriented lifecycle transition: <code>ACTIVE</code> (reactivate), <code>SUSPENDED</code>
@@ -18,8 +22,12 @@ import type { UpdateConnectionStatusData, UpdateConnectionStatusResponses } from
  */
 export const updateConnectionStatus = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateConnectionStatusData, ThrowOnError>,
-): RequestResult<UpdateConnectionStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateConnectionStatusResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateConnectionStatusResponses, UpdateConnectionStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdateConnectionStatusResponses,
+		UpdateConnectionStatusErrors,
+		ThrowOnError
+	>({
 		responseTransformer: updateConnectionStatusResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{id}/status",

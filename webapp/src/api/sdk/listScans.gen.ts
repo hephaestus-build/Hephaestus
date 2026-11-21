@@ -4,15 +4,15 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listScansResponseTransformer } from "../transformers.gen.js";
-import type { ListScansData, ListScansResponses } from "../types.gen.js";
+import type { ListScansData, ListScansErrors, ListScansResponses } from "../types.gen.js";
 
 /**
  * List repository scans
  */
 export const listScans = <ThrowOnError extends boolean = false>(
 	options: Options<ListScansData, ThrowOnError>,
-): RequestResult<ListScansResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListScansResponses, unknown, ThrowOnError>({
+): RequestResult<ListScansResponses, ListScansErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListScansResponses, ListScansErrors, ThrowOnError>({
 		responseTransformer: listScansResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/scans",

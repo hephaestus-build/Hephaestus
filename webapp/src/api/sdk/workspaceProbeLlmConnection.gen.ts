@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	WorkspaceProbeLlmConnectionData,
+	WorkspaceProbeLlmConnectionErrors,
 	WorkspaceProbeLlmConnectionResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const workspaceProbeLlmConnection = <ThrowOnError extends boolean = false>(
 	options: Options<WorkspaceProbeLlmConnectionData, ThrowOnError>,
-): RequestResult<WorkspaceProbeLlmConnectionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<WorkspaceProbeLlmConnectionResponses, unknown, ThrowOnError>({
+): RequestResult<
+	WorkspaceProbeLlmConnectionResponses,
+	WorkspaceProbeLlmConnectionErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		WorkspaceProbeLlmConnectionResponses,
+		WorkspaceProbeLlmConnectionErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/connections/{id}/probe",
 		...options,

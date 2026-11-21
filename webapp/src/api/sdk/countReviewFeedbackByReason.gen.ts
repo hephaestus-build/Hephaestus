@@ -5,13 +5,22 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	CountReviewFeedbackByReasonData,
+	CountReviewFeedbackByReasonErrors,
 	CountReviewFeedbackByReasonResponses,
 } from "../types.gen.js";
 
 export const countReviewFeedbackByReason = <ThrowOnError extends boolean = false>(
 	options: Options<CountReviewFeedbackByReasonData, ThrowOnError>,
-): RequestResult<CountReviewFeedbackByReasonResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<CountReviewFeedbackByReasonResponses, unknown, ThrowOnError>({
+): RequestResult<
+	CountReviewFeedbackByReasonResponses,
+	CountReviewFeedbackByReasonErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		CountReviewFeedbackByReasonResponses,
+		CountReviewFeedbackByReasonErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/reasons",
 		...options,

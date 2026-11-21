@@ -4,12 +4,20 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { updatePracticeGroupResponseTransformer } from "../transformers.gen.js";
-import type { UpdatePracticeGroupData, UpdatePracticeGroupResponses } from "../types.gen.js";
+import type {
+	UpdatePracticeGroupData,
+	UpdatePracticeGroupErrors,
+	UpdatePracticeGroupResponses,
+} from "../types.gen.js";
 
 export const updatePracticeGroup = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePracticeGroupData, ThrowOnError>,
-): RequestResult<UpdatePracticeGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdatePracticeGroupResponses, unknown, ThrowOnError>({
+): RequestResult<UpdatePracticeGroupResponses, UpdatePracticeGroupErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdatePracticeGroupResponses,
+		UpdatePracticeGroupErrors,
+		ThrowOnError
+	>({
 		responseTransformer: updatePracticeGroupResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}",

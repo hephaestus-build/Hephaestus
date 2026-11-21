@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { updateFeaturesResponseTransformer } from "../transformers.gen.js";
-import type { UpdateFeaturesData, UpdateFeaturesResponses } from "../types.gen.js";
+import type {
+	UpdateFeaturesData,
+	UpdateFeaturesErrors,
+	UpdateFeaturesResponses,
+} from "../types.gen.js";
 
 /**
  * Update workspace feature flags
  */
 export const updateFeatures = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateFeaturesData, ThrowOnError>,
-): RequestResult<UpdateFeaturesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateFeaturesResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateFeaturesResponses, UpdateFeaturesErrors, ThrowOnError> =>
+	(options.client ?? client).patch<UpdateFeaturesResponses, UpdateFeaturesErrors, ThrowOnError>({
 		responseTransformer: updateFeaturesResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/features",

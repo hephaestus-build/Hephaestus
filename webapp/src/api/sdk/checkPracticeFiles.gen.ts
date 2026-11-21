@@ -3,7 +3,11 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { CheckPracticeFilesData, CheckPracticeFilesResponses } from "../types.gen.js";
+import type {
+	CheckPracticeFilesData,
+	CheckPracticeFilesErrors,
+	CheckPracticeFilesResponses,
+} from "../types.gen.js";
 
 /**
  * Check a practice folder without saving it
@@ -12,8 +16,12 @@ import type { CheckPracticeFilesData, CheckPracticeFilesResponses } from "../typ
  */
 export const checkPracticeFiles = <ThrowOnError extends boolean = false>(
 	options: Options<CheckPracticeFilesData, ThrowOnError>,
-): RequestResult<CheckPracticeFilesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CheckPracticeFilesResponses, unknown, ThrowOnError>({
+): RequestResult<CheckPracticeFilesResponses, CheckPracticeFilesErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CheckPracticeFilesResponses,
+		CheckPracticeFilesErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/file-check",
 		...options,

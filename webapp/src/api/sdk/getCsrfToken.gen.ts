@@ -3,7 +3,7 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetCsrfTokenData, GetCsrfTokenResponses } from "../types.gen.js";
+import type { GetCsrfTokenData, GetCsrfTokenErrors, GetCsrfTokenResponses } from "../types.gen.js";
 
 /**
  * Get the raw CSRF token for the current browser
@@ -12,8 +12,8 @@ import type { GetCsrfTokenData, GetCsrfTokenResponses } from "../types.gen.js";
  */
 export const getCsrfToken = <ThrowOnError extends boolean = false>(
 	options?: Options<GetCsrfTokenData, ThrowOnError>,
-): RequestResult<GetCsrfTokenResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetCsrfTokenResponses, unknown, ThrowOnError>({
+): RequestResult<GetCsrfTokenResponses, GetCsrfTokenErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetCsrfTokenResponses, GetCsrfTokenErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/auth/csrf",
 		...options,

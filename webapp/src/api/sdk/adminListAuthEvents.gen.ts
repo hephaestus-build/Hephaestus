@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { adminListAuthEventsResponseTransformer } from "../transformers.gen.js";
-import type { AdminListAuthEventsData, AdminListAuthEventsResponses } from "../types.gen.js";
+import type {
+	AdminListAuthEventsData,
+	AdminListAuthEventsErrors,
+	AdminListAuthEventsResponses,
+} from "../types.gen.js";
 
 /**
  * List auth audit events (newest first)
  */
 export const adminListAuthEvents = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListAuthEventsData, ThrowOnError>,
-): RequestResult<AdminListAuthEventsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListAuthEventsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListAuthEventsResponses, AdminListAuthEventsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListAuthEventsResponses,
+		AdminListAuthEventsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminListAuthEventsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/audit",

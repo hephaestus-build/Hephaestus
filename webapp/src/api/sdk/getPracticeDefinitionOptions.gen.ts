@@ -5,13 +5,22 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetPracticeDefinitionOptionsData,
+	GetPracticeDefinitionOptionsErrors,
 	GetPracticeDefinitionOptionsResponses,
 } from "../types.gen.js";
 
 export const getPracticeDefinitionOptions = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeDefinitionOptionsData, ThrowOnError>,
-): RequestResult<GetPracticeDefinitionOptionsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetPracticeDefinitionOptionsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetPracticeDefinitionOptionsResponses,
+	GetPracticeDefinitionOptionsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetPracticeDefinitionOptionsResponses,
+		GetPracticeDefinitionOptionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/definition-options",
 		...options,

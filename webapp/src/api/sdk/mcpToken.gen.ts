@@ -3,15 +3,15 @@
 import { client } from "../client.gen.js";
 import { type RequestResult, urlSearchParamsBodySerializer } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { McpTokenData, McpTokenResponses } from "../types.gen.js";
+import type { McpTokenData, McpTokenErrors, McpTokenResponses } from "../types.gen.js";
 
 /**
  * Exchange a code or rotate a refresh token (RFC 6749 § 3.2)
  */
 export const mcpToken = <ThrowOnError extends boolean = false>(
 	options?: Options<McpTokenData, ThrowOnError>,
-): RequestResult<McpTokenResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).post<McpTokenResponses, unknown, ThrowOnError>({
+): RequestResult<McpTokenResponses, McpTokenErrors, ThrowOnError> =>
+	(options?.client ?? client).post<McpTokenResponses, McpTokenErrors, ThrowOnError>({
 		...urlSearchParamsBodySerializer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/mcp/oauth/token",

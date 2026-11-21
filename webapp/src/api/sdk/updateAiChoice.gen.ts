@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { UpdateAiChoiceData, UpdateAiChoiceResponses } from "../types.gen.js";
+import type {
+	UpdateAiChoiceData,
+	UpdateAiChoiceErrors,
+	UpdateAiChoiceResponses,
+} from "../types.gen.js";
 
 /**
  * Change your AI choice without changing workspace membership
  */
 export const updateAiChoice = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateAiChoiceData, ThrowOnError>,
-): RequestResult<UpdateAiChoiceResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateAiChoiceResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateAiChoiceResponses, UpdateAiChoiceErrors, ThrowOnError> =>
+	(options.client ?? client).put<UpdateAiChoiceResponses, UpdateAiChoiceErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/onboarding/me/ai-choice",
 		...options,

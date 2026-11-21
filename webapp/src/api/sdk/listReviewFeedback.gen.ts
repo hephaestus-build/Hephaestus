@@ -4,12 +4,20 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listReviewFeedbackResponseTransformer } from "../transformers.gen.js";
-import type { ListReviewFeedbackData, ListReviewFeedbackResponses } from "../types.gen.js";
+import type {
+	ListReviewFeedbackData,
+	ListReviewFeedbackErrors,
+	ListReviewFeedbackResponses,
+} from "../types.gen.js";
 
 export const listReviewFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewFeedbackData, ThrowOnError>,
-): RequestResult<ListReviewFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<ListReviewFeedbackResponses, ListReviewFeedbackErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListReviewFeedbackResponses,
+		ListReviewFeedbackErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listReviewFeedbackResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback",

@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { declineGitHubInstallationResponseTransformer } from "../transformers.gen.js";
 import type {
 	DeclineGitHubInstallationData,
+	DeclineGitHubInstallationErrors,
 	DeclineGitHubInstallationResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const declineGitHubInstallation = <ThrowOnError extends boolean = false>(
 	options: Options<DeclineGitHubInstallationData, ThrowOnError>,
-): RequestResult<DeclineGitHubInstallationResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<DeclineGitHubInstallationResponses, unknown, ThrowOnError>({
+): RequestResult<
+	DeclineGitHubInstallationResponses,
+	DeclineGitHubInstallationErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		DeclineGitHubInstallationResponses,
+		DeclineGitHubInstallationErrors,
+		ThrowOnError
+	>({
 		responseTransformer: declineGitHubInstallationResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/github-installations/{installationId}/decline",

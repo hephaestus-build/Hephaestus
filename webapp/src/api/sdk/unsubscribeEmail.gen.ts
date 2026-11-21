@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import { type RequestResult, urlSearchParamsBodySerializer } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { UnsubscribeEmailData, UnsubscribeEmailResponses } from "../types.gen.js";
+import type {
+	UnsubscribeEmailData,
+	UnsubscribeEmailErrors,
+	UnsubscribeEmailResponses,
+} from "../types.gen.js";
 
 /**
  * Unsubscribe from one optional email subscription
  */
 export const unsubscribeEmail = <ThrowOnError extends boolean = false>(
 	options: Options<UnsubscribeEmailData, ThrowOnError>,
-): RequestResult<UnsubscribeEmailResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<UnsubscribeEmailResponses, unknown, ThrowOnError>({
+): RequestResult<UnsubscribeEmailResponses, UnsubscribeEmailErrors, ThrowOnError> =>
+	(options.client ?? client).post<UnsubscribeEmailResponses, UnsubscribeEmailErrors, ThrowOnError>({
 		...urlSearchParamsBodySerializer,
 		url: "/notifications/unsubscribe/{token}",
 		...options,

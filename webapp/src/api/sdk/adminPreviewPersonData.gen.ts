@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { adminPreviewPersonDataResponseTransformer } from "../transformers.gen.js";
-import type { AdminPreviewPersonDataData, AdminPreviewPersonDataResponses } from "../types.gen.js";
+import type {
+	AdminPreviewPersonDataData,
+	AdminPreviewPersonDataErrors,
+	AdminPreviewPersonDataResponses,
+} from "../types.gen.js";
 
 /**
  * Resolve exact identities and preview every personal-data store
  */
 export const adminPreviewPersonData = <ThrowOnError extends boolean = false>(
 	options: Options<AdminPreviewPersonDataData, ThrowOnError>,
-): RequestResult<AdminPreviewPersonDataResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdminPreviewPersonDataResponses, unknown, ThrowOnError>({
+): RequestResult<AdminPreviewPersonDataResponses, AdminPreviewPersonDataErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		AdminPreviewPersonDataResponses,
+		AdminPreviewPersonDataErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminPreviewPersonDataResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/person-data/preview",

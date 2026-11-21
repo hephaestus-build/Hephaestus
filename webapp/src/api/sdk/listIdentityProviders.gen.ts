@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ListIdentityProvidersData, ListIdentityProvidersResponses } from "../types.gen.js";
+import type {
+	ListIdentityProvidersData,
+	ListIdentityProvidersErrors,
+	ListIdentityProvidersResponses,
+} from "../types.gen.js";
 
 /**
  * List available identity providers
  */
 export const listIdentityProviders = <ThrowOnError extends boolean = false>(
 	options?: Options<ListIdentityProvidersData, ThrowOnError>,
-): RequestResult<ListIdentityProvidersResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<ListIdentityProvidersResponses, unknown, ThrowOnError>({
+): RequestResult<ListIdentityProvidersResponses, ListIdentityProvidersErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		ListIdentityProvidersResponses,
+		ListIdentityProvidersErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/identity-providers",
 		...options,

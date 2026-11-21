@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listMcpClientGrantsResponseTransformer } from "../transformers.gen.js";
-import type { ListMcpClientGrantsData, ListMcpClientGrantsResponses } from "../types.gen.js";
+import type {
+	ListMcpClientGrantsData,
+	ListMcpClientGrantsErrors,
+	ListMcpClientGrantsResponses,
+} from "../types.gen.js";
 
 /**
  * List the MCP clients connected to the workspace
  */
 export const listMcpClientGrants = <ThrowOnError extends boolean = false>(
 	options: Options<ListMcpClientGrantsData, ThrowOnError>,
-): RequestResult<ListMcpClientGrantsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListMcpClientGrantsResponses, unknown, ThrowOnError>({
+): RequestResult<ListMcpClientGrantsResponses, ListMcpClientGrantsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListMcpClientGrantsResponses,
+		ListMcpClientGrantsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listMcpClientGrantsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/mcp-grants",

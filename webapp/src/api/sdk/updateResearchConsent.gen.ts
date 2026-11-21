@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { UpdateResearchConsentData, UpdateResearchConsentResponses } from "../types.gen.js";
+import type {
+	UpdateResearchConsentData,
+	UpdateResearchConsentErrors,
+	UpdateResearchConsentResponses,
+} from "../types.gen.js";
 
 /**
  * Grant or withdraw research consent
  */
 export const updateResearchConsent = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateResearchConsentData, ThrowOnError>,
-): RequestResult<UpdateResearchConsentResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateResearchConsentResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateResearchConsentResponses, UpdateResearchConsentErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		UpdateResearchConsentResponses,
+		UpdateResearchConsentErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/consent/research",
 		...options,

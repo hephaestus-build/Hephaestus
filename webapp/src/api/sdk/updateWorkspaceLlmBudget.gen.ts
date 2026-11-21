@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	UpdateWorkspaceLlmBudgetData,
+	UpdateWorkspaceLlmBudgetErrors,
 	UpdateWorkspaceLlmBudgetResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const updateWorkspaceLlmBudget = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateWorkspaceLlmBudgetData, ThrowOnError>,
-): RequestResult<UpdateWorkspaceLlmBudgetResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateWorkspaceLlmBudgetResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateWorkspaceLlmBudgetResponses, UpdateWorkspaceLlmBudgetErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		UpdateWorkspaceLlmBudgetResponses,
+		UpdateWorkspaceLlmBudgetErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/budget",
 		...options,

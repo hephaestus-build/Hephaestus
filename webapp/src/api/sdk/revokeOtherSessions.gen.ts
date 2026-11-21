@@ -3,7 +3,11 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { RevokeOtherSessionsData, RevokeOtherSessionsResponses } from "../types.gen.js";
+import type {
+	RevokeOtherSessionsData,
+	RevokeOtherSessionsErrors,
+	RevokeOtherSessionsResponses,
+} from "../types.gen.js";
 
 /**
  * Revoke all sessions except the current one
@@ -13,8 +17,12 @@ import type { RevokeOtherSessionsData, RevokeOtherSessionsResponses } from "../t
  */
 export const revokeOtherSessions = <ThrowOnError extends boolean = false>(
 	options?: Options<RevokeOtherSessionsData, ThrowOnError>,
-): RequestResult<RevokeOtherSessionsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).delete<RevokeOtherSessionsResponses, unknown, ThrowOnError>({
+): RequestResult<RevokeOtherSessionsResponses, RevokeOtherSessionsErrors, ThrowOnError> =>
+	(options?.client ?? client).delete<
+		RevokeOtherSessionsResponses,
+		RevokeOtherSessionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/sessions",
 		...options,

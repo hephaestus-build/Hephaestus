@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import type { ProblemType } from "@/api/types.gen";
 import { isRecord } from "@/lib/is-record";
 
 /**
@@ -28,11 +29,21 @@ export function problemDetailOf(
 	return fallback;
 }
 
-/** The kinds of problem the SPA branches on. The server's `ProblemType` is the registry. */
-export type ProblemTypeSlug = "feedback-withheld" | "passkey-required" | "step-up-required";
+/**
+ * The kinds of problem the SPA branches on. `ProblemType` in the API description lists every kind
+ * the server sends, and a test holds each slug here to that list.
+ */
+export const PROBLEM_TYPE_SLUGS = [
+	"csrf-token-rejected",
+	"feedback-withheld",
+	"passkey-required",
+	"step-up-required",
+] as const;
+
+export type ProblemTypeSlug = (typeof PROBLEM_TYPE_SLUGS)[number];
 
 /** The RFC 9457 `type` the server sends for a problem kind. */
-export function problemType(slug: ProblemTypeSlug | "csrf-token-rejected"): string {
+export function problemType(slug: ProblemTypeSlug): ProblemType {
 	// oxlint-disable-next-line hephaestus/no-raw-docs-url -- An RFC 9457 type is an identifier that the server sends. It must not follow the docs of the release.
 	return `https://docs.hephaestus.build/contributor/api-error-handling#${slug}`;
 }

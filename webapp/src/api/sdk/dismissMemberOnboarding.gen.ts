@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	DismissMemberOnboardingData,
+	DismissMemberOnboardingErrors,
 	DismissMemberOnboardingResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const dismissMemberOnboarding = <ThrowOnError extends boolean = false>(
 	options: Options<DismissMemberOnboardingData, ThrowOnError>,
-): RequestResult<DismissMemberOnboardingResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<DismissMemberOnboardingResponses, unknown, ThrowOnError>({
+): RequestResult<DismissMemberOnboardingResponses, DismissMemberOnboardingErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		DismissMemberOnboardingResponses,
+		DismissMemberOnboardingErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/onboarding/me/dismissal",
 		...options,

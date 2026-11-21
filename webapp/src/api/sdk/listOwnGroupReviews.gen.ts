@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listOwnGroupReviewsResponseTransformer } from "../transformers.gen.js";
-import type { ListOwnGroupReviewsData, ListOwnGroupReviewsResponses } from "../types.gen.js";
+import type {
+	ListOwnGroupReviewsData,
+	ListOwnGroupReviewsErrors,
+	ListOwnGroupReviewsResponses,
+} from "../types.gen.js";
 
 /**
  * List your reviews in a practice group
  */
 export const listOwnGroupReviews = <ThrowOnError extends boolean = false>(
 	options: Options<ListOwnGroupReviewsData, ThrowOnError>,
-): RequestResult<ListOwnGroupReviewsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListOwnGroupReviewsResponses, unknown, ThrowOnError>({
+): RequestResult<ListOwnGroupReviewsResponses, ListOwnGroupReviewsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListOwnGroupReviewsResponses,
+		ListOwnGroupReviewsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listOwnGroupReviewsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/reviews",

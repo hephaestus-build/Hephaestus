@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ListGitLabProjectsData, ListGitLabProjectsResponses } from "../types.gen.js";
+import type {
+	ListGitLabProjectsData,
+	ListGitLabProjectsErrors,
+	ListGitLabProjectsResponses,
+} from "../types.gen.js";
 
 /**
  * List one page of the projects in a GitLab group and its subgroups that a PAT can read
  */
 export const listGitLabProjects = <ThrowOnError extends boolean = false>(
 	options: Options<ListGitLabProjectsData, ThrowOnError>,
-): RequestResult<ListGitLabProjectsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ListGitLabProjectsResponses, unknown, ThrowOnError>({
+): RequestResult<ListGitLabProjectsResponses, ListGitLabProjectsErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		ListGitLabProjectsResponses,
+		ListGitLabProjectsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/gitlab/projects",
 		...options,

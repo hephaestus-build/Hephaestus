@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getDataExportStatusResponseTransformer } from "../transformers.gen.js";
-import type { GetDataExportStatusData, GetDataExportStatusResponses } from "../types.gen.js";
+import type {
+	GetDataExportStatusData,
+	GetDataExportStatusErrors,
+	GetDataExportStatusResponses,
+} from "../types.gen.js";
 
 /**
  * Get data-export status
  */
 export const getDataExportStatus = <ThrowOnError extends boolean = false>(
 	options: Options<GetDataExportStatusData, ThrowOnError>,
-): RequestResult<GetDataExportStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetDataExportStatusResponses, unknown, ThrowOnError>({
+): RequestResult<GetDataExportStatusResponses, GetDataExportStatusErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetDataExportStatusResponses,
+		GetDataExportStatusErrors,
+		ThrowOnError
+	>({
 		responseTransformer: getDataExportStatusResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/exports/{id}",

@@ -4,15 +4,15 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { cancelReviewResponseTransformer } from "../transformers.gen.js";
-import type { CancelReviewData, CancelReviewResponses } from "../types.gen.js";
+import type { CancelReviewData, CancelReviewErrors, CancelReviewResponses } from "../types.gen.js";
 
 /**
  * Cancel a practice review
  */
 export const cancelReview = <ThrowOnError extends boolean = false>(
 	options: Options<CancelReviewData, ThrowOnError>,
-): RequestResult<CancelReviewResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CancelReviewResponses, unknown, ThrowOnError>({
+): RequestResult<CancelReviewResponses, CancelReviewErrors, ThrowOnError> =>
+	(options.client ?? client).post<CancelReviewResponses, CancelReviewErrors, ThrowOnError>({
 		responseTransformer: cancelReviewResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel",

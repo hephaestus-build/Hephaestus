@@ -4,12 +4,16 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { retryFeedbackResponseTransformer } from "../transformers.gen.js";
-import type { RetryFeedbackData, RetryFeedbackResponses } from "../types.gen.js";
+import type {
+	RetryFeedbackData,
+	RetryFeedbackErrors,
+	RetryFeedbackResponses,
+} from "../types.gen.js";
 
 export const retryFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<RetryFeedbackData, ThrowOnError>,
-): RequestResult<RetryFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RetryFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<RetryFeedbackResponses, RetryFeedbackErrors, ThrowOnError> =>
+	(options.client ?? client).post<RetryFeedbackResponses, RetryFeedbackErrors, ThrowOnError>({
 		responseTransformer: retryFeedbackResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/retry",

@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { updateReviewScheduleResponseTransformer } from "../transformers.gen.js";
-import type { UpdateReviewScheduleData, UpdateReviewScheduleResponses } from "../types.gen.js";
+import type {
+	UpdateReviewScheduleData,
+	UpdateReviewScheduleErrors,
+	UpdateReviewScheduleResponses,
+} from "../types.gen.js";
 
 /**
  * Update a review schedule
  */
 export const updateReviewSchedule = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateReviewScheduleData, ThrowOnError>,
-): RequestResult<UpdateReviewScheduleResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<UpdateReviewScheduleResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateReviewScheduleResponses, UpdateReviewScheduleErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		UpdateReviewScheduleResponses,
+		UpdateReviewScheduleErrors,
+		ThrowOnError
+	>({
 		responseTransformer: updateReviewScheduleResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-schedules/{scheduleId}",

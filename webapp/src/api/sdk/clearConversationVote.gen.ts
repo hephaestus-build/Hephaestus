@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { clearConversationVoteResponseTransformer } from "../transformers.gen.js";
-import type { ClearConversationVoteData, ClearConversationVoteResponses } from "../types.gen.js";
+import type {
+	ClearConversationVoteData,
+	ClearConversationVoteErrors,
+	ClearConversationVoteResponses,
+} from "../types.gen.js";
 
 /**
  * Clear the vote on one of Hephaestus's messages
  */
 export const clearConversationVote = <ThrowOnError extends boolean = false>(
 	options: Options<ClearConversationVoteData, ThrowOnError>,
-): RequestResult<ClearConversationVoteResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<ClearConversationVoteResponses, unknown, ThrowOnError>({
+): RequestResult<ClearConversationVoteResponses, ClearConversationVoteErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		ClearConversationVoteResponses,
+		ClearConversationVoteErrors,
+		ThrowOnError
+	>({
 		responseTransformer: clearConversationVoteResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/conversation/entries/{entryId}/vote",

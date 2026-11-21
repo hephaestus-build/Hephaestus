@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { updateReviewBatchStatusResponseTransformer } from "../transformers.gen.js";
 import type {
 	UpdateReviewBatchStatusData,
+	UpdateReviewBatchStatusErrors,
 	UpdateReviewBatchStatusResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const updateReviewBatchStatus = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateReviewBatchStatusData, ThrowOnError>,
-): RequestResult<UpdateReviewBatchStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateReviewBatchStatusResponses, unknown, ThrowOnError>({
+): RequestResult<UpdateReviewBatchStatusResponses, UpdateReviewBatchStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdateReviewBatchStatusResponses,
+		UpdateReviewBatchStatusErrors,
+		ThrowOnError
+	>({
 		responseTransformer: updateReviewBatchStatusResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-batches/{batchId}/status",

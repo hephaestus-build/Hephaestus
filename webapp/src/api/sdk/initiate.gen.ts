@@ -3,12 +3,12 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { InitiateData, InitiateResponses } from "../types.gen.js";
+import type { InitiateData, InitiateErrors, InitiateResponses } from "../types.gen.js";
 
 export const initiate = <ThrowOnError extends boolean = false>(
 	options: Options<InitiateData, ThrowOnError>,
-): RequestResult<InitiateResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<InitiateResponses, unknown, ThrowOnError>({
+): RequestResult<InitiateResponses, InitiateErrors, ThrowOnError> =>
+	(options.client ?? client).post<InitiateResponses, InitiateErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections",
 		...options,

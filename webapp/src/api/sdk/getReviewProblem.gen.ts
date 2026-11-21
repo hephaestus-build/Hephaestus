@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getReviewProblemResponseTransformer } from "../transformers.gen.js";
-import type { GetReviewProblemData, GetReviewProblemResponses } from "../types.gen.js";
+import type {
+	GetReviewProblemData,
+	GetReviewProblemErrors,
+	GetReviewProblemResponses,
+} from "../types.gen.js";
 
 /**
  * Get a review problem
  */
 export const getReviewProblem = <ThrowOnError extends boolean = false>(
 	options: Options<GetReviewProblemData, ThrowOnError>,
-): RequestResult<GetReviewProblemResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetReviewProblemResponses, unknown, ThrowOnError>({
+): RequestResult<GetReviewProblemResponses, GetReviewProblemErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetReviewProblemResponses, GetReviewProblemErrors, ThrowOnError>({
 		responseTransformer: getReviewProblemResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/problems/{problemId}",

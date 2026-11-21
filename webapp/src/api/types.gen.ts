@@ -4890,11 +4890,11 @@ export type ProblemDetail = {
 	scanId?: string;
 	slackError?: string;
 	state?: string;
-	status?: number;
+	status: number;
 	stop?: string;
 	supportedRef?: string;
-	title?: string;
-	type?: string;
+	title: string;
+	type?: ProblemType;
 	withholdingReason?: string;
 	workspaceByteBudget?: number;
 	workspaceBytes?: number;
@@ -4905,6 +4905,11 @@ export type ProblemSummary = {
 	severity: Severity;
 	summary: string;
 };
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name. The problem's kind. A client branches on it, never on the title or the detail. A problem without a type is about:blank: its status is its kind.
+ */
+export type ProblemType = string;
 
 export type ProcessingStatus = "NONE" | "PENDING" | "DONE" | "FAILED";
 
@@ -8750,6 +8755,15 @@ export type GetProvenanceKeysData = {
 	url: "/.well-known/hephaestus-provenance-keys.json";
 };
 
+export type GetProvenanceKeysErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetProvenanceKeysError = GetProvenanceKeysErrors[keyof GetProvenanceKeysErrors];
+
 export type GetProvenanceKeysResponses = {
 	/**
 	 * OK
@@ -8769,6 +8783,15 @@ export type GetJwksData = {
 	url: "/.well-known/jwks.json";
 };
 
+export type GetJwksErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetJwksError = GetJwksErrors[keyof GetJwksErrors];
+
 export type GetJwksResponses = {
 	/**
 	 * OK
@@ -8786,6 +8809,16 @@ export type GetMcpAuthorizationServerMetadataData = {
 	query?: never;
 	url: "/.well-known/oauth-authorization-server";
 };
+
+export type GetMcpAuthorizationServerMetadataErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetMcpAuthorizationServerMetadataError =
+	GetMcpAuthorizationServerMetadataErrors[keyof GetMcpAuthorizationServerMetadataErrors];
 
 export type GetMcpAuthorizationServerMetadataResponses = {
 	/**
@@ -8807,6 +8840,16 @@ export type GetMcpResourceMetadataData = {
 	query?: never;
 	url: "/.well-known/oauth-protected-resource/{resourcePath}";
 };
+
+export type GetMcpResourceMetadataErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetMcpResourceMetadataError =
+	GetMcpResourceMetadataErrors[keyof GetMcpResourceMetadataErrors];
 
 export type GetMcpResourceMetadataResponses = {
 	/**
@@ -8836,6 +8879,15 @@ export type AdminListAuthEventsData = {
 	url: "/admin/audit";
 };
 
+export type AdminListAuthEventsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminListAuthEventsError = AdminListAuthEventsErrors[keyof AdminListAuthEventsErrors];
+
 export type AdminListAuthEventsResponses = {
 	/**
 	 * OK
@@ -8860,6 +8912,16 @@ export type AdminCountAuthEventsData = {
 	url: "/admin/audit/count";
 };
 
+export type AdminCountAuthEventsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminCountAuthEventsError =
+	AdminCountAuthEventsErrors[keyof AdminCountAuthEventsErrors];
+
 export type AdminCountAuthEventsResponses = {
 	/**
 	 * OK
@@ -8883,6 +8945,16 @@ export type AdminExportAuthEventsData = {
 	};
 	url: "/admin/audit/export";
 };
+
+export type AdminExportAuthEventsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminExportAuthEventsError =
+	AdminExportAuthEventsErrors[keyof AdminExportAuthEventsErrors];
 
 export type AdminExportAuthEventsResponses = {
 	/**
@@ -8912,6 +8984,16 @@ export type AdminListConfigAuditEventsData = {
 	url: "/admin/config-audit";
 };
 
+export type AdminListConfigAuditEventsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminListConfigAuditEventsError =
+	AdminListConfigAuditEventsErrors[keyof AdminListConfigAuditEventsErrors];
+
 export type AdminListConfigAuditEventsResponses = {
 	/**
 	 * OK
@@ -8938,6 +9020,16 @@ export type AdminCountConfigAuditEventsData = {
 	url: "/admin/config-audit/count";
 };
 
+export type AdminCountConfigAuditEventsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminCountConfigAuditEventsError =
+	AdminCountConfigAuditEventsErrors[keyof AdminCountConfigAuditEventsErrors];
+
 export type AdminCountConfigAuditEventsResponses = {
 	/**
 	 * OK
@@ -8955,6 +9047,16 @@ export type AdminGetConfigurationReadinessData = {
 	url: "/admin/configuration-readiness";
 };
 
+export type AdminGetConfigurationReadinessErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminGetConfigurationReadinessError =
+	AdminGetConfigurationReadinessErrors[keyof AdminGetConfigurationReadinessErrors];
+
 export type AdminGetConfigurationReadinessResponses = {
 	/**
 	 * OK
@@ -8971,6 +9073,15 @@ export type GetEmailStatusData = {
 	query?: never;
 	url: "/admin/email/status";
 };
+
+export type GetEmailStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetEmailStatusError = GetEmailStatusErrors[keyof GetEmailStatusErrors];
 
 export type GetEmailStatusResponses = {
 	/**
@@ -8993,6 +9104,10 @@ export type AdminSendTestEmailErrors = {
 	 * Malformed request or invalid recipient address
 	 */
 	400: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type AdminSendTestEmailError = AdminSendTestEmailErrors[keyof AdminSendTestEmailErrors];
@@ -9014,6 +9129,16 @@ export type ListGitHubInstallationsData = {
 	url: "/admin/github-installations";
 };
 
+export type ListGitHubInstallationsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListGitHubInstallationsError =
+	ListGitHubInstallationsErrors[keyof ListGitHubInstallationsErrors];
+
 export type ListGitHubInstallationsResponses = {
 	/**
 	 * OK
@@ -9033,6 +9158,16 @@ export type AdoptGitHubInstallationData = {
 	url: "/admin/github-installations/{installationId}/adopt";
 };
 
+export type AdoptGitHubInstallationErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdoptGitHubInstallationError =
+	AdoptGitHubInstallationErrors[keyof AdoptGitHubInstallationErrors];
+
 export type AdoptGitHubInstallationResponses = {
 	/**
 	 * OK
@@ -9051,6 +9186,16 @@ export type DeclineGitHubInstallationData = {
 	query?: never;
 	url: "/admin/github-installations/{installationId}/decline";
 };
+
+export type DeclineGitHubInstallationErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type DeclineGitHubInstallationError =
+	DeclineGitHubInstallationErrors[keyof DeclineGitHubInstallationErrors];
 
 export type DeclineGitHubInstallationResponses = {
 	/**
@@ -9072,6 +9217,16 @@ export type ListInstallationDeadLettersData = {
 	url: "/admin/integration/dead-letters";
 };
 
+export type ListInstallationDeadLettersErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListInstallationDeadLettersError =
+	ListInstallationDeadLettersErrors[keyof ListInstallationDeadLettersErrors];
+
 export type ListInstallationDeadLettersResponses = {
 	/**
 	 * OK
@@ -9091,6 +9246,16 @@ export type ReplayInstallationDeadLetterData = {
 	url: "/admin/integration/dead-letters/{id}/replays";
 };
 
+export type ReplayInstallationDeadLetterErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ReplayInstallationDeadLetterError =
+	ReplayInstallationDeadLetterErrors[keyof ReplayInstallationDeadLetterErrors];
+
 export type ReplayInstallationDeadLetterResponses = {
 	/**
 	 * OK
@@ -9107,6 +9272,16 @@ export type AdminListLlmCallPoolsData = {
 	query?: never;
 	url: "/admin/llm/call-pools";
 };
+
+export type AdminListLlmCallPoolsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminListLlmCallPoolsError =
+	AdminListLlmCallPoolsErrors[keyof AdminListLlmCallPoolsErrors];
 
 export type AdminListLlmCallPoolsResponses = {
 	/**
@@ -9129,8 +9304,15 @@ export type AdminCreateLlmCallPoolErrors = {
 	/**
 	 * A pool with this slug already exists
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AdminCreateLlmCallPoolError =
+	AdminCreateLlmCallPoolErrors[keyof AdminCreateLlmCallPoolErrors];
 
 export type AdminCreateLlmCallPoolResponses = {
 	/**
@@ -9148,6 +9330,16 @@ export type AdminListLlmCallPoolModelsData = {
 	query?: never;
 	url: "/admin/llm/call-pools/models";
 };
+
+export type AdminListLlmCallPoolModelsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminListLlmCallPoolModelsError =
+	AdminListLlmCallPoolModelsErrors[keyof AdminListLlmCallPoolModelsErrors];
 
 export type AdminListLlmCallPoolModelsResponses = {
 	/**
@@ -9172,16 +9364,23 @@ export type AdminDeleteLlmCallPoolErrors = {
 	/**
 	 * The pool is a model's own
 	 */
-	400: unknown;
+	400: ProblemDetail;
 	/**
 	 * Pool not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * The pool still has calls, rate history, or a cooldown
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AdminDeleteLlmCallPoolError =
+	AdminDeleteLlmCallPoolErrors[keyof AdminDeleteLlmCallPoolErrors];
 
 export type AdminDeleteLlmCallPoolResponses = {
 	/**
@@ -9206,16 +9405,23 @@ export type AdminUpdateLlmCallPoolErrors = {
 	/**
 	 * The pool slug cannot change or the limits are invalid
 	 */
-	400: unknown;
+	400: ProblemDetail;
 	/**
 	 * Pool not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * The pool still has calls, rate history, or a cooldown
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AdminUpdateLlmCallPoolError =
+	AdminUpdateLlmCallPoolErrors[keyof AdminUpdateLlmCallPoolErrors];
 
 export type AdminUpdateLlmCallPoolResponses = {
 	/**
@@ -9240,12 +9446,19 @@ export type AdminUpdateLlmCallPoolModelsErrors = {
 	/**
 	 * Pool or model not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * The pool still has calls, rate history, or a cooldown
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AdminUpdateLlmCallPoolModelsError =
+	AdminUpdateLlmCallPoolModelsErrors[keyof AdminUpdateLlmCallPoolModelsErrors];
 
 export type AdminUpdateLlmCallPoolModelsResponses = {
 	/**
@@ -9263,6 +9476,16 @@ export type AdminListLlmConnectionsData = {
 	query?: never;
 	url: "/admin/llm/connections";
 };
+
+export type AdminListLlmConnectionsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminListLlmConnectionsError =
+	AdminListLlmConnectionsErrors[keyof AdminListLlmConnectionsErrors];
 
 export type AdminListLlmConnectionsResponses = {
 	/**
@@ -9285,8 +9508,15 @@ export type AdminCreateLlmConnectionErrors = {
 	/**
 	 * An LLM connection with this slug already exists
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AdminCreateLlmConnectionError =
+	AdminCreateLlmConnectionErrors[keyof AdminCreateLlmConnectionErrors];
 
 export type AdminCreateLlmConnectionResponses = {
 	/**
@@ -9304,6 +9534,16 @@ export type AdminProbeLlmConnectionDraftData = {
 	query?: never;
 	url: "/admin/llm/connections/probe";
 };
+
+export type AdminProbeLlmConnectionDraftErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminProbeLlmConnectionDraftError =
+	AdminProbeLlmConnectionDraftErrors[keyof AdminProbeLlmConnectionDraftErrors];
 
 export type AdminProbeLlmConnectionDraftResponses = {
 	/**
@@ -9328,12 +9568,18 @@ export type AdminCreateLlmModelErrors = {
 	/**
 	 * LLM connection not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * A model with this slug or upstream model id already exists on the connection
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AdminCreateLlmModelError = AdminCreateLlmModelErrors[keyof AdminCreateLlmModelErrors];
 
 export type AdminCreateLlmModelResponses = {
 	/**
@@ -9358,12 +9604,19 @@ export type AdminDeleteLlmConnectionErrors = {
 	/**
 	 * LLM connection not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * Cannot delete a connection still referenced by one or more models
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AdminDeleteLlmConnectionError =
+	AdminDeleteLlmConnectionErrors[keyof AdminDeleteLlmConnectionErrors];
 
 export type AdminDeleteLlmConnectionResponses = {
 	/**
@@ -9388,8 +9641,15 @@ export type AdminUpdateLlmConnectionErrors = {
 	/**
 	 * LLM connection not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AdminUpdateLlmConnectionError =
+	AdminUpdateLlmConnectionErrors[keyof AdminUpdateLlmConnectionErrors];
 
 export type AdminUpdateLlmConnectionResponses = {
 	/**
@@ -9410,6 +9670,16 @@ export type AdminProbeLlmConnectionData = {
 	url: "/admin/llm/connections/{id}/probe";
 };
 
+export type AdminProbeLlmConnectionErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminProbeLlmConnectionError =
+	AdminProbeLlmConnectionErrors[keyof AdminProbeLlmConnectionErrors];
+
 export type AdminProbeLlmConnectionResponses = {
 	/**
 	 * OK
@@ -9426,6 +9696,15 @@ export type AdminListLlmModelsData = {
 	query?: never;
 	url: "/admin/llm/models";
 };
+
+export type AdminListLlmModelsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminListLlmModelsError = AdminListLlmModelsErrors[keyof AdminListLlmModelsErrors];
 
 export type AdminListLlmModelsResponses = {
 	/**
@@ -9450,12 +9729,18 @@ export type AdminDeleteLlmModelErrors = {
 	/**
 	 * LLM model not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * Cannot delete a model still assigned to a purpose
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AdminDeleteLlmModelError = AdminDeleteLlmModelErrors[keyof AdminDeleteLlmModelErrors];
 
 export type AdminDeleteLlmModelResponses = {
 	/**
@@ -9480,12 +9765,18 @@ export type AdminUpdateLlmModelErrors = {
 	/**
 	 * LLM model not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * Another model on the connection already uses this upstream model id
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AdminUpdateLlmModelError = AdminUpdateLlmModelErrors[keyof AdminUpdateLlmModelErrors];
 
 export type AdminUpdateLlmModelResponses = {
 	/**
@@ -9505,6 +9796,16 @@ export type AdminProbeLlmModelCapabilitiesData = {
 	query?: never;
 	url: "/admin/llm/models/{id}/capabilities";
 };
+
+export type AdminProbeLlmModelCapabilitiesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminProbeLlmModelCapabilitiesError =
+	AdminProbeLlmModelCapabilitiesErrors[keyof AdminProbeLlmModelCapabilitiesErrors];
 
 export type AdminProbeLlmModelCapabilitiesResponses = {
 	/**
@@ -9529,8 +9830,15 @@ export type AdminUpdateLlmModelPriceErrors = {
 	/**
 	 * LLM model not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AdminUpdateLlmModelPriceError =
+	AdminUpdateLlmModelPriceErrors[keyof AdminUpdateLlmModelPriceErrors];
 
 export type AdminUpdateLlmModelPriceResponses = {
 	/**
@@ -9555,8 +9863,15 @@ export type AdminUpdateLlmModelSharingErrors = {
 	/**
 	 * LLM model not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AdminUpdateLlmModelSharingError =
+	AdminUpdateLlmModelSharingErrors[keyof AdminUpdateLlmModelSharingErrors];
 
 export type AdminUpdateLlmModelSharingResponses = {
 	/**
@@ -9575,6 +9890,15 @@ export type AdminGetLlmSettingsData = {
 	url: "/admin/llm/settings";
 };
 
+export type AdminGetLlmSettingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminGetLlmSettingsError = AdminGetLlmSettingsErrors[keyof AdminGetLlmSettingsErrors];
+
 export type AdminGetLlmSettingsResponses = {
 	/**
 	 * OK
@@ -9591,6 +9915,16 @@ export type AdminUpdateLlmSettingsData = {
 	query?: never;
 	url: "/admin/llm/settings";
 };
+
+export type AdminUpdateLlmSettingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminUpdateLlmSettingsError =
+	AdminUpdateLlmSettingsErrors[keyof AdminUpdateLlmSettingsErrors];
 
 export type AdminUpdateLlmSettingsResponses = {
 	/**
@@ -9611,6 +9945,16 @@ export type AdminGetLlmUsageReportData = {
 	url: "/admin/llm/usage";
 };
 
+export type AdminGetLlmUsageReportErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminGetLlmUsageReportError =
+	AdminGetLlmUsageReportErrors[keyof AdminGetLlmUsageReportErrors];
+
 export type AdminGetLlmUsageReportResponses = {
 	/**
 	 * OK
@@ -9628,6 +9972,16 @@ export type AdminListLoginProvidersData = {
 	url: "/admin/login-providers";
 };
 
+export type AdminListLoginProvidersErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminListLoginProvidersError =
+	AdminListLoginProvidersErrors[keyof AdminListLoginProvidersErrors];
+
 export type AdminListLoginProvidersResponses = {
 	/**
 	 * OK
@@ -9644,6 +9998,16 @@ export type AdminCreateLoginProviderData = {
 	query?: never;
 	url: "/admin/login-providers";
 };
+
+export type AdminCreateLoginProviderErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminCreateLoginProviderError =
+	AdminCreateLoginProviderErrors[keyof AdminCreateLoginProviderErrors];
 
 export type AdminCreateLoginProviderResponses = {
 	/**
@@ -9664,6 +10028,16 @@ export type AdminDeleteLoginProviderData = {
 	url: "/admin/login-providers/{registrationId}";
 };
 
+export type AdminDeleteLoginProviderErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminDeleteLoginProviderError =
+	AdminDeleteLoginProviderErrors[keyof AdminDeleteLoginProviderErrors];
+
 export type AdminDeleteLoginProviderResponses = {
 	/**
 	 * Login provider deleted
@@ -9683,6 +10057,16 @@ export type AdminUpdateLoginProviderData = {
 	url: "/admin/login-providers/{registrationId}";
 };
 
+export type AdminUpdateLoginProviderErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminUpdateLoginProviderError =
+	AdminUpdateLoginProviderErrors[keyof AdminUpdateLoginProviderErrors];
+
 export type AdminUpdateLoginProviderResponses = {
 	/**
 	 * OK
@@ -9700,6 +10084,16 @@ export type AdminPreviewPersonDataData = {
 	url: "/admin/person-data/preview";
 };
 
+export type AdminPreviewPersonDataErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminPreviewPersonDataError =
+	AdminPreviewPersonDataErrors[keyof AdminPreviewPersonDataErrors];
+
 export type AdminPreviewPersonDataResponses = {
 	/**
 	 * OK
@@ -9716,6 +10110,16 @@ export type AdminListPersonDataProvidersData = {
 	query?: never;
 	url: "/admin/person-data/providers";
 };
+
+export type AdminListPersonDataProvidersErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminListPersonDataProvidersError =
+	AdminListPersonDataProvidersErrors[keyof AdminListPersonDataProvidersErrors];
 
 export type AdminListPersonDataProvidersResponses = {
 	/**
@@ -9736,6 +10140,16 @@ export type AdminGetPersonDataRequestData = {
 	url: "/admin/person-data/{id}";
 };
 
+export type AdminGetPersonDataRequestErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminGetPersonDataRequestError =
+	AdminGetPersonDataRequestErrors[keyof AdminGetPersonDataRequestErrors];
+
 export type AdminGetPersonDataRequestResponses = {
 	/**
 	 * OK
@@ -9754,6 +10168,16 @@ export type AdminErasePersonDataData = {
 	query?: never;
 	url: "/admin/person-data/{id}/erase";
 };
+
+export type AdminErasePersonDataErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminErasePersonDataError =
+	AdminErasePersonDataErrors[keyof AdminErasePersonDataErrors];
 
 export type AdminErasePersonDataResponses = {
 	/**
@@ -9774,6 +10198,16 @@ export type AdminExportPersonDataData = {
 	url: "/admin/person-data/{id}/export";
 };
 
+export type AdminExportPersonDataErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminExportPersonDataError =
+	AdminExportPersonDataErrors[keyof AdminExportPersonDataErrors];
+
 export type AdminExportPersonDataResponses = {
 	/**
 	 * JSON file
@@ -9790,6 +10224,15 @@ export type GetInstanceCatalogData = {
 	query?: never;
 	url: "/admin/practice-catalog";
 };
+
+export type GetInstanceCatalogErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetInstanceCatalogError = GetInstanceCatalogErrors[keyof GetInstanceCatalogErrors];
 
 export type GetInstanceCatalogResponses = {
 	/**
@@ -9808,6 +10251,16 @@ export type GetInstanceDefinitionOptionsData = {
 	url: "/admin/practice-catalog/definition-options";
 };
 
+export type GetInstanceDefinitionOptionsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetInstanceDefinitionOptionsError =
+	GetInstanceDefinitionOptionsErrors[keyof GetInstanceDefinitionOptionsErrors];
+
 export type GetInstanceDefinitionOptionsResponses = {
 	/**
 	 * OK
@@ -9824,6 +10277,15 @@ export type CreateCatalogGroupData = {
 	query?: never;
 	url: "/admin/practice-catalog/groups";
 };
+
+export type CreateCatalogGroupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CreateCatalogGroupError = CreateCatalogGroupErrors[keyof CreateCatalogGroupErrors];
 
 export type CreateCatalogGroupResponses = {
 	/**
@@ -9845,6 +10307,16 @@ export type ReorderCatalogGroupsData = {
 	url: "/admin/practice-catalog/groups/reorder";
 };
 
+export type ReorderCatalogGroupsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ReorderCatalogGroupsError =
+	ReorderCatalogGroupsErrors[keyof ReorderCatalogGroupsErrors];
+
 export type ReorderCatalogGroupsResponses = {
 	/**
 	 * OK
@@ -9863,6 +10335,15 @@ export type GetCatalogGroupData = {
 	query?: never;
 	url: "/admin/practice-catalog/groups/{slug}";
 };
+
+export type GetCatalogGroupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetCatalogGroupError = GetCatalogGroupErrors[keyof GetCatalogGroupErrors];
 
 export type GetCatalogGroupResponses = {
 	/**
@@ -9884,6 +10365,15 @@ export type UpdateCatalogGroupData = {
 	query?: never;
 	url: "/admin/practice-catalog/groups/{slug}";
 };
+
+export type UpdateCatalogGroupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateCatalogGroupError = UpdateCatalogGroupErrors[keyof UpdateCatalogGroupErrors];
 
 export type UpdateCatalogGroupResponses = {
 	/**
@@ -9907,6 +10397,15 @@ export type ResetCatalogGroupData = {
 	url: "/admin/practice-catalog/groups/{slug}/override";
 };
 
+export type ResetCatalogGroupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ResetCatalogGroupError = ResetCatalogGroupErrors[keyof ResetCatalogGroupErrors];
+
 export type ResetCatalogGroupResponses = {
 	/**
 	 * OK
@@ -9928,6 +10427,16 @@ export type AcknowledgeCatalogGroupData = {
 	query?: never;
 	url: "/admin/practice-catalog/groups/{slug}/override/acknowledgement";
 };
+
+export type AcknowledgeCatalogGroupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AcknowledgeCatalogGroupError =
+	AcknowledgeCatalogGroupErrors[keyof AcknowledgeCatalogGroupErrors];
 
 export type AcknowledgeCatalogGroupResponses = {
 	/**
@@ -9951,6 +10460,16 @@ export type SetCatalogGroupStatusData = {
 	url: "/admin/practice-catalog/groups/{slug}/status";
 };
 
+export type SetCatalogGroupStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type SetCatalogGroupStatusError =
+	SetCatalogGroupStatusErrors[keyof SetCatalogGroupStatusErrors];
+
 export type SetCatalogGroupStatusResponses = {
 	/**
 	 * OK
@@ -9971,6 +10490,15 @@ export type ResetCatalogOrderData = {
 	url: "/admin/practice-catalog/order";
 };
 
+export type ResetCatalogOrderErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ResetCatalogOrderError = ResetCatalogOrderErrors[keyof ResetCatalogOrderErrors];
+
 export type ResetCatalogOrderResponses = {
 	/**
 	 * OK
@@ -9987,6 +10515,16 @@ export type CreateCatalogPracticeData = {
 	query?: never;
 	url: "/admin/practice-catalog/practices";
 };
+
+export type CreateCatalogPracticeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CreateCatalogPracticeError =
+	CreateCatalogPracticeErrors[keyof CreateCatalogPracticeErrors];
 
 export type CreateCatalogPracticeResponses = {
 	/**
@@ -10006,6 +10544,15 @@ export type GetCatalogPracticeData = {
 	query?: never;
 	url: "/admin/practice-catalog/practices/{slug}";
 };
+
+export type GetCatalogPracticeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetCatalogPracticeError = GetCatalogPracticeErrors[keyof GetCatalogPracticeErrors];
 
 export type GetCatalogPracticeResponses = {
 	/**
@@ -10029,6 +10576,16 @@ export type UpdateCatalogPracticeData = {
 	url: "/admin/practice-catalog/practices/{slug}";
 };
 
+export type UpdateCatalogPracticeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateCatalogPracticeError =
+	UpdateCatalogPracticeErrors[keyof UpdateCatalogPracticeErrors];
+
 export type UpdateCatalogPracticeResponses = {
 	/**
 	 * OK
@@ -10050,6 +10607,15 @@ export type MoveCatalogPracticeData = {
 	query?: never;
 	url: "/admin/practice-catalog/practices/{slug}/group";
 };
+
+export type MoveCatalogPracticeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type MoveCatalogPracticeError = MoveCatalogPracticeErrors[keyof MoveCatalogPracticeErrors];
 
 export type MoveCatalogPracticeResponses = {
 	/**
@@ -10073,6 +10639,16 @@ export type ResetCatalogPracticeData = {
 	url: "/admin/practice-catalog/practices/{slug}/override";
 };
 
+export type ResetCatalogPracticeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ResetCatalogPracticeError =
+	ResetCatalogPracticeErrors[keyof ResetCatalogPracticeErrors];
+
 export type ResetCatalogPracticeResponses = {
 	/**
 	 * OK
@@ -10095,6 +10671,16 @@ export type AcknowledgeCatalogPracticeData = {
 	url: "/admin/practice-catalog/practices/{slug}/override/acknowledgement";
 };
 
+export type AcknowledgeCatalogPracticeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AcknowledgeCatalogPracticeError =
+	AcknowledgeCatalogPracticeErrors[keyof AcknowledgeCatalogPracticeErrors];
+
 export type AcknowledgeCatalogPracticeResponses = {
 	/**
 	 * OK
@@ -10113,6 +10699,16 @@ export type GetCatalogPracticeReleaseData = {
 	query?: never;
 	url: "/admin/practice-catalog/practices/{slug}/release";
 };
+
+export type GetCatalogPracticeReleaseErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetCatalogPracticeReleaseError =
+	GetCatalogPracticeReleaseErrors[keyof GetCatalogPracticeReleaseErrors];
 
 export type GetCatalogPracticeReleaseResponses = {
 	/**
@@ -10136,6 +10732,16 @@ export type AcceptCatalogPracticeReleaseData = {
 	url: "/admin/practice-catalog/practices/{slug}/release";
 };
 
+export type AcceptCatalogPracticeReleaseErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AcceptCatalogPracticeReleaseError =
+	AcceptCatalogPracticeReleaseErrors[keyof AcceptCatalogPracticeReleaseErrors];
+
 export type AcceptCatalogPracticeReleaseResponses = {
 	/**
 	 * OK
@@ -10157,6 +10763,16 @@ export type SetCatalogPracticeStatusData = {
 	query?: never;
 	url: "/admin/practice-catalog/practices/{slug}/status";
 };
+
+export type SetCatalogPracticeStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type SetCatalogPracticeStatusError =
+	SetCatalogPracticeStatusErrors[keyof SetCatalogPracticeStatusErrors];
 
 export type SetCatalogPracticeStatusResponses = {
 	/**
@@ -10189,6 +10805,16 @@ export type AdminListProductFeedbackData = {
 	url: "/admin/product-feedback";
 };
 
+export type AdminListProductFeedbackErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminListProductFeedbackError =
+	AdminListProductFeedbackErrors[keyof AdminListProductFeedbackErrors];
+
 export type AdminListProductFeedbackResponses = {
 	/**
 	 * OK
@@ -10208,6 +10834,16 @@ export type ConfirmProductFeedbackCleanupData = {
 	url: "/admin/product-feedback/cleanups/{cleanupId}/confirm";
 };
 
+export type ConfirmProductFeedbackCleanupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ConfirmProductFeedbackCleanupError =
+	ConfirmProductFeedbackCleanupErrors[keyof ConfirmProductFeedbackCleanupErrors];
+
 export type ConfirmProductFeedbackCleanupResponses = {
 	/**
 	 * The step is confirmed and its issue locator is deleted
@@ -10224,6 +10860,16 @@ export type GetProductFeedbackDestinationsData = {
 	query?: never;
 	url: "/admin/product-feedback/destinations";
 };
+
+export type GetProductFeedbackDestinationsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetProductFeedbackDestinationsError =
+	GetProductFeedbackDestinationsErrors[keyof GetProductFeedbackDestinationsErrors];
 
 export type GetProductFeedbackDestinationsResponses = {
 	/**
@@ -10242,6 +10888,16 @@ export type UpdateProductFeedbackDestinationsData = {
 	url: "/admin/product-feedback/destinations";
 };
 
+export type UpdateProductFeedbackDestinationsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateProductFeedbackDestinationsError =
+	UpdateProductFeedbackDestinationsErrors[keyof UpdateProductFeedbackDestinationsErrors];
+
 export type UpdateProductFeedbackDestinationsResponses = {
 	/**
 	 * OK
@@ -10259,6 +10915,16 @@ export type FileAllSavedProductFeedbackData = {
 	url: "/admin/product-feedback/file-saved";
 };
 
+export type FileAllSavedProductFeedbackErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type FileAllSavedProductFeedbackError =
+	FileAllSavedProductFeedbackErrors[keyof FileAllSavedProductFeedbackErrors];
+
 export type FileAllSavedProductFeedbackResponses = {
 	/**
 	 * OK
@@ -10275,6 +10941,16 @@ export type ListProductFeedbackNeedsActionData = {
 	query?: never;
 	url: "/admin/product-feedback/needs-action";
 };
+
+export type ListProductFeedbackNeedsActionErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListProductFeedbackNeedsActionError =
+	ListProductFeedbackNeedsActionErrors[keyof ListProductFeedbackNeedsActionErrors];
 
 export type ListProductFeedbackNeedsActionResponses = {
 	/**
@@ -10295,6 +10971,16 @@ export type AdminTriageProductFeedbackData = {
 	url: "/admin/product-feedback/{feedbackId}";
 };
 
+export type AdminTriageProductFeedbackErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminTriageProductFeedbackError =
+	AdminTriageProductFeedbackErrors[keyof AdminTriageProductFeedbackErrors];
+
 export type AdminTriageProductFeedbackResponses = {
 	/**
 	 * OK
@@ -10314,6 +11000,16 @@ export type FileSavedProductFeedbackData = {
 	url: "/admin/product-feedback/{feedbackId}/file";
 };
 
+export type FileSavedProductFeedbackErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type FileSavedProductFeedbackError =
+	FileSavedProductFeedbackErrors[keyof FileSavedProductFeedbackErrors];
+
 export type FileSavedProductFeedbackResponses = {
 	/**
 	 * The report goes through drafting and routing
@@ -10332,6 +11028,16 @@ export type RetryProductFeedbackFilingData = {
 	query?: never;
 	url: "/admin/product-feedback/{feedbackId}/retry";
 };
+
+export type RetryProductFeedbackFilingErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RetryProductFeedbackFilingError =
+	RetryProductFeedbackFilingErrors[keyof RetryProductFeedbackFilingErrors];
 
 export type RetryProductFeedbackFilingResponses = {
 	/**
@@ -10353,6 +11059,16 @@ export type ListInstanceProviderRepairsData = {
 	url: "/admin/provider-resource-repairs";
 };
 
+export type ListInstanceProviderRepairsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListInstanceProviderRepairsError =
+	ListInstanceProviderRepairsErrors[keyof ListInstanceProviderRepairsErrors];
+
 export type ListInstanceProviderRepairsResponses = {
 	/**
 	 * OK
@@ -10372,6 +11088,16 @@ export type ReleaseOrphanProviderRepairData = {
 	url: "/admin/provider-resource-repairs/{repairId}/release";
 };
 
+export type ReleaseOrphanProviderRepairErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ReleaseOrphanProviderRepairError =
+	ReleaseOrphanProviderRepairErrors[keyof ReleaseOrphanProviderRepairErrors];
+
 export type ReleaseOrphanProviderRepairResponses = {
 	/**
 	 * OK
@@ -10385,6 +11111,15 @@ export type AdminGetReleaseData = {
 	query?: never;
 	url: "/admin/release";
 };
+
+export type AdminGetReleaseErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminGetReleaseError = AdminGetReleaseErrors[keyof AdminGetReleaseErrors];
 
 export type AdminGetReleaseResponses = {
 	/**
@@ -10401,6 +11136,15 @@ export type AdminCheckReleaseData = {
 	query?: never;
 	url: "/admin/release/checks";
 };
+
+export type AdminCheckReleaseErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminCheckReleaseError = AdminCheckReleaseErrors[keyof AdminCheckReleaseErrors];
 
 export type AdminCheckReleaseResponses = {
 	/**
@@ -10419,6 +11163,16 @@ export type ReleaseResearchDatasetData = {
 	url: "/admin/research-disclosures";
 };
 
+export type ReleaseResearchDatasetErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ReleaseResearchDatasetError =
+	ReleaseResearchDatasetErrors[keyof ReleaseResearchDatasetErrors];
+
 export type ReleaseResearchDatasetResponses = {
 	/**
 	 * Research dataset JSON attachment
@@ -10435,6 +11189,16 @@ export type CheckResearchRemovalsData = {
 	query?: never;
 	url: "/admin/research-disclosures/removal-checks";
 };
+
+export type CheckResearchRemovalsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CheckResearchRemovalsError =
+	CheckResearchRemovalsErrors[keyof CheckResearchRemovalsErrors];
 
 export type CheckResearchRemovalsResponses = {
 	/**
@@ -10455,6 +11219,16 @@ export type CloseResearchDisclosureData = {
 	url: "/admin/research-disclosures/{datasetId}/closure";
 };
 
+export type CloseResearchDisclosureErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CloseResearchDisclosureError =
+	CloseResearchDisclosureErrors[keyof CloseResearchDisclosureErrors];
+
 export type CloseResearchDisclosureResponses = {
 	/**
 	 * OK
@@ -10470,6 +11244,16 @@ export type RecordResearchRemovalsData = {
 	query?: never;
 	url: "/admin/research-disclosures/{datasetId}/removal-receipts";
 };
+
+export type RecordResearchRemovalsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RecordResearchRemovalsError =
+	RecordResearchRemovalsErrors[keyof RecordResearchRemovalsErrors];
 
 export type RecordResearchRemovalsResponses = {
 	/**
@@ -10488,6 +11272,16 @@ export type AdminGetInstanceSettingsData = {
 	url: "/admin/settings";
 };
 
+export type AdminGetInstanceSettingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminGetInstanceSettingsError =
+	AdminGetInstanceSettingsErrors[keyof AdminGetInstanceSettingsErrors];
+
 export type AdminGetInstanceSettingsResponses = {
 	/**
 	 * OK
@@ -10505,6 +11299,16 @@ export type GetPublicActivityPolicyData = {
 	url: "/admin/settings/public-activity";
 };
 
+export type GetPublicActivityPolicyErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPublicActivityPolicyError =
+	GetPublicActivityPolicyErrors[keyof GetPublicActivityPolicyErrors];
+
 export type GetPublicActivityPolicyResponses = {
 	/**
 	 * OK
@@ -10521,6 +11325,16 @@ export type UpdatePublicActivityPolicyData = {
 	query?: never;
 	url: "/admin/settings/public-activity";
 };
+
+export type UpdatePublicActivityPolicyErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdatePublicActivityPolicyError =
+	UpdatePublicActivityPolicyErrors[keyof UpdatePublicActivityPolicyErrors];
 
 export type UpdatePublicActivityPolicyResponses = {
 	/**
@@ -10554,6 +11368,10 @@ export type AdminUpdateSilentModeErrors = {
 	 * If-Match is required when releasing Silent Mode
 	 */
 	428: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type AdminUpdateSilentModeError =
@@ -10579,6 +11397,15 @@ export type AdminListUsersData = {
 	url: "/admin/users";
 };
 
+export type AdminListUsersErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminListUsersError = AdminListUsersErrors[keyof AdminListUsersErrors];
+
 export type AdminListUsersResponses = {
 	/**
 	 * OK
@@ -10597,6 +11424,15 @@ export type AdminUpdateUserData = {
 	url: "/admin/users/{id}";
 };
 
+export type AdminUpdateUserErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminUpdateUserError = AdminUpdateUserErrors[keyof AdminUpdateUserErrors];
+
 export type AdminUpdateUserResponses = {
 	/**
 	 * OK
@@ -10614,6 +11450,16 @@ export type AdminRevokeUserSessionsData = {
 	query?: never;
 	url: "/admin/users/{id}/sessions";
 };
+
+export type AdminRevokeUserSessionsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminRevokeUserSessionsError =
+	AdminRevokeUserSessionsErrors[keyof AdminRevokeUserSessionsErrors];
 
 export type AdminRevokeUserSessionsResponses = {
 	/**
@@ -10634,6 +11480,16 @@ export type AdminUpdateUserStatusData = {
 	url: "/admin/users/{id}/status";
 };
 
+export type AdminUpdateUserStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminUpdateUserStatusError =
+	AdminUpdateUserStatusErrors[keyof AdminUpdateUserStatusErrors];
+
 export type AdminUpdateUserStatusResponses = {
 	/**
 	 * OK
@@ -10650,6 +11506,15 @@ export type AdminListWorkspacesData = {
 	query?: never;
 	url: "/admin/workspaces";
 };
+
+export type AdminListWorkspacesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminListWorkspacesError = AdminListWorkspacesErrors[keyof AdminListWorkspacesErrors];
 
 export type AdminListWorkspacesResponses = {
 	/**
@@ -10669,6 +11534,16 @@ export type AdminUpdateWorkspaceLlmBudgetData = {
 	query?: never;
 	url: "/admin/workspaces/{workspaceSlug}/llm/budget";
 };
+
+export type AdminUpdateWorkspaceLlmBudgetErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdminUpdateWorkspaceLlmBudgetError =
+	AdminUpdateWorkspaceLlmBudgetErrors[keyof AdminUpdateWorkspaceLlmBudgetErrors];
 
 export type AdminUpdateWorkspaceLlmBudgetResponses = {
 	/**
@@ -10694,6 +11569,10 @@ export type GetClientSignInConfigurationErrors = {
 	 * The client id is not a Chrome extension id
 	 */
 	400: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetClientSignInConfigurationError =
@@ -10729,6 +11608,10 @@ export type LogoutClientSessionErrors = {
 	 * This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again.
 	 */
 	429: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type LogoutClientSessionError = LogoutClientSessionErrors[keyof LogoutClientSessionErrors];
@@ -10767,6 +11650,10 @@ export type RefreshClientSessionErrors = {
 	 * This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again.
 	 */
 	429: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type RefreshClientSessionError =
@@ -10802,6 +11689,10 @@ export type ExchangeClientSignInErrors = {
 	 * This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again.
 	 */
 	429: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type ExchangeClientSignInError =
@@ -10824,6 +11715,15 @@ export type GetCsrfTokenData = {
 	url: "/auth/csrf";
 };
 
+export type GetCsrfTokenErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetCsrfTokenError = GetCsrfTokenErrors[keyof GetCsrfTokenErrors];
+
 export type GetCsrfTokenResponses = {
 	/**
 	 * OK
@@ -10839,6 +11739,15 @@ export type LogoutData = {
 	query?: never;
 	url: "/auth/logout";
 };
+
+export type LogoutErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type LogoutError = LogoutErrors[keyof LogoutErrors];
 
 export type LogoutResponses = {
 	/**
@@ -10860,12 +11769,18 @@ export type RefreshErrors = {
 	/**
 	 * The token belongs to an installed-client session
 	 */
-	400: unknown;
+	400: ProblemDetail;
 	/**
 	 * Session has ended
 	 */
-	401: unknown;
+	401: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type RefreshError = RefreshErrors[keyof RefreshErrors];
 
 export type RefreshResponses = {
 	/**
@@ -10887,20 +11802,26 @@ export type ReportBrowserFaultsErrors = {
 	/**
 	 * A fault names an unknown value or is out of range
 	 */
-	400: unknown;
+	400: ProblemDetail;
 	/**
 	 * The browser sent the report from another site, or the CSRF token is missing
 	 */
-	403: unknown;
+	403: ProblemDetail;
 	/**
 	 * The report is larger than 16 KiB
 	 */
-	413: unknown;
+	413: ProblemDetail;
 	/**
 	 * The reader or address sent too many reports
 	 */
-	429: unknown;
+	429: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type ReportBrowserFaultsError = ReportBrowserFaultsErrors[keyof ReportBrowserFaultsErrors];
 
 export type ReportBrowserFaultsResponses = {
 	/**
@@ -10918,6 +11839,16 @@ export type ListGlobalContributorsData = {
 	query?: never;
 	url: "/contributors";
 };
+
+export type ListGlobalContributorsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListGlobalContributorsError =
+	ListGlobalContributorsErrors[keyof ListGlobalContributorsErrors];
 
 export type ListGlobalContributorsResponses = {
 	/**
@@ -10938,6 +11869,16 @@ export type ClaimGitHubInstallationData = {
 	url: "/github-installations/{installationId}/claim";
 };
 
+export type ClaimGitHubInstallationErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ClaimGitHubInstallationError =
+	ClaimGitHubInstallationErrors[keyof ClaimGitHubInstallationErrors];
+
 export type ClaimGitHubInstallationResponses = {
 	/**
 	 * OK
@@ -10954,6 +11895,16 @@ export type ListIdentityProvidersData = {
 	query?: never;
 	url: "/identity-providers";
 };
+
+export type ListIdentityProvidersErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListIdentityProvidersError =
+	ListIdentityProvidersErrors[keyof ListIdentityProvidersErrors];
 
 export type ListIdentityProvidersResponses = {
 	/**
@@ -10982,6 +11933,15 @@ export type AuthorizeMcpClientData = {
 	url: "/mcp/oauth/authorize";
 };
 
+export type AuthorizeMcpClientErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AuthorizeMcpClientError = AuthorizeMcpClientErrors[keyof AuthorizeMcpClientErrors];
+
 export type AuthorizeMcpClientResponses = {
 	/**
 	 * OK
@@ -10997,6 +11957,16 @@ export type RefuseMcpConsentRequestData = {
 	query?: never;
 	url: "/mcp/oauth/requests/{requestId}";
 };
+
+export type RefuseMcpConsentRequestErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RefuseMcpConsentRequestError =
+	RefuseMcpConsentRequestErrors[keyof RefuseMcpConsentRequestErrors];
 
 export type RefuseMcpConsentRequestResponses = {
 	/**
@@ -11017,6 +11987,16 @@ export type GetMcpConsentRequestData = {
 	url: "/mcp/oauth/requests/{requestId}";
 };
 
+export type GetMcpConsentRequestErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetMcpConsentRequestError =
+	GetMcpConsentRequestErrors[keyof GetMcpConsentRequestErrors];
+
 export type GetMcpConsentRequestResponses = {
 	/**
 	 * OK
@@ -11035,6 +12015,16 @@ export type ApproveMcpConsentRequestData = {
 	query?: never;
 	url: "/mcp/oauth/requests/{requestId}/approval";
 };
+
+export type ApproveMcpConsentRequestErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ApproveMcpConsentRequestError =
+	ApproveMcpConsentRequestErrors[keyof ApproveMcpConsentRequestErrors];
 
 export type ApproveMcpConsentRequestResponses = {
 	/**
@@ -11062,6 +12052,15 @@ export type McpTokenData = {
 	url: "/mcp/oauth/token";
 };
 
+export type McpTokenErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type McpTokenError = McpTokenErrors[keyof McpTokenErrors];
+
 export type McpTokenResponses = {
 	/**
 	 * OK
@@ -11084,6 +12083,15 @@ export type UnsubscribeEmailData = {
 	url: "/notifications/unsubscribe/{token}";
 };
 
+export type UnsubscribeEmailErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UnsubscribeEmailError = UnsubscribeEmailErrors[keyof UnsubscribeEmailErrors];
+
 export type UnsubscribeEmailResponses = {
 	/**
 	 * Subscription disabled, or token no longer applicable
@@ -11105,6 +12113,15 @@ export type CallbackGetData = {
 	};
 	url: "/oauth/callback/{kind}";
 };
+
+export type CallbackGetErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CallbackGetError = CallbackGetErrors[keyof CallbackGetErrors];
 
 export type CallbackGetResponses = {
 	/**
@@ -11130,6 +12147,15 @@ export type CallbackPostData = {
 	url: "/oauth/callback/{kind}";
 };
 
+export type CallbackPostErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CallbackPostError = CallbackPostErrors[keyof CallbackPostErrors];
+
 export type CallbackPostResponses = {
 	/**
 	 * OK
@@ -11148,6 +12174,16 @@ export type SubmitInstanceProductFeedbackData = {
 	url: "/product-feedback";
 };
 
+export type SubmitInstanceProductFeedbackErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type SubmitInstanceProductFeedbackError =
+	SubmitInstanceProductFeedbackErrors[keyof SubmitInstanceProductFeedbackErrors];
+
 export type SubmitInstanceProductFeedbackResponses = {
 	/**
 	 * OK
@@ -11164,6 +12200,16 @@ export type ListMyProductFeedbackData = {
 	query?: never;
 	url: "/product-feedback/mine";
 };
+
+export type ListMyProductFeedbackErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListMyProductFeedbackError =
+	ListMyProductFeedbackErrors[keyof ListMyProductFeedbackErrors];
 
 export type ListMyProductFeedbackResponses = {
 	/**
@@ -11182,6 +12228,16 @@ export type GetProductFeedbackSharingData = {
 	url: "/product-feedback/sharing";
 };
 
+export type GetProductFeedbackSharingErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetProductFeedbackSharingError =
+	GetProductFeedbackSharingErrors[keyof GetProductFeedbackSharingErrors];
+
 export type GetProductFeedbackSharingResponses = {
 	/**
 	 * OK
@@ -11198,6 +12254,16 @@ export type UpdateProductFeedbackSharingData = {
 	query?: never;
 	url: "/product-feedback/sharing";
 };
+
+export type UpdateProductFeedbackSharingErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateProductFeedbackSharingError =
+	UpdateProductFeedbackSharingErrors[keyof UpdateProductFeedbackSharingErrors];
 
 export type UpdateProductFeedbackSharingResponses = {
 	/**
@@ -11218,6 +12284,16 @@ export type AllowMyProductFeedbackPublicData = {
 	url: "/product-feedback/{feedbackId}/allow-public";
 };
 
+export type AllowMyProductFeedbackPublicErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AllowMyProductFeedbackPublicError =
+	AllowMyProductFeedbackPublicErrors[keyof AllowMyProductFeedbackPublicErrors];
+
 export type AllowMyProductFeedbackPublicResponses = {
 	/**
 	 * OK
@@ -11236,6 +12312,16 @@ export type EditMyProductFeedbackDraftData = {
 	query?: never;
 	url: "/product-feedback/{feedbackId}/draft";
 };
+
+export type EditMyProductFeedbackDraftErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type EditMyProductFeedbackDraftError =
+	EditMyProductFeedbackDraftErrors[keyof EditMyProductFeedbackDraftErrors];
 
 export type EditMyProductFeedbackDraftResponses = {
 	/**
@@ -11256,6 +12342,16 @@ export type KeepMyProductFeedbackPrivateData = {
 	url: "/product-feedback/{feedbackId}/keep-private";
 };
 
+export type KeepMyProductFeedbackPrivateErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type KeepMyProductFeedbackPrivateError =
+	KeepMyProductFeedbackPrivateErrors[keyof KeepMyProductFeedbackPrivateErrors];
+
 export type KeepMyProductFeedbackPrivateResponses = {
 	/**
 	 * OK
@@ -11274,6 +12370,16 @@ export type MakeMyProductFeedbackPrivateData = {
 	query?: never;
 	url: "/product-feedback/{feedbackId}/make-private";
 };
+
+export type MakeMyProductFeedbackPrivateErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type MakeMyProductFeedbackPrivateError =
+	MakeMyProductFeedbackPrivateErrors[keyof MakeMyProductFeedbackPrivateErrors];
 
 export type MakeMyProductFeedbackPrivateResponses = {
 	/**
@@ -11302,6 +12408,15 @@ export type GetPublicActivityData = {
 	url: "/public/workspaces/{slug}/activity";
 };
 
+export type GetPublicActivityErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPublicActivityError = GetPublicActivityErrors[keyof GetPublicActivityErrors];
+
 export type GetPublicActivityResponses = {
 	/**
 	 * Public contributions counted
@@ -11329,6 +12444,16 @@ export type GetPublicActivityPersonData = {
 	};
 	url: "/public/workspaces/{slug}/activity/people/{login}";
 };
+
+export type GetPublicActivityPersonErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPublicActivityPersonError =
+	GetPublicActivityPersonErrors[keyof GetPublicActivityPersonErrors];
 
 export type GetPublicActivityPersonResponses = {
 	/**
@@ -11370,6 +12495,16 @@ export type GetPublicActivityPersonWorkData = {
 	url: "/public/workspaces/{slug}/activity/people/{login}/work";
 };
 
+export type GetPublicActivityPersonWorkErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPublicActivityPersonWorkError =
+	GetPublicActivityPersonWorkErrors[keyof GetPublicActivityPersonWorkErrors];
+
 export type GetPublicActivityPersonWorkResponses = {
 	/**
 	 * Public work listed
@@ -11395,6 +12530,10 @@ export type DeleteCurrentUserErrors = {
 	 * The caller has not signed in recently (problem type step-up-required)
 	 */
 	403: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type DeleteCurrentUserError = DeleteCurrentUserErrors[keyof DeleteCurrentUserErrors];
@@ -11416,6 +12555,15 @@ export type GetCurrentUserData = {
 	url: "/user";
 };
 
+export type GetCurrentUserErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetCurrentUserError = GetCurrentUserErrors[keyof GetCurrentUserErrors];
+
 export type GetCurrentUserResponses = {
 	/**
 	 * OK
@@ -11431,6 +12579,15 @@ export type GetAccountAiChoiceData = {
 	query?: never;
 	url: "/user/ai-choice";
 };
+
+export type GetAccountAiChoiceErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetAccountAiChoiceError = GetAccountAiChoiceErrors[keyof GetAccountAiChoiceErrors];
 
 export type GetAccountAiChoiceResponses = {
 	/**
@@ -11449,6 +12606,16 @@ export type UpdateAccountAiChoiceData = {
 	url: "/user/ai-choice";
 };
 
+export type UpdateAccountAiChoiceErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateAccountAiChoiceError =
+	UpdateAccountAiChoiceErrors[keyof UpdateAccountAiChoiceErrors];
+
 export type UpdateAccountAiChoiceResponses = {
 	/**
 	 * OK
@@ -11466,6 +12633,15 @@ export type GetConsentStatusData = {
 	url: "/user/consent";
 };
 
+export type GetConsentStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetConsentStatusError = GetConsentStatusErrors[keyof GetConsentStatusErrors];
+
 export type GetConsentStatusResponses = {
 	/**
 	 * OK
@@ -11481,6 +12657,16 @@ export type CompleteFirstLoginConsentData = {
 	query?: never;
 	url: "/user/consent";
 };
+
+export type CompleteFirstLoginConsentErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CompleteFirstLoginConsentError =
+	CompleteFirstLoginConsentErrors[keyof CompleteFirstLoginConsentErrors];
 
 export type CompleteFirstLoginConsentResponses = {
 	/**
@@ -11499,6 +12685,16 @@ export type UpdateResearchConsentData = {
 	url: "/user/consent/research";
 };
 
+export type UpdateResearchConsentErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateResearchConsentError =
+	UpdateResearchConsentErrors[keyof UpdateResearchConsentErrors];
+
 export type UpdateResearchConsentResponses = {
 	/**
 	 * OK
@@ -11515,6 +12711,15 @@ export type RequestDataExportData = {
 	query?: never;
 	url: "/user/exports";
 };
+
+export type RequestDataExportErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RequestDataExportError = RequestDataExportErrors[keyof RequestDataExportErrors];
 
 export type RequestDataExportResponses = {
 	/**
@@ -11535,6 +12740,15 @@ export type GetDataExportStatusData = {
 	url: "/user/exports/{id}";
 };
 
+export type GetDataExportStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetDataExportStatusError = GetDataExportStatusErrors[keyof GetDataExportStatusErrors];
+
 export type GetDataExportStatusResponses = {
 	/**
 	 * OK
@@ -11554,6 +12768,15 @@ export type DownloadDataExportData = {
 	url: "/user/exports/{id}/download";
 };
 
+export type DownloadDataExportErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type DownloadDataExportError = DownloadDataExportErrors[keyof DownloadDataExportErrors];
+
 export type DownloadDataExportResponses = {
 	/**
 	 * OK
@@ -11571,6 +12794,15 @@ export type GetUserFeaturesData = {
 	url: "/user/features";
 };
 
+export type GetUserFeaturesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetUserFeaturesError = GetUserFeaturesErrors[keyof GetUserFeaturesErrors];
+
 export type GetUserFeaturesResponses = {
 	/**
 	 * Feature flags evaluated successfully
@@ -11586,6 +12818,16 @@ export type ListLinkedIdentitiesData = {
 	query?: never;
 	url: "/user/identities";
 };
+
+export type ListLinkedIdentitiesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListLinkedIdentitiesError =
+	ListLinkedIdentitiesErrors[keyof ListLinkedIdentitiesErrors];
 
 export type ListLinkedIdentitiesResponses = {
 	/**
@@ -11610,12 +12852,18 @@ export type UnlinkIdentityErrors = {
 	/**
 	 * No such identity on the current account
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * Cannot unlink the account's only remaining sign-in method
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type UnlinkIdentityError = UnlinkIdentityErrors[keyof UnlinkIdentityErrors];
 
 export type UnlinkIdentityResponses = {
 	/**
@@ -11632,6 +12880,16 @@ export type GetNotificationPreferencesData = {
 	query?: never;
 	url: "/user/notification-preferences";
 };
+
+export type GetNotificationPreferencesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetNotificationPreferencesError =
+	GetNotificationPreferencesErrors[keyof GetNotificationPreferencesErrors];
 
 export type GetNotificationPreferencesResponses = {
 	/**
@@ -11677,6 +12935,10 @@ export type UpdateNotificationPreferencesErrors = {
 	 * If-Match is required
 	 */
 	428: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type UpdateNotificationPreferencesError =
@@ -11699,6 +12961,15 @@ export type GetPasskeyStatusData = {
 	url: "/user/passkeys";
 };
 
+export type GetPasskeyStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPasskeyStatusError = GetPasskeyStatusErrors[keyof GetPasskeyStatusErrors];
+
 export type GetPasskeyStatusResponses = {
 	/**
 	 * OK
@@ -11715,6 +12986,15 @@ export type RegisterPasskeyData = {
 	url: "/user/passkeys";
 };
 
+export type RegisterPasskeyErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RegisterPasskeyError = RegisterPasskeyErrors[keyof RegisterPasskeyErrors];
+
 export type RegisterPasskeyResponses = {
 	/**
 	 * OK
@@ -11728,6 +13008,16 @@ export type UpdatePasskeyProtectionData = {
 	query?: never;
 	url: "/user/passkeys/protection";
 };
+
+export type UpdatePasskeyProtectionErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdatePasskeyProtectionError =
+	UpdatePasskeyProtectionErrors[keyof UpdatePasskeyProtectionErrors];
 
 export type UpdatePasskeyProtectionResponses = {
 	/**
@@ -11743,6 +13033,15 @@ export type RecoverPasskeysData = {
 	url: "/user/passkeys/recovery";
 };
 
+export type RecoverPasskeysErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RecoverPasskeysError = RecoverPasskeysErrors[keyof RecoverPasskeysErrors];
+
 export type RecoverPasskeysResponses = {
 	/**
 	 * OK
@@ -11756,6 +13055,16 @@ export type CreatePasskeyRecoveryCodesData = {
 	query?: never;
 	url: "/user/passkeys/recovery-codes";
 };
+
+export type CreatePasskeyRecoveryCodesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CreatePasskeyRecoveryCodesError =
+	CreatePasskeyRecoveryCodesErrors[keyof CreatePasskeyRecoveryCodesErrors];
 
 export type CreatePasskeyRecoveryCodesResponses = {
 	/**
@@ -11774,6 +13083,16 @@ export type GetPasskeyRegistrationOptionsData = {
 	url: "/user/passkeys/registration-options";
 };
 
+export type GetPasskeyRegistrationOptionsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPasskeyRegistrationOptionsError =
+	GetPasskeyRegistrationOptionsErrors[keyof GetPasskeyRegistrationOptionsErrors];
+
 export type GetPasskeyRegistrationOptionsResponses = {
 	/**
 	 * OK
@@ -11791,6 +13110,15 @@ export type VerifyPasskeyData = {
 	url: "/user/passkeys/verification";
 };
 
+export type VerifyPasskeyErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type VerifyPasskeyError = VerifyPasskeyErrors[keyof VerifyPasskeyErrors];
+
 export type VerifyPasskeyResponses = {
 	/**
 	 * OK
@@ -11804,6 +13132,16 @@ export type GetPasskeyVerificationOptionsData = {
 	query?: never;
 	url: "/user/passkeys/verification-options";
 };
+
+export type GetPasskeyVerificationOptionsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPasskeyVerificationOptionsError =
+	GetPasskeyVerificationOptionsErrors[keyof GetPasskeyVerificationOptionsErrors];
 
 export type GetPasskeyVerificationOptionsResponses = {
 	/**
@@ -11824,6 +13162,15 @@ export type RemovePasskeyData = {
 	url: "/user/passkeys/{credentialId}";
 };
 
+export type RemovePasskeyErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RemovePasskeyError = RemovePasskeyErrors[keyof RemovePasskeyErrors];
+
 export type RemovePasskeyResponses = {
 	/**
 	 * OK
@@ -11837,6 +13184,16 @@ export type GetPublicActivityChoiceData = {
 	query?: never;
 	url: "/user/public-activity";
 };
+
+export type GetPublicActivityChoiceErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPublicActivityChoiceError =
+	GetPublicActivityChoiceErrors[keyof GetPublicActivityChoiceErrors];
 
 export type GetPublicActivityChoiceResponses = {
 	/**
@@ -11854,6 +13211,16 @@ export type UpdatePublicActivityChoiceData = {
 	query?: never;
 	url: "/user/public-activity";
 };
+
+export type UpdatePublicActivityChoiceErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdatePublicActivityChoiceError =
+	UpdatePublicActivityChoiceErrors[keyof UpdatePublicActivityChoiceErrors];
 
 export type UpdatePublicActivityChoiceResponses = {
 	/**
@@ -11874,6 +13241,16 @@ export type GetPublicActivityOnboardingData = {
 	url: "/user/public-activity/workspaces/{slug}/onboarding";
 };
 
+export type GetPublicActivityOnboardingErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPublicActivityOnboardingError =
+	GetPublicActivityOnboardingErrors[keyof GetPublicActivityOnboardingErrors];
+
 export type GetPublicActivityOnboardingResponses = {
 	/**
 	 * OK
@@ -11893,6 +13270,16 @@ export type AnswerPublicActivityOnboardingData = {
 	url: "/user/public-activity/workspaces/{slug}/onboarding";
 };
 
+export type AnswerPublicActivityOnboardingErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AnswerPublicActivityOnboardingError =
+	AnswerPublicActivityOnboardingErrors[keyof AnswerPublicActivityOnboardingErrors];
+
 export type AnswerPublicActivityOnboardingResponses = {
 	/**
 	 * OK
@@ -11910,6 +13297,15 @@ export type RevokeOtherSessionsData = {
 	url: "/user/sessions";
 };
 
+export type RevokeOtherSessionsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RevokeOtherSessionsError = RevokeOtherSessionsErrors[keyof RevokeOtherSessionsErrors];
+
 export type RevokeOtherSessionsResponses = {
 	/**
 	 * Other sessions revoked
@@ -11926,6 +13322,15 @@ export type ListSessionsData = {
 	query?: never;
 	url: "/user/sessions";
 };
+
+export type ListSessionsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListSessionsError = ListSessionsErrors[keyof ListSessionsErrors];
 
 export type ListSessionsResponses = {
 	/**
@@ -11945,6 +13350,15 @@ export type RevokeSessionData = {
 	url: "/user/sessions/{jti}";
 };
 
+export type RevokeSessionErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RevokeSessionError = RevokeSessionErrors[keyof RevokeSessionErrors];
+
 export type RevokeSessionResponses = {
 	/**
 	 * Session revoked
@@ -11960,6 +13374,15 @@ export type GetUserSettingsData = {
 	query?: never;
 	url: "/user/settings";
 };
+
+export type GetUserSettingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetUserSettingsError = GetUserSettingsErrors[keyof GetUserSettingsErrors];
 
 export type GetUserSettingsResponses = {
 	/**
@@ -11977,6 +13400,15 @@ export type UpdateUserSettingsData = {
 	url: "/user/settings";
 };
 
+export type UpdateUserSettingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateUserSettingsError = UpdateUserSettingsErrors[keyof UpdateUserSettingsErrors];
+
 export type UpdateUserSettingsResponses = {
 	/**
 	 * OK
@@ -11993,6 +13425,16 @@ export type GetSlackUserPreferencesData = {
 	query?: never;
 	url: "/user/slack/preferences";
 };
+
+export type GetSlackUserPreferencesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetSlackUserPreferencesError =
+	GetSlackUserPreferencesErrors[keyof GetSlackUserPreferencesErrors];
 
 export type GetSlackUserPreferencesResponses = {
 	/**
@@ -12015,12 +13457,18 @@ export type ReportWebVitalsErrors = {
 	/**
 	 * A measurement names an unknown vital, navigation, page or region, is out of range, or is the time to first byte of a route view
 	 */
-	400: unknown;
+	400: ProblemDetail;
 	/**
 	 * Not signed in
 	 */
-	401: unknown;
+	401: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type ReportWebVitalsError = ReportWebVitalsErrors[keyof ReportWebVitalsErrors];
 
 export type ReportWebVitalsResponses = {
 	/**
@@ -12038,6 +13486,15 @@ export type ListWorkspacesData = {
 	url: "/workspaces";
 };
 
+export type ListWorkspacesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListWorkspacesError = ListWorkspacesErrors[keyof ListWorkspacesErrors];
+
 export type ListWorkspacesResponses = {
 	/**
 	 * Workspace list
@@ -12053,6 +13510,15 @@ export type CreateWorkspaceData = {
 	query?: never;
 	url: "/workspaces";
 };
+
+export type CreateWorkspaceErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CreateWorkspaceError = CreateWorkspaceErrors[keyof CreateWorkspaceErrors];
 
 export type CreateWorkspaceResponses = {
 	/**
@@ -12070,6 +13536,15 @@ export type ListGitLabGroupsData = {
 	url: "/workspaces/gitlab/groups";
 };
 
+export type ListGitLabGroupsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListGitLabGroupsError = ListGitLabGroupsErrors[keyof ListGitLabGroupsErrors];
+
 export type ListGitLabGroupsResponses = {
 	/**
 	 * Accessible groups
@@ -12085,6 +13560,15 @@ export type GitLabPreflightData = {
 	query?: never;
 	url: "/workspaces/gitlab/preflight";
 };
+
+export type GitLabPreflightErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GitLabPreflightError = GitLabPreflightErrors[keyof GitLabPreflightErrors];
 
 export type GitLabPreflightResponses = {
 	/**
@@ -12105,6 +13589,15 @@ export type ListGitLabProjectsData = {
 	url: "/workspaces/gitlab/projects";
 };
 
+export type ListGitLabProjectsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListGitLabProjectsError = ListGitLabProjectsErrors[keyof ListGitLabProjectsErrors];
+
 export type ListGitLabProjectsResponses = {
 	/**
 	 * One page of projects, ordered by path; nextCursor is absent on the last page
@@ -12121,6 +13614,15 @@ export type GetProvidersData = {
 	query?: never;
 	url: "/workspaces/providers";
 };
+
+export type GetProvidersErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetProvidersError = GetProvidersErrors[keyof GetProvidersErrors];
 
 export type GetProvidersResponses = {
 	/**
@@ -12148,6 +13650,10 @@ export type PurgeWorkspaceErrors = {
 	 * The caller has not signed in recently (problem type step-up-required), or is not an owner
 	 */
 	403: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type PurgeWorkspaceError = PurgeWorkspaceErrors[keyof PurgeWorkspaceErrors];
@@ -12172,6 +13678,15 @@ export type GetWorkspaceData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}";
 };
+
+export type GetWorkspaceErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetWorkspaceError = GetWorkspaceErrors[keyof GetWorkspaceErrors];
 
 export type GetWorkspaceResponses = {
 	/**
@@ -12207,6 +13722,10 @@ export type GetActivityFacetsErrors = {
 	 * Workspace, contributor, team or repository not found
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetActivityFacetsError = GetActivityFacetsErrors[keyof GetActivityFacetsErrors];
@@ -12246,6 +13765,10 @@ export type ListHiddenContributorsErrors = {
 	 * Workspace, contributor, team or repository not found
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type ListHiddenContributorsError =
@@ -12295,6 +13818,10 @@ export type GetOwnActivityErrors = {
 	 * Workspace, contributor, team or repository not found
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetOwnActivityError = GetOwnActivityErrors[keyof GetOwnActivityErrors];
@@ -12354,6 +13881,10 @@ export type GetOwnActivityWorkErrors = {
 	 * Workspace, contributor, team or repository not found
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetOwnActivityWorkError = GetOwnActivityWorkErrors[keyof GetOwnActivityWorkErrors];
@@ -12397,6 +13928,10 @@ export type GetOpenWorkErrors = {
 	 * Workspace, contributor, team or repository not found
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetOpenWorkError = GetOpenWorkErrors[keyof GetOpenWorkErrors];
@@ -12444,6 +13979,10 @@ export type GetActivityPeopleErrors = {
 	 * Workspace, contributor, team or repository not found
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetActivityPeopleError = GetActivityPeopleErrors[keyof GetActivityPeopleErrors];
@@ -12493,6 +14032,10 @@ export type GetActivityPersonErrors = {
 	 * Workspace, contributor, team or repository not found
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetActivityPersonError = GetActivityPersonErrors[keyof GetActivityPersonErrors];
@@ -12535,6 +14078,10 @@ export type UpdateActivityAutomationErrors = {
 	 * Workspace, contributor, team or repository not found
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type UpdateActivityAutomationError =
@@ -12578,6 +14125,10 @@ export type UpdatePublicActivityObjectionErrors = {
 	 * Workspace, contributor, team or repository not found
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type UpdatePublicActivityObjectionError =
@@ -12640,6 +14191,10 @@ export type GetActivityPersonWorkErrors = {
 	 * Workspace, contributor, team or repository not found
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetActivityPersonWorkError =
@@ -12680,6 +14235,10 @@ export type GetPublicActivityHiddenCountErrors = {
 	 * Workspace, contributor, team or repository not found
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetPublicActivityHiddenCountError =
@@ -12742,6 +14301,10 @@ export type GetActivityWorkErrors = {
 	 * Workspace, contributor, team or repository not found
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetActivityWorkError = GetActivityWorkErrors[keyof GetActivityWorkErrors];
@@ -12777,6 +14340,16 @@ export type ListWorkspaceConfigAuditEventsData = {
 	url: "/workspaces/{workspaceSlug}/config-audit";
 };
 
+export type ListWorkspaceConfigAuditEventsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListWorkspaceConfigAuditEventsError =
+	ListWorkspaceConfigAuditEventsErrors[keyof ListWorkspaceConfigAuditEventsErrors];
+
 export type ListWorkspaceConfigAuditEventsResponses = {
 	/**
 	 * OK
@@ -12807,6 +14380,16 @@ export type CountWorkspaceConfigAuditEventsData = {
 	url: "/workspaces/{workspaceSlug}/config-audit/count";
 };
 
+export type CountWorkspaceConfigAuditEventsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CountWorkspaceConfigAuditEventsError =
+	CountWorkspaceConfigAuditEventsErrors[keyof CountWorkspaceConfigAuditEventsErrors];
+
 export type CountWorkspaceConfigAuditEventsResponses = {
 	/**
 	 * OK
@@ -12829,6 +14412,15 @@ export type ListData = {
 	url: "/workspaces/{workspaceSlug}/connections";
 };
 
+export type ListErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListError = ListErrors[keyof ListErrors];
+
 export type ListResponses = {
 	/**
 	 * OK
@@ -12850,6 +14442,15 @@ export type InitiateData = {
 	url: "/workspaces/{workspaceSlug}/connections";
 };
 
+export type InitiateErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type InitiateError = InitiateErrors[keyof InitiateErrors];
+
 export type InitiateResponses = {
 	/**
 	 * OK
@@ -12870,6 +14471,16 @@ export type GetIntegrationCatalogData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/connections/catalog";
 };
+
+export type GetIntegrationCatalogErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetIntegrationCatalogError =
+	GetIntegrationCatalogErrors[keyof GetIntegrationCatalogErrors];
 
 export type GetIntegrationCatalogResponses = {
 	/**
@@ -12897,8 +14508,15 @@ export type GetOutlineTokenStatusErrors = {
 	/**
 	 * The workspace has no ACTIVE Outline connection
 	 */
-	404: unknown;
+	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type GetOutlineTokenStatusError =
+	GetOutlineTokenStatusErrors[keyof GetOutlineTokenStatusErrors];
 
 export type GetOutlineTokenStatusResponses = {
 	/**
@@ -12930,7 +14548,11 @@ export type ReplaceOutlineTokenErrors = {
 	/**
 	 * The workspace has no ACTIVE Outline connection
 	 */
-	404: unknown;
+	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type ReplaceOutlineTokenError = ReplaceOutlineTokenErrors[keyof ReplaceOutlineTokenErrors];
@@ -12961,6 +14583,16 @@ export type ListConnectionProviderRepairsData = {
 	url: "/workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs";
 };
 
+export type ListConnectionProviderRepairsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListConnectionProviderRepairsError =
+	ListConnectionProviderRepairsErrors[keyof ListConnectionProviderRepairsErrors];
+
 export type ListConnectionProviderRepairsResponses = {
 	/**
 	 * OK
@@ -12985,6 +14617,16 @@ export type ReleaseConnectionProviderRepairData = {
 	url: "/workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs/{repairId}/release";
 };
 
+export type ReleaseConnectionProviderRepairErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ReleaseConnectionProviderRepairError =
+	ReleaseConnectionProviderRepairErrors[keyof ReleaseConnectionProviderRepairErrors];
+
 export type ReleaseConnectionProviderRepairResponses = {
 	/**
 	 * OK
@@ -13004,6 +14646,16 @@ export type GetConnectionSyncStatusData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/connections/{connectionId}/sync";
 };
+
+export type GetConnectionSyncStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetConnectionSyncStatusError =
+	GetConnectionSyncStatusErrors[keyof GetConnectionSyncStatusErrors];
 
 export type GetConnectionSyncStatusResponses = {
 	/**
@@ -13030,6 +14682,16 @@ export type ListConnectionSyncJobsData = {
 	};
 	url: "/workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs";
 };
+
+export type ListConnectionSyncJobsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListConnectionSyncJobsError =
+	ListConnectionSyncJobsErrors[keyof ListConnectionSyncJobsErrors];
 
 export type ListConnectionSyncJobsResponses = {
 	/**
@@ -13071,6 +14733,10 @@ export type TriggerSyncJobErrors = {
 	 * The server is too busy to dispatch the sync; retry later
 	 */
 	503: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type TriggerSyncJobError = TriggerSyncJobErrors[keyof TriggerSyncJobErrors];
@@ -13115,6 +14781,10 @@ export type UpdateConnectionSyncJobErrors = {
 	 * Job is already in a terminal status
 	 */
 	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type UpdateConnectionSyncJobError =
@@ -13143,6 +14813,16 @@ export type ListConnectionSyncResourcesData = {
 	url: "/workspaces/{workspaceSlug}/connections/{connectionId}/sync/resources";
 };
 
+export type ListConnectionSyncResourcesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListConnectionSyncResourcesError =
+	ListConnectionSyncResourcesErrors[keyof ListConnectionSyncResourcesErrors];
+
 export type ListConnectionSyncResourcesResponses = {
 	/**
 	 * OK
@@ -13166,6 +14846,15 @@ export type ReadData = {
 	url: "/workspaces/{workspaceSlug}/connections/{id}";
 };
 
+export type ReadErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ReadError = ReadErrors[keyof ReadErrors];
+
 export type ReadResponses = {
 	/**
 	 * OK
@@ -13188,6 +14877,16 @@ export type UpdateConnectionStatusData = {
 	url: "/workspaces/{workspaceSlug}/connections/{id}/status";
 };
 
+export type UpdateConnectionStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateConnectionStatusError =
+	UpdateConnectionStatusErrors[keyof UpdateConnectionStatusErrors];
+
 export type UpdateConnectionStatusResponses = {
 	/**
 	 * OK
@@ -13209,6 +14908,15 @@ export type GetConversationData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/conversation";
 };
+
+export type GetConversationErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetConversationError = GetConversationErrors[keyof GetConversationErrors];
 
 export type GetConversationResponses = {
 	/**
@@ -13233,6 +14941,16 @@ export type ListConversationEntriesData = {
 	};
 	url: "/workspaces/{workspaceSlug}/conversation/entries";
 };
+
+export type ListConversationEntriesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListConversationEntriesError =
+	ListConversationEntriesErrors[keyof ListConversationEntriesErrors];
 
 export type ListConversationEntriesResponses = {
 	/**
@@ -13262,6 +14980,10 @@ export type DeleteConversationEntryErrors = {
 	 * Only the developer's own questions can be deleted
 	 */
 	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type DeleteConversationEntryError =
@@ -13298,6 +15020,10 @@ export type GetConversationThreadErrors = {
 	 * No top-level message of the developer has this id
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetConversationThreadError =
@@ -13325,6 +15051,16 @@ export type ClearConversationVoteData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/conversation/entries/{entryId}/vote";
 };
+
+export type ClearConversationVoteErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ClearConversationVoteError =
+	ClearConversationVoteErrors[keyof ClearConversationVoteErrors];
 
 export type ClearConversationVoteResponses = {
 	/**
@@ -13354,6 +15090,10 @@ export type SetConversationVoteErrors = {
 	 * The message is not one of Hephaestus's
 	 */
 	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type SetConversationVoteError = SetConversationVoteErrors[keyof SetConversationVoteErrors];
@@ -13379,6 +15119,16 @@ export type MarkConversationReadData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/conversation/read";
 };
+
+export type MarkConversationReadErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type MarkConversationReadError =
+	MarkConversationReadErrors[keyof MarkConversationReadErrors];
 
 export type MarkConversationReadResponses = {
 	/**
@@ -13407,6 +15157,10 @@ export type SubmitConversationTurnErrors = {
 	 * Hephaestus declines the developer (conversation-refused), too many follow-ups wait, the requestId was used for another message, or the parent cannot have a thread (conversation-rejected)
 	 */
 	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type SubmitConversationTurnError =
@@ -13435,6 +15189,16 @@ export type UpdateConversationTurnStatusData = {
 	url: "/workspaces/{workspaceSlug}/conversation/turns/{turnId}/status";
 };
 
+export type UpdateConversationTurnStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateConversationTurnStatusError =
+	UpdateConversationTurnStatusErrors[keyof UpdateConversationTurnStatusErrors];
+
 export type UpdateConversationTurnStatusResponses = {
 	/**
 	 * OK
@@ -13456,6 +15220,15 @@ export type UpdateFeaturesData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/features";
 };
+
+export type UpdateFeaturesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateFeaturesError = UpdateFeaturesErrors[keyof UpdateFeaturesErrors];
 
 export type UpdateFeaturesResponses = {
 	/**
@@ -13481,6 +15254,16 @@ export type ListConsumerDeadLettersData = {
 	url: "/workspaces/{workspaceSlug}/integrations/dead-letters";
 };
 
+export type ListConsumerDeadLettersErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListConsumerDeadLettersError =
+	ListConsumerDeadLettersErrors[keyof ListConsumerDeadLettersErrors];
+
 export type ListConsumerDeadLettersResponses = {
 	/**
 	 * OK
@@ -13504,6 +15287,16 @@ export type ReplayConsumerDeadLetterData = {
 	url: "/workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays";
 };
 
+export type ReplayConsumerDeadLetterErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ReplayConsumerDeadLetterError =
+	ReplayConsumerDeadLetterErrors[keyof ReplayConsumerDeadLetterErrors];
+
 export type ReplayConsumerDeadLetterResponses = {
 	/**
 	 * OK
@@ -13525,6 +15318,16 @@ export type WorkspaceListAvailableLlmModelsData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/llm/available-models";
 };
+
+export type WorkspaceListAvailableLlmModelsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type WorkspaceListAvailableLlmModelsError =
+	WorkspaceListAvailableLlmModelsErrors[keyof WorkspaceListAvailableLlmModelsErrors];
 
 export type WorkspaceListAvailableLlmModelsResponses = {
 	/**
@@ -13548,6 +15351,16 @@ export type UpdateWorkspaceLlmBudgetData = {
 	url: "/workspaces/{workspaceSlug}/llm/budget";
 };
 
+export type UpdateWorkspaceLlmBudgetErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateWorkspaceLlmBudgetError =
+	UpdateWorkspaceLlmBudgetErrors[keyof UpdateWorkspaceLlmBudgetErrors];
+
 export type UpdateWorkspaceLlmBudgetResponses = {
 	/**
 	 * Cap updated
@@ -13569,6 +15382,16 @@ export type WorkspaceListLlmConnectionsData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/llm/connections";
 };
+
+export type WorkspaceListLlmConnectionsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type WorkspaceListLlmConnectionsError =
+	WorkspaceListLlmConnectionsErrors[keyof WorkspaceListLlmConnectionsErrors];
 
 export type WorkspaceListLlmConnectionsResponses = {
 	/**
@@ -13596,8 +15419,15 @@ export type WorkspaceCreateLlmConnectionErrors = {
 	/**
 	 * A connection with this slug already exists in this workspace
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type WorkspaceCreateLlmConnectionError =
+	WorkspaceCreateLlmConnectionErrors[keyof WorkspaceCreateLlmConnectionErrors];
 
 export type WorkspaceCreateLlmConnectionResponses = {
 	/**
@@ -13626,12 +15456,19 @@ export type WorkspaceCreateLlmModelErrors = {
 	/**
 	 * AI provider connection not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * A model with this slug or upstream model id already exists on the connection
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type WorkspaceCreateLlmModelError =
+	WorkspaceCreateLlmModelErrors[keyof WorkspaceCreateLlmModelErrors];
 
 export type WorkspaceCreateLlmModelResponses = {
 	/**
@@ -13660,12 +15497,19 @@ export type WorkspaceDeleteLlmConnectionErrors = {
 	/**
 	 * Connection not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * Cannot delete a connection still referenced by one or more models
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type WorkspaceDeleteLlmConnectionError =
+	WorkspaceDeleteLlmConnectionErrors[keyof WorkspaceDeleteLlmConnectionErrors];
 
 export type WorkspaceDeleteLlmConnectionResponses = {
 	/**
@@ -13694,8 +15538,15 @@ export type WorkspaceUpdateLlmConnectionErrors = {
 	/**
 	 * Connection not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type WorkspaceUpdateLlmConnectionError =
+	WorkspaceUpdateLlmConnectionErrors[keyof WorkspaceUpdateLlmConnectionErrors];
 
 export type WorkspaceUpdateLlmConnectionResponses = {
 	/**
@@ -13720,6 +15571,16 @@ export type WorkspaceProbeLlmConnectionData = {
 	url: "/workspaces/{workspaceSlug}/llm/connections/{id}/probe";
 };
 
+export type WorkspaceProbeLlmConnectionErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type WorkspaceProbeLlmConnectionError =
+	WorkspaceProbeLlmConnectionErrors[keyof WorkspaceProbeLlmConnectionErrors];
+
 export type WorkspaceProbeLlmConnectionResponses = {
 	/**
 	 * OK
@@ -13741,6 +15602,16 @@ export type WorkspaceListLlmModelsData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/llm/models";
 };
+
+export type WorkspaceListLlmModelsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type WorkspaceListLlmModelsError =
+	WorkspaceListLlmModelsErrors[keyof WorkspaceListLlmModelsErrors];
 
 export type WorkspaceListLlmModelsResponses = {
 	/**
@@ -13769,12 +15640,19 @@ export type WorkspaceDeleteLlmModelErrors = {
 	/**
 	 * Model not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * Cannot delete a model still assigned to a purpose
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type WorkspaceDeleteLlmModelError =
+	WorkspaceDeleteLlmModelErrors[keyof WorkspaceDeleteLlmModelErrors];
 
 export type WorkspaceDeleteLlmModelResponses = {
 	/**
@@ -13803,12 +15681,19 @@ export type WorkspaceUpdateLlmModelErrors = {
 	/**
 	 * Model not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * Another model on the connection already uses this upstream model id
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type WorkspaceUpdateLlmModelError =
+	WorkspaceUpdateLlmModelErrors[keyof WorkspaceUpdateLlmModelErrors];
 
 export type WorkspaceUpdateLlmModelResponses = {
 	/**
@@ -13833,6 +15718,16 @@ export type WorkspaceProbeLlmModelCapabilitiesData = {
 	url: "/workspaces/{workspaceSlug}/llm/models/{id}/capabilities";
 };
 
+export type WorkspaceProbeLlmModelCapabilitiesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type WorkspaceProbeLlmModelCapabilitiesError =
+	WorkspaceProbeLlmModelCapabilitiesErrors[keyof WorkspaceProbeLlmModelCapabilitiesErrors];
+
 export type WorkspaceProbeLlmModelCapabilitiesResponses = {
 	/**
 	 * OK
@@ -13854,6 +15749,16 @@ export type WorkspaceGetLlmSettingsData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/llm/settings";
 };
+
+export type WorkspaceGetLlmSettingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type WorkspaceGetLlmSettingsError =
+	WorkspaceGetLlmSettingsErrors[keyof WorkspaceGetLlmSettingsErrors];
 
 export type WorkspaceGetLlmSettingsResponses = {
 	/**
@@ -13879,6 +15784,15 @@ export type GetLlmUsageReportData = {
 	url: "/workspaces/{workspaceSlug}/llm/usage";
 };
 
+export type GetLlmUsageReportErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetLlmUsageReportError = GetLlmUsageReportErrors[keyof GetLlmUsageReportErrors];
+
 export type GetLlmUsageReportResponses = {
 	/**
 	 * OK
@@ -13900,6 +15814,15 @@ export type ListMcpClientGrantsData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/mcp-grants";
 };
+
+export type ListMcpClientGrantsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListMcpClientGrantsError = ListMcpClientGrantsErrors[keyof ListMcpClientGrantsErrors];
 
 export type ListMcpClientGrantsResponses = {
 	/**
@@ -13923,6 +15846,16 @@ export type RevokeMcpClientGrantData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/mcp-grants/{grantId}";
 };
+
+export type RevokeMcpClientGrantErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RevokeMcpClientGrantError =
+	RevokeMcpClientGrantErrors[keyof RevokeMcpClientGrantErrors];
 
 export type RevokeMcpClientGrantResponses = {
 	/**
@@ -13958,6 +15891,15 @@ export type ListMembershipsData = {
 	url: "/workspaces/{workspaceSlug}/members";
 };
 
+export type ListMembershipsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListMembershipsError = ListMembershipsErrors[keyof ListMembershipsErrors];
+
 export type ListMembershipsResponses = {
 	/**
 	 * OK
@@ -13984,6 +15926,10 @@ export type AssignMemberRoleErrors = {
 	 * The change grants, demotes or removes an owner and the caller has not signed in recently (problem type step-up-required), or the caller cannot manage the role
 	 */
 	403: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type AssignMemberRoleError = AssignMemberRoleErrors[keyof AssignMemberRoleErrors];
@@ -14014,6 +15960,10 @@ export type LeaveWorkspaceErrors = {
 	 * You are the workspace's last owner
 	 */
 	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type LeaveWorkspaceError = LeaveWorkspaceErrors[keyof LeaveWorkspaceErrors];
@@ -14038,6 +15988,15 @@ export type GetOwnMembershipData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/members/me";
 };
+
+export type GetOwnMembershipErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetOwnMembershipError = GetOwnMembershipErrors[keyof GetOwnMembershipErrors];
 
 export type GetOwnMembershipResponses = {
 	/**
@@ -14066,6 +16025,10 @@ export type RemoveMemberErrors = {
 	 * The change grants, demotes or removes an owner and the caller has not signed in recently (problem type step-up-required), or the caller cannot manage the role
 	 */
 	403: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type RemoveMemberError = RemoveMemberErrors[keyof RemoveMemberErrors];
@@ -14091,6 +16054,15 @@ export type SetMemberHiddenData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/members/{accountId}/hidden";
 };
+
+export type SetMemberHiddenErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type SetMemberHiddenError = SetMemberHiddenErrors[keyof SetMemberHiddenErrors];
 
 export type SetMemberHiddenResponses = {
 	/**
@@ -14119,6 +16091,10 @@ export type FollowProviderRoleErrors = {
 	 * The member is an owner, whose role is always set by a person
 	 */
 	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type FollowProviderRoleError = FollowProviderRoleErrors[keyof FollowProviderRoleErrors];
@@ -14145,6 +16121,16 @@ export type ListModelAssignmentsData = {
 	url: "/workspaces/{workspaceSlug}/model-assignments";
 };
 
+export type ListModelAssignmentsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListModelAssignmentsError =
+	ListModelAssignmentsErrors[keyof ListModelAssignmentsErrors];
+
 export type ListModelAssignmentsResponses = {
 	/**
 	 * Model assignments returned
@@ -14169,6 +16155,16 @@ export type RemoveModelAssignmentData = {
 	};
 	url: "/workspaces/{workspaceSlug}/model-assignments/{purpose}";
 };
+
+export type RemoveModelAssignmentErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RemoveModelAssignmentError =
+	RemoveModelAssignmentErrors[keyof RemoveModelAssignmentErrors];
 
 export type RemoveModelAssignmentResponses = {
 	/**
@@ -14199,12 +16195,18 @@ export type AssignModelErrors = {
 	/**
 	 * Model not found
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * The model is undeclared, or declared as another tier than this slot (problem type model-assignment-slot-mismatch, property declaredTier)
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type AssignModelError = AssignModelErrors[keyof AssignModelErrors];
 
 export type AssignModelResponses = {
 	/**
@@ -14226,6 +16228,15 @@ export type GetMemberOnboardingData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/onboarding/me";
 };
+
+export type GetMemberOnboardingErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetMemberOnboardingError = GetMemberOnboardingErrors[keyof GetMemberOnboardingErrors];
 
 export type GetMemberOnboardingResponses = {
 	/**
@@ -14249,6 +16260,15 @@ export type UpdateAiChoiceData = {
 	url: "/workspaces/{workspaceSlug}/onboarding/me/ai-choice";
 };
 
+export type UpdateAiChoiceErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateAiChoiceError = UpdateAiChoiceErrors[keyof UpdateAiChoiceErrors];
+
 export type UpdateAiChoiceResponses = {
 	/**
 	 * OK
@@ -14269,6 +16289,16 @@ export type DismissMemberOnboardingData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/onboarding/me/dismissal";
 };
+
+export type DismissMemberOnboardingErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type DismissMemberOnboardingError =
+	DismissMemberOnboardingErrors[keyof DismissMemberOnboardingErrors];
 
 export type DismissMemberOnboardingResponses = {
 	/**
@@ -14292,6 +16322,16 @@ export type GetMemberOnboardingSettingsData = {
 	url: "/workspaces/{workspaceSlug}/onboarding/settings";
 };
 
+export type GetMemberOnboardingSettingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetMemberOnboardingSettingsError =
+	GetMemberOnboardingSettingsErrors[keyof GetMemberOnboardingSettingsErrors];
+
 export type GetMemberOnboardingSettingsResponses = {
 	/**
 	 * OK
@@ -14314,6 +16354,16 @@ export type UpdateMemberOnboardingSettingsData = {
 	url: "/workspaces/{workspaceSlug}/onboarding/settings";
 };
 
+export type UpdateMemberOnboardingSettingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateMemberOnboardingSettingsError =
+	UpdateMemberOnboardingSettingsErrors[keyof UpdateMemberOnboardingSettingsErrors];
+
 export type UpdateMemberOnboardingSettingsResponses = {
 	/**
 	 * OK
@@ -14335,6 +16385,16 @@ export type GetMemberOnboardingLinkOptionsData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/onboarding/settings/links";
 };
+
+export type GetMemberOnboardingLinkOptionsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetMemberOnboardingLinkOptionsError =
+	GetMemberOnboardingLinkOptionsErrors[keyof GetMemberOnboardingLinkOptionsErrors];
 
 export type GetMemberOnboardingLinkOptionsResponses = {
 	/**
@@ -14362,8 +16422,15 @@ export type ListOutlineCollectionsErrors = {
 	/**
 	 * The workspace has no ACTIVE Outline connection
 	 */
-	404: unknown;
+	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type ListOutlineCollectionsError =
+	ListOutlineCollectionsErrors[keyof ListOutlineCollectionsErrors];
 
 export type ListOutlineCollectionsResponses = {
 	/**
@@ -14391,16 +16458,23 @@ export type RegisterOutlineCollectionErrors = {
 	/**
 	 * The workspace has no ACTIVE Outline connection
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * A concurrent registration of the same collection won the race
 	 */
-	409: unknown;
+	409: ProblemDetail;
 	/**
 	 * Outline does not know the requested collection id
 	 */
-	422: unknown;
+	422: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type RegisterOutlineCollectionError =
+	RegisterOutlineCollectionErrors[keyof RegisterOutlineCollectionErrors];
 
 export type RegisterOutlineCollectionResponses = {
 	/**
@@ -14432,16 +16506,23 @@ export type ListOutlineCollectionCandidatesErrors = {
 	/**
 	 * The workspace has no ACTIVE Outline connection
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * The Outline server could not be reached or answered with an error
 	 */
-	502: unknown;
+	502: ProblemDetail;
 	/**
 	 * Outline limited the request rate. The Retry-After header carries the seconds to wait before retrying.
 	 */
-	503: unknown;
+	503: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type ListOutlineCollectionCandidatesError =
+	ListOutlineCollectionCandidatesErrors[keyof ListOutlineCollectionCandidatesErrors];
 
 export type ListOutlineCollectionCandidatesResponses = {
 	/**
@@ -14470,8 +16551,15 @@ export type DeleteOutlineCollectionErrors = {
 	/**
 	 * The collection is not registered for this workspace, or the workspace has no ACTIVE Outline connection
 	 */
-	404: unknown;
+	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type DeleteOutlineCollectionError =
+	DeleteOutlineCollectionErrors[keyof DeleteOutlineCollectionErrors];
 
 export type DeleteOutlineCollectionResponses = {
 	/**
@@ -14500,8 +16588,15 @@ export type UpdateOutlineCollectionStateErrors = {
 	/**
 	 * The collection is not registered for this workspace, or the workspace has no ACTIVE Outline connection
 	 */
-	404: unknown;
+	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type UpdateOutlineCollectionStateError =
+	UpdateOutlineCollectionStateErrors[keyof UpdateOutlineCollectionStateErrors];
 
 export type UpdateOutlineCollectionStateResponses = {
 	/**
@@ -14525,6 +16620,16 @@ export type GetWorkspacePasskeyPolicyData = {
 	url: "/workspaces/{workspaceSlug}/passkey-policy";
 };
 
+export type GetWorkspacePasskeyPolicyErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetWorkspacePasskeyPolicyError =
+	GetWorkspacePasskeyPolicyErrors[keyof GetWorkspacePasskeyPolicyErrors];
+
 export type GetWorkspacePasskeyPolicyResponses = {
 	/**
 	 * OK
@@ -14546,6 +16651,16 @@ export type UpdateWorkspacePasskeyPolicyData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/passkey-policy";
 };
+
+export type UpdateWorkspacePasskeyPolicyErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateWorkspacePasskeyPolicyError =
+	UpdateWorkspacePasskeyPolicyErrors[keyof UpdateWorkspacePasskeyPolicyErrors];
 
 export type UpdateWorkspacePasskeyPolicyResponses = {
 	/**
@@ -14574,6 +16689,10 @@ export type ListAdoptablePracticesErrors = {
 	 * Workspace administrator access is required
 	 */
 	403: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type ListAdoptablePracticesError =
@@ -14602,6 +16721,16 @@ export type PreviewGroupAdoptionData = {
 	url: "/workspaces/{workspaceSlug}/practice-catalog/adoption/groups/{slug}";
 };
 
+export type PreviewGroupAdoptionErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type PreviewGroupAdoptionError =
+	PreviewGroupAdoptionErrors[keyof PreviewGroupAdoptionErrors];
+
 export type PreviewGroupAdoptionResponses = {
 	/**
 	 * OK
@@ -14627,6 +16756,15 @@ export type AdoptGroupData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practice-catalog/adoption/groups/{slug}";
 };
+
+export type AdoptGroupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AdoptGroupError = AdoptGroupErrors[keyof AdoptGroupErrors];
 
 export type AdoptGroupResponses = {
 	/**
@@ -14659,6 +16797,10 @@ export type PreviewPracticeAdoptionErrors = {
 	 * Practice is not offered
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type PreviewPracticeAdoptionError =
@@ -14707,6 +16849,10 @@ export type AdoptPracticeErrors = {
 	 * The If-Match preview validator is required
 	 */
 	428: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type AdoptPracticeError = AdoptPracticeErrors[keyof AdoptPracticeErrors];
@@ -14825,6 +16971,15 @@ export type ListPracticeGroupsData = {
 	url: "/workspaces/{workspaceSlug}/practice-groups";
 };
 
+export type ListPracticeGroupsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListPracticeGroupsError = ListPracticeGroupsErrors[keyof ListPracticeGroupsErrors];
+
 export type ListPracticeGroupsResponses = {
 	/**
 	 * OK
@@ -14846,6 +17001,15 @@ export type CreatePracticeGroupData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practice-groups";
 };
+
+export type CreatePracticeGroupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CreatePracticeGroupError = CreatePracticeGroupErrors[keyof CreatePracticeGroupErrors];
 
 export type CreatePracticeGroupResponses = {
 	/**
@@ -14869,6 +17033,16 @@ export type ReorderPracticeGroupsData = {
 	url: "/workspaces/{workspaceSlug}/practice-groups/reorder";
 };
 
+export type ReorderPracticeGroupsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ReorderPracticeGroupsError =
+	ReorderPracticeGroupsErrors[keyof ReorderPracticeGroupsErrors];
+
 export type ReorderPracticeGroupsResponses = {
 	/**
 	 * OK
@@ -14890,6 +17064,16 @@ export type GetOwnGroupStandingsData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practice-groups/standings";
 };
+
+export type GetOwnGroupStandingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetOwnGroupStandingsError =
+	GetOwnGroupStandingsErrors[keyof GetOwnGroupStandingsErrors];
 
 export type GetOwnGroupStandingsResponses = {
 	/**
@@ -14914,6 +17098,15 @@ export type DeletePracticeGroupData = {
 	url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}";
 };
 
+export type DeletePracticeGroupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type DeletePracticeGroupError = DeletePracticeGroupErrors[keyof DeletePracticeGroupErrors];
+
 export type DeletePracticeGroupResponses = {
 	/**
 	 * Practice group deleted
@@ -14937,6 +17130,15 @@ export type GetPracticeGroupData = {
 	url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}";
 };
 
+export type GetPracticeGroupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPracticeGroupError = GetPracticeGroupErrors[keyof GetPracticeGroupErrors];
+
 export type GetPracticeGroupResponses = {
 	/**
 	 * OK
@@ -14958,6 +17160,15 @@ export type UpdatePracticeGroupData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}";
 };
+
+export type UpdatePracticeGroupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdatePracticeGroupError = UpdatePracticeGroupErrors[keyof UpdatePracticeGroupErrors];
 
 export type UpdatePracticeGroupResponses = {
 	/**
@@ -14985,6 +17196,15 @@ export type ResetGroupToCatalogData = {
 	url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/catalog-customization";
 };
 
+export type ResetGroupToCatalogErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ResetGroupToCatalogError = ResetGroupToCatalogErrors[keyof ResetGroupToCatalogErrors];
+
 export type ResetGroupToCatalogResponses = {
 	/**
 	 * OK
@@ -15007,6 +17227,16 @@ export type SetGroupFeedbackModeData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/feedback-mode";
 };
+
+export type SetGroupFeedbackModeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type SetGroupFeedbackModeError =
+	SetGroupFeedbackModeErrors[keyof SetGroupFeedbackModeErrors];
 
 export type SetGroupFeedbackModeResponses = {
 	/**
@@ -15036,6 +17266,15 @@ export type ListOwnGroupReviewsData = {
 	url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/reviews";
 };
 
+export type ListOwnGroupReviewsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListOwnGroupReviewsError = ListOwnGroupReviewsErrors[keyof ListOwnGroupReviewsErrors];
+
 export type ListOwnGroupReviewsResponses = {
 	/**
 	 * OK
@@ -15057,6 +17296,16 @@ export type GetOwnPracticeProfileOverviewData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practice-profile/overview";
 };
+
+export type GetOwnPracticeProfileOverviewErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetOwnPracticeProfileOverviewError =
+	GetOwnPracticeProfileOverviewErrors[keyof GetOwnPracticeProfileOverviewErrors];
 
 export type GetOwnPracticeProfileOverviewResponses = {
 	/**
@@ -15100,6 +17349,15 @@ export type ListOwnReviewsData = {
 	url: "/workspaces/{workspaceSlug}/practice-profile/reviews";
 };
 
+export type ListOwnReviewsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListOwnReviewsError = ListOwnReviewsErrors[keyof ListOwnReviewsErrors];
+
 export type ListOwnReviewsResponses = {
 	/**
 	 * OK
@@ -15122,6 +17380,15 @@ export type GetOwnReviewData = {
 	url: "/workspaces/{workspaceSlug}/practice-profile/reviews/{reviewId}";
 };
 
+export type GetOwnReviewErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetOwnReviewError = GetOwnReviewErrors[keyof GetOwnReviewErrors];
+
 export type GetOwnReviewResponses = {
 	/**
 	 * OK
@@ -15142,6 +17409,15 @@ export type StartPracticeTrialData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practice-trials";
 };
+
+export type StartPracticeTrialErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type StartPracticeTrialError = StartPracticeTrialErrors[keyof StartPracticeTrialErrors];
 
 export type StartPracticeTrialResponses = {
 	/**
@@ -15166,6 +17442,15 @@ export type GetPracticeTrialData = {
 	url: "/workspaces/{workspaceSlug}/practice-trials/{trialId}";
 };
 
+export type GetPracticeTrialErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPracticeTrialError = GetPracticeTrialErrors[keyof GetPracticeTrialErrors];
+
 export type GetPracticeTrialResponses = {
 	/**
 	 * OK
@@ -15189,6 +17474,15 @@ export type ListPracticesData = {
 	url: "/workspaces/{workspaceSlug}/practices";
 };
 
+export type ListPracticesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListPracticesError = ListPracticesErrors[keyof ListPracticesErrors];
+
 export type ListPracticesResponses = {
 	/**
 	 * OK
@@ -15209,6 +17503,15 @@ export type CreatePracticeData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices";
 };
+
+export type CreatePracticeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CreatePracticeError = CreatePracticeErrors[keyof CreatePracticeErrors];
 
 export type CreatePracticeResponses = {
 	/**
@@ -15231,6 +17534,16 @@ export type GetPracticeDefinitionOptionsData = {
 	url: "/workspaces/{workspaceSlug}/practices/definition-options";
 };
 
+export type GetPracticeDefinitionOptionsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPracticeDefinitionOptionsError =
+	GetPracticeDefinitionOptionsErrors[keyof GetPracticeDefinitionOptionsErrors];
+
 export type GetPracticeDefinitionOptionsResponses = {
 	/**
 	 * OK
@@ -15252,6 +17565,16 @@ export type GetFeedbackModeRollupData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/feedback-modes";
 };
+
+export type GetFeedbackModeRollupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetFeedbackModeRollupError =
+	GetFeedbackModeRollupErrors[keyof GetFeedbackModeRollupErrors];
 
 export type GetFeedbackModeRollupResponses = {
 	/**
@@ -15277,6 +17600,16 @@ export type GetOwnDeliveredWorkFeedbackData = {
 	url: "/workspaces/{workspaceSlug}/practices/feedback/on-work";
 };
 
+export type GetOwnDeliveredWorkFeedbackErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetOwnDeliveredWorkFeedbackError =
+	GetOwnDeliveredWorkFeedbackErrors[keyof GetOwnDeliveredWorkFeedbackErrors];
+
 export type GetOwnDeliveredWorkFeedbackResponses = {
 	/**
 	 * OK
@@ -15298,6 +17631,16 @@ export type GetOwnPracticePageFeedbackData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/feedback/practice-page";
 };
+
+export type GetOwnPracticePageFeedbackErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetOwnPracticePageFeedbackError =
+	GetOwnPracticePageFeedbackErrors[keyof GetOwnPracticePageFeedbackErrors];
 
 export type GetOwnPracticePageFeedbackResponses = {
 	/**
@@ -15326,8 +17669,15 @@ export type ClearOwnFeedbackResponseErrors = {
 	/**
 	 * Delivered feedback not found for the current recipient
 	 */
-	404: unknown;
+	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type ClearOwnFeedbackResponseError =
+	ClearOwnFeedbackResponseErrors[keyof ClearOwnFeedbackResponseErrors];
 
 export type ClearOwnFeedbackResponseResponses = {
 	/**
@@ -15356,8 +17706,15 @@ export type GetOwnFeedbackResponseErrors = {
 	/**
 	 * Delivered feedback not found for the current recipient
 	 */
-	404: unknown;
+	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type GetOwnFeedbackResponseError =
+	GetOwnFeedbackResponseErrors[keyof GetOwnFeedbackResponseErrors];
 
 export type GetOwnFeedbackResponseResponses = {
 	/**
@@ -15386,16 +17743,23 @@ export type ReplaceOwnFeedbackResponseErrors = {
 	/**
 	 * Invalid response
 	 */
-	400: unknown;
+	400: ProblemDetail;
 	/**
 	 * Delivered feedback not found for the current recipient
 	 */
-	404: unknown;
+	404: ProblemDetail;
 	/**
 	 * A workspace admin withdrew this feedback
 	 */
-	409: unknown;
+	409: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type ReplaceOwnFeedbackResponseError =
+	ReplaceOwnFeedbackResponseErrors[keyof ReplaceOwnFeedbackResponseErrors];
 
 export type ReplaceOwnFeedbackResponseResponses = {
 	/**
@@ -15423,6 +17787,15 @@ export type ListReviewItemsData = {
 	url: "/workspaces/{workspaceSlug}/practices/items";
 };
 
+export type ListReviewItemsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListReviewItemsError = ListReviewItemsErrors[keyof ListReviewItemsErrors];
+
 export type ListReviewItemsResponses = {
 	/**
 	 * OK
@@ -15444,6 +17817,15 @@ export type GetItemFactsData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/items/{itemId}/facts";
 };
+
+export type GetItemFactsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetItemFactsError = GetItemFactsErrors[keyof GetItemFactsErrors];
 
 export type GetItemFactsResponses = {
 	/**
@@ -15468,6 +17850,15 @@ export type GetOwnItemTraceData = {
 	};
 	url: "/workspaces/{workspaceSlug}/practices/items/{itemId}/own-trace";
 };
+
+export type GetOwnItemTraceErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetOwnItemTraceError = GetOwnItemTraceErrors[keyof GetOwnItemTraceErrors];
 
 export type GetOwnItemTraceResponses = {
 	/**
@@ -15494,6 +17885,15 @@ export type ListOwnItemReviewsData = {
 	url: "/workspaces/{workspaceSlug}/practices/items/{itemId}/reviews";
 };
 
+export type ListOwnItemReviewsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListOwnItemReviewsError = ListOwnItemReviewsErrors[keyof ListOwnItemReviewsErrors];
+
 export type ListOwnItemReviewsResponses = {
 	/**
 	 * OK
@@ -15517,6 +17917,15 @@ export type GetItemTraceData = {
 	url: "/workspaces/{workspaceSlug}/practices/items/{itemId}/trace";
 };
 
+export type GetItemTraceErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetItemTraceError = GetItemTraceErrors[keyof GetItemTraceErrors];
+
 export type GetItemTraceResponses = {
 	/**
 	 * OK
@@ -15537,6 +17946,16 @@ export type ListPracticeReleasesData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/releases";
 };
+
+export type ListPracticeReleasesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListPracticeReleasesError =
+	ListPracticeReleasesErrors[keyof ListPracticeReleasesErrors];
 
 export type ListPracticeReleasesResponses = {
 	/**
@@ -15564,6 +17983,16 @@ export type DeclinePracticeReleaseData = {
 	url: "/workspaces/{workspaceSlug}/practices/releases/{slug}";
 };
 
+export type DeclinePracticeReleaseErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type DeclinePracticeReleaseError =
+	DeclinePracticeReleaseErrors[keyof DeclinePracticeReleaseErrors];
+
 export type DeclinePracticeReleaseResponses = {
 	/**
 	 * The offered version was declined
@@ -15586,6 +18015,15 @@ export type GetPracticeReleaseData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/releases/{slug}";
 };
+
+export type GetPracticeReleaseErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPracticeReleaseError = GetPracticeReleaseErrors[keyof GetPracticeReleaseErrors];
 
 export type GetPracticeReleaseResponses = {
 	/**
@@ -15612,6 +18050,16 @@ export type AcceptPracticeReleaseData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/releases/{slug}";
 };
+
+export type AcceptPracticeReleaseErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AcceptPracticeReleaseError =
+	AcceptPracticeReleaseErrors[keyof AcceptPracticeReleaseErrors];
 
 export type AcceptPracticeReleaseResponses = {
 	/**
@@ -15646,6 +18094,15 @@ export type ListOwnResultsData = {
 	url: "/workspaces/{workspaceSlug}/practices/results";
 };
 
+export type ListOwnResultsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListOwnResultsError = ListOwnResultsErrors[keyof ListOwnResultsErrors];
+
 export type ListOwnResultsResponses = {
 	/**
 	 * Paginated results returned
@@ -15672,8 +18129,14 @@ export type GetOwnResultErrors = {
 	/**
 	 * Result not found or not owned by current user
 	 */
-	404: unknown;
+	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
+
+export type GetOwnResultError = GetOwnResultErrors[keyof GetOwnResultErrors];
 
 export type GetOwnResultResponses = {
 	/**
@@ -15700,6 +18163,15 @@ export type ListReviewBatchesData = {
 	url: "/workspaces/{workspaceSlug}/practices/review-batches";
 };
 
+export type ListReviewBatchesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListReviewBatchesError = ListReviewBatchesErrors[keyof ListReviewBatchesErrors];
+
 export type ListReviewBatchesResponses = {
 	/**
 	 * OK
@@ -15721,6 +18193,15 @@ export type CreateReviewBatchData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/review-batches";
 };
+
+export type CreateReviewBatchErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CreateReviewBatchError = CreateReviewBatchErrors[keyof CreateReviewBatchErrors];
 
 export type CreateReviewBatchResponses = {
 	/**
@@ -15747,6 +18228,16 @@ export type UpdateReviewBatchStatusData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/review-batches/{batchId}/status";
 };
+
+export type UpdateReviewBatchStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateReviewBatchStatusError =
+	UpdateReviewBatchStatusErrors[keyof UpdateReviewBatchStatusErrors];
 
 export type UpdateReviewBatchStatusResponses = {
 	/**
@@ -15788,6 +18279,10 @@ export type ResolveReviewContextErrors = {
 	 * This workspace has no reviewed work at this address
 	 */
 	404: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type ResolveReviewContextError =
@@ -15815,6 +18310,15 @@ export type RequestReviewData = {
 	url: "/workspaces/{workspaceSlug}/practices/review-requests";
 };
 
+export type RequestReviewErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RequestReviewError = RequestReviewErrors[keyof RequestReviewErrors];
+
 export type RequestReviewResponses = {
 	/**
 	 * OK
@@ -15835,6 +18339,15 @@ export type ListReviewSchedulesData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/review-schedules";
 };
+
+export type ListReviewSchedulesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListReviewSchedulesError = ListReviewSchedulesErrors[keyof ListReviewSchedulesErrors];
 
 export type ListReviewSchedulesResponses = {
 	/**
@@ -15857,6 +18370,16 @@ export type CreateReviewScheduleData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/review-schedules";
 };
+
+export type CreateReviewScheduleErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CreateReviewScheduleError =
+	CreateReviewScheduleErrors[keyof CreateReviewScheduleErrors];
 
 export type CreateReviewScheduleResponses = {
 	/**
@@ -15884,6 +18407,16 @@ export type DeleteReviewScheduleData = {
 	url: "/workspaces/{workspaceSlug}/practices/review-schedules/{scheduleId}";
 };
 
+export type DeleteReviewScheduleErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type DeleteReviewScheduleError =
+	DeleteReviewScheduleErrors[keyof DeleteReviewScheduleErrors];
+
 export type DeleteReviewScheduleResponses = {
 	/**
 	 * Deleted
@@ -15909,6 +18442,16 @@ export type SetReviewScheduleEnabledData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/review-schedules/{scheduleId}";
 };
+
+export type SetReviewScheduleEnabledErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type SetReviewScheduleEnabledError =
+	SetReviewScheduleEnabledErrors[keyof SetReviewScheduleEnabledErrors];
 
 export type SetReviewScheduleEnabledResponses = {
 	/**
@@ -15936,6 +18479,16 @@ export type UpdateReviewScheduleData = {
 	url: "/workspaces/{workspaceSlug}/practices/review-schedules/{scheduleId}";
 };
 
+export type UpdateReviewScheduleErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateReviewScheduleError =
+	UpdateReviewScheduleErrors[keyof UpdateReviewScheduleErrors];
+
 export type UpdateReviewScheduleResponses = {
 	/**
 	 * OK
@@ -15957,6 +18510,16 @@ export type GetPracticeReviewSettingsData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/review-settings";
 };
+
+export type GetPracticeReviewSettingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPracticeReviewSettingsError =
+	GetPracticeReviewSettingsErrors[keyof GetPracticeReviewSettingsErrors];
 
 export type GetPracticeReviewSettingsResponses = {
 	/**
@@ -15983,6 +18546,16 @@ export type UpdatePracticeReviewSettingsData = {
 	url: "/workspaces/{workspaceSlug}/practices/review-settings";
 };
 
+export type UpdatePracticeReviewSettingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdatePracticeReviewSettingsError =
+	UpdatePracticeReviewSettingsErrors[keyof UpdatePracticeReviewSettingsErrors];
+
 export type UpdatePracticeReviewSettingsResponses = {
 	/**
 	 * Policy updated
@@ -16005,6 +18578,15 @@ export type PreviewReviewScopeData = {
 	url: "/workspaces/{workspaceSlug}/practices/review-settings/scope-preview";
 };
 
+export type PreviewReviewScopeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type PreviewReviewScopeError = PreviewReviewScopeErrors[keyof PreviewReviewScopeErrors];
+
 export type PreviewReviewScopeResponses = {
 	/**
 	 * OK
@@ -16026,6 +18608,16 @@ export type ListReviewedPracticesData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/reviewed";
 };
+
+export type ListReviewedPracticesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListReviewedPracticesError =
+	ListReviewedPracticesErrors[keyof ListReviewedPracticesErrors];
 
 export type ListReviewedPracticesResponses = {
 	/**
@@ -16068,6 +18660,10 @@ export type ListReviewsErrors = {
 	 * Invalid filter or pagination
 	 */
 	400: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type ListReviewsError = ListReviewsErrors[keyof ListReviewsErrors];
@@ -16112,6 +18708,15 @@ export type ListReviewFeedbackData = {
 	url: "/workspaces/{workspaceSlug}/practices/reviews/feedback";
 };
 
+export type ListReviewFeedbackErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListReviewFeedbackError = ListReviewFeedbackErrors[keyof ListReviewFeedbackErrors];
+
 export type ListReviewFeedbackResponses = {
 	/**
 	 * OK
@@ -16150,6 +18755,16 @@ export type CountReviewFeedbackByLocationData = {
 	};
 	url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/locations";
 };
+
+export type CountReviewFeedbackByLocationErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CountReviewFeedbackByLocationError =
+	CountReviewFeedbackByLocationErrors[keyof CountReviewFeedbackByLocationErrors];
 
 export type CountReviewFeedbackByLocationResponses = {
 	/**
@@ -16190,6 +18805,16 @@ export type CountReviewFeedbackByReasonData = {
 	url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/reasons";
 };
 
+export type CountReviewFeedbackByReasonErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CountReviewFeedbackByReasonError =
+	CountReviewFeedbackByReasonErrors[keyof CountReviewFeedbackByReasonErrors];
+
 export type CountReviewFeedbackByReasonResponses = {
 	/**
 	 * OK
@@ -16212,6 +18837,15 @@ export type GetReviewFeedbackData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}";
 };
+
+export type GetReviewFeedbackErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetReviewFeedbackError = GetReviewFeedbackErrors[keyof GetReviewFeedbackErrors];
 
 export type GetReviewFeedbackResponses = {
 	/**
@@ -16236,6 +18870,16 @@ export type ListFeedbackDecisionsData = {
 	url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/decisions";
 };
 
+export type ListFeedbackDecisionsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListFeedbackDecisionsError =
+	ListFeedbackDecisionsErrors[keyof ListFeedbackDecisionsErrors];
+
 export type ListFeedbackDecisionsResponses = {
 	/**
 	 * OK
@@ -16258,6 +18902,16 @@ export type CreateFeedbackDecisionData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/decisions";
 };
+
+export type CreateFeedbackDecisionErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CreateFeedbackDecisionError =
+	CreateFeedbackDecisionErrors[keyof CreateFeedbackDecisionErrors];
 
 export type CreateFeedbackDecisionResponses = {
 	/**
@@ -16282,6 +18936,16 @@ export type RecheckFeedbackDeliveryData = {
 	url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/recheck";
 };
 
+export type RecheckFeedbackDeliveryErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RecheckFeedbackDeliveryError =
+	RecheckFeedbackDeliveryErrors[keyof RecheckFeedbackDeliveryErrors];
+
 export type RecheckFeedbackDeliveryResponses = {
 	/**
 	 * Feedback delivery recheck accepted
@@ -16304,6 +18968,15 @@ export type RetryFeedbackData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/retry";
 };
+
+export type RetryFeedbackErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RetryFeedbackError = RetryFeedbackErrors[keyof RetryFeedbackErrors];
 
 export type RetryFeedbackResponses = {
 	/**
@@ -16332,6 +19005,15 @@ export type GetReviewLineageData = {
 	};
 	url: "/workspaces/{workspaceSlug}/practices/reviews/lineage";
 };
+
+export type GetReviewLineageErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetReviewLineageError = GetReviewLineageErrors[keyof GetReviewLineageErrors];
 
 export type GetReviewLineageResponses = {
 	/**
@@ -16376,6 +19058,10 @@ export type GetReviewOverviewErrors = {
 	 * Invalid range or time zone
 	 */
 	400: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetReviewOverviewError = GetReviewOverviewErrors[keyof GetReviewOverviewErrors];
@@ -16423,6 +19109,15 @@ export type ListReviewProblemsData = {
 	url: "/workspaces/{workspaceSlug}/practices/reviews/problems";
 };
 
+export type ListReviewProblemsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListReviewProblemsError = ListReviewProblemsErrors[keyof ListReviewProblemsErrors];
+
 export type ListReviewProblemsResponses = {
 	/**
 	 * OK
@@ -16446,6 +19141,15 @@ export type GetReviewProblemData = {
 	url: "/workspaces/{workspaceSlug}/practices/reviews/problems/{problemId}";
 };
 
+export type GetReviewProblemErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetReviewProblemError = GetReviewProblemErrors[keyof GetReviewProblemErrors];
+
 export type GetReviewProblemResponses = {
 	/**
 	 * OK
@@ -16466,6 +19170,15 @@ export type GetReviewQueueData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/reviews/queue";
 };
+
+export type GetReviewQueueErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetReviewQueueError = GetReviewQueueErrors[keyof GetReviewQueueErrors];
 
 export type GetReviewQueueResponses = {
 	/**
@@ -16506,6 +19219,15 @@ export type ListReviewResultsData = {
 	url: "/workspaces/{workspaceSlug}/practices/reviews/results";
 };
 
+export type ListReviewResultsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListReviewResultsError = ListReviewResultsErrors[keyof ListReviewResultsErrors];
+
 export type ListReviewResultsResponses = {
 	/**
 	 * OK
@@ -16529,6 +19251,15 @@ export type GetReviewResultData = {
 	url: "/workspaces/{workspaceSlug}/practices/reviews/results/{resultId}";
 };
 
+export type GetReviewResultErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetReviewResultError = GetReviewResultErrors[keyof GetReviewResultErrors];
+
 export type GetReviewResultResponses = {
 	/**
 	 * OK
@@ -16550,6 +19281,15 @@ export type ListResultMarksData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/reviews/results/{resultId}/marks";
 };
+
+export type ListResultMarksErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListResultMarksError = ListResultMarksErrors[keyof ListResultMarksErrors];
 
 export type ListResultMarksResponses = {
 	/**
@@ -16573,6 +19313,15 @@ export type CreateResultMarkData = {
 	url: "/workspaces/{workspaceSlug}/practices/reviews/results/{resultId}/marks";
 };
 
+export type CreateResultMarkErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CreateResultMarkError = CreateResultMarkErrors[keyof CreateResultMarkErrors];
+
 export type CreateResultMarkResponses = {
 	/**
 	 * Created
@@ -16595,6 +19344,15 @@ export type RemoveResultMarkData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/reviews/results/{resultId}/marks/{markId}";
 };
+
+export type RemoveResultMarkErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RemoveResultMarkError = RemoveResultMarkErrors[keyof RemoveResultMarkErrors];
 
 export type RemoveResultMarkResponses = {
 	/**
@@ -16635,6 +19393,10 @@ export type GetReviewTimingErrors = {
 	 * Invalid range
 	 */
 	400: ProblemDetail;
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
 };
 
 export type GetReviewTimingError = GetReviewTimingErrors[keyof GetReviewTimingErrors];
@@ -16661,6 +19423,15 @@ export type GetReviewData = {
 	url: "/workspaces/{workspaceSlug}/practices/reviews/{reviewId}";
 };
 
+export type GetReviewErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetReviewError = GetReviewErrors[keyof GetReviewErrors];
+
 export type GetReviewResponses = {
 	/**
 	 * OK
@@ -16682,6 +19453,15 @@ export type CancelReviewData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel";
 };
+
+export type CancelReviewErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CancelReviewError = CancelReviewErrors[keyof CancelReviewErrors];
 
 export type CancelReviewResponses = {
 	/**
@@ -16708,6 +19488,16 @@ export type ListReviewFeedbackChecksData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/reviews/{reviewId}/feedback-checks";
 };
+
+export type ListReviewFeedbackChecksErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListReviewFeedbackChecksError =
+	ListReviewFeedbackChecksErrors[keyof ListReviewFeedbackChecksErrors];
 
 export type ListReviewFeedbackChecksResponses = {
 	/**
@@ -16736,6 +19526,15 @@ export type ListScansData = {
 	url: "/workspaces/{workspaceSlug}/practices/scans";
 };
 
+export type ListScansErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListScansError = ListScansErrors[keyof ListScansErrors];
+
 export type ListScansResponses = {
 	/**
 	 * OK
@@ -16760,6 +19559,15 @@ export type StartScanData = {
 	url: "/workspaces/{workspaceSlug}/practices/scans";
 };
 
+export type StartScanErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type StartScanError = StartScanErrors[keyof StartScanErrors];
+
 export type StartScanResponses = {
 	/**
 	 * Accepted
@@ -16782,6 +19590,15 @@ export type GetScanData = {
 	url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}";
 };
 
+export type GetScanErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetScanError = GetScanErrors[keyof GetScanErrors];
+
 export type GetScanResponses = {
 	/**
 	 * OK
@@ -16803,6 +19620,15 @@ export type GetScanReportData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/report";
 };
+
+export type GetScanReportErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetScanReportError = GetScanReportErrors[keyof GetScanReportErrors];
 
 export type GetScanReportResponses = {
 	/**
@@ -16833,6 +19659,15 @@ export type ListScanReportItemsData = {
 	};
 	url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/report/items";
 };
+
+export type ListScanReportItemsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListScanReportItemsError = ListScanReportItemsErrors[keyof ListScanReportItemsErrors];
 
 export type ListScanReportItemsResponses = {
 	/**
@@ -16865,6 +19700,16 @@ export type ListScanReportProblemsData = {
 	url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/report/problems";
 };
 
+export type ListScanReportProblemsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListScanReportProblemsError =
+	ListScanReportProblemsErrors[keyof ListScanReportProblemsErrors];
+
 export type ListScanReportProblemsResponses = {
 	/**
 	 * OK
@@ -16888,6 +19733,15 @@ export type ExportScanSarifData = {
 	url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/report/sarif";
 };
 
+export type ExportScanSarifErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ExportScanSarifError = ExportScanSarifErrors[keyof ExportScanSarifErrors];
+
 export type ExportScanSarifResponses = {
 	/**
 	 * SARIF report
@@ -16909,6 +19763,15 @@ export type UpdateScanStatusData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/status";
 };
+
+export type UpdateScanStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateScanStatusError = UpdateScanStatusErrors[keyof UpdateScanStatusErrors];
 
 export type UpdateScanStatusResponses = {
 	/**
@@ -16935,6 +19798,16 @@ export type GetOwnPracticeStandingsData = {
 	url: "/workspaces/{workspaceSlug}/practices/standings";
 };
 
+export type GetOwnPracticeStandingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetOwnPracticeStandingsError =
+	GetOwnPracticeStandingsErrors[keyof GetOwnPracticeStandingsErrors];
+
 export type GetOwnPracticeStandingsResponses = {
 	/**
 	 * Practice standings returned
@@ -16959,6 +19832,16 @@ export type GetPracticeWorkspaceTilesData = {
 	url: "/workspaces/{workspaceSlug}/practices/tiles";
 };
 
+export type GetPracticeWorkspaceTilesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPracticeWorkspaceTilesError =
+	GetPracticeWorkspaceTilesErrors[keyof GetPracticeWorkspaceTilesErrors];
+
 export type GetPracticeWorkspaceTilesResponses = {
 	/**
 	 * OK
@@ -16980,6 +19863,16 @@ export type GetPracticeWorkspaceOverviewData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/workspace-overview";
 };
+
+export type GetPracticeWorkspaceOverviewErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPracticeWorkspaceOverviewError =
+	GetPracticeWorkspaceOverviewErrors[keyof GetPracticeWorkspaceOverviewErrors];
 
 export type GetPracticeWorkspaceOverviewResponses = {
 	/**
@@ -17004,6 +19897,15 @@ export type DeletePracticeData = {
 	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}";
 };
 
+export type DeletePracticeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type DeletePracticeError = DeletePracticeErrors[keyof DeletePracticeErrors];
+
 export type DeletePracticeResponses = {
 	/**
 	 * Practice deleted
@@ -17026,6 +19928,15 @@ export type GetPracticeData = {
 	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}";
 };
 
+export type GetPracticeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPracticeError = GetPracticeErrors[keyof GetPracticeErrors];
+
 export type GetPracticeResponses = {
 	/**
 	 * OK
@@ -17047,6 +19958,15 @@ export type UpdatePracticeData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}";
 };
+
+export type UpdatePracticeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdatePracticeError = UpdatePracticeErrors[keyof UpdatePracticeErrors];
 
 export type UpdatePracticeResponses = {
 	/**
@@ -17073,6 +19993,16 @@ export type ResetPracticeToCatalogData = {
 	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/catalog-customization";
 };
 
+export type ResetPracticeToCatalogErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ResetPracticeToCatalogError =
+	ResetPracticeToCatalogErrors[keyof ResetPracticeToCatalogErrors];
+
 export type ResetPracticeToCatalogResponses = {
 	/**
 	 * OK
@@ -17095,6 +20025,16 @@ export type SetPracticeFeedbackModeData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/feedback-mode";
 };
+
+export type SetPracticeFeedbackModeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type SetPracticeFeedbackModeError =
+	SetPracticeFeedbackModeErrors[keyof SetPracticeFeedbackModeErrors];
 
 export type SetPracticeFeedbackModeResponses = {
 	/**
@@ -17119,6 +20059,15 @@ export type CheckPracticeFilesData = {
 	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/file-check";
 };
 
+export type CheckPracticeFilesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type CheckPracticeFilesError = CheckPracticeFilesErrors[keyof CheckPracticeFilesErrors];
+
 export type CheckPracticeFilesResponses = {
 	/**
 	 * OK
@@ -17141,6 +20090,16 @@ export type DownloadPracticeFilesData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/files";
 };
+
+export type DownloadPracticeFilesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type DownloadPracticeFilesError =
+	DownloadPracticeFilesErrors[keyof DownloadPracticeFilesErrors];
 
 export type DownloadPracticeFilesResponses = {
 	/**
@@ -17165,6 +20124,15 @@ export type MovePracticeData = {
 	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/group";
 };
 
+export type MovePracticeErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type MovePracticeError = MovePracticeErrors[keyof MovePracticeErrors];
+
 export type MovePracticeResponses = {
 	/**
 	 * OK
@@ -17186,6 +20154,15 @@ export type BindPracticeGroupData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/group";
 };
+
+export type BindPracticeGroupErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type BindPracticeGroupError = BindPracticeGroupErrors[keyof BindPracticeGroupErrors];
 
 export type BindPracticeGroupResponses = {
 	/**
@@ -17213,6 +20190,15 @@ export type GetPracticeGuidanceData = {
 	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/guidance";
 };
 
+export type GetPracticeGuidanceErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetPracticeGuidanceError = GetPracticeGuidanceErrors[keyof GetPracticeGuidanceErrors];
+
 export type GetPracticeGuidanceResponses = {
 	/**
 	 * Practice guidance
@@ -17236,6 +20222,16 @@ export type ListPracticeVersionsData = {
 	url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/versions";
 };
 
+export type ListPracticeVersionsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListPracticeVersionsError =
+	ListPracticeVersionsErrors[keyof ListPracticeVersionsErrors];
+
 export type ListPracticeVersionsResponses = {
 	/**
 	 * OK
@@ -17257,6 +20253,16 @@ export type SubmitWorkspaceProductFeedbackData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/product-feedback";
 };
+
+export type SubmitWorkspaceProductFeedbackErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type SubmitWorkspaceProductFeedbackError =
+	SubmitWorkspaceProductFeedbackErrors[keyof SubmitWorkspaceProductFeedbackErrors];
 
 export type SubmitWorkspaceProductFeedbackResponses = {
 	/**
@@ -17280,6 +20286,16 @@ export type GetWorkspacePublicActivitySettingsData = {
 	url: "/workspaces/{workspaceSlug}/public-activity";
 };
 
+export type GetWorkspacePublicActivitySettingsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetWorkspacePublicActivitySettingsError =
+	GetWorkspacePublicActivitySettingsErrors[keyof GetWorkspacePublicActivitySettingsErrors];
+
 export type GetWorkspacePublicActivitySettingsResponses = {
 	/**
 	 * OK
@@ -17301,6 +20317,16 @@ export type UpdatePublicActivityData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/public-activity";
 };
+
+export type UpdatePublicActivityErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdatePublicActivityError =
+	UpdatePublicActivityErrors[keyof UpdatePublicActivityErrors];
 
 export type UpdatePublicActivityResponses = {
 	/**
@@ -17326,6 +20352,16 @@ export type RemoveRepositoryToMonitorData = {
 	url: "/workspaces/{workspaceSlug}/repositories";
 };
 
+export type RemoveRepositoryToMonitorErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RemoveRepositoryToMonitorError =
+	RemoveRepositoryToMonitorErrors[keyof RemoveRepositoryToMonitorErrors];
+
 export type RemoveRepositoryToMonitorResponses = {
 	/**
 	 * Repository removed from the monitor list
@@ -17347,6 +20383,16 @@ export type GetRepositoriesToMonitorData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/repositories";
 };
+
+export type GetRepositoriesToMonitorErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetRepositoriesToMonitorError =
+	GetRepositoriesToMonitorErrors[keyof GetRepositoriesToMonitorErrors];
 
 export type GetRepositoriesToMonitorResponses = {
 	/**
@@ -17372,6 +20418,16 @@ export type AddRepositoryToMonitorData = {
 	url: "/workspaces/{workspaceSlug}/repositories";
 };
 
+export type AddRepositoryToMonitorErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AddRepositoryToMonitorError =
+	AddRepositoryToMonitorErrors[keyof AddRepositoryToMonitorErrors];
+
 export type AddRepositoryToMonitorResponses = {
 	/**
 	 * Repository added to the monitor list
@@ -17390,6 +20446,16 @@ export type GetGitLabRepositorySelectionData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/repositories/selection";
 };
+
+export type GetGitLabRepositorySelectionErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetGitLabRepositorySelectionError =
+	GetGitLabRepositorySelectionErrors[keyof GetGitLabRepositorySelectionErrors];
 
 export type GetGitLabRepositorySelectionResponses = {
 	/**
@@ -17413,6 +20479,16 @@ export type UpdateGitLabRepositorySelectionData = {
 	url: "/workspaces/{workspaceSlug}/repositories/selection";
 };
 
+export type UpdateGitLabRepositorySelectionErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateGitLabRepositorySelectionError =
+	UpdateGitLabRepositorySelectionErrors[keyof UpdateGitLabRepositorySelectionErrors];
+
 export type UpdateGitLabRepositorySelectionResponses = {
 	/**
 	 * OK
@@ -17434,6 +20510,16 @@ export type GetStoppedGitLabProjectsData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/repositories/stopped";
 };
+
+export type GetStoppedGitLabProjectsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetStoppedGitLabProjectsError =
+	GetStoppedGitLabProjectsErrors[keyof GetStoppedGitLabProjectsErrors];
 
 export type GetStoppedGitLabProjectsResponses = {
 	/**
@@ -17460,6 +20546,16 @@ export type RemoveStoppedGitLabProjectData = {
 	url: "/workspaces/{workspaceSlug}/repositories/stopped/{repositoryItemId}";
 };
 
+export type RemoveStoppedGitLabProjectErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RemoveStoppedGitLabProjectError =
+	RemoveStoppedGitLabProjectErrors[keyof RemoveStoppedGitLabProjectErrors];
+
 export type RemoveStoppedGitLabProjectResponses = {
 	/**
 	 * No Content
@@ -17481,6 +20577,15 @@ export type ListSlackChannelsData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/slack/channels";
 };
+
+export type ListSlackChannelsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListSlackChannelsError = ListSlackChannelsErrors[keyof ListSlackChannelsErrors];
 
 export type ListSlackChannelsResponses = {
 	/**
@@ -17504,6 +20609,16 @@ export type RegisterSlackChannelData = {
 	url: "/workspaces/{workspaceSlug}/slack/channels";
 };
 
+export type RegisterSlackChannelErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RegisterSlackChannelError =
+	RegisterSlackChannelErrors[keyof RegisterSlackChannelErrors];
+
 export type RegisterSlackChannelResponses = {
 	/**
 	 * OK
@@ -17525,6 +20640,16 @@ export type ListSlackChannelCandidatesData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/slack/channels/candidates";
 };
+
+export type ListSlackChannelCandidatesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListSlackChannelCandidatesError =
+	ListSlackChannelCandidatesErrors[keyof ListSlackChannelCandidatesErrors];
 
 export type ListSlackChannelCandidatesResponses = {
 	/**
@@ -17549,6 +20674,16 @@ export type UpdateSlackChannelConsentData = {
 	url: "/workspaces/{workspaceSlug}/slack/channels/{slackChannelId}";
 };
 
+export type UpdateSlackChannelConsentErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateSlackChannelConsentError =
+	UpdateSlackChannelConsentErrors[keyof UpdateSlackChannelConsentErrors];
+
 export type UpdateSlackChannelConsentResponses = {
 	/**
 	 * OK
@@ -17572,6 +20707,16 @@ export type ListSlackChannelConsentEventsData = {
 	url: "/workspaces/{workspaceSlug}/slack/channels/{slackChannelId}/consent-events";
 };
 
+export type ListSlackChannelConsentEventsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListSlackChannelConsentEventsError =
+	ListSlackChannelConsentEventsErrors[keyof ListSlackChannelConsentEventsErrors];
+
 export type ListSlackChannelConsentEventsResponses = {
 	/**
 	 * OK
@@ -17593,6 +20738,16 @@ export type UpdateSlackUserPreferencesData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/slack/me/preferences";
 };
+
+export type UpdateSlackUserPreferencesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateSlackUserPreferencesError =
+	UpdateSlackUserPreferencesErrors[keyof UpdateSlackUserPreferencesErrors];
 
 export type UpdateSlackUserPreferencesResponses = {
 	/**
@@ -17616,6 +20771,15 @@ export type GetSlackScopesData = {
 	url: "/workspaces/{workspaceSlug}/slack/scopes";
 };
 
+export type GetSlackScopesErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetSlackScopesError = GetSlackScopesErrors[keyof GetSlackScopesErrors];
+
 export type GetSlackScopesResponses = {
 	/**
 	 * OK
@@ -17637,6 +20801,15 @@ export type UpdateStatusData = {
 	url: "/workspaces/{workspaceSlug}/status";
 };
 
+export type UpdateStatusErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateStatusError = UpdateStatusErrors[keyof UpdateStatusErrors];
+
 export type UpdateStatusResponses = {
 	/**
 	 * Workspace updated
@@ -17657,6 +20830,16 @@ export type GetWorkspaceSyncProgressData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/sync/progress";
 };
+
+export type GetWorkspaceSyncProgressErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetWorkspaceSyncProgressError =
+	GetWorkspaceSyncProgressErrors[keyof GetWorkspaceSyncProgressErrors];
 
 export type GetWorkspaceSyncProgressResponses = {
 	/**
@@ -17680,6 +20863,15 @@ export type GetAllTeamsData = {
 	url: "/workspaces/{workspaceSlug}/teams";
 };
 
+export type GetAllTeamsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetAllTeamsError = GetAllTeamsErrors[keyof GetAllTeamsErrors];
+
 export type GetAllTeamsResponses = {
 	/**
 	 * OK
@@ -17702,6 +20894,16 @@ export type UpdateTeamVisibilityData = {
 	url: "/workspaces/{workspaceSlug}/teams/{id}/visibility";
 };
 
+export type UpdateTeamVisibilityErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateTeamVisibilityError =
+	UpdateTeamVisibilityErrors[keyof UpdateTeamVisibilityErrors];
+
 export type UpdateTeamVisibilityResponses = {
 	/**
 	 * OK
@@ -17722,6 +20924,15 @@ export type RemoveLabelFromTeamData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}";
 };
+
+export type RemoveLabelFromTeamErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type RemoveLabelFromTeamError = RemoveLabelFromTeamErrors[keyof RemoveLabelFromTeamErrors];
 
 export type RemoveLabelFromTeamResponses = {
 	/**
@@ -17747,6 +20958,15 @@ export type AddLabelToTeamData = {
 	url: "/workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}";
 };
 
+export type AddLabelToTeamErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type AddLabelToTeamError = AddLabelToTeamErrors[keyof AddLabelToTeamErrors];
+
 export type AddLabelToTeamResponses = {
 	/**
 	 * OK
@@ -17770,6 +20990,16 @@ export type UpdateRepositoryVisibilityData = {
 	url: "/workspaces/{workspaceSlug}/teams/{teamId}/repositories/{repositoryId}/visibility";
 };
 
+export type UpdateRepositoryVisibilityErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateRepositoryVisibilityError =
+	UpdateRepositoryVisibilityErrors[keyof UpdateRepositoryVisibilityErrors];
+
 export type UpdateRepositoryVisibilityResponses = {
 	/**
 	 * OK
@@ -17788,6 +21018,15 @@ export type UpdateTokenData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/token";
 };
+
+export type UpdateTokenErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type UpdateTokenError = UpdateTokenErrors[keyof UpdateTokenErrors];
 
 export type UpdateTokenResponses = {
 	/**
@@ -17812,6 +21051,15 @@ export type ListUserViewUsersData = {
 	};
 	url: "/workspaces/{workspaceSlug}/user-view/users";
 };
+
+export type ListUserViewUsersErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type ListUserViewUsersError = ListUserViewUsersErrors[keyof ListUserViewUsersErrors];
 
 export type ListUserViewUsersResponses = {
 	/**
@@ -17842,6 +21090,15 @@ export type GetUserViewUserData = {
 	url: "/workspaces/{workspaceSlug}/user-view/users/{accountId}";
 };
 
+export type GetUserViewUserErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetUserViewUserError = GetUserViewUserErrors[keyof GetUserViewUserErrors];
+
 export type GetUserViewUserResponses = {
 	/**
 	 * OK
@@ -17862,6 +21119,15 @@ export type GetUsersWithTeamsData = {
 	query?: never;
 	url: "/workspaces/{workspaceSlug}/users";
 };
+
+export type GetUsersWithTeamsErrors = {
+	/**
+	 * An error. Its type names the problem.
+	 */
+	default: ProblemDetail;
+};
+
+export type GetUsersWithTeamsError = GetUsersWithTeamsErrors[keyof GetUsersWithTeamsErrors];
 
 export type GetUsersWithTeamsResponses = {
 	/**

@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	UpdateGitLabRepositorySelectionData,
+	UpdateGitLabRepositorySelectionErrors,
 	UpdateGitLabRepositorySelectionResponses,
 } from "../types.gen.js";
 
@@ -13,15 +14,21 @@ import type {
  */
 export const updateGitLabRepositorySelection = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateGitLabRepositorySelectionData, ThrowOnError>,
-): RequestResult<UpdateGitLabRepositorySelectionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateGitLabRepositorySelectionResponses, unknown, ThrowOnError>(
-		{
-			security: [{ scheme: "bearer", type: "http" }],
-			url: "/workspaces/{workspaceSlug}/repositories/selection",
-			...options,
-			headers: {
-				"Content-Type": "application/json",
-				...options.headers,
-			},
+): RequestResult<
+	UpdateGitLabRepositorySelectionResponses,
+	UpdateGitLabRepositorySelectionErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		UpdateGitLabRepositorySelectionResponses,
+		UpdateGitLabRepositorySelectionErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/repositories/selection",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
 		},
-	);
+	});

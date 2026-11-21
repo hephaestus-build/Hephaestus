@@ -188,6 +188,12 @@ paths:
                 type: object
                 additionalProperties: {}
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Public keys of the provenance records
       tags:
       - Provenance
@@ -202,6 +208,12 @@ paths:
                 type: object
                 additionalProperties: {}
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: JWK set (public keys only)
       tags:
       - Auth discovery
@@ -216,6 +228,12 @@ paths:
                 type: object
                 additionalProperties: {}
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Authorization server metadata (RFC 8414)
       tags:
       - MCP authorization
@@ -236,6 +254,12 @@ paths:
                 type: object
                 additionalProperties: {}
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Protected resource metadata of a workspace MCP endpoint (RFC 9728)
       tags:
       - MCP authorization
@@ -300,6 +324,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CursorPageDTOAuthEventView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List auth audit events (newest first)
       tags:
       - Admin
@@ -352,6 +382,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/TotalCount"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Count the auth audit events a filter matches
       tags:
       - Admin
@@ -411,6 +447,12 @@ paths:
                 type: integer
                 format: int64
               style: simple
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Export the filtered audit log as CSV (newest first, capped)"
       tags:
       - Admin
@@ -485,6 +527,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CursorPageDTOConfigAuditEntryView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List admin configuration changes across workspaces (newest first)
       tags:
       - Admin
@@ -547,6 +595,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/TotalCount"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Count the configuration changes a filter matches
       tags:
       - Admin
@@ -562,6 +616,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/ConfigurationFact"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get redacted configuration readiness
       tags:
       - Configuration Readiness
@@ -575,6 +635,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/EmailStatus"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Whether this instance can send email at all
       tags:
       - Instance Email
@@ -601,6 +667,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Malformed request or invalid recipient address
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Send a test email
       tags:
       - Instance Email
@@ -616,6 +688,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/GitHubInstallationRequest"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List GitHub App installations and their decisions
       tags:
       - git-hub-installation-admin
@@ -636,6 +714,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/GitHubInstallationRequest"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Create the installation's workspace, with the signed-in admin as its\
         \ owner"
       tags:
@@ -657,6 +741,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/GitHubInstallationRequest"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Decline a GitHub App installation
       tags:
       - git-hub-installation-admin
@@ -685,6 +775,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CursorPageDTOConsumerDeadLetter"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List unassigned installation dead letters
       tags:
       - installation-dead-letter
@@ -705,6 +801,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConsumerDeadLetter"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Replay an unassigned installation dead letter
       tags:
       - installation-dead-letter
@@ -720,6 +822,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/LlmCallPool"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the pools of provider capacity
       tags:
       - Admin LLM
@@ -739,7 +847,17 @@ paths:
                 $ref: "#/components/schemas/LlmCallPool"
           description: Pool created; URL in the Location header
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: A pool with this slug already exists
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Create a pool of provider capacity
       tags:
       - Admin LLM
@@ -755,6 +873,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/LlmCallPoolModel"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "List every model that can join a pool, with the pool it is in"
       tags:
       - Admin LLM
@@ -772,11 +896,29 @@ paths:
         "204":
           description: Pool deleted
         "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The pool is a model's own
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Pool not found
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: "The pool still has calls, rate history, or a cooldown"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Delete a shared pool; each of its models gets a pool of its own
       tags:
       - Admin LLM
@@ -803,11 +945,29 @@ paths:
                 $ref: "#/components/schemas/LlmCallPool"
           description: OK
         "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The pool slug cannot change or the limits are invalid
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Pool not found
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: "The pool still has calls, rate history, or a cooldown"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Change a pool's name and limits
       tags:
       - Admin LLM
@@ -837,9 +997,23 @@ paths:
                   $ref: "#/components/schemas/LlmCallPoolModel"
           description: OK
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Pool or model not found
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: "The pool still has calls, rate history, or a cooldown"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Replace the models in a pool
       tags:
       - Admin LLM
@@ -855,6 +1029,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/LlmConnection"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List LLM connections
       tags:
       - Admin LLM
@@ -874,7 +1054,17 @@ paths:
                 $ref: "#/components/schemas/LlmConnection"
           description: Connection created; URL in the Location header
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: An LLM connection with this slug already exists
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Create an LLM connection
       tags:
       - Admin LLM
@@ -894,6 +1084,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/LlmProbeResult"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Test a draft connection and fetch its models
       tags:
       - Admin LLM
@@ -921,10 +1117,24 @@ paths:
                 $ref: "#/components/schemas/LlmModel"
           description: Model created; URL in the Location header
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: LLM connection not found
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: A model with this slug or upstream model id already exists
             on the connection
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Create a model on an LLM connection
       tags:
       - Admin LLM
@@ -942,10 +1152,24 @@ paths:
         "204":
           description: Connection deleted
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: LLM connection not found
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Cannot delete a connection still referenced by one or more
             models
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Delete an LLM connection
       tags:
       - Admin LLM
@@ -972,7 +1196,17 @@ paths:
                 $ref: "#/components/schemas/LlmConnection"
           description: OK
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: LLM connection not found
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update an LLM connection
       tags:
       - Admin LLM
@@ -993,6 +1227,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/LlmProbeResult"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Test a stored connection and fetch its models
       tags:
       - Admin LLM
@@ -1008,6 +1248,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/LlmModel"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List LLM catalog models
       tags:
       - Admin LLM
@@ -1025,9 +1271,23 @@ paths:
         "204":
           description: Model deleted
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: LLM model not found
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Cannot delete a model still assigned to a purpose
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Delete an LLM catalog model
       tags:
       - Admin LLM
@@ -1054,10 +1314,24 @@ paths:
                 $ref: "#/components/schemas/LlmModel"
           description: OK
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: LLM model not found
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Another model on the connection already uses this upstream
             model id
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update a model's metadata
       tags:
       - Admin LLM
@@ -1078,6 +1352,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/LlmModelCapabilities"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Probe the model's forced tool-choice capability
       tags:
       - Admin LLM
@@ -1105,7 +1385,17 @@ paths:
                 $ref: "#/components/schemas/LlmModel"
           description: OK
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: LLM model not found
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Reprice a model
       tags:
       - Admin LLM
@@ -1133,7 +1423,17 @@ paths:
                 $ref: "#/components/schemas/LlmModel"
           description: OK
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: LLM model not found
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Share a model with all or selected workspaces
       tags:
       - Admin LLM
@@ -1147,6 +1447,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/InstanceLlmSettings"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get instance-wide LLM governance settings
       tags:
       - Admin LLM
@@ -1165,6 +1471,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/InstanceLlmSettings"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update instance-wide LLM governance settings
       tags:
       - Admin LLM
@@ -1185,6 +1497,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminLlmUsageReport"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Per-workspace LLM spend rollup for one month (all workspaces)
       tags:
       - Admin
@@ -1200,6 +1518,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/LoginProviderView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List login providers
       tags:
       - Admin
@@ -1218,6 +1542,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/LoginProviderView"
           description: Login provider created; URL in the Location header
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Create a login provider
       tags:
       - Admin
@@ -1233,6 +1563,12 @@ paths:
       responses:
         "204":
           description: Login provider deleted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Delete a login provider
       tags:
       - Admin
@@ -1257,6 +1593,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/LoginProviderView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update a login provider
       tags:
       - Admin
@@ -1276,6 +1618,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PersonDataRequest"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Resolve exact identities and preview every personal-data store
       tags:
       - Person Data
@@ -1291,6 +1639,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/PersonDataProvider"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List exact provider instances without credentials
       tags:
       - Person Data
@@ -1311,6 +1665,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PersonDataRequest"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get a person-data preview or erasure receipt
       tags:
       - Person Data
@@ -1337,6 +1697,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PersonDataRequest"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Start or resume the preview's audited erasure job
       tags:
       - Person Data
@@ -1358,6 +1724,12 @@ paths:
                 type: string
                 format: binary
           description: JSON file
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Download the preview's frozen scope as one JSON file
       tags:
       - Person Data
@@ -1371,6 +1743,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Catalog"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/definition-options:
@@ -1383,6 +1761,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeDefinitionOptions"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/groups:
@@ -1401,6 +1785,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogGroup"
           description: Group created; URL in the Location header
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/groups/reorder:
@@ -1425,6 +1815,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Catalog"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/groups/{slug}:
@@ -1443,6 +1839,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogGroup"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
     put:
@@ -1471,6 +1873,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogGroup"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/groups/{slug}/override:
@@ -1494,6 +1902,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogGroup"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/groups/{slug}/override/acknowledgement:
@@ -1517,6 +1931,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogGroup"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/groups/{slug}/status:
@@ -1546,6 +1966,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Catalog"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/order:
@@ -1564,6 +1990,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Catalog"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/practices:
@@ -1582,6 +2014,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogPractice"
           description: Practice created; URL in the Location header
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/practices/{slug}:
@@ -1600,6 +2038,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogPractice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
     put:
@@ -1628,6 +2072,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogPractice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/practices/{slug}/group:
@@ -1657,6 +2107,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Catalog"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/practices/{slug}/override:
@@ -1680,6 +2136,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogPractice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/practices/{slug}/override/acknowledgement:
@@ -1703,6 +2165,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogPractice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/practices/{slug}/release:
@@ -1721,6 +2189,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeReleaseProposal"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
     put:
@@ -1749,6 +2223,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogPractice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/practice-catalog/practices/{slug}/status:
@@ -1778,6 +2258,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogPractice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - catalog-admin
   /admin/product-feedback:
@@ -1822,6 +2308,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOFeedbackItem"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "List product feedback, newest first"
       tags:
       - feedback-admin
@@ -1838,6 +2330,12 @@ paths:
       responses:
         "204":
           description: The step is confirmed and its issue locator is deleted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Confirm that a maintainer finished an erased report's manual step on
         GitHub
       tags:
@@ -1852,6 +2350,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductFeedbackDestinations"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get the product feedback destinations and their health
       tags:
       - product-feedback-destinations
@@ -1870,6 +2374,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductFeedbackDestinations"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Set where product feedback is filed
       tags:
       - product-feedback-destinations
@@ -1883,6 +2393,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductFeedbackMove"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Send every report that is saved for admins to GitHub as private issues
       tags:
       - product-feedback-destinations
@@ -1896,6 +2412,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductFeedbackNeedsActionList"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List reports that failed to file and erased reports whose issues need
         a manual step
       tags:
@@ -1923,6 +2445,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/FeedbackItem"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Mark product feedback as resolved or reopen it
       tags:
       - feedback-admin
@@ -1939,6 +2467,12 @@ paths:
       responses:
         "204":
           description: The report goes through drafting and routing
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Send a report that is saved for admins to GitHub as a private issue
       tags:
       - product-feedback-destinations
@@ -1955,6 +2489,12 @@ paths:
       responses:
         "204":
           description: The report goes back to filing
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: File a stopped report again
       tags:
       - product-feedback-destinations
@@ -1986,6 +2526,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOProviderResourceRepair"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - instance-provider-resource-repair
   /admin/provider-resource-repairs/{repairId}/release:
@@ -2007,6 +2553,12 @@ paths:
       responses:
         "200":
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - instance-provider-resource-repair
   /admin/release:
@@ -2019,6 +2571,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReleaseStatus"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get the running release and the last update check
       tags:
       - Instance Release
@@ -2032,6 +2590,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReleaseStatus"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Check GitHub for a newer release now
       tags:
       - Instance Release
@@ -2056,6 +2620,12 @@ paths:
                 type: string
                 format: binary
           description: Research dataset JSON attachment
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Release and download one consented research dataset
       tags:
       - Research
@@ -2073,6 +2643,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/ResearchRemovalDisclosure"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Check and record research removal obligations
       tags:
       - Research
@@ -2097,6 +2673,12 @@ paths:
       responses:
         "200":
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Attest destruction or anonymization of every retained research copy
       tags:
       - Research
@@ -2125,6 +2707,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ResearchRemovalReceipt"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Attest removal of participant keys from retained research copies
       tags:
       - Research
@@ -2138,6 +2726,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/InstanceSettings"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get instance settings
       tags:
       - Instance Settings
@@ -2151,6 +2745,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PublicActivityPolicy"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get the instance public activity policy
       tags:
       - public-activity-settings
@@ -2169,6 +2769,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PublicActivityPolicy"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Allow or stop public activity pages
       tags:
       - public-activity-settings
@@ -2207,6 +2813,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: If-Match is required when releasing Silent Mode
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Engage or release the instance-wide silent mode
       tags:
       - Instance Settings
@@ -2235,6 +2847,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOAdminAccountView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List accounts (paged)
       tags:
       - Admin
@@ -2261,6 +2879,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminAccountView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update an account's app role
       tags:
       - Admin
@@ -2281,6 +2905,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/RevokeSessionsResult"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Force sign-out: revoke all of an account's active sessions"
       tags:
       - Admin
@@ -2307,6 +2937,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminAccountView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Block an account, which ends its sessions and refuses its sign-in,\
         \ or unblock it"
       tags:
@@ -2323,6 +2959,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/AdminWorkspaceView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List all workspaces (metadata only)
       tags:
       - Admin
@@ -2344,6 +2986,12 @@ paths:
       responses:
         "204":
           description: Cap updated
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Set or clear a workspace's monthly cap on host-funded LLM spend
       tags:
       - Admin
@@ -2372,6 +3020,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: The client id is not a Chrome extension id
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Whether this instance lets the given installed client sign in
       tags:
       - Client session
@@ -2408,6 +3062,12 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "This address sent too many installed-client requests. Wait\
             \ the number of seconds in the Retry-After header, then try again."
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: End the session its refresh secret belongs to
       tags:
       - Client session
@@ -2454,6 +3114,12 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "This address sent too many installed-client requests. Wait\
             \ the number of seconds in the Retry-After header, then try again."
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Rotate the session's access token and refresh secret
       tags:
       - Client session
@@ -2495,6 +3161,12 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "This address sent too many installed-client requests. Wait\
             \ the number of seconds in the Retry-After header, then try again."
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Redeem a sign-in handoff code with its PKCE verifier
       tags:
       - Client session
@@ -2513,6 +3185,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CsrfToken"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get the raw CSRF token for the current browser
       tags:
       - Auth
@@ -2523,6 +3201,12 @@ paths:
       responses:
         "204":
           description: Session ended
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Log out — revoke the current token + clear the cookie
       tags:
       - Auth
@@ -2533,9 +3217,23 @@ paths:
         "204":
           description: Session renewal completed
         "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The token belongs to an installed-client session
         "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Session has ended
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Renew the browser session
       tags:
       - Auth
@@ -2552,14 +3250,36 @@ paths:
         "204":
           description: Faults recorded
         "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: A fault names an unknown value or is out of range
         "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: "The browser sent the report from another site, or the CSRF\
             \ token is missing"
         "413":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The report is larger than 16 KiB
         "429":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The reader or address sent too many reports
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       security: []
       summary: Record the faults that one page met
       tags:
@@ -2577,6 +3297,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/Contributor"
           description: list of contributors sorted by contribution count
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       security: []
       summary: List global contributors
       tags:
@@ -2604,6 +3330,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/GitHubInstallationClaim"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Confirm the installation that the signed-in person set up on GitHub
       tags:
       - git-hub-installation-claim
@@ -2619,6 +3351,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/IdentityProviderView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List available identity providers
       tags:
       - Auth discovery
@@ -2674,6 +3412,12 @@ paths:
       responses:
         "200":
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Start an MCP client authorization (RFC 6749 § 4.1.1)
       tags:
       - MCP authorization
@@ -2694,6 +3438,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/McpConsentRedirect"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Refuse an MCP client
       tags:
       - MCP authorization
@@ -2713,6 +3463,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/McpConsentRequest"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Read a pending MCP client consent request
       tags:
       - MCP authorization
@@ -2733,6 +3489,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/McpConsentRedirect"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Approve an MCP client for a workspace
       tags:
       - MCP authorization
@@ -2768,6 +3530,12 @@ paths:
               schema:
                 type: object
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Exchange a code or rotate a refresh token (RFC 6749 § 3.2)
       tags:
       - MCP authorization
@@ -2801,6 +3569,12 @@ paths:
       responses:
         "204":
           description: "Subscription disabled, or token no longer applicable"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       security: []
       summary: Unsubscribe from one optional email subscription
       tags:
@@ -2828,6 +3602,12 @@ paths:
               schema:
                 type: object
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - o-auth-callback
     post:
@@ -2852,6 +3632,12 @@ paths:
               schema:
                 type: object
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - o-auth-callback
   /product-feedback:
@@ -2870,6 +3656,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/FeedbackReceipt"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Send instance-scoped product feedback
       tags:
       - instance-feedback
@@ -2885,6 +3677,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/MyProductFeedback"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "List the current account's product feedback, newest first"
       tags:
       - my-product-feedback
@@ -2898,6 +3696,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductFeedbackSharing"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get the current account's choice about public issues
       tags:
       - my-product-feedback
@@ -2916,6 +3720,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductFeedbackSharing"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Choose whether reports can become public issues
       tags:
       - my-product-feedback
@@ -2942,6 +3752,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/MyProductFeedback"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Let maintainers publish a private report, or take that back"
       tags:
       - my-product-feedback
@@ -2968,6 +3784,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/MyProductFeedback"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Edit a held report before it is filed
       tags:
       - my-product-feedback
@@ -2988,6 +3810,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/MyProductFeedback"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Keep a report private before it is filed
       tags:
       - my-product-feedback
@@ -3008,6 +3836,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/MyProductFeedback"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Move the report's public issue to the private repository
       tags:
       - my-product-feedback
@@ -3059,6 +3893,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PublicActivity"
           description: Public contributions counted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       security: []
       summary: Read human contributions to public repositories
       tags:
@@ -3116,6 +3956,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PublicActivityPersonDetail"
           description: Public contributions counted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       security: []
       summary: Read a person's published repository contributions
       tags:
@@ -3197,6 +4043,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CursorPageDTOPublicActivityWork"
           description: Public work listed
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       security: []
       summary: Read a person's published work timeline
       tags:
@@ -3215,10 +4067,16 @@ paths:
           description: Account deletion requested
         "403":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: The caller has not signed in recently (problem type step-up-required)
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Delete the current account (GDPR Art. 17)
       tags:
       - Account
@@ -3231,6 +4089,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CurrentUserView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get the current user
       tags:
       - Account
@@ -3244,6 +4108,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/AccountAiChoice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get your AI choice
       tags:
       - Account
@@ -3262,6 +4132,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/AccountAiChoice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Change your AI choice for every workspace you are in
       tags:
       - Account
@@ -3275,6 +4151,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConsentStatus"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get the current consent notice and status
       tags:
       - Consent
@@ -3293,6 +4175,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConsentStatus"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Complete the first-login transparency step
       tags:
       - Consent
@@ -3312,6 +4200,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConsentStatus"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Grant or withdraw research consent
       tags:
       - Consent
@@ -3325,6 +4219,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ExportCreated"
           description: Export requested; status URL in the Location header
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Request a data export (async)
       tags:
       - Account
@@ -3345,6 +4245,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ExportStatus"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get data-export status
       tags:
       - Account
@@ -3366,6 +4272,12 @@ paths:
                 type: string
                 format: byte
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Download the data-export bundle
       tags:
       - Account
@@ -3380,6 +4292,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/FeatureFlags"
           description: Feature flags evaluated successfully
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get feature flags for the current user
       tags:
       - Account
@@ -3395,6 +4313,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/IdentityView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List linked identity providers
       tags:
       - Account
@@ -3412,9 +4336,23 @@ paths:
         "204":
           description: Identity unlinked
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: No such identity on the current account
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Cannot unlink the account's only remaining sign-in method
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Unlink one of the current user's linked identity providers
       tags:
       - Account
@@ -3434,6 +4372,12 @@ paths:
               schema:
                 type: string
               style: simple
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get your email subscriptions
       tags:
       - Notification preferences
@@ -3495,6 +4439,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: If-Match is required
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update your email subscriptions
       tags:
       - Notification preferences
@@ -3508,6 +4458,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PasskeyStatus"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get passkey settings
       tags:
       - Passkeys
@@ -3522,6 +4478,12 @@ paths:
       responses:
         "200":
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Register a passkey
       tags:
       - Passkeys
@@ -3537,6 +4499,12 @@ paths:
       responses:
         "200":
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update personal admin protection
       tags:
       - Passkeys
@@ -3552,6 +4520,12 @@ paths:
       responses:
         "200":
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Start restricted passkey recovery
       tags:
       - Passkeys
@@ -3565,6 +4539,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PasskeyRecoveryCodes"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Replace passkey recovery codes
       tags:
       - Passkeys
@@ -3578,6 +4558,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PasskeyOptions"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Start passkey enrollment
       tags:
       - Passkeys
@@ -3593,6 +4579,12 @@ paths:
       responses:
         "200":
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Verify a passkey for this browser session
       tags:
       - Passkeys
@@ -3606,6 +4598,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PasskeyOptions"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Start passkey verification
       tags:
       - Passkeys
@@ -3621,6 +4619,12 @@ paths:
       responses:
         "200":
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Remove a passkey
       tags:
       - Passkeys
@@ -3634,6 +4638,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PublicActivityChoice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get your account-wide public activity choice
       tags:
       - account-public-activity
@@ -3652,6 +4662,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PublicActivityChoice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Show or hide your activity on all public pages
       tags:
       - account-public-activity
@@ -3671,6 +4687,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PublicActivityOnboarding"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Check your public-workspace onboarding
       tags:
       - public-activity-onboarding
@@ -3695,6 +4717,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PublicActivityOnboarding"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Show or hide yourself and finish this workspace's onboarding
       tags:
       - public-activity-onboarding
@@ -3707,6 +4735,12 @@ paths:
       responses:
         "204":
           description: Other sessions revoked
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Revoke all sessions except the current one
       tags:
       - Account
@@ -3721,6 +4755,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/SessionView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List active sessions for the current user
       tags:
       - Account
@@ -3739,6 +4779,12 @@ paths:
       responses:
         "204":
           description: Session revoked
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Revoke a single session
       tags:
       - Account
@@ -3752,6 +4798,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserSettings"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get user settings
       tags:
       - Account
@@ -3770,6 +4822,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserSettings"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update user settings
       tags:
       - Account
@@ -3783,6 +4841,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/SlackUserPreferences"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get current user's Slack preferences
       tags:
       - Slack User Preferences
@@ -3799,10 +4863,24 @@ paths:
         "204":
           description: Measurements recorded
         "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: "A measurement names an unknown vital, navigation, page or\
             \ region, is out of range, or is the time to first byte of a route view"
         "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Not signed in
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Record the measurements of one page visit
       tags:
       - Web vitals
@@ -3818,6 +4896,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/WorkspaceListItem"
           description: Workspace list
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List all workspaces
       tags:
       - workspace-registry
@@ -3836,6 +4920,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Workspace"
           description: Workspace created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Create a new workspace
       tags:
       - workspace-registry
@@ -3857,6 +4947,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/GitLabGroup"
           description: Accessible groups
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List GitLab groups accessible to a PAT
       tags:
       - git-lab-preflight
@@ -3876,6 +4972,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/GitLabPreflightResponse"
           description: Validation result
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Validate a GitLab PAT before workspace creation
       tags:
       - git-lab-preflight
@@ -3909,6 +5011,12 @@ paths:
                 $ref: "#/components/schemas/CursorPageDTOGitLabProject"
           description: "One page of projects, ordered by path; nextCursor is absent\
             \ on the last page"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List one page of the projects in a GitLab group and its subgroups that
         a PAT can read
       tags:
@@ -3925,6 +5033,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceProviders"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       security: []
       summary: List available workspace creation providers
       tags:
@@ -3947,11 +5061,17 @@ paths:
           description: Workspace purged
         "403":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "The caller has not signed in recently (problem type step-up-required),\
             \ or is not an owner"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Permanently delete a workspace and purge its data
       tags:
       - workspace
@@ -3974,6 +5094,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Workspace"
           description: Workspace returned
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Fetch a workspace by slug
       tags:
       - workspace
@@ -4017,6 +5143,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the repositories and teams that activity can be narrowed to
       tags:
       - Activity
@@ -4060,6 +5192,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the contributors without a membership whom an admin hid from activity
       tags:
       - Activity
@@ -4138,6 +5276,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Read your activity in this workspace
       tags:
       - Activity
@@ -4240,6 +5384,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the work on which your activity happened
       tags:
       - Activity
@@ -4289,6 +5439,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List what is open for a member
       tags:
       - Activity
@@ -4367,6 +5523,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Count each contributor and automation account in one response
       tags:
       - Activity
@@ -4451,6 +5613,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Count a contributor by week, type and repository"
       tags:
       - Activity
@@ -4499,6 +5667,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Treat a contributor as automation, or reset the classification"
       tags:
       - Activity
@@ -4547,6 +5721,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Honor a contributor publication objection, or restore workspace visibility"
       tags:
       - Activity
@@ -4655,6 +5835,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List a contributor's work one page at a time
       tags:
       - Activity
@@ -4696,6 +5882,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Count hidden public contributors without identifying them
       tags:
       - Activity
@@ -4807,6 +5999,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "List activity by the pull request or issue it happened on, one page\
         \ at a time"
       tags:
@@ -4885,6 +6083,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CursorPageDTOConfigAuditEntryView"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List this workspace's admin configuration changes (newest first)
       tags:
       - Config Audit
@@ -4950,6 +6154,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/TotalCount"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Count this workspace's configuration changes a filter matches
       tags:
       - Config Audit
@@ -4975,6 +6185,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/ConnectionSummary"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - Connections
     post:
@@ -5002,6 +6218,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/InitiateConnectionResponse"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - Connections
   /workspaces/{workspaceSlug}/connections/catalog:
@@ -5026,6 +6248,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/IntegrationCatalogEntry"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Every integration kind this workspace could connect, joined against\
         \ existing connections"
       tags:
@@ -5055,7 +6283,17 @@ paths:
                 $ref: "#/components/schemas/OutlineTokenStatus"
           description: Token state returned
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The workspace has no ACTIVE Outline connection
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Live state of the API token behind this workspace's Outline connection
       tags:
       - Connections
@@ -5089,13 +6327,23 @@ paths:
           description: Key replaced; the state of the new key returned
         "400":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Outline does not accept the key, or the key belongs to another\
             \ Outline team"
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The workspace has no ACTIVE Outline connection
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Replace the API key of this workspace's Outline connection
       tags:
       - Connections
@@ -5142,6 +6390,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOProviderResourceRepair"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - provider-resource-repair
   /workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs/{repairId}/release:
@@ -5178,6 +6432,12 @@ paths:
       responses:
         "200":
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - provider-resource-repair
   /workspaces/{workspaceSlug}/connections/{connectionId}/sync:
@@ -5206,6 +6466,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConnectionSyncStatus"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Unified sync status for one connection
       tags:
       - Sync
@@ -5249,6 +6515,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOSyncJob"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Paginated sync job history for one connection
       tags:
       - Sync
@@ -5318,6 +6590,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: The server is too busy to dispatch the sync; retry later
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Trigger a manual sync or backfill
       tags:
       - Sync
@@ -5377,6 +6655,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Job is already in a terminal status
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update a running sync job
       tags:
       - Sync
@@ -5408,6 +6692,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/SyncResourceState"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Per-resource sync state (repos / channels / collections) for one connection
       tags:
       - Sync
@@ -5437,6 +6727,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConnectionDetail"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - Connections
   /workspaces/{workspaceSlug}/connections/{id}/status:
@@ -5477,6 +6773,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConnectionSummary"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: |-
         Resource-oriented lifecycle transition: <code>ACTIVE</code> (reactivate), <code>SUSPENDED</code>
          (suspend), or <code>UNINSTALLED</code> (disconnect).
@@ -5502,6 +6804,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Conversation"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "The developer's conversation: what runs now, its threads and how far\
         \ it reached"
       tags:
@@ -5538,6 +6846,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CursorPageDTOConversationEntry"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "A page of top-level messages, oldest first; pass nextCursor as cursor\
         \ for older ones"
       tags:
@@ -5572,6 +6886,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Only the developer's own questions can be deleted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Delete a message the developer wrote
       tags:
       - Conversation
@@ -5619,6 +6939,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: No top-level message of the developer has this id
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "The thread on a top-level message: the message and a page of replies,\
         \ oldest first"
       tags:
@@ -5649,6 +6975,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConversationEntry"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Clear the vote on one of Hephaestus's messages
       tags:
       - Conversation
@@ -5689,6 +7021,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: The message is not one of Hephaestus's
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Rate one of Hephaestus's messages as helpful or not helpful
       tags:
       - Conversation
@@ -5720,6 +7058,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConversationRead"
           description: "The marker after the request: this time or a later one"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Mark the conversation read
       tags:
       - Conversation
@@ -5760,6 +7104,12 @@ paths:
           description: "Hephaestus declines the developer (conversation-refused),\
             \ too many follow-ups wait, the requestId was used for another message,\
             \ or the parent cannot have a thread (conversation-rejected)"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Ask Hephaestus
       tags:
       - Conversation
@@ -5798,6 +7148,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConversationTurn"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Stop a turn
       tags:
       - Conversation
@@ -5827,6 +7183,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Workspace"
           description: Workspace updated
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update workspace feature flags
       tags:
       - workspace
@@ -5864,6 +7226,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CursorPageDTOConsumerDeadLetter"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List this workspace's dead letters
       tags:
       - consumer-dead-letter
@@ -5893,6 +7261,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ConsumerDeadLetter"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Replay a dead letter in this workspace
       tags:
       - consumer-dead-letter
@@ -5918,6 +7292,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/AvailableLlmModel"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List models this workspace can bind a Task to (shared + your own)
       tags:
       - Workspace LLM
@@ -5943,6 +7323,12 @@ paths:
       responses:
         "204":
           description: Cap updated
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Set or clear this workspace's monthly cap on its own-provider LLM spend
       tags:
       - LLM Usage
@@ -5968,6 +7354,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/WorkspaceLlmConnection"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List your AI provider connections
       tags:
       - Workspace LLM
@@ -5997,7 +7389,17 @@ paths:
                 $ref: "#/components/schemas/WorkspaceLlmConnection"
           description: Connection created; URL in the Location header
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: A connection with this slug already exists in this workspace
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Connect your own AI provider
       tags:
       - Workspace LLM
@@ -6034,10 +7436,24 @@ paths:
                 $ref: "#/components/schemas/WorkspaceLlmModel"
           description: Model created; URL in the Location header
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: AI provider connection not found
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: A model with this slug or upstream model id already exists
             on the connection
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Create a model on your AI provider
       tags:
       - Workspace LLM
@@ -6064,10 +7480,24 @@ paths:
         "204":
           description: Connection removed
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Connection not found
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Cannot delete a connection still referenced by one or more
             models
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Remove your AI provider connection
       tags:
       - Workspace LLM
@@ -6103,7 +7533,17 @@ paths:
                 $ref: "#/components/schemas/WorkspaceLlmConnection"
           description: OK
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Connection not found
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update your AI provider connection
       tags:
       - Workspace LLM
@@ -6133,6 +7573,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceLlmProbeResult"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Test your AI provider connection
       tags:
       - Workspace LLM
@@ -6158,6 +7604,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/WorkspaceLlmModel"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List models on your AI provider
       tags:
       - Workspace LLM
@@ -6184,9 +7636,23 @@ paths:
         "204":
           description: Model removed
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Model not found
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Cannot delete a model still assigned to a purpose
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Remove a model on your AI provider
       tags:
       - Workspace LLM
@@ -6222,10 +7688,24 @@ paths:
                 $ref: "#/components/schemas/WorkspaceLlmModel"
           description: OK
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Model not found
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Another model on the connection already uses this upstream
             model id
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update a model on your AI provider
       tags:
       - Workspace LLM
@@ -6255,6 +7735,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/LlmModelCapabilities"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Probe the model's forced tool-choice capability
       tags:
       - Workspace LLM
@@ -6278,6 +7764,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceLlmSettings"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get the instance LLM policy as it applies to this workspace
       tags:
       - Workspace LLM
@@ -6307,6 +7799,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceLlmUsageReport"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get the workspace's LLM usage report for one month
       tags:
       - LLM Usage
@@ -6332,6 +7830,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/McpClientGrant"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the MCP clients connected to the workspace
       tags:
       - mcp-client-grant
@@ -6357,6 +7861,12 @@ paths:
       responses:
         "200":
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Disconnect an MCP client from the workspace
       tags:
       - mcp-client-grant
@@ -6418,6 +7928,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOWorkspaceMembership"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List workspace memberships
       tags:
       - membership
@@ -6449,12 +7965,18 @@ paths:
           description: The member's role
         "403":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "The change grants, demotes or removes an owner and the caller\
             \ has not signed in recently (problem type step-up-required), or the caller\
             \ cannot manage the role"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Assign a workspace role
       tags:
       - membership
@@ -6479,10 +8001,16 @@ paths:
           description: You left the workspace
         "409":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: You are the workspace's last owner
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Leave the workspace
       tags:
       - membership
@@ -6505,6 +8033,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceMembership"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get your workspace membership
       tags:
       - membership
@@ -6533,12 +8067,18 @@ paths:
           description: Membership removed
         "403":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "The change grants, demotes or removes an owner and the caller\
             \ has not signed in recently (problem type step-up-required), or the caller\
             \ cannot manage the role"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Remove a workspace member
       tags:
       - membership
@@ -6575,6 +8115,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceMembership"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Change a member’s activity visibility
       tags:
       - membership
@@ -6610,10 +8156,16 @@ paths:
           description: "The member, whose role the provider sets from the next sync"
         "409":
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "The member is an owner, whose role is always set by a person"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Let the provider decide a member's role again
       tags:
       - membership
@@ -6639,6 +8191,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/ModelAssignment"
           description: Model assignments returned
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the workspace's model assignments
       tags:
       - Model assignments
@@ -6669,6 +8227,12 @@ paths:
       responses:
         "204":
           description: Model assignment removed
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Remove the model assignment of one purpose (turn it off)
       tags:
       - Model assignments
@@ -6709,10 +8273,24 @@ paths:
                 $ref: "#/components/schemas/ModelAssignment"
           description: Model assignment saved
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Model not found
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: "The model is undeclared, or declared as another tier than\
             \ this slot (problem type model-assignment-slot-mismatch, property declaredTier)"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Assign a model to one purpose
       tags:
       - Model assignments
@@ -6736,6 +8314,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceOnboarding"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get your first-visit setup and AI choice in this workspace
       tags:
       - workspace-onboarding
@@ -6765,6 +8349,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceOnboarding"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Change your AI choice without changing workspace membership
       tags:
       - workspace-onboarding
@@ -6788,6 +8378,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceOnboarding"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Skip first-visit setup for now without treating that as an AI choice
       tags:
       - workspace-onboarding
@@ -6811,6 +8407,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceOnboardingSettings"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get this workspace's member-onboarding settings
       tags:
       - workspace-onboarding
@@ -6839,6 +8441,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceOnboardingSettings"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Configure first-visit setup and required workspace account links
       tags:
       - workspace-onboarding
@@ -6864,6 +8472,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/WorkspaceOnboardingLink"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List workspace account links available for onboarding requirements
       tags:
       - workspace-onboarding
@@ -6890,7 +8504,17 @@ paths:
                   $ref: "#/components/schemas/OutlineCollection"
           description: Mirrored collections returned
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The workspace has no ACTIVE Outline connection
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the workspace's mirrored Outline collections with their sync state
       tags:
       - Outline collections
@@ -6927,11 +8551,29 @@ paths:
           description: Collection registered; the Location header points at the collection
             resource
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The workspace has no ACTIVE Outline connection
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: A concurrent registration of the same collection won the race
         "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Outline does not know the requested collection id
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Register an Outline collection for mirroring (lands ENABLED + PENDING;
         idempotent on the id)
       tags:
@@ -6962,13 +8604,31 @@ paths:
                   $ref: "#/components/schemas/OutlineCollectionCandidate"
           description: "Candidate collections returned (Cache-Control: no-store)"
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The workspace has no ACTIVE Outline connection
         "502":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: The Outline server could not be reached or answered with an
             error
         "503":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Outline limited the request rate. The Retry-After header carries
             the seconds to wait before retrying.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the Outline collections available to mirror (live proxy; doubles
         as connectivity probe)
       tags:
@@ -6995,8 +8655,18 @@ paths:
         "204":
           description: Collection removed and its mirrored documents erased
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: "The collection is not registered for this workspace, or the\
             \ workspace has no ACTIVE Outline connection"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Remove a collection from the mirror and erase its mirrored documents
         (terminal)
       tags:
@@ -7034,8 +8704,18 @@ paths:
                 $ref: "#/components/schemas/OutlineCollection"
           description: Collection state after the transition returned
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: "The collection is not registered for this workspace, or the\
             \ workspace has no ACTIVE Outline connection"
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Transition a mirrored collection to a target mirror state (pause /
         resume)
       tags:
@@ -7060,6 +8740,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspacePasskeyPolicy"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get workspace admin passkey policy
       tags:
       - workspace-passkey-policy
@@ -7088,6 +8774,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspacePasskeyPolicy"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update workspace admin passkey policy
       tags:
       - workspace-passkey-policy
@@ -7119,6 +8811,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Workspace administrator access is required
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List practices available for adoption
       tags:
       - Practice Catalog Adoption
@@ -7147,6 +8845,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogGroupAdoptionPreview"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Preview adoption of a catalog group and its practices
       tags:
       - Practice Catalog Adoption
@@ -7179,6 +8883,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CatalogGroupAdoptionResult"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Adopt all available practices in a catalog group
       tags:
       - Practice Catalog Adoption
@@ -7225,6 +8935,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Practice is not offered
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get a practice adoption preview
       tags:
       - Practice Catalog Adoption
@@ -7281,6 +8997,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: The If-Match preview validator is required
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Adopt a catalog practice
       tags:
       - Practice Catalog Adoption
@@ -7428,6 +9150,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/PracticeGroup"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-group
     post:
@@ -7455,6 +9183,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeGroup"
           description: Practice group created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-group
   /workspaces/{workspaceSlug}/practice-groups/reorder:
@@ -7485,6 +9219,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/PracticeGroup"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-group
   /workspaces/{workspaceSlug}/practice-groups/standings:
@@ -7511,6 +9251,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/PracticeGroupStanding"
           description: Practice group standings returned
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the current developer's practice group standings
       tags:
       - Practice Group Standings
@@ -7535,6 +9281,12 @@ paths:
       responses:
         "204":
           description: Practice group deleted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-group
     get:
@@ -7561,6 +9313,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeGroup"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-group
     patch:
@@ -7593,6 +9351,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeGroup"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-group
   /workspaces/{workspaceSlug}/practice-groups/{groupSlug}/catalog-customization:
@@ -7625,6 +9389,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeGroup"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-group
   /workspaces/{workspaceSlug}/practice-groups/{groupSlug}/feedback-mode:
@@ -7658,6 +9428,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeGroup"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-group
   /workspaces/{workspaceSlug}/practice-groups/{groupSlug}/reviews:
@@ -7710,6 +9486,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOProfileReview"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List your reviews in a practice group
       tags:
       - practice-group-detail
@@ -7738,6 +9520,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeProfileOverview"
           description: Practice profile overview returned
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "What was met, what changed and which work was reviewed since the run\
         \ before the latest one"
       tags:
@@ -7815,6 +9603,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOProfileReview"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List reviews with results about you
       tags:
       - practice-profile-review
@@ -7844,6 +9638,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProfileReviewDetail"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get your results from a review
       tags:
       - practice-profile-review
@@ -7876,6 +9676,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Trial"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Try a practice on one item
       tags:
       - Practice reviews
@@ -7905,6 +9711,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Trial"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Read a trial and what it found
       tags:
       - Practice reviews
@@ -7935,6 +9747,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/Practice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
     post:
@@ -7962,6 +9780,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Practice"
           description: Practice created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
   /workspaces/{workspaceSlug}/practices/definition-options:
@@ -7984,6 +9808,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeDefinitionOptions"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
   /workspaces/{workspaceSlug}/practices/feedback-modes:
@@ -8006,6 +9836,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/FeedbackModeRollup"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
   /workspaces/{workspaceSlug}/practices/feedback/on-work:
@@ -8042,6 +9878,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/DeliveredWorkFeedback"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: The caller's recorded feedback comments on this work
       tags:
       - Practice feedback
@@ -8067,6 +9909,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/PracticePageFeedback"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Read your practice feedback
       tags:
       - practice-page-feedback
@@ -8097,7 +9945,17 @@ paths:
                 $ref: "#/components/schemas/FeedbackResponse"
           description: Complete cleared response returned
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Delivered feedback not found for the current recipient
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Clear the response to delivered feedback
       tags:
       - Feedback Response
@@ -8127,7 +9985,17 @@ paths:
                 $ref: "#/components/schemas/FeedbackResponse"
           description: Complete current response returned
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Delivered feedback not found for the current recipient
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get the current feedback response
       tags:
       - Feedback Response
@@ -8165,11 +10033,29 @@ paths:
                 $ref: "#/components/schemas/FeedbackResponse"
           description: Response replaced
         "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Invalid response
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Delivered feedback not found for the current recipient
         "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: A workspace admin withdrew this feedback
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Replace the response to delivered feedback
       tags:
       - Feedback Response
@@ -8212,6 +10098,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOItemRef"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List items in the workspace
       tags:
       - item
@@ -8242,6 +10134,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ItemFacts"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get current facts about an item
       tags:
       - item
@@ -8278,6 +10176,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OwnItemTrace"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Trace your results from an item review
       tags:
       - Practice review trace
@@ -8322,6 +10226,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOProfileReview"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List your reviews of an item
       tags:
       - item
@@ -8352,6 +10262,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ItemTrace"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Trace reviews of an item
       tags:
       - Practice review trace
@@ -8377,6 +10293,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/PracticeReleaseProposal"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List pending practice releases
       tags:
       - Practice Catalog
@@ -8406,6 +10328,12 @@ paths:
       responses:
         "204":
           description: The offered version was declined
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Decline this version of a practice release
       tags:
       - Practice Catalog
@@ -8433,6 +10361,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeReleaseProposal"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Compare the adopted, current, and offered practice"
       tags:
       - Practice Catalog
@@ -8471,6 +10405,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Practice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Accept selected fields from a practice release
       tags:
       - Practice Catalog
@@ -8552,6 +10492,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOResultList"
           description: Paginated results returned
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List results for current developer
       tags:
       - Practice Results
@@ -8582,7 +10528,17 @@ paths:
                 $ref: "#/components/schemas/ResultDetail"
           description: Result detail returned
         "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
           description: Result not found or not owned by current user
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get result detail
       tags:
       - Practice Results
@@ -8625,6 +10581,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOReviewBatch"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List review batches
       tags:
       - review-batch
@@ -8653,6 +10615,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewBatch"
           description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Create a review batch
       tags:
       - review-batch
@@ -8693,6 +10661,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewBatch"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Pause, resume or cancel a review batch"
       tags:
       - review-batch
@@ -8747,6 +10721,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: This workspace has no reviewed work at this address
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Find the reviewed work a provider page shows
       tags:
       - Practice review requests
@@ -8776,6 +10756,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewRequestOutcome"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Ask for a review of an item
       tags:
       - review-request
@@ -8801,6 +10787,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/ReviewSchedule"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List review schedules
       tags:
       - review-schedule
@@ -8829,6 +10821,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewSchedule"
           description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Create a review schedule
       tags:
       - review-schedule
@@ -8859,6 +10857,12 @@ paths:
       responses:
         "204":
           description: Deleted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Delete an unused review schedule
       tags:
       - review-schedule
@@ -8898,6 +10902,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewSchedule"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Enable or disable a review schedule
       tags:
       - review-schedule
@@ -8937,6 +10947,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewSchedule"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update a review schedule
       tags:
       - review-schedule
@@ -8960,6 +10976,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeReviewSettings"
           description: Policy returned
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get the workspace's practice-review policy
       tags:
       - Practice Review Settings
@@ -8993,6 +11015,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeReviewSettings"
           description: Policy updated
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update the workspace's practice-review policy
       tags:
       - Practice Review Settings
@@ -9022,6 +11050,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeReviewScopePreview"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - Practice Review Settings
   /workspaces/{workspaceSlug}/practices/reviewed:
@@ -9046,6 +11080,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/ReviewedPractice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
   /workspaces/{workspaceSlug}/practices/reviews:
@@ -9157,6 +11197,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Invalid filter or pagination
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List practice reviews with result and feedback outcomes
       tags:
       - Practice reviews
@@ -9290,6 +11336,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOReviewFeedback"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - feedback-review
   /workspaces/{workspaceSlug}/practices/reviews/feedback/locations:
@@ -9407,6 +11459,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/ReasonCount"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - feedback-review
   /workspaces/{workspaceSlug}/practices/reviews/feedback/reasons:
@@ -9524,6 +11582,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/ReasonCount"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - feedback-review
   /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}:
@@ -9552,6 +11616,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewFeedbackDetail"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - feedback-review
   /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/decisions:
@@ -9582,6 +11652,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/FeedbackDecision"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - feedback-review
     post:
@@ -9615,6 +11691,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/FeedbackDecision"
           description: Feedback decision recorded
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - feedback-review
   /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/recheck:
@@ -9643,6 +11725,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewFeedbackDetail"
           description: Feedback delivery recheck accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - feedback-review
   /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/retry:
@@ -9671,6 +11759,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewFeedbackDetail"
           description: Feedback retry accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - feedback-review
   /workspaces/{workspaceSlug}/practices/reviews/lineage:
@@ -9729,6 +11823,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewLineage"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Trace an item, review, result, problem or feedback"
       tags:
       - practice-review-output
@@ -9794,6 +11894,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Invalid range or time zone
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "Count practice reviews, results and feedback in a time range"
       tags:
       - Practice reviews
@@ -9937,6 +12043,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOReviewProblem"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List review problems
       tags:
       - practice-review-output
@@ -9966,6 +12078,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewProblemDetail"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get a review problem
       tags:
       - practice-review-output
@@ -9992,6 +12110,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewQueue"
           description: Practice review queue returned
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Show the practice review queue as it stands now
       tags:
       - Practice reviews
@@ -10119,6 +12243,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOReviewResult"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List review results
       tags:
       - practice-review-output
@@ -10148,6 +12278,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewResultDetail"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get a review result
       tags:
       - practice-review-output
@@ -10179,6 +12315,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/ResultMark"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the marks on a result
       tags:
       - practice-review-output
@@ -10213,6 +12355,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ResultMark"
           description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Mark a result
       tags:
       - practice-review-output
@@ -10254,6 +12402,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ResultMark"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Remove a result mark
       tags:
       - practice-review-output
@@ -10311,6 +12465,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Invalid range
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Measure how long each stage of the practice reviews in a time range
         took
       tags:
@@ -10341,6 +12501,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewDetail"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get a review
       tags:
       - Practice reviews
@@ -10376,6 +12542,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Review"
           description: Accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Cancel a practice review
       tags:
       - Practice reviews
@@ -10407,6 +12579,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/FeedbackCheck"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - feedback-review
   /workspaces/{workspaceSlug}/practices/scans:
@@ -10458,6 +12636,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOScanSummary"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List repository scans
       tags:
       - scan
@@ -10492,6 +12676,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ScanSummary"
           description: Accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Start a repository scan
       tags:
       - scan
@@ -10521,6 +12711,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ScanDetail"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Read a repository scan
       tags:
       - scan
@@ -10550,6 +12746,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ScanReport"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Read a scan report
       tags:
       - scan
@@ -10618,6 +12820,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CursorPageDTOScanReportItem"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the items in a scan report
       tags:
       - scan
@@ -10687,6 +12895,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/CursorPageDTOScanReportProblem"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the problems in a scan report
       tags:
       - scan
@@ -10717,6 +12931,12 @@ paths:
                 type: string
                 format: binary
           description: SARIF report
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Export a scan report as SARIF
       tags:
       - scan
@@ -10758,6 +12978,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ScanDetail"
           description: Accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Cancel a repository scan
       tags:
       - scan
@@ -10785,6 +13011,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/PracticeStanding"
           description: Practice standings returned
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the current developer's practice standings
       tags:
       - Practice Standings
@@ -10815,6 +13047,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticesAcrossWorkspaceTiles"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: The reader's figures over one window beside the workspace's middle
         half
       tags:
@@ -10842,6 +13080,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticesAcrossWorkspace"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: "How the workspace's developers split across practice groups and practices,\
         \ the reader marked"
       tags:
@@ -10867,6 +13111,12 @@ paths:
       responses:
         "204":
           description: Practice deleted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
     get:
@@ -10893,6 +13143,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Practice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
     patch:
@@ -10925,6 +13181,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Practice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
   /workspaces/{workspaceSlug}/practices/{practiceSlug}/catalog-customization:
@@ -10957,6 +13219,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Practice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
   /workspaces/{workspaceSlug}/practices/{practiceSlug}/feedback-mode:
@@ -10990,6 +13258,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Practice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
   /workspaces/{workspaceSlug}/practices/{practiceSlug}/file-check:
@@ -11025,6 +13299,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeFileCheck"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Check a practice folder without saving it
       tags:
       - practice-file
@@ -11054,6 +13334,12 @@ paths:
                 type: string
                 format: binary
           description: A ZIP archive with the practice folder
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Download a practice as a folder of files
       tags:
       - practice-file
@@ -11090,6 +13376,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/Practice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
     put:
@@ -11122,6 +13414,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Practice"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
   /workspaces/{workspaceSlug}/practices/{practiceSlug}/guidance:
@@ -11156,6 +13454,12 @@ paths:
           description: Practice guidance
         "304":
           description: Guidance is unchanged
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
   /workspaces/{workspaceSlug}/practices/{practiceSlug}/versions:
@@ -11185,6 +13489,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/PracticeVersion"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - practice-catalog
   /workspaces/{workspaceSlug}/product-feedback:
@@ -11213,6 +13523,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/FeedbackReceipt"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Send product feedback to instance administrators
       tags:
       - feedback
@@ -11236,6 +13552,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PublicActivityWorkspaceSettings"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Get public activity and search indexing settings
       tags:
       - workspace
@@ -11266,6 +13588,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/PublicActivityWorkspaceSettings"
           description: Workspace updated
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Change the supplied public activity settings
       tags:
       - workspace
@@ -11290,6 +13618,12 @@ paths:
       responses:
         "204":
           description: Repository removed from the monitor list
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Remove a repository from a workspace monitor list
       tags:
       - workspace
@@ -11314,6 +13648,12 @@ paths:
                 items:
                   type: string
           description: Repository list
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List repositories monitored by a workspace
       tags:
       - workspace
@@ -11337,6 +13677,12 @@ paths:
       responses:
         "201":
           description: Repository added to the monitor list
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Add a repository to a workspace monitor list
       tags:
       - workspace
@@ -11360,6 +13706,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/GitLabRepositorySelection"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Read whether a GitLab workspace follows every project of its group
         or only selected ones
       tags:
@@ -11389,6 +13741,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/GitLabRepositorySelection"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Choose whether a GitLab workspace follows every project of its group
         or only the projects it monitors
       tags:
@@ -11415,6 +13773,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/GitLabStoppedProject"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List stopped GitLab projects whose synced work the workspace still
         keeps
       tags:
@@ -11448,6 +13812,12 @@ paths:
       responses:
         "204":
           description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Remove the synced work a workspace keeps from a stopped GitLab project
       tags:
       - workspace
@@ -11473,6 +13843,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/SlackMonitoredChannel"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the workspace's allow-listed Slack channels with their consent
         state
       tags:
@@ -11502,6 +13878,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/SlackMonitoredChannel"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Allow-list a Slack channel (lands in PENDING; idempotent on the natural
         key)
       tags:
@@ -11528,6 +13910,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/SlackChannelCandidate"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List Slack channels available to add to monitoring
       tags:
       - Slack channel activation
@@ -11562,6 +13950,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/SlackMonitoredChannel"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Transition a Slack channel to a target consent state (activate / pause
         / resume / revoke)
       tags:
@@ -11593,6 +13987,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/SlackChannelConsentEvent"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: The immutable consent-transition audit trail of one Slack channel
       tags:
       - Slack channel activation
@@ -11622,6 +14022,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/SlackUserWorkspacePreferences"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update current user's Slack workspace preferences
       tags:
       - Slack User Preferences
@@ -11645,6 +14051,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/SlackScopes"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List the Slack scopes that Hephaestus requests and the workspace's
         Slack token does not hold
       tags:
@@ -11675,6 +14087,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Workspace"
           description: Workspace updated
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update workspace lifecycle status
       tags:
       - workspace
@@ -11698,6 +14116,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceSyncProgress"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Whether a sync is running in this workspace
       tags:
       - Sync
@@ -11724,6 +14148,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/TeamInfo"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List teams
       tags:
       - Teams
@@ -11756,6 +14186,12 @@ paths:
       responses:
         "200":
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update team visibility
       tags:
       - Teams
@@ -11791,6 +14227,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/TeamInfo"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Remove a repository label from a team
       tags:
       - workspace
@@ -11825,6 +14267,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/TeamInfo"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Add a repository label to a team
       tags:
       - workspace
@@ -11862,6 +14310,12 @@ paths:
       responses:
         "200":
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       tags:
       - Teams
   /workspaces/{workspaceSlug}/token:
@@ -11890,6 +14344,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Workspace"
           description: Workspace updated
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Update workspace Personal Access Token
       tags:
       - workspace
@@ -11930,6 +14390,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OffsetPageDTOUserViewAccount"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List workspace users and their linked account status
       tags:
       - User view
@@ -11967,6 +14433,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserViewAccount"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: Confirm access to a workspace user
       tags:
       - User view
@@ -11992,6 +14464,12 @@ paths:
                 items:
                   $ref: "#/components/schemas/UserTeams"
           description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: An error. Its type names the problem.
       summary: List workspace users and the teams they belong to
       tags:
       - workspace
@@ -20321,8 +22799,7 @@ components:
         title:
           type: string
         type:
-          type: string
-          format: uri-reference
+          $ref: "#/components/schemas/ProblemType"
         withholdingReason:
           type: string
         workspaceByteBudget:
@@ -20331,6 +22808,9 @@ components:
         workspaceBytes:
           type: integer
           format: int64
+      required:
+      - status
+      - title
     ProblemSummary:
       type: object
       properties:
@@ -20345,6 +22825,42 @@ components:
       - id
       - severity
       - summary
+    ProblemType:
+      type: string
+      format: uri-reference
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name. The problem's kind. A client branches on it, never on the title\
+        \ or the detail. A problem without a type is about:blank: its status is its\
+        \ kind."
+      examples:
+      - about:blank
+      - https://docs.hephaestus.build/contributor/api-error-handling#model-assignment-slot-mismatch
+      - https://docs.hephaestus.build/contributor/api-error-handling#agent-job-state-conflict
+      - https://docs.hephaestus.build/contributor/api-error-handling#concurrent-modification
+      - https://docs.hephaestus.build/contributor/api-error-handling#csrf-token-rejected
+      - https://docs.hephaestus.build/contributor/api-error-handling#feedback-withheld
+      - https://docs.hephaestus.build/contributor/api-error-handling#llm-call-pool-in-use
+      - https://docs.hephaestus.build/contributor/api-error-handling#llm-call-pool-slug-conflict
+      - https://docs.hephaestus.build/contributor/api-error-handling#llm-connection-in-use
+      - https://docs.hephaestus.build/contributor/api-error-handling#llm-connection-slug-conflict
+      - https://docs.hephaestus.build/contributor/api-error-handling#llm-model-in-use
+      - https://docs.hephaestus.build/contributor/api-error-handling#llm-model-slug-conflict
+      - https://docs.hephaestus.build/contributor/api-error-handling#llm-model-upstream-id-conflict
+      - https://docs.hephaestus.build/contributor/api-error-handling#conversation-lease-lost
+      - https://docs.hephaestus.build/contributor/api-error-handling#conversation-turn-stopped
+      - https://docs.hephaestus.build/contributor/api-error-handling#conversation-refused
+      - https://docs.hephaestus.build/contributor/api-error-handling#conversation-rejected
+      - https://docs.hephaestus.build/contributor/api-error-handling#oauth-callback-failed
+      - https://docs.hephaestus.build/contributor/api-error-handling#outline-rate-limited
+      - https://docs.hephaestus.build/contributor/api-error-handling#outline-unreachable
+      - https://docs.hephaestus.build/contributor/api-error-handling#passkey-required
+      - https://docs.hephaestus.build/contributor/api-error-handling#review-batch-conflict
+      - https://docs.hephaestus.build/contributor/api-error-handling#review-schedule-conflict
+      - https://docs.hephaestus.build/contributor/api-error-handling#step-up-required
+      - https://docs.hephaestus.build/contributor/api-error-handling#sync-not-supported
+      - https://docs.hephaestus.build/contributor/api-error-handling#unknown-outline-collection
+      - https://docs.hephaestus.build/contributor/api-error-handling#workspace-budget-exceeded
+      - https://docs.hephaestus.build/contributor/api-error-handling#workspace-owner-required
     ProcessingStatus:
       type: string
       enum:

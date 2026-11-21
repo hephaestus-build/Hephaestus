@@ -3,12 +3,20 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ResetCatalogOrderData, ResetCatalogOrderResponses } from "../types.gen.js";
+import type {
+	ResetCatalogOrderData,
+	ResetCatalogOrderErrors,
+	ResetCatalogOrderResponses,
+} from "../types.gen.js";
 
 export const resetCatalogOrder = <ThrowOnError extends boolean = false>(
 	options?: Options<ResetCatalogOrderData, ThrowOnError>,
-): RequestResult<ResetCatalogOrderResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).delete<ResetCatalogOrderResponses, unknown, ThrowOnError>({
+): RequestResult<ResetCatalogOrderResponses, ResetCatalogOrderErrors, ThrowOnError> =>
+	(options?.client ?? client).delete<
+		ResetCatalogOrderResponses,
+		ResetCatalogOrderErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/order",
 		...options,

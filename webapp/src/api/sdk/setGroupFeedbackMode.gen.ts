@@ -4,12 +4,20 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { setGroupFeedbackModeResponseTransformer } from "../transformers.gen.js";
-import type { SetGroupFeedbackModeData, SetGroupFeedbackModeResponses } from "../types.gen.js";
+import type {
+	SetGroupFeedbackModeData,
+	SetGroupFeedbackModeErrors,
+	SetGroupFeedbackModeResponses,
+} from "../types.gen.js";
 
 export const setGroupFeedbackMode = <ThrowOnError extends boolean = false>(
 	options: Options<SetGroupFeedbackModeData, ThrowOnError>,
-): RequestResult<SetGroupFeedbackModeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<SetGroupFeedbackModeResponses, unknown, ThrowOnError>({
+): RequestResult<SetGroupFeedbackModeResponses, SetGroupFeedbackModeErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		SetGroupFeedbackModeResponses,
+		SetGroupFeedbackModeErrors,
+		ThrowOnError
+	>({
 		responseTransformer: setGroupFeedbackModeResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/feedback-mode",

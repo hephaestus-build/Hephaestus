@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	CountWorkspaceConfigAuditEventsData,
+	CountWorkspaceConfigAuditEventsErrors,
 	CountWorkspaceConfigAuditEventsResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const countWorkspaceConfigAuditEvents = <ThrowOnError extends boolean = false>(
 	options: Options<CountWorkspaceConfigAuditEventsData, ThrowOnError>,
-): RequestResult<CountWorkspaceConfigAuditEventsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<CountWorkspaceConfigAuditEventsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	CountWorkspaceConfigAuditEventsResponses,
+	CountWorkspaceConfigAuditEventsErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		CountWorkspaceConfigAuditEventsResponses,
+		CountWorkspaceConfigAuditEventsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/config-audit/count",
 		...options,

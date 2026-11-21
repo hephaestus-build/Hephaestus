@@ -230,7 +230,7 @@ function providerLogin(
  * reader: in a user view, the settings it would open are the viewer's.
  */
 function accountOf(
-	membership: UseQueryResult<WorkspaceMembership>,
+	membership: UseQueryResult<WorkspaceMembership, unknown>,
 	login: string | undefined,
 	offerSettings: boolean,
 ): ActivityAccount {

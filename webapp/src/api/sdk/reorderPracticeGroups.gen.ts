@@ -4,12 +4,20 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { reorderPracticeGroupsResponseTransformer } from "../transformers.gen.js";
-import type { ReorderPracticeGroupsData, ReorderPracticeGroupsResponses } from "../types.gen.js";
+import type {
+	ReorderPracticeGroupsData,
+	ReorderPracticeGroupsErrors,
+	ReorderPracticeGroupsResponses,
+} from "../types.gen.js";
 
 export const reorderPracticeGroups = <ThrowOnError extends boolean = false>(
 	options: Options<ReorderPracticeGroupsData, ThrowOnError>,
-): RequestResult<ReorderPracticeGroupsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<ReorderPracticeGroupsResponses, unknown, ThrowOnError>({
+): RequestResult<ReorderPracticeGroupsResponses, ReorderPracticeGroupsErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		ReorderPracticeGroupsResponses,
+		ReorderPracticeGroupsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: reorderPracticeGroupsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/reorder",

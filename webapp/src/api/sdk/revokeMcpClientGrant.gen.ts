@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { RevokeMcpClientGrantData, RevokeMcpClientGrantResponses } from "../types.gen.js";
+import type {
+	RevokeMcpClientGrantData,
+	RevokeMcpClientGrantErrors,
+	RevokeMcpClientGrantResponses,
+} from "../types.gen.js";
 
 /**
  * Disconnect an MCP client from the workspace
  */
 export const revokeMcpClientGrant = <ThrowOnError extends boolean = false>(
 	options: Options<RevokeMcpClientGrantData, ThrowOnError>,
-): RequestResult<RevokeMcpClientGrantResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RevokeMcpClientGrantResponses, unknown, ThrowOnError>({
+): RequestResult<RevokeMcpClientGrantResponses, RevokeMcpClientGrantErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		RevokeMcpClientGrantResponses,
+		RevokeMcpClientGrantErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/mcp-grants/{grantId}",
 		...options,

@@ -3,7 +3,11 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { UpdatePublicActivityData, UpdatePublicActivityResponses } from "../types.gen.js";
+import type {
+	UpdatePublicActivityData,
+	UpdatePublicActivityErrors,
+	UpdatePublicActivityResponses,
+} from "../types.gen.js";
 
 /**
  * Change the supplied public activity settings
@@ -12,8 +16,12 @@ import type { UpdatePublicActivityData, UpdatePublicActivityResponses } from "..
  */
 export const updatePublicActivity = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePublicActivityData, ThrowOnError>,
-): RequestResult<UpdatePublicActivityResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdatePublicActivityResponses, unknown, ThrowOnError>({
+): RequestResult<UpdatePublicActivityResponses, UpdatePublicActivityErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		UpdatePublicActivityResponses,
+		UpdatePublicActivityErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/public-activity",
 		...options,

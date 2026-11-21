@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetCurrentUserData, GetCurrentUserResponses } from "../types.gen.js";
+import type {
+	GetCurrentUserData,
+	GetCurrentUserErrors,
+	GetCurrentUserResponses,
+} from "../types.gen.js";
 
 /**
  * Get the current user
  */
 export const getCurrentUser = <ThrowOnError extends boolean = false>(
 	options?: Options<GetCurrentUserData, ThrowOnError>,
-): RequestResult<GetCurrentUserResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetCurrentUserResponses, unknown, ThrowOnError>({
+): RequestResult<GetCurrentUserResponses, GetCurrentUserErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetCurrentUserResponses, GetCurrentUserErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user",
 		...options,

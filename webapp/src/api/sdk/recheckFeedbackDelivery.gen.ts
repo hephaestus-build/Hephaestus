@@ -6,13 +6,18 @@ import type { Options } from "../sdk.gen.js";
 import { recheckFeedbackDeliveryResponseTransformer } from "../transformers.gen.js";
 import type {
 	RecheckFeedbackDeliveryData,
+	RecheckFeedbackDeliveryErrors,
 	RecheckFeedbackDeliveryResponses,
 } from "../types.gen.js";
 
 export const recheckFeedbackDelivery = <ThrowOnError extends boolean = false>(
 	options: Options<RecheckFeedbackDeliveryData, ThrowOnError>,
-): RequestResult<RecheckFeedbackDeliveryResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RecheckFeedbackDeliveryResponses, unknown, ThrowOnError>({
+): RequestResult<RecheckFeedbackDeliveryResponses, RecheckFeedbackDeliveryErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		RecheckFeedbackDeliveryResponses,
+		RecheckFeedbackDeliveryErrors,
+		ThrowOnError
+	>({
 		responseTransformer: recheckFeedbackDeliveryResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/recheck",

@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { keepMyProductFeedbackPrivateResponseTransformer } from "../transformers.gen.js";
 import type {
 	KeepMyProductFeedbackPrivateData,
+	KeepMyProductFeedbackPrivateErrors,
 	KeepMyProductFeedbackPrivateResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const keepMyProductFeedbackPrivate = <ThrowOnError extends boolean = false>(
 	options: Options<KeepMyProductFeedbackPrivateData, ThrowOnError>,
-): RequestResult<KeepMyProductFeedbackPrivateResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<KeepMyProductFeedbackPrivateResponses, unknown, ThrowOnError>({
+): RequestResult<
+	KeepMyProductFeedbackPrivateResponses,
+	KeepMyProductFeedbackPrivateErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		KeepMyProductFeedbackPrivateResponses,
+		KeepMyProductFeedbackPrivateErrors,
+		ThrowOnError
+	>({
 		responseTransformer: keepMyProductFeedbackPrivateResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback/{feedbackId}/keep-private",

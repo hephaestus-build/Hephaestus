@@ -3,12 +3,20 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { CreateCatalogGroupData, CreateCatalogGroupResponses } from "../types.gen.js";
+import type {
+	CreateCatalogGroupData,
+	CreateCatalogGroupErrors,
+	CreateCatalogGroupResponses,
+} from "../types.gen.js";
 
 export const createCatalogGroup = <ThrowOnError extends boolean = false>(
 	options: Options<CreateCatalogGroupData, ThrowOnError>,
-): RequestResult<CreateCatalogGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CreateCatalogGroupResponses, unknown, ThrowOnError>({
+): RequestResult<CreateCatalogGroupResponses, CreateCatalogGroupErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CreateCatalogGroupResponses,
+		CreateCatalogGroupErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/groups",
 		...options,

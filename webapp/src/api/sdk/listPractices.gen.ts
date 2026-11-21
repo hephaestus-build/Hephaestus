@@ -4,12 +4,16 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listPracticesResponseTransformer } from "../transformers.gen.js";
-import type { ListPracticesData, ListPracticesResponses } from "../types.gen.js";
+import type {
+	ListPracticesData,
+	ListPracticesErrors,
+	ListPracticesResponses,
+} from "../types.gen.js";
 
 export const listPractices = <ThrowOnError extends boolean = false>(
 	options: Options<ListPracticesData, ThrowOnError>,
-): RequestResult<ListPracticesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListPracticesResponses, unknown, ThrowOnError>({
+): RequestResult<ListPracticesResponses, ListPracticesErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListPracticesResponses, ListPracticesErrors, ThrowOnError>({
 		responseTransformer: listPracticesResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices",

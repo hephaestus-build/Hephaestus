@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listScanReportItemsResponseTransformer } from "../transformers.gen.js";
-import type { ListScanReportItemsData, ListScanReportItemsResponses } from "../types.gen.js";
+import type {
+	ListScanReportItemsData,
+	ListScanReportItemsErrors,
+	ListScanReportItemsResponses,
+} from "../types.gen.js";
 
 /**
  * List the items in a scan report
  */
 export const listScanReportItems = <ThrowOnError extends boolean = false>(
 	options: Options<ListScanReportItemsData, ThrowOnError>,
-): RequestResult<ListScanReportItemsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListScanReportItemsResponses, unknown, ThrowOnError>({
+): RequestResult<ListScanReportItemsResponses, ListScanReportItemsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListScanReportItemsResponses,
+		ListScanReportItemsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listScanReportItemsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/report/items",

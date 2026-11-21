@@ -5,13 +5,22 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	CountReviewFeedbackByLocationData,
+	CountReviewFeedbackByLocationErrors,
 	CountReviewFeedbackByLocationResponses,
 } from "../types.gen.js";
 
 export const countReviewFeedbackByLocation = <ThrowOnError extends boolean = false>(
 	options: Options<CountReviewFeedbackByLocationData, ThrowOnError>,
-): RequestResult<CountReviewFeedbackByLocationResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<CountReviewFeedbackByLocationResponses, unknown, ThrowOnError>({
+): RequestResult<
+	CountReviewFeedbackByLocationResponses,
+	CountReviewFeedbackByLocationErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		CountReviewFeedbackByLocationResponses,
+		CountReviewFeedbackByLocationErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/feedback/locations",
 		...options,

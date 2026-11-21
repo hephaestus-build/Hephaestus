@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { AdminCountAuthEventsData, AdminCountAuthEventsResponses } from "../types.gen.js";
+import type {
+	AdminCountAuthEventsData,
+	AdminCountAuthEventsErrors,
+	AdminCountAuthEventsResponses,
+} from "../types.gen.js";
 
 /**
  * Count the auth audit events a filter matches
  */
 export const adminCountAuthEvents = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminCountAuthEventsData, ThrowOnError>,
-): RequestResult<AdminCountAuthEventsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminCountAuthEventsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminCountAuthEventsResponses, AdminCountAuthEventsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminCountAuthEventsResponses,
+		AdminCountAuthEventsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/audit/count",
 		...options,

@@ -3,12 +3,16 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { DeletePracticeData, DeletePracticeResponses } from "../types.gen.js";
+import type {
+	DeletePracticeData,
+	DeletePracticeErrors,
+	DeletePracticeResponses,
+} from "../types.gen.js";
 
 export const deletePractice = <ThrowOnError extends boolean = false>(
 	options: Options<DeletePracticeData, ThrowOnError>,
-): RequestResult<DeletePracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<DeletePracticeResponses, unknown, ThrowOnError>({
+): RequestResult<DeletePracticeResponses, DeletePracticeErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeletePracticeResponses, DeletePracticeErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}",
 		...options,

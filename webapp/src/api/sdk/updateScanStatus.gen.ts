@@ -4,21 +4,27 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { updateScanStatusResponseTransformer } from "../transformers.gen.js";
-import type { UpdateScanStatusData, UpdateScanStatusResponses } from "../types.gen.js";
+import type {
+	UpdateScanStatusData,
+	UpdateScanStatusErrors,
+	UpdateScanStatusResponses,
+} from "../types.gen.js";
 
 /**
  * Cancel a repository scan
  */
 export const updateScanStatus = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateScanStatusData, ThrowOnError>,
-): RequestResult<UpdateScanStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateScanStatusResponses, unknown, ThrowOnError>({
-		responseTransformer: updateScanStatusResponseTransformer,
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/status",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
+): RequestResult<UpdateScanStatusResponses, UpdateScanStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<UpdateScanStatusResponses, UpdateScanStatusErrors, ThrowOnError>(
+		{
+			responseTransformer: updateScanStatusResponseTransformer,
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/practices/scans/{scanId}/status",
+			...options,
+			headers: {
+				"Content-Type": "application/json",
+				...options.headers,
+			},
 		},
-	});
+	);

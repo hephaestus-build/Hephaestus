@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetRepositoriesToMonitorData,
+	GetRepositoriesToMonitorErrors,
 	GetRepositoriesToMonitorResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const getRepositoriesToMonitor = <ThrowOnError extends boolean = false>(
 	options: Options<GetRepositoriesToMonitorData, ThrowOnError>,
-): RequestResult<GetRepositoriesToMonitorResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetRepositoriesToMonitorResponses, unknown, ThrowOnError>({
+): RequestResult<GetRepositoriesToMonitorResponses, GetRepositoriesToMonitorErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetRepositoriesToMonitorResponses,
+		GetRepositoriesToMonitorErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/repositories",
 		...options,

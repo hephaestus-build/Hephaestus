@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getOwnItemTraceResponseTransformer } from "../transformers.gen.js";
-import type { GetOwnItemTraceData, GetOwnItemTraceResponses } from "../types.gen.js";
+import type {
+	GetOwnItemTraceData,
+	GetOwnItemTraceErrors,
+	GetOwnItemTraceResponses,
+} from "../types.gen.js";
 
 /**
  * Trace your results from an item review
  */
 export const getOwnItemTrace = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnItemTraceData, ThrowOnError>,
-): RequestResult<GetOwnItemTraceResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnItemTraceResponses, unknown, ThrowOnError>({
+): RequestResult<GetOwnItemTraceResponses, GetOwnItemTraceErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetOwnItemTraceResponses, GetOwnItemTraceErrors, ThrowOnError>({
 		responseTransformer: getOwnItemTraceResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/items/{itemId}/own-trace",

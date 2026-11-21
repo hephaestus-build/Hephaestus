@@ -4,12 +4,12 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { readResponseTransformer } from "../transformers.gen.js";
-import type { ReadData, ReadResponses } from "../types.gen.js";
+import type { ReadData, ReadErrors, ReadResponses } from "../types.gen.js";
 
 export const read = <ThrowOnError extends boolean = false>(
 	options: Options<ReadData, ThrowOnError>,
-): RequestResult<ReadResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ReadResponses, unknown, ThrowOnError>({
+): RequestResult<ReadResponses, ReadErrors, ThrowOnError> =>
+	(options.client ?? client).get<ReadResponses, ReadErrors, ThrowOnError>({
 		responseTransformer: readResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{id}",

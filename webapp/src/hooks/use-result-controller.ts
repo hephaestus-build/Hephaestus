@@ -41,7 +41,7 @@ export function useResultController(workspaceSlug: string, resultId: string): Re
 	const path = { workspaceSlug, resultId };
 	const resultQuery = useQuery(getReviewResultOptions({ path }));
 	const settled = {
-		onError: (error: Error) => {
+		onError: (error: unknown) => {
 			void resultQuery.refetch();
 			toast.error("We could not change this observation", { description: problemDetailOf(error) });
 		},

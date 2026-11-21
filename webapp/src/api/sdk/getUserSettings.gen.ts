@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetUserSettingsData, GetUserSettingsResponses } from "../types.gen.js";
+import type {
+	GetUserSettingsData,
+	GetUserSettingsErrors,
+	GetUserSettingsResponses,
+} from "../types.gen.js";
 
 /**
  * Get user settings
  */
 export const getUserSettings = <ThrowOnError extends boolean = false>(
 	options?: Options<GetUserSettingsData, ThrowOnError>,
-): RequestResult<GetUserSettingsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetUserSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<GetUserSettingsResponses, GetUserSettingsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetUserSettingsResponses, GetUserSettingsErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/settings",
 		...options,

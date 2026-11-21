@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	WorkspaceProbeLlmModelCapabilitiesData,
+	WorkspaceProbeLlmModelCapabilitiesErrors,
 	WorkspaceProbeLlmModelCapabilitiesResponses,
 } from "../types.gen.js";
 
@@ -13,10 +14,14 @@ import type {
  */
 export const workspaceProbeLlmModelCapabilities = <ThrowOnError extends boolean = false>(
 	options: Options<WorkspaceProbeLlmModelCapabilitiesData, ThrowOnError>,
-): RequestResult<WorkspaceProbeLlmModelCapabilitiesResponses, unknown, ThrowOnError> =>
+): RequestResult<
+	WorkspaceProbeLlmModelCapabilitiesResponses,
+	WorkspaceProbeLlmModelCapabilitiesErrors,
+	ThrowOnError
+> =>
 	(options.client ?? client).put<
 		WorkspaceProbeLlmModelCapabilitiesResponses,
-		unknown,
+		WorkspaceProbeLlmModelCapabilitiesErrors,
 		ThrowOnError
 	>({
 		security: [{ scheme: "bearer", type: "http" }],

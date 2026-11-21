@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { adminListConfigAuditEventsResponseTransformer } from "../transformers.gen.js";
 import type {
 	AdminListConfigAuditEventsData,
+	AdminListConfigAuditEventsErrors,
 	AdminListConfigAuditEventsResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const adminListConfigAuditEvents = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListConfigAuditEventsData, ThrowOnError>,
-): RequestResult<AdminListConfigAuditEventsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListConfigAuditEventsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminListConfigAuditEventsResponses,
+	AdminListConfigAuditEventsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		AdminListConfigAuditEventsResponses,
+		AdminListConfigAuditEventsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminListConfigAuditEventsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/config-audit",

@@ -4,17 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getLlmUsageReportResponseTransformer } from "../transformers.gen.js";
-import type { GetLlmUsageReportData, GetLlmUsageReportResponses } from "../types.gen.js";
+import type {
+	GetLlmUsageReportData,
+	GetLlmUsageReportErrors,
+	GetLlmUsageReportResponses,
+} from "../types.gen.js";
 
 /**
  * Get the workspace's LLM usage report for one month
  */
 export const getLlmUsageReport = <ThrowOnError extends boolean = false>(
 	options: Options<GetLlmUsageReportData, ThrowOnError>,
-): RequestResult<GetLlmUsageReportResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetLlmUsageReportResponses, unknown, ThrowOnError>({
-		responseTransformer: getLlmUsageReportResponseTransformer,
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/llm/usage",
-		...options,
-	});
+): RequestResult<GetLlmUsageReportResponses, GetLlmUsageReportErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetLlmUsageReportResponses, GetLlmUsageReportErrors, ThrowOnError>(
+		{
+			responseTransformer: getLlmUsageReportResponseTransformer,
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/llm/usage",
+			...options,
+		},
+	);

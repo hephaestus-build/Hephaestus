@@ -4,7 +4,11 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { startPracticeTrialResponseTransformer } from "../transformers.gen.js";
-import type { StartPracticeTrialData, StartPracticeTrialResponses } from "../types.gen.js";
+import type {
+	StartPracticeTrialData,
+	StartPracticeTrialErrors,
+	StartPracticeTrialResponses,
+} from "../types.gen.js";
 
 /**
  * Try a practice on one item
@@ -13,8 +17,12 @@ import type { StartPracticeTrialData, StartPracticeTrialResponses } from "../typ
  */
 export const startPracticeTrial = <ThrowOnError extends boolean = false>(
 	options: Options<StartPracticeTrialData, ThrowOnError>,
-): RequestResult<StartPracticeTrialResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<StartPracticeTrialResponses, unknown, ThrowOnError>({
+): RequestResult<StartPracticeTrialResponses, StartPracticeTrialErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		StartPracticeTrialResponses,
+		StartPracticeTrialErrors,
+		ThrowOnError
+	>({
 		responseTransformer: startPracticeTrialResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-trials",

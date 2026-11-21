@@ -38,7 +38,7 @@ export const Route = createFileRoute("/_authenticated/admin/")({
  * What a card may show from a read. A retryable failed refresh keeps the last answer with the
  * failure beside it. A refusal, or any read that never succeeded, shows nothing.
  */
-function lastRead<TData>(query: UseQueryResult<TData>): {
+function lastRead<TData>(query: UseQueryResult<TData, unknown>): {
 	data: TData | undefined;
 	refreshFailure?: RefreshFailure;
 } {

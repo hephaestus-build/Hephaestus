@@ -4,17 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listReviewBatchesResponseTransformer } from "../transformers.gen.js";
-import type { ListReviewBatchesData, ListReviewBatchesResponses } from "../types.gen.js";
+import type {
+	ListReviewBatchesData,
+	ListReviewBatchesErrors,
+	ListReviewBatchesResponses,
+} from "../types.gen.js";
 
 /**
  * List review batches
  */
 export const listReviewBatches = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewBatchesData, ThrowOnError>,
-): RequestResult<ListReviewBatchesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewBatchesResponses, unknown, ThrowOnError>({
-		responseTransformer: listReviewBatchesResponseTransformer,
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/practices/review-batches",
-		...options,
-	});
+): RequestResult<ListReviewBatchesResponses, ListReviewBatchesErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListReviewBatchesResponses, ListReviewBatchesErrors, ThrowOnError>(
+		{
+			responseTransformer: listReviewBatchesResponseTransformer,
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/practices/review-batches",
+			...options,
+		},
+	);

@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { adminTriageProductFeedbackResponseTransformer } from "../transformers.gen.js";
 import type {
 	AdminTriageProductFeedbackData,
+	AdminTriageProductFeedbackErrors,
 	AdminTriageProductFeedbackResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const adminTriageProductFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<AdminTriageProductFeedbackData, ThrowOnError>,
-): RequestResult<AdminTriageProductFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<AdminTriageProductFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AdminTriageProductFeedbackResponses,
+	AdminTriageProductFeedbackErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		AdminTriageProductFeedbackResponses,
+		AdminTriageProductFeedbackErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminTriageProductFeedbackResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/{feedbackId}",

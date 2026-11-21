@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { adminGetInstanceSettingsResponseTransformer } from "../transformers.gen.js";
 import type {
 	AdminGetInstanceSettingsData,
+	AdminGetInstanceSettingsErrors,
 	AdminGetInstanceSettingsResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const adminGetInstanceSettings = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminGetInstanceSettingsData, ThrowOnError>,
-): RequestResult<AdminGetInstanceSettingsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminGetInstanceSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminGetInstanceSettingsResponses, AdminGetInstanceSettingsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminGetInstanceSettingsResponses,
+		AdminGetInstanceSettingsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminGetInstanceSettingsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/settings",

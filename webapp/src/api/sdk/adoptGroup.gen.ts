@@ -4,15 +4,15 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { adoptGroupResponseTransformer } from "../transformers.gen.js";
-import type { AdoptGroupData, AdoptGroupResponses } from "../types.gen.js";
+import type { AdoptGroupData, AdoptGroupErrors, AdoptGroupResponses } from "../types.gen.js";
 
 /**
  * Adopt all available practices in a catalog group
  */
 export const adoptGroup = <ThrowOnError extends boolean = false>(
 	options: Options<AdoptGroupData, ThrowOnError>,
-): RequestResult<AdoptGroupResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<AdoptGroupResponses, unknown, ThrowOnError>({
+): RequestResult<AdoptGroupResponses, AdoptGroupErrors, ThrowOnError> =>
+	(options.client ?? client).post<AdoptGroupResponses, AdoptGroupErrors, ThrowOnError>({
 		responseTransformer: adoptGroupResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-catalog/adoption/groups/{slug}",

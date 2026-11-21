@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { AdminUpdateUserData, AdminUpdateUserResponses } from "../types.gen.js";
+import type {
+	AdminUpdateUserData,
+	AdminUpdateUserErrors,
+	AdminUpdateUserResponses,
+} from "../types.gen.js";
 
 /**
  * Update an account's app role
  */
 export const adminUpdateUser = <ThrowOnError extends boolean = false>(
 	options: Options<AdminUpdateUserData, ThrowOnError>,
-): RequestResult<AdminUpdateUserResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<AdminUpdateUserResponses, unknown, ThrowOnError>({
+): RequestResult<AdminUpdateUserResponses, AdminUpdateUserErrors, ThrowOnError> =>
+	(options.client ?? client).patch<AdminUpdateUserResponses, AdminUpdateUserErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/users/{id}",
 		...options,

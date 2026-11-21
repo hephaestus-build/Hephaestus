@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	AdminRevokeUserSessionsData,
+	AdminRevokeUserSessionsErrors,
 	AdminRevokeUserSessionsResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const adminRevokeUserSessions = <ThrowOnError extends boolean = false>(
 	options: Options<AdminRevokeUserSessionsData, ThrowOnError>,
-): RequestResult<AdminRevokeUserSessionsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<AdminRevokeUserSessionsResponses, unknown, ThrowOnError>({
+): RequestResult<AdminRevokeUserSessionsResponses, AdminRevokeUserSessionsErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		AdminRevokeUserSessionsResponses,
+		AdminRevokeUserSessionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/users/{id}/sessions",
 		...options,

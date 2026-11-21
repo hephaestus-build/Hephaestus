@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { makeMyProductFeedbackPrivateResponseTransformer } from "../transformers.gen.js";
 import type {
 	MakeMyProductFeedbackPrivateData,
+	MakeMyProductFeedbackPrivateErrors,
 	MakeMyProductFeedbackPrivateResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const makeMyProductFeedbackPrivate = <ThrowOnError extends boolean = false>(
 	options: Options<MakeMyProductFeedbackPrivateData, ThrowOnError>,
-): RequestResult<MakeMyProductFeedbackPrivateResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<MakeMyProductFeedbackPrivateResponses, unknown, ThrowOnError>({
+): RequestResult<
+	MakeMyProductFeedbackPrivateResponses,
+	MakeMyProductFeedbackPrivateErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		MakeMyProductFeedbackPrivateResponses,
+		MakeMyProductFeedbackPrivateErrors,
+		ThrowOnError
+	>({
 		responseTransformer: makeMyProductFeedbackPrivateResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback/{feedbackId}/make-private",

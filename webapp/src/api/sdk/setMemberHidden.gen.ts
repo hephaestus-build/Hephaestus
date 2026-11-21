@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { setMemberHiddenResponseTransformer } from "../transformers.gen.js";
-import type { SetMemberHiddenData, SetMemberHiddenResponses } from "../types.gen.js";
+import type {
+	SetMemberHiddenData,
+	SetMemberHiddenErrors,
+	SetMemberHiddenResponses,
+} from "../types.gen.js";
 
 /**
  * Change a member’s activity visibility
  */
 export const setMemberHidden = <ThrowOnError extends boolean = false>(
 	options: Options<SetMemberHiddenData, ThrowOnError>,
-): RequestResult<SetMemberHiddenResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<SetMemberHiddenResponses, unknown, ThrowOnError>({
+): RequestResult<SetMemberHiddenResponses, SetMemberHiddenErrors, ThrowOnError> =>
+	(options.client ?? client).patch<SetMemberHiddenResponses, SetMemberHiddenErrors, ThrowOnError>({
 		responseTransformer: setMemberHiddenResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/members/{accountId}/hidden",

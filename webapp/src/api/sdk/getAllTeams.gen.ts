@@ -4,7 +4,7 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { getAllTeamsResponseTransformer } from "../transformers.gen.js";
-import type { GetAllTeamsData, GetAllTeamsResponses } from "../types.gen.js";
+import type { GetAllTeamsData, GetAllTeamsErrors, GetAllTeamsResponses } from "../types.gen.js";
 
 /**
  * List teams
@@ -13,8 +13,8 @@ import type { GetAllTeamsData, GetAllTeamsResponses } from "../types.gen.js";
  */
 export const getAllTeams = <ThrowOnError extends boolean = false>(
 	options: Options<GetAllTeamsData, ThrowOnError>,
-): RequestResult<GetAllTeamsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetAllTeamsResponses, unknown, ThrowOnError>({
+): RequestResult<GetAllTeamsResponses, GetAllTeamsErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetAllTeamsResponses, GetAllTeamsErrors, ThrowOnError>({
 		responseTransformer: getAllTeamsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/teams",

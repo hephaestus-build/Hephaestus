@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetGitLabRepositorySelectionData,
+	GetGitLabRepositorySelectionErrors,
 	GetGitLabRepositorySelectionResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,16 @@ import type {
  */
 export const getGitLabRepositorySelection = <ThrowOnError extends boolean = false>(
 	options: Options<GetGitLabRepositorySelectionData, ThrowOnError>,
-): RequestResult<GetGitLabRepositorySelectionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetGitLabRepositorySelectionResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetGitLabRepositorySelectionResponses,
+	GetGitLabRepositorySelectionErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetGitLabRepositorySelectionResponses,
+		GetGitLabRepositorySelectionErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/repositories/selection",
 		...options,

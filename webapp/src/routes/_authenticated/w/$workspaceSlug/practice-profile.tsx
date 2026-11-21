@@ -532,7 +532,7 @@ function PracticeProfile() {
  * misrouted answer never shows another practice's words under this practice.
  */
 function selectedObservationState(
-	query: UseQueryResult<ResultDetail>,
+	query: UseQueryResult<ResultDetail, unknown>,
 	resultId: string | undefined,
 	practiceSlug: string | undefined,
 ): SelectedObservationState | undefined {

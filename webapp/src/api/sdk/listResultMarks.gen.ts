@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listResultMarksResponseTransformer } from "../transformers.gen.js";
-import type { ListResultMarksData, ListResultMarksResponses } from "../types.gen.js";
+import type {
+	ListResultMarksData,
+	ListResultMarksErrors,
+	ListResultMarksResponses,
+} from "../types.gen.js";
 
 /**
  * List the marks on a result
  */
 export const listResultMarks = <ThrowOnError extends boolean = false>(
 	options: Options<ListResultMarksData, ThrowOnError>,
-): RequestResult<ListResultMarksResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListResultMarksResponses, unknown, ThrowOnError>({
+): RequestResult<ListResultMarksResponses, ListResultMarksErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListResultMarksResponses, ListResultMarksErrors, ThrowOnError>({
 		responseTransformer: listResultMarksResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/results/{resultId}/marks",

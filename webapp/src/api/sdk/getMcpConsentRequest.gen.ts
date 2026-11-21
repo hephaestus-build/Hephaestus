@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetMcpConsentRequestData, GetMcpConsentRequestResponses } from "../types.gen.js";
+import type {
+	GetMcpConsentRequestData,
+	GetMcpConsentRequestErrors,
+	GetMcpConsentRequestResponses,
+} from "../types.gen.js";
 
 /**
  * Read a pending MCP client consent request
  */
 export const getMcpConsentRequest = <ThrowOnError extends boolean = false>(
 	options: Options<GetMcpConsentRequestData, ThrowOnError>,
-): RequestResult<GetMcpConsentRequestResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetMcpConsentRequestResponses, unknown, ThrowOnError>({
+): RequestResult<GetMcpConsentRequestResponses, GetMcpConsentRequestErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetMcpConsentRequestResponses,
+		GetMcpConsentRequestErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/mcp/oauth/requests/{requestId}",
 		...options,

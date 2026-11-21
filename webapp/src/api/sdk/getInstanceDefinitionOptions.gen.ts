@@ -5,13 +5,22 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetInstanceDefinitionOptionsData,
+	GetInstanceDefinitionOptionsErrors,
 	GetInstanceDefinitionOptionsResponses,
 } from "../types.gen.js";
 
 export const getInstanceDefinitionOptions = <ThrowOnError extends boolean = false>(
 	options?: Options<GetInstanceDefinitionOptionsData, ThrowOnError>,
-): RequestResult<GetInstanceDefinitionOptionsResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetInstanceDefinitionOptionsResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetInstanceDefinitionOptionsResponses,
+	GetInstanceDefinitionOptionsErrors,
+	ThrowOnError
+> =>
+	(options?.client ?? client).get<
+		GetInstanceDefinitionOptionsResponses,
+		GetInstanceDefinitionOptionsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/definition-options",
 		...options,

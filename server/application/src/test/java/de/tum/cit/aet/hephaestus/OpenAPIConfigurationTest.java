@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -29,7 +30,7 @@ import org.junit.jupiter.api.Test;
 class OpenAPIConfigurationTest {
     @Test
     void shouldDescribeProblemExtensionsAtTheTopLevel() {
-        var problem = objectWithFields("detail", "instance", "type", "properties");
+        var problem = objectWithFields("detail", "instance", "status", "title", "type", "properties");
         var api = api(new Components().addSchemas("ProblemDetail", problem), responseOperation("ProblemDetail"));
 
         new OpenAPIConfiguration().schemaCustomizer("test").customise(api);
@@ -38,11 +39,64 @@ class OpenAPIConfigurationTest {
         // The extension members are listed: `additionalProperties: true` breaks OpenAPI Generator's Kotlin client.
         assertThat(problem.getAdditionalProperties()).isNull();
         assertThat(problem.getProperties()).containsKeys("errors", "maxAgeSeconds", "withholdingReason");
-        assertThat(Stream.of("instance", "type")
-                        .map(name -> Objects.requireNonNull(
-                                        problem.getProperties().get(name))
-                                .getFormat()))
-                .containsOnly("uri-reference");
+        assertThat(Objects.requireNonNull(problem.getProperties().get("instance"))
+                        .getFormat())
+                .isEqualTo("uri-reference");
+        // Spring leaves out `type` for about:blank, and always writes `title` and `status`.
+        assertThat(problem.getRequired()).containsExactly("status", "title");
+    }
+
+    @Test
+    void shouldPublishEveryProblemTypeAsAnOpenEnumThatTheTypeMemberNames() {
+        var problem = objectWithFields("type");
+        var api = api(new Components().addSchemas("ProblemDetail", problem), responseOperation("ProblemDetail"));
+
+        new OpenAPIConfiguration().schemaCustomizer("test").customise(api);
+
+        assertThat(Objects.requireNonNull(problem.getProperties().get("type")).get$ref())
+                .isEqualTo("#/components/schemas/ProblemType");
+        Schema<?> type = Objects.requireNonNull(api.getComponents().getSchemas().get("ProblemType"));
+        assertThat(type.getEnum()).isNull();
+        assertThat(type.getFormat()).isEqualTo("uri-reference");
+        assertThat(type.getDescription()).startsWith(OpenAPIConfiguration.OPEN_ENUM_NOTE);
+        List<Object> known = Stream.concat(
+                        Stream.of("about:blank"),
+                        Stream.of(ProblemType.values()).map(kind -> kind.uri().toString()))
+                .map(Object.class::cast)
+                .toList();
+        assertThat(List.copyOf(type.getExamples())).isEqualTo(known);
+    }
+
+    @Test
+    void shouldAnswerEveryErrorOfEveryOperationWithAProblem() {
+        var listed = responseOperation("ProblemDetail");
+        listed.getResponses()
+                .addApiResponse(
+                        "409",
+                        new ApiResponse()
+                                .description("Conflict")
+                                .content(new Content()
+                                        .addMediaType(
+                                                "application/json",
+                                                new MediaType()
+                                                        .schema(new Schema<>()
+                                                                .$ref("#/components/schemas/ProblemDetail")))))
+                .addApiResponse("404", new ApiResponse().description("Not found"));
+        var api = api(new Components().addSchemas("ProblemDetail", objectWithFields("type")), listed);
+
+        new OpenAPIConfiguration().schemaCustomizer("test").customise(api);
+
+        var responses = listed.getResponses();
+        assertThat(responses).containsKeys("200", "404", "409", "default");
+        assertThat(Objects.requireNonNull(responses.get("200")).getContent()).containsOnlyKeys("application/json");
+        for (String code : List.of("404", "409", "default")) {
+            var content = Objects.requireNonNull(responses.get(code)).getContent();
+            assertThat(content).containsOnlyKeys("application/problem+json");
+            assertThat(Objects.requireNonNull(content.get("application/problem+json"))
+                            .getSchema()
+                            .get$ref())
+                    .isEqualTo("#/components/schemas/ProblemDetail");
+        }
     }
 
     @Test

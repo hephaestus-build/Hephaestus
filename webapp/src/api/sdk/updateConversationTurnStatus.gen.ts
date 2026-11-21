@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { updateConversationTurnStatusResponseTransformer } from "../transformers.gen.js";
 import type {
 	UpdateConversationTurnStatusData,
+	UpdateConversationTurnStatusErrors,
 	UpdateConversationTurnStatusResponses,
 } from "../types.gen.js";
 
@@ -16,8 +17,16 @@ import type {
  */
 export const updateConversationTurnStatus = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateConversationTurnStatusData, ThrowOnError>,
-): RequestResult<UpdateConversationTurnStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<UpdateConversationTurnStatusResponses, unknown, ThrowOnError>({
+): RequestResult<
+	UpdateConversationTurnStatusResponses,
+	UpdateConversationTurnStatusErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).patch<
+		UpdateConversationTurnStatusResponses,
+		UpdateConversationTurnStatusErrors,
+		ThrowOnError
+	>({
 		responseTransformer: updateConversationTurnStatusResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/conversation/turns/{turnId}/status",

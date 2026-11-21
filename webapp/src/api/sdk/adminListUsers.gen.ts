@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { AdminListUsersData, AdminListUsersResponses } from "../types.gen.js";
+import type {
+	AdminListUsersData,
+	AdminListUsersErrors,
+	AdminListUsersResponses,
+} from "../types.gen.js";
 
 /**
  * List accounts (paged)
  */
 export const adminListUsers = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListUsersData, ThrowOnError>,
-): RequestResult<AdminListUsersResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListUsersResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListUsersResponses, AdminListUsersErrors, ThrowOnError> =>
+	(options?.client ?? client).get<AdminListUsersResponses, AdminListUsersErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/users",
 		...options,

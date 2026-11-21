@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { RemoveModelAssignmentData, RemoveModelAssignmentResponses } from "../types.gen.js";
+import type {
+	RemoveModelAssignmentData,
+	RemoveModelAssignmentErrors,
+	RemoveModelAssignmentResponses,
+} from "../types.gen.js";
 
 /**
  * Remove the model assignment of one purpose (turn it off)
  */
 export const removeModelAssignment = <ThrowOnError extends boolean = false>(
 	options: Options<RemoveModelAssignmentData, ThrowOnError>,
-): RequestResult<RemoveModelAssignmentResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RemoveModelAssignmentResponses, unknown, ThrowOnError>({
+): RequestResult<RemoveModelAssignmentResponses, RemoveModelAssignmentErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		RemoveModelAssignmentResponses,
+		RemoveModelAssignmentErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/model-assignments/{purpose}",
 		...options,

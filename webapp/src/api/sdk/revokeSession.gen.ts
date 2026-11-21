@@ -3,7 +3,11 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { RevokeSessionData, RevokeSessionResponses } from "../types.gen.js";
+import type {
+	RevokeSessionData,
+	RevokeSessionErrors,
+	RevokeSessionResponses,
+} from "../types.gen.js";
 
 /**
  * Revoke a single session
@@ -12,8 +16,8 @@ import type { RevokeSessionData, RevokeSessionResponses } from "../types.gen.js"
  */
 export const revokeSession = <ThrowOnError extends boolean = false>(
 	options: Options<RevokeSessionData, ThrowOnError>,
-): RequestResult<RevokeSessionResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RevokeSessionResponses, unknown, ThrowOnError>({
+): RequestResult<RevokeSessionResponses, RevokeSessionErrors, ThrowOnError> =>
+	(options.client ?? client).delete<RevokeSessionResponses, RevokeSessionErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/sessions/{jti}",
 		...options,

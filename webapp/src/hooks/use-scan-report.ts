@@ -51,7 +51,7 @@ export interface ScanReportData {
 }
 
 function listState<TPage extends { content: readonly TEntry[] }, TEntry>(
-	query: UseInfiniteQueryResult<InfiniteData<TPage>>,
+	query: UseInfiniteQueryResult<InfiniteData<TPage>, unknown>,
 ): ScanListState<TEntry> {
 	const state = infiniteListState(query, (pages) => ({
 		entries: pages.flatMap((page) => page.content),

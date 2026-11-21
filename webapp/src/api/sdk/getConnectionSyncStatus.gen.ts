@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { getConnectionSyncStatusResponseTransformer } from "../transformers.gen.js";
 import type {
 	GetConnectionSyncStatusData,
+	GetConnectionSyncStatusErrors,
 	GetConnectionSyncStatusResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const getConnectionSyncStatus = <ThrowOnError extends boolean = false>(
 	options: Options<GetConnectionSyncStatusData, ThrowOnError>,
-): RequestResult<GetConnectionSyncStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetConnectionSyncStatusResponses, unknown, ThrowOnError>({
+): RequestResult<GetConnectionSyncStatusResponses, GetConnectionSyncStatusErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetConnectionSyncStatusResponses,
+		GetConnectionSyncStatusErrors,
+		ThrowOnError
+	>({
 		responseTransformer: getConnectionSyncStatusResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{connectionId}/sync",

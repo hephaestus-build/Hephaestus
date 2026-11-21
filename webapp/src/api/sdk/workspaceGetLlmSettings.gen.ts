@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	WorkspaceGetLlmSettingsData,
+	WorkspaceGetLlmSettingsErrors,
 	WorkspaceGetLlmSettingsResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const workspaceGetLlmSettings = <ThrowOnError extends boolean = false>(
 	options: Options<WorkspaceGetLlmSettingsData, ThrowOnError>,
-): RequestResult<WorkspaceGetLlmSettingsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<WorkspaceGetLlmSettingsResponses, unknown, ThrowOnError>({
+): RequestResult<WorkspaceGetLlmSettingsResponses, WorkspaceGetLlmSettingsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		WorkspaceGetLlmSettingsResponses,
+		WorkspaceGetLlmSettingsErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/llm/settings",
 		...options,

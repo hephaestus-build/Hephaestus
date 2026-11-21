@@ -4,15 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listOwnItemReviewsResponseTransformer } from "../transformers.gen.js";
-import type { ListOwnItemReviewsData, ListOwnItemReviewsResponses } from "../types.gen.js";
+import type {
+	ListOwnItemReviewsData,
+	ListOwnItemReviewsErrors,
+	ListOwnItemReviewsResponses,
+} from "../types.gen.js";
 
 /**
  * List your reviews of an item
  */
 export const listOwnItemReviews = <ThrowOnError extends boolean = false>(
 	options: Options<ListOwnItemReviewsData, ThrowOnError>,
-): RequestResult<ListOwnItemReviewsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListOwnItemReviewsResponses, unknown, ThrowOnError>({
+): RequestResult<ListOwnItemReviewsResponses, ListOwnItemReviewsErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		ListOwnItemReviewsResponses,
+		ListOwnItemReviewsErrors,
+		ThrowOnError
+	>({
 		responseTransformer: listOwnItemReviewsResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/items/{itemId}/reviews",

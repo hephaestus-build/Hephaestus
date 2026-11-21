@@ -5,13 +5,22 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	ReleaseConnectionProviderRepairData,
+	ReleaseConnectionProviderRepairErrors,
 	ReleaseConnectionProviderRepairResponses,
 } from "../types.gen.js";
 
 export const releaseConnectionProviderRepair = <ThrowOnError extends boolean = false>(
 	options: Options<ReleaseConnectionProviderRepairData, ThrowOnError>,
-): RequestResult<ReleaseConnectionProviderRepairResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<ReleaseConnectionProviderRepairResponses, unknown, ThrowOnError>({
+): RequestResult<
+	ReleaseConnectionProviderRepairResponses,
+	ReleaseConnectionProviderRepairErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).post<
+		ReleaseConnectionProviderRepairResponses,
+		ReleaseConnectionProviderRepairErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs/{repairId}/release",
 		...options,

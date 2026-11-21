@@ -4,17 +4,23 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { listReviewResultsResponseTransformer } from "../transformers.gen.js";
-import type { ListReviewResultsData, ListReviewResultsResponses } from "../types.gen.js";
+import type {
+	ListReviewResultsData,
+	ListReviewResultsErrors,
+	ListReviewResultsResponses,
+} from "../types.gen.js";
 
 /**
  * List review results
  */
 export const listReviewResults = <ThrowOnError extends boolean = false>(
 	options: Options<ListReviewResultsData, ThrowOnError>,
-): RequestResult<ListReviewResultsResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListReviewResultsResponses, unknown, ThrowOnError>({
-		responseTransformer: listReviewResultsResponseTransformer,
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/practices/reviews/results",
-		...options,
-	});
+): RequestResult<ListReviewResultsResponses, ListReviewResultsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListReviewResultsResponses, ListReviewResultsErrors, ThrowOnError>(
+		{
+			responseTransformer: listReviewResultsResponseTransformer,
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/practices/reviews/results",
+			...options,
+		},
+	);

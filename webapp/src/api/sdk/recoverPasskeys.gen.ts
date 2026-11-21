@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { RecoverPasskeysData, RecoverPasskeysResponses } from "../types.gen.js";
+import type {
+	RecoverPasskeysData,
+	RecoverPasskeysErrors,
+	RecoverPasskeysResponses,
+} from "../types.gen.js";
 
 /**
  * Start restricted passkey recovery
  */
 export const recoverPasskeys = <ThrowOnError extends boolean = false>(
 	options: Options<RecoverPasskeysData, ThrowOnError>,
-): RequestResult<RecoverPasskeysResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<RecoverPasskeysResponses, unknown, ThrowOnError>({
+): RequestResult<RecoverPasskeysResponses, RecoverPasskeysErrors, ThrowOnError> =>
+	(options.client ?? client).post<RecoverPasskeysResponses, RecoverPasskeysErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/recovery",
 		...options,

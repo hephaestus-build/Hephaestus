@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { RemovePasskeyData, RemovePasskeyResponses } from "../types.gen.js";
+import type {
+	RemovePasskeyData,
+	RemovePasskeyErrors,
+	RemovePasskeyResponses,
+} from "../types.gen.js";
 
 /**
  * Remove a passkey
  */
 export const removePasskey = <ThrowOnError extends boolean = false>(
 	options: Options<RemovePasskeyData, ThrowOnError>,
-): RequestResult<RemovePasskeyResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<RemovePasskeyResponses, unknown, ThrowOnError>({
+): RequestResult<RemovePasskeyResponses, RemovePasskeyErrors, ThrowOnError> =>
+	(options.client ?? client).delete<RemovePasskeyResponses, RemovePasskeyErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/passkeys/{credentialId}",
 		...options,

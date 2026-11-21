@@ -3,7 +3,11 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetUserFeaturesData, GetUserFeaturesResponses } from "../types.gen.js";
+import type {
+	GetUserFeaturesData,
+	GetUserFeaturesErrors,
+	GetUserFeaturesResponses,
+} from "../types.gen.js";
 
 /**
  * Get feature flags for the current user
@@ -12,8 +16,8 @@ import type { GetUserFeaturesData, GetUserFeaturesResponses } from "../types.gen
  */
 export const getUserFeatures = <ThrowOnError extends boolean = false>(
 	options?: Options<GetUserFeaturesData, ThrowOnError>,
-): RequestResult<GetUserFeaturesResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetUserFeaturesResponses, unknown, ThrowOnError>({
+): RequestResult<GetUserFeaturesResponses, GetUserFeaturesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetUserFeaturesResponses, GetUserFeaturesErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/features",
 		...options,

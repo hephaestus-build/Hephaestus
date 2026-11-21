@@ -1,0 +1,7 @@
+{
+	"type": "https://docs.hephaestus.build/contributor/api-error-handling#added-in-a-later-release",
+	"title": "Added in a later release",
+	"status": 409,
+	"detail": "A newer server sent a problem type that this client does not know.",
+	"retryInMinutes": 5
+}

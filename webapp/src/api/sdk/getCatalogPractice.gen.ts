@@ -3,12 +3,20 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetCatalogPracticeData, GetCatalogPracticeResponses } from "../types.gen.js";
+import type {
+	GetCatalogPracticeData,
+	GetCatalogPracticeErrors,
+	GetCatalogPracticeResponses,
+} from "../types.gen.js";
 
 export const getCatalogPractice = <ThrowOnError extends boolean = false>(
 	options: Options<GetCatalogPracticeData, ThrowOnError>,
-): RequestResult<GetCatalogPracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetCatalogPracticeResponses, unknown, ThrowOnError>({
+): RequestResult<GetCatalogPracticeResponses, GetCatalogPracticeErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetCatalogPracticeResponses,
+		GetCatalogPracticeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}",
 		...options,

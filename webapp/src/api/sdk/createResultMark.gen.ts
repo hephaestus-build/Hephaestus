@@ -4,15 +4,19 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { createResultMarkResponseTransformer } from "../transformers.gen.js";
-import type { CreateResultMarkData, CreateResultMarkResponses } from "../types.gen.js";
+import type {
+	CreateResultMarkData,
+	CreateResultMarkErrors,
+	CreateResultMarkResponses,
+} from "../types.gen.js";
 
 /**
  * Mark a result
  */
 export const createResultMark = <ThrowOnError extends boolean = false>(
 	options: Options<CreateResultMarkData, ThrowOnError>,
-): RequestResult<CreateResultMarkResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).post<CreateResultMarkResponses, unknown, ThrowOnError>({
+): RequestResult<CreateResultMarkResponses, CreateResultMarkErrors, ThrowOnError> =>
+	(options.client ?? client).post<CreateResultMarkResponses, CreateResultMarkErrors, ThrowOnError>({
 		responseTransformer: createResultMarkResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/reviews/results/{resultId}/marks",

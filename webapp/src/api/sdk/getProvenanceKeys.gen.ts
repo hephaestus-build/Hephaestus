@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetProvenanceKeysData, GetProvenanceKeysResponses } from "../types.gen.js";
+import type {
+	GetProvenanceKeysData,
+	GetProvenanceKeysErrors,
+	GetProvenanceKeysResponses,
+} from "../types.gen.js";
 
 /**
  * Public keys of the provenance records
  */
 export const getProvenanceKeys = <ThrowOnError extends boolean = false>(
 	options?: Options<GetProvenanceKeysData, ThrowOnError>,
-): RequestResult<GetProvenanceKeysResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetProvenanceKeysResponses, unknown, ThrowOnError>({
+): RequestResult<GetProvenanceKeysResponses, GetProvenanceKeysErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		GetProvenanceKeysResponses,
+		GetProvenanceKeysErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/.well-known/hephaestus-provenance-keys.json",
 		...options,

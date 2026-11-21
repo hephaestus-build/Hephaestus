@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	AdminDeleteLoginProviderData,
+	AdminDeleteLoginProviderErrors,
 	AdminDeleteLoginProviderResponses,
 } from "../types.gen.js";
 
@@ -13,8 +14,12 @@ import type {
  */
 export const adminDeleteLoginProvider = <ThrowOnError extends boolean = false>(
 	options: Options<AdminDeleteLoginProviderData, ThrowOnError>,
-): RequestResult<AdminDeleteLoginProviderResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<AdminDeleteLoginProviderResponses, unknown, ThrowOnError>({
+): RequestResult<AdminDeleteLoginProviderResponses, AdminDeleteLoginProviderErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		AdminDeleteLoginProviderResponses,
+		AdminDeleteLoginProviderErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/login-providers/{registrationId}",
 		...options,

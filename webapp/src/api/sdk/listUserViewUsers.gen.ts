@@ -3,16 +3,22 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { ListUserViewUsersData, ListUserViewUsersResponses } from "../types.gen.js";
+import type {
+	ListUserViewUsersData,
+	ListUserViewUsersErrors,
+	ListUserViewUsersResponses,
+} from "../types.gen.js";
 
 /**
  * List workspace users and their linked account status
  */
 export const listUserViewUsers = <ThrowOnError extends boolean = false>(
 	options: Options<ListUserViewUsersData, ThrowOnError>,
-): RequestResult<ListUserViewUsersResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<ListUserViewUsersResponses, unknown, ThrowOnError>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/user-view/users",
-		...options,
-	});
+): RequestResult<ListUserViewUsersResponses, ListUserViewUsersErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListUserViewUsersResponses, ListUserViewUsersErrors, ThrowOnError>(
+		{
+			security: [{ scheme: "bearer", type: "http" }],
+			url: "/workspaces/{workspaceSlug}/user-view/users",
+			...options,
+		},
+	);

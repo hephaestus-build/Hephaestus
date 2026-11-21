@@ -6,13 +6,18 @@ import type { Options } from "../sdk.gen.js";
 import { setPracticeFeedbackModeResponseTransformer } from "../transformers.gen.js";
 import type {
 	SetPracticeFeedbackModeData,
+	SetPracticeFeedbackModeErrors,
 	SetPracticeFeedbackModeResponses,
 } from "../types.gen.js";
 
 export const setPracticeFeedbackMode = <ThrowOnError extends boolean = false>(
 	options: Options<SetPracticeFeedbackModeData, ThrowOnError>,
-): RequestResult<SetPracticeFeedbackModeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<SetPracticeFeedbackModeResponses, unknown, ThrowOnError>({
+): RequestResult<SetPracticeFeedbackModeResponses, SetPracticeFeedbackModeErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		SetPracticeFeedbackModeResponses,
+		SetPracticeFeedbackModeErrors,
+		ThrowOnError
+	>({
 		responseTransformer: setPracticeFeedbackModeResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/{practiceSlug}/feedback-mode",

@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { AdminUpdateUserStatusData, AdminUpdateUserStatusResponses } from "../types.gen.js";
+import type {
+	AdminUpdateUserStatusData,
+	AdminUpdateUserStatusErrors,
+	AdminUpdateUserStatusResponses,
+} from "../types.gen.js";
 
 /**
  * Block an account, which ends its sessions and refuses its sign-in, or unblock it
  */
 export const adminUpdateUserStatus = <ThrowOnError extends boolean = false>(
 	options: Options<AdminUpdateUserStatusData, ThrowOnError>,
-): RequestResult<AdminUpdateUserStatusResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).patch<AdminUpdateUserStatusResponses, unknown, ThrowOnError>({
+): RequestResult<AdminUpdateUserStatusResponses, AdminUpdateUserStatusErrors, ThrowOnError> =>
+	(options.client ?? client).patch<
+		AdminUpdateUserStatusResponses,
+		AdminUpdateUserStatusErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/users/{id}/status",
 		...options,

@@ -4,12 +4,20 @@ import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import { resetGroupToCatalogResponseTransformer } from "../transformers.gen.js";
-import type { ResetGroupToCatalogData, ResetGroupToCatalogResponses } from "../types.gen.js";
+import type {
+	ResetGroupToCatalogData,
+	ResetGroupToCatalogErrors,
+	ResetGroupToCatalogResponses,
+} from "../types.gen.js";
 
 export const resetGroupToCatalog = <ThrowOnError extends boolean = false>(
 	options: Options<ResetGroupToCatalogData, ThrowOnError>,
-): RequestResult<ResetGroupToCatalogResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<ResetGroupToCatalogResponses, unknown, ThrowOnError>({
+): RequestResult<ResetGroupToCatalogResponses, ResetGroupToCatalogErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		ResetGroupToCatalogResponses,
+		ResetGroupToCatalogErrors,
+		ThrowOnError
+	>({
 		responseTransformer: resetGroupToCatalogResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/catalog-customization",

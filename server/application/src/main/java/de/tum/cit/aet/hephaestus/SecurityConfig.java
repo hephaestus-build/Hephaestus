@@ -284,10 +284,14 @@ public class SecurityConfig {
         // every request. The resolver bean is built in the auth module (AuthJwtConfig) so this root
         // config depends only on the framework BearerTokenResolver interface. See ADR 0017.
         BearerTokenResolver bearerTokenResolver = bearerTokenResolverProvider.getIfAvailable();
+        var refusals = new ProblemSecurityResponses(objectMapper);
+        http.exceptionHandling(
+                exceptions -> exceptions.authenticationEntryPoint(refusals).accessDeniedHandler(refusals));
         http.oauth2ResourceServer(resourceServer -> {
             if (bearerTokenResolver != null) {
                 resourceServer.bearerTokenResolver(bearerTokenResolver);
             }
+            resourceServer.authenticationEntryPoint(refusals).accessDeniedHandler(refusals);
             resourceServer.jwt(jwtConfigurer -> {
                 jwtConfigurer.decoder(jwtDecoder).jwtAuthenticationConverter(authenticationConverter);
             });

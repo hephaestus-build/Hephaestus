@@ -27,6 +27,22 @@ A problem has the RFC 9457 members `type`, `title`, `status` and `detail`.
   Add the slug to [Problem types](#problem-types) in the same change.
 - The webapp reads the `type` through `isProblemType` and `stepUpChallengeOf` in `webapp/src/lib/problem-detail.ts`.
   It shows `detail`, or `title` when `detail` is absent.
+  A test holds each slug that the webapp names to the `ProblemType` list in `server/openapi.yaml`.
+
+## The published contract
+
+`OpenAPIConfiguration` writes one error contract into `server/openapi.yaml`, and the generated clients take it from there.
+
+- The `ProblemDetail` schema always has `status` and `title`.
+  Spring leaves out `type` for `about:blank`, so `type` is optional.
+- The `ProblemType` schema lists `about:blank` and every `ProblemType` URI, from the enum.
+  It is an open enum (ADR 0103), because a minor release can add a type.
+- Each 4xx or 5xx response that an operation lists is `application/problem+json` with `ProblemDetail`.
+- Each operation has a `default` response with the same schema, for every status that it does not list.
+  Do not document a list of statuses for an operation that no test checks.
+- The security filters write the same problem.
+  A request without a valid sign-in gets a 401 problem with the `WWW-Authenticate` challenge.
+  A request that the filters refuse gets a 403 problem.
 
 ## Which message reaches the client
 

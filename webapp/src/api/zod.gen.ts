@@ -2643,6 +2643,11 @@ export const zProblemChanges = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
+/**
+ * Extensible enum: a client accepts a value that the examples do not name. The problem's kind. A client branches on it, never on the title or the detail. A problem without a type is about:blank: its status is its kind.
+ */
+export const zProblemType = z.string();
+
 export const zProblemDetail = z.object({
 	activeScanId: z.uuid().optional(),
 	callbackError: z.string().optional(),
@@ -2666,12 +2671,11 @@ export const zProblemDetail = z.object({
 	status: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	stop: z.string().optional(),
 	supportedRef: z.string().optional(),
-	title: z.string().optional(),
-	type: z.string().optional(),
+	title: z.string(),
+	type: zProblemType.optional(),
 	withholdingReason: z.string().optional(),
 	workspaceByteBudget: z.int().optional(),
 	workspaceBytes: z.int().optional(),

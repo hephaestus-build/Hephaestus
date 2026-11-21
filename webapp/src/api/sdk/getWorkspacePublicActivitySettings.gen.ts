@@ -5,6 +5,7 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	GetWorkspacePublicActivitySettingsData,
+	GetWorkspacePublicActivitySettingsErrors,
 	GetWorkspacePublicActivitySettingsResponses,
 } from "../types.gen.js";
 
@@ -13,10 +14,14 @@ import type {
  */
 export const getWorkspacePublicActivitySettings = <ThrowOnError extends boolean = false>(
 	options: Options<GetWorkspacePublicActivitySettingsData, ThrowOnError>,
-): RequestResult<GetWorkspacePublicActivitySettingsResponses, unknown, ThrowOnError> =>
+): RequestResult<
+	GetWorkspacePublicActivitySettingsResponses,
+	GetWorkspacePublicActivitySettingsErrors,
+	ThrowOnError
+> =>
 	(options.client ?? client).get<
 		GetWorkspacePublicActivitySettingsResponses,
-		unknown,
+		GetWorkspacePublicActivitySettingsErrors,
 		ThrowOnError
 	>({
 		security: [{ scheme: "bearer", type: "http" }],

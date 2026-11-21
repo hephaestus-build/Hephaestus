@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { DeleteReviewScheduleData, DeleteReviewScheduleResponses } from "../types.gen.js";
+import type {
+	DeleteReviewScheduleData,
+	DeleteReviewScheduleErrors,
+	DeleteReviewScheduleResponses,
+} from "../types.gen.js";
 
 /**
  * Delete an unused review schedule
  */
 export const deleteReviewSchedule = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteReviewScheduleData, ThrowOnError>,
-): RequestResult<DeleteReviewScheduleResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).delete<DeleteReviewScheduleResponses, unknown, ThrowOnError>({
+): RequestResult<DeleteReviewScheduleResponses, DeleteReviewScheduleErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		DeleteReviewScheduleResponses,
+		DeleteReviewScheduleErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/review-schedules/{scheduleId}",
 		...options,

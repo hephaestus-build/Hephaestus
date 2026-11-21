@@ -3,15 +3,23 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { DownloadDataExportData, DownloadDataExportResponses } from "../types.gen.js";
+import type {
+	DownloadDataExportData,
+	DownloadDataExportErrors,
+	DownloadDataExportResponses,
+} from "../types.gen.js";
 
 /**
  * Download the data-export bundle
  */
 export const downloadDataExport = <ThrowOnError extends boolean = false>(
 	options: Options<DownloadDataExportData, ThrowOnError>,
-): RequestResult<DownloadDataExportResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<DownloadDataExportResponses, unknown, ThrowOnError>({
+): RequestResult<DownloadDataExportResponses, DownloadDataExportErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		DownloadDataExportResponses,
+		DownloadDataExportErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/exports/{id}/download",
 		...options,

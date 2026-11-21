@@ -3,7 +3,7 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetProvidersData, GetProvidersResponses } from "../types.gen.js";
+import type { GetProvidersData, GetProvidersErrors, GetProvidersResponses } from "../types.gen.js";
 
 /**
  * List available workspace creation providers
@@ -12,8 +12,8 @@ import type { GetProvidersData, GetProvidersResponses } from "../types.gen.js";
  */
 export const getProviders = <ThrowOnError extends boolean = false>(
 	options?: Options<GetProvidersData, ThrowOnError>,
-): RequestResult<GetProvidersResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<GetProvidersResponses, unknown, ThrowOnError>({
+): RequestResult<GetProvidersResponses, GetProvidersErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetProvidersResponses, GetProvidersErrors, ThrowOnError>({
 		url: "/workspaces/providers",
 		...options,
 	});

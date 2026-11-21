@@ -5,13 +5,22 @@ import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
 import type {
 	AcknowledgeCatalogPracticeData,
+	AcknowledgeCatalogPracticeErrors,
 	AcknowledgeCatalogPracticeResponses,
 } from "../types.gen.js";
 
 export const acknowledgeCatalogPractice = <ThrowOnError extends boolean = false>(
 	options: Options<AcknowledgeCatalogPracticeData, ThrowOnError>,
-): RequestResult<AcknowledgeCatalogPracticeResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<AcknowledgeCatalogPracticeResponses, unknown, ThrowOnError>({
+): RequestResult<
+	AcknowledgeCatalogPracticeResponses,
+	AcknowledgeCatalogPracticeErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		AcknowledgeCatalogPracticeResponses,
+		AcknowledgeCatalogPracticeErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/practice-catalog/practices/{slug}/override/acknowledgement",
 		...options,

@@ -3,15 +3,19 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
-import type { GetSlackScopesData, GetSlackScopesResponses } from "../types.gen.js";
+import type {
+	GetSlackScopesData,
+	GetSlackScopesErrors,
+	GetSlackScopesResponses,
+} from "../types.gen.js";
 
 /**
  * List the Slack scopes that Hephaestus requests and the workspace's Slack token does not hold
  */
 export const getSlackScopes = <ThrowOnError extends boolean = false>(
 	options: Options<GetSlackScopesData, ThrowOnError>,
-): RequestResult<GetSlackScopesResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetSlackScopesResponses, unknown, ThrowOnError>({
+): RequestResult<GetSlackScopesResponses, GetSlackScopesErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetSlackScopesResponses, GetSlackScopesErrors, ThrowOnError>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/slack/scopes",
 		...options,

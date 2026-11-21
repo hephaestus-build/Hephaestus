@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { getOwnDeliveredWorkFeedbackResponseTransformer } from "../transformers.gen.js";
 import type {
 	GetOwnDeliveredWorkFeedbackData,
+	GetOwnDeliveredWorkFeedbackErrors,
 	GetOwnDeliveredWorkFeedbackResponses,
 } from "../types.gen.js";
 
@@ -16,8 +17,16 @@ import type {
  */
 export const getOwnDeliveredWorkFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<GetOwnDeliveredWorkFeedbackData, ThrowOnError>,
-): RequestResult<GetOwnDeliveredWorkFeedbackResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).get<GetOwnDeliveredWorkFeedbackResponses, unknown, ThrowOnError>({
+): RequestResult<
+	GetOwnDeliveredWorkFeedbackResponses,
+	GetOwnDeliveredWorkFeedbackErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).get<
+		GetOwnDeliveredWorkFeedbackResponses,
+		GetOwnDeliveredWorkFeedbackErrors,
+		ThrowOnError
+	>({
 		responseTransformer: getOwnDeliveredWorkFeedbackResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practices/feedback/on-work",

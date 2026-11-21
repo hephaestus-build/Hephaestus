@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { editMyProductFeedbackDraftResponseTransformer } from "../transformers.gen.js";
 import type {
 	EditMyProductFeedbackDraftData,
+	EditMyProductFeedbackDraftErrors,
 	EditMyProductFeedbackDraftResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,16 @@ import type {
  */
 export const editMyProductFeedbackDraft = <ThrowOnError extends boolean = false>(
 	options: Options<EditMyProductFeedbackDraftData, ThrowOnError>,
-): RequestResult<EditMyProductFeedbackDraftResponses, unknown, ThrowOnError> =>
-	(options.client ?? client).put<EditMyProductFeedbackDraftResponses, unknown, ThrowOnError>({
+): RequestResult<
+	EditMyProductFeedbackDraftResponses,
+	EditMyProductFeedbackDraftErrors,
+	ThrowOnError
+> =>
+	(options.client ?? client).put<
+		EditMyProductFeedbackDraftResponses,
+		EditMyProductFeedbackDraftErrors,
+		ThrowOnError
+	>({
 		responseTransformer: editMyProductFeedbackDraftResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/product-feedback/{feedbackId}/draft",

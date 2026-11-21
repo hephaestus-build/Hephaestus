@@ -6,6 +6,7 @@ import type { Options } from "../sdk.gen.js";
 import { adminListLoginProvidersResponseTransformer } from "../transformers.gen.js";
 import type {
 	AdminListLoginProvidersData,
+	AdminListLoginProvidersErrors,
 	AdminListLoginProvidersResponses,
 } from "../types.gen.js";
 
@@ -14,8 +15,12 @@ import type {
  */
 export const adminListLoginProviders = <ThrowOnError extends boolean = false>(
 	options?: Options<AdminListLoginProvidersData, ThrowOnError>,
-): RequestResult<AdminListLoginProvidersResponses, unknown, ThrowOnError> =>
-	(options?.client ?? client).get<AdminListLoginProvidersResponses, unknown, ThrowOnError>({
+): RequestResult<AdminListLoginProvidersResponses, AdminListLoginProvidersErrors, ThrowOnError> =>
+	(options?.client ?? client).get<
+		AdminListLoginProvidersResponses,
+		AdminListLoginProvidersErrors,
+		ThrowOnError
+	>({
 		responseTransformer: adminListLoginProvidersResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/login-providers",
