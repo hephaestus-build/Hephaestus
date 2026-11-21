@@ -18752,6 +18752,16 @@ export type SetPracticeRepositoryErrors = {
 export type SetPracticeRepositoryError =
 	SetPracticeRepositoryErrors[keyof SetPracticeRepositoryErrors];
 
+export type SetPracticeRepositoryResponses = {
+	/**
+	 * The practice repository
+	 */
+	200: PracticeRepository;
+};
+
+export type SetPracticeRepositoryResponse =
+	SetPracticeRepositoryResponses[keyof SetPracticeRepositoryResponses];
+
 export type ChangePracticeEditedInData = {
 	body: ChangePracticeEditedInRequest;
 	path: {

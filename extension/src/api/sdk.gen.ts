@@ -977,6 +977,7 @@ import type {
 	SetPracticeFeedbackModeResponses,
 	SetPracticeRepositoryData,
 	SetPracticeRepositoryErrors,
+	SetPracticeRepositoryResponses,
 	SetReviewScheduleEnabledData,
 	SetReviewScheduleEnabledErrors,
 	SetReviewScheduleEnabledResponses,
@@ -5914,8 +5915,12 @@ export const getPracticeRepository = <ThrowOnError extends boolean = false>(
  */
 export const setPracticeRepository = <ThrowOnError extends boolean = false>(
 	options: Options<SetPracticeRepositoryData, ThrowOnError>,
-): RequestResult<unknown, SetPracticeRepositoryErrors, ThrowOnError> =>
-	(options.client ?? client).put<unknown, SetPracticeRepositoryErrors, ThrowOnError>({
+): RequestResult<SetPracticeRepositoryResponses, SetPracticeRepositoryErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		SetPracticeRepositoryResponses,
+		SetPracticeRepositoryErrors,
+		ThrowOnError
+	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-repository",
 		...options,
