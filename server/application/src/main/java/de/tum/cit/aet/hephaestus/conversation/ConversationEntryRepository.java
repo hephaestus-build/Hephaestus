@@ -63,7 +63,7 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
      * The entries the app can show, as a predicate on {@code e}: the developer's messages and weekly digests, deleted
      * ones included, and Hephaestus's messages that have text or call a link tool ({@code link_result}, {@code link_problem},
      * {@code show_feedback}). Tool results, summaries, system entries and erased Hephaestus messages stay out. A Hephaestus message
-     * without text whose calls show nothing matches, but the app does not show it ({@code ConversationTimeline.shows}).
+     * without text whose calls show nothing matches, but the app does not show it ({@code ConversationEntryViews.shows}).
      */
     String SHOWN = """
              e.kind IN ('USER', 'ANSWER', 'DIGEST')

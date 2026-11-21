@@ -18,7 +18,7 @@ public class ConversationSlackMessages {
     private final ConversationRepository conversations;
     private final ConversationEntryRepository entries;
     private final ConversationTurnRepository turns;
-    private final ConversationTimeline timeline;
+    private final ConversationEntryViews views;
 
     /**
      * A turn asked in Slack, with where its reply goes.
@@ -93,7 +93,7 @@ public class ConversationSlackMessages {
                 channelId,
                 threadTs,
                 question,
-                timeline.shown(conversation.get(), stored),
+                views.shown(conversation.get(), stored),
                 !entries.answeredInSlackBefore(
                         workspaceId, Objects.requireNonNull(conversation.get().getId()), question.getSeq())));
     }
