@@ -83,9 +83,7 @@ export function WorkspacePracticeEditedInHephaestusNote({
 					{unavailable || repository === null ? (
 						reason
 					) : (
-						<>
-							Move it to {repository.nameWithOwner} to change its definition and group there.
-						</>
+						<>Move it to {repository.nameWithOwner} to change its definition and group there.</>
 					)}
 				</ItemDescription>
 			</ItemContent>
