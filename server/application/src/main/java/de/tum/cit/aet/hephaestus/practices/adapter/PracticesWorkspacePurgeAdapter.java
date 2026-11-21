@@ -26,6 +26,7 @@ public class PracticesWorkspacePurgeAdapter implements WorkspacePurgeContributor
         rows.deleteWorkspaceVersions(ws);
         rows.deleteWorkspacePractices(ws);
         rows.deleteWorkspaceGroups(ws);
+        rows.deleteWorkspacePracticeRepository(ws);
     }
 
     @Override

@@ -9,8 +9,10 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
 import de.tum.cit.aet.hephaestus.practices.dto.CreatePracticeRequestDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeFileProblemDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeState;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
@@ -155,6 +157,7 @@ public class PracticeService {
     public Practice updatePractice(WorkspaceContext ctx, String slug, @Valid UpdatePracticeRequestDTO request) {
         lock(ctx);
         Practice practice = getPractice(ctx, slug);
+        PracticeEditing.requireEditedInHephaestus(practice);
         long expectedVersionId = Long.parseLong(request.expectedVersionId());
         if (expectedVersionId
                 != Objects.requireNonNull(practice.getCurrentVersion().getId())) {
@@ -194,6 +197,8 @@ public class PracticeService {
         var before = PracticeDefinitionSnapshot.of(practice, mapper);
         PracticeGroup destination = group(ctx, groupSlug);
         Long oldGroup = practice.getGroup() == null ? null : practice.getGroup().getId();
+        if (!Objects.equals(oldGroup, destination == null ? null : destination.getId()))
+            PracticeEditing.requireEditedInHephaestus(practice);
         practice.setGroup(destination);
         List<Practice> peers = new ArrayList<>(practices.findAllForCatalog(ctx.id()).stream()
                 .filter(peer -> !peer.getId().equals(practice.getId())
@@ -288,6 +293,77 @@ public class PracticeService {
         practices.flush();
     }
 
+    /**
+     * Moves a practice to the practice repository (ADR 0118): from now on its folder on the default branch is its
+     * source. When the folder's definition differs from the current version, it becomes the next version, with the
+     * commit it was read at. History, observations, the feedback mode and the position stay. The caller has read a
+     * valid folder, so the next sync of the repository finds the practice there.
+     */
+    @Transactional
+    public Practice moveToRepository(
+            WorkspaceContext ctx, String slug, CatalogPracticeDocument document, String commit) {
+        lock(ctx);
+        Practice practice = getPractice(ctx, slug);
+        if (!practice.getKind().equals(document.kind()))
+            throw new InvalidInputException(
+                    "A practice keeps the kind of work that it reviews, and its folder names another kind.");
+        var before = PracticeDefinitionSnapshot.of(practice, mapper);
+        if (!practice.getCurrentVersion().getDefinition().equals(mapper.valueToTree(document.definition())))
+            versions.append(
+                    practice,
+                    document.definition(),
+                    SecurityUtils.getCurrentAccountId().orElse(null),
+                    commit);
+        var groupSlug = document.groupSlug();
+        var group = groupSlug == null
+                ? null
+                : groups.findByWorkspaceIdAndSlug(ctx.id(), groupSlug)
+                        .orElseThrow(() -> new PracticeFolderInvalidException(List.of(new PracticeFileProblemDTO(
+                                PracticeFiles.PRACTICE,
+                                null,
+                                null,
+                                "UNKNOWN_GROUP",
+                                "This workspace has no group " + groupSlug + ". Create it, or remove it from the"
+                                        + " folder."))));
+        if (!Objects.equals(
+                practice.getGroup() == null ? null : practice.getGroup().getId(),
+                group == null ? null : group.getId())) {
+            practice.setGroup(group);
+            practice.setPosition(practices.findMaxPosition(ctx.id(), group == null ? null : group.getId()) + 1);
+        }
+        practice.setEditedIn(PracticeEditedIn.REPOSITORY);
+        practices.save(practice);
+        record(ctx, practice, before);
+        return practice;
+    }
+
+    /**
+     * Edit in Hephaestus: the practice keeps its current version and becomes editable in the consoles again. Later
+     * changes to its folder no longer reach it. It reverses {@link #moveToRepository}.
+     */
+    @Transactional
+    public Practice moveToHephaestus(WorkspaceContext ctx, String slug) {
+        lock(ctx);
+        Practice practice = getPractice(ctx, slug);
+        var before = PracticeDefinitionSnapshot.of(practice, mapper);
+        practice.setEditedIn(PracticeEditedIn.HEPHAESTUS);
+        practices.save(practice);
+        record(ctx, practice, before);
+        return practice;
+    }
+
+    /** Unsetting the practice repository moves every practice edited there back to Hephaestus. Nothing is deleted. */
+    @Transactional
+    public void moveAllToHephaestus(WorkspaceContext ctx) {
+        lock(ctx);
+        for (Practice practice : practices.findEditedIn(ctx.id(), PracticeEditedIn.REPOSITORY)) {
+            var before = PracticeDefinitionSnapshot.of(practice, mapper);
+            practice.setEditedIn(PracticeEditedIn.HEPHAESTUS);
+            practices.save(practice);
+            record(ctx, practice, before);
+        }
+    }
+
     private Practice draft(WorkspaceContext ctx, String slug) {
         Practice practice =
                 drafts.find(ctx.id(), slug).orElseThrow(() -> new EntityNotFoundException("Practice", slug));
@@ -300,6 +376,7 @@ public class PracticeService {
     public void deletePractice(WorkspaceContext ctx, String slug) {
         lock(ctx);
         Practice practice = getPractice(ctx, slug);
+        PracticeEditing.requireEditedInHephaestus(practice);
         audit.record(ConfigAuditEntry.deleted(
                 ConfigAuditEntityType.PRACTICE_DEFINITION,
                 practice.getId(),

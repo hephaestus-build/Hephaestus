@@ -387,6 +387,7 @@ export type AuthEventEventType =
 	| "WORKSPACE_OWNER_CHANGE"
 	| "WORKSPACE_DELETION"
 	| "PROVIDER_RESOURCE_RELEASE"
+	| "PRACTICE_REPOSITORY_CHANGE"
 	| "LLM_CONNECTION_CREATED"
 	| "LLM_CONNECTION_UPDATED"
 	| "LLM_CONNECTION_DELETED"
@@ -710,6 +711,13 @@ export type CatalogPracticeUpdate = {
 };
 
 /**
+ * Where the practice is edited from now on: Move to repository, or Edit in Hephaestus.
+ */
+export type ChangePracticeEditedInRequest = {
+	editedIn: PracticeEditedIn;
+};
+
+/**
  * The state to move a draft practice to. Only <code>ACTIVE</code> is a change a draft can make.
  */
 export type ChangePracticeStateRequest = {
@@ -817,6 +825,7 @@ export type ConfigAuditEntityType =
 	| "PRACTICE_USAGE"
 	| "PRACTICE_DEFINITION"
 	| "PRACTICE_GROUP"
+	| "PRACTICE_REPOSITORY"
 	| "CATALOG_PRACTICE"
 	| "CATALOG_GROUP"
 	| "WORKSPACE_INSTANCE_LLM_BUDGET"
@@ -4279,6 +4288,10 @@ export type Practice = {
 	catalogOrigin: CatalogOrigin;
 	createdAt: string;
 	currentVersion: PracticeVersion;
+	/**
+	 * Where the practice is edited. A practice edited in the practice repository is read-only here, except for its feedback mode and position
+	 */
+	editedIn: PracticeEditedIn;
 	feedbackMode: FeedbackModeAssignment;
 	groupSlug: string | null;
 	id: string;
@@ -4357,6 +4370,8 @@ export type PracticeDraft = {
 	 */
 	warnings: Array<PracticeFileProblem>;
 };
+
+export type PracticeEditedIn = "HEPHAESTUS" | "REPOSITORY";
 
 /**
  * The result of checking a practice folder. Nothing was saved, and no model was called.
@@ -4586,6 +4601,22 @@ export type PracticeReleaseProposal = {
 	offered: PracticeDefinition;
 	offeredDigest: string;
 	practiceSlug: string;
+};
+
+/**
+ * The workspace's practice repository (ADR 0118).
+ */
+export type PracticeRepository = {
+	/**
+	 * the branch whose head holds the practices; null until the provider has named it
+	 */
+	defaultBranch?: string;
+	directory: string;
+	/**
+	 * the repository's provider path; null when it is no longer monitored
+	 */
+	nameWithOwner?: string;
+	repositoryItemId: string;
 };
 
 export type PracticeReviewField =
@@ -4899,6 +4930,10 @@ export type ProblemDetail = {
 	instance?: string;
 	jobId?: number;
 	maxAgeSeconds?: number;
+	/**
+	 * Why a practice folder cannot become a practice: each problem with its file and, where known, its line and column
+	 */
+	problems?: Array<PracticeFileProblem>;
 	/**
 	 * The request's trace id, the same as the X-Request-Id header
 	 */
@@ -6741,6 +6776,17 @@ export type SetFeedbackModeRequest = {
 
 export type SetMemberHiddenRequest = {
 	hidden: boolean;
+};
+
+/**
+ * The monitored repository that holds the workspace's practices, and the directory of their folders in it.
+ */
+export type SetPracticeRepositoryRequest = {
+	/**
+	 * A path relative to the repository root; .hephaestus/practices when absent
+	 */
+	directory?: string;
+	repositoryItemId: string;
 };
 
 export type SetReviewScheduleEnabledRequest = {
@@ -18525,6 +18571,171 @@ export type GetOwnReviewResponses = {
 };
 
 export type GetOwnReviewResponse = GetOwnReviewResponses[keyof GetOwnReviewResponses];
+
+export type UnsetPracticeRepositoryData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practice-repository";
+};
+
+export type UnsetPracticeRepositoryErrors = {
+	/**
+	 * The workspace has no practice repository to unset
+	 */
+	404: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type UnsetPracticeRepositoryError =
+	UnsetPracticeRepositoryErrors[keyof UnsetPracticeRepositoryErrors];
+
+export type UnsetPracticeRepositoryResponses = {
+	/**
+	 * The workspace has no practice repository
+	 */
+	204: void;
+};
+
+export type UnsetPracticeRepositoryResponse =
+	UnsetPracticeRepositoryResponses[keyof UnsetPracticeRepositoryResponses];
+
+export type GetPracticeRepositoryData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practice-repository";
+};
+
+export type GetPracticeRepositoryErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type GetPracticeRepositoryError =
+	GetPracticeRepositoryErrors[keyof GetPracticeRepositoryErrors];
+
+export type GetPracticeRepositoryResponses = {
+	/**
+	 * The practice repository
+	 */
+	200: PracticeRepository;
+	/**
+	 * The workspace has no practice repository
+	 */
+	204: void;
+};
+
+export type GetPracticeRepositoryResponse =
+	GetPracticeRepositoryResponses[keyof GetPracticeRepositoryResponses];
+
+export type SetPracticeRepositoryData = {
+	body: SetPracticeRepositoryRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practice-repository";
+};
+
+export type SetPracticeRepositoryErrors = {
+	/**
+	 * The repository is not one that the workspace monitors, or the directory is not a relative path
+	 */
+	400: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type SetPracticeRepositoryError =
+	SetPracticeRepositoryErrors[keyof SetPracticeRepositoryErrors];
+
+export type SetPracticeRepositoryResponses = {
+	/**
+	 * The practice repository
+	 */
+	200: PracticeRepository;
+};
+
+export type SetPracticeRepositoryResponse =
+	SetPracticeRepositoryResponses[keyof SetPracticeRepositoryResponses];
+
+export type ChangePracticeEditedInData = {
+	body: ChangePracticeEditedInRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		practiceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practice-repository/practices/{practiceSlug}/edited-in";
+};
+
+export type ChangePracticeEditedInErrors = {
+	/**
+	 * No practice repository, it cannot be read now, its default branch has no folder for this practice, or the setting changed meanwhile
+	 */
+	409: ProblemDetail;
+	/**
+	 * The practice folder is not valid: problems lists each problem
+	 */
+	422: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type ChangePracticeEditedInError =
+	ChangePracticeEditedInErrors[keyof ChangePracticeEditedInErrors];
+
+export type ChangePracticeEditedInResponses = {
+	/**
+	 * The practice is edited where the request named
+	 */
+	204: void;
+};
+
+export type ChangePracticeEditedInResponse =
+	ChangePracticeEditedInResponses[keyof ChangePracticeEditedInResponses];
 
 export type StartPracticeTrialData = {
 	body: StartTrialRequest;

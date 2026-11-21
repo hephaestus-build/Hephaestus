@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDrafts;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogService;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -107,6 +108,10 @@ class CatalogAdoptionPlanAssembler {
         if (plan.availability() == CatalogAdoptionAvailability.AVAILABLE) return CatalogGroupPracticeAction.ADD;
         if (plan.availability() == CatalogAdoptionAvailability.SLUG_CONFLICT) return CatalogGroupPracticeAction.BLOCKED;
         Practice existing = drafts.find(ctx.id(), plan.slug()).orElseThrow();
+        // The folder in the practice repository owns the group of a practice edited there.
+        if (existing.getEditedIn() == PracticeEditedIn.REPOSITORY
+                && (existing.getGroup() == null
+                        || !slug.equals(existing.getGroup().getSlug()))) return CatalogGroupPracticeAction.BLOCKED;
         return existing.getGroup() == null
                 ? CatalogGroupPracticeAction.MOVE_TO_GROUP
                 : slug.equals(existing.getGroup().getSlug())

@@ -390,6 +390,12 @@ public class OpenAPIConfiguration {
                 new MapSchema()
                         .additionalProperties(new ArraySchema().items(new StringSchema()))
                         .description("Validation messages for each field that needs a change"));
+        members.put(
+                "problems",
+                new ArraySchema()
+                        .items(new Schema<>().$ref("#/components/schemas/PracticeFileProblem"))
+                        .description("Why a practice folder cannot become a practice: each problem with its file and,"
+                                + " where known, its line and column"));
         for (String number : List.of(
                 "maxAgeSeconds",
                 "retryAfterSeconds",
