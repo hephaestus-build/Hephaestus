@@ -1,12 +1,11 @@
 package de.tum.cit.aet.hephaestus;
 
-import de.tum.cit.aet.hephaestus.core.web.RequestReference;
+import de.tum.cit.aet.hephaestus.core.web.ProblemResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
@@ -14,7 +13,6 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthen
 import org.springframework.security.oauth2.server.resource.web.access.BearerTokenAccessDeniedHandler;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * The resource server's refusals before a controller runs. The bearer handlers set the status and the RFC 6750
@@ -24,11 +22,6 @@ final class ProblemSecurityResponses implements AuthenticationEntryPoint, Access
 
     private final AuthenticationEntryPoint challenge = new BearerTokenAuthenticationEntryPoint();
     private final AccessDeniedHandler denial = new BearerTokenAccessDeniedHandler();
-    private final ObjectMapper objectMapper;
-
-    ProblemSecurityResponses(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
 
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception)
@@ -52,8 +45,6 @@ final class ProblemSecurityResponses implements AuthenticationEntryPoint, Access
             case FORBIDDEN -> "Your account does not have access to this.";
             default -> "The request's credentials are not valid. Sign in again.";
         };
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
-        response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        objectMapper.writeValue(response.getOutputStream(), RequestReference.name(problem, response));
+        ProblemResponse.write(response, ProblemDetail.forStatusAndDetail(status, detail));
     }
 }

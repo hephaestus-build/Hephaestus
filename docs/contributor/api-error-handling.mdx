@@ -38,11 +38,17 @@ A problem has the RFC 9457 members `type`, `title`, `status` and `detail`.
 - The `ProblemType` schema lists `about:blank` and every `ProblemType` URI, from the enum.
   It is an open enum (ADR 0103), because a minor release can add a type.
 - Each 4xx or 5xx response that an operation lists is `application/problem+json` with `ProblemDetail`.
-- Each operation has a `default` response with the same schema, for every status that it does not list.
+  An error body that an operation declares itself stays, such as the OAuth error of the MCP token endpoint.
+- Each operation has `4XX` and `5XX` responses with the same schema, for the statuses that it does not list.
   Do not document a list of statuses for an operation that no test checks.
-- The security filters write the same problem.
+  Do not use `default`: it also covers redirects.
+- A controller never answers an error with an empty body.
+  Throw an exception that an advice maps, or throw a `ResponseStatusException`.
+- A filter writes its problem with `ProblemResponse` (`core/web`).
   A request without a valid sign-in gets a 401 problem with the `WWW-Authenticate` challenge.
-  A request that the filters refuse gets a 403 problem.
+  A request that the security filters refuse gets a 403 problem.
+- A request that the servlet container rejects before Spring MVC runs gets the Spring Boot error body, not a problem.
+  A firewall rejection is one example.
 
 ## Which message reaches the client
 

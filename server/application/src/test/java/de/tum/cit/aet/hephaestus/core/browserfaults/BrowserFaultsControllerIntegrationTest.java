@@ -155,11 +155,22 @@ class BrowserFaultsControllerIntegrationTest extends AbstractWorkspaceIntegratio
         double before = faults("type_error");
         var report = Map.of("faults", List.of(fault("TYPE_ERROR", "0.95.1", "CRYwA6-M")));
 
-        anonymously(report, "cross-site").expectStatus().isForbidden().expectBody(Void.class);
+        anonymously(report, "cross-site")
+                .expectStatus()
+                .isForbidden()
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.detail")
+                .isEqualTo("The browser sent this report from another site.");
         var padded = new HashMap<String, Object>(report);
         padded.put("padding", "x".repeat(17 * 1024));
         double oversized = refused("payload-too-large");
-        anonymously(padded, "same-origin").expectStatus().isEqualTo(413).expectBody(Void.class);
+        anonymously(padded, "same-origin")
+                .expectStatus()
+                .isEqualTo(413)
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON);
 
         assertThat(faults("type_error")).isEqualTo(before);
         assertThat(refused("payload-too-large")).isEqualTo(oversized + 1);

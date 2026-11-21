@@ -6679,6 +6679,41 @@ export const McpConsentRequestMcpConsentRefusalSchema = {
 	enum: ["NOT_ADMIN", "PASSKEY_RECOVERY_PENDING", "INSTANCE_ADMIN_PASSKEY_REQUIRED"],
 } as const;
 
+export const McpTokenErrorSchema = {
+	type: "object",
+	description: "An error response of the token endpoint (RFC 6749 § 5.2).",
+	properties: {
+		error: {
+			type: "string",
+		},
+	},
+	required: ["error"],
+} as const;
+
+export const McpTokenResponseSchema = {
+	type: "object",
+	description: "A successful token response (RFC 6749 § 5.1).",
+	properties: {
+		access_token: {
+			type: "string",
+		},
+		expires_in: {
+			type: "integer",
+			format: "int64",
+		},
+		refresh_token: {
+			type: "string",
+		},
+		scope: {
+			type: "string",
+		},
+		token_type: {
+			type: "string",
+		},
+	},
+	required: ["expires_in", "scope"],
+} as const;
+
 export const MemberReviewReadinessSchema = {
 	type: "object",
 	description:

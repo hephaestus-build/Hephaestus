@@ -6,6 +6,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -33,12 +35,19 @@ public class PayloadSizeFilter extends OncePerRequestFilter {
         }
         if (contentLength < 0) {
             refused(request, "length-required");
-            response.setStatus(HttpServletResponse.SC_LENGTH_REQUIRED);
+            ProblemResponse.write(
+                    response,
+                    ProblemDetail.forStatusAndDetail(
+                            HttpStatus.LENGTH_REQUIRED, "Send the request body with a Content-Length header."));
             return;
         }
         if (contentLength > maxBytes) {
             refused(request, "payload-too-large");
-            response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
+            ProblemResponse.write(
+                    response,
+                    ProblemDetail.forStatusAndDetail(
+                            HttpStatus.CONTENT_TOO_LARGE,
+                            "The request body is larger than " + maxBytes + " bytes. Send a smaller one."));
             return;
         }
         accepted(request, response, chain, contentLength);

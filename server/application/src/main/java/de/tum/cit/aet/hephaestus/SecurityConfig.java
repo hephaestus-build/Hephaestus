@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
+import de.tum.cit.aet.hephaestus.core.web.ProblemResponse;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceOriginPolicy;
 import jakarta.servlet.FilterChain;
@@ -68,7 +69,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.OncePerRequestFilter;
-import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @EnableMethodSecurity(prePostEnabled = true)
@@ -254,8 +254,7 @@ public class SecurityConfig {
             ObjectProvider<BearerTokenResolver> bearerTokenResolverProvider,
             ObjectProvider<StaleAuthCookieFilter> staleAuthCookieFilterProvider,
             Converter<Jwt, AbstractAuthenticationToken> authenticationConverter,
-            ObjectProvider<AuthRateLimitFilter> authRateLimitFilterProvider,
-            ObjectMapper objectMapper)
+            ObjectProvider<AuthRateLimitFilter> authRateLimitFilterProvider)
             throws Exception {
         http.sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()));
@@ -284,9 +283,9 @@ public class SecurityConfig {
         // every request. The resolver bean is built in the auth module (AuthJwtConfig) so this root
         // config depends only on the framework BearerTokenResolver interface. See ADR 0017.
         BearerTokenResolver bearerTokenResolver = bearerTokenResolverProvider.getIfAvailable();
-        var refusals = new ProblemSecurityResponses(objectMapper);
-        http.exceptionHandling(
-                exceptions -> exceptions.authenticationEntryPoint(refusals).accessDeniedHandler(refusals));
+        var refusals = new ProblemSecurityResponses();
+        // The resource server's handlers serve requests that carry a token. This one also serves a refusal without one.
+        http.exceptionHandling(exceptions -> exceptions.accessDeniedHandler(refusals));
         http.oauth2ResourceServer(resourceServer -> {
             if (bearerTokenResolver != null) {
                 resourceServer.bearerTokenResolver(bearerTokenResolver);
@@ -315,13 +314,10 @@ public class SecurityConfig {
                         // Set the matcher after initialization to retain CSRF checks for cookie auth.
                         filter.setRequireCsrfProtectionMatcher(SecurityConfig.this::requiresCsrf);
                         filter.setAccessDeniedHandler((request, response, exception) -> {
-                            response.setStatus(403);
-                            response.setContentType("application/problem+json");
                             var problem = ProblemDetail.forStatus(403);
                             problem.setType(ProblemType.CSRF_TOKEN_REJECTED.uri());
                             problem.setTitle("Invalid CSRF token");
-                            objectMapper.writeValue(
-                                    response.getOutputStream(), RequestReference.name(problem, response));
+                            ProblemResponse.write(response, problem);
                         });
                         return filter;
                     }

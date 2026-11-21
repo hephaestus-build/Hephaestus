@@ -34,6 +34,10 @@ class PayloadSizeFilterTest extends BaseUnitTest {
 
         assertThat(served).hasValue(0);
         assertThat(response.getStatus()).isEqualTo(413);
+        assertThat(response.getContentType()).isEqualTo("application/problem+json");
+        assertThat(response.getContentAsString())
+                .contains("\"status\":413", "\"title\":\"Content Too Large\"")
+                .doesNotContain("\"properties\"");
     }
 
     /** A body whose size is only knowable after reading it is the case the limit exists to avoid. */

@@ -13,12 +13,14 @@ import jakarta.validation.Valid;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.server.ResponseStatusException;
 
 @WorkspaceScopedController
 @RequestMapping("/teams")
@@ -54,8 +56,10 @@ public class TeamController {
         log.info("Updating team visibility: teamId={}, workspaceId={}", id, workspaceContext.id());
         Workspace workspace = workspaceResolver.requireWorkspace(workspaceContext);
 
-        boolean updated = teamService.updateTeamVisibility(workspace, id, request.hidden());
-        return updated ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
+        if (!teamService.updateTeamVisibility(workspace, id, request.hidden())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "This workspace has no such team.");
+        }
+        return ResponseEntity.ok().build();
     }
 
     @PatchMapping("/{teamId}/repositories/{repositoryId}/visibility")
@@ -73,7 +77,10 @@ public class TeamController {
                 workspaceContext.id());
         Workspace workspace = workspaceResolver.requireWorkspace(workspaceContext);
 
-        boolean updated = teamService.updateRepositoryVisibility(workspace, teamId, repositoryId, request.hidden());
-        return updated ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
+        if (!teamService.updateRepositoryVisibility(workspace, teamId, repositoryId, request.hidden())) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "This workspace has no such team, or the team has no such repository.");
+        }
+        return ResponseEntity.ok().build();
     }
 }

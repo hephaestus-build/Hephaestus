@@ -334,8 +334,10 @@ public class OpenAPIConfiguration {
     }
 
     /**
-     * Every error status that an operation lists carries a problem, and {@code default} gives the same schema to each
-     * status that it does not list. A list of statuses for each operation would be a claim that nothing checks.
+     * Every 4xx and 5xx answer is a problem. An operation lists the statuses that it documents, and the {@code 4XX} and
+     * {@code 5XX} ranges cover the rest. A list of every status for each operation would be a claim that nothing
+     * checks, and {@code default} would also claim the redirects. An error body that an operation declares itself,
+     * such as an OAuth error, stays.
      */
     private static void declareProblemResponses(OpenAPI openApi) {
         if (openApi.getPaths() == null) return;
@@ -344,16 +346,31 @@ public class OpenAPIConfiguration {
                 .forEach(item -> item.readOperations().forEach(operation -> {
                     if (operation.getResponses() == null) operation.setResponses(new ApiResponses());
                     operation.getResponses().forEach((code, response) -> {
-                        if (code.startsWith("4") || code.startsWith("5")) response.setContent(problemContent());
+                        if (isError(code) && isProblemOrEmpty(response.getContent()))
+                            response.setContent(problemContent());
                     });
-                    operation
-                            .getResponses()
-                            .putIfAbsent(
-                                    "default",
-                                    new ApiResponse()
-                                            .description("An error. Its type names the problem.")
-                                            .content(problemContent()));
+                    for (String range : List.of("4XX", "5XX")) {
+                        operation
+                                .getResponses()
+                                .putIfAbsent(
+                                        range,
+                                        new ApiResponse()
+                                                .description("A problem. Its type names the kind.")
+                                                .content(problemContent()));
+                    }
                 }));
+    }
+
+    private static boolean isError(String code) {
+        return code.startsWith("4") || code.startsWith("5");
+    }
+
+    private static boolean isProblemOrEmpty(Content content) {
+        return content == null
+                || content.values().stream()
+                        .allMatch(media -> media.getSchema() != null
+                                && (COMPONENTS + "ProblemDetail")
+                                        .equals(media.getSchema().get$ref()));
     }
 
     private static Content problemContent() {

@@ -71,8 +71,9 @@ public class AuthLifecycleController {
                         CurrentAccount.passkeyCredential()),
                 request,
                 response);
-        return sessionContinues
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        if (!sessionContinues) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Your session has ended. Sign in again.");
+        }
+        return ResponseEntity.noContent().build();
     }
 }

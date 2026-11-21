@@ -165,7 +165,7 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .executeWithoutResult(status -> issuedJwtRepository.revokeAllForAccount(
                         issued.accountId(), Instant.now(), IssuedJwt.RevokedReason.SIGN_OUT_EVERYWHERE));
 
-        // The SAME cookie now fails closed: 401 via the resource-server chain.
+        // The SAME cookie now fails closed: 401 via the resource-server chain, with the challenge and a problem.
         webTestClient
                 .get()
                 .uri("/user")
@@ -173,7 +173,15 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isUnauthorized()
-                .expectBody(Void.class);
+                .expectHeader()
+                .valueMatches(HttpHeaders.WWW_AUTHENTICATE, "Bearer error=\"invalid_token\".*")
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo(401)
+                .jsonPath("$.detail")
+                .isEqualTo("Sign in, then try again.");
     }
 
     @Test

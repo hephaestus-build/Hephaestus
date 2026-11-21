@@ -2031,6 +2031,24 @@ export const zMcpConsentRequest = z.object({
 	workspaceSlug: z.string(),
 });
 
+/**
+ * An error response of the token endpoint (RFC 6749 § 5.2).
+ */
+export const zMcpTokenError = z.object({
+	error: z.string(),
+});
+
+/**
+ * A successful token response (RFC 6749 § 5.1).
+ */
+export const zMcpTokenResponse = z.object({
+	access_token: z.string().optional(),
+	expires_in: z.int(),
+	refresh_token: z.string().optional(),
+	scope: z.string(),
+	token_type: z.string().optional(),
+});
+
 export const zMembershipRoleSource = z.enum(["PROVIDER", "PERSON"]);
 
 export const zMembershipWorkspaceRole = z.enum(["OWNER", "ADMIN", "MEMBER"]);

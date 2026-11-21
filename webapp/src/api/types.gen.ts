@@ -3472,6 +3472,24 @@ export type McpConsentRequestMcpConsentRefusal =
 	| "INSTANCE_ADMIN_PASSKEY_REQUIRED";
 
 /**
+ * An error response of the token endpoint (RFC 6749 § 5.2).
+ */
+export type McpTokenError = {
+	error: string;
+};
+
+/**
+ * A successful token response (RFC 6749 § 5.1).
+ */
+export type McpTokenResponse = {
+	access_token?: string;
+	expires_in: number;
+	refresh_token?: string;
+	scope: string;
+	token_type?: string;
+};
+
+/**
  * Whether and how the workspace reviews one member's work, from the rules that start and admit a review.
  */
 export type MemberReviewReadiness = {
@@ -8757,9 +8775,13 @@ export type GetProvenanceKeysData = {
 
 export type GetProvenanceKeysErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetProvenanceKeysError = GetProvenanceKeysErrors[keyof GetProvenanceKeysErrors];
@@ -8785,9 +8807,13 @@ export type GetJwksData = {
 
 export type GetJwksErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetJwksError = GetJwksErrors[keyof GetJwksErrors];
@@ -8812,9 +8838,13 @@ export type GetMcpAuthorizationServerMetadataData = {
 
 export type GetMcpAuthorizationServerMetadataErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetMcpAuthorizationServerMetadataError =
@@ -8843,9 +8873,13 @@ export type GetMcpResourceMetadataData = {
 
 export type GetMcpResourceMetadataErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetMcpResourceMetadataError =
@@ -8881,9 +8915,13 @@ export type AdminListAuthEventsData = {
 
 export type AdminListAuthEventsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminListAuthEventsError = AdminListAuthEventsErrors[keyof AdminListAuthEventsErrors];
@@ -8914,9 +8952,13 @@ export type AdminCountAuthEventsData = {
 
 export type AdminCountAuthEventsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminCountAuthEventsError =
@@ -8948,9 +8990,13 @@ export type AdminExportAuthEventsData = {
 
 export type AdminExportAuthEventsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminExportAuthEventsError =
@@ -8986,9 +9032,13 @@ export type AdminListConfigAuditEventsData = {
 
 export type AdminListConfigAuditEventsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminListConfigAuditEventsError =
@@ -9022,9 +9072,13 @@ export type AdminCountConfigAuditEventsData = {
 
 export type AdminCountConfigAuditEventsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminCountConfigAuditEventsError =
@@ -9049,9 +9103,13 @@ export type AdminGetConfigurationReadinessData = {
 
 export type AdminGetConfigurationReadinessErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminGetConfigurationReadinessError =
@@ -9076,9 +9134,13 @@ export type GetEmailStatusData = {
 
 export type GetEmailStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetEmailStatusError = GetEmailStatusErrors[keyof GetEmailStatusErrors];
@@ -9105,9 +9167,13 @@ export type AdminSendTestEmailErrors = {
 	 */
 	400: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminSendTestEmailError = AdminSendTestEmailErrors[keyof AdminSendTestEmailErrors];
@@ -9131,9 +9197,13 @@ export type ListGitHubInstallationsData = {
 
 export type ListGitHubInstallationsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListGitHubInstallationsError =
@@ -9160,9 +9230,13 @@ export type AdoptGitHubInstallationData = {
 
 export type AdoptGitHubInstallationErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdoptGitHubInstallationError =
@@ -9189,9 +9263,13 @@ export type DeclineGitHubInstallationData = {
 
 export type DeclineGitHubInstallationErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type DeclineGitHubInstallationError =
@@ -9219,9 +9297,13 @@ export type ListInstallationDeadLettersData = {
 
 export type ListInstallationDeadLettersErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListInstallationDeadLettersError =
@@ -9248,9 +9330,13 @@ export type ReplayInstallationDeadLetterData = {
 
 export type ReplayInstallationDeadLetterErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ReplayInstallationDeadLetterError =
@@ -9275,9 +9361,13 @@ export type AdminListLlmCallPoolsData = {
 
 export type AdminListLlmCallPoolsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminListLlmCallPoolsError =
@@ -9306,9 +9396,13 @@ export type AdminCreateLlmCallPoolErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminCreateLlmCallPoolError =
@@ -9333,9 +9427,13 @@ export type AdminListLlmCallPoolModelsData = {
 
 export type AdminListLlmCallPoolModelsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminListLlmCallPoolModelsError =
@@ -9374,9 +9472,13 @@ export type AdminDeleteLlmCallPoolErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminDeleteLlmCallPoolError =
@@ -9415,9 +9517,13 @@ export type AdminUpdateLlmCallPoolErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminUpdateLlmCallPoolError =
@@ -9452,9 +9558,13 @@ export type AdminUpdateLlmCallPoolModelsErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminUpdateLlmCallPoolModelsError =
@@ -9479,9 +9589,13 @@ export type AdminListLlmConnectionsData = {
 
 export type AdminListLlmConnectionsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminListLlmConnectionsError =
@@ -9510,9 +9624,13 @@ export type AdminCreateLlmConnectionErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminCreateLlmConnectionError =
@@ -9537,9 +9655,13 @@ export type AdminProbeLlmConnectionDraftData = {
 
 export type AdminProbeLlmConnectionDraftErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminProbeLlmConnectionDraftError =
@@ -9574,9 +9696,13 @@ export type AdminCreateLlmModelErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminCreateLlmModelError = AdminCreateLlmModelErrors[keyof AdminCreateLlmModelErrors];
@@ -9610,9 +9736,13 @@ export type AdminDeleteLlmConnectionErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminDeleteLlmConnectionError =
@@ -9643,9 +9773,13 @@ export type AdminUpdateLlmConnectionErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminUpdateLlmConnectionError =
@@ -9672,9 +9806,13 @@ export type AdminProbeLlmConnectionData = {
 
 export type AdminProbeLlmConnectionErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminProbeLlmConnectionError =
@@ -9699,9 +9837,13 @@ export type AdminListLlmModelsData = {
 
 export type AdminListLlmModelsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminListLlmModelsError = AdminListLlmModelsErrors[keyof AdminListLlmModelsErrors];
@@ -9735,9 +9877,13 @@ export type AdminDeleteLlmModelErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminDeleteLlmModelError = AdminDeleteLlmModelErrors[keyof AdminDeleteLlmModelErrors];
@@ -9771,9 +9917,13 @@ export type AdminUpdateLlmModelErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminUpdateLlmModelError = AdminUpdateLlmModelErrors[keyof AdminUpdateLlmModelErrors];
@@ -9799,9 +9949,13 @@ export type AdminProbeLlmModelCapabilitiesData = {
 
 export type AdminProbeLlmModelCapabilitiesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminProbeLlmModelCapabilitiesError =
@@ -9832,9 +9986,13 @@ export type AdminUpdateLlmModelPriceErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminUpdateLlmModelPriceError =
@@ -9865,9 +10023,13 @@ export type AdminUpdateLlmModelSharingErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminUpdateLlmModelSharingError =
@@ -9892,9 +10054,13 @@ export type AdminGetLlmSettingsData = {
 
 export type AdminGetLlmSettingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminGetLlmSettingsError = AdminGetLlmSettingsErrors[keyof AdminGetLlmSettingsErrors];
@@ -9918,9 +10084,13 @@ export type AdminUpdateLlmSettingsData = {
 
 export type AdminUpdateLlmSettingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminUpdateLlmSettingsError =
@@ -9947,9 +10117,13 @@ export type AdminGetLlmUsageReportData = {
 
 export type AdminGetLlmUsageReportErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminGetLlmUsageReportError =
@@ -9974,9 +10148,13 @@ export type AdminListLoginProvidersData = {
 
 export type AdminListLoginProvidersErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminListLoginProvidersError =
@@ -10001,9 +10179,13 @@ export type AdminCreateLoginProviderData = {
 
 export type AdminCreateLoginProviderErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminCreateLoginProviderError =
@@ -10030,9 +10212,13 @@ export type AdminDeleteLoginProviderData = {
 
 export type AdminDeleteLoginProviderErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminDeleteLoginProviderError =
@@ -10059,9 +10245,13 @@ export type AdminUpdateLoginProviderData = {
 
 export type AdminUpdateLoginProviderErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminUpdateLoginProviderError =
@@ -10086,9 +10276,13 @@ export type AdminPreviewPersonDataData = {
 
 export type AdminPreviewPersonDataErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminPreviewPersonDataError =
@@ -10113,9 +10307,13 @@ export type AdminListPersonDataProvidersData = {
 
 export type AdminListPersonDataProvidersErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminListPersonDataProvidersError =
@@ -10142,9 +10340,13 @@ export type AdminGetPersonDataRequestData = {
 
 export type AdminGetPersonDataRequestErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminGetPersonDataRequestError =
@@ -10171,9 +10373,13 @@ export type AdminErasePersonDataData = {
 
 export type AdminErasePersonDataErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminErasePersonDataError =
@@ -10200,9 +10406,13 @@ export type AdminExportPersonDataData = {
 
 export type AdminExportPersonDataErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminExportPersonDataError =
@@ -10227,9 +10437,13 @@ export type GetInstanceCatalogData = {
 
 export type GetInstanceCatalogErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetInstanceCatalogError = GetInstanceCatalogErrors[keyof GetInstanceCatalogErrors];
@@ -10253,9 +10467,13 @@ export type GetInstanceDefinitionOptionsData = {
 
 export type GetInstanceDefinitionOptionsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetInstanceDefinitionOptionsError =
@@ -10280,9 +10498,13 @@ export type CreateCatalogGroupData = {
 
 export type CreateCatalogGroupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CreateCatalogGroupError = CreateCatalogGroupErrors[keyof CreateCatalogGroupErrors];
@@ -10309,9 +10531,13 @@ export type ReorderCatalogGroupsData = {
 
 export type ReorderCatalogGroupsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ReorderCatalogGroupsError =
@@ -10338,9 +10564,13 @@ export type GetCatalogGroupData = {
 
 export type GetCatalogGroupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetCatalogGroupError = GetCatalogGroupErrors[keyof GetCatalogGroupErrors];
@@ -10368,9 +10598,13 @@ export type UpdateCatalogGroupData = {
 
 export type UpdateCatalogGroupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateCatalogGroupError = UpdateCatalogGroupErrors[keyof UpdateCatalogGroupErrors];
@@ -10399,9 +10633,13 @@ export type ResetCatalogGroupData = {
 
 export type ResetCatalogGroupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ResetCatalogGroupError = ResetCatalogGroupErrors[keyof ResetCatalogGroupErrors];
@@ -10430,9 +10668,13 @@ export type AcknowledgeCatalogGroupData = {
 
 export type AcknowledgeCatalogGroupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AcknowledgeCatalogGroupError =
@@ -10462,9 +10704,13 @@ export type SetCatalogGroupStatusData = {
 
 export type SetCatalogGroupStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type SetCatalogGroupStatusError =
@@ -10492,9 +10738,13 @@ export type ResetCatalogOrderData = {
 
 export type ResetCatalogOrderErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ResetCatalogOrderError = ResetCatalogOrderErrors[keyof ResetCatalogOrderErrors];
@@ -10518,9 +10768,13 @@ export type CreateCatalogPracticeData = {
 
 export type CreateCatalogPracticeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CreateCatalogPracticeError =
@@ -10547,9 +10801,13 @@ export type GetCatalogPracticeData = {
 
 export type GetCatalogPracticeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetCatalogPracticeError = GetCatalogPracticeErrors[keyof GetCatalogPracticeErrors];
@@ -10578,9 +10836,13 @@ export type UpdateCatalogPracticeData = {
 
 export type UpdateCatalogPracticeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateCatalogPracticeError =
@@ -10610,9 +10872,13 @@ export type MoveCatalogPracticeData = {
 
 export type MoveCatalogPracticeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type MoveCatalogPracticeError = MoveCatalogPracticeErrors[keyof MoveCatalogPracticeErrors];
@@ -10641,9 +10907,13 @@ export type ResetCatalogPracticeData = {
 
 export type ResetCatalogPracticeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ResetCatalogPracticeError =
@@ -10673,9 +10943,13 @@ export type AcknowledgeCatalogPracticeData = {
 
 export type AcknowledgeCatalogPracticeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AcknowledgeCatalogPracticeError =
@@ -10702,9 +10976,13 @@ export type GetCatalogPracticeReleaseData = {
 
 export type GetCatalogPracticeReleaseErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetCatalogPracticeReleaseError =
@@ -10734,9 +11012,13 @@ export type AcceptCatalogPracticeReleaseData = {
 
 export type AcceptCatalogPracticeReleaseErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AcceptCatalogPracticeReleaseError =
@@ -10766,9 +11048,13 @@ export type SetCatalogPracticeStatusData = {
 
 export type SetCatalogPracticeStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type SetCatalogPracticeStatusError =
@@ -10807,9 +11093,13 @@ export type AdminListProductFeedbackData = {
 
 export type AdminListProductFeedbackErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminListProductFeedbackError =
@@ -10836,9 +11126,13 @@ export type ConfirmProductFeedbackCleanupData = {
 
 export type ConfirmProductFeedbackCleanupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ConfirmProductFeedbackCleanupError =
@@ -10863,9 +11157,13 @@ export type GetProductFeedbackDestinationsData = {
 
 export type GetProductFeedbackDestinationsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetProductFeedbackDestinationsError =
@@ -10890,9 +11188,13 @@ export type UpdateProductFeedbackDestinationsData = {
 
 export type UpdateProductFeedbackDestinationsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateProductFeedbackDestinationsError =
@@ -10917,9 +11219,13 @@ export type FileAllSavedProductFeedbackData = {
 
 export type FileAllSavedProductFeedbackErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type FileAllSavedProductFeedbackError =
@@ -10944,9 +11250,13 @@ export type ListProductFeedbackNeedsActionData = {
 
 export type ListProductFeedbackNeedsActionErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListProductFeedbackNeedsActionError =
@@ -10973,9 +11283,13 @@ export type AdminTriageProductFeedbackData = {
 
 export type AdminTriageProductFeedbackErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminTriageProductFeedbackError =
@@ -11002,9 +11316,13 @@ export type FileSavedProductFeedbackData = {
 
 export type FileSavedProductFeedbackErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type FileSavedProductFeedbackError =
@@ -11031,9 +11349,13 @@ export type RetryProductFeedbackFilingData = {
 
 export type RetryProductFeedbackFilingErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RetryProductFeedbackFilingError =
@@ -11061,9 +11383,13 @@ export type ListInstanceProviderRepairsData = {
 
 export type ListInstanceProviderRepairsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListInstanceProviderRepairsError =
@@ -11090,9 +11416,13 @@ export type ReleaseOrphanProviderRepairData = {
 
 export type ReleaseOrphanProviderRepairErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ReleaseOrphanProviderRepairError =
@@ -11114,9 +11444,13 @@ export type AdminGetReleaseData = {
 
 export type AdminGetReleaseErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminGetReleaseError = AdminGetReleaseErrors[keyof AdminGetReleaseErrors];
@@ -11139,9 +11473,13 @@ export type AdminCheckReleaseData = {
 
 export type AdminCheckReleaseErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminCheckReleaseError = AdminCheckReleaseErrors[keyof AdminCheckReleaseErrors];
@@ -11165,9 +11503,13 @@ export type ReleaseResearchDatasetData = {
 
 export type ReleaseResearchDatasetErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ReleaseResearchDatasetError =
@@ -11192,9 +11534,13 @@ export type CheckResearchRemovalsData = {
 
 export type CheckResearchRemovalsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CheckResearchRemovalsError =
@@ -11221,9 +11567,13 @@ export type CloseResearchDisclosureData = {
 
 export type CloseResearchDisclosureErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CloseResearchDisclosureError =
@@ -11247,9 +11597,13 @@ export type RecordResearchRemovalsData = {
 
 export type RecordResearchRemovalsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RecordResearchRemovalsError =
@@ -11274,9 +11628,13 @@ export type AdminGetInstanceSettingsData = {
 
 export type AdminGetInstanceSettingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminGetInstanceSettingsError =
@@ -11301,9 +11659,13 @@ export type GetPublicActivityPolicyData = {
 
 export type GetPublicActivityPolicyErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPublicActivityPolicyError =
@@ -11328,9 +11690,13 @@ export type UpdatePublicActivityPolicyData = {
 
 export type UpdatePublicActivityPolicyErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdatePublicActivityPolicyError =
@@ -11369,9 +11735,13 @@ export type AdminUpdateSilentModeErrors = {
 	 */
 	428: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminUpdateSilentModeError =
@@ -11399,9 +11769,13 @@ export type AdminListUsersData = {
 
 export type AdminListUsersErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminListUsersError = AdminListUsersErrors[keyof AdminListUsersErrors];
@@ -11426,9 +11800,13 @@ export type AdminUpdateUserData = {
 
 export type AdminUpdateUserErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminUpdateUserError = AdminUpdateUserErrors[keyof AdminUpdateUserErrors];
@@ -11453,9 +11831,13 @@ export type AdminRevokeUserSessionsData = {
 
 export type AdminRevokeUserSessionsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminRevokeUserSessionsError =
@@ -11482,9 +11864,13 @@ export type AdminUpdateUserStatusData = {
 
 export type AdminUpdateUserStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminUpdateUserStatusError =
@@ -11509,9 +11895,13 @@ export type AdminListWorkspacesData = {
 
 export type AdminListWorkspacesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminListWorkspacesError = AdminListWorkspacesErrors[keyof AdminListWorkspacesErrors];
@@ -11537,9 +11927,13 @@ export type AdminUpdateWorkspaceLlmBudgetData = {
 
 export type AdminUpdateWorkspaceLlmBudgetErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdminUpdateWorkspaceLlmBudgetError =
@@ -11570,9 +11964,13 @@ export type GetClientSignInConfigurationErrors = {
 	 */
 	400: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetClientSignInConfigurationError =
@@ -11609,9 +12007,13 @@ export type LogoutClientSessionErrors = {
 	 */
 	429: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type LogoutClientSessionError = LogoutClientSessionErrors[keyof LogoutClientSessionErrors];
@@ -11651,9 +12053,13 @@ export type RefreshClientSessionErrors = {
 	 */
 	429: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RefreshClientSessionError =
@@ -11690,9 +12096,13 @@ export type ExchangeClientSignInErrors = {
 	 */
 	429: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ExchangeClientSignInError =
@@ -11717,9 +12127,13 @@ export type GetCsrfTokenData = {
 
 export type GetCsrfTokenErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetCsrfTokenError = GetCsrfTokenErrors[keyof GetCsrfTokenErrors];
@@ -11742,9 +12156,13 @@ export type LogoutData = {
 
 export type LogoutErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type LogoutError = LogoutErrors[keyof LogoutErrors];
@@ -11775,9 +12193,13 @@ export type RefreshErrors = {
 	 */
 	401: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RefreshError = RefreshErrors[keyof RefreshErrors];
@@ -11816,9 +12238,13 @@ export type ReportBrowserFaultsErrors = {
 	 */
 	429: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ReportBrowserFaultsError = ReportBrowserFaultsErrors[keyof ReportBrowserFaultsErrors];
@@ -11842,9 +12268,13 @@ export type ListGlobalContributorsData = {
 
 export type ListGlobalContributorsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListGlobalContributorsError =
@@ -11871,9 +12301,13 @@ export type ClaimGitHubInstallationData = {
 
 export type ClaimGitHubInstallationErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ClaimGitHubInstallationError =
@@ -11898,9 +12332,13 @@ export type ListIdentityProvidersData = {
 
 export type ListIdentityProvidersErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListIdentityProvidersError =
@@ -11935,9 +12373,13 @@ export type AuthorizeMcpClientData = {
 
 export type AuthorizeMcpClientErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AuthorizeMcpClientError = AuthorizeMcpClientErrors[keyof AuthorizeMcpClientErrors];
@@ -11960,9 +12402,13 @@ export type RefuseMcpConsentRequestData = {
 
 export type RefuseMcpConsentRequestErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RefuseMcpConsentRequestError =
@@ -11989,9 +12435,13 @@ export type GetMcpConsentRequestData = {
 
 export type GetMcpConsentRequestErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetMcpConsentRequestError =
@@ -12018,9 +12468,13 @@ export type ApproveMcpConsentRequestData = {
 
 export type ApproveMcpConsentRequestErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ApproveMcpConsentRequestError =
@@ -12054,23 +12508,29 @@ export type McpTokenData = {
 
 export type McpTokenErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * The grant is refused (RFC 6749 § 5.2)
 	 */
-	default: ProblemDetail;
+	400: McpTokenError;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
-export type McpTokenError = McpTokenErrors[keyof McpTokenErrors];
+export type McpTokenError2 = McpTokenErrors[keyof McpTokenErrors];
 
 export type McpTokenResponses = {
 	/**
-	 * OK
+	 * The tokens (RFC 6749 § 5.1)
 	 */
-	200: {
-		[key: string]: unknown;
-	};
+	200: McpTokenResponse;
 };
 
-export type McpTokenResponse = McpTokenResponses[keyof McpTokenResponses];
+export type McpTokenResponse2 = McpTokenResponses[keyof McpTokenResponses];
 
 export type UnsubscribeEmailData = {
 	body?: {
@@ -12085,9 +12545,13 @@ export type UnsubscribeEmailData = {
 
 export type UnsubscribeEmailErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UnsubscribeEmailError = UnsubscribeEmailErrors[keyof UnsubscribeEmailErrors];
@@ -12116,9 +12580,13 @@ export type CallbackGetData = {
 
 export type CallbackGetErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CallbackGetError = CallbackGetErrors[keyof CallbackGetErrors];
@@ -12149,9 +12617,13 @@ export type CallbackPostData = {
 
 export type CallbackPostErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CallbackPostError = CallbackPostErrors[keyof CallbackPostErrors];
@@ -12176,9 +12648,13 @@ export type SubmitInstanceProductFeedbackData = {
 
 export type SubmitInstanceProductFeedbackErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type SubmitInstanceProductFeedbackError =
@@ -12203,9 +12679,13 @@ export type ListMyProductFeedbackData = {
 
 export type ListMyProductFeedbackErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListMyProductFeedbackError =
@@ -12230,9 +12710,13 @@ export type GetProductFeedbackSharingData = {
 
 export type GetProductFeedbackSharingErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetProductFeedbackSharingError =
@@ -12257,9 +12741,13 @@ export type UpdateProductFeedbackSharingData = {
 
 export type UpdateProductFeedbackSharingErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateProductFeedbackSharingError =
@@ -12286,9 +12774,13 @@ export type AllowMyProductFeedbackPublicData = {
 
 export type AllowMyProductFeedbackPublicErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AllowMyProductFeedbackPublicError =
@@ -12315,9 +12807,13 @@ export type EditMyProductFeedbackDraftData = {
 
 export type EditMyProductFeedbackDraftErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type EditMyProductFeedbackDraftError =
@@ -12344,9 +12840,13 @@ export type KeepMyProductFeedbackPrivateData = {
 
 export type KeepMyProductFeedbackPrivateErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type KeepMyProductFeedbackPrivateError =
@@ -12373,9 +12873,13 @@ export type MakeMyProductFeedbackPrivateData = {
 
 export type MakeMyProductFeedbackPrivateErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type MakeMyProductFeedbackPrivateError =
@@ -12410,9 +12914,13 @@ export type GetPublicActivityData = {
 
 export type GetPublicActivityErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPublicActivityError = GetPublicActivityErrors[keyof GetPublicActivityErrors];
@@ -12447,9 +12955,13 @@ export type GetPublicActivityPersonData = {
 
 export type GetPublicActivityPersonErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPublicActivityPersonError =
@@ -12497,9 +13009,13 @@ export type GetPublicActivityPersonWorkData = {
 
 export type GetPublicActivityPersonWorkErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPublicActivityPersonWorkError =
@@ -12531,9 +13047,13 @@ export type DeleteCurrentUserErrors = {
 	 */
 	403: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type DeleteCurrentUserError = DeleteCurrentUserErrors[keyof DeleteCurrentUserErrors];
@@ -12557,9 +13077,13 @@ export type GetCurrentUserData = {
 
 export type GetCurrentUserErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetCurrentUserError = GetCurrentUserErrors[keyof GetCurrentUserErrors];
@@ -12582,9 +13106,13 @@ export type GetAccountAiChoiceData = {
 
 export type GetAccountAiChoiceErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetAccountAiChoiceError = GetAccountAiChoiceErrors[keyof GetAccountAiChoiceErrors];
@@ -12608,9 +13136,13 @@ export type UpdateAccountAiChoiceData = {
 
 export type UpdateAccountAiChoiceErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateAccountAiChoiceError =
@@ -12635,9 +13167,13 @@ export type GetConsentStatusData = {
 
 export type GetConsentStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetConsentStatusError = GetConsentStatusErrors[keyof GetConsentStatusErrors];
@@ -12660,9 +13196,13 @@ export type CompleteFirstLoginConsentData = {
 
 export type CompleteFirstLoginConsentErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CompleteFirstLoginConsentError =
@@ -12687,9 +13227,13 @@ export type UpdateResearchConsentData = {
 
 export type UpdateResearchConsentErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateResearchConsentError =
@@ -12714,9 +13258,13 @@ export type RequestDataExportData = {
 
 export type RequestDataExportErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RequestDataExportError = RequestDataExportErrors[keyof RequestDataExportErrors];
@@ -12742,9 +13290,13 @@ export type GetDataExportStatusData = {
 
 export type GetDataExportStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetDataExportStatusError = GetDataExportStatusErrors[keyof GetDataExportStatusErrors];
@@ -12770,9 +13322,13 @@ export type DownloadDataExportData = {
 
 export type DownloadDataExportErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type DownloadDataExportError = DownloadDataExportErrors[keyof DownloadDataExportErrors];
@@ -12796,9 +13352,13 @@ export type GetUserFeaturesData = {
 
 export type GetUserFeaturesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetUserFeaturesError = GetUserFeaturesErrors[keyof GetUserFeaturesErrors];
@@ -12821,9 +13381,13 @@ export type ListLinkedIdentitiesData = {
 
 export type ListLinkedIdentitiesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListLinkedIdentitiesError =
@@ -12858,9 +13422,13 @@ export type UnlinkIdentityErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UnlinkIdentityError = UnlinkIdentityErrors[keyof UnlinkIdentityErrors];
@@ -12883,9 +13451,13 @@ export type GetNotificationPreferencesData = {
 
 export type GetNotificationPreferencesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetNotificationPreferencesError =
@@ -12936,9 +13508,13 @@ export type UpdateNotificationPreferencesErrors = {
 	 */
 	428: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateNotificationPreferencesError =
@@ -12963,9 +13539,13 @@ export type GetPasskeyStatusData = {
 
 export type GetPasskeyStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPasskeyStatusError = GetPasskeyStatusErrors[keyof GetPasskeyStatusErrors];
@@ -12988,9 +13568,13 @@ export type RegisterPasskeyData = {
 
 export type RegisterPasskeyErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RegisterPasskeyError = RegisterPasskeyErrors[keyof RegisterPasskeyErrors];
@@ -13011,9 +13595,13 @@ export type UpdatePasskeyProtectionData = {
 
 export type UpdatePasskeyProtectionErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdatePasskeyProtectionError =
@@ -13035,9 +13623,13 @@ export type RecoverPasskeysData = {
 
 export type RecoverPasskeysErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RecoverPasskeysError = RecoverPasskeysErrors[keyof RecoverPasskeysErrors];
@@ -13058,9 +13650,13 @@ export type CreatePasskeyRecoveryCodesData = {
 
 export type CreatePasskeyRecoveryCodesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CreatePasskeyRecoveryCodesError =
@@ -13085,9 +13681,13 @@ export type GetPasskeyRegistrationOptionsData = {
 
 export type GetPasskeyRegistrationOptionsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPasskeyRegistrationOptionsError =
@@ -13112,9 +13712,13 @@ export type VerifyPasskeyData = {
 
 export type VerifyPasskeyErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type VerifyPasskeyError = VerifyPasskeyErrors[keyof VerifyPasskeyErrors];
@@ -13135,9 +13739,13 @@ export type GetPasskeyVerificationOptionsData = {
 
 export type GetPasskeyVerificationOptionsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPasskeyVerificationOptionsError =
@@ -13164,9 +13772,13 @@ export type RemovePasskeyData = {
 
 export type RemovePasskeyErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RemovePasskeyError = RemovePasskeyErrors[keyof RemovePasskeyErrors];
@@ -13187,9 +13799,13 @@ export type GetPublicActivityChoiceData = {
 
 export type GetPublicActivityChoiceErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPublicActivityChoiceError =
@@ -13214,9 +13830,13 @@ export type UpdatePublicActivityChoiceData = {
 
 export type UpdatePublicActivityChoiceErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdatePublicActivityChoiceError =
@@ -13243,9 +13863,13 @@ export type GetPublicActivityOnboardingData = {
 
 export type GetPublicActivityOnboardingErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPublicActivityOnboardingError =
@@ -13272,9 +13896,13 @@ export type AnswerPublicActivityOnboardingData = {
 
 export type AnswerPublicActivityOnboardingErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AnswerPublicActivityOnboardingError =
@@ -13299,9 +13927,13 @@ export type RevokeOtherSessionsData = {
 
 export type RevokeOtherSessionsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RevokeOtherSessionsError = RevokeOtherSessionsErrors[keyof RevokeOtherSessionsErrors];
@@ -13325,9 +13957,13 @@ export type ListSessionsData = {
 
 export type ListSessionsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListSessionsError = ListSessionsErrors[keyof ListSessionsErrors];
@@ -13352,9 +13988,13 @@ export type RevokeSessionData = {
 
 export type RevokeSessionErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RevokeSessionError = RevokeSessionErrors[keyof RevokeSessionErrors];
@@ -13377,9 +14017,13 @@ export type GetUserSettingsData = {
 
 export type GetUserSettingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetUserSettingsError = GetUserSettingsErrors[keyof GetUserSettingsErrors];
@@ -13402,9 +14046,13 @@ export type UpdateUserSettingsData = {
 
 export type UpdateUserSettingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateUserSettingsError = UpdateUserSettingsErrors[keyof UpdateUserSettingsErrors];
@@ -13428,9 +14076,13 @@ export type GetSlackUserPreferencesData = {
 
 export type GetSlackUserPreferencesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetSlackUserPreferencesError =
@@ -13463,9 +14115,13 @@ export type ReportWebVitalsErrors = {
 	 */
 	401: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ReportWebVitalsError = ReportWebVitalsErrors[keyof ReportWebVitalsErrors];
@@ -13488,9 +14144,13 @@ export type ListWorkspacesData = {
 
 export type ListWorkspacesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListWorkspacesError = ListWorkspacesErrors[keyof ListWorkspacesErrors];
@@ -13513,9 +14173,13 @@ export type CreateWorkspaceData = {
 
 export type CreateWorkspaceErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CreateWorkspaceError = CreateWorkspaceErrors[keyof CreateWorkspaceErrors];
@@ -13538,9 +14202,13 @@ export type ListGitLabGroupsData = {
 
 export type ListGitLabGroupsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListGitLabGroupsError = ListGitLabGroupsErrors[keyof ListGitLabGroupsErrors];
@@ -13563,9 +14231,13 @@ export type GitLabPreflightData = {
 
 export type GitLabPreflightErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GitLabPreflightError = GitLabPreflightErrors[keyof GitLabPreflightErrors];
@@ -13591,9 +14263,13 @@ export type ListGitLabProjectsData = {
 
 export type ListGitLabProjectsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListGitLabProjectsError = ListGitLabProjectsErrors[keyof ListGitLabProjectsErrors];
@@ -13617,9 +14293,13 @@ export type GetProvidersData = {
 
 export type GetProvidersErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetProvidersError = GetProvidersErrors[keyof GetProvidersErrors];
@@ -13651,9 +14331,13 @@ export type PurgeWorkspaceErrors = {
 	 */
 	403: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type PurgeWorkspaceError = PurgeWorkspaceErrors[keyof PurgeWorkspaceErrors];
@@ -13681,9 +14365,13 @@ export type GetWorkspaceData = {
 
 export type GetWorkspaceErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetWorkspaceError = GetWorkspaceErrors[keyof GetWorkspaceErrors];
@@ -13723,9 +14411,13 @@ export type GetActivityFacetsErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetActivityFacetsError = GetActivityFacetsErrors[keyof GetActivityFacetsErrors];
@@ -13766,9 +14458,13 @@ export type ListHiddenContributorsErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListHiddenContributorsError =
@@ -13819,9 +14515,13 @@ export type GetOwnActivityErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOwnActivityError = GetOwnActivityErrors[keyof GetOwnActivityErrors];
@@ -13882,9 +14582,13 @@ export type GetOwnActivityWorkErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOwnActivityWorkError = GetOwnActivityWorkErrors[keyof GetOwnActivityWorkErrors];
@@ -13929,9 +14633,13 @@ export type GetOpenWorkErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOpenWorkError = GetOpenWorkErrors[keyof GetOpenWorkErrors];
@@ -13980,9 +14688,13 @@ export type GetActivityPeopleErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetActivityPeopleError = GetActivityPeopleErrors[keyof GetActivityPeopleErrors];
@@ -14033,9 +14745,13 @@ export type GetActivityPersonErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetActivityPersonError = GetActivityPersonErrors[keyof GetActivityPersonErrors];
@@ -14079,9 +14795,13 @@ export type UpdateActivityAutomationErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateActivityAutomationError =
@@ -14126,9 +14846,13 @@ export type UpdatePublicActivityObjectionErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdatePublicActivityObjectionError =
@@ -14192,9 +14916,13 @@ export type GetActivityPersonWorkErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetActivityPersonWorkError =
@@ -14236,9 +14964,13 @@ export type GetPublicActivityHiddenCountErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPublicActivityHiddenCountError =
@@ -14302,9 +15034,13 @@ export type GetActivityWorkErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetActivityWorkError = GetActivityWorkErrors[keyof GetActivityWorkErrors];
@@ -14342,9 +15078,13 @@ export type ListWorkspaceConfigAuditEventsData = {
 
 export type ListWorkspaceConfigAuditEventsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListWorkspaceConfigAuditEventsError =
@@ -14382,9 +15122,13 @@ export type CountWorkspaceConfigAuditEventsData = {
 
 export type CountWorkspaceConfigAuditEventsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CountWorkspaceConfigAuditEventsError =
@@ -14414,9 +15158,13 @@ export type ListData = {
 
 export type ListErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListError = ListErrors[keyof ListErrors];
@@ -14444,9 +15192,13 @@ export type InitiateData = {
 
 export type InitiateErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type InitiateError = InitiateErrors[keyof InitiateErrors];
@@ -14474,9 +15226,13 @@ export type GetIntegrationCatalogData = {
 
 export type GetIntegrationCatalogErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetIntegrationCatalogError =
@@ -14510,9 +15266,13 @@ export type GetOutlineTokenStatusErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOutlineTokenStatusError =
@@ -14550,9 +15310,13 @@ export type ReplaceOutlineTokenErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ReplaceOutlineTokenError = ReplaceOutlineTokenErrors[keyof ReplaceOutlineTokenErrors];
@@ -14585,9 +15349,13 @@ export type ListConnectionProviderRepairsData = {
 
 export type ListConnectionProviderRepairsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListConnectionProviderRepairsError =
@@ -14619,9 +15387,13 @@ export type ReleaseConnectionProviderRepairData = {
 
 export type ReleaseConnectionProviderRepairErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ReleaseConnectionProviderRepairError =
@@ -14649,9 +15421,13 @@ export type GetConnectionSyncStatusData = {
 
 export type GetConnectionSyncStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetConnectionSyncStatusError =
@@ -14685,9 +15461,13 @@ export type ListConnectionSyncJobsData = {
 
 export type ListConnectionSyncJobsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListConnectionSyncJobsError =
@@ -14734,9 +15514,13 @@ export type TriggerSyncJobErrors = {
 	 */
 	503: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type TriggerSyncJobError = TriggerSyncJobErrors[keyof TriggerSyncJobErrors];
@@ -14782,9 +15566,13 @@ export type UpdateConnectionSyncJobErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateConnectionSyncJobError =
@@ -14815,9 +15603,13 @@ export type ListConnectionSyncResourcesData = {
 
 export type ListConnectionSyncResourcesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListConnectionSyncResourcesError =
@@ -14848,9 +15640,13 @@ export type ReadData = {
 
 export type ReadErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ReadError = ReadErrors[keyof ReadErrors];
@@ -14879,9 +15675,13 @@ export type UpdateConnectionStatusData = {
 
 export type UpdateConnectionStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateConnectionStatusError =
@@ -14911,9 +15711,13 @@ export type GetConversationData = {
 
 export type GetConversationErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetConversationError = GetConversationErrors[keyof GetConversationErrors];
@@ -14944,9 +15748,13 @@ export type ListConversationEntriesData = {
 
 export type ListConversationEntriesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListConversationEntriesError =
@@ -14981,9 +15789,13 @@ export type DeleteConversationEntryErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type DeleteConversationEntryError =
@@ -15021,9 +15833,13 @@ export type GetConversationThreadErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetConversationThreadError =
@@ -15054,9 +15870,13 @@ export type ClearConversationVoteData = {
 
 export type ClearConversationVoteErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ClearConversationVoteError =
@@ -15091,9 +15911,13 @@ export type SetConversationVoteErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type SetConversationVoteError = SetConversationVoteErrors[keyof SetConversationVoteErrors];
@@ -15122,9 +15946,13 @@ export type MarkConversationReadData = {
 
 export type MarkConversationReadErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type MarkConversationReadError =
@@ -15158,9 +15986,13 @@ export type SubmitConversationTurnErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type SubmitConversationTurnError =
@@ -15191,9 +16023,13 @@ export type UpdateConversationTurnStatusData = {
 
 export type UpdateConversationTurnStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateConversationTurnStatusError =
@@ -15223,9 +16059,13 @@ export type UpdateFeaturesData = {
 
 export type UpdateFeaturesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateFeaturesError = UpdateFeaturesErrors[keyof UpdateFeaturesErrors];
@@ -15256,9 +16096,13 @@ export type ListConsumerDeadLettersData = {
 
 export type ListConsumerDeadLettersErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListConsumerDeadLettersError =
@@ -15289,9 +16133,13 @@ export type ReplayConsumerDeadLetterData = {
 
 export type ReplayConsumerDeadLetterErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ReplayConsumerDeadLetterError =
@@ -15321,9 +16169,13 @@ export type WorkspaceListAvailableLlmModelsData = {
 
 export type WorkspaceListAvailableLlmModelsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type WorkspaceListAvailableLlmModelsError =
@@ -15353,9 +16205,13 @@ export type UpdateWorkspaceLlmBudgetData = {
 
 export type UpdateWorkspaceLlmBudgetErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateWorkspaceLlmBudgetError =
@@ -15385,9 +16241,13 @@ export type WorkspaceListLlmConnectionsData = {
 
 export type WorkspaceListLlmConnectionsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type WorkspaceListLlmConnectionsError =
@@ -15421,9 +16281,13 @@ export type WorkspaceCreateLlmConnectionErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type WorkspaceCreateLlmConnectionError =
@@ -15462,9 +16326,13 @@ export type WorkspaceCreateLlmModelErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type WorkspaceCreateLlmModelError =
@@ -15503,9 +16371,13 @@ export type WorkspaceDeleteLlmConnectionErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type WorkspaceDeleteLlmConnectionError =
@@ -15540,9 +16412,13 @@ export type WorkspaceUpdateLlmConnectionErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type WorkspaceUpdateLlmConnectionError =
@@ -15573,9 +16449,13 @@ export type WorkspaceProbeLlmConnectionData = {
 
 export type WorkspaceProbeLlmConnectionErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type WorkspaceProbeLlmConnectionError =
@@ -15605,9 +16485,13 @@ export type WorkspaceListLlmModelsData = {
 
 export type WorkspaceListLlmModelsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type WorkspaceListLlmModelsError =
@@ -15646,9 +16530,13 @@ export type WorkspaceDeleteLlmModelErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type WorkspaceDeleteLlmModelError =
@@ -15687,9 +16575,13 @@ export type WorkspaceUpdateLlmModelErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type WorkspaceUpdateLlmModelError =
@@ -15720,9 +16612,13 @@ export type WorkspaceProbeLlmModelCapabilitiesData = {
 
 export type WorkspaceProbeLlmModelCapabilitiesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type WorkspaceProbeLlmModelCapabilitiesError =
@@ -15752,9 +16648,13 @@ export type WorkspaceGetLlmSettingsData = {
 
 export type WorkspaceGetLlmSettingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type WorkspaceGetLlmSettingsError =
@@ -15786,9 +16686,13 @@ export type GetLlmUsageReportData = {
 
 export type GetLlmUsageReportErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetLlmUsageReportError = GetLlmUsageReportErrors[keyof GetLlmUsageReportErrors];
@@ -15817,9 +16721,13 @@ export type ListMcpClientGrantsData = {
 
 export type ListMcpClientGrantsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListMcpClientGrantsError = ListMcpClientGrantsErrors[keyof ListMcpClientGrantsErrors];
@@ -15849,9 +16757,13 @@ export type RevokeMcpClientGrantData = {
 
 export type RevokeMcpClientGrantErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RevokeMcpClientGrantError =
@@ -15893,9 +16805,13 @@ export type ListMembershipsData = {
 
 export type ListMembershipsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListMembershipsError = ListMembershipsErrors[keyof ListMembershipsErrors];
@@ -15927,9 +16843,13 @@ export type AssignMemberRoleErrors = {
 	 */
 	403: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AssignMemberRoleError = AssignMemberRoleErrors[keyof AssignMemberRoleErrors];
@@ -15961,9 +16881,13 @@ export type LeaveWorkspaceErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type LeaveWorkspaceError = LeaveWorkspaceErrors[keyof LeaveWorkspaceErrors];
@@ -15991,9 +16915,13 @@ export type GetOwnMembershipData = {
 
 export type GetOwnMembershipErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOwnMembershipError = GetOwnMembershipErrors[keyof GetOwnMembershipErrors];
@@ -16026,9 +16954,13 @@ export type RemoveMemberErrors = {
 	 */
 	403: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RemoveMemberError = RemoveMemberErrors[keyof RemoveMemberErrors];
@@ -16057,9 +16989,13 @@ export type SetMemberHiddenData = {
 
 export type SetMemberHiddenErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type SetMemberHiddenError = SetMemberHiddenErrors[keyof SetMemberHiddenErrors];
@@ -16092,9 +17028,13 @@ export type FollowProviderRoleErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type FollowProviderRoleError = FollowProviderRoleErrors[keyof FollowProviderRoleErrors];
@@ -16123,9 +17063,13 @@ export type ListModelAssignmentsData = {
 
 export type ListModelAssignmentsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListModelAssignmentsError =
@@ -16158,9 +17102,13 @@ export type RemoveModelAssignmentData = {
 
 export type RemoveModelAssignmentErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RemoveModelAssignmentError =
@@ -16201,9 +17149,13 @@ export type AssignModelErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AssignModelError = AssignModelErrors[keyof AssignModelErrors];
@@ -16231,9 +17183,13 @@ export type GetMemberOnboardingData = {
 
 export type GetMemberOnboardingErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetMemberOnboardingError = GetMemberOnboardingErrors[keyof GetMemberOnboardingErrors];
@@ -16262,9 +17218,13 @@ export type UpdateAiChoiceData = {
 
 export type UpdateAiChoiceErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateAiChoiceError = UpdateAiChoiceErrors[keyof UpdateAiChoiceErrors];
@@ -16292,9 +17252,13 @@ export type DismissMemberOnboardingData = {
 
 export type DismissMemberOnboardingErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type DismissMemberOnboardingError =
@@ -16324,9 +17288,13 @@ export type GetMemberOnboardingSettingsData = {
 
 export type GetMemberOnboardingSettingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetMemberOnboardingSettingsError =
@@ -16356,9 +17324,13 @@ export type UpdateMemberOnboardingSettingsData = {
 
 export type UpdateMemberOnboardingSettingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateMemberOnboardingSettingsError =
@@ -16388,9 +17360,13 @@ export type GetMemberOnboardingLinkOptionsData = {
 
 export type GetMemberOnboardingLinkOptionsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetMemberOnboardingLinkOptionsError =
@@ -16424,9 +17400,13 @@ export type ListOutlineCollectionsErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListOutlineCollectionsError =
@@ -16468,9 +17448,13 @@ export type RegisterOutlineCollectionErrors = {
 	 */
 	422: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RegisterOutlineCollectionError =
@@ -16516,9 +17500,13 @@ export type ListOutlineCollectionCandidatesErrors = {
 	 */
 	503: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListOutlineCollectionCandidatesError =
@@ -16553,9 +17541,13 @@ export type DeleteOutlineCollectionErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type DeleteOutlineCollectionError =
@@ -16590,9 +17582,13 @@ export type UpdateOutlineCollectionStateErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateOutlineCollectionStateError =
@@ -16622,9 +17618,13 @@ export type GetWorkspacePasskeyPolicyData = {
 
 export type GetWorkspacePasskeyPolicyErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetWorkspacePasskeyPolicyError =
@@ -16654,9 +17654,13 @@ export type UpdateWorkspacePasskeyPolicyData = {
 
 export type UpdateWorkspacePasskeyPolicyErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateWorkspacePasskeyPolicyError =
@@ -16690,9 +17694,13 @@ export type ListAdoptablePracticesErrors = {
 	 */
 	403: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListAdoptablePracticesError =
@@ -16723,9 +17731,13 @@ export type PreviewGroupAdoptionData = {
 
 export type PreviewGroupAdoptionErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type PreviewGroupAdoptionError =
@@ -16759,9 +17771,13 @@ export type AdoptGroupData = {
 
 export type AdoptGroupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdoptGroupError = AdoptGroupErrors[keyof AdoptGroupErrors];
@@ -16798,9 +17814,13 @@ export type PreviewPracticeAdoptionErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type PreviewPracticeAdoptionError =
@@ -16850,9 +17870,13 @@ export type AdoptPracticeErrors = {
 	 */
 	428: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AdoptPracticeError = AdoptPracticeErrors[keyof AdoptPracticeErrors];
@@ -16973,9 +17997,13 @@ export type ListPracticeGroupsData = {
 
 export type ListPracticeGroupsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListPracticeGroupsError = ListPracticeGroupsErrors[keyof ListPracticeGroupsErrors];
@@ -17004,9 +18032,13 @@ export type CreatePracticeGroupData = {
 
 export type CreatePracticeGroupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CreatePracticeGroupError = CreatePracticeGroupErrors[keyof CreatePracticeGroupErrors];
@@ -17035,9 +18067,13 @@ export type ReorderPracticeGroupsData = {
 
 export type ReorderPracticeGroupsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ReorderPracticeGroupsError =
@@ -17067,9 +18103,13 @@ export type GetOwnGroupStandingsData = {
 
 export type GetOwnGroupStandingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOwnGroupStandingsError =
@@ -17100,9 +18140,13 @@ export type DeletePracticeGroupData = {
 
 export type DeletePracticeGroupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type DeletePracticeGroupError = DeletePracticeGroupErrors[keyof DeletePracticeGroupErrors];
@@ -17132,9 +18176,13 @@ export type GetPracticeGroupData = {
 
 export type GetPracticeGroupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPracticeGroupError = GetPracticeGroupErrors[keyof GetPracticeGroupErrors];
@@ -17163,9 +18211,13 @@ export type UpdatePracticeGroupData = {
 
 export type UpdatePracticeGroupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdatePracticeGroupError = UpdatePracticeGroupErrors[keyof UpdatePracticeGroupErrors];
@@ -17198,9 +18250,13 @@ export type ResetGroupToCatalogData = {
 
 export type ResetGroupToCatalogErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ResetGroupToCatalogError = ResetGroupToCatalogErrors[keyof ResetGroupToCatalogErrors];
@@ -17230,9 +18286,13 @@ export type SetGroupFeedbackModeData = {
 
 export type SetGroupFeedbackModeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type SetGroupFeedbackModeError =
@@ -17268,9 +18328,13 @@ export type ListOwnGroupReviewsData = {
 
 export type ListOwnGroupReviewsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListOwnGroupReviewsError = ListOwnGroupReviewsErrors[keyof ListOwnGroupReviewsErrors];
@@ -17299,9 +18363,13 @@ export type GetOwnPracticeProfileOverviewData = {
 
 export type GetOwnPracticeProfileOverviewErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOwnPracticeProfileOverviewError =
@@ -17351,9 +18419,13 @@ export type ListOwnReviewsData = {
 
 export type ListOwnReviewsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListOwnReviewsError = ListOwnReviewsErrors[keyof ListOwnReviewsErrors];
@@ -17382,9 +18454,13 @@ export type GetOwnReviewData = {
 
 export type GetOwnReviewErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOwnReviewError = GetOwnReviewErrors[keyof GetOwnReviewErrors];
@@ -17412,9 +18488,13 @@ export type StartPracticeTrialData = {
 
 export type StartPracticeTrialErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type StartPracticeTrialError = StartPracticeTrialErrors[keyof StartPracticeTrialErrors];
@@ -17444,9 +18524,13 @@ export type GetPracticeTrialData = {
 
 export type GetPracticeTrialErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPracticeTrialError = GetPracticeTrialErrors[keyof GetPracticeTrialErrors];
@@ -17476,9 +18560,13 @@ export type ListPracticesData = {
 
 export type ListPracticesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListPracticesError = ListPracticesErrors[keyof ListPracticesErrors];
@@ -17506,9 +18594,13 @@ export type CreatePracticeData = {
 
 export type CreatePracticeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CreatePracticeError = CreatePracticeErrors[keyof CreatePracticeErrors];
@@ -17536,9 +18628,13 @@ export type GetPracticeDefinitionOptionsData = {
 
 export type GetPracticeDefinitionOptionsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPracticeDefinitionOptionsError =
@@ -17568,9 +18664,13 @@ export type GetFeedbackModeRollupData = {
 
 export type GetFeedbackModeRollupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetFeedbackModeRollupError =
@@ -17602,9 +18702,13 @@ export type GetOwnDeliveredWorkFeedbackData = {
 
 export type GetOwnDeliveredWorkFeedbackErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOwnDeliveredWorkFeedbackError =
@@ -17634,9 +18738,13 @@ export type GetOwnPracticePageFeedbackData = {
 
 export type GetOwnPracticePageFeedbackErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOwnPracticePageFeedbackError =
@@ -17671,9 +18779,13 @@ export type ClearOwnFeedbackResponseErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ClearOwnFeedbackResponseError =
@@ -17708,9 +18820,13 @@ export type GetOwnFeedbackResponseErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOwnFeedbackResponseError =
@@ -17753,9 +18869,13 @@ export type ReplaceOwnFeedbackResponseErrors = {
 	 */
 	409: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ReplaceOwnFeedbackResponseError =
@@ -17789,9 +18909,13 @@ export type ListReviewItemsData = {
 
 export type ListReviewItemsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListReviewItemsError = ListReviewItemsErrors[keyof ListReviewItemsErrors];
@@ -17820,9 +18944,13 @@ export type GetItemFactsData = {
 
 export type GetItemFactsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetItemFactsError = GetItemFactsErrors[keyof GetItemFactsErrors];
@@ -17853,9 +18981,13 @@ export type GetOwnItemTraceData = {
 
 export type GetOwnItemTraceErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOwnItemTraceError = GetOwnItemTraceErrors[keyof GetOwnItemTraceErrors];
@@ -17887,9 +19019,13 @@ export type ListOwnItemReviewsData = {
 
 export type ListOwnItemReviewsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListOwnItemReviewsError = ListOwnItemReviewsErrors[keyof ListOwnItemReviewsErrors];
@@ -17919,9 +19055,13 @@ export type GetItemTraceData = {
 
 export type GetItemTraceErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetItemTraceError = GetItemTraceErrors[keyof GetItemTraceErrors];
@@ -17949,9 +19089,13 @@ export type ListPracticeReleasesData = {
 
 export type ListPracticeReleasesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListPracticeReleasesError =
@@ -17985,9 +19129,13 @@ export type DeclinePracticeReleaseData = {
 
 export type DeclinePracticeReleaseErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type DeclinePracticeReleaseError =
@@ -18018,9 +19166,13 @@ export type GetPracticeReleaseData = {
 
 export type GetPracticeReleaseErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPracticeReleaseError = GetPracticeReleaseErrors[keyof GetPracticeReleaseErrors];
@@ -18053,9 +19205,13 @@ export type AcceptPracticeReleaseData = {
 
 export type AcceptPracticeReleaseErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AcceptPracticeReleaseError =
@@ -18096,9 +19252,13 @@ export type ListOwnResultsData = {
 
 export type ListOwnResultsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListOwnResultsError = ListOwnResultsErrors[keyof ListOwnResultsErrors];
@@ -18131,9 +19291,13 @@ export type GetOwnResultErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOwnResultError = GetOwnResultErrors[keyof GetOwnResultErrors];
@@ -18165,9 +19329,13 @@ export type ListReviewBatchesData = {
 
 export type ListReviewBatchesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListReviewBatchesError = ListReviewBatchesErrors[keyof ListReviewBatchesErrors];
@@ -18196,9 +19364,13 @@ export type CreateReviewBatchData = {
 
 export type CreateReviewBatchErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CreateReviewBatchError = CreateReviewBatchErrors[keyof CreateReviewBatchErrors];
@@ -18231,9 +19403,13 @@ export type UpdateReviewBatchStatusData = {
 
 export type UpdateReviewBatchStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateReviewBatchStatusError =
@@ -18280,9 +19456,13 @@ export type ResolveReviewContextErrors = {
 	 */
 	404: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ResolveReviewContextError =
@@ -18312,9 +19492,13 @@ export type RequestReviewData = {
 
 export type RequestReviewErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RequestReviewError = RequestReviewErrors[keyof RequestReviewErrors];
@@ -18342,9 +19526,13 @@ export type ListReviewSchedulesData = {
 
 export type ListReviewSchedulesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListReviewSchedulesError = ListReviewSchedulesErrors[keyof ListReviewSchedulesErrors];
@@ -18373,9 +19561,13 @@ export type CreateReviewScheduleData = {
 
 export type CreateReviewScheduleErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CreateReviewScheduleError =
@@ -18409,9 +19601,13 @@ export type DeleteReviewScheduleData = {
 
 export type DeleteReviewScheduleErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type DeleteReviewScheduleError =
@@ -18445,9 +19641,13 @@ export type SetReviewScheduleEnabledData = {
 
 export type SetReviewScheduleEnabledErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type SetReviewScheduleEnabledError =
@@ -18481,9 +19681,13 @@ export type UpdateReviewScheduleData = {
 
 export type UpdateReviewScheduleErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateReviewScheduleError =
@@ -18513,9 +19717,13 @@ export type GetPracticeReviewSettingsData = {
 
 export type GetPracticeReviewSettingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPracticeReviewSettingsError =
@@ -18548,9 +19756,13 @@ export type UpdatePracticeReviewSettingsData = {
 
 export type UpdatePracticeReviewSettingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdatePracticeReviewSettingsError =
@@ -18580,9 +19792,13 @@ export type PreviewReviewScopeData = {
 
 export type PreviewReviewScopeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type PreviewReviewScopeError = PreviewReviewScopeErrors[keyof PreviewReviewScopeErrors];
@@ -18611,9 +19827,13 @@ export type ListReviewedPracticesData = {
 
 export type ListReviewedPracticesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListReviewedPracticesError =
@@ -18661,9 +19881,13 @@ export type ListReviewsErrors = {
 	 */
 	400: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListReviewsError = ListReviewsErrors[keyof ListReviewsErrors];
@@ -18710,9 +19934,13 @@ export type ListReviewFeedbackData = {
 
 export type ListReviewFeedbackErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListReviewFeedbackError = ListReviewFeedbackErrors[keyof ListReviewFeedbackErrors];
@@ -18758,9 +19986,13 @@ export type CountReviewFeedbackByLocationData = {
 
 export type CountReviewFeedbackByLocationErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CountReviewFeedbackByLocationError =
@@ -18807,9 +20039,13 @@ export type CountReviewFeedbackByReasonData = {
 
 export type CountReviewFeedbackByReasonErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CountReviewFeedbackByReasonError =
@@ -18840,9 +20076,13 @@ export type GetReviewFeedbackData = {
 
 export type GetReviewFeedbackErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetReviewFeedbackError = GetReviewFeedbackErrors[keyof GetReviewFeedbackErrors];
@@ -18872,9 +20112,13 @@ export type ListFeedbackDecisionsData = {
 
 export type ListFeedbackDecisionsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListFeedbackDecisionsError =
@@ -18905,9 +20149,13 @@ export type CreateFeedbackDecisionData = {
 
 export type CreateFeedbackDecisionErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CreateFeedbackDecisionError =
@@ -18938,9 +20186,13 @@ export type RecheckFeedbackDeliveryData = {
 
 export type RecheckFeedbackDeliveryErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RecheckFeedbackDeliveryError =
@@ -18971,9 +20223,13 @@ export type RetryFeedbackData = {
 
 export type RetryFeedbackErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RetryFeedbackError = RetryFeedbackErrors[keyof RetryFeedbackErrors];
@@ -19008,9 +20264,13 @@ export type GetReviewLineageData = {
 
 export type GetReviewLineageErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetReviewLineageError = GetReviewLineageErrors[keyof GetReviewLineageErrors];
@@ -19059,9 +20319,13 @@ export type GetReviewOverviewErrors = {
 	 */
 	400: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetReviewOverviewError = GetReviewOverviewErrors[keyof GetReviewOverviewErrors];
@@ -19111,9 +20375,13 @@ export type ListReviewProblemsData = {
 
 export type ListReviewProblemsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListReviewProblemsError = ListReviewProblemsErrors[keyof ListReviewProblemsErrors];
@@ -19143,9 +20411,13 @@ export type GetReviewProblemData = {
 
 export type GetReviewProblemErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetReviewProblemError = GetReviewProblemErrors[keyof GetReviewProblemErrors];
@@ -19173,9 +20445,13 @@ export type GetReviewQueueData = {
 
 export type GetReviewQueueErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetReviewQueueError = GetReviewQueueErrors[keyof GetReviewQueueErrors];
@@ -19221,9 +20497,13 @@ export type ListReviewResultsData = {
 
 export type ListReviewResultsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListReviewResultsError = ListReviewResultsErrors[keyof ListReviewResultsErrors];
@@ -19253,9 +20533,13 @@ export type GetReviewResultData = {
 
 export type GetReviewResultErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetReviewResultError = GetReviewResultErrors[keyof GetReviewResultErrors];
@@ -19284,9 +20568,13 @@ export type ListResultMarksData = {
 
 export type ListResultMarksErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListResultMarksError = ListResultMarksErrors[keyof ListResultMarksErrors];
@@ -19315,9 +20603,13 @@ export type CreateResultMarkData = {
 
 export type CreateResultMarkErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CreateResultMarkError = CreateResultMarkErrors[keyof CreateResultMarkErrors];
@@ -19347,9 +20639,13 @@ export type RemoveResultMarkData = {
 
 export type RemoveResultMarkErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RemoveResultMarkError = RemoveResultMarkErrors[keyof RemoveResultMarkErrors];
@@ -19394,9 +20690,13 @@ export type GetReviewTimingErrors = {
 	 */
 	400: ProblemDetail;
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetReviewTimingError = GetReviewTimingErrors[keyof GetReviewTimingErrors];
@@ -19425,9 +20725,13 @@ export type GetReviewData = {
 
 export type GetReviewErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetReviewError = GetReviewErrors[keyof GetReviewErrors];
@@ -19456,9 +20760,13 @@ export type CancelReviewData = {
 
 export type CancelReviewErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CancelReviewError = CancelReviewErrors[keyof CancelReviewErrors];
@@ -19491,9 +20799,13 @@ export type ListReviewFeedbackChecksData = {
 
 export type ListReviewFeedbackChecksErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListReviewFeedbackChecksError =
@@ -19528,9 +20840,13 @@ export type ListScansData = {
 
 export type ListScansErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListScansError = ListScansErrors[keyof ListScansErrors];
@@ -19561,9 +20877,13 @@ export type StartScanData = {
 
 export type StartScanErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type StartScanError = StartScanErrors[keyof StartScanErrors];
@@ -19592,9 +20912,13 @@ export type GetScanData = {
 
 export type GetScanErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetScanError = GetScanErrors[keyof GetScanErrors];
@@ -19623,9 +20947,13 @@ export type GetScanReportData = {
 
 export type GetScanReportErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetScanReportError = GetScanReportErrors[keyof GetScanReportErrors];
@@ -19662,9 +20990,13 @@ export type ListScanReportItemsData = {
 
 export type ListScanReportItemsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListScanReportItemsError = ListScanReportItemsErrors[keyof ListScanReportItemsErrors];
@@ -19702,9 +21034,13 @@ export type ListScanReportProblemsData = {
 
 export type ListScanReportProblemsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListScanReportProblemsError =
@@ -19735,9 +21071,13 @@ export type ExportScanSarifData = {
 
 export type ExportScanSarifErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ExportScanSarifError = ExportScanSarifErrors[keyof ExportScanSarifErrors];
@@ -19766,9 +21106,13 @@ export type UpdateScanStatusData = {
 
 export type UpdateScanStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateScanStatusError = UpdateScanStatusErrors[keyof UpdateScanStatusErrors];
@@ -19800,9 +21144,13 @@ export type GetOwnPracticeStandingsData = {
 
 export type GetOwnPracticeStandingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetOwnPracticeStandingsError =
@@ -19834,9 +21182,13 @@ export type GetPracticeWorkspaceTilesData = {
 
 export type GetPracticeWorkspaceTilesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPracticeWorkspaceTilesError =
@@ -19866,9 +21218,13 @@ export type GetPracticeWorkspaceOverviewData = {
 
 export type GetPracticeWorkspaceOverviewErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPracticeWorkspaceOverviewError =
@@ -19899,9 +21255,13 @@ export type DeletePracticeData = {
 
 export type DeletePracticeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type DeletePracticeError = DeletePracticeErrors[keyof DeletePracticeErrors];
@@ -19930,9 +21290,13 @@ export type GetPracticeData = {
 
 export type GetPracticeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPracticeError = GetPracticeErrors[keyof GetPracticeErrors];
@@ -19961,9 +21325,13 @@ export type UpdatePracticeData = {
 
 export type UpdatePracticeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdatePracticeError = UpdatePracticeErrors[keyof UpdatePracticeErrors];
@@ -19995,9 +21363,13 @@ export type ResetPracticeToCatalogData = {
 
 export type ResetPracticeToCatalogErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ResetPracticeToCatalogError =
@@ -20028,9 +21400,13 @@ export type SetPracticeFeedbackModeData = {
 
 export type SetPracticeFeedbackModeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type SetPracticeFeedbackModeError =
@@ -20061,9 +21437,13 @@ export type CheckPracticeFilesData = {
 
 export type CheckPracticeFilesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type CheckPracticeFilesError = CheckPracticeFilesErrors[keyof CheckPracticeFilesErrors];
@@ -20093,9 +21473,13 @@ export type DownloadPracticeFilesData = {
 
 export type DownloadPracticeFilesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type DownloadPracticeFilesError =
@@ -20126,9 +21510,13 @@ export type MovePracticeData = {
 
 export type MovePracticeErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type MovePracticeError = MovePracticeErrors[keyof MovePracticeErrors];
@@ -20157,9 +21545,13 @@ export type BindPracticeGroupData = {
 
 export type BindPracticeGroupErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type BindPracticeGroupError = BindPracticeGroupErrors[keyof BindPracticeGroupErrors];
@@ -20192,9 +21584,13 @@ export type GetPracticeGuidanceData = {
 
 export type GetPracticeGuidanceErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetPracticeGuidanceError = GetPracticeGuidanceErrors[keyof GetPracticeGuidanceErrors];
@@ -20224,9 +21620,13 @@ export type ListPracticeVersionsData = {
 
 export type ListPracticeVersionsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListPracticeVersionsError =
@@ -20256,9 +21656,13 @@ export type SubmitWorkspaceProductFeedbackData = {
 
 export type SubmitWorkspaceProductFeedbackErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type SubmitWorkspaceProductFeedbackError =
@@ -20288,9 +21692,13 @@ export type GetWorkspacePublicActivitySettingsData = {
 
 export type GetWorkspacePublicActivitySettingsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetWorkspacePublicActivitySettingsError =
@@ -20320,9 +21728,13 @@ export type UpdatePublicActivityData = {
 
 export type UpdatePublicActivityErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdatePublicActivityError =
@@ -20354,9 +21766,13 @@ export type RemoveRepositoryToMonitorData = {
 
 export type RemoveRepositoryToMonitorErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RemoveRepositoryToMonitorError =
@@ -20386,9 +21802,13 @@ export type GetRepositoriesToMonitorData = {
 
 export type GetRepositoriesToMonitorErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetRepositoriesToMonitorError =
@@ -20420,9 +21840,13 @@ export type AddRepositoryToMonitorData = {
 
 export type AddRepositoryToMonitorErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AddRepositoryToMonitorError =
@@ -20449,9 +21873,13 @@ export type GetGitLabRepositorySelectionData = {
 
 export type GetGitLabRepositorySelectionErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetGitLabRepositorySelectionError =
@@ -20481,9 +21909,13 @@ export type UpdateGitLabRepositorySelectionData = {
 
 export type UpdateGitLabRepositorySelectionErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateGitLabRepositorySelectionError =
@@ -20513,9 +21945,13 @@ export type GetStoppedGitLabProjectsData = {
 
 export type GetStoppedGitLabProjectsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetStoppedGitLabProjectsError =
@@ -20548,9 +21984,13 @@ export type RemoveStoppedGitLabProjectData = {
 
 export type RemoveStoppedGitLabProjectErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RemoveStoppedGitLabProjectError =
@@ -20580,9 +22020,13 @@ export type ListSlackChannelsData = {
 
 export type ListSlackChannelsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListSlackChannelsError = ListSlackChannelsErrors[keyof ListSlackChannelsErrors];
@@ -20611,9 +22055,13 @@ export type RegisterSlackChannelData = {
 
 export type RegisterSlackChannelErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RegisterSlackChannelError =
@@ -20643,9 +22091,13 @@ export type ListSlackChannelCandidatesData = {
 
 export type ListSlackChannelCandidatesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListSlackChannelCandidatesError =
@@ -20676,9 +22128,13 @@ export type UpdateSlackChannelConsentData = {
 
 export type UpdateSlackChannelConsentErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateSlackChannelConsentError =
@@ -20709,9 +22165,13 @@ export type ListSlackChannelConsentEventsData = {
 
 export type ListSlackChannelConsentEventsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListSlackChannelConsentEventsError =
@@ -20741,9 +22201,13 @@ export type UpdateSlackUserPreferencesData = {
 
 export type UpdateSlackUserPreferencesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateSlackUserPreferencesError =
@@ -20773,9 +22237,13 @@ export type GetSlackScopesData = {
 
 export type GetSlackScopesErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetSlackScopesError = GetSlackScopesErrors[keyof GetSlackScopesErrors];
@@ -20803,9 +22271,13 @@ export type UpdateStatusData = {
 
 export type UpdateStatusErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateStatusError = UpdateStatusErrors[keyof UpdateStatusErrors];
@@ -20833,9 +22305,13 @@ export type GetWorkspaceSyncProgressData = {
 
 export type GetWorkspaceSyncProgressErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetWorkspaceSyncProgressError =
@@ -20865,9 +22341,13 @@ export type GetAllTeamsData = {
 
 export type GetAllTeamsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetAllTeamsError = GetAllTeamsErrors[keyof GetAllTeamsErrors];
@@ -20896,9 +22376,13 @@ export type UpdateTeamVisibilityData = {
 
 export type UpdateTeamVisibilityErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateTeamVisibilityError =
@@ -20927,9 +22411,13 @@ export type RemoveLabelFromTeamData = {
 
 export type RemoveLabelFromTeamErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type RemoveLabelFromTeamError = RemoveLabelFromTeamErrors[keyof RemoveLabelFromTeamErrors];
@@ -20960,9 +22448,13 @@ export type AddLabelToTeamData = {
 
 export type AddLabelToTeamErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type AddLabelToTeamError = AddLabelToTeamErrors[keyof AddLabelToTeamErrors];
@@ -20992,9 +22484,13 @@ export type UpdateRepositoryVisibilityData = {
 
 export type UpdateRepositoryVisibilityErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateRepositoryVisibilityError =
@@ -21021,9 +22517,13 @@ export type UpdateTokenData = {
 
 export type UpdateTokenErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type UpdateTokenError = UpdateTokenErrors[keyof UpdateTokenErrors];
@@ -21054,9 +22554,13 @@ export type ListUserViewUsersData = {
 
 export type ListUserViewUsersErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type ListUserViewUsersError = ListUserViewUsersErrors[keyof ListUserViewUsersErrors];
@@ -21092,9 +22596,13 @@ export type GetUserViewUserData = {
 
 export type GetUserViewUserErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetUserViewUserError = GetUserViewUserErrors[keyof GetUserViewUserErrors];
@@ -21122,9 +22630,13 @@ export type GetUsersWithTeamsData = {
 
 export type GetUsersWithTeamsErrors = {
 	/**
-	 * An error. Its type names the problem.
+	 * A problem. Its type names the kind.
 	 */
-	default: ProblemDetail;
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
 };
 
 export type GetUsersWithTeamsError = GetUsersWithTeamsErrors[keyof GetUsersWithTeamsErrors];

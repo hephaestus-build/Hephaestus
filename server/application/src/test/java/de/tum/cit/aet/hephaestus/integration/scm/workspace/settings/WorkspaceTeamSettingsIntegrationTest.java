@@ -132,7 +132,8 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
                 .exchange()
                 .expectStatus()
                 .isNotFound()
-                .expectBody(Void.class);
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON);
         webTestClient
                 .patch()
                 .uri(
@@ -146,7 +147,8 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
                 .exchange()
                 .expectStatus()
                 .isNotFound()
-                .expectBody(Void.class);
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON);
 
         assertThat(repositorySettingsRepository.findByWorkspaceIdAndTeamIdAndRepositoryId(
                         workspace.getId(), team.getId(), unmonitored.getId()))

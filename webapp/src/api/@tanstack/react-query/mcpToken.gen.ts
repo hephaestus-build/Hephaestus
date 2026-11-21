@@ -4,17 +4,17 @@ import type { UseMutationOptions } from "@tanstack/react-query";
 
 import type { Options } from "../../sdk.gen.js";
 import { mcpToken } from "../../sdk/mcpToken.gen.js";
-import type { McpTokenData, McpTokenError, McpTokenResponse } from "../../types.gen.js";
+import type { McpTokenData, McpTokenError2, McpTokenResponse2 } from "../../types.gen.js";
 
 /**
  * Exchange a code or rotate a refresh token (RFC 6749 § 3.2)
  */
 export const mcpTokenMutation = (
 	options?: Partial<Options<McpTokenData>>,
-): UseMutationOptions<McpTokenResponse, McpTokenError, Options<McpTokenData>> => {
+): UseMutationOptions<McpTokenResponse2, McpTokenError2, Options<McpTokenData>> => {
 	const mutationOptions: UseMutationOptions<
-		McpTokenResponse,
-		McpTokenError,
+		McpTokenResponse2,
+		McpTokenError2,
 		Options<McpTokenData>
 	> = {
 		mutationFn: async (fnOptions) => {

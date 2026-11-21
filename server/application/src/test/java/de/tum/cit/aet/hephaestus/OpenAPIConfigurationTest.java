@@ -59,37 +59,31 @@ class OpenAPIConfigurationTest {
         assertThat(type.getEnum()).isNull();
         assertThat(type.getFormat()).isEqualTo("uri-reference");
         assertThat(type.getDescription()).startsWith(OpenAPIConfiguration.OPEN_ENUM_NOTE);
-        List<Object> known = Stream.concat(
-                        Stream.of("about:blank"),
-                        Stream.of(ProblemType.values()).map(kind -> kind.uri().toString()))
-                .map(Object.class::cast)
-                .toList();
-        assertThat(List.copyOf(type.getExamples())).isEqualTo(known);
+        List<Object> examples = List.copyOf(type.getExamples());
+        assertThat(examples)
+                .startsWith("about:blank")
+                .contains(
+                        "https://docs.hephaestus.build/contributor/api-error-handling#step-up-required",
+                        "https://docs.hephaestus.build/contributor/api-error-handling#csrf-token-rejected")
+                .hasSize(ProblemType.values().length + 1);
     }
 
     @Test
     void shouldAnswerEveryErrorOfEveryOperationWithAProblem() {
         var listed = responseOperation("ProblemDetail");
         listed.getResponses()
-                .addApiResponse(
-                        "409",
-                        new ApiResponse()
-                                .description("Conflict")
-                                .content(new Content()
-                                        .addMediaType(
-                                                "application/json",
-                                                new MediaType()
-                                                        .schema(new Schema<>()
-                                                                .$ref("#/components/schemas/ProblemDetail")))))
-                .addApiResponse("404", new ApiResponse().description("Not found"));
+                .addApiResponse("409", errorResponse("application/json", "ProblemDetail"))
+                .addApiResponse("404", new ApiResponse().description("Not found"))
+                .addApiResponse("400", errorResponse("application/json", "OAuthError"));
         var api = api(new Components().addSchemas("ProblemDetail", objectWithFields("type")), listed);
 
         new OpenAPIConfiguration().schemaCustomizer("test").customise(api);
 
         var responses = listed.getResponses();
-        assertThat(responses).containsKeys("200", "404", "409", "default");
+        // `default` would also claim the redirects, so the ranges cover the statuses that an operation does not list.
+        assertThat(responses).containsOnlyKeys("200", "400", "404", "409", "4XX", "5XX");
         assertThat(Objects.requireNonNull(responses.get("200")).getContent()).containsOnlyKeys("application/json");
-        for (String code : List.of("404", "409", "default")) {
+        for (String code : List.of("404", "409", "4XX", "5XX")) {
             var content = Objects.requireNonNull(responses.get(code)).getContent();
             assertThat(content).containsOnlyKeys("application/problem+json");
             assertThat(Objects.requireNonNull(content.get("application/problem+json"))
@@ -97,6 +91,21 @@ class OpenAPIConfigurationTest {
                             .get$ref())
                     .isEqualTo("#/components/schemas/ProblemDetail");
         }
+        // An error body that the operation declares itself stays.
+        assertThat(Objects.requireNonNull(Objects.requireNonNull(responses.get("400"))
+                                .getContent()
+                                .get("application/json"))
+                        .getSchema()
+                        .get$ref())
+                .isEqualTo("#/components/schemas/OAuthError");
+    }
+
+    private static ApiResponse errorResponse(String media, String schema) {
+        return new ApiResponse()
+                .description("Refused")
+                .content(new Content()
+                        .addMediaType(
+                                media, new MediaType().schema(new Schema<>().$ref("#/components/schemas/" + schema))));
     }
 
     @Test

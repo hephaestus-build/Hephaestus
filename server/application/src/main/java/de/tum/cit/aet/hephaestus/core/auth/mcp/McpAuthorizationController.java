@@ -12,6 +12,9 @@ import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
@@ -180,6 +183,20 @@ public class McpAuthorizationController {
     @PostMapping(value = "/token", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     @PreAuthorize("permitAll()")
     @Operation(summary = "Exchange a code or rotate a refresh token (RFC 6749 § 3.2)", operationId = "mcpToken")
+    @ApiResponse(
+            responseCode = "200",
+            description = "The tokens (RFC 6749 § 5.1)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = McpTokenResponseDTO.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "The grant is refused (RFC 6749 § 5.2)",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = McpTokenErrorDTO.class)))
     public ResponseEntity<?> token(
             @RequestParam(name = "grant_type", required = false) @Nullable String grantType,
             @RequestParam(name = "code", required = false) @Nullable String code,

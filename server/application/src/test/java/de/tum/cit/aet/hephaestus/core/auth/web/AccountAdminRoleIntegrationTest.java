@@ -192,7 +192,13 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isForbidden()
-                .expectBody(Void.class);
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo(403)
+                .jsonPath("$.title")
+                .isEqualTo("Forbidden");
     }
 
     @Test

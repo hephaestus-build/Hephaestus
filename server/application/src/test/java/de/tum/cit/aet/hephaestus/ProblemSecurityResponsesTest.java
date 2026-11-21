@@ -21,7 +21,7 @@ class ProblemSecurityResponsesTest {
             .addMixIn(ProblemDetail.class, ProblemDetailJacksonMixin.class)
             .build();
 
-    private final ProblemSecurityResponses refusals = new ProblemSecurityResponses(mapper);
+    private final ProblemSecurityResponses refusals = new ProblemSecurityResponses();
 
     @Test
     void shouldAnswerAMissingSignInWithTheBearerChallengeAndAProblem() throws Exception {
