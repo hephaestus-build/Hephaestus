@@ -590,6 +590,12 @@
 			// loader that builds it, which lives with the house plugin; no alias spans the two trees.
 			"files": ["scripts/check-lint-contract.ts"],
 			"rules": { "import/no-relative-parent-imports": "off" }
+		},
+		{
+			// The source address index parses pages with the docs site's own Markdown plugins, which only
+			// the docs package installs, so it lives there; no alias spans the two trees.
+			"files": ["scripts/check-docs-addresses.ts"],
+			"rules": { "import/no-relative-parent-imports": "off" }
 		}
 	]
 }

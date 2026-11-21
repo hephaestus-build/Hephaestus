@@ -134,6 +134,7 @@ const policyGates = [
 	"gate:env",
 	"gate:quarantine",
 	"gate:no-legacy",
+	"gate:docs-addresses",
 	"gate:api-pagination",
 	"gate:configuration-reference",
 	"gate:shell",
@@ -285,6 +286,9 @@ export default defineConfig({
 			"gate:no-legacy": run(
 				"node --test scripts/check-no-legacy.test.ts && node scripts/check-no-legacy.ts",
 			),
+			// Every docs address in the repository against the docs source, without a build; the docs
+			// build checks the same addresses against the built site.
+			"gate:docs-addresses": run("node scripts/check-docs-addresses.ts --source"),
 			"lint:prose": run("node scripts/check-prose.ts"),
 			"report:prose": run("node scripts/report-prose.ts"),
 			"gate:instructions": run(
@@ -497,23 +501,41 @@ export default defineConfig({
 			"ci:windows": group(checkTasks.filter((gate) => !linuxOnly.has(gate))),
 
 			// Scoped selections for check:affected
-			"affected:agents": group([...agentGates, "gate:adr-confirmation", "gate:no-legacy"]),
+			"affected:agents": group([
+				...agentGates,
+				"gate:adr-confirmation",
+				"gate:no-legacy",
+				"gate:docs-addresses",
+			]),
 			"affected:changesets": group(changesetGates),
-			"affected:docs": group([...docsGates, "gate:instructions", "gate:prose", "gate:no-legacy"]),
+			"affected:docs": group([
+				...docsGates,
+				"gate:instructions",
+				"gate:prose",
+				"gate:no-legacy",
+				"gate:docs-addresses",
+			]),
 			// The pagination policy reads only server/openapi.yaml, which selects this scope.
 			"affected:server": group([
 				...serverGates,
 				"gate:adr-confirmation",
 				"gate:api-pagination",
 				"gate:no-legacy",
+				"gate:docs-addresses",
 			]),
 			"affected:webapp": group([
 				...webappGates,
 				"gate:prose",
 				"gate:adr-confirmation",
 				"gate:no-legacy",
+				"gate:docs-addresses",
 			]),
-			"affected:extension": group([...extensionGates, "gate:adr-confirmation", "gate:no-legacy"]),
+			"affected:extension": group([
+				...extensionGates,
+				"gate:adr-confirmation",
+				"gate:no-legacy",
+				"gate:docs-addresses",
+			]),
 
 			// The credential-free builds and suites that verification adds to quality
 			"verification:storybook-tests": group(["test:webapp:stories"]),

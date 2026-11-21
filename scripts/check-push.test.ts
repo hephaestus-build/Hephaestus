@@ -27,7 +27,7 @@ import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 
 void test("workflow and docs edits run their static checks without complete suites or builds", async () => {
 	const selected = pushTasks([".github/workflows/cicd.yml", "docs/contributor/ci-cd.mdx"]);
-	assert.equal(selected.length, 15);
+	assert.equal(selected.length, 16);
 	for (const owner of [
 		"gate:agents-lint",
 		"gate:scripts-typecheck",
@@ -36,6 +36,7 @@ void test("workflow and docs edits run their static checks without complete suit
 		"gate:docs-pages",
 		"gate:adr-confirmation",
 		"gate:no-legacy",
+		"gate:docs-addresses",
 	]) {
 		assert.ok(selected.includes(owner));
 	}
@@ -430,10 +431,10 @@ void test("a worktree selects its own changes and uses its own installed CLI", a
 		assert.equal(result.status, 0, result.stderr);
 		const calls = await readFile(f.calls, "utf8");
 		assert.ok(calls.includes(JSON.stringify(realpathSync(worktree))));
-		for (const task of ["gate:changesets", "gate:docs-lint", "gate:prose"]) {
+		for (const task of ["gate:changesets", "gate:docs-lint", "gate:prose", "gate:docs-addresses"]) {
 			assert.ok(calls.includes(JSON.stringify(["run", task])));
 		}
-		assert.equal(calls.trim().split("\n").length, 3);
+		assert.equal(calls.trim().split("\n").length, 4);
 	} finally {
 		f.git("worktree", "remove", "--force", worktree);
 		await rm(f.directory, { recursive: true, force: true });
