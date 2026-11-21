@@ -90,6 +90,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionManager;
 import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
 import org.springframework.transaction.interceptor.TransactionInterceptor;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -204,7 +205,8 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
                 new FeedbackThreadMeters(new SimpleMeterRegistry()),
                 Clock.systemUTC()));
         proxy.setProxyTargetClass(true);
-        proxy.addAdvice(new TransactionInterceptor(transactionManager, new AnnotationTransactionAttributeSource()));
+        proxy.addAdvice(new TransactionInterceptor(
+                (TransactionManager) transactionManager, new AnnotationTransactionAttributeSource()));
         adapter = new FeedbackThreadResolutionAdapter(
                 new FeedbackThreadResolutionService((FeedbackThreadSteps) proxy.getProxy(), targets, List.of(provider)),
                 mapper);
