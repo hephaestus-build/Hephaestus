@@ -81,7 +81,7 @@ The server and the agent-sandbox controller never connect to each other: both co
 The server creates a `SandboxClaim` there, and the controller watches the claims and creates each sandbox Pod.
 Public traffic goes through the Gateway data plane, the proxy or load balancer of the cluster admins' Gateway API implementation. It reaches the server Service on port 8080.
 
-<SystemDiagram name="deployment-cluster" title="Deployment view: Hephaestus on a managed Kubernetes cluster" alt="Deployment diagram: the Gateway data plane and API server, worker nodes with the server, PostgreSQL, controller and sandbox Pods, each with its image and connections.">
+<SystemDiagram name="deployment-cluster" title="Deployment view: Hephaestus on a managed Kubernetes cluster" alt="Deployment diagram: the Gateway data plane, the API server, and worker nodes with the server, PostgreSQL, controller and sandbox Pods and their images.">
 
 | From | To | Protocol | What crosses |
 | --- | --- | --- | --- |
