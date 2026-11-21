@@ -48,8 +48,9 @@ declare global {
 	}
 }
 
-export const API = "http://api.test";
 export const APP = new URL(E2E_BASE_URL).origin;
+// On the app's own origin, as the server serves its API: the page's policy allows no other host to connect to.
+export const API = `${APP}/api`;
 const EVENTS = "/conversation/events";
 const LATENCY_MS = 100;
 
@@ -254,7 +255,7 @@ async function instrument(page: Page, role: WorkspaceMembership["role"], answer:
 	});
 	// Nothing outside the app and its fixture API.
 	await context.route(
-		(url) => url.origin !== API && url.origin !== APP,
+		(url) => url.origin !== APP,
 		async (route) => route.abort(),
 	);
 	await useFixtureApi(context, APP, API);
@@ -266,7 +267,7 @@ async function instrument(page: Page, role: WorkspaceMembership["role"], answer:
 			return;
 		}
 		reads.push(
-			`${request.method()} ${url.pathname.replace(`/workspaces/${WORKSPACE}`, "/w")}${url.search}`,
+			`${request.method()} ${url.pathname.slice("/api".length).replace(`/workspaces/${WORKSPACE}`, "/w")}${url.search}`,
 		);
 		// Together with the read: a listed read that is not yet unanswered would let a step end early.
 		if (answer === "after-latency") {
