@@ -94,6 +94,7 @@ We choose option 1.
 
 ## Update — 2026-11-21: no upstream report for the `cn` helper
 
-The maintainers decided not to report the `cn` helper to Fumadocs.
-Its `tailwind-merge` costs 9.6 KB (gzip) on each page, and we accept that cost. We do not patch it.
-This replaces "We report it upstream" in the last bad consequence of § Consequences.
+The maintainers decided to make no upstream report for the `cn` helper.
+The helper costs 9.6 KB (gzip) on each page, mostly for `tailwind-merge`. We accept that cost and do not patch the helper.
+With it, a docs page loads 173 KB (gzip), below the 188 KB gate (§ Considered options). The revisit trigger for that gate stays.
+This replaces the `cn` consequence in § Consequences, which said that we report the helper upstream.
