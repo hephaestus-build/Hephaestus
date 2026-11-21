@@ -1349,7 +1349,8 @@ jobs:
   # The image's JVM settings rest on facts that a code or JDK change can break unseen: the AOT cache
   # loads under the chart's options, the memory calculator's class count covers a run without the
   # cache, and startup is no slower than main's image (ADR 0067, update "the image ships an AOT cache
-  # that every run mode loads").
+  # that every run mode loads"). Each platform of the group's image index starts on a runner of its own
+  # architecture, where a pull by digest resolves to that platform's image and its own AOT cache.
   Server-image:
     name: "Server image startup"
     needs: [detect-changes, Docker]
@@ -1358,7 +1359,12 @@ jobs:
       needs.Docker.outputs.server-digest != '' && needs.Docker.outputs.postgres-digest != '' &&
       needs.detect-changes.outputs.queue-server-image == 'true' && needs.detect-changes.outputs.publishable == 'true'
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    # The default fail-fast: a failed leg cancels the other, so fail-fast-Server-image, which waits for
+    # the whole job, stops the merge group at once.
+    strategy:
+      matrix:
+        platform: ${{ fromJSON(needs.detect-changes.outputs.platforms) }}
     permissions:
       contents: read
       packages: read
@@ -1385,7 +1391,10 @@ jobs:
           POSTGRES_IMAGE: ghcr.io/${{ github.repository_owner }}/postgres@${{ needs.Docker.outputs.postgres-digest }}
           # The startup time is a ratio against the last image that main published, started on this runner.
           BASE_SERVER_IMAGE: ghcr.io/${{ github.repository_owner }}/server:main
-        run: node scripts/server-image-startup.ts "$SERVER_IMAGE" "$POSTGRES_IMAGE" "$BASE_SERVER_IMAGE"
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          [ "$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}')" = "$PLATFORM" ] || { echo "::error::This runner does not run $PLATFORM"; exit 1; }
+          node scripts/server-image-startup.ts "$SERVER_IMAGE" "$POSTGRES_IMAGE" "$BASE_SERVER_IMAGE"
 
   # Validate the built images before release; signatures and attestations are added at publication.
   # Every release candidate needs evidence for its own tree, including a merge group's aggregate.

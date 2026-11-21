@@ -45,13 +45,37 @@ void test("a merge group that changes the server image starts that image and its
 		assert.match(String(job.if), condition);
 	}
 
+	// Every platform of the merge group's image index starts on a runner of its own architecture.
+	assert.match(String(outputs.platforms), /'\["linux\/amd64","linux\/arm64"\]'/u);
+	const strategy = record(job.strategy, "Server-image.strategy");
+	// fail-fast-Server-image waits for the whole job, so a failed leg must cancel the other one.
+	assert.equal(strategy["fail-fast"], undefined);
+	assert.match(
+		String(record(strategy.matrix, "Server-image.strategy.matrix").platform),
+		/^\$\{\{ fromJSON\(needs\.detect-changes\.outputs\.platforms\) \}\}$/u,
+	);
+	assert.match(
+		String(job["runs-on"]),
+		/matrix\.platform == 'linux\/arm64' && 'ubuntu-24\.04-arm'/u,
+	);
+
 	// The startup time is a ratio against main's image on the same runner, so the job passes that image.
 	assert.ok(Array.isArray(job.steps), "Server-image.steps");
 	const startup = job.steps
 		.map((step) => record(step, "step"))
 		.find((step) => String(step.run).includes("scripts/server-image-startup.ts"));
-	assert.match(String(record(startup?.env, "startup env").BASE_SERVER_IMAGE), /\/server:main$/u);
-	assert.match(String(startup?.run), /"\$SERVER_IMAGE" "\$POSTGRES_IMAGE" "\$BASE_SERVER_IMAGE"$/u);
+	const env = record(startup?.env, "startup env");
+	assert.match(String(env.BASE_SERVER_IMAGE), /\/server:main$/u);
+	assert.match(String(env.PLATFORM), /^\$\{\{ matrix\.platform \}\}$/u);
+	// A leg on the wrong architecture would start another platform's image, so it fails first.
+	assert.match(
+		String(startup?.run),
+		/\{\{\.Server\.Os\}\}\/\{\{\.Server\.Arch\}\}'\)" = "\$PLATFORM" \]/u,
+	);
+	assert.match(
+		String(startup?.run),
+		/"\$SERVER_IMAGE" "\$POSTGRES_IMAGE" "\$BASE_SERVER_IMAGE"\n$/u,
+	);
 
 	// A merge group aliases nothing, so the job needs this group's own PostgreSQL image.
 	const docker = record(record(jobs.Docker, "Docker").with, "Docker.with");
