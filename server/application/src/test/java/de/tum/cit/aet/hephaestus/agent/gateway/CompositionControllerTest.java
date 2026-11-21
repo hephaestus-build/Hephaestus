@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.composer.ComposerTranscript;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionClosing;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
@@ -45,8 +46,9 @@ class CompositionControllerTest {
 
     private final ReviewComposeSandboxKind kind = mock(ReviewComposeSandboxKind.class);
     private final CompositionSessions sessions = mock(CompositionSessions.class);
+    private final CompositionClosing closing = mock(CompositionClosing.class);
     private final ComposerTranscript transcript = mock(ComposerTranscript.class);
-    private final CompositionController controller = new CompositionController(kind, sessions, transcript);
+    private final CompositionController controller = new CompositionController(kind, sessions, closing, transcript);
     private final AgentRunFence fence = new AgentRunFence(UUID.randomUUID(), 7L, 2);
     private final SandboxRun run = new SandboxRun(
             new AgentSandboxes.LiveSandbox(UUID.randomUUID(), 7L, "review:1", AgentSandboxKind.REVIEW),
@@ -83,7 +85,7 @@ class CompositionControllerTest {
 
         assertThatThrownBy(() -> controller.next(run, new CompositionController.NextRequest(List.of())))
                 .isInstanceOf(StaleRunException.class);
-        verifyNoInteractions(sessions);
+        verifyNoInteractions(sessions, closing);
     }
 
     @Test
@@ -104,7 +106,7 @@ class CompositionControllerTest {
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         refused -> assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
-        verifyNoInteractions(kind, sessions);
+        verifyNoInteractions(kind, sessions, closing);
     }
 
     @Test

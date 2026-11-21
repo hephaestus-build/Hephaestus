@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.composer;
 
-import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
@@ -8,60 +7,45 @@ import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
-import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
-import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.agent.runtime.FeedbackWritingGuide;
-import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
-import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackEditBudgetSpentException;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
-import io.micrometer.core.instrument.MeterRegistry;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The server side of feedback composition. It renders each session of an admitted review's composition from the
- * retained basis in PostgreSQL, runs each tool the composer calls, and closes what the composition left open. The
- * composer loop owns only the loop: its calls, retries and the cause each destination stopped with.
+ * retained basis in PostgreSQL and runs each tool the composer calls; {@link CompositionClosing} closes what the
+ * composition left open. The composer loop owns only the loop: its calls, retries and the cause each destination
+ * stopped with.
  *
  * <p>What a call decided is kept in PostgreSQL, in the composition's tool trace: the package each check accepted, each
  * publication and each refusal's reason. A publish reads the checked package back from the trace, a private
@@ -73,8 +57,6 @@ import tools.jackson.databind.node.ObjectNode;
 public class CompositionSessions {
     private static final Logger log = LoggerFactory.getLogger(CompositionSessions.class);
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
-    /** Reads the retained files, which are plain JSON: no application module changes how they parse. */
-    private static final JsonMapper MAPPER = new JsonMapper();
 
     private static final Duration READBACK_PAUSE = Duration.ofSeconds(1);
     private static final int DEFAULT_CONTEXT_WINDOW = 128_000;
@@ -84,15 +66,11 @@ public class CompositionSessions {
             + " this turn supplied; correct the package and check it again.";
 
     private final ResultAdmissionService admission;
-    private final ReviewCompositionContinuation continuation;
-    private final ReviewJobAssignments assignments;
-    private final ItemDescriptorRegistry items;
     private final PracticeReviewProperties properties;
-    private final AgentCapacityProperties agentCapacity;
-    private final MeterRegistry meters;
     private final ObjectMapper mapper;
     private final FeedbackRepair repairs;
     private final CompositionToolTrace toolTrace;
+    private final CompositionPlans plans;
     private final Duration readbackPause;
     private final String reviewSystem;
     private final String privateSystem;
@@ -100,67 +78,32 @@ public class CompositionSessions {
     @Autowired
     public CompositionSessions(
             ResultAdmissionService admission,
-            ReviewCompositionContinuation continuation,
-            ReviewJobAssignments assignments,
-            ItemDescriptorRegistry items,
             PracticeReviewProperties properties,
-            AgentCapacityProperties agentCapacity,
-            MeterRegistry meters,
             ObjectMapper mapper,
             FeedbackRepair repairs,
-            CompositionToolTrace toolTrace) {
-        this(
-                admission,
-                continuation,
-                assignments,
-                items,
-                properties,
-                agentCapacity,
-                meters,
-                mapper,
-                repairs,
-                toolTrace,
-                READBACK_PAUSE);
+            CompositionToolTrace toolTrace,
+            CompositionPlans plans) {
+        this(admission, properties, mapper, repairs, toolTrace, plans, READBACK_PAUSE);
     }
 
     CompositionSessions(
             ResultAdmissionService admission,
-            ReviewCompositionContinuation continuation,
-            ReviewJobAssignments assignments,
-            ItemDescriptorRegistry items,
             PracticeReviewProperties properties,
-            AgentCapacityProperties agentCapacity,
-            MeterRegistry meters,
             ObjectMapper mapper,
             FeedbackRepair repairs,
             CompositionToolTrace toolTrace,
+            CompositionPlans plans,
             Duration readbackPause) {
         this.admission = admission;
-        this.continuation = continuation;
-        this.assignments = assignments;
-        this.items = items;
         this.properties = properties;
-        this.agentCapacity = agentCapacity;
-        this.meters = meters;
         this.mapper = mapper;
         this.repairs = repairs;
         this.toolTrace = toolTrace;
+        this.plans = plans;
         this.readbackPause = readbackPause;
-        String style = sharedStyle();
-        this.reviewSystem = style + "\n\n" + prompt("review-composer.md");
-        this.privateSystem = style + "\n\n" + prompt("feedback-composer.md");
-    }
-
-    static String sharedStyle() {
-        return prompt("feedback-style.md") + "\n\n" + FeedbackWritingGuide.text();
-    }
-
-    static String prompt(String name) {
-        try {
-            return new ClassPathResource("agent/" + name).getContentAsString(StandardCharsets.UTF_8);
-        } catch (IOException missing) {
-            throw new UncheckedIOException(missing);
-        }
+        String style = ComposerTurns.sharedStyle();
+        this.reviewSystem = style + "\n\n" + ComposerTurns.prompt("review-composer.md");
+        this.privateSystem = style + "\n\n" + ComposerTurns.prompt("feedback-composer.md");
     }
 
     // ------------------------------------------------------------ the wire records
@@ -257,13 +200,6 @@ public class CompositionSessions {
         }
     }
 
-    /** The cause a destination stopped with, and the reason its withholding records. */
-    private record Stop(CompositionStop cause, FeedbackStopReason reason) {
-        static Stop of(CompositionStop cause) {
-            return new Stop(cause, cause.reason());
-        }
-    }
-
     // ------------------------------------------------------------ the session order
 
     /**
@@ -275,11 +211,11 @@ public class CompositionSessions {
      */
     public Optional<Next> next(
             ReviewJob job, ResultAdmissionService.AdmissionIdentity identity, Set<FeedbackDestination> finished) {
-        var plan = found(job, identity);
+        var plan = plans.found(job, identity);
         if (plan == null) return Optional.empty();
-        Basis basis;
+        CompositionPlans.Basis basis;
         try {
-            basis = basis(job, plan);
+            basis = plans.basis(job, plan);
         } catch (ReviewCompositionContinuation.InputsUnavailableException unavailable) {
             var cause = unavailable.erased() ? CompositionStop.INPUTS_ERASED : CompositionStop.INPUTS_GONE;
             repairs.stop(job.getWorkspaceId(), job.getReviewId(), cause.name());
@@ -308,8 +244,8 @@ public class CompositionSessions {
     private Session reviewSession(
             ReviewJob job,
             ResultAdmissionService.AdmissionIdentity identity,
-            Plan plan,
-            Basis basis,
+            CompositionPlans.Plan plan,
+            CompositionPlans.Basis basis,
             List<ObjectNode> reviewable) {
         var turn = reviewTurn(identity, plan, basis);
         boolean accepted = plan.state().publicReviewed();
@@ -337,11 +273,12 @@ public class CompositionSessions {
                 turn.publicationContext());
     }
 
-    private Session privateSession(ReviewJob job, Plan plan, Basis basis, Scoped scoped) {
+    private Session privateSession(
+            ReviewJob job, CompositionPlans.Plan plan, CompositionPlans.Basis basis, Scoped scoped) {
         var state = plan.state();
         PrivateFeedback.stageHistory(state.privateHistory(), basis.files());
         var review = priorReview(job, state);
-        String turn = privateTurn(
+        String turn = ComposerTurns.privateTurn(
                 basis.files(), basis.captured(), scoped.request(), state, review, scoped.routes(), basis.notReached());
         var tools = List.of(
                 new Tool(
@@ -399,11 +336,6 @@ public class CompositionSessions {
                 fits,
                 properties.practiceModelCalls(),
                 publicationContext);
-    }
-
-    /** Whether this is the review's last attempt: a passing cause then withholds instead of handing the run on. */
-    public boolean lastAttempt(ReviewJob job) {
-        return job.spentAttempts() >= agentCapacity.reviewRetries();
     }
 
     /** Records why the review on the work stopped, so that its readback correction is not pending any more. */
@@ -484,7 +416,7 @@ public class CompositionSessions {
                     destination,
                     "There is no tool named " + call.name()
                             + "; check_package validates a draft and publish_package accepts its draftId.");
-        var plan = plan(job, identity);
+        var plan = plans.plan(job, identity);
         if (plan == null) throw new AdmissionConflictException();
         boolean accepted = plan.state().publicReviewed();
         if (call.name().equals("check_package")) return checkReview(job, identity, call, plan, accepted);
@@ -532,10 +464,10 @@ public class CompositionSessions {
             ReviewJob job,
             ResultAdmissionService.AdmissionIdentity identity,
             ToolCall call,
-            Plan plan,
+            CompositionPlans.Plan plan,
             boolean accepted) {
         var destination = FeedbackDestination.ON_WORK;
-        var turn = reviewTurn(identity, plan, basis(job, plan));
+        var turn = reviewTurn(identity, plan, plans.basis(job, plan));
         String editOf = Js.string(call.arguments().path("editOf"));
         // A review written for another history is composed again, before its witnesses are read against this one.
         // An accepted review's own copy changes the history, so after acceptance only the refusal below answers.
@@ -616,7 +548,7 @@ public class CompositionSessions {
         if (!call.name().equals("check_package") && !call.name().equals("publish_package"))
             return Answered.text(
                     destination, "Unknown tool; use check_package, then publish_package with its draftId.");
-        var plan = found(job, identity);
+        var plan = plans.found(job, identity);
         if (plan == null) throw new AdmissionConflictException();
         if (call.name().equals("publish_package")) return publishPrivately(job, identity, call);
         var state = plan.state();
@@ -633,7 +565,7 @@ public class CompositionSessions {
             return Answered.text(
                     destination,
                     "This destination has nothing left to compose. Stop this session; nothing was checked.");
-        var basis = basis(job, plan);
+        var basis = plans.basis(job, plan);
         var scoped = scoped(plan.request(), routes, destination.name());
         PrivateFeedback.stageHistory(state.privateHistory(), basis.files());
         var targets = PrivateFeedback.preparedTargets(basis.files(), mapper);
@@ -673,7 +605,7 @@ public class CompositionSessions {
             return Answered.text(destination, "Unknown draftId. Check the complete package first.");
         // A checked package decides every practice the destination may carry, so a destination whose prepared rows
         // leave nothing to compose has accepted its package. Routing closes such a destination.
-        var current = Objects.requireNonNull(plan(job, identity));
+        var current = Objects.requireNonNull(plans.plan(job, identity));
         var routes = PrivateFeedback.closeUnrouted(current.request(), current.state(), new ArrayList<>());
         if (!current.request().open(destination.name())
                 || PrivateFeedback.composable(
@@ -793,225 +725,7 @@ public class CompositionSessions {
         return name + " " + broken + ".";
     }
 
-    // ------------------------------------------------------------ closing
-
-    /**
-     * Withholds each destination the server routes and no prepared row decides, with the cause that stopped it: the
-     * review on the work, and each private destination per practice. Read from the server again, so that it counts
-     * what this attempt prepared. A passing cause before the retry limit withholds nothing.
-     *
-     * @return the passing cause that left a destination open, so that another attempt composes it; null when every
-     *     destination is decided
-     */
-    public @Nullable CompositionStop close(
-            ReviewJob job,
-            ResultAdmissionService.AdmissionIdentity identity,
-            Map<FeedbackDestination, CompositionStop> stops) {
-        var plan = plan(job, identity);
-        if (plan == null) return null;
-        boolean last = lastAttempt(job);
-        var confirmed = confirmed(job, plan, stops);
-        CompositionStop handedOn = null;
-        for (var open : open(job, plan)) {
-            var stop = open.routingUnavailable()
-                    ? Stop.of(CompositionStop.ROUTING_UNAVAILABLE)
-                    : stop(
-                            identity,
-                            open.destination(),
-                            confirmed.getOrDefault(open.destination(), CompositionStop.NO_DECISION));
-            if (stop.cause().passing() && !last) {
-                if (handedOn == null) handedOn = stop.cause();
-                continue;
-            }
-            // A refused withholding stays open, so a next attempt tries to record it again.
-            if (!withhold(plan, open.destination(), stop, open.resultIds()) && handedOn == null)
-                handedOn = stop.cause();
-        }
-        if (handedOn != null) count(handedOn, "handed_on");
-        return handedOn;
-    }
-
-    /**
-     * The stops as the server confirms them. A loop reports that the inputs are gone only because the server said so; a
-     * report the retained inputs contradict counts as a failure of the loop, never as an erasure.
-     */
-    private Map<FeedbackDestination, CompositionStop> confirmed(
-            ReviewJob job, Plan plan, Map<FeedbackDestination, CompositionStop> stops) {
-        if (stops.values().stream()
-                .noneMatch(stop -> stop == CompositionStop.INPUTS_GONE || stop == CompositionStop.INPUTS_ERASED))
-            return stops;
-        CompositionStop actual;
-        try {
-            basis(job, plan);
-            actual = CompositionStop.UNEXPECTED;
-        } catch (ReviewCompositionContinuation.InputsUnavailableException unavailable) {
-            actual = unavailable.erased() ? CompositionStop.INPUTS_ERASED : CompositionStop.INPUTS_GONE;
-        }
-        var confirmed = new LinkedHashMap<FeedbackDestination, CompositionStop>();
-        for (var entry : stops.entrySet()) {
-            boolean inputs = entry.getValue() == CompositionStop.INPUTS_GONE
-                    || entry.getValue() == CompositionStop.INPUTS_ERASED;
-            confirmed.put(entry.getKey(), inputs ? actual : entry.getValue());
-        }
-        return confirmed;
-    }
-
-    /** Closes every open destination with one cause, without composing. */
-    public @Nullable CompositionStop withholdOpen(
-            ReviewJob job, ResultAdmissionService.AdmissionIdentity identity, CompositionStop stop) {
-        repairs.stop(job.getWorkspaceId(), job.getReviewId(), stop.name());
-        var all = new LinkedHashMap<FeedbackDestination, CompositionStop>();
-        for (var destination : FeedbackDestination.values()) all.put(destination, stop);
-        return close(job, identity, all);
-    }
-
-    /**
-     * The reason a destination's withholding records for its cause. A refused publication records the reason the
-     * server refused it for, as this attempt's trace keeps it; every other cause records its own.
-     */
-    private Stop stop(
-            ResultAdmissionService.AdmissionIdentity identity, FeedbackDestination destination, CompositionStop cause) {
-        if (cause != CompositionStop.PUBLICATION_REFUSED) return Stop.of(cause);
-        try {
-            return toolTrace.decisions(identity).stream()
-                    .filter(decision -> decision.destination() == destination && decision.refusal() != null)
-                    .reduce((earlier, later) -> later)
-                    .map(decision -> new Stop(cause, Objects.requireNonNull(decision.refusal())))
-                    .orElse(Stop.of(cause));
-        } catch (ReviewCompositionContinuation.InputsUnavailableException unreadable) {
-            // The trace expired or was erased with its capsule: the withholding is recorded now, with the cause's
-            // reason.
-            return Stop.of(cause);
-        }
-    }
-
-    /** A destination no prepared row decides, with the results a withholding there rests on. */
-    private record Open(FeedbackDestination destination, List<UUID> resultIds, boolean routingUnavailable) {}
-
-    private List<Open> open(ReviewJob job, Plan plan) {
-        var state = admitted(job);
-        var request = plan.request();
-        var open = new ArrayList<Open>();
-        var reviewable = ReviewOnWork.publicResults(state.results());
-        if (request.open("ON_WORK") && !state.publicReviewed() && !reviewable.isEmpty())
-            open.add(new Open(FeedbackDestination.ON_WORK, ids(reviewable), false));
-        var unavailable = new ArrayList<String>();
-        var routes = PrivateFeedback.closeUnrouted(request, state, unavailable);
-        // A destination whose routing read failed is still owed a decision. If it is withheld, preparation reads its
-        // routing again and records the server's own reason when the destination is not eligible.
-        for (String destination : unavailable)
-            for (String slug : Evidence.notMetPractices(state.results()))
-                if (!state.decided().getOrDefault(destination, Set.of()).contains(slug))
-                    open.add(new Open(FeedbackDestination.valueOf(destination), notMet(state, slug), true));
-        routes.forEach((slug, destinations) -> {
-            for (String destination : destinations)
-                open.add(new Open(FeedbackDestination.valueOf(destination), notMet(state, slug), false));
-        });
-        return open;
-    }
-
-    /** Whether the server recorded the withholding; there is nothing to record without results. */
-    private boolean withhold(Plan plan, FeedbackDestination destination, Stop stop, List<UUID> resultIds) {
-        if (resultIds.isEmpty()) return true;
-        try {
-            admission.publishPackage(
-                    plan.identity(), CompositionPackages.withheld(destination, stop.reason(), resultIds));
-            count(stop.cause(), "withheld");
-            return true;
-        } catch (AdmissionConflictException | PublicationContextRefusedException refused) {
-            count(stop.cause(), "refused");
-            log.error(
-                    "The server refused to record a withheld {} piece, so it stays open: jobId={}, reason={}",
-                    destination,
-                    plan.identity().jobId(),
-                    refused.getClass().getSimpleName());
-            return false;
-        }
-    }
-
-    private void count(CompositionStop cause, String outcome) {
-        meters.counter(AgentMetrics.AGENT_JOB_COMPOSITION_STOPPED, "cause", cause.tag(), "outcome", outcome)
-                .increment();
-    }
-
-    // ------------------------------------------------------------ what a composition reads
-
-    /** What one attempt composes: its identity, the request it composes for and the admitted results. */
-    @SuppressWarnings("ArrayRecordComponent") // routing narrows a parsed request, so each reader parses its own
-    private record Plan(
-            ResultAdmissionService.AdmissionIdentity identity,
-            byte[] requestBytes,
-            PrivateFeedback.Request request,
-            Admission state) {}
-
-    /** The attempt's plan, or null when the review has no destination to compose or no admitted result. */
-    private @Nullable Plan plan(ReviewJob job, ResultAdmissionService.AdmissionIdentity identity) {
-        return plan(job, identity, Map.of());
-    }
-
-    /**
-     * The plan as this attempt found it: its sessions render and check what earlier attempts decided, so what this
-     * attempt published is its own work, not a decision it found. Closing counts both.
-     */
-    private @Nullable Plan found(ReviewJob job, ResultAdmissionService.AdmissionIdentity identity) {
-        var own = new LinkedHashMap<String, Set<String>>();
-        var decisions = toolTrace.decisions(identity);
-        for (var published : decisions) {
-            if (!published.published() || published.destination() == FeedbackDestination.ON_WORK) continue;
-            decisions.stream()
-                    .filter(check -> check.destination() == published.destination()
-                            && Objects.equals(check.draftId(), published.draftId())
-                            && check.proposal() != null)
-                    .findFirst()
-                    .ifPresent(check -> mapper.treeToValue(check.proposal(), FeedbackPackage.class)
-                            .composition()
-                            .forEach(piece -> piece.resultIds()
-                                    .forEach(id -> own.computeIfAbsent(
-                                                    published.destination().name(), ignored -> new LinkedHashSet<>())
-                                            .add(id.toString()))));
-        }
-        return plan(job, identity, own);
-    }
-
-    private @Nullable Plan plan(
-            ReviewJob job, ResultAdmissionService.AdmissionIdentity identity, Map<String, Set<String>> own) {
-        var review = assignments.review(job);
-        var capabilities = items.descriptorFor(review.item().kind())
-                .map(ItemDescriptor::copyCapabilities)
-                .orElse(Set.of());
-        byte[] requestBytes = FeedbackCompositionInputs.request(
-                        review.kind(), review.origin(), Set.of(FeedbackDestination.values()), capabilities, mapper)
-                .orElse(null);
-        if (requestBytes == null) return null;
-        var request = PrivateFeedback.Request.of(mapper.readTree(requestBytes)).orElse(null);
-        if (request == null) return null;
-        var state = admitted(job, own);
-        if (state.results().isEmpty()) return null;
-        return new Plan(identity, requestBytes, request, state);
-    }
-
-    /** The retained inputs a session renders from, with what the turns read of them. */
-    private record Basis(
-            ComposerFiles files,
-            CapturedWork captured,
-            JsonNode folderIndex,
-            JsonNode practiceIndex,
-            List<String> practiceSlugs,
-            List<String> notReached) {}
-
-    private Basis basis(ReviewJob job, Plan plan) {
-        var files = workspace(continuation.retainedInputs(job), plan.requestBytes(), plan.state());
-        JsonNode folderIndex = files.json(SandboxLayout.MANIFEST_PATH, mapper).orElse(JSON.missingNode());
-        JsonNode practiceIndex =
-                files.json(ComposerFiles.PRACTICE_INDEX, mapper).orElse(JSON.arrayNode());
-        return new Basis(
-                files,
-                new CapturedWork(files, mapper),
-                folderIndex,
-                practiceIndex,
-                practiceSlugs(practiceIndex),
-                notReached(practiceIndex, plan.state()));
-    }
+    // ------------------------------------------------------------ what a session reads
 
     /** One private destination's request and routes. */
     private record Scoped(
@@ -1033,14 +747,16 @@ public class CompositionSessions {
     /** The review on the work that this or an earlier attempt prepared, which the private feedback follows. */
     private ReviewOnWork.@Nullable ComposedReview priorReview(ReviewJob job, Admission state) {
         if (!state.publicReviewed()) return null;
-        return admission.preparedReview(job).map(CompositionSessions::review).orElse(null);
+        return admission.preparedReview(job).map(ComposerTurns::review).orElse(null);
     }
 
     private ReviewCompositionTurn reviewTurn(
-            ResultAdmissionService.AdmissionIdentity identity, Plan plan, Basis basis) {
+            ResultAdmissionService.AdmissionIdentity identity,
+            CompositionPlans.Plan plan,
+            CompositionPlans.Basis basis) {
         // Read now, not at capture: feedback delivered while this review ran was said here too.
         JsonNode read = mapper.valueToTree(admission.publicFeedbackHistory(identity));
-        return reviewTurn(
+        return ComposerTurns.reviewTurn(
                 basis.files(),
                 basis.captured(),
                 basis.folderIndex(),
@@ -1051,220 +767,5 @@ public class CompositionSessions {
                 basis.notReached(),
                 PrimarySource.captured(
                         basis.files(), basis.folderIndex(), ComposerFiles.CONTEXT_ROOT, ComposerFiles.REPOSITORY_ROOT));
-    }
-
-    /** The admitted results with the private feedback each destination's prepared pieces already decide. */
-    private Admission admitted(ReviewJob job) {
-        return admitted(job, Map.of());
-    }
-
-    /** The admitted results with what each destination's prepared pieces decide, without the results in {@code own}. */
-    private Admission admitted(ReviewJob job, Map<String, Set<String>> own) {
-        var decided = new LinkedHashMap<String, Set<String>>();
-        admission.privateProgress(job).decidedByDestination().forEach((destination, results) -> {
-            var ids = new LinkedHashSet<String>();
-            results.forEach(id -> ids.add(id.toString()));
-            ids.removeAll(own.getOrDefault(destination.name(), Set.of()));
-            decided.put(destination.name(), ids);
-        });
-        return Admission.of(mapper.valueToTree(admission.admittedResponse(job)), decided);
-    }
-
-    private static List<UUID> notMet(Admission state, String slug) {
-        return state.results().stream()
-                .filter(result -> slug.equals(Js.string(result.path("practiceSlug")))
-                        && "NOT_MET".equals(Js.string(result.path("outcome"))))
-                .map(result -> UUID.fromString(Evidence.text(result.path("resultId"))))
-                .toList();
-    }
-
-    /** The files a composition renders its turns from: the retained inputs, the request and the page support. */
-    static ComposerFiles workspace(Map<String, byte[]> inputs, byte[] requestBytes, Admission state) {
-        var files = new ComposerFiles(inputs);
-        files.put(SandboxLayout.FEEDBACK_COMPOSITION_PATH, requestBytes);
-        if (state.complete("PRACTICE_PAGE") && state.practicePageSupport() != null)
-            files.put(ComposerFiles.SUPPORT, utf8(JsonText.stringify(state.practicePageSupport(), 2)));
-        return files;
-    }
-
-    static List<String> practiceSlugs(JsonNode practiceIndex) {
-        var slugs = new TreeSet<String>();
-        Js.listOf(practiceIndex).forEach(practice -> slugs.add(Evidence.text(practice.path("slug"))));
-        return List.copyOf(slugs);
-    }
-
-    /** The practices the review took on and admitted no result for: not settled, so nothing is said about them. */
-    static List<String> notReached(JsonNode practiceIndex, Admission state) {
-        var admitted = new LinkedHashSet<String>();
-        state.results().forEach(result -> admitted.add(Evidence.text(result.path("practiceSlug"))));
-        return Js.listOf(practiceIndex).stream()
-                .map(practice -> Evidence.text(practice.path("slug")))
-                .filter(slug -> !admitted.contains(slug))
-                .toList();
-    }
-
-    static ReviewCompositionTurn reviewTurn(
-            ComposerFiles files,
-            CapturedWork captured,
-            JsonNode folderIndex,
-            JsonNode practiceIndex,
-            Admission state,
-            PrivateFeedback.Request request,
-            JsonNode read,
-            List<String> notReached,
-            PrimarySource.Reader reader) {
-        boolean lineNotes = request.onWorkCopyForms.contains("LINE_NOTE");
-        var framing = new CapturedWork.Framing(null, null);
-        var reviewable = ReviewOnWork.publicResults(state.results());
-        String readAt = Js.string(read.path("readAt"));
-        ObjectNode history = captured.publicReviewHistory(folderIndex, framing);
-        var alreadySaid = ReviewOnWork.priorPublicFeedback(
-                ReviewOnWork.publicHistory(read),
-                thisWork(files, folderIndex),
-                Js.string(history.path("capturedAt")),
-                readAt);
-        var witnesses = ReviewOnWork.priorAdviceWitnesses(alreadySaid.feedback(), history.path("statements"));
-        var eligible = witnesses.entrySet().stream()
-                .filter(entry -> entry.getValue().eligibleForAlreadySaid())
-                .map(Map.Entry::getKey)
-                .toList();
-        String primary = PrimarySource.reference(
-                files,
-                ComposerFiles.CONTEXT_ROOT,
-                ComposerFiles.REPOSITORY_ROOT,
-                folderIndex,
-                new ArrayList<>(state.results().stream()
-                        .filter(ReviewOnWork::publicNotMet)
-                        .toList()),
-                reader);
-        String sameWork = String.join(
-                "\n\n",
-                List.of(captured.sameWorkContext(folderIndex, framing), primary).stream()
-                        .filter(part -> !part.isEmpty())
-                        .toList());
-        String text = ReviewOnWork.turn(new ReviewOnWork.TurnInput(
-                sameWork,
-                reviewable,
-                ReviewOnWork.publicQualifications(state.results()),
-                alreadySaid,
-                readAt,
-                history,
-                practices(practiceIndex, reviewable),
-                notReached,
-                lineNotes,
-                slug -> files.text(ComposerFiles.criteria(slug)).orElse(null)));
-        var restable = Evidence.byId(reviewable);
-        return new ReviewCompositionTurn(
-                text,
-                ReviewOnWork.toolParameters(restable, lineNotes, eligible),
-                restable,
-                lineNotes,
-                witnesses,
-                Js.string(read.path("publicationContext")));
-    }
-
-    /** The private turn includes proven primary source for its routed concerns, as the public turn does. */
-    static String privateTurn(
-            ComposerFiles files,
-            CapturedWork captured,
-            PrivateFeedback.Request request,
-            Admission state,
-            ReviewOnWork.@Nullable ComposedReview review,
-            Map<String, List<String>> routes,
-            List<String> notReached) {
-        String brief = captured.brief();
-        JsonNode folderIndex = files.json(SandboxLayout.MANIFEST_PATH, MAPPER).orElse(JSON.missingNode());
-        var composable = PrivateFeedback.composable(state, routes);
-        var eligible = state.results().stream()
-                .filter(result -> {
-                    String slug = result.path("practiceSlug").asString();
-                    return composable.contains(slug)
-                            && request.openPrivate().stream()
-                                    .anyMatch(destination ->
-                                            routes.getOrDefault(slug, List.of()).contains(destination));
-                })
-                .toList();
-        String primary = PrimarySource.reference(
-                files,
-                ComposerFiles.CONTEXT_ROOT,
-                ComposerFiles.REPOSITORY_ROOT,
-                folderIndex,
-                new ArrayList<>(eligible),
-                PrimarySource.captured(files, folderIndex, ComposerFiles.CONTEXT_ROOT, ComposerFiles.REPOSITORY_ROOT));
-        return String.join(
-                "\n\n",
-                List.of(brief, primary, PrivateFeedback.turn(files, MAPPER, request, state, review, routes, notReached))
-                        .stream()
-                        .filter(part -> !part.isEmpty())
-                        .toList());
-    }
-
-    private static byte[] utf8(String text) {
-        return text.getBytes(StandardCharsets.UTF_8);
-    }
-
-    private static List<UUID> ids(List<ObjectNode> results) {
-        return results.stream()
-                .map(result -> UUID.fromString(Evidence.text(result.path("resultId"))))
-                .toList();
-    }
-
-    /** A review on the work that an attempt prepared, as a composition holds one it composed. */
-    static ReviewOnWork.ComposedReview review(ResultAdmissionService.PreparedReview prepared) {
-        String summary = prepared.summary();
-        return new ReviewOnWork.ComposedReview(
-                summary == null ? null : new ReviewOnWork.Summary(summary, evidence(prepared.summaryBasis())),
-                prepared.notes().stream()
-                        .map(note -> new ReviewOnWork.InlineNote(
-                                note.body(),
-                                evidence(note.basedOn()),
-                                new ReviewOnWork.Anchor(
-                                        note.anchor().problemId().toString(),
-                                        note.anchor().citationIndex())))
-                        .toList(),
-                prepared.withheld().stream()
-                        .map(decision -> new ReviewOnWork.Withheld(
-                                evidence(decision.basedOn()), decision.reason(), decision.witnessIds()))
-                        .toList());
-    }
-
-    private static List<Evidence.Ref> evidence(List<FeedbackCompositionTrace.Support> support) {
-        return support.stream()
-                .map(ref -> new Evidence.Ref(
-                        ref.resultId().toString(),
-                        ref.problemId() == null ? null : ref.problemId().toString()))
-                .toList();
-    }
-
-    /** The reviewed work's identity, derived from the captured record. */
-    static @Nullable String thisWork(ComposerFiles files, JsonNode folderIndex) {
-        var metadata = files.json(ComposerFiles.CONTEXT_ROOT + "/metadata.json", MAPPER)
-                .orElse(null);
-        if (metadata == null || !folderIndex.isObject() || !metadata.isObject()) return null;
-        String kind = Js.string(folderIndex.path("itemKind"));
-        boolean pullRequest = "scm.pull_request".equals(kind);
-        if (!pullRequest && !"scm.issue".equals(kind)) return null;
-        return ReviewOnWork.workIdentity(
-                folderIndex.path("itemKind"), metadata.path(pullRequest ? "pr_url" : "html_url"));
-    }
-
-    /** The practices of the reviewable results, as the practice index names them. */
-    static List<ReviewOnWork.Practice> practices(JsonNode practiceIndex, List<ObjectNode> reviewable) {
-        var slugs = new LinkedHashSet<String>();
-        reviewable.forEach(result -> slugs.add(Evidence.text(result.path("practiceSlug"))));
-        var practices = new ArrayList<ReviewOnWork.Practice>();
-        for (JsonNode practice : Js.listOf(practiceIndex)) {
-            String slug = Js.string(practice.path("slug"));
-            if (slug == null || !slugs.contains(slug)) continue;
-            practices.add(new ReviewOnWork.Practice(
-                    slug,
-                    Evidence.text(practice.path("name")),
-                    Js.string(practice.path("whyItMatters")),
-                    Js.listOf(practice.path("knownLimitations")).stream()
-                            .map(JsonNode::asString)
-                            .toList(),
-                    Js.string(practice.path("versionId"))));
-        }
-        return practices;
     }
 }

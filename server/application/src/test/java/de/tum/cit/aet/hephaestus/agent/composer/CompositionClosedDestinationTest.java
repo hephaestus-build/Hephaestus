@@ -51,7 +51,8 @@ class CompositionClosedDestinationTest {
 
         assertThat(answer.published()).isFalse();
         assertThat(answer.text()).contains("cannot be read now");
-        assertThat(sessions.close(server.job, identity, Map.of())).isEqualTo(CompositionStop.ROUTING_UNAVAILABLE);
+        assertThat(server.closing().close(server.job, identity, Map.of()))
+                .isEqualTo(CompositionStop.ROUTING_UNAVAILABLE);
     }
 
     @Test

@@ -51,7 +51,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
     private final ResultAdmissionService admission;
     private final ReviewAttemptCustody custody;
     private final ReviewCompositionContinuation continuation;
-    private final CompositionSessions sessions;
+    private final CompositionClosing closing;
     private final ReviewJobTerminal terminal;
     private final ProviderOutages outages;
     private final AgentRuns runs;
@@ -63,7 +63,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
             ResultAdmissionService admission,
             ReviewAttemptCustody custody,
             ReviewCompositionContinuation continuation,
-            CompositionSessions sessions,
+            CompositionClosing closing,
             ReviewJobTerminal terminal,
             ProviderOutages outages,
             AgentRuns runs,
@@ -74,7 +74,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         this.admission = admission;
         this.custody = custody;
         this.continuation = continuation;
-        this.sessions = sessions;
+        this.closing = closing;
         this.terminal = terminal;
         this.outages = outages;
         this.runs = runs;
@@ -152,7 +152,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         var cause = decision.withholdOnly();
         if (cause != null) {
             custody.hold(identity, () -> continuation.stageWithoutInputs(job).staged());
-            if (!decision.withheld()) gateway.withholdOnce(run, job, () -> sessions.withholdOpen(job, identity, cause));
+            if (!decision.withheld()) gateway.withholdOnce(run, job, () -> closing.withholdOpen(job, identity, cause));
             return composing;
         }
         try {
@@ -160,7 +160,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         } catch (ReviewCompositionContinuation.InputsUnavailableException unavailable) {
             var stop = unavailable.erased() ? CompositionStop.INPUTS_ERASED : CompositionStop.INPUTS_GONE;
             custody.hold(identity, () -> continuation.stageWithoutInputs(job).staged());
-            if (!decision.withheld()) gateway.withholdOnce(run, job, () -> sessions.withholdOpen(job, identity, stop));
+            if (!decision.withheld()) gateway.withholdOnce(run, job, () -> closing.withholdOpen(job, identity, stop));
         }
         return composing;
     }

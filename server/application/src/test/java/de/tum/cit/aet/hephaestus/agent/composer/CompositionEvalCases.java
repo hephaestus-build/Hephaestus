@@ -43,7 +43,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The labelled composition cases of {@code scripts/feedback-eval/compositions.json}, each rendered by main's review
- * composer: the opening turn and the check_package tool that {@link CompositionSessions#reviewTurn} renders, and
+ * composer: the opening turn and the check_package tool that {@link ComposerTurns#reviewTurn} renders, and
  * the acceptance check of {@link ReviewOnWork#read}. Each case becomes a scenario in the layout of the golden
  * pull-request scenario. {@code docs/contributor/feedback-quality-evals.mdx} owns the use.
  */
@@ -72,7 +72,7 @@ final class CompositionEvalCases {
 
     /** The composer's system prompt for the review on the work. */
     static String system() {
-        return CompositionSessions.sharedStyle() + "\n\n" + CompositionSessions.prompt("review-composer.md");
+        return ComposerTurns.sharedStyle() + "\n\n" + ComposerTurns.prompt("review-composer.md");
     }
 
     /** One model request: the case's opening turn and its check_package tool. */
@@ -744,11 +744,11 @@ final class CompositionEvalCases {
         var envelope = JSON.objectNode().put("contractVersion", 3).put("minDistinctItems", 2);
         envelope.putObject("destinations").putObject(destination).put("maxPieces", 3);
         envelope.putArray("onWorkCopyForms");
-        var files = CompositionSessions.workspace(scenario.inputs(), json(envelope), state);
+        var files = ComposerTurns.workspace(scenario.inputs(), json(envelope), state);
         PrivateFeedback.stageHistory(state.privateHistory(), files);
         var routes = PrivateFeedback.closeUnrouted(request, state, new ArrayList<>());
         var captured = new CapturedWork(files, MAPPER);
-        var turn = CompositionSessions.privateTurn(files, captured, request, state, null, routes, List.of());
+        var turn = ComposerTurns.privateTurn(files, captured, request, state, null, routes, List.of());
         var slugs = Evidence.notMetPractices(state.results());
         return new PrivateScenario(
                 scenario.id() + "/" + destination + "/" + supportCount,
@@ -794,13 +794,13 @@ final class CompositionEvalCases {
         var state = Admission.of(response, Map.of("PRACTICE_PAGE", decided, "CONVERSATION", decided));
         byte[] requestBytes = Objects.requireNonNull(inputs.get(SandboxLayout.FEEDBACK_COMPOSITION_PATH));
         var request = PrivateFeedback.Request.of(MAPPER.readTree(requestBytes)).orElseThrow();
-        var files = CompositionSessions.workspace(inputs, requestBytes, state);
+        var files = ComposerTurns.workspace(inputs, requestBytes, state);
         JsonNode folderIndex = files.json(SandboxLayout.MANIFEST_PATH, MAPPER).orElseThrow();
         JsonNode practiceIndex =
                 files.json(ComposerFiles.PRACTICE_INDEX, MAPPER).orElseThrow();
-        var notReached = CompositionSessions.notReached(practiceIndex, state);
+        var notReached = ComposerTurns.notReached(practiceIndex, state);
         var captured = new CapturedWork(files, MAPPER);
-        return CompositionSessions.reviewTurn(
+        return ComposerTurns.reviewTurn(
                 files,
                 captured,
                 folderIndex,

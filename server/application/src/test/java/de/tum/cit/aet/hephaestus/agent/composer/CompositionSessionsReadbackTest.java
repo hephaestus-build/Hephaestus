@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
@@ -34,7 +33,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -158,26 +156,12 @@ class CompositionSessionsReadbackTest extends BaseUnitTest {
                     .thenReturn(new FeedbackRepairStatus(FEEDBACK, state, 0, copies));
             sessions = new CompositionSessions(
                     admission,
-                    mock(ReviewCompositionContinuation.class),
-                    assignments,
-                    items,
                     new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 342_000, Duration.ofMinutes(10)),
-                    new AgentCapacityProperties(
-                            Duration.ofMinutes(5),
-                            Duration.ofSeconds(60),
-                            null,
-                            Duration.ofSeconds(25),
-                            5,
-                            Duration.ofMinutes(10),
-                            Duration.ofSeconds(30),
-                            Duration.ofMinutes(2),
-                            Duration.ofMinutes(1),
-                            Duration.ofMinutes(15),
-                            Duration.ofHours(2)),
-                    new SimpleMeterRegistry(),
                     JSON,
                     repairs,
                     trace,
+                    new CompositionPlans(
+                            admission, mock(ReviewCompositionContinuation.class), assignments, items, JSON, trace),
                     Duration.ZERO);
         }
 

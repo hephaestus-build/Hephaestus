@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import de.tum.cit.aet.hephaestus.agent.composer.ComposerTranscript;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionClosing;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
@@ -40,8 +41,9 @@ import tools.jackson.databind.JsonNode;
 /**
  * The feedback composer's routes of a {@code review_compose} run (ADR 0079, ADR 0069): the next session, each tool
  * call, the stop of the review on the work, and the close. {@link CompositionSessions} renders and checks everything and
- * keeps what each call decided, so the composer loop in the sandbox holds no provider token and no state that a
- * guardrail depends on. Every write is fenced on the run's current lease in its own transaction; a stale claim answers
+ * keeps what each call decided, and {@link CompositionClosing} closes what the composition left open, so the composer
+ * loop in the sandbox holds no provider token and no state that a guardrail depends on. Every write is fenced on the
+ * run's current lease in its own transaction; a stale claim answers
  * {@code 409}, and inputs that are no longer retained answer {@code 410} with the stop as the reason.
  *
  * <p>Each session and each tool answer goes into the claim's {@link ComposerTranscript}, so that the gateway forwards
@@ -57,12 +59,17 @@ import tools.jackson.databind.JsonNode;
 public class CompositionController {
     private final ReviewComposeSandboxKind kind;
     private final CompositionSessions sessions;
+    private final CompositionClosing closing;
     private final ComposerTranscript transcript;
 
     public CompositionController(
-            ReviewComposeSandboxKind kind, CompositionSessions sessions, ComposerTranscript transcript) {
+            ReviewComposeSandboxKind kind,
+            CompositionSessions sessions,
+            CompositionClosing closing,
+            ComposerTranscript transcript) {
         this.kind = kind;
         this.sessions = sessions;
+        this.closing = closing;
         this.transcript = transcript;
     }
 
@@ -72,7 +79,7 @@ public class CompositionController {
             var finished = EnumSet.noneOf(FeedbackDestination.class);
             finished.addAll(request.finished());
             var deadline = notAfter(composing);
-            boolean last = sessions.lastAttempt(composing.job());
+            boolean last = closing.lastAttempt(composing.job());
             return sessions.next(composing.job(), composing.identity(), finished)
                     .map(next -> switch (next) {
                         case CompositionSessions.Session session -> {
@@ -124,7 +131,7 @@ public class CompositionController {
     public CloseAnswer close(SandboxRun run, @Valid @RequestBody CloseRequest request) {
         return fenced(
                 run,
-                composing -> new CloseAnswer(sessions.close(composing.job(), composing.identity(), request.stops())));
+                composing -> new CloseAnswer(closing.close(composing.job(), composing.identity(), request.stops())));
     }
 
     private <T> T fenced(SandboxRun run, Function<ResultAdmissionService.Composing, T> operation) {

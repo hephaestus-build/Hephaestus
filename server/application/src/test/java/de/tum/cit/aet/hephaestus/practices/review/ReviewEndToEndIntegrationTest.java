@@ -12,7 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionService;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelService;
-import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionClosing;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentRequestDTO;
@@ -196,7 +196,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private ReviewComposeSandboxKind composeKind;
 
     @Autowired
-    private CompositionSessions compositionSessions;
+    private CompositionClosing compositionClosing;
 
     @Autowired
     private AgentRuns agentRuns;
@@ -448,7 +448,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .orElse(null));
             if (run == null) continue;
             var composing = composeKind.prepare(run);
-            compositionSessions.withholdOpen(composing.job(), composing.identity(), CompositionStop.NO_DECISION);
+            compositionClosing.withholdOpen(composing.job(), composing.identity(), CompositionStop.NO_DECISION);
             transactions.executeWithoutResult(status -> composeKind.end(run, SandboxRunKind.Outcome.COMPLETED));
         }
     }

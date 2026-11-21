@@ -8,6 +8,8 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.composer.ComposerTranscript;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionClosing;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionPlans;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
@@ -123,17 +125,27 @@ public final class ComposeRunGateway implements AutoCloseable {
         var jobs = context.getBean(ReviewJobRepository.class);
         var admission = context.getBean(ResultAdmissionService.class);
         var continuation = context.getBean(ReviewCompositionContinuation.class);
-        var sessions = new CompositionSessions(
+        var plans = new CompositionPlans(
                 admission,
                 continuation,
                 context.getBean(ReviewJobAssignments.class),
                 context.getBean(ItemDescriptorRegistry.class),
+                context.getBean(JsonMapper.class),
+                context.getBean(CompositionToolTrace.class));
+        var sessions = new CompositionSessions(
+                admission,
                 context.getBean(PracticeReviewProperties.class),
-                runs.capacity(),
-                context.getBean(MeterRegistry.class),
                 context.getBean(JsonMapper.class),
                 context.getBean(FeedbackRepair.class),
-                context.getBean(CompositionToolTrace.class));
+                context.getBean(CompositionToolTrace.class),
+                plans);
+        var closing = new CompositionClosing(
+                admission,
+                runs.capacity(),
+                context.getBean(MeterRegistry.class),
+                context.getBean(FeedbackRepair.class),
+                context.getBean(CompositionToolTrace.class),
+                plans);
         sandboxes = new AgentSandboxes(
                 context.getBean(AgentSandboxRepository.class),
                 runs,
@@ -148,7 +160,7 @@ public final class ComposeRunGateway implements AutoCloseable {
                 admission,
                 custody,
                 continuation,
-                sessions,
+                closing,
                 SandboxReviewClaims.terminal(context),
                 context.getBean(ProviderOutages.class),
                 runs,
@@ -169,7 +181,7 @@ public final class ComposeRunGateway implements AutoCloseable {
                     "agentRunController", new AgentRunController(runs, sandboxes, transactions, List.of(kind)));
             factory.registerSingleton(
                     "compositionController",
-                    new CompositionController(kind, sessions, context.getBean(ComposerTranscript.class)));
+                    new CompositionController(kind, sessions, closing, context.getBean(ComposerTranscript.class)));
             factory.registerSingleton("modelEndpoint", modelEndpoint);
             factory.registerSingleton("sandboxRunArguments", new WebMvcConfigurer() {
                 @Override

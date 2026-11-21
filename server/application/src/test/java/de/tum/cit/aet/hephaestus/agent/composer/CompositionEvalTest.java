@@ -117,7 +117,7 @@ class CompositionEvalTest {
         var files = scenario.files();
         var captured = new CapturedWork(files, MAPPER);
         var index = files.json(SandboxLayout.MANIFEST_PATH, MAPPER).orElseThrow();
-        String turn = CompositionSessions.privateTurn(
+        String turn = ComposerTurns.privateTurn(
                 files, captured, scenario.request(), scenario.admission(), null, scenario.routes(), List.of());
         assertThat(turn).contains(".accessibilityLabel(isPaused ? \"Resume run\" : \"Pause run\")");
         var publicConcern = scenario.admission().results().get(0).deepCopy();
@@ -129,7 +129,7 @@ class CompositionEvalTest {
         }
         scenario.admission().results().add(publicConcern);
         var publicRequest = new PrivateFeedback.Request(Map.of("ON_WORK", 3), 2, List.of());
-        var publicTurn = CompositionSessions.reviewTurn(
+        var publicTurn = ComposerTurns.reviewTurn(
                 files,
                 captured,
                 index,
@@ -140,16 +140,16 @@ class CompositionEvalTest {
                 List.of(),
                 PrimarySource.captured(files, index, ComposerFiles.CONTEXT_ROOT, ComposerFiles.REPOSITORY_ROOT));
         assertThat(publicTurn.text()).doesNotContain(".accessibilityLabel(isPaused");
-        assertThat(CompositionSessions.privateTurn(
+        assertThat(ComposerTurns.privateTurn(
                         files, captured, scenario.request(), scenario.admission(), null, Map.of(), List.of()))
                 .doesNotContain(".accessibilityLabel(isPaused");
         var closedConversation = new PrivateFeedback.Request(Map.of("PRACTICE_PAGE", 3), 2, List.of());
-        assertThat(CompositionSessions.privateTurn(
+        assertThat(ComposerTurns.privateTurn(
                         files, captured, closedConversation, scenario.admission(), null, scenario.routes(), List.of()))
                 .doesNotContain(".accessibilityLabel(isPaused");
         for (JsonNode text : index.path("citableTexts"))
             files.put(text.path("stagedPath").asString(), "tampered".getBytes(StandardCharsets.UTF_8));
-        assertThat(CompositionSessions.privateTurn(
+        assertThat(ComposerTurns.privateTurn(
                         files, captured, scenario.request(), scenario.admission(), null, scenario.routes(), List.of()))
                 .doesNotContain(".accessibilityLabel(isPaused")
                 .contains("Not shown");
