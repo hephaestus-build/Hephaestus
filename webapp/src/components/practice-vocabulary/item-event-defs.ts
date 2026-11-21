@@ -86,7 +86,7 @@ export const ITEM_EVENT_REASON_SENTENCES = {
 	QUIET_WINDOW:
 		"It waits briefly for more changes to the same work, so that they are decided together.",
 	REVIEW_IN_PROGRESS:
-		"An earlier review of the same work, queued or running, still includes a practice that this event selects. This event is decided again after that review ends.",
+		"An earlier review of the same work still includes a practice that this event selects, or an earlier automatic review has not started yet. This event is decided again after that review starts, ends or is replaced.",
 	ALREADY_CURRENT:
 		"Every practice that reviews on this event already has a current observation of this work.",
 } satisfies Record<string, string>;

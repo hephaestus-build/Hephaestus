@@ -35,7 +35,10 @@ public enum ReviewRequestReason {
     OCCASION_EVIDENCE_UNAVAILABLE,
     /** The occasion waits in its item's quiet window, which a newer occasion of the item extends up to the cap. */
     QUIET_WINDOW,
-    /** A practice the window selects is still measured by an earlier review of the item; the window waits for it. */
+    /**
+     * A practice the window selects is still measured by an earlier review of the item, or an earlier event review of
+     * the item has not started yet; the window waits for it.
+     */
     REVIEW_IN_PROGRESS,
     /** Every practice the occasion selects already has a current result or is being measured. */
     ALREADY_CURRENT;

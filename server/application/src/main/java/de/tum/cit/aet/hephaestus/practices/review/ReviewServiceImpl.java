@@ -531,8 +531,10 @@ public class ReviewServiceImpl implements ReviewService {
      * feedback mode Off that reviews at a milestone: it waits for that milestone and never follows a newer head. One
      * that this version still owes, such as for its checks or a spent deadline, finishes here. A practice that an
      * earlier review of the item still measures (queued, or running with an unsettled job) holds the whole window until
-     * that review ends, so its occasions are never lost. A continuing occasion leaves out every practice whose result
-     * is current; a milestone measures them again.
+     * that review ends, so its occasions are never lost. An event review that never started holds a window of
+     * occasions that join it whatever it lists, so that its claim replaces it instead of starting a sandbox on work
+     * that moved. A continuing occasion leaves out every practice whose result is current; a milestone measures them
+     * again.
      */
     private List<Practice> pending(
             ItemSnapshot pinned,
@@ -549,25 +551,30 @@ public class ReviewServiceImpl implements ReviewService {
                     workspaceId, itemId, pinned.version().value(), ReviewWithholdings.CARRIED));
         }
         var selected = gated.stream().filter(p -> !waiting.contains(p.getId())).toList();
-        boolean allOff = selected.isEmpty() && !waiting.isEmpty();
-        // A window of practices that all wait still waits for an earlier review of them, so a queued one is replaced.
-        var selectedIds =
-                (allOff ? gated : selected).stream().map(Practice::getId).collect(Collectors.toSet());
+        var selectedIds = selected.stream().map(Practice::getId).collect(Collectors.toSet());
         // Starting a review commits before its job is enqueued, so a running review with no job yet still measures.
         // One that never got a job stops holding the window one cap after it started.
         Instant enqueuedBy = clock.instant().minus(itemEvents.quietWindowCap());
+        // An event review that never started holds a window whatever it lists: its claim replaces it while this
+        // occasion waits, so no sandbox starts on work that moved. Only an occasion that joins a window can replace it.
+        boolean replaceable = occasions.stream()
+                .allMatch(name -> itemOptions.occasion(kind, name).joinsWindow());
         boolean measured = memberships.listedPractices(workspaceId, itemId).stream()
-                .filter(listed -> selectedIds.contains(listed.getPracticeId()))
-                .anyMatch(listed -> listed.getStatus().equals(ReviewStatus.QUEUED.name())
-                        || hasUnsettledInvocation(workspaceId, listed.getReviewId())
-                        || listed.getStartedAt() == null
-                        || listed.getStartedAt().isAfter(enqueuedBy));
+                .anyMatch(listed -> (replaceable
+                                && listed.getStatus().equals(ReviewStatus.QUEUED.name())
+                                && listed.getStartedAt() == null
+                                && listed.getOrigin().equals(ReviewOrigin.EVENT.name()))
+                        || (selectedIds.contains(listed.getPracticeId())
+                                && (listed.getStatus().equals(ReviewStatus.QUEUED.name())
+                                        || hasUnsettledInvocation(workspaceId, listed.getReviewId())
+                                        || listed.getStartedAt() == null
+                                        || listed.getStartedAt().isAfter(enqueuedBy))));
         if (measured)
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.REQUEST_CONFLICT,
                     "An earlier review of this item still measures a selected practice.",
                     ReviewRequestReason.REVIEW_IN_PROGRESS);
-        if (allOff)
+        if (selected.isEmpty() && !waiting.isEmpty())
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
                     "Every selected practice has feedback mode Off and waits for a milestone of the work.",
