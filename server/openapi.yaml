@@ -11362,6 +11362,12 @@ paths:
               $ref: "#/components/schemas/SetPracticeRepositoryRequest"
         required: true
       responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeRepository"
+          description: The practice repository
         "400":
           content:
             application/problem+json:
