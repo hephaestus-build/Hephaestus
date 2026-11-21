@@ -59,8 +59,16 @@ metadata:
 spec:
   backoffLimit: 6
   ttlSecondsAfterFinished: 86400
+  # A preemption or an eviction is not a failed attempt.
+  podFailurePolicy:
+    rules:
+      - action: Ignore
+        onPodConditions:
+          - type: DisruptionTarget
   template:
-    {{- include "hephaestus.backup.pod" (dict "root" . "command" "pgbackrest --stanza=hephaestus stanza-create && pgbackrest --stanza=hephaestus check") | nindent 4 }}
+    {{- /* stanza-create and check keep little memory, and every upgrade runs this Job beside the migration. */}}
+    {{- $resources := dict "requests" (dict "cpu" "10m" "memory" "64Mi" "ephemeral-storage" "64Mi") "limits" (dict "cpu" "1" "memory" "64Mi" "ephemeral-storage" "1Gi") }}
+    {{- include "hephaestus.backup.pod" (dict "root" . "resources" $resources "command" "pgbackrest --stanza=hephaestus stanza-create && pgbackrest --stanza=hephaestus check") | nindent 4 }}
 {{- end }}
 {{- if eq (include "hephaestus.restoring" .) "true" }}
 ---
@@ -105,7 +113,7 @@ spec:
               value: {{ $backup.restore.time | quote }}
             {{- include "hephaestus.backup.serverEnv" . | nindent 12 }}
           resources:
-            {{- toYaml $backup.resources | nindent 12 }}
+            {{- toYaml $backup.restore.resources | nindent 12 }}
           securityContext:
             {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
           volumeMounts:
@@ -152,6 +160,12 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
+      # A preemption or an eviction is not a failed attempt: a backup in the lowest tier yields its room.
+      podFailurePolicy:
+        rules:
+          - action: Ignore
+            onPodConditions:
+              - type: DisruptionTarget
       template:
         {{- include "hephaestus.backup.pod" (dict "root" $ "command" (printf "pgbackrest --stanza=hephaestus --type=%s backup" $type)) | nindent 8 }}
 {{- end }}

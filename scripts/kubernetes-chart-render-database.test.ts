@@ -712,11 +712,6 @@ await test("small PostgreSQL overrides the image calculator and gives each datab
 	assert.equal(settings.effective_cache_size, "1GB");
 	assert.equal(settings.max_parallel_workers_per_gather, "0");
 	assert.equal(settings.max_wal_size, "1GB");
-	assert.equal(
-		get(container(postgres), "resources", "limits", "memory"),
-		"2Gi",
-		"the lower trial ceiling is not enabled",
-	);
 	const migration = resources.find(
 		(resource) => kindOf(resource) === "Job" && componentOf(resource) === "migration",
 	);
@@ -728,6 +723,121 @@ await test("small PostgreSQL overrides the image calculator and gives each datab
 		assert.equal(envValue(role, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"), maximum);
 		assert.equal(envValue(role, "SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE"), minimum);
 	}
+});
+
+const postgresqlSettings = (resources: Resource[]) => {
+	const args = list(get(container(workload(resources, "postgresql")), "args"));
+	return new Map(
+		args.flatMap((arg, index) => {
+			if (args[index - 1] !== "-c" || typeof arg !== "string") {
+				return [];
+			}
+			const equals = arg.indexOf("=");
+			return [[arg.slice(0, equals), arg.slice(equals + 1)] as const];
+		}),
+	);
+};
+
+await test("every profile's PostgreSQL runs without JIT, in the memory that docs/admin/sizing.mdx derives", () => {
+	const sizing = readFileSync(new URL("../docs/admin/sizing.mdx", import.meta.url), "utf8");
+	const documented = (label: string) => {
+		const mib = new RegExp(`^\\| ${label} \\| (?<mib>\\d+) MiB \\|`, "mu").exec(sizing)?.groups
+			?.mib;
+		assert.ok(mib !== undefined, `docs/admin/sizing.mdx states "${label}" in MiB`);
+		return Number(mib);
+	};
+	const connectionMi = documented("Private memory of each connection");
+	const processesMi = documented("Postmaster and background processes");
+	// The page states the formula that this test computes, constant for constant.
+	for (const line of [
+		"shared memory   = shared_buffers + shared_buffers / 16 + 20 MiB + max_connections / 16 MiB",
+		`each connection = ${connectionMi} MiB + shared_buffers / 512 + work_mem × hash_mem_multiplier`,
+		"maintenance     = maintenance_work_mem + autovacuum_max_workers × autovacuum_work_mem",
+		`processes       = ${processesMi} MiB`,
+		"The chart rounds each part up to a whole MiB.",
+		"it also adds 8 parallel workers as connections",
+	]) {
+		assert.ok(sizing.includes(line), `docs/admin/sizing.mdx states: ${line}`);
+	}
+	for (const name of profiles.filter((candidate) => candidate !== "external")) {
+		const resources = rendered(layersFor(name));
+		const settings = postgresqlSettings(resources);
+		const setting = (key: string) => {
+			const value = settings.get(key);
+			assert.ok(value !== undefined, `${name}: ${key}`);
+			return value;
+		};
+		const mib = (key: string) => {
+			const { count, unit } = /^(?<count>\d+)(?<unit>kB|MB|GB)$/u.exec(setting(key))?.groups ?? {};
+			assert.ok(count !== undefined && unit !== undefined, `${name}: ${key} in kB, MB or GB`);
+			const perMib: Record<string, number> = { GB: 1024, MB: 1, kB: 1 / 1024 };
+			return Math.ceil(Number(count) * (perMib[unit] ?? Number.NaN));
+		};
+		assert.equal(setting("jit"), "off", name);
+		const connections = Number(setting("max_connections"));
+		const parallelWorkers = Number(setting("max_parallel_workers_per_gather")) > 0 ? 8 : 0;
+		const sharedBuffers = mib("shared_buffers");
+		const shared = sharedBuffers + Math.ceil(sharedBuffers / 16) + 20 + Math.ceil(connections / 16);
+		const perConnection =
+			connectionMi +
+			Math.ceil(sharedBuffers / 512) +
+			Math.ceil(mib("work_mem") * Number(setting("hash_mem_multiplier")));
+		const maintenance =
+			mib("maintenance_work_mem") +
+			Number(setting("autovacuum_max_workers")) * mib("autovacuum_work_mem");
+		const required =
+			shared + (connections + parallelWorkers) * perConnection + maintenance + processesMi;
+		const memory = `${required}Mi`;
+		const database = container(workload(resources, "postgresql"));
+		assert.equal(get(database, "resources", "limits", "memory"), memory, name);
+		assert.equal(get(database, "resources", "requests", "memory"), memory, name);
+		assert.ok(
+			sizing.includes(`| \`${name}\` | ${connections} | ${memory.replace("Mi", " MiB")} |`),
+			`docs/admin/sizing.mdx gives ${name}: ${connections} connections, ${memory}`,
+		);
+	}
+});
+
+await test("PostgreSQL refuses a memory limit below its derived size, a request above it, and a missing memory setting", () => {
+	const layers = layersFor("small");
+	const derived = Number(
+		String(
+			get(container(workload(rendered(layers), "postgresql")), "resources", "limits", "memory"),
+		).replace("Mi", ""),
+	);
+	const limited = (memory: string) =>
+		render([...layers, { postgresql: { resources: { limits: { memory } } } }]);
+	const short = limited(`${derived - 128}Mi`);
+	assert.equal(short.ok, false);
+	assert.match(
+		short.stderr,
+		/postgresql\.resources\.limits\.memory .* needs at least \d+Mi: shared memory=.*processes=/u,
+	);
+	const roomy = rendered([...layers, { postgresql: { resources: { limits: { memory: "4Gi" } } } }]);
+	const database = container(workload(roomy, "postgresql"));
+	assert.equal(get(database, "resources", "limits", "memory"), "4Gi");
+	assert.equal(get(database, "resources", "requests", "memory"), "4Gi", "auto follows the limit");
+	const overRequested = render([
+		...layers,
+		{ postgresql: { resources: { requests: { memory: `${derived + 128}Mi` } } } },
+	]);
+	assert.equal(overRequested.ok, false);
+	assert.match(
+		overRequested.stderr,
+		/postgresql\.resources\.requests\.memory .* is above the memory limit/u,
+	);
+	// Equal decimal quantities are equal: only a larger request fails.
+	const decimal = rendered([
+		...layers,
+		{ postgresql: { resources: { requests: { memory: "5G" }, limits: { memory: "5G" } } } },
+	]);
+	assert.equal(
+		get(container(workload(decimal, "postgresql")), "resources", "requests", "memory"),
+		"5G",
+	);
+	const missing = render([...layers, { postgresql: { parameters: { work_mem: null } } }]);
+	assert.equal(missing.ok, false);
+	assert.match(missing.stderr, /postgresql\.parameters\.work_mem is required/u);
 });
 
 await test("a restore that stops the servers keeps max_connections; a count of 0 needs the pin", () => {
@@ -788,7 +898,8 @@ await test("the database budget holds the runtime pools, rollout, listeners and 
 			layers: [
 				...base,
 				{
-					sandbox: { reviewMemory: memoryFor(8) },
+					// The connection budget, not the node fit: a budget that holds eight reviews.
+					sandbox: { reviewMemory: memoryFor(8), budget: { cpu: "8", memory: "32Gi" } },
 					// Eight reviews and two conversation loads fit small's 20Gi Git cache at 1Gi each.
 					server: { gitCache: { snapshotLimit: "1Gi" } },
 				},

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { stringify } from "yaml";
+import { parse, stringify } from "yaml";
 import {
 	adminBundle,
 	amount,
@@ -37,6 +38,9 @@ import {
 	reviewWidth,
 	sandboxGib,
 	sandboxLayer,
+	stackOn,
+	readValues,
+	profile,
 	sandboxNamespace,
 	sandboxPods,
 	sandboxQuota,
@@ -53,6 +57,7 @@ import {
 	withSandboxes,
 	workload,
 	workloads,
+	scheduledBackup,
 	reviewMemoryMi,
 	javaCapacityConstant,
 } from "./kubernetes-chart-render-support.ts";
@@ -340,6 +345,8 @@ await test("the conversation quota counts the template requests of each resident
 		...layersFor("small"),
 		{
 			sandbox: {
+				// Quota arithmetic, not the node fit: a budget that holds these turns.
+				budget: { cpu: "8", memory: "32Gi" },
 				conversationTurns: 3,
 				templates: {
 					conversation: {
@@ -441,6 +448,8 @@ await test("review slot admission and quota count the same overridden template r
 		...layersFor("small"),
 		{
 			sandbox: {
+				// Quota arithmetic, not the node fit: a budget that holds these turns.
+				budget: { cpu: "8", memory: "32Gi" },
 				reviewMemory: "1920Mi",
 				conversationTurns: 8,
 				templates: {
@@ -498,8 +507,8 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 		assert.equal(mirrors + snapshots, volume, name);
 		assert.ok(mirrors >= 1024 ** 3, `${name}: the mirrors keep at least 1Gi`);
 	}
-	assert.equal(capacity(layersFor("small")), "11");
-	assert.equal(capacity([...layersFor("small"), { sandbox: { conversationTurns: 5 } }]), "5");
+	assert.equal(capacity(layersFor("small")), "3");
+	assert.equal(capacity([...layersFor("small"), { sandbox: { conversationTurns: 2 } }]), "2");
 	const exhausted = render([
 		...layersFor("small"),
 		{ server: { resources: { requests: { cpu: "3" } } } },
@@ -598,7 +607,7 @@ await test("auto is the largest turn count whose rendered steady and drained-upg
 		},
 		{
 			name: "upgrade memory",
-			values: { migration: { resources: { requests: { memory: "4Gi" } } } },
+			values: { migration: { resources: { requests: { memory: "2Gi" } } } },
 			overhead: { cpuMillis: 0, memoryMi: 0 },
 		},
 	];
@@ -608,12 +617,7 @@ await test("auto is the largest turn count whose rendered steady and drained-upg
 		const turns = Number(
 			envValue(workload(resources, "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY"),
 		);
-		const budget = get(scenario.values, "sandbox", "budget");
-		const room = {
-			cpu: get(budget, "cpu") === undefined ? nodeRoom().cpu : amount(get(budget, "cpu")),
-			memory:
-				get(budget, "memory") === undefined ? nodeRoom().memory : amount(get(budget, "memory")),
-		};
+		const room = nodeRoom(get(scenario.values, "sandbox", "budget"));
 		const phases = Object.values(fitTotals(resources, scenario.overhead));
 		for (const phase of phases) {
 			assert.ok(phase.cpu <= room.cpu + 1e-9, `${scenario.name}: CPU fits`);
@@ -637,6 +641,118 @@ await test("auto is the largest turn count whose rendered steady and drained-upg
 		assert.match(excess.stderr, /exceeds sandbox.budget/u);
 		process.stdout.write(`${scenario.name}: auto=${turns}\n`);
 	}
+});
+
+await test("the node reserve table of docs/admin/sizing.mdx is what the single-node installs render", () => {
+	const sizing = readFileSync(new URL("../docs/admin/sizing.mdx", import.meta.url), "utf8");
+	const allocatable = amount(get(readValues(profile("small")), "sandbox", "budget", "memory"));
+	const outside = amount(
+		get(readValues(profile("small")), "sandbox", "budget", "outsideRelease", "memory"),
+	);
+	const oneHost = asRecord(
+		parse(readFileSync(new URL("../deploy/platform/k3s-values.yaml", import.meta.url), "utf8")),
+		"k3s-values.yaml",
+	);
+	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
+	const backup = {
+		postgresql: {
+			backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+		},
+	};
+	const everything: Layer[] = [stackOn, backup, { postgresql: { metrics: { enabled: true } } }];
+	const gvisor = { cpuMillis: 10, memoryMi: 48 };
+	const none = { cpuMillis: 0, memoryMi: 0 };
+	const installs: { install: string; layers: Layer[]; overhead: typeof none }[] = [
+		{ install: "`small.yaml`", layers: [], overhead: none },
+		{ install: "`small.yaml`, backups on", layers: [backup], overhead: none },
+		{
+			install: "`small.yaml`, backups, database metrics and the monitoring stack",
+			layers: everything,
+			overhead: none,
+		},
+		{ install: "One host", layers: [oneHost], overhead: gvisor },
+		{ install: "One host, backups on", layers: [oneHost, backup], overhead: gvisor },
+		{
+			install: "One host, backups, database metrics and the monitoring stack",
+			layers: [oneHost, ...everything],
+			overhead: gvisor,
+		},
+	];
+	for (const { install, layers, overhead } of installs) {
+		const base = [...layersFor("small"), ...layers];
+		const resources = rendered(base);
+		const turns = Number(
+			envValue(workload(resources, "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY"),
+		);
+		const before = fitTotals(rendered([...base, { sandbox: { conversationTurns: 0 } }]), overhead);
+		const peak = fitTotals(resources, overhead);
+		const free = Math.round(
+			(allocatable - outside - Math.max(peak.upgrade.memory, peak.steady.memory)) / 2 ** 20,
+		);
+		const row = `| ${install} | ${Math.round(before.upgrade.memory / 2 ** 20)} MiB | ${turns} | ${free} MiB |`;
+		assert.ok(sizing.includes(row), `docs/admin/sizing.mdx § Node reserve states ${row}`);
+	}
+});
+
+await test("a backup Pod never preempts, and every role and Job of the release outranks it", () => {
+	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
+	const resources = rendered([
+		...layersFor("small"),
+		{
+			postgresql: {
+				metrics: { enabled: true },
+				backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+			},
+		},
+	]);
+	const classes = new Map(
+		resources
+			.filter((resource) => kindOf(resource) === "PriorityClass")
+			.map((resource) => [nameOf(resource), resource]),
+	);
+	const classOf = (spec: unknown) => {
+		const priorityClass = classes.get(String(get(spec, "priorityClassName")));
+		assert.ok(priorityClass, String(get(spec, "priorityClassName")));
+		return priorityClass;
+	};
+	const backups = resources.filter(
+		(resource) =>
+			scheduledBackup(resource) ||
+			(kindOf(resource) === "Job" && nameOf(resource).includes("-postgresql-backup-stanza-")),
+	);
+	// The two scheduled backups and the stanza Job of this release.
+	assert.equal(backups.length, 3);
+	const backupClasses = backups.map((resource) =>
+		classOf(
+			kindOf(resource) === "CronJob"
+				? get(resource, "spec", "jobTemplate", "spec", "template", "spec")
+				: podSpec(resource),
+		),
+	);
+	for (const priorityClass of backupClasses) {
+		// When the node's requests are full, a backup waits for room instead of preempting another Pod.
+		assert.equal(get(priorityClass, "preemptionPolicy"), "Never");
+	}
+	const backupValue = Math.max(
+		...backupClasses.map((priorityClass) => Number(get(priorityClass, "value"))),
+	);
+	const others = [
+		...workloads(resources).map((resource) => podSpec(resource)),
+		...resources
+			.filter((resource) => kindOf(resource) === "Job" && !backups.includes(resource))
+			.map((resource) => podSpec(resource)),
+	];
+	for (const spec of others) {
+		// A Pod of a higher tier preempts a running backup before it preempts a conversation sandbox.
+		assert.ok(
+			Number(get(classOf(spec), "value")) > backupValue,
+			String(get(spec, "priorityClassName")),
+		);
+	}
+	assert.equal(
+		get(classOf(podSpec(workload(resources, "server"))), "preemptionPolicy"),
+		"PreemptLowerPriority",
+	);
 });
 
 await test("the single-node profile's requests, one upgrade beside them and its sandbox quota fit the node it states", () => {
@@ -676,12 +792,11 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 			disk += amount(get(claim, "spec", "resources", "requests", "storage"));
 		}
 	}
-	// The migration Job and the stanza Job run beside the upgrade, and one backup at a time.
+	// The migration Job and the stanza Job run beside the upgrade. A scheduled backup is not counted: it fits in the
+	// reserve's headroom, or it waits.
 	for (const job of resources.filter((candidate) => kindOf(candidate) === "Job")) {
 		add(podSpec(job), 1);
 	}
-	const backup = resources.find((resource) => kindOf(resource) === "CronJob");
-	add(get(backup, "spec", "jobTemplate", "spec", "template", "spec"), 1);
 	const residents = workloads(resources).reduce(
 		(requested, resource) =>
 			requested +
@@ -702,7 +817,7 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	// The backup's request comes out of the turns too.
 	assert.equal(
 		Number(envValue(workload(resources, "server"), "HEPHAESTUS_CONVERSATION_TURN_CAPACITY")),
-		7,
+		3,
 	);
 	assert.ok(cpu <= node.cpu, `${cpu.toFixed(2)} CPU requested, ${node.cpu} on the node`);
 	assert.ok(
@@ -773,13 +888,20 @@ const quotaDisk = (renderedResources: Resource[]) =>
 await test("quotas admit schema-supported template quantities and round fractional quota units up", () => {
 	const base = [
 		...layersFor("small"),
-		{ sandbox: { conversationTurns: 8, reviewMemory: memoryFor(2) } },
+		{
+			sandbox: {
+				budget: { cpu: "8", memory: "32Gi" },
+				conversationTurns: 8,
+				reviewMemory: memoryFor(2),
+			},
+		},
 	];
 	const requests = { cpu: "0.0001k", memory: "1.5Gi", "ephemeral-storage": "1000M" };
 	const custom = [
 		...layersFor("small"),
 		{
 			sandbox: {
+				budget: { cpu: "8", memory: "32Gi" },
 				conversationTurns: 8,
 				reviewMemory: "3Gi",
 				templates: {
@@ -850,15 +972,15 @@ await test("the small profile fits its declared budget at steady state and the d
 		cpu: reviewSlots * sandboxPods.review.cpu + conversations * sandboxPods.conversation.cpu,
 		memory: (reviewSlots * sandboxGib.review + conversations * sandboxGib.conversation) * 2 ** 30,
 	});
-	assert.equal(turns, 7);
+	assert.equal(turns, 3);
 	assert.equal(reviewSlots, 5);
 	assert.ok(steady.cpu <= node.cpu, `steady: ${steady.cpu.toFixed(2)} CPU of ${node.cpu}`);
 	assert.ok(
 		steady.memory <= node.memory,
 		`steady: ${gib(steady.memory)} of ${gib(node.memory)} GiB`,
 	);
-	// An upgrade keeps the old server beside its replacement. Other Deployments can surge,
-	// and the migration and stanza Jobs can run beside the resident conversation sandboxes.
+	// An upgrade keeps the old server beside its replacement. Other Deployments can surge, and the migration and
+	// stanza Jobs can run beside the resident conversation sandboxes. A scheduled backup is not counted.
 	const jobs = resources
 		.filter((resource) => kindOf(resource) === "Job")
 		.map((job): [unknown, number] => [podSpec(job), 1]);
@@ -870,7 +992,6 @@ await test("the small profile fits its declared budget at steady state and the d
 					(kindOf(resource) === "Deployment" ? surge(resource) : 0),
 			]),
 			...jobs,
-			[backup, 1],
 		]),
 		{
 			cpu: conversations * sandboxPods.conversation.cpu,
