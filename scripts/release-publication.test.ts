@@ -277,6 +277,11 @@ if (tool === 'git') {
   } else if (args.includes('inspect')) {
     const reference = args[3];
     const digest = reference.includes('@') ? reference.split('@')[1] : read('aliases')[reference];
+    // As \`docker buildx imagetools inspect\` answers for a tag that does not exist yet: an error, exit 1.
+    if (digest === undefined) {
+      process.stderr.write('ERROR: ' + reference + ': not found\n');
+      process.exit(1);
+    }
     console.log(JSON.stringify({digest}));
   } else if (args.includes('create')) {
     if (!state().isImmutable) throw new Error('Aliases require immutable publication');

@@ -805,14 +805,25 @@ jobs:
           aliases=$(node scripts/plan-release.ts --aliases "$VERSION")
           [ -n "$aliases" ] || { echo "::error::No image aliases selected"; exit 1; }
           mapfile -t tags <<< "$aliases"
+          # Each alias's digest before the writes, read under the lock: the only stale answer that the check below
+          # accepts. A third digest after the writes means another writer moved the alias.
+          : > "$RUNNER_TEMP/previous.tsv"
+          while IFS=$'\t' read -r ref digest; do
+            for tag in "${tags[@]}"; do
+              before=$(node scripts/wait-for-image-tag.ts current "$ref:$tag")
+              printf '%s\t%s\n' "$ref:$tag" "$before" >> "$RUNNER_TEMP/previous.tsv"
+            done
+          done < "$RUNNER_TEMP/promotions.tsv"
           while IFS=$'\t' read -r ref digest; do
             flags=()
             for tag in "${tags[@]}"; do flags+=(-t "$ref:$tag"); done
             docker buildx imagetools create "${flags[@]}" "$ref@$digest"
           done < "$RUNNER_TEMP/promotions.tsv"
+          # Each alias moved to the verified digest. The registry can still serve the alias's previous digest, or no
+          # tag, for a moment, so the check waits for the verified digest, for at most 60 s.
           while IFS=$'\t' read -r ref digest; do
             for tag in "${tags[@]}"; do
-              promoted=$(docker buildx imagetools inspect "$ref:$tag" --format '{{json .Manifest}}' | jq -r .digest)
-              [ "$promoted" = "$digest" ] || { echo "::error::Promotion changed $ref:$tag digest"; exit 1; }
+              before=$(awk -F '\t' -v alias="$ref:$tag" '$1 == alias { print $2 }' "$RUNNER_TEMP/previous.tsv")
+              node scripts/wait-for-image-tag.ts wait "$ref:$tag" "$digest" "$before"
             done
           done < "$RUNNER_TEMP/promotions.tsv"
