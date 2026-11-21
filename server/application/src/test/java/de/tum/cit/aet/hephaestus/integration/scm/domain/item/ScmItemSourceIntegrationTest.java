@@ -234,6 +234,22 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private FeedbackTargetResolver targets;
 
+    /** A work item indexed without its repository cannot be authorized through one: it is not visible. */
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldRefuseAWorkItemWithoutAParentInsteadOfFailing(IdentityProviderType type) {
+        var fixture = fixture(type);
+        long workspaceId = fixture.workspace().getId();
+        var orphan = writer.upsert(new ItemRegistration(
+                workspaceId, ScmItemEvents.PULL_REQUEST, fixture.repository().getId(), null, null));
+        assertThat(orphan.parentId()).isNull();
+
+        for (var purpose : SourceUsePurpose.values())
+            assertThat(sourceAccess.permits(orphan, purpose)).as(purpose.name()).isFalse();
+    }
+
     @ParameterizedTest
     @EnumSource(
             value = IdentityProviderType.class,
