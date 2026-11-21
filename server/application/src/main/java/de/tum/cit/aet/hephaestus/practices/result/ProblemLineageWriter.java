@@ -50,8 +50,7 @@ class ProblemLineageWriter {
             List<Problem> problems,
             CapturedTextProbe captured,
             Instant at) {
-        // A trial writes no result. A scan compares its files in its own report. A result that ended at once describes
-        // no
+        // A trial writes no result. A scan compares its files in its own report. A result that ended at once is no
         // current decision: a newer result compares instead.
         if (review.getKind() != ReviewKind.ITEM || result.getEndedAt() != null || result.getPracticeVersionId() == null)
             return;
@@ -84,8 +83,9 @@ class ProblemLineageWriter {
             var state = match == null
                     ? ProblemBaselineState.NEW
                     : comparison
-                                    .content(match.candidate())
-                                    .equals(comparison.content(entry.getValue().candidate()))
+                                    .itemContent(match.candidate())
+                                    .equals(comparison.itemContent(
+                                            entry.getValue().candidate()))
                             ? ProblemBaselineState.UNCHANGED
                             : ProblemBaselineState.UPDATED;
             recorded.add(row(ws, result, prior, entry.getValue().id(), match == null ? null : match.id(), state, at));

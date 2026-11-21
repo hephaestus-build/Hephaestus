@@ -303,14 +303,23 @@ Thread resolution from lineage, repeats by identity and the composer's view of l
 - When the seal writes an item review's result, it compares each problem with the previous comparable result.
   That is the newest earlier result of the same practice version, item and developer, with the same model method.
   The comparison writes one `problem_lineage` row for each problem: New, Unchanged or Updated.
-- Identity is the scan comparison's: a problem matches by its key, or else by its first citation.
+  It writes no rows when there is no such result.
+  The same holds when that result is not permitted or no longer verifies.
+- Identity is the scan comparison's. A problem matches by its key.
+  A problem with no key matches by the source and the normalized quote of its first citation.
+- Unchanged and Updated compare the problem's content without line numbers and without the cited commit.
+  Every push moves the head that a citation names.
 - A previous problem that the newer result does not find is No longer present only with complete proof.
   The proof is the scan comparison's: a judged result of a changed version, unmarked, permitted and with trusted coverage.
   Item reviews add one more condition, because the model chooses the keys and can leave a problem out.
   Every text that the previous problem quoted must be gone from the newer review's capture.
 - The capture decides as follows:
+  - Only file versions count: texts that the capture stages at a commit.
+    A record of the change, such as its unified diff, also holds the lines that the change removes.
   - The capture must hold the cited source whole, and it must hold the cited path.
-  - The quote is searched in every text of the source at the reviewed version.
+  - A quote of the old side cites what the change removes, so it proves nothing.
+  - The quote is searched first in the file at the cited path, at the reviewed version.
+    A source that captures a change is then searched in every new file version, within a read budget.
     Leading and trailing blanks of each line are ignored.
   - A renamed file keeps its code at its new path, so the quote is still present.
   - A deleted file keeps its old text in the capture of a change.
@@ -321,6 +330,7 @@ Thread resolution from lineage, repeats by identity and the composer's view of l
 Enforced by:
 
 - `ResultAdmissionIntegrationTest#shouldRecordAProblemUnchangedUpdatedOrNewAgainstThePreviousComparableResult`
-- `ResultAdmissionIntegrationTest#shouldRecordAProblemNoLongerPresentWhenItsTextIsGoneFromTheNewerCapture`
+- `ResultAdmissionIntegrationTest#shouldRecordAProblemNoLongerPresentWhenAJudgedReviewOfAChangedVersionNoLongerFindsItAndItsTextIsGone`
 - `ResultAdmissionIntegrationTest#shouldNotRecordAProblemNoLongerPresentWithoutCompleteProof`
+- `ResultAdmissionIntegrationTest#shouldCompareWithNoResultThatAPersonMarkedIncorrect`
 - `CapturedQuoteProbeTest`

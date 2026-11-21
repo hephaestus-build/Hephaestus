@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
+import de.tum.cit.aet.hephaestus.practices.model.ProblemLineage;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.AbstractResultAdmissionIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
@@ -49,9 +50,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
+import de.tum.cit.aet.hephaestus.practices.spi.EvidenceCitation;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.FrozenModel;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
+import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
@@ -333,6 +336,200 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         .orElseThrow()
                         .getId())
                 .isEqualTo(current);
+    }
+
+    /** Seals a new review of the scenario's item at {@code version}, ordered {@code minutesAgo}, as {@code shaped}. */
+    private UUID sealed(
+            String version,
+            int minutesAgo,
+            ResultOutcome outcome,
+            UnaryOperator<ResultCandidate> shaped,
+            CapturedTextProbe probe) {
+        var pending = admissions.pending(
+                scenario, Instant.now().minus(Duration.ofMinutes(minutesAgo)), scenarioAccountId, version);
+        running(pending, 1);
+        var candidate = shaped.apply(admissions.candidate(pending, outcome));
+        return store.admit(
+                        pending.review().getWorkspaceId(),
+                        pending.review().getId(),
+                        pending.jobId(),
+                        1,
+                        List.of(candidate),
+                        probe)
+                .resultIds()
+                .getFirst();
+    }
+
+    private UUID sealed(String version, int minutesAgo, ResultOutcome outcome, CapturedTextProbe probe) {
+        return sealed(version, minutesAgo, outcome, UnaryOperator.identity(), probe);
+    }
+
+    private Map<ProblemBaselineState, Long> lineageOf(UUID result) {
+        return lineage.findByWorkspaceIdAndResultId(scenario.workspace().getId(), result).stream()
+                .collect(Collectors.groupingBy(ProblemLineage::getState, Collectors.counting()));
+    }
+
+    private static ResultCandidate withProblems(ResultCandidate c, UnaryOperator<ProblemCandidate> change) {
+        return new ResultCandidate(
+                c.practiceId(),
+                c.practiceVersionId(),
+                c.itemId(),
+                c.itemVersion(),
+                c.developerId(),
+                c.outcome(),
+                c.summary(),
+                c.explanation(),
+                c.evidence(),
+                c.example(),
+                c.coverage(),
+                c.problems().stream().map(change).toList());
+    }
+
+    private static ProblemCandidate problem(ProblemCandidate p, String explanation, String commit) {
+        return new ProblemCandidate(
+                p.position(),
+                p.key(),
+                p.severity(),
+                p.summary(),
+                explanation,
+                p.citations().stream()
+                        .map(c -> new EvidenceCitation(
+                                c.sourceKind(),
+                                c.sourcePath(),
+                                c.path(),
+                                c.side(),
+                                commit,
+                                c.startLine(),
+                                c.endLine(),
+                                c.quote(),
+                                c.verification()))
+                        .toList(),
+                p.basis(),
+                p.nextStep());
+    }
+
+    private static final CapturedTextProbe GONE = cited -> CapturedTextProbe.Presence.GONE;
+
+    private static HostCoverage incomplete(HostCoverage host) {
+        return new HostCoverage(
+                false, host.omitted(), host.reads(), host.truncatedReads(), host.failedReads(), host.receipts());
+    }
+
+    @Test
+    void shouldRecordAProblemUnchangedUpdatedOrNewAgainstThePreviousComparableResult() {
+        var first = sealed("v1", 30, ResultOutcome.NOT_MET, CapturedTextProbe.NONE);
+        assertThat(lineageOf(first))
+                .as("the first result has nothing to compare with")
+                .isEmpty();
+
+        // A push moves the head that the citation names. The problem's text and place stay, so it is unchanged.
+        var pushed = sealed(
+                "v2",
+                20,
+                ResultOutcome.NOT_MET,
+                c -> withProblems(c, p -> problem(p, p.explanation(), "commit-2")),
+                CapturedTextProbe.NONE);
+        assertThat(lineageOf(pushed)).containsExactlyEntriesOf(Map.of(ProblemBaselineState.UNCHANGED, 1L));
+        var unchanged = lineage.findByWorkspaceIdAndResultId(
+                        scenario.workspace().getId(), pushed)
+                .getFirst();
+        assertThat(unchanged.getPriorResultId()).isEqualTo(first);
+        assertThat(unchanged.getProblemId()).isNotNull();
+        assertThat(unchanged.getPriorProblemId()).isNotNull();
+
+        var updated = sealed(
+                "v3",
+                10,
+                ResultOutcome.NOT_MET,
+                c -> withProblems(c, p -> problem(p, "It also skips the empty case.", "commit-2")),
+                CapturedTextProbe.NONE);
+        assertThat(lineageOf(updated)).containsExactlyEntriesOf(Map.of(ProblemBaselineState.UPDATED, 1L));
+
+        var renamed = sealed(
+                "v4",
+                5,
+                ResultOutcome.NOT_MET,
+                c -> withProblems(
+                        c,
+                        p -> new ProblemCandidate(
+                                p.position(),
+                                "another-problem",
+                                p.severity(),
+                                p.summary(),
+                                p.explanation(),
+                                p.citations(),
+                                p.basis(),
+                                p.nextStep())),
+                cited -> CapturedTextProbe.Presence.PRESENT);
+        assertThat(lineageOf(renamed))
+                .as("a problem under another key is new, and its code still being there repairs nothing")
+                .containsExactlyEntriesOf(Map.of(ProblemBaselineState.NEW, 1L));
+    }
+
+    @Test
+    void shouldRecordAProblemNoLongerPresentWhenAJudgedReviewOfAChangedVersionNoLongerFindsItAndItsTextIsGone() {
+        var first = sealed("v1", 30, ResultOutcome.NOT_MET, CapturedTextProbe.NONE);
+        var gone = sealed("v2", 20, ResultOutcome.MET, GONE);
+        assertThat(lineage.findByWorkspaceIdAndResultId(scenario.workspace().getId(), gone))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getState()).isEqualTo(ProblemBaselineState.ABSENT);
+                    assertThat(row.getProblemId()).isNull();
+                    assertThat(row.getPriorResultId()).isEqualTo(first);
+                    assertThat(row.getPriorProblemId()).isNotNull();
+                });
+    }
+
+    @Test
+    void shouldNotRecordAProblemNoLongerPresentWithoutCompleteProof() {
+        // Its quoted text is still in the work: the model left the problem out, which proves nothing.
+        sealed("a1", 60, ResultOutcome.NOT_MET, CapturedTextProbe.NONE);
+        assertThat(lineageOf(sealed("a2", 55, ResultOutcome.MET, cited -> CapturedTextProbe.Presence.PRESENT)))
+                .isEmpty();
+        // The capture cannot say: a path that the change no longer touches, or a cut capture.
+        sealed("b1", 50, ResultOutcome.NOT_MET, CapturedTextProbe.NONE);
+        assertThat(lineageOf(sealed("b2", 45, ResultOutcome.MET, CapturedTextProbe.NONE)))
+                .isEmpty();
+        // A review that could not decide says nothing about the work.
+        sealed("c1", 40, ResultOutcome.NOT_MET, CapturedTextProbe.NONE);
+        assertThat(lineageOf(sealed("c2", 35, ResultOutcome.COULD_NOT_DETERMINE, GONE)))
+                .isEmpty();
+        // The same version again: nothing changed that could repair it.
+        sealed("d1", 30, ResultOutcome.NOT_MET, CapturedTextProbe.NONE);
+        assertThat(lineageOf(sealed("d1", 25, ResultOutcome.MET, GONE))).isEmpty();
+        // A review that did not read the work whole.
+        sealed("e1", 20, ResultOutcome.NOT_MET, CapturedTextProbe.NONE);
+        assertThat(lineageOf(sealed(
+                        "e2",
+                        15,
+                        ResultOutcome.MET,
+                        c -> new ResultCandidate(
+                                c.practiceId(),
+                                c.practiceVersionId(),
+                                c.itemId(),
+                                c.itemVersion(),
+                                c.developerId(),
+                                c.outcome(),
+                                c.summary(),
+                                c.explanation(),
+                                c.evidence(),
+                                c.example(),
+                                incomplete((HostCoverage) c.coverage()),
+                                c.problems()),
+                        GONE)))
+                .isEmpty();
+        // A person accepted the earlier result: a marked result proves no repair.
+        var accepted = sealed("f1", 10, ResultOutcome.NOT_MET, CapturedTextProbe.NONE);
+        store.mark(scenario.workspace().getId(), accepted, ResultMarkKind.ACCEPTED, scenarioAccountId, "Accepted");
+        assertThat(lineageOf(sealed("f2", 5, ResultOutcome.MET, GONE))).isEmpty();
+    }
+
+    @Test
+    void shouldCompareWithNoResultThatAPersonMarkedIncorrect() {
+        var incorrect = sealed("g1", 20, ResultOutcome.NOT_MET, CapturedTextProbe.NONE);
+        store.mark(scenario.workspace().getId(), incorrect, ResultMarkKind.INCORRECT, scenarioAccountId, "Wrong");
+        assertThat(lineageOf(sealed("g2", 10, ResultOutcome.NOT_MET, CapturedTextProbe.NONE)))
+                .isEmpty();
     }
 
     @Test

@@ -81,6 +81,12 @@ public class ProblemComparison {
         var ordinals = new HashMap<String, Integer>();
         var keys = new LinkedHashMap<String, AdmittedProblemSnapshot>();
         for (var problem : result.problems()) {
+            // Proof from before 1.0 can hold a problem without a citation: with no key either, it has no identity.
+            if (problem.candidate().citations().isEmpty()) {
+                if (problem.candidate().key() != null)
+                    keys.put("key:" + problem.candidate().key(), problem);
+                continue;
+            }
             var first = problem.candidate().citations().getFirst();
             String quote = normalize(first.quote());
             int ordinal = problem.candidate().key() == null ? ordinals.merge(quote, 1, Integer::sum) - 1 : 0;
@@ -103,6 +109,18 @@ public class ProblemComparison {
     }
 
     public String content(ProblemCandidate problem) {
+        return content(problem, false);
+    }
+
+    /**
+     * The content of an item review's problem, as {@link #content(ProblemCandidate)} gives it but without the cited
+     * commit: every push moves the head that a citation names, and the problem's text and place may stay the same.
+     */
+    public String itemContent(ProblemCandidate problem) {
+        return content(problem, true);
+    }
+
+    private String content(ProblemCandidate problem, boolean withoutCommit) {
         var body = json.createObjectNode();
         body.put("severity", problem.severity().name());
         body.put("summary", problem.summary());
@@ -116,6 +134,7 @@ public class ProblemComparison {
                 object.remove("startLine");
                 object.remove("endLine");
                 object.remove("verification");
+                if (withoutCommit) object.remove("commit");
             }
             citations.add(citation);
         }

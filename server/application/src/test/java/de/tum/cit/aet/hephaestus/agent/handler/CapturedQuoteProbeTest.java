@@ -48,14 +48,16 @@ class CapturedQuoteProbeTest extends BaseUnitTest {
             var side = key.startsWith("old:") ? CitationSide.OLD : CitationSide.NEW;
             String path = key.substring(4);
             String staged = "context/citable/" + key.substring(0, 3) + "/" + path;
-            String sha = Integer.toHexString(staged.hashCode())
-                    .repeat(16)
-                    .substring(0, 64)
-                    .replaceAll("[^0-9a-f]", "0");
-            citable.add(
-                    new CitableText(DIFF.value(), path, side, side == CitationSide.OLD ? "base" : "head", staged, sha));
+            citable.add(new CitableText(
+                    DIFF.value(), path, side, side == CitationSide.OLD ? "base" : "head", staged, sha(staged)));
             when(files.readText(eq(job), eq(staged), any())).thenReturn(Optional.of(content));
         });
+        // The capture of a change also stages its unified diff as a record, with no commit. Its removed lines hold
+        // code that the change deletes, so it never counts as the work.
+        String record = "context/citable-records/scm.pull-request.diff/change.json";
+        citable.add(new CitableText(
+                DIFF.value(), "context/change.json#/diff", CitationSide.NEW, null, record, sha(record)));
+        when(files.readText(eq(job), eq(record), any())).thenReturn(Optional.of("-" + QUOTE + "\n+requireUser();"));
         var manifest = new JobFolderIndex(
                 new SourceContractVersion("3.0.0"),
                 "a".repeat(64),
@@ -73,6 +75,28 @@ class CapturedQuoteProbeTest extends BaseUnitTest {
                 List.of(),
                 citable);
         return new CapturedQuoteProbe(job, CapturedEvidence.of(manifest), files);
+    }
+
+    private static String sha(String path) {
+        return String.format("%064x", path.hashCode() & 0xffffffffL);
+    }
+
+    /** A quote of the old side cites what the change removes: its absence from the new side repairs nothing. */
+    @Test
+    void shouldNotSayForAQuoteOfTheOldSide() {
+        var probe = probe(
+                SourceCompleteness.COMPLETE, Map.of("old:src/User.java", QUOTE, "new:src/User.java", "class User {}"));
+        var old = new EvidenceCitation(
+                DIFF, "inputs/sources/scm/diff.patch", "src/User.java", CitationSide.OLD, "base", 3, 3, QUOTE, null);
+        assertThat(probe.presence(old)).isEqualTo(Presence.UNKNOWN);
+    }
+
+    @Test
+    void shouldNotSayForAQuoteOfARecordOfTheChange() {
+        var probe = probe(SourceCompleteness.COMPLETE, Map.of("new:src/User.java", "class User {}"));
+        var record = new EvidenceCitation(
+                DIFF, "context/change.json", "context/change.json#/diff", CitationSide.NEW, null, 1, 1, QUOTE, null);
+        assertThat(probe.presence(record)).isEqualTo(Presence.UNKNOWN);
     }
 
     @Test

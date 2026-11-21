@@ -7,26 +7,37 @@ import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
 import de.tum.cit.aet.hephaestus.practices.spi.CapturedTextProbe;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceCitation;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * Whether the text that an earlier problem quoted is still in the work that this attempt captured. The answer is
- * {@link Presence#GONE} only when the capture holds the cited source whole, holds the cited path, and no text of the
- * source at the reviewed version contains the quote. The quote is searched in every text of the source, so code that
- * moved to another file, as in a rename, is still present. A deleted file keeps its old text in the capture of a change,
- * so its path is still there, and its code is gone. A path that the capture does not hold, such as a file that the
- * change no longer touches, shows nothing. Leading and trailing blanks of each line are ignored, so a reindented line
- * is still present.
+ * Whether the code that an earlier problem quoted is still in the work that this attempt captured. Only file versions
+ * count: a text that a capture stages at a commit. A record of the change, such as its unified diff, holds removed lines
+ * too, and a record of the item holds no code.
+ *
+ * <p>The answer is {@link Presence#GONE} only for a quote of the reviewed side of a file, when the capture holds the
+ * cited source whole and holds the cited path, and no file version of the reviewed side contains the quote:
+ *
+ * <ul>
+ *   <li>A file still at the cited path is read first.
+ *   <li>A source that captures a change, with an old and a new side, is searched in every new file version: code that
+ *       moved to another file, as in a rename, is still present. A deleted file keeps its old side in the capture, so
+ *       its path is held and its code is gone.
+ *   <li>A path that the capture does not hold, such as a file that the change no longer touches, shows nothing, and so
+ *       does a quote of the old side, which the change removes by design.
+ * </ul>
+ *
+ * Leading and trailing blanks of each line are ignored, so a reindented line is still present. The search reads at most
+ * {@link #SEARCH_BUDGET_BYTES}; past that it cannot say.
  */
 final class CapturedQuoteProbe implements CapturedTextProbe {
+    static final long SEARCH_BUDGET_BYTES = 16L * 1024 * 1024;
+
     private final ReviewJob job;
     private final CapturedEvidence captured;
     private final JobEvidenceFiles files;
-    private final Map<String, Optional<String>> read = new HashMap<>();
+    private long read;
 
     CapturedQuoteProbe(ReviewJob job, CapturedEvidence captured, JobEvidenceFiles files) {
         this.job = job;
@@ -37,24 +48,49 @@ final class CapturedQuoteProbe implements CapturedTextProbe {
     @Override
     public Presence presence(EvidenceCitation cited) {
         var kind = cited.sourceKind();
-        if (!captured.capturedWhole(kind) || captured.leftPartOut(kind)) return Presence.UNKNOWN;
-        List<CitableText> texts = captured.texts(kind);
-        if (texts.stream().noneMatch(text -> text.path().equals(cited.path()))) return Presence.UNKNOWN;
+        if (cited.side() == CitationSide.OLD || !captured.capturedWhole(kind) || captured.leftPartOut(kind))
+            return Presence.UNKNOWN;
+        List<CitableText> versions = captured.texts(kind).stream()
+                .filter(text -> text.commit() != null)
+                .toList();
+        if (versions.stream().noneMatch(text -> text.path().equals(cited.path()))) return Presence.UNKNOWN;
         String quote = blanksTrimmed(cited.quote());
         if (quote.isBlank()) return Presence.UNKNOWN;
+        var reviewed = versions.stream()
+                .filter(text -> text.side() == CitationSide.NEW)
+                .toList();
+        var atPath = reviewed.stream()
+                .filter(text -> text.path().equals(cited.path()))
+                .toList();
+        var found = search(atPath, quote);
+        if (found != Presence.GONE) return found;
+        boolean change = versions.stream().anyMatch(text -> text.side() == CitationSide.OLD);
+        if (!change) return atPath.isEmpty() ? Presence.UNKNOWN : Presence.GONE;
+        return search(
+                reviewed.stream()
+                        .filter(text -> !text.path().equals(cited.path()))
+                        .toList(),
+                quote);
+    }
+
+    /** PRESENT if a text holds the quote, GONE if none does, UNKNOWN if one could not be read within the budget. */
+    private Presence search(List<CitableText> texts, String quote) {
         for (var text : texts) {
-            if (text.side() != CitationSide.NEW) continue;
-            var body = read.computeIfAbsent(text.stagedPath(), path -> read(path, text.sha256()));
+            var body = read(text);
             if (body.isEmpty()) return Presence.UNKNOWN;
             if (body.orElseThrow().contains(quote)) return Presence.PRESENT;
         }
         return Presence.GONE;
     }
 
-    /** A text the attempt no longer holds, or one that fails its digest, is no text: nothing then shows it is gone. */
-    private Optional<String> read(String path, String sha256) {
+    /** A text past the budget, one the attempt no longer holds, or one that fails its digest is no text. */
+    private Optional<String> read(CitableText text) {
         try {
-            return files.readText(job, path, sha256).map(CapturedQuoteProbe::blanksTrimmed);
+            var body = files.readText(job, text.stagedPath(), text.sha256());
+            if (body.isEmpty()) return Optional.empty();
+            read += body.orElseThrow().length();
+            if (read > SEARCH_BUDGET_BYTES) return Optional.empty();
+            return Optional.of(blanksTrimmed(body.orElseThrow()));
         } catch (RuntimeException unreadable) {
             return Optional.empty();
         }
