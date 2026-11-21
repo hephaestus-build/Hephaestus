@@ -91,7 +91,14 @@ class FeedbackThreadResolver {
             if (!resolve) return;
             row = resolutions.save(FeedbackThreadResolution.resolve(
                     workspaceId, itemId, thread.getThreadRef(), thread.getCopyId(), now));
-        } else if (!row.ask(resolve, thread.getCopyId(), now)) return;
+        } else {
+            int asked = row.getGeneration();
+            if (!row.ask(resolve, thread.getCopyId(), now)) {
+                // A withdrawn resolve that never started leaves nothing to undo: its waiting action goes too.
+                if (row.getGeneration() != asked) actions.cancelPending(workspaceId, LANE + row.getId());
+                return;
+            }
+        }
         String lane = LANE + row.getId();
         actions.cancelPending(workspaceId, lane);
         actions.enqueue(new ActionRequest(
