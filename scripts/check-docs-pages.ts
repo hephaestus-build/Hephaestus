@@ -264,6 +264,62 @@ export function screenshotProblems(
 }
 
 /**
+ * Each `<SystemDiagram>` renders a committed source, states its view and scope, describes the image in a
+ * literal `alt`, and holds a table of every connection, because the SVG draws its text as paths. MDX is
+ * not type-checked, so the component's required props hold only here.
+ */
+export function systemDiagramProblems(
+	file: string,
+	source: string,
+	hasSource: (name: string) => boolean,
+): string[] {
+	// Code fences and code spans show the component without using it.
+	const lines = source.split(/\r?\n/u).map(() => "");
+	for (const { number, text } of readPage(source).body) {
+		lines[number - 1] = text.replaceAll(/`[^`]*`/gu, (code) => " ".repeat(code.length));
+	}
+	const prose = lines.join("\n");
+	const problems: string[] = [];
+	for (const match of prose.matchAll(/<SystemDiagram\b(?<attributes>[^>]*)>/gu)) {
+		const report = (message: string) =>
+			problems.push(`${file}:${prose.slice(0, match.index).split("\n").length}: ${message}`);
+		const attribute = (name: string) =>
+			new RegExp(`\\b${name}="(?<value>[^"]*)"`, "u")
+				.exec(match.groups?.attributes ?? "")
+				?.groups?.value?.trim();
+		const name = attribute("name");
+		if (name === undefined || name === "") {
+			report('Give the <SystemDiagram> a literal name, such as name="containers".');
+		} else if (!hasSource(name)) {
+			report(`docs/diagrams/${name}.hyl does not exist. Name the source of the view.`);
+		}
+		if (!/^[^:]+: \S/u.test(attribute("title") ?? "")) {
+			report(
+				'Give the <SystemDiagram> a literal title "<view>: <scope>", such as "Container view: Hephaestus".',
+			);
+		}
+		const alt = attribute("alt") ?? "";
+		if (alt === "") {
+			report("Give the <SystemDiagram> a literal alt text that says what the diagram shows.");
+		} else if (alt.length > MAX_ALT) {
+			report(`Shorten the alt text to ${MAX_ALT} characters (${alt.length}).`);
+		}
+		const start = match.index + match[0].length;
+		const end = prose.indexOf("</SystemDiagram>", start);
+		if (
+			match[0].endsWith("/>") ||
+			end === -1 ||
+			!/^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/mu.test(prose.slice(start, end))
+		) {
+			report(
+				"Put a table of every connection of the view between <SystemDiagram> and </SystemDiagram>.",
+			);
+		}
+	}
+	return problems;
+}
+
+/**
  * A migration note that stops servers says so in its heading, and its docs links resolve. The docs
  * build owns the note's shape: docs/src/lib/migration-entries.ts.
  */
@@ -378,6 +434,14 @@ if (import.meta.main) {
 					file,
 					source,
 					(image) => statSync(path.resolve(repositoryRoot, image), { throwIfNoEntry: false })?.size,
+				),
+				...systemDiagramProblems(
+					file,
+					source,
+					(name) =>
+						statSync(path.resolve(repositoryRoot, "docs/diagrams", `${name}.hyl`), {
+							throwIfNoEntry: false,
+						})?.isFile() === true,
 				),
 			);
 		}

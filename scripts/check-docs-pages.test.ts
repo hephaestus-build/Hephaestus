@@ -6,6 +6,7 @@ import {
 	headingAnchors,
 	migrationNoteProblems,
 	screenshotProblems,
+	systemDiagramProblems,
 } from "./check-docs-pages.ts";
 
 const page = (frontMatter: string, body: string) => `---\n${frontMatter}\n---\n\n${body}\n`;
@@ -279,6 +280,65 @@ await describe("migration note stops and links", async () => {
 		assert.deepEqual(
 			migrationNoteProblems(linking("https://docs.hephaestus.build/admin/kubernetes#x"), anchors),
 			["n.md:3: No docs page serves https://docs.hephaestus.build/admin/kubernetes#x."],
+		);
+	});
+});
+
+const table = "| From | To |\n| --- | --- |\n| Server | PostgreSQL |";
+const diagram = (attributes: string, children = table) =>
+	`Text.\n\n<SystemDiagram ${attributes}>\n\n${children}\n\n</SystemDiagram>\n`;
+const valid = 'name="containers" title="Container view: Hephaestus" alt="Container diagram."';
+const checkDiagram = (source: string) =>
+	systemDiagramProblems("page.mdx", source, (name) => name === "containers");
+
+await describe("systemDiagramProblems", async () => {
+	await test("accepts a view with its source, title, alt text and connections table", () => {
+		assert.deepEqual(checkDiagram(diagram(valid)), []);
+	});
+
+	await test("asks for a source that exists, because the SVG has none of its own", () => {
+		assert.deepEqual(checkDiagram(diagram(valid.replace("containers", "context"))), [
+			"page.mdx:3: docs/diagrams/context.hyl does not exist. Name the source of the view.",
+		]);
+		assert.deepEqual(checkDiagram(diagram(valid.replace('name="containers"', "name={view}"))), [
+			'page.mdx:3: Give the <SystemDiagram> a literal name, such as name="containers".',
+		]);
+	});
+
+	await test("asks for a title that states the view and its scope", () => {
+		assert.deepEqual(
+			checkDiagram(diagram(valid.replace("Container view: Hephaestus", "Containers"))),
+			[
+				'page.mdx:3: Give the <SystemDiagram> a literal title "<view>: <scope>", such as "Container view: Hephaestus".',
+			],
+		);
+	});
+
+	await test("asks for alt text, because MDX does not check the component's props", () => {
+		assert.deepEqual(checkDiagram(diagram(valid.replace(' alt="Container diagram."', ""))), [
+			"page.mdx:3: Give the <SystemDiagram> a literal alt text that says what the diagram shows.",
+		]);
+		assert.deepEqual(checkDiagram(diagram(valid.replace("Container diagram.", "a".repeat(156)))), [
+			"page.mdx:3: Shorten the alt text to 155 characters (156).",
+		]);
+	});
+
+	await test("asks for the connections as a table, because the SVG text is paths", () => {
+		const missing =
+			"page.mdx:3: Put a table of every connection of the view between <SystemDiagram> and </SystemDiagram>.";
+		assert.deepEqual(checkDiagram(diagram(valid, "The server reaches PostgreSQL.")), [missing]);
+		assert.deepEqual(checkDiagram(`<SystemDiagram ${valid} />\n`), [missing.replace(":3:", ":1:")]);
+		assert.deepEqual(checkDiagram(`<SystemDiagram ${valid}>\n\n${table}\n`), [
+			missing.replace(":3:", ":1:"),
+		]);
+	});
+
+	await test("ignores the component in code, where a page only shows it", () => {
+		assert.deepEqual(
+			checkDiagram(
+				'Use `<SystemDiagram name="<name>" title="…">`.\n\n```mdx\n<SystemDiagram name="x">\n```\n',
+			),
+			[],
 		);
 	});
 });
