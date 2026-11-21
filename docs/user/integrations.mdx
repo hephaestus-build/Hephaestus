@@ -122,17 +122,21 @@ Reconnecting does not restore it, and starts a new first sync.
 
 Hephaestus also erases the practice results and the feedback that came from this data.
 Repositories, messages, and documents at the provider stay.
+So does feedback that Hephaestus already posted on pull requests and merge requests.
 
-To disconnect Slack or Outline:
+To disconnect GitLab, Slack or Outline:
 
-1. Under **Administration → Integrations**, open **Slack** or **Outline**.
-2. Select **Disconnect Slack…** or **Disconnect Outline…**.
-3. Read the dialog, then select **Disconnect Slack** or **Disconnect Outline**.
+1. Under **Administration → Integrations**, open **GitLab**, **Slack** or **Outline**.
+2. Select **Disconnect GitLab…**, **Disconnect Slack…** or **Disconnect Outline…**.
+3. Read the dialog, then select **Disconnect GitLab**, **Disconnect Slack** or **Disconnect Outline**.
+
+Disconnect shows only while the connection is active. Resume a suspended connection first.
+To use GitLab again, [reconnect it with a new token](./workspace#replace-a-refused-token).
 
 To replace only the Slack token, use [Reconnect Slack](#reconnect-slack) instead.
 If your instance operator turned the integration off, you cannot disconnect it until it is on again.
 
-**Administration → Integrations** has no disconnect for GitHub or GitLab.
+**Administration → Integrations** has no disconnect for GitHub.
 If you uninstall the Hephaestus GitHub App on GitHub, Hephaestus deletes the whole workspace.
 
 ## Provider removals [#confirm-a-provider-removal]

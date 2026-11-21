@@ -149,14 +149,11 @@ To remove such a webhook:
 2. Delete the webhook whose URL contains `/webhooks/gitlab/connections/`.
 3. Release its block, as [Provider removals](./instance-admin#provider-removals) describes.
 
-**Administration → Integrations** has no **Disconnect** for GitLab yet.
-A disconnect through the API removes every webhook of the connection, and keeps the workspace.
-It erases the synced work of the connection, as a workspace removal does.
+A workspace admin can [disconnect GitLab](/user/integrations#disconnect-an-integration) and keep the workspace.
+The disconnect erases the synced work of the connection, as a workspace removal does.
+It sends the webhook removals after it commits.
+A removal that GitLab does not confirm shows as a block, which you remove with the steps above.
 Afterwards, the GitLab page of the workspace offers **Reconnect GitLab**.
-To disconnect, call the API as [Call the API](./instance-admin#call-the-api) describes:
-
-1. Send `GET https://<host>/api/workspaces/<slug>/connections`, and note the `id` of the GitLab connection.
-2. Send `PATCH https://<host>/api/workspaces/<slug>/connections/<id>/status` with the body `{"state": "UNINSTALLED"}`.
 
 Project webhooks do not send member, subgroup, and project events.
 Membership changes, new subgroups, and new projects show after the next sync.
