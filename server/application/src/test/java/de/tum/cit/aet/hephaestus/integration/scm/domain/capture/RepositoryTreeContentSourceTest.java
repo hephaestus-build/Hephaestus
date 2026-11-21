@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpoolFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
@@ -41,6 +42,9 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
     @Mock
     private GitRepositoryManager gitRepositoryManager;
 
+    @Mock
+    private GitTreeSnapshots gitTreeSnapshots;
+
     private RepositoryTreeContentSource source;
     private final ReviewRepositoryPreparer preparer = Mockito.mock(ReviewRepositoryPreparer.class);
     private final List<AutoCloseable> cleanups = new ArrayList<>();
@@ -56,7 +60,7 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
                 .path();
         Git.init().setDirectory(stagingDir.toFile()).call().close();
         source = new RepositoryTreeContentSource(
-                gitRepositoryManager, preparer, Mockito.mock(PersonDataCopyRecorder.class));
+                gitRepositoryManager, gitTreeSnapshots, preparer, Mockito.mock(PersonDataCopyRecorder.class));
     }
 
     /** The base that the capture fixtures give a pull request. */
@@ -73,9 +77,9 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
         when(gitRepositoryManager.isRepositoryCloned(new RepositoryKey(99L, 17L)))
                 .thenReturn(true);
-        when(gitRepositoryManager.readTreeSnapshot(
+        when(gitTreeSnapshots.readTreeSnapshot(
                         new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789", BASE))
-                .thenReturn(new GitRepositoryManager.GitTreeSnapshot(
+                .thenReturn(new GitTreeSnapshots.GitTreeSnapshot(
                         stagingDir,
                         "0123456789012345678901234567890123456789",
                         "1123456789012345678901234567890123456789",
@@ -100,7 +104,7 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
                                 "1123456789012345678901234567890123456789",
                                 1,
                                 null)));
-        verify(gitRepositoryManager)
+        verify(gitTreeSnapshots)
                 .readTreeSnapshot(new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789", BASE);
         assertThat(contribution.immutableIdentities())
                 .as("the pull request's two commits, never the repository's other refs")
@@ -114,9 +118,9 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
         when(gitRepositoryManager.isRepositoryCloned(new RepositoryKey(99L, 17L)))
                 .thenReturn(true);
-        when(gitRepositoryManager.readTreeSnapshot(
+        when(gitTreeSnapshots.readTreeSnapshot(
                         new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789", BASE))
-                .thenReturn(new GitRepositoryManager.GitTreeSnapshot(
+                .thenReturn(new GitTreeSnapshots.GitTreeSnapshot(
                         stagingDir,
                         "0123456789012345678901234567890123456789",
                         "1123456789012345678901234567890123456789",
@@ -124,8 +128,8 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
                         40_000,
                         false,
                         Set.of(
-                                GitRepositoryManager.TREE_LIMITATION_UNSAFE_PATH,
-                                GitRepositoryManager.TREE_LIMITATION_SUBMODULE)));
+                                GitTreeSnapshots.TREE_LIMITATION_UNSAFE_PATH,
+                                GitTreeSnapshots.TREE_LIMITATION_SUBMODULE)));
 
         var contribution = source.capture(job, Set.of(RepositoryTreeContentSource.KIND));
         if (contribution.cleanup() != null) cleanups.add(contribution.cleanup());
@@ -136,8 +140,7 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
                 .containsEntry(new SourceKind("scm.repository.tree"), SourceCompleteness.PARTIAL);
         assertThat(contribution.captureLimitations().get(new SourceKind("scm.repository.tree")))
                 .containsExactlyInAnyOrder(
-                        GitRepositoryManager.TREE_LIMITATION_UNSAFE_PATH,
-                        GitRepositoryManager.TREE_LIMITATION_SUBMODULE);
+                        GitTreeSnapshots.TREE_LIMITATION_UNSAFE_PATH, GitTreeSnapshots.TREE_LIMITATION_SUBMODULE);
     }
 
     @Test
@@ -156,7 +159,7 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
         when(gitRepositoryManager.isRepositoryCloned(new RepositoryKey(99L, 17L)))
                 .thenReturn(true);
-        when(gitRepositoryManager.readTreeSnapshot(
+        when(gitTreeSnapshots.readTreeSnapshot(
                         new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789", BASE))
                 .thenThrow(new GitRepositoryManager.GitOperationException("unreadable commit", new IOException()));
 

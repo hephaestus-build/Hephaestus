@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLoc
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.metrics.ScmMetrics;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
@@ -43,6 +44,7 @@ class ScmCapturedCheckoutsTest {
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private final ReviewRepositoryPreparer preparer = mock(ReviewRepositoryPreparer.class);
     private GitRepositoryManager git;
+    private GitTreeSnapshots snapshots;
     private Path upstream;
     private String head;
     private String tree;
@@ -72,13 +74,12 @@ class ScmCapturedCheckoutsTest {
                     .getTree()
                     .name();
         }
-        git = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 2, 1L << 30, 1L << 40),
-                new GitRepositoryLockManager(),
-                new FabricLayout(temporary.resolve("fabric").toString()),
-                GitTransportFixtures.guarded(),
-                GitTransportFixtures.copyFence(),
-                new SimpleMeterRegistry());
+        var properties = new GitRepositoryProperties(true, 2, 1L << 30, 1L << 40);
+        var locks = new GitRepositoryLockManager();
+        var layout = new FabricLayout(temporary.resolve("fabric").toString());
+        var transports = GitTransportFixtures.guarded();
+        git = new GitRepositoryManager(properties, locks, layout, transports, new SimpleMeterRegistry());
+        snapshots = new GitTreeSnapshots(git, properties, locks, layout, transports, GitTransportFixtures.copyFence());
         when(preparer.permittedRepositories(WORKSPACE)).thenReturn(List.of());
         when(preparer.activeTokenSource(WORKSPACE)).thenReturn(Optional.empty());
     }
@@ -86,7 +87,7 @@ class ScmCapturedCheckoutsTest {
     @Test
     void shouldCopyTheCheckoutFromThisServersMirrorAndThenFromItsCache() {
         git.ensureRepository(KEY, upstream.toUri().toString(), null);
-        var checkouts = new ScmCapturedCheckouts(git, preparer, meters);
+        var checkouts = new ScmCapturedCheckouts(git, snapshots, preparer, meters);
         var key = new CheckoutKey(KEY.repositoryId(), head, tree, null, null);
 
         checkouts.copy(WORKSPACE, key, temporary.resolve("first"), copy -> true);
@@ -100,7 +101,7 @@ class ScmCapturedCheckoutsTest {
     @Test
     void shouldRefuseACopyThatTheCallersDigestCheckRejectsAndLeaveNoCopy() {
         git.ensureRepository(KEY, upstream.toUri().toString(), null);
-        var checkouts = new ScmCapturedCheckouts(git, preparer, meters);
+        var checkouts = new ScmCapturedCheckouts(git, snapshots, preparer, meters);
         Path target = temporary.resolve("copy");
 
         assertThatThrownBy(() -> checkouts.copy(
@@ -116,7 +117,7 @@ class ScmCapturedCheckoutsTest {
     @Test
     void shouldRefuseARecordedTreeThatTheCommitDoesNotHave() {
         git.ensureRepository(KEY, upstream.toUri().toString(), null);
-        var checkouts = new ScmCapturedCheckouts(git, preparer, meters);
+        var checkouts = new ScmCapturedCheckouts(git, snapshots, preparer, meters);
 
         assertThatThrownBy(() -> checkouts.copy(
                         WORKSPACE,
@@ -131,7 +132,7 @@ class ScmCapturedCheckoutsTest {
 
     @Test
     void shouldNotFetchForARepositoryThatTheWorkspaceNoLongerMonitors() {
-        var checkouts = new ScmCapturedCheckouts(git, preparer, meters);
+        var checkouts = new ScmCapturedCheckouts(git, snapshots, preparer, meters);
 
         assertThatThrownBy(() -> checkouts.copy(
                         WORKSPACE,
@@ -149,7 +150,7 @@ class ScmCapturedCheckoutsTest {
     @Test
     void shouldFetchTheMirrorAgainWhenAnEvictionTakesItBetweenTheCheckAndTheCopy() {
         git.ensureRepository(KEY, upstream.toUri().toString(), null);
-        var evicting = spy(git);
+        var evicting = spy(snapshots);
         doThrow(new GitRepositoryManager.MirrorUnavailableException())
                 .doCallRealMethod()
                 .when(evicting)
@@ -161,7 +162,7 @@ class ScmCapturedCheckoutsTest {
                 .thenReturn(Optional.of(temporary.resolve("srv").toUri().toString()));
         when(source.accessToken(WORKSPACE)).thenReturn(Optional.of(""));
         when(preparer.activeTokenSource(WORKSPACE)).thenReturn(Optional.of(source));
-        var checkouts = new ScmCapturedCheckouts(evicting, preparer, meters);
+        var checkouts = new ScmCapturedCheckouts(git, evicting, preparer, meters);
 
         checkouts.copy(
                 WORKSPACE,

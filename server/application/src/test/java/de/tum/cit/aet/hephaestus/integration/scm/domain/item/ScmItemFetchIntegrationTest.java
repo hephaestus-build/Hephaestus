@@ -374,7 +374,6 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryLockManager(),
                 new FabricLayout(root.resolve("fabric").toString()),
                 GitTransportFixtures.guarded(),
-                GitTransportFixtures.copyFence(),
                 new SimpleMeterRegistry());
         var cold = pipeline(noMirror).reader();
         var pullRef = pullRequestItem(fixture());

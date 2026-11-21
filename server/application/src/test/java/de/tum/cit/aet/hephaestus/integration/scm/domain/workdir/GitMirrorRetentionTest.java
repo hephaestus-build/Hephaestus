@@ -50,7 +50,7 @@ class GitMirrorRetentionTest extends BaseUnitTest {
         try {
             assertThat(retention.evictLeastRecentlyUsedMirrors()).isEqualTo(1);
 
-            assertThat(manager().localRepositories()).containsExactlyInAnyOrder(MIDDLE, NEWEST);
+            assertThat(inventory().localRepositories()).containsExactlyInAnyOrder(MIDDLE, NEWEST);
             assertThat(checkout).exists();
             assertThat(meters.get("git.mirror.evictions").counter().count()).isEqualTo(1);
             assertThat(meters.get("git.cache.bytes").gauge().value()).isLessThanOrEqualTo(VOLUME * 0.8);
@@ -68,7 +68,7 @@ class GitMirrorRetentionTest extends BaseUnitTest {
 
         assertThat(retentionOf(VOLUME * 4).evictLeastRecentlyUsedMirrors()).isZero();
 
-        assertThat(manager().localRepositories()).containsExactlyInAnyOrder(OLDEST, MIDDLE);
+        assertThat(inventory().localRepositories()).containsExactlyInAnyOrder(OLDEST, MIDDLE);
     }
 
     /** Evicting a mirror that was fetched moments ago would fail its capture, and it would only be fetched again. */
@@ -80,7 +80,7 @@ class GitMirrorRetentionTest extends BaseUnitTest {
         try {
             assertThat(retention.evictLeastRecentlyUsedMirrors()).isZero();
 
-            assertThat(manager().localRepositories()).containsExactly(OLDEST);
+            assertThat(inventory().localRepositories()).containsExactly(OLDEST);
             assertThat(meters.get("git.cache.bytes").gauge().value()).isGreaterThan(VOLUME * 0.8);
         } finally {
             // Micrometer holds a gauge's state by weak reference, and the retention owns that state.
@@ -110,7 +110,7 @@ class GitMirrorRetentionTest extends BaseUnitTest {
         assertThat(retention().evictLeastRecentlyUsedMirrors()).isZero();
 
         capture.join();
-        assertThat(manager().localRepositories()).contains(OLDEST);
+        assertThat(inventory().localRepositories()).contains(OLDEST);
     }
 
     /** A capture that reads a mirror finishes, so the next mirror goes in its place. */
@@ -139,7 +139,7 @@ class GitMirrorRetentionTest extends BaseUnitTest {
             capture.join();
         }
 
-        assertThat(manager().localRepositories()).containsExactlyInAnyOrder(OLDEST, NEWEST);
+        assertThat(inventory().localRepositories()).containsExactlyInAnyOrder(OLDEST, NEWEST);
     }
 
     private GitMirrorRetention retention() {
@@ -147,7 +147,19 @@ class GitMirrorRetentionTest extends BaseUnitTest {
     }
 
     private GitMirrorRetention retentionOf(long volume) {
-        return new GitMirrorRetention(manager(), repositories, properties(volume), meters);
+        return new GitMirrorRetention(
+                manager(), locks, new FabricLayout(fabric.toString()), repositories, properties(volume), meters);
+    }
+
+    /** The mirrors on the volume, read with meters of their own, so that the asserted meters stay those of the pass. */
+    private GitMirrorRetention inventory() {
+        return new GitMirrorRetention(
+                manager(),
+                locks,
+                new FabricLayout(fabric.toString()),
+                repositories,
+                properties(VOLUME),
+                new SimpleMeterRegistry());
     }
 
     private GitRepositoryManager manager() {
@@ -156,7 +168,6 @@ class GitMirrorRetentionTest extends BaseUnitTest {
                 locks,
                 new FabricLayout(fabric.toString()),
                 GitTransportFixtures.guarded(),
-                GitTransportFixtures.copyFence(),
                 new SimpleMeterRegistry());
     }
 

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import java.nio.file.Path;
 import java.util.List;
@@ -37,6 +38,7 @@ public class RepositoryTreeContentSource {
     public static final SourceKind KIND = new SourceKind("scm.repository.tree");
 
     private final GitRepositoryManager gitRepositoryManager;
+    private final GitTreeSnapshots gitTreeSnapshots;
     private final ReviewRepositoryPreparer repositoryPreparer;
     private final PersonDataCopyRecorder personCopies;
 
@@ -61,7 +63,7 @@ public class RepositoryTreeContentSource {
             var metadata = Objects.requireNonNull(request.work());
             personCopies.recordRepository(metadata.repositoryId());
         }
-        GitRepositoryManager.GitTreeSnapshot snapshot = snapshot(request);
+        GitTreeSnapshots.GitTreeSnapshot snapshot = snapshot(request);
         Map<String, Path> onDisk = Map.of(
                 "repos/reviewed/.git/HEAD", snapshot.stagingDir().resolve(".git/HEAD"),
                 "repos/reviewed/.git/hephaestus-captured-refs",
@@ -72,7 +74,7 @@ public class RepositoryTreeContentSource {
         List<CitableText> citable;
         String identity;
         try {
-            identity = GitRepositoryManager.treeIdentity(
+            identity = GitTreeSnapshots.treeIdentity(
                     snapshot.commitSha(), Objects.requireNonNull(request.work().base()));
             citable = ScmCitableTexts.tree(snapshot.stagingDir(), snapshot.commitSha());
         } catch (RuntimeException failure) {
@@ -139,7 +141,7 @@ public class RepositoryTreeContentSource {
         return new SourceCaptureState.Unavailable(SourceAbsenceReason.NO_WORKING_COPY);
     }
 
-    private GitRepositoryManager.GitTreeSnapshot snapshot(ScmCaptureContext request) {
+    private GitTreeSnapshots.GitTreeSnapshot snapshot(ScmCaptureContext request) {
         if (!request.pullRequest()) {
             throw new IllegalStateException("Repository-tree capture requires a pull request review");
         }
@@ -165,7 +167,7 @@ public class RepositoryTreeContentSource {
                     "Repository not cloned: repoId=" + repositoryId + ", jobId=" + request.jobId());
         }
         try {
-            return gitRepositoryManager.readTreeSnapshot(
+            return gitTreeSnapshots.readTreeSnapshot(
                     new RepositoryKey(request.workspaceId(), repositoryId), commitSha, base);
         } catch (GitRepositoryManager.GitOperationException e) {
             throw new ItemCaptureException(

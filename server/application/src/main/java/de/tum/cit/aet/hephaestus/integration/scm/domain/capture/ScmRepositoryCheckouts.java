@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitCloneUrl;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamRepositorySettingsRepository;
@@ -45,6 +46,7 @@ public class ScmRepositoryCheckouts implements RepositoryCheckouts {
     private static final Pattern REVIEW = Pattern.compile("(pull|merge-request)/([1-9][0-9]{0,8})");
 
     private final GitRepositoryManager git;
+    private final GitTreeSnapshots snapshots;
     private final ReviewRepositoryPreparer preparer;
     private final PullRequestRepository pullRequests;
     private final WorkspaceTeamRepositorySettingsRepository teamRepositorySettings;
@@ -70,8 +72,8 @@ public class ScmRepositoryCheckouts implements RepositoryCheckouts {
             if (abandoned.getAsBoolean())
                 throw new CancellationException("The reader stopped waiting for the checkout");
             // Only the head, the base and their history: no other branch, tag or review ref of the mirror.
-            GitRepositoryManager.GitTreeSnapshot snapshot =
-                    git.readOriginalSnapshot(remote.key(), head, baseSha == null ? List.of() : List.of(baseSha));
+            GitTreeSnapshots.GitTreeSnapshot snapshot =
+                    snapshots.readOriginalSnapshot(remote.key(), head, baseSha == null ? List.of() : List.of(baseSha));
             try {
                 if (baseSha != null && !holds(snapshot.stagingDir(), baseSha))
                     throw new RepositoryCheckoutException(
@@ -217,7 +219,7 @@ public class ScmRepositoryCheckouts implements RepositoryCheckouts {
     }
 
     private record ScmCheckout(
-            String repository, String head, @Nullable String base, GitRepositoryManager.GitTreeSnapshot snapshot)
+            String repository, String head, @Nullable String base, GitTreeSnapshots.GitTreeSnapshot snapshot)
             implements Checkout {
         @Override
         public Path directory() {

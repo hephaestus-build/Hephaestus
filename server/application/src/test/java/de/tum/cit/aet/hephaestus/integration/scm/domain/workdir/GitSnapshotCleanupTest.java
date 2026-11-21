@@ -32,7 +32,7 @@ class GitSnapshotCleanupTest extends BaseUnitTest {
             directory = layout.spool().directory(1L).path();
         }
         Path copy = Files.writeString(directory.resolve("person.txt"), "Captured personal data");
-        var snapshot = new GitRepositoryManager.GitTreeSnapshot(directory, "commit", "tree", 1, 1, true, Set.of());
+        var snapshot = new GitTreeSnapshots.GitTreeSnapshot(directory, "commit", "tree", 1, 1, true, Set.of());
         try (var filesystem = mockStatic(FileSystemUtils.class)) {
             filesystem
                     .when(() -> FileSystemUtils.deleteRecursively(directory))

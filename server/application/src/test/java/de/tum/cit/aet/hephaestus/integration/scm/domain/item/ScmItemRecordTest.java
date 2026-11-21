@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLoc
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -118,7 +119,7 @@ class ScmItemRecordTest extends BaseUnitTest {
         when(tree.inventory(key, HEAD)).thenReturn(List.of(entry));
         when(tree.content(key, entry)).thenReturn(bytes);
         when(tree.snapshot(key, HEAD, Set.of("src/a.ts")))
-                .thenReturn(new GitRepositoryManager.GitTreeSnapshot(
+                .thenReturn(new GitTreeSnapshots.GitTreeSnapshot(
                         staging, HEAD, "d".repeat(40), bytes.length, 1, true, Set.of()));
         var source = RepositoryTreeContentSource.KIND;
         var capture = service.capture(
@@ -156,14 +157,14 @@ class ScmItemRecordTest extends BaseUnitTest {
         var original = snapshot("scm.file");
         var source = RepositoryTreeContentSource.KIND;
         var key = new RepositoryKey(1, 3);
-        var manager = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 2, 64 * 1024 * 1024, 1L << 40),
-                new GitRepositoryLockManager(),
-                new FabricLayout(root.resolve("fabric").toString()),
-                GitTransportFixtures.guarded(),
-                GitTransportFixtures.copyFence(),
-                new SimpleMeterRegistry());
-        var gitTree = new ScmGitTree(manager);
+        var properties = new GitRepositoryProperties(true, 2, 64 * 1024 * 1024, 1L << 40);
+        var locks = new GitRepositoryLockManager();
+        var layout = new FabricLayout(root.resolve("fabric").toString());
+        var transports = GitTransportFixtures.guarded();
+        var manager = new GitRepositoryManager(properties, locks, layout, transports, new SimpleMeterRegistry());
+        var gitTree = new ScmGitTree(
+                manager,
+                new GitTreeSnapshots(manager, properties, locks, layout, transports, GitTransportFixtures.copyFence()));
         var versions = new ScmFileVersions(mapper);
         ReflectionTestUtils.setField(service, "tree", gitTree);
         ReflectionTestUtils.setField(service, "fileVersions", versions);

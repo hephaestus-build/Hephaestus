@@ -14,7 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturePreparation;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -70,7 +70,7 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
                 fingerprints.put(kind, SourceFingerprint.git(kind, pair.base() + ":" + pair.head()));
             else if (kind.equals(RepositoryTreeContentSource.KIND))
                 fingerprints.put(
-                        kind, SourceFingerprint.git(kind, GitRepositoryManager.treeIdentity(pair.head(), pair.base())));
+                        kind, SourceFingerprint.git(kind, GitTreeSnapshots.treeIdentity(pair.head(), pair.base())));
         }
         if (!records.isEmpty()) {
             var held = occasion == null ? null : held(item, snapshot, occasion);

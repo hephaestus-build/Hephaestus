@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
@@ -50,7 +51,7 @@ class ScmGitTreeTest extends BaseUnitTest {
                 GitRepositoryManager.MirrorRead<?> operation = call.getArgument(1);
                 return operation.apply(repository.getRepository());
             });
-            var tree = new ScmGitTree(manager);
+            var tree = new ScmGitTree(manager, mock(GitTreeSnapshots.class));
             var versions = new ScmFileVersions(new JsonMapper());
             var listed = tree.inventory(key, commit);
             assertThat(listed).hasSize(6);
@@ -84,7 +85,7 @@ class ScmGitTreeTest extends BaseUnitTest {
             Thread.sleep(50); // NOPMD - the repository read is slow on purpose, which the test observes
             return List.of();
         });
-        var tree = new ScmGitTree(manager);
+        var tree = new ScmGitTree(manager, mock(GitTreeSnapshots.class));
 
         assertThat(PinnedParks.during(() -> tree.index(key, commit)))
                 .as("pinned parks while the tree was read")

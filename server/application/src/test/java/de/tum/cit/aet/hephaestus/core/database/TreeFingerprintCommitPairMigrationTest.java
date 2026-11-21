@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTreeSnapshots;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
 import java.io.InputStream;
@@ -62,14 +62,14 @@ class TreeFingerprintCommitPairMigrationTest {
 
         assertThat(fingerprint(database, pullRequest, TREE))
                 .as("the fingerprint the server now computes for the pinned pair")
-                .isEqualTo(SourceFingerprint.git(new SourceKind(TREE), GitRepositoryManager.treeIdentity(head, base)));
+                .isEqualTo(SourceFingerprint.git(new SourceKind(TREE), GitTreeSnapshots.treeIdentity(head, base)));
         assertThat(fingerprint(database, pullRequest, "scm.pull-request.core"))
                 .as("other sources keep their fingerprints")
                 .isEqualTo(CORE);
         assertThat(fingerprint(database, submitted, TREE))
                 .as("the pull request's head, never the submitted review's own commit")
-                .isEqualTo(SourceFingerprint.git(
-                        new SourceKind(TREE), GitRepositoryManager.treeIdentity(reviewHead, base)));
+                .isEqualTo(
+                        SourceFingerprint.git(new SourceKind(TREE), GitTreeSnapshots.treeIdentity(reviewHead, base)));
         assertThat(fingerprint(database, scan, TREE))
                 .as("a scan, which is never compared, is left as it was")
                 .isEqualTo(OLD);

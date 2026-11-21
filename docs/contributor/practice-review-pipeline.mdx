@@ -1158,7 +1158,7 @@ The [operator inventory](../admin/practice-review-operations#temporary-evidence-
 Repository-owned checkout caches are built inside their mirror, under its lock and retention.
 They do not open a capture session inside a transaction that already holds copy admission.
 
-For returned snapshots, `GitRepositoryManager` enters `spool.capture(workspaceId, fence::capture)` before taking a mirror lock or reading source content.
+For returned snapshots, `GitTreeSnapshots` enters `spool.capture(workspaceId, fence::capture)` before taking a mirror lock or reading source content.
 Review capture enters an outer scope so its nested Git reads reuse the same admission session.
 A caller that prepares several copies enters that scope inside its preparation worker before calling the loader.
 Nested operations in that worker borrow the same admission session.

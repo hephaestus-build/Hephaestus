@@ -1,119 +1,65 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 
-import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
-
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
-import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails.FileChange;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
 import de.tum.cit.aet.hephaestus.integration.scm.metrics.ScmMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.io.Serial;
-import java.io.Writer;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.DirectoryNotEmptyException;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HexFormat;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.regex.Pattern;
-import java.util.stream.Stream;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.InvalidRemoteException;
 import org.eclipse.jgit.api.errors.TransportException;
-import org.eclipse.jgit.diff.DiffEntry;
-import org.eclipse.jgit.diff.DiffFormatter;
-import org.eclipse.jgit.diff.Edit;
-import org.eclipse.jgit.diff.RawTextComparator;
 import org.eclipse.jgit.errors.IncorrectObjectTypeException;
 import org.eclipse.jgit.lib.Constants;
-import org.eclipse.jgit.lib.FileMode;
 import org.eclipse.jgit.lib.ObjectId;
-import org.eclipse.jgit.lib.ObjectReader;
-import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Ref;
-import org.eclipse.jgit.lib.RefUpdate;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.StoredConfig;
-import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.transport.RefSpec;
 import org.eclipse.jgit.transport.TagOpt;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
-import org.eclipse.jgit.treewalk.CanonicalTreeParser;
-import org.eclipse.jgit.treewalk.EmptyTreeIterator;
-import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.util.FileUtils;
-import org.eclipse.jgit.util.io.DisabledOutputStream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
-import org.springframework.util.FileSystemUtils;
 
 /**
- * Bare mirrors under the fabric root, one per workspace and repository, and the checkouts a review
- * reads from them. Every operation runs in this process; a role that runs Git owns its own mirrors.
+ * Bare mirrors under the fabric root, one per workspace and repository: their fetches, and the reads and commit walks
+ * that run on them under the mirror's read lock. {@link GitTreeSnapshots} writes the checkouts that a review reads
+ * from them, and {@link GitMirrorRetention} removes them. Every operation runs in this process; a role that runs Git
+ * owns its own mirrors.
  */
 @Service
 @EnableConfigurationProperties(GitRepositoryProperties.class)
 public class GitRepositoryManager {
-    public static final String TREE_LIMITATION_SUBMODULE = "SUBMODULE_EXCLUDED";
-    public static final String TREE_LIMITATION_UNSAFE_PATH = "UNSAFE_PATH_EXCLUDED";
-
     /** Where a fetched review head lives in the mirror; content-addressed, so a refetch is idempotent. */
     public static final String REVIEW_REFS = "refs/hephaestus/reviews/";
 
     /** What the review container may see of the mirror's refs, with their types; the admission reads it back. */
     public static final String CAPTURED_REFS = "hephaestus-captured-refs";
 
-    private static final String MIRRORS = "mirrors";
+    static final String MIRRORS = "mirrors";
 
-    /** Checkouts built again for captures of other servers, inside their mirror ({@link #copyCheckout}). */
-    private static final String CHECKOUTS = "hephaestus-checkouts";
-
-    private static final Pattern MIRROR_ID = Pattern.compile("[1-9][0-9]{0,17}");
     private static final Logger log = LoggerFactory.getLogger(GitRepositoryManager.class);
-    private static final int PAGE_SIZE = 256;
-
-    /** The block size of the file systems a node's volumes use. */
-    private static final long DISK_BLOCK = 4096;
-
-    /** A walk stops after this many pages that needed capture; the next sync cycle resumes from the captured set. */
-    private static final int MAX_DETAIL_PAGES_PER_WALK = 32;
 
     private static final List<RefSpec> MIRROR_REFSPECS =
             List.of(new RefSpec("+refs/heads/*:refs/heads/*"), new RefSpec("+refs/tags/*:refs/tags/*"));
@@ -121,10 +67,9 @@ public class GitRepositoryManager {
     private final GitRepositoryProperties properties;
     private final GitRepositoryLockManager locks;
     private final FabricLayout layout;
-    private final Semaphore ingestionPermits;
+    private final GitCommitWalks walks;
 
     private final GuardedGitTransport transports;
-    private final PersonDataCopyFence copyFence;
     private final int transportTimeoutSeconds;
     private final Duration captureMirrorWait;
     private final Counter transportSilent;
@@ -136,9 +81,8 @@ public class GitRepositoryManager {
             GitRepositoryLockManager locks,
             FabricLayout layout,
             GuardedGitTransport transports,
-            PersonDataCopyFence copyFence,
             MeterRegistry meters) {
-        this(properties, locks, layout, transports, copyFence, meters, TRANSPORT_TIMEOUT_SECONDS, CAPTURE_MIRROR_WAIT);
+        this(properties, locks, layout, transports, meters, TRANSPORT_TIMEOUT_SECONDS, CAPTURE_MIRROR_WAIT);
     }
 
     /**
@@ -150,16 +94,14 @@ public class GitRepositoryManager {
             GitRepositoryLockManager locks,
             FabricLayout layout,
             GuardedGitTransport transports,
-            PersonDataCopyFence copyFence,
             MeterRegistry meters,
             int transportTimeoutSeconds,
             Duration captureMirrorWait) {
-        this.copyFence = copyFence;
         this.transports = transports;
         this.properties = properties;
         this.locks = locks;
         this.layout = layout;
-        this.ingestionPermits = new Semaphore(properties.maxConcurrentIngestions());
+        this.walks = new GitCommitWalks(properties.maxConcurrentIngestions());
         this.transportTimeoutSeconds = transportTimeoutSeconds;
         this.captureMirrorWait = captureMirrorWait;
         this.transportSilent = fetchStopped(meters, "transport_silent");
@@ -179,126 +121,6 @@ public class GitRepositoryManager {
 
     public boolean isRepositoryCloned(RepositoryKey repository) {
         return isEnabled() && Files.isRegularFile(mirror(repository).resolve(Constants.HEAD));
-    }
-
-    /** The mirrors under this process's root, whichever workspace they belong to. */
-    public List<RepositoryKey> localRepositories() {
-        Path root = layout.root().resolve(MIRRORS);
-        if (!Files.isDirectory(root)) return List.of();
-        List<RepositoryKey> keys = new ArrayList<>();
-        try (Stream<Path> workspaces = Files.list(root)) {
-            for (Path workspace : workspaces.toList()) {
-                String workspaceId = workspace.getFileName().toString();
-                if (!MIRROR_ID.matcher(workspaceId).matches() || !Files.isDirectory(workspace, NOFOLLOW_LINKS))
-                    continue;
-                try (Stream<Path> mirrors = Files.list(workspace)) {
-                    for (Path mirror : mirrors.toList()) {
-                        String name = mirror.getFileName().toString();
-                        if (!name.endsWith(".git")) continue;
-                        String repositoryId = name.substring(0, name.length() - ".git".length());
-                        if (MIRROR_ID.matcher(repositoryId).matches() && Files.isDirectory(mirror, NOFOLLOW_LINKS))
-                            keys.add(new RepositoryKey(Long.parseLong(workspaceId), Long.parseLong(repositoryId)));
-                    }
-                }
-            }
-        } catch (IOException e) {
-            throw new GitOperationException("Cannot list repository mirrors", e);
-        }
-        return List.copyOf(keys);
-    }
-
-    /** The mirrors under this process's root, the one that a capture used longest ago first. */
-    public List<RepositoryKey> localRepositoriesLeastRecentlyUsedFirst() {
-        return localRepositories().stream()
-                .sorted(Comparator.comparing(this::lastUsed))
-                .toList();
-    }
-
-    /**
-     * When a capture last fetched this mirror; the epoch for a mirror that is already gone. A read does not count: it
-     * holds the read lock, which keeps the mirror while it runs.
-     */
-    public Instant lastUsed(RepositoryKey repository) {
-        try {
-            return Files.getLastModifiedTime(mirror(repository), NOFOLLOW_LINKS).toInstant();
-        } catch (IOException removed) {
-            return Instant.EPOCH;
-        }
-    }
-
-    /** What this process keeps on its volume: mirrors, attempt folders, snapshot spools and staged archives. */
-    public long cacheBytes() {
-        return bytesUnder(layout.root());
-    }
-
-    public long mirrorBytes(RepositoryKey repository) {
-        return bytesUnder(mirror(repository));
-    }
-
-    /**
-     * What these files take on disk, in whole blocks with their directories, as the kubelet counts a volume. Counts what
-     * it can read: a fetch or an attempt may remove a file under the walk.
-     */
-    private static long bytesUnder(Path root) {
-        if (!Files.isDirectory(root, NOFOLLOW_LINKS)) return 0;
-        var bytes = new AtomicLong();
-        try {
-            Files.walkFileTree(root, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
-                    bytes.addAndGet(DISK_BLOCK);
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
-                    bytes.addAndGet((attributes.size() + DISK_BLOCK - 1) / DISK_BLOCK * DISK_BLOCK);
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFileFailed(Path file, IOException failure) {
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult postVisitDirectory(Path directory, @Nullable IOException failure) {
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-        } catch (IOException e) {
-            throw new GitOperationException("Cannot measure " + root.getFileName(), e);
-        }
-        return bytes.get();
-    }
-
-    /**
-     * Deletes one workspace's mirror unless {@code retained} holds. The check runs under the mirror's write lock, so a
-     * fetch or a read that started before it finishes first, and one that starts after it finds no mirror. A fetch can
-     * run for minutes while it receives data, so this waits at most {@code wait} for the lock and then leaves the
-     * mirror for a later call.
-     *
-     * @return whether the mirror was deleted
-     */
-    public boolean deleteUnretainedRepository(RepositoryKey repository, Duration wait, BooleanSupplier retained) {
-        long deadline = System.nanoTime() + wait.toNanos();
-        try {
-            return locks.withWriteLock(repository, () -> System.nanoTime() - deadline > 0, () -> {
-                if (retained.getAsBoolean()) return false;
-                try {
-                    // A fetch that just finished may still be packing in the background; a file it removes under
-                    // the walk is not a failure to delete.
-                    FileUtils.delete(
-                            mirror(repository).toFile(),
-                            FileUtils.RECURSIVE | FileUtils.RETRY | FileUtils.SKIP_MISSING);
-                } catch (IOException e) {
-                    throw new GitOperationException("Cannot delete repository mirror", e);
-                }
-                return true;
-            });
-        } catch (CancellationException busy) {
-            return false;
-        }
     }
 
     /**
@@ -519,11 +341,7 @@ public class GitRepositoryManager {
             Consumer<CommitDetails> consumer) {
         if (!isEnabled()) return;
         read(repository, repo -> {
-            try (RevWalk walk = new RevWalk(repo)) {
-                walk.markStart(walk.parseCommit(repo.resolve(toSha)));
-                if (fromSha != null) walk.markUninteresting(walk.parseCommit(repo.resolve(fromSha)));
-                visit(repo, walk, captured, consumer);
-            }
+            walks.forEachCommitInRange(repo, fromSha, toSha, captured, consumer);
             return null;
         });
     }
@@ -543,29 +361,7 @@ public class GitRepositoryManager {
             throw new IllegalStateException("Local git storage is disabled; the commits of a range cannot be read");
         }
         read(repository, repo -> {
-            ObjectId from = repo.resolve(base);
-            ObjectId to = repo.resolve(head);
-            if (from == null || to == null) {
-                throw new IllegalStateException("The mirror does not hold the pinned range " + base + ".." + head);
-            }
-            try (RevWalk walk = new RevWalk(repo)) {
-                // REVERSE buffers the whole range before yielding, so the byte budget
-                // cannot stop it early.
-                walk.setRetainBody(false);
-                walk.markStart(walk.parseCommit(to));
-                walk.markUninteresting(walk.parseCommit(from));
-                for (RevCommit commit : walk) {
-                    checkInterrupted();
-                    CommitDetails read;
-                    try {
-                        walk.parseBody(commit);
-                        read = details(repo, commit);
-                    } finally {
-                        commit.disposeBody();
-                    }
-                    consumer.accept(read);
-                }
-            }
+            walks.forEachCommitBetween(repo, base, head, consumer);
             return null;
         });
     }
@@ -574,14 +370,7 @@ public class GitRepositoryManager {
     public void forEachCommitMessage(RepositoryKey repository, String base, String head, Consumer<String> consumer) {
         if (!isEnabled()) return;
         read(repository, repo -> {
-            try (RevWalk walk = new RevWalk(repo)) {
-                walk.markStart(walk.parseCommit(repo.resolve(head)));
-                walk.markUninteresting(walk.parseCommit(repo.resolve(base)));
-                for (RevCommit commit : walk) {
-                    checkInterrupted();
-                    consumer.accept(commit.getFullMessage());
-                }
-            }
+            walks.forEachCommitMessage(repo, base, head, consumer);
             return null;
         });
     }
@@ -591,458 +380,9 @@ public class GitRepositoryManager {
             RepositoryKey repository, Function<List<String>, Set<String>> captured, Consumer<CommitDetails> consumer) {
         if (!isEnabled()) return;
         read(repository, repo -> {
-            try (RevWalk walk = new RevWalk(repo)) {
-                for (Ref ref : repo.getRefDatabase().getRefs()) {
-                    ObjectId id = ref.getObjectId();
-                    if (id == null) continue;
-                    // A tag on a tree or blob is witnessed, not walked.
-                    if (walk.peel(walk.parseAny(id)) instanceof RevCommit commit) walk.markStart(commit);
-                }
-                visit(repo, walk, captured, consumer);
-            }
+            walks.forEachMissingCommit(repo, captured, consumer);
             return null;
         });
-    }
-
-    private void visit(
-            Repository repo,
-            RevWalk walk,
-            Function<List<String>, Set<String>> captured,
-            Consumer<CommitDetails> consumer)
-            throws IOException {
-        List<RevCommit> page = new ArrayList<>(PAGE_SIZE);
-        int capturedPages = 0;
-        for (RevCommit commit : walk) {
-            checkInterrupted();
-            page.add(commit);
-            if (page.size() == PAGE_SIZE) {
-                if (capturedPages == MAX_DETAIL_PAGES_PER_WALK) {
-                    log.info("Git walk paused at its page budget: repository={}", repo.getDirectory());
-                    return;
-                }
-                if (visitPage(repo, page, captured, consumer)) capturedPages++;
-                page.clear();
-            }
-        }
-        if (!page.isEmpty() && capturedPages < MAX_DETAIL_PAGES_PER_WALK) visitPage(repo, page, captured, consumer);
-    }
-
-    /** @return whether any commit of the page still needed capture */
-    private boolean visitPage(
-            Repository repo,
-            List<RevCommit> page,
-            Function<List<String>, Set<String>> captured,
-            Consumer<CommitDetails> consumer)
-            throws IOException {
-        Set<String> existing =
-                captured.apply(page.stream().map(RevCommit::getName).toList());
-        boolean any = false;
-        for (RevCommit commit : page) {
-            if (existing.contains(commit.getName())) continue;
-            any = true;
-            checkInterrupted();
-            CommitDetails details = details(repo, commit);
-            acquireIngestionPermit();
-            try {
-                consumer.accept(details);
-            } finally {
-                ingestionPermits.release();
-            }
-        }
-        return any;
-    }
-
-    private static CommitDetails details(Repository repo, RevCommit commit) throws IOException {
-        PersonIdent author = commit.getAuthorIdent();
-        PersonIdent committer = commit.getCommitterIdent();
-        List<FileChange> changes = fileChanges(repo, commit);
-        int additions = 0;
-        int deletions = 0;
-        for (FileChange change : changes) {
-            additions = Math.addExact(additions, change.additions());
-            deletions = Math.addExact(deletions, change.deletions());
-        }
-        String message = commit.getFullMessage().stripTrailing();
-        int newline = message.indexOf('\n');
-        String body = newline < 0 ? null : message.substring(newline + 1).strip();
-        return new CommitDetails(
-                commit.getName(),
-                newline < 0 ? message : message.substring(0, newline),
-                body == null || body.isEmpty() ? null : body,
-                author.getName(),
-                author.getEmailAddress(),
-                author.getWhenAsInstant(),
-                committer.getName(),
-                committer.getEmailAddress(),
-                committer.getWhenAsInstant(),
-                additions,
-                deletions,
-                changes.size(),
-                changes,
-                Stream.of(commit.getParents()).map(RevCommit::getName).toList(),
-                commit.getFullMessage());
-    }
-
-    /** A merge's changes are those against its first parent, as {@code --diff-merges=first-parent} lists them. */
-    private static List<FileChange> fileChanges(Repository repo, RevCommit commit) throws IOException {
-        List<FileChange> changes = new ArrayList<>();
-        try (RevWalk walk = new RevWalk(repo);
-                ObjectReader reader = repo.newObjectReader();
-                DiffFormatter formatter = new DiffFormatter(DisabledOutputStream.INSTANCE)) {
-            formatter.setRepository(repo);
-            formatter.setDiffComparator(RawTextComparator.DEFAULT);
-            formatter.setDetectRenames(true);
-            var newTree = new CanonicalTreeParser();
-            newTree.reset(reader, commit.getTree());
-            List<DiffEntry> entries;
-            if (commit.getParentCount() > 0) {
-                var oldTree = new CanonicalTreeParser();
-                oldTree.reset(reader, walk.parseCommit(commit.getParent(0)).getTree());
-                entries = formatter.scan(oldTree, newTree);
-            } else {
-                entries = formatter.scan(new EmptyTreeIterator(), newTree);
-            }
-            for (DiffEntry entry : entries) {
-                int added = 0;
-                int deleted = 0;
-                for (Edit edit : formatter.toFileHeader(entry).toEditList()) {
-                    deleted += edit.getEndA() - edit.getBeginA();
-                    added += edit.getEndB() - edit.getBeginB();
-                }
-                boolean renamedOrCopied = entry.getChangeType() == DiffEntry.ChangeType.RENAME
-                        || entry.getChangeType() == DiffEntry.ChangeType.COPY;
-                changes.add(new FileChange(
-                        entry.getChangeType() == DiffEntry.ChangeType.DELETE ? entry.getOldPath() : entry.getNewPath(),
-                        switch (entry.getChangeType()) {
-                            case ADD -> ChangeType.ADDED;
-                            case MODIFY -> ChangeType.MODIFIED;
-                            case DELETE -> ChangeType.REMOVED;
-                            case RENAME -> ChangeType.RENAMED;
-                            case COPY -> ChangeType.COPIED;
-                        },
-                        added,
-                        deleted,
-                        Math.addExact(added, deleted),
-                        renamedOrCopied ? entry.getOldPath() : null));
-            }
-        }
-        return List.copyOf(changes);
-    }
-
-    public GitTreeSnapshot readScanSnapshot(RepositoryKey repository, String sha, Set<String> paths) {
-        var admission = layout.spool().capture(repository.workspaceId(), copyFence::capture);
-        try (admission) {
-            requireEnabled();
-            if (!ObjectId.isId(sha)) throw new GitOperationException("Invalid scan commit", new IOException());
-            return locks.withReadLock(repository, () -> {
-                Path staging = null;
-                try {
-                    staging = layout.spool().directory(repository.workspaceId()).path();
-                    return writeScanSnapshot(repository, sha, paths, staging);
-                } catch (IOException | RuntimeException failure) {
-                    if (staging != null) deleteTreeQuietly(staging);
-                    throw new GitOperationException("Cannot capture the pinned scan tree", failure);
-                }
-            });
-        }
-    }
-
-    /** The caller owns the destination and holds the mirror read lock. */
-    private GitTreeSnapshot writeScanSnapshot(RepositoryKey repository, String sha, Set<String> paths, Path staging)
-            throws IOException {
-        try (Git git = Git.open(mirror(repository).toFile());
-                RevWalk walk = new RevWalk(git.getRepository());
-                ObjectReader reader = git.getRepository().newObjectReader();
-                TreeWalk tree = new TreeWalk(reader)) {
-            RevCommit commit = walk.parseCommit(ObjectId.fromString(sha));
-            tree.addTree(commit.getTree());
-            tree.setRecursive(true);
-            long bytes = 0, files = 0;
-            Set<String> limitations = new TreeSet<>();
-            Set<String> missing = new TreeSet<>(paths);
-            while (tree.next()) {
-                checkInterrupted();
-                String name = tree.getPathString();
-                if (!paths.contains(name)) continue;
-                FileMode mode = tree.getFileMode(0);
-                if (!mode.equals(FileMode.REGULAR_FILE) && !mode.equals(FileMode.EXECUTABLE_FILE)) {
-                    continue;
-                }
-                Path target = staging.resolve(name).normalize();
-                if (name.contains("\\")
-                        || !target.startsWith(staging)
-                        || name.equals(".git")
-                        || name.startsWith(".git/")) {
-                    limitations.add(TREE_LIMITATION_UNSAFE_PATH);
-                    continue;
-                }
-                var object = reader.open(tree.getObjectId(0), Constants.OBJ_BLOB);
-                bytes = Math.addExact(bytes, object.getSize());
-                if (bytes > properties.maxSnapshotBytes())
-                    throw new GitOperationException("Scan tree exceeds the snapshot size limit", new IOException());
-                Files.createDirectories(target.getParent());
-                try (var output = Files.newOutputStream(target)) {
-                    object.copyTo(output);
-                }
-                files++;
-                missing.remove(name);
-            }
-            if (!missing.isEmpty()) limitations.add("SCAN_PATH_UNAVAILABLE");
-            return new GitTreeSnapshot(
-                    staging, sha, commit.getTree().getName(), bytes, files, limitations.isEmpty(), limitations);
-        }
-    }
-
-    /**
-     * A checkout of the reviewed {@code sha} with its own {@code .git}: that commit detached at HEAD, and the objects
-     * of {@code base} and of both histories. It holds no branch and no tag: the review reads its change, never the
-     * rest of the repository, so its {@linkplain #treeIdentity tree identity} is the two commits alone, and a push to
-     * another branch changes nothing that it can read. Symbolic links are written as files holding their target. It
-     * has no remote configuration and no credential. Measured before anything is written; a repository over the bound
-     * is refused whole. The caller closes the snapshot to delete the directory.
-     */
-    public GitTreeSnapshot readTreeSnapshot(RepositoryKey repository, String sha, String base) {
-        requireEnabled();
-        for (String id : List.of(sha, base))
-            if (!ObjectId.isId(id)) throw new GitOperationException("Invalid commit", new IOException(id));
-        return snapshot(
-                repository,
-                sha,
-                List.copyOf(new LinkedHashSet<>(List.of(sha, base))),
-                true,
-                "Cannot prepare Git snapshot");
-    }
-
-    /**
-     * The checkout {@link #readTreeSnapshot} made of {@code sha}, again: measured, bounded and limited the same way,
-     * holding the named original commits and their history from the local mirror's own objects. No remote is
-     * contacted, and no captured-refs record is written: the caller restores the original one. A commit the mirror no longer holds refuses the snapshot rather than being
-     * replaced. The caller closes the snapshot to delete it.
-     */
-    public GitTreeSnapshot readOriginalSnapshot(RepositoryKey repository, String sha, Collection<String> commits) {
-        requireEnabled();
-        var wanted = new LinkedHashSet<String>();
-        wanted.add(sha);
-        wanted.addAll(commits);
-        for (String id : wanted) {
-            if (!ObjectId.isId(id)) throw new GitOperationException("Invalid commit", new IOException(id));
-        }
-        return snapshot(repository, sha, List.copyOf(wanted), false, "Cannot restore the original Git snapshot");
-    }
-
-    /** Only {@code commits} and their history; {@code captured} writes the captured-refs record of a new capture. */
-    private GitTreeSnapshot snapshot(
-            RepositoryKey repository, String sha, List<String> commits, boolean captured, String failure) {
-        var admission = layout.spool().capture(repository.workspaceId(), copyFence::capture);
-        try (admission) {
-            return locks.withReadLock(repository, () -> {
-                Path staging = null;
-                try {
-                    staging = layout.spool().directory(repository.workspaceId()).path();
-                    return writeSnapshot(repository, sha, commits, captured, staging);
-                } catch (GitOperationException e) {
-                    if (staging != null) deleteTreeQuietly(staging);
-                    throw e;
-                } catch (GitAPIException | IOException | RuntimeException e) {
-                    if (staging != null) deleteTreeQuietly(staging);
-                    throw new GitOperationException(failure, e);
-                }
-            });
-        }
-    }
-
-    /** The caller owns the destination and holds the mirror read lock. */
-    private GitTreeSnapshot writeSnapshot(
-            RepositoryKey repository, String sha, List<String> commits, boolean captured, Path staging)
-            throws GitAPIException, IOException {
-        Path mirror = mirror(repository);
-        try (Git source = Git.open(mirror.toFile())) {
-            Repository repo = source.getRepository();
-            RevCommit commit;
-            try (RevWalk walk = new RevWalk(repo)) {
-                // A missing commit fails here, before any source content is written.
-                for (String id : commits) walk.parseCommit(ObjectId.fromString(id));
-                commit = walk.parseCommit(ObjectId.fromString(sha));
-            }
-            Set<String> limitations = new TreeSet<>();
-            long bytes = 0;
-            long files = 0;
-            List<String> excluded = new ArrayList<>();
-            try (ObjectReader reader = repo.newObjectReader();
-                    TreeWalk tree = new TreeWalk(reader)) {
-                tree.addTree(commit.getTree());
-                tree.setRecursive(true);
-                while (tree.next()) {
-                    checkInterrupted();
-                    FileMode mode = tree.getFileMode(0);
-                    if (FileMode.GITLINK.equals(mode)) {
-                        limitations.add(TREE_LIMITATION_SUBMODULE);
-                        continue;
-                    }
-                    if (tree.getPathString().contains("\\")) {
-                        limitations.add(TREE_LIMITATION_UNSAFE_PATH);
-                        excluded.add(tree.getPathString());
-                        continue;
-                    }
-                    bytes = Math.addExact(bytes, reader.getObjectSize(tree.getObjectId(0), Constants.OBJ_BLOB));
-                    files++;
-                }
-            }
-            long history = directorySize(mirror.resolve(Constants.OBJECTS));
-            if (bytes + history > properties.maxSnapshotBytes()) {
-                throw new GitOperationException(
-                        "Repository snapshot exceeds hephaestus.git.max-snapshot-bytes", new IOException());
-            }
-            try (Git git = Git.init().setDirectory(staging.toFile()).call()) {
-                StoredConfig config = git.getRepository().getConfig();
-                // A link in the checkout would let the review read outside it; it is a
-                // file holding the target.
-                config.setBoolean("core", null, "symlinks", false);
-                // A disposable checkout must not have background writers when it is removed.
-                config.setBoolean("fetch", null, "autoGC", false);
-                config.save();
-                // Fetched by id only: the checkout holds these commits and their history, and no branch or tag.
-                git.fetch()
-                        .setRemote(mirror.toUri().toString())
-                        .setTransportConfigCallback(
-                                transports.callback(mirror.toUri().toString()))
-                        .setRefSpecs(commits.stream()
-                                .map(id -> new RefSpec(id + ":" + REVIEW_REFS + id))
-                                .toList())
-                        .setTagOpt(TagOpt.NO_TAGS)
-                        .call();
-                for (String id : commits) {
-                    if (!git.getRepository().getObjectDatabase().has(ObjectId.fromString(id))) {
-                        throw new GitOperationException("A commit is not available", new IOException(id));
-                    }
-                }
-                git.checkout().setName(sha).call();
-                // The pins only fetched the objects. The checkout exposes the detached HEAD and no ref.
-                for (var ref : git.getRepository().getRefDatabase().getRefsByPrefix(REVIEW_REFS)) {
-                    var removal = git.getRepository().updateRef(ref.getName());
-                    removal.setForceUpdate(true);
-                    if (removal.delete() != RefUpdate.Result.FORCED)
-                        throw new GitOperationException("Could not remove a private checkout ref", new IOException());
-                }
-                for (String path : excluded) Files.deleteIfExists(staging.resolve(path));
-                if (captured) writeCapturedRefs(git.getRepository());
-            }
-            return new GitTreeSnapshot(
-                    staging, sha, commit.getTree().getName(), bytes, files, limitations.isEmpty(), limitations);
-        }
-    }
-
-    /**
-     * Copies this server's checkout of {@code commit} to {@code target}, which must not exist. The checkout is the one
-     * {@link #readOriginalSnapshot} makes of the commit alone, or {@link #readScanSnapshot} of {@code paths}. It is
-     * built from the mirror on the first copy and kept inside the mirror, so it goes with the mirror's removal or
-     * eviction; a copy counts as a use of the mirror. The build and the copy run under one hold of the mirror's read
-     * lock, so no removal or eviction takes the mirror or the checkout between them.
-     *
-     * @return whether the checkout was built for this copy rather than found in the cache
-     * @throws TreeMismatchException when the commit's tree is not {@code tree}
-     * @throws MirrorUnavailableException when the mirror is gone, as after an eviction: the caller may fetch it again
-     */
-    public boolean copyCheckout(
-            RepositoryKey repository, String commit, String tree, @Nullable List<String> paths, Path target) {
-        requireEnabled();
-        if (!ObjectId.isId(commit) || !ObjectId.isId(tree))
-            throw new GitOperationException("Invalid checkout identity", new IOException(commit));
-        Path entry = mirror(repository).resolve(CHECKOUTS).resolve(checkoutName(commit, tree, paths));
-        return locks.withReadLock(repository, () -> {
-            if (!isRepositoryCloned(repository)) throw new MirrorUnavailableException();
-            boolean built = false;
-            if (!Files.isDirectory(entry, NOFOLLOW_LINKS)) {
-                try {
-                    Files.createDirectories(entry.getParent());
-                    Path staging = Files.createTempDirectory(entry.getParent(), ".preparing-");
-                    Closeable cleanup = () -> FileSystemUtils.deleteRecursively(staging);
-                    try (cleanup) {
-                        // Cache construction belongs to the mirror, including an interrupted staging directory.
-                        // It must not acquire a second capture session inside an admitting transaction.
-                        var snapshot = paths == null
-                                ? writeSnapshot(repository, commit, List.of(commit), false, staging)
-                                : writeScanSnapshot(repository, commit, Set.copyOf(paths), staging);
-                        if (!snapshot.treeSha().equals(tree)) throw new TreeMismatchException();
-                        Files.move(staging, entry, StandardCopyOption.ATOMIC_MOVE);
-                        built = true;
-                    }
-                } catch (FileAlreadyExistsException | DirectoryNotEmptyException concurrent) {
-                    // Another copy built the same checkout first.
-                } catch (GitOperationException e) {
-                    throw e;
-                } catch (GitAPIException | IOException | RuntimeException e) {
-                    throw new GitOperationException("Cannot keep the built checkout", e);
-                }
-            }
-            try {
-                FileSystemUtils.copyRecursively(entry, target);
-                FileTime now = FileTime.from(Instant.now());
-                Files.setLastModifiedTime(entry, now);
-                Files.setLastModifiedTime(mirror(repository), now);
-            } catch (IOException e) {
-                throw new GitOperationException("Cannot copy the built checkout", e);
-            }
-            return built;
-        });
-    }
-
-    /** The commit and tree name a whole checkout; a scan's partial checkout also names a digest of its paths. */
-    private static String checkoutName(String commit, String tree, @Nullable List<String> paths) {
-        if (paths == null) return commit + "-" + tree;
-        try {
-            var digest = MessageDigest.getInstance("SHA-256");
-            for (String path : paths) {
-                byte[] bytes = path.getBytes(StandardCharsets.UTF_8);
-                digest.update(
-                        ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
-                digest.update(bytes);
-            }
-            return commit + "-" + tree + "-" + HexFormat.of().formatHex(digest.digest());
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 is unavailable", e);
-        }
-    }
-
-    /**
-     * The identity of a pull request's captured checkout ({@link #readTreeSnapshot}): its two commits, which address
-     * everything it holds. The server computes the same value from the pull request's version, with no checkout.
-     */
-    public static String treeIdentity(String head, String base) {
-        return head + ":" + base;
-    }
-
-    /** Tags are peeled and every line carries its type, so a tag on a tree or blob is witnessed, not walked. */
-    private static void writeCapturedRefs(Repository repo) throws IOException {
-        try (RevWalk walk = new RevWalk(repo);
-                Writer out = Files.newBufferedWriter(
-                        repo.getDirectory().toPath().resolve(CAPTURED_REFS), StandardCharsets.UTF_8)) {
-            List<Ref> refs = new ArrayList<>(repo.getRefDatabase().getRefsByPrefix(Constants.R_REMOTES + "origin/"));
-            refs.addAll(repo.getRefDatabase().getRefsByPrefix(Constants.R_TAGS));
-            for (Ref ref : refs) {
-                ObjectId id = ref.getObjectId();
-                if (id == null) continue;
-                Ref peeled = repo.getRefDatabase().peel(ref);
-                ObjectId target = peeled.getPeeledObjectId() != null ? peeled.getPeeledObjectId() : id;
-                out.write(Constants.typeString(walk.parseAny(target).getType())
-                        + " "
-                        + target.getName()
-                        + " "
-                        + ref.getName()
-                        + "\n");
-            }
-        }
-    }
-
-    private static long directorySize(Path directory) throws IOException {
-        if (!Files.isDirectory(directory)) return 0;
-        try (Stream<Path> paths = Files.walk(directory)) {
-            long total = 0;
-            for (Path path : paths.toList()) {
-                if (Files.isRegularFile(path)) total = Math.addExact(total, Files.size(path));
-            }
-            return total;
-        }
     }
 
     /** A read of the mirror's object and ref databases. */
@@ -1062,7 +402,7 @@ public class GitRepositoryManager {
         });
     }
 
-    private Path mirror(RepositoryKey repository) {
+    Path mirror(RepositoryKey repository) {
         return layout.root()
                 .resolve(MIRRORS)
                 .resolve(Long.toString(repository.workspaceId()))
@@ -1081,58 +421,8 @@ public class GitRepositoryManager {
         return token == null || token.isBlank() ? null : new UsernamePasswordCredentialsProvider("oauth2", token);
     }
 
-    private void requireEnabled() {
+    void requireEnabled() {
         if (!isEnabled()) throw new IllegalStateException("Git repository preparation is disabled");
-    }
-
-    /** Bounds the commit rows written at once, not what is read from Git. */
-    private void acquireIngestionPermit() {
-        try {
-            ingestionPermits.acquire();
-        } catch (InterruptedException failure) {
-            Thread.currentThread().interrupt();
-            throw new GitOperationException("Git ingestion admission interrupted", failure);
-        }
-    }
-
-    private static void checkInterrupted() {
-        if (Thread.currentThread().isInterrupted())
-            throw new GitOperationException("Git operation interrupted", new InterruptedException());
-    }
-
-    static void deleteTreeQuietly(Path root) {
-        try {
-            EvidenceSpool.close(root);
-        } catch (IOException e) {
-            log.atWarn()
-                    .addKeyValue("event.name", "evidence.spool.cleanup.failed")
-                    .addKeyValue("evidence.path", root.toString())
-                    .addKeyValue("error.type", e.getClass().getName())
-                    .log("Could not remove Git snapshot directory");
-        }
-    }
-
-    public record GitTreeSnapshot(
-            Path stagingDir,
-            String commitSha,
-            String treeSha,
-            long totalBytes,
-            long visitedFiles,
-            boolean complete,
-            Set<String> limitations)
-            implements AutoCloseable {
-        public GitTreeSnapshot {
-            limitations = Set.copyOf(limitations);
-        }
-
-        @Override
-        public void close() {
-            try {
-                EvidenceSpool.close(stagingDir);
-            } catch (IOException failed) {
-                throw new GitOperationException("Could not remove the captured Git snapshot", failed);
-            }
-        }
     }
 
     /** The authorized upstream could not supply Git objects. Local storage failures stay distinct. */
