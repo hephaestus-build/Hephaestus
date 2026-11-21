@@ -1152,6 +1152,22 @@ needs the Kubernetes API, with only the Role of templates/postgresql-backup.yaml
 {{- and .Values.postgresql.bundled .Values.postgresql.backup.enabled -}}
 {{- end -}}
 
+{{/*
+The groups of files/hephaestus-alerts.yml that apply to this release, as a JSON list. The server reports the backup
+age only when hephaestus.backupsRead gives it the backup CronJobs, so the group hephaestus-backups renders on the same
+switch.
+*/}}
+{{- define "hephaestus.alertRuleGroups" -}}
+{{- $groups := list -}}
+{{- $backups := include "hephaestus.backupsRead" . -}}
+{{- range (fromYaml (.Files.Get "files/hephaestus-alerts.yml")).groups -}}
+{{- if or (ne .name "hephaestus-backups") (eq $backups "true") -}}
+{{- $groups = append $groups . -}}
+{{- end -}}
+{{- end -}}
+{{- toJson $groups -}}
+{{- end -}}
+
 {{/* The backup CronJobs of templates/postgresql-backup.yaml, as a list. */}}
 {{- define "hephaestus.backupCronJobs" -}}
 {{- $name := include "hephaestus.name" (dict "root" . "component" "postgresql-backup") -}}

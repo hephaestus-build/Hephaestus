@@ -279,7 +279,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "real native SCM capture and current-row reconciliation with a listener spy"
                             + " for transactional rollback and durable retry"),
             Map.entry("provider-event-receiver-spy", "the provider event receiver spied to fail the inbox write"),
-            Map.entry("scrape-contract", "the series of a server at start, before other classes add meters"),
+            Map.entry(
+                    "scrape-contract", "the series of a server with backups at start, before other classes add meters"),
             Map.entry("slack-enabled", "real Slack item resolution with the configured provider adapter"),
             Map.entry("slack-ingest", "enabled Slack ingest wiring with its review-submission spy"),
             Map.entry("slack-lifecycle", "agent submission boundary override"),
@@ -384,6 +385,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
             "integration.scm.github.installation.adoption.GitHubInstallationAdoptionIntegrationTest",
+            "observability.ScrapeContractIntegrationTest",
             "productfeedback.ProductFeedbackCleanupIntegrationTest",
             "productfeedback.ProductFeedbackTrustGatesIntegrationTest",
             "productfeedback.PrivateDestinationOutOfWorkspacesIntegrationTest",

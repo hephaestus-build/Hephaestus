@@ -249,8 +249,8 @@ migration:
 # loads them. Both read the `job` and `runtime_role` labels that the scrape sets: docs/admin/observability.mdx.
 observability:
   alertRules:
-    # A ConfigMap with the file as it is, under the key hephaestus-alerts.yml, for a Prometheus or
-    # vmalert that mounts it in the release's namespace.
+    # A ConfigMap with the file's groups, under the key hephaestus-alerts.yml, for a Prometheus or
+    # vmalert that mounts it in the release's namespace. Both leave out hephaestus-backups without backups.
     configMap: false
     # A PrometheusRule with the file's groups, for the Prometheus Operator. Its CRD must exist.
     prometheusRule: false

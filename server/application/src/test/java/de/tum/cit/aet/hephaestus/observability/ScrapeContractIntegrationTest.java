@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.observability;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.database.backup.BackupSchedules;
 import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -29,8 +31,19 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * instead of leaving an alert that never fires or a panel that stays empty.
  */
 // An own context: the shared one also holds the meters of other classes, so its series depend on the class order.
-@TestPropertySource(properties = "hephaestus.test.context=scrape-contract")
+// The backup settings are those that the chart gives the server with backups on. The chart renders the rule group
+// hephaestus-backups on the same switch (hephaestus.alertRuleGroups), so this server exports its metric.
+@TestPropertySource(
+        properties = {
+            "hephaestus.test.context=scrape-contract",
+            "hephaestus.database.backup.namespace=hephaestus",
+            "hephaestus.database.backup.cron-jobs=hephaestus-postgresql-backup-full,hephaestus-postgresql-backup-diff"
+        })
 class ScrapeContractIntegrationTest extends BaseIntegrationTest {
+
+    /** No cluster to read: each read finds no schedule, which the monitor reports as an infinite age. */
+    @MockitoBean
+    private BackupSchedules backupSchedules;
 
     @Autowired
     private ApplicationContext context;

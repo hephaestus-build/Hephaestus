@@ -34,6 +34,9 @@ They need these target labels from the scrape configuration:
 - `runtime_role="server"`.
 - A different `instance` on each target.
 
+The rule of the group `hephaestus-backups`, `HephaestusBackupStale`, reads the server's metrics with the same labels.
+The server reports the backup age only with the bundled PostgreSQL's backups on, and the chart renders the group only then.
+
 The rules of the group `hephaestus-postgresql` need `job="postgresql"` on the PostgreSQL exporter target.
 
 `HephaestusMetricsUnavailable` fires only for a target that Prometheus still discovers.

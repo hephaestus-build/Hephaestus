@@ -6,6 +6,7 @@ import {
 	amount,
 	assertCaOnly,
 	assertDatabaseSetup,
+	backupsOn,
 	bundled,
 	byCodePoint,
 	chart,
@@ -1081,16 +1082,6 @@ await test("server.stopped stops the servers and changes no PostgreSQL value, at
 		}
 	}
 });
-
-const backupsOn = {
-	postgresql: {
-		backup: {
-			clientTlsSecret: "hephaestus-postgresql-backup-tls",
-			enabled: true,
-			s3: { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" },
-		},
-	},
-};
 
 /** What the server can reach of the Kubernetes API: its token, its egress to the API, and its RBAC rules. */
 const serverApiAccess = (resources: Resource[]) => {

@@ -827,7 +827,7 @@
 					"additionalProperties": false,
 					"properties": {
 						"configMap": {
-							"description": "Render a ConfigMap with the rule file as it is.",
+							"description": "Render a ConfigMap with the groups of the rule file that apply to the release.",
 							"type": "boolean"
 						},
 						"prometheusRule": {

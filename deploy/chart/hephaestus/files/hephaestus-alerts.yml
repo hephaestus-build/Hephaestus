@@ -591,18 +591,6 @@ groups:
         annotations:
           summary: An outbox action ended uncertain, so its write may have reached the provider and nothing confirms it
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      # The server reads the backup CronJobs of the bundled PostgreSQL (BackupScheduleMonitor): seconds since the newest
-      # successful backup, or since the schedules were created before the first. A backup Job that waits Pending never
-      # succeeds, so its age grows. A failed read or a missing CronJob reports an infinite age, so they fire too.
-      # Fifteen minutes let one failed read pass. Without backups, the server reports no age, and nothing fires.
-      - alert: HephaestusBackupStale
-        expr: max(database_backup_age_seconds{job="hephaestus"}) > 30 * 3600
-        for: 15m
-        labels:
-          severity: critical
-        annotations:
-          summary: No PostgreSQL backup completed in the last 30 hours, or the server cannot read the backup schedules
-          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWalArchiveFailing
         expr: >-
           max(database_wal_archive_failing{job="hephaestus"}) == 1
@@ -673,6 +661,22 @@ groups:
           summary: An hourly privacy sweep ended no run in four hours
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  # The bundled PostgreSQL's backups. The server reports their age only when the chart gives it the backup CronJobs,
+  # and the chart renders this group only then (hephaestus.backupsRead), so the rule and its metric exist together.
+  - name: hephaestus-backups
+    rules:
+      # The server reads the backup CronJobs of the bundled PostgreSQL (BackupScheduleMonitor): seconds since the newest
+      # successful backup, or since the schedules were created before the first. A backup Job that waits Pending never
+      # succeeds, so its age grows. A failed read or a missing CronJob reports an infinite age, so they fire too.
+      # Fifteen minutes let one failed read pass.
+      - alert: HephaestusBackupStale
+        expr: max(database_backup_age_seconds{job="hephaestus"}) > 30 * 3600
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: No PostgreSQL backup completed in the last 30 hours, or the server cannot read the backup schedules
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
   # Kubernetes and cluster metrics: kube-state-metrics, the kubelet and cert-manager.
   # The PVC and CronJob names are those that the chart gives a release. The server rules select the
   # Deployment by the chart's labels, which kube-state-metrics exports only when they are allowed. Add a namespace matcher to
