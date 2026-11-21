@@ -8288,6 +8288,10 @@ export type WorkspaceListItem = {
 	 */
 	linkHosts: Array<string>;
 	/**
+	 * Whether workspace admins see practice results per person. Every member reads it, because it decides who sees their results.
+	 */
+	perPersonResultsForAdmins: boolean;
+	/**
 	 * Whether practice reviews are on
 	 */
 	practicesEnabled: boolean;

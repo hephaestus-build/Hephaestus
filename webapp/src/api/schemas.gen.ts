@@ -18348,6 +18348,11 @@ export const WorkspaceListItemSchema = {
 			},
 			uniqueItems: true,
 		},
+		perPersonResultsForAdmins: {
+			type: "boolean",
+			description:
+				"Whether workspace admins see practice results per person. Every member reads it, because it decides who sees their results.",
+		},
 		practicesEnabled: {
 			type: "boolean",
 			description: "Whether practice reviews are on",
@@ -18382,6 +18387,7 @@ export const WorkspaceListItemSchema = {
 		"displayName",
 		"id",
 		"linkHosts",
+		"perPersonResultsForAdmins",
 		"practicesEnabled",
 		"publishesPublicActivity",
 		"status",

@@ -6742,6 +6742,7 @@ export const zWorkspaceListItem = z.object({
 	displayName: z.string(),
 	id: z.int(),
 	linkHosts: z.array(z.string()),
+	perPersonResultsForAdmins: z.boolean(),
 	practicesEnabled: z.boolean(),
 	providerType: zIdentityProviderType.optional(),
 	publishesPublicActivity: z.boolean(),
