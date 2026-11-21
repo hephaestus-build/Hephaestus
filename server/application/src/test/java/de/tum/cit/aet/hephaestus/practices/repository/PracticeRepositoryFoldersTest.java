@@ -58,6 +58,19 @@ class PracticeRepositoryFoldersTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepAFileNameWithABackslashApartFromTheFigureItsNameResembles() throws IOException {
+        write("explain-the-change/practice.md", "---\nname: x\n---\n");
+        write("explain-the-change/figures/flow.svg", "<svg>figure</svg>");
+        write("explain-the-change/figures\\flow.svg", "<svg>another file</svg>");
+
+        var folder = folders.read(WORKSPACE, "explain-the-change").orElseThrow();
+
+        assertThat(folder.files())
+                .containsEntry("figures/flow.svg", "<svg>figure</svg>")
+                .containsEntry("figures\\flow.svg", "<svg>another file</svg>");
+    }
+
+    @Test
     void shouldFindNoFolderForAPracticeTheBranchDoesNotHold() {
         assertThat(folders.read(WORKSPACE, "explain-the-change")).isEmpty();
     }

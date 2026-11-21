@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
@@ -109,7 +111,11 @@ public class PracticeRepositoryFolders {
             for (var paths = walk.iterator(); paths.hasNext(); ) {
                 var path = paths.next();
                 if (path.equals(folder) || Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) continue;
-                var name = folder.relativize(path).toString().replace('\\', '/');
+                // The path's own names, joined with "/": a file name that holds a backslash stays itself, and never
+                // becomes the path of another file in the folder.
+                var name = StreamSupport.stream(folder.relativize(path).spliterator(), false)
+                        .map(Path::toString)
+                        .collect(Collectors.joining("/"));
                 if (Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
                     throw invalid(PracticeFileProblemDTO.FILE_INVALID, name, "A practice folder holds no links.");
                 if (files.size() >= MAX_FILES)
