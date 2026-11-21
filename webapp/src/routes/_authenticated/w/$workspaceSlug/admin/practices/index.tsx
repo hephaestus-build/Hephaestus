@@ -270,7 +270,10 @@ function PracticeCatalogRoute() {
 			toast.error("We could not download the practice. Nothing was changed. Try again."),
 	});
 	const [staleLevelKey, setStaleLevelKey] = useState<string | null>(null);
-	const [conflictSlug, setConflictSlug] = useState<string | null>(null);
+	// The practice whose save the server refused with 409, and the version that save was based on.
+	const [conflict, setConflict] = useState<{ slug: string; expectedVersionId: string } | null>(
+		null,
+	);
 	const [editorGeneration, setEditorGeneration] = useState(0);
 	const catalog = usePracticeCatalogMutations(workspaceSlug);
 	const editor = usePracticeEditor(workspaceSlug);
@@ -583,8 +586,41 @@ function PracticeCatalogRoute() {
 			await work;
 			stackControls.close(level.depth);
 		};
-		const conflict =
-			!creating && conflictSlug === entry.id && editing !== undefined ? (
+		const editInHephaestus = creating
+			? undefined
+			: practiceRepository.control(detailStackKey(entry), entry.id);
+		const refused = !creating && conflict?.slug === entry.id ? conflict : undefined;
+		// Moved to the practice repository meanwhile: the draft stays to copy from, and the server
+		// refuses every save until the practice is edited in Hephaestus again.
+		const movedToRepository = refused !== undefined && editing?.editedIn === "REPOSITORY";
+		let conflictNotice: ReactNode;
+		if (movedToRepository && editInHephaestus !== undefined) {
+			const repository = editInHephaestus.repositoryName ?? "the practice repository";
+			conflictNotice = (
+				<Alert variant="warning" role="alert">
+					<AlertTitle>This practice is now edited in {repository}</AlertTitle>
+					<AlertDescription>
+						<p>
+							Nothing was saved. Your changes are still here, so copy what you want to keep. Its
+							folder in {repository} now holds its definition and group, so it cannot be saved here.
+						</p>
+						<Button
+							size="sm"
+							variant="outline"
+							className="mt-2"
+							onClick={() => editInHephaestus.onConfirmingChange(true)}
+						>
+							Edit in Hephaestus
+						</Button>
+					</AlertDescription>
+				</Alert>
+			);
+		} else if (
+			refused !== undefined &&
+			editing !== undefined &&
+			editing.currentVersion.id !== refused.expectedVersionId
+		) {
+			conflictNotice = (
 				<Alert variant="warning" role="alert">
 					<AlertTitle>Someone saved a newer version</AlertTitle>
 					<AlertDescription>
@@ -597,7 +633,7 @@ function PracticeCatalogRoute() {
 							variant="outline"
 							className="mt-2"
 							onClick={() => {
-								setConflictSlug(null);
+								setConflict(null);
 								setEditorGeneration((generation) => generation + 1);
 							}}
 						>
@@ -605,7 +641,8 @@ function PracticeCatalogRoute() {
 						</Button>
 					</AlertDescription>
 				</Alert>
-			) : undefined;
+			);
+		}
 		const update = async (
 			practice: Practice,
 			request: UpdatePracticeRequest,
@@ -615,7 +652,7 @@ function PracticeCatalogRoute() {
 				await editor.update(practice, request, groupSlug);
 			} catch (error) {
 				if (problemStatusOf(error) === 409) {
-					setConflictSlug(practice.slug);
+					setConflict({ slug: practice.slug, expectedVersionId: request.expectedVersionId });
 					void query?.refetch();
 				}
 				throw error;
@@ -624,14 +661,12 @@ function PracticeCatalogRoute() {
 		// A refusal hides the form even over cached data. Any other failure leaves a loaded draft
 		// open beside the retry.
 		const failure = readFailure([groupsQuery, definitionOptionsQuery, query]);
-		const editInHephaestus = creating
-			? undefined
-			: practiceRepository.control(detailStackKey(entry), entry.id);
 		let body: ReactNode;
 		if (
 			failure?.refused !== true &&
 			editing?.editedIn === "REPOSITORY" &&
-			editInHephaestus !== undefined
+			editInHephaestus !== undefined &&
+			!movedToRepository
 		) {
 			// A link or an old address can open the editor for a practice that its folder in the
 			// practice repository holds. The server refuses every save, so the level says why instead.
@@ -665,7 +700,8 @@ function PracticeCatalogRoute() {
 						: {
 								mode: "edit" as const,
 								initialData: editing,
-								notice: conflict,
+								notice: conflictNotice,
+								isSubmitDisabled: movedToRepository,
 								onSubmit: async (request, groupSlug) => saved(update(editing, request, groupSlug)),
 							})}
 					workspaceSlug={workspaceSlug}
