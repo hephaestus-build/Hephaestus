@@ -63,7 +63,8 @@ class EnumCheckConstraintsMigrationTest {
                 var labels = new LabelExpression();
 
                 assertThatThrownBy(() -> liquibase.update(contexts, labels))
-                        .hasStackTraceContaining("ck_activity_event_event_type");
+                        .hasStackTraceContaining("ck_activity_event_event_type")
+                        .hasStackTraceContaining("is violated by some row");
                 connection.rollback();
                 // The check that the stopped upgrade added refuses new unknown values already.
                 assertThatThrownBy(() -> statement.execute(

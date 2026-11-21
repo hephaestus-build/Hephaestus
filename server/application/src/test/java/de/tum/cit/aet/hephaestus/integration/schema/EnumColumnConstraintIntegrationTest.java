@@ -76,8 +76,8 @@ class EnumColumnConstraintIntegrationTest extends BaseIntegrationTest {
                         "activity_event.event_type", "workspace.practice_delivery_status", "catalog_entry.entry_type");
         assertThat(mismatches).as("""
                         An enum column's CHECK must list exactly the enum's values. Write a new changelog that drops \
-                        and adds the column's check again, such as ck_<table>_<column>. Never edit a changelog that \
-                        reached main. See docs/contributor/database-migration.mdx § Enum columns.""").isEmpty();
+                        and adds the column's check again. pg_constraint names it: a new check is \
+                        ck_<table>_<column>, an older one keeps its name. Never edit a changelog that reached main. See docs/contributor/database-migration.mdx § Enum columns.""").isEmpty();
     }
 
     /** The basic parts of a model part: the part itself, or the attributes of an embeddable, also when nested. */
@@ -115,6 +115,8 @@ class EnumColumnConstraintIntegrationTest extends BaseIntegrationTest {
             boolean whole = matches.size() == 1
                     && (definition.substring(0, matches.getFirst().start())
                                     + definition.substring(matches.getFirst().end()))
+                            // A list that also lets NULL through is still only a list for the column.
+                            .replace("(" + column + " IS NULL) OR ", "")
                             .matches(WHOLE_CHECK_REST);
             if (whole) {
                 Set<String> listed = values(Objects.requireNonNullElse(
