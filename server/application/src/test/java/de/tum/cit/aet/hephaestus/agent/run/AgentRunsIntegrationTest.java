@@ -638,14 +638,18 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         AgentRunRef interactive = enqueue(workspace, AgentRunBand.INTERACTIVE, "review:due-interactive");
         enqueue(workspace, AgentRunBand.BATCH, "review:due-batch");
 
-        var due = runs.due(Set.of(AgentRunKind.REVIEW), 10);
+        var due = runs.due(Set.of(AgentRunKind.REVIEW), 0, 10);
 
         assertThat(due)
                 .extracting(AgentRuns.DueRun::run)
                 .as("the interactive run first, and a subject's younger run not at all")
                 .containsExactly(interactive, batch);
-        assertThat(runs.due(Set.of(AgentRunKind.REVIEW_COMPOSE), 10)).isEmpty();
-        assertThat(runs.due(Set.of(AgentRunKind.REVIEW), 1)).hasSize(1);
+        assertThat(runs.due(Set.of(AgentRunKind.REVIEW_COMPOSE), 0, 10)).isEmpty();
+        assertThat(runs.due(Set.of(AgentRunKind.REVIEW), 0, 1)).hasSize(1);
+        assertThat(runs.due(Set.of(AgentRunKind.REVIEW), 1, 10))
+                .extracting(AgentRuns.DueRun::run)
+                .as("the next page starts after the first run")
+                .containsExactly(batch);
         assertThat(state(batch.id())).isEqualTo("QUEUED");
     }
 

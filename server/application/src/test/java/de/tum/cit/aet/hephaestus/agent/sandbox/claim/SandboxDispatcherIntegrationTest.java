@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
+import de.tum.cit.aet.hephaestus.agent.gateway.RunAdmission;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxDispatcher;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
@@ -17,6 +18,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -76,13 +78,94 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
     }
 
     private SandboxDispatcher dispatcher(int reviewSandboxes) {
+        return dispatcher(reviewSandboxes, RunAdmission.ALL);
+    }
+
+    private SandboxDispatcher dispatcher(int reviewSandboxes, RunAdmission admission) {
         return new SandboxDispatcher(
                 sandboxes,
                 runs,
                 List.of(new Driven(AgentRunKind.REVIEW, AgentSandboxKind.REVIEW)),
                 Map.of(AgentSandboxKind.REVIEW, reviewSandboxes),
                 new ReviewAttemptCustody(runs),
+                admission,
                 meters);
+    }
+
+    private String queue(long inWorkspace) {
+        String subject = "review:" + UUID.randomUUID();
+        transactions.executeWithoutResult(
+                status -> runs.enqueue(inWorkspace, AgentRunKind.REVIEW, AgentRunBand.BATCH, subject, null));
+        return subject;
+    }
+
+    @Test
+    void shouldGiveAModelPoolsOnePlaceToTheWorkspaceWithTheFewestLeasedRunsAndHoldTheRestWithoutASandbox() {
+        long busy = workspace;
+        long quiet = workspaces
+                .save(TestEntities.activeWorkspace("dispatch-" + UUID.randomUUID()))
+                .getId();
+        queue(busy);
+        var running = Objects.requireNonNull(
+                        transactions.execute(status -> runs.claim(Set.of(AgentRunKind.REVIEW), Set.of())))
+                .orElseThrow();
+        assertThat(running.workspaceId())
+                .as("the busy workspace already runs a review")
+                .isEqualTo(busy);
+        String busyFirst = queue(busy);
+        String busySecond = queue(busy);
+        String quietOnly = queue(quiet);
+        // One pool with room for one more review: a pass admits one review of the pool, the first in claim order.
+        RunAdmission onePlace = kinds -> new RunAdmission.Pass() {
+            private boolean taken;
+
+            @Override
+            public boolean admits(AgentRuns.DueRun due) {
+                if (taken) return false;
+                taken = true;
+                return true;
+            }
+        };
+
+        dispatcher(5, onePlace).dispatch();
+
+        assertThat(sandboxesOf(quietOnly))
+                .as("the workspace with no leased run goes first")
+                .isOne();
+        assertThat(sandboxesOf(busyFirst)).as("a held review gets no sandbox").isZero();
+        assertThat(sandboxesOf(busySecond)).isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_run WHERE state = 'QUEUED' AND workspace_id = ?",
+                        Integer.class,
+                        busy))
+                .as("the held reviews keep their place in the queue")
+                .isEqualTo(2);
+    }
+
+    @Test
+    void shouldReadPastTheRunsThatAPoolHoldsToARunThatMayStart() {
+        // More held runs than the kind's limit and a page of the due runs together.
+        var heldPool = new HashSet<String>();
+        for (int i = 0; i < 70; i++) heldPool.add(queue());
+        String otherPool = queue();
+        RunAdmission onePoolFull = kinds -> due -> !heldPool.contains(due.concurrencyKey());
+
+        dispatcher(2, onePoolFull).dispatch();
+
+        assertThat(heldPool)
+                .allSatisfy(subject -> assertThat(sandboxesOf(subject)).isZero());
+        assertThat(sandboxesOf(otherPool))
+                .as("runs held for a full pool do not use up the pass")
+                .isOne();
+    }
+
+    @Test
+    void shouldStartSandboxesForAKindWithNoLimit() {
+        String subject = queue();
+
+        dispatcher(Integer.MAX_VALUE).dispatch();
+
+        assertThat(sandboxesOf(subject)).isOne();
     }
 
     private String queue() {
@@ -176,6 +259,7 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
                 List.of(new Driven(AgentRunKind.TURN, AgentSandboxKind.CONVERSATION)),
                 Map.of(AgentSandboxKind.CONVERSATION, limit),
                 new ReviewAttemptCustody(runs),
+                RunAdmission.ALL,
                 meters);
     }
 

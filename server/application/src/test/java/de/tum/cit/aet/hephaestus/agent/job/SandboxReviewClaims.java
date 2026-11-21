@@ -1,11 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
@@ -25,8 +24,7 @@ public final class SandboxReviewClaims {
     public static ReviewJobClaimService claimService(ApplicationContext context, ReviewMemberAiPolicy policy) {
         var budgets = mock(LlmBudgetService.class);
         when(budgets.decide(anyLong())).thenReturn(LlmBudgetDecision.ALLOWED);
-        var calls = mock(LlmCallPermits.class);
-        when(calls.poolFor(any())).thenReturn(1L);
+        var calls = LlmCallPermitsTestFixtures.idle();
         return new ReviewJobClaimService(
                 context.getBean(ReviewJobRepository.class),
                 policy,

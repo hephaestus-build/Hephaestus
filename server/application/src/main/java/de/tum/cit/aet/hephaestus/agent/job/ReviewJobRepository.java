@@ -153,6 +153,78 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             + "de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus.PENDING))")
     boolean existsPurgeBlockingWork(@Param("workspaceId") Long workspaceId);
 
+    /** How many measurements a model pool admitted that still run, in every workspace that shares it, and the newest start. */
+    interface PoolLoad {
+        long getRunning();
+
+        @Nullable
+        Instant getNewestStart();
+    }
+
+    @WorkspaceAgnostic("A model pool is shared by the workspaces whose models it serves; the load names no workspace")
+    @Query(value = """
+        SELECT count(*) AS running, max(j.started_at) AS "newestStart" FROM review_job j
+        JOIN agent_run r ON r.id=j.run_id AND r.workspace_id=j.workspace_id
+        WHERE j.call_pool_id=:poolId AND j.status='RUNNING' AND r.kind='REVIEW' AND r.state='LEASED'
+        """, nativeQuery = true)
+    PoolLoad poolLoad(@Param("poolId") long poolId);
+
+    /**
+     * The model that a queued measurement froze at its submission: only the reference that names its model pool, read
+     * from the job's snapshot. The rest of the snapshot stays in the database.
+     */
+    interface QueuedModel {
+        UUID getRunId();
+
+        @Nullable
+        Integer getSchemaVersion();
+
+        @Nullable
+        String getConnectionScope();
+
+        @Nullable
+        Long getConnectionId();
+
+        @Nullable
+        Long getModelId();
+
+        @Nullable
+        Long getWorkspaceId();
+    }
+
+    String QUEUED_MODEL = """
+        SELECT j.run_id AS "runId", (j.config_snapshot->>'schemaVersion')::int AS "schemaVersion",
+               j.config_snapshot->'model'->>'connectionScope' AS "connectionScope",
+               (j.config_snapshot->'model'->>'connectionId')::bigint AS "connectionId",
+               (j.config_snapshot->'model'->>'modelId')::bigint AS "modelId",
+               (j.config_snapshot->'model'->>'workspaceId')::bigint AS "workspaceId"
+          FROM review_job j
+        """;
+
+    /**
+     * The models of due measurements whose sandbox has started but has not claimed the run yet. Each still takes its
+     * pool's place: the pool load counts it only once its claim leases the run. A run that a hold or a backoff put back
+     * to a later time is not due, so its idle sandbox takes no place. A deferral keeps the run due.
+     */
+    @WorkspaceAgnostic(
+            "A model pool is shared by the workspaces whose models it serves; the read returns model references only")
+    @Query(value = QUEUED_MODEL + """
+        JOIN agent_run r ON r.id=j.run_id AND r.workspace_id=j.workspace_id
+        JOIN workspace w ON w.id=r.workspace_id AND w.status='ACTIVE'
+        JOIN agent_sandbox s ON s.workspace_id=r.workspace_id AND s.subject_key=r.concurrency_key
+        WHERE j.status='QUEUED' AND r.kind='REVIEW' AND r.state='QUEUED' AND r.available_at <= clock_timestamp()
+          AND (r.deadline IS NULL OR r.deadline > clock_timestamp()) AND s.state IN ('REQUESTED','READY')
+        """, nativeQuery = true)
+    List<QueuedModel> findStartingModels();
+
+    /** The models of the queued jobs of these runs, read in one statement before the runs are claimed. */
+    @WorkspaceAgnostic(
+            "The dispatch reads a page of due runs of every workspace for their shared model pools; model references only")
+    @Query(value = QUEUED_MODEL + """
+        WHERE j.run_id IN (:runIds) AND j.status='QUEUED'
+        """, nativeQuery = true)
+    List<QueuedModel> findQueuedModels(@Param("runIds") Collection<UUID> runIds);
+
     @WorkspaceAgnostic("Bounded server completion pass; each selected job is reloaded under its own workspace")
     @Query(value = """
         SELECT j.id,j.workspace_id AS "workspaceId",j.review_id AS "reviewId"

@@ -31,7 +31,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
-import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
@@ -1116,7 +1116,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 null,
                 context.getBean(ReviewJobTelemetry.class),
-                mock(LlmCallPermits.class),
+                LlmCallPermitsTestFixtures.idle(),
                 agentRuns,
                 reviewRuns);
     }
