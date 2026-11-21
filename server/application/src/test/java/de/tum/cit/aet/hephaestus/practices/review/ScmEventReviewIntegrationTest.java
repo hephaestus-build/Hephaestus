@@ -2450,6 +2450,15 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(ended.getStatus()).isEqualTo(ReviewStatus.CANCELLED);
         assertThat(ended.getStopReason()).isEqualTo(ReviewStopReason.SOURCES_MOVED);
         assertThat(reasonOf(membersOf(workspace, stale.getId()), off)).isEqualTo("SOURCES_MOVED");
+
+        // The push waited for the review it replaced. Offered again, it measures nothing and starts no review.
+        closeWindows(prepared);
+        assertThat(itemEvents(prepared))
+                .filteredOn(event -> !event.getName().equals(ScmItemEvents.PULL_REQUEST_OPENED.value()))
+                .allSatisfy(event -> assertThat(event.getState()).isEqualTo(ItemEventState.WITHHELD))
+                .extracting(ItemEvent::getReason)
+                .contains(ReviewRequestReason.FEEDBACK_MODE_OFF);
+        assertThat(newestReview(prepared).getId()).isEqualTo(stale.getId());
     }
 
     @Test
