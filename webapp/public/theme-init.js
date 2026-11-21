@@ -1,5 +1,5 @@
 // Runs before the first paint, so the page never flashes the other theme. It stays a classic script
-// in `public/`: the CSP allows `script-src 'self'` and no inline code. It reads the cookie exactly as
+// in `public/`: the page's CSP allows no inline code, only scripts that carry its nonce. It reads the cookie exactly as
 // `readThemeCookie` in `src/runtime/theme/theme-cookie.ts` does (a parity test holds them together),
 // then falls back to the `system` default.
 {

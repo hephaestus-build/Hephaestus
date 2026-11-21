@@ -87,7 +87,9 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
                                             "\"workspaceSubdomains\":{\"enabled\":true,\"baseDomain\":\"hephaestus.build\"}"),
                                     containsString("\"xsrfCookieName\":\"__Host-XSRF-TOKEN\""))));
         }
-        mvc().perform(head("/w/acme")).andExpect(status().isOk());
+        mvc().perform(head("/w/acme"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Security-Policy", containsString("'strict-dynamic'")));
     }
 
     @Test

@@ -84,12 +84,7 @@ public class WebAppIndex {
                 .replace(">", "\\u003e")
                 .replace("&", "\\u0026");
         String template = index.getContentAsString(StandardCharsets.UTF_8);
-        // A page built without the placeholder would carry no nonce, and the policy would block every script on it.
-        if (!template.contains("nonce=\"" + NONCE_PLACEHOLDER + "\"")) {
-            throw new IllegalStateException(
-                    "The web app's index.html carries no script nonce; build it with html.cspNonce "
-                            + NONCE_PLACEHOLDER);
-        }
+        requireNoncePlaceholder(template);
         int head = template.indexOf("</head>");
         if (head < 0) {
             throw new IllegalStateException("The web app's index.html has no </head>");
@@ -99,6 +94,17 @@ public class WebAppIndex {
                 + record
                 + "</script>"
                 + template.substring(head);
+    }
+
+    /**
+     * A page built without the placeholder would carry no nonce, and the policy would block every script on it. A
+     * {@code webapp/dist} built before the placeholder existed is the usual cause.
+     */
+    static void requireNoncePlaceholder(String template) {
+        if (!template.contains("nonce=\"" + NONCE_PLACEHOLDER + "\"")) {
+            throw new IllegalStateException(
+                    "The web app's index.html carries no script nonce placeholder; rebuild it with `vp run build:webapp`");
+        }
     }
 
     /** Whether this server has a web app to serve. */

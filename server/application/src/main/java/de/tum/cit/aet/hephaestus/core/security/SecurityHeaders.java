@@ -74,8 +74,9 @@ public final class SecurityHeaders {
      * The policy names no partner host, because each directive says what this origin may do:
      *
      * <ul>
-     *   <li>{@code script-src 'self'}, without {@code 'unsafe-inline'}, is the XSS control. The web app's config
-     *       record is JSON, not a script, so it needs no exception.</li>
+     *   <li>{@code script-src 'self'}, without {@code 'unsafe-inline'}, is the XSS control of every response but the
+     *       web app's page, whose policy names its own nonce ({@link #pagePolicy}). The web app's config record is
+     *       JSON, not a script, so it needs no exception.</li>
      *   <li>{@code style-src} keeps {@code 'unsafe-inline'}: Swagger UI and the web app's components set inline
      *       styles.</li>
      *   <li>{@code img-src https:} shows avatars from any provider host without listing them, and still blocks
