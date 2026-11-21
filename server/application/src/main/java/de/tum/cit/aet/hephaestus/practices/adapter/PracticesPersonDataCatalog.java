@@ -230,7 +230,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "problem_lineage",
                                 "problem_lineage",
                                 "t.result_id IN(" + RESULT_IDS + ") OR t.prior_result_id IN(" + RESULT_IDS + ")",
-                                "id,workspace_id,result_id,prior_result_id,problem_id,prior_problem_id,state,recorded_at",
+                                "id,workspace_id,result_id,prior_result_id,problem_id,prior_problem_id,comparison,recorded_at",
                                 "id,workspace_id",
                                 "",
                                 -160),

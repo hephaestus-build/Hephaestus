@@ -64,9 +64,10 @@ public class ProblemLineage {
     @Column(name = "prior_problem_id")
     private @Nullable UUID priorProblemId;
 
+    /** How the problem compares: New, Unchanged, Updated, or No longer present ({@code ABSENT}). */
     @Enumerated(EnumType.STRING)
-    @Column(name = "state", nullable = false, length = 16)
-    private ProblemBaselineState state;
+    @Column(name = "comparison", nullable = false, length = 16)
+    private ProblemBaselineState comparison;
 
     @Column(name = "recorded_at", nullable = false)
     private Instant recordedAt;

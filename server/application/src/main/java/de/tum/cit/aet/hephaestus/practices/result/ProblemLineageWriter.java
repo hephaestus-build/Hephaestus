@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 /**
  * Records how the problems of a newly written item review result compare with the previous comparable result (ADR 0069
  * L12). Identity, comparability and the proof of absence are the scan comparison's: a problem matches by its key or its
- * first citation, and No longer present needs a judged result of a changed version, unmarked, permitted and with
+ * first citation, and No longer present needs a judged result of a changed version, unmarked and with
  * trusted coverage. An item review adds one condition, because its problems can cite any path and the model chooses
  * their keys: every text that the previous problem quoted must be gone from the newer capture. A renamed key or a
  * problem the model left out is then never mistaken for a repair.
@@ -54,19 +54,9 @@ class ProblemLineageWriter {
         // current decision: a newer result compares instead.
         if (review.getKind() != ReviewKind.ITEM || result.getEndedAt() != null || result.getPracticeVersionId() == null)
             return;
-        var prior = results.findPreviousComparable(
-                        ws,
-                        review.getId(),
-                        result.getId(),
-                        result.getPracticeId(),
-                        result.getPracticeVersionId(),
-                        result.getItemId(),
-                        result.getDeveloperId(),
-                        result.getRecordedAt())
-                .orElse(null);
+        var prior = results.findPreviousComparable(ws, result.getId()).orElse(null);
         if (prior == null || prior.isMigratedHistory() || !prior.isAdmissibleProof()) return;
         var rows = List.of(result, prior);
-        if (!evidence.permitted(ws, rows).containsAll(List.of(result.getId(), prior.getId()))) return;
         AdmittedResultSnapshot before;
         try {
             before = proof.snapshot(prior);
@@ -132,7 +122,7 @@ class ProblemLineageWriter {
                 .priorResultId(Objects.requireNonNull(prior.getId()))
                 .problemId(problem)
                 .priorProblemId(priorProblem)
-                .state(state)
+                .comparison(state)
                 .recordedAt(at)
                 .build();
     }

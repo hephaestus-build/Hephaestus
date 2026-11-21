@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
+import de.tum.cit.aet.hephaestus.evidence.CapturedSource;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
 import de.tum.cit.aet.hephaestus.practices.spi.CapturedTextProbe.Presence;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceCitation;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,7 +35,7 @@ class CapturedQuoteProbeTest extends BaseUnitTest {
     private static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
     private static final String QUOTE = "if (user == null) return;";
 
-    private final ReviewJob job = mock(ReviewJob.class);
+    private final ReviewJob job = TestEntities.reviewJob();
     private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
 
     private static EvidenceCitation cited(String path) {
@@ -70,7 +72,7 @@ class CapturedQuoteProbeTest extends BaseUnitTest {
                                 completeness,
                                 new SourceCaptureFacts(Instant.now(), null, null, "base:head")),
                         EvidenceSnapshotFixtures.citation(DIFF),
-                        List.of())),
+                        List.of(new CapturedSource("context/change.json", "application/json", "b".repeat(64), 1)))),
                 List.of(),
                 List.of(),
                 citable);

@@ -16,7 +16,7 @@
             <column name="result_id" type="UUID">
                 <constraints nullable="false"/>
             </column>
-            <column name="state" type="VARCHAR(16)">
+            <column name="comparison" type="VARCHAR(16)">
                 <constraints nullable="false"/>
             </column>
             <column name="workspace_id" type="BIGINT">
@@ -31,13 +31,13 @@
         <addUniqueConstraint columnNames="result_id, problem_id" constraintName="uk_problem_lineage_problem" tableName="problem_lineage"/>
     </changeSet>
     <changeSet id="1795279787201-4" author="hephaestus">
-        <comment>A lineage row names a problem of the newer result, of the previous one, or both, as its state says. Its results and problems belong to its workspace, and a row goes with either result.</comment>
+        <comment>A lineage row names a problem of the newer result, of the previous one, or both, as its comparison says. Its results and problems belong to its workspace, and a row goes with either result.</comment>
         <sql>ALTER TABLE problem_lineage
-            ADD CONSTRAINT ck_problem_lineage_state CHECK (state IN ('ABSENT', 'NEW', 'UNCHANGED', 'UPDATED')),
+            ADD CONSTRAINT ck_problem_lineage_comparison CHECK (comparison IN ('ABSENT', 'NEW', 'UNCHANGED', 'UPDATED')),
             ADD CONSTRAINT ck_problem_lineage_sides CHECK (
-                (state = 'NEW' AND problem_id IS NOT NULL AND prior_problem_id IS NULL)
-                OR (state = 'ABSENT' AND problem_id IS NULL AND prior_problem_id IS NOT NULL)
-                OR (state IN ('UNCHANGED', 'UPDATED') AND problem_id IS NOT NULL AND prior_problem_id IS NOT NULL)),
+                (comparison = 'NEW' AND problem_id IS NOT NULL AND prior_problem_id IS NULL)
+                OR (comparison = 'ABSENT' AND problem_id IS NULL AND prior_problem_id IS NOT NULL)
+                OR (comparison IN ('UNCHANGED', 'UPDATED') AND problem_id IS NOT NULL AND prior_problem_id IS NOT NULL)),
             ADD CONSTRAINT ck_problem_lineage_results CHECK (result_id &lt;&gt; prior_result_id),
             ADD CONSTRAINT sfk_problem_lineage_result FOREIGN KEY (result_id, workspace_id)
                 REFERENCES result(id, workspace_id) ON DELETE CASCADE,
@@ -59,7 +59,7 @@
             DROP CONSTRAINT IF EXISTS sfk_problem_lineage_result,
             DROP CONSTRAINT IF EXISTS ck_problem_lineage_results,
             DROP CONSTRAINT IF EXISTS ck_problem_lineage_sides,
-            DROP CONSTRAINT IF EXISTS ck_problem_lineage_state;</sql>
+            DROP CONSTRAINT IF EXISTS ck_problem_lineage_comparison;</sql>
         </rollback>
     </changeSet>
 </databaseChangeLog>

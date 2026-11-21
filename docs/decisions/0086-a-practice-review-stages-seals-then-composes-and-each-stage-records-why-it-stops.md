@@ -304,13 +304,13 @@ Thread resolution from lineage, repeats by identity and the composer's view of l
   That is the newest earlier result of the same practice version, item and developer, with the same model method.
   The comparison writes one `problem_lineage` row for each problem: New, Unchanged or Updated.
   It writes no rows when there is no such result.
-  The same holds when that result is not permitted or no longer verifies.
+  The same holds when that result no longer verifies.
 - Identity is the scan comparison's. A problem matches by its key.
   A problem with no key matches by the source and the normalized quote of its first citation.
 - Unchanged and Updated compare the problem's content without line numbers and without the cited commit.
   Every push moves the head that a citation names.
 - A previous problem that the newer result does not find is No longer present only with complete proof.
-  The proof is the scan comparison's: a judged result of a changed version, unmarked, permitted and with trusted coverage.
+  The proof is the scan comparison's: a judged result of a changed version, unmarked and with trusted coverage.
   Item reviews add one more condition, because the model chooses the keys and can leave a problem out.
   Every text that the previous problem quoted must be gone from the newer review's capture.
 - The capture decides as follows:

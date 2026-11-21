@@ -111,19 +111,20 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
      */
     @Query(value = """
         SELECT r.* FROM result r
+        JOIN result n ON n.id = :resultId AND n.workspace_id = r.workspace_id
         JOIN review_practice prior_method ON prior_method.review_id = r.review_id
           AND prior_method.practice_id = r.practice_id AND prior_method.workspace_id = r.workspace_id
-        JOIN review_practice requested_method ON requested_method.review_id = :reviewId
+        JOIN review_practice requested_method ON requested_method.review_id = n.review_id
           AND requested_method.practice_id = r.practice_id AND requested_method.workspace_id = r.workspace_id
         JOIN review prior_review ON prior_review.id=r.review_id AND prior_review.workspace_id=r.workspace_id
-        JOIN review requested_review ON requested_review.id=:reviewId AND requested_review.workspace_id=r.workspace_id
-        WHERE r.workspace_id = :workspaceId AND r.practice_id = :practiceId AND r.item_id = :itemId
-          AND r.practice_version_id = :practiceVersionId AND r.id <> :resultId
-          AND r.developer_id IS NOT DISTINCT FROM :developerId
+        JOIN review requested_review ON requested_review.id=n.review_id AND requested_review.workspace_id=r.workspace_id
+        WHERE r.workspace_id = :workspaceId AND r.practice_id = n.practice_id AND r.item_id = n.item_id
+          AND r.practice_version_id = n.practice_version_id AND r.id <> n.id
+          AND r.developer_id IS NOT DISTINCT FROM n.developer_id
           AND prior_review.kind = 'ITEM' AND prior_review.origin <> 'TRIAL'
           AND r.end_reason IS DISTINCT FROM 'OUTRANKED'
           AND (prior_review.ordered_at < requested_review.ordered_at
-            OR (prior_review.ordered_at = requested_review.ordered_at AND r.recorded_at < :recordedAt))
+            OR (prior_review.ordered_at = requested_review.ordered_at AND r.recorded_at < n.recorded_at))
           AND prior_method.method IS NOT NULL
           AND prior_method.method->>'modelDigest' = requested_method.method->>'modelDigest'
           AND prior_method.method->>'epoch' = requested_method.method->>'epoch'
@@ -132,15 +133,7 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
         ORDER BY prior_review.ordered_at DESC, r.recorded_at DESC, r.id DESC
         LIMIT 1
         """, nativeQuery = true)
-    Optional<Result> findPreviousComparable(
-            @Param("workspaceId") long workspaceId,
-            @Param("reviewId") UUID reviewId,
-            @Param("resultId") UUID resultId,
-            @Param("practiceId") long practiceId,
-            @Param("practiceVersionId") long practiceVersionId,
-            @Param("itemId") long itemId,
-            @Param("developerId") @Nullable Long developerId,
-            @Param("recordedAt") Instant recordedAt);
+    Optional<Result> findPreviousComparable(@Param("workspaceId") long workspaceId, @Param("resultId") UUID resultId);
 
     @Query(value = """
         SELECT r.* FROM result r

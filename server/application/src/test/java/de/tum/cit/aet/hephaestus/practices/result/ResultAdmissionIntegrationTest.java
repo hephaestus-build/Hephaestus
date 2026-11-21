@@ -366,7 +366,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
 
     private Map<ProblemBaselineState, Long> lineageOf(UUID result) {
         return lineage.findByWorkspaceIdAndResultId(scenario.workspace().getId(), result).stream()
-                .collect(Collectors.groupingBy(ProblemLineage::getState, Collectors.counting()));
+                .collect(Collectors.groupingBy(ProblemLineage::getComparison, Collectors.counting()));
     }
 
     private static ResultCandidate withProblems(ResultCandidate c, UnaryOperator<ProblemCandidate> change) {
@@ -473,7 +473,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         assertThat(lineage.findByWorkspaceIdAndResultId(scenario.workspace().getId(), gone))
                 .singleElement()
                 .satisfies(row -> {
-                    assertThat(row.getState()).isEqualTo(ProblemBaselineState.ABSENT);
+                    assertThat(row.getComparison()).isEqualTo(ProblemBaselineState.ABSENT);
                     assertThat(row.getProblemId()).isNull();
                     assertThat(row.getPriorResultId()).isEqualTo(first);
                     assertThat(row.getPriorProblemId()).isNotNull();
