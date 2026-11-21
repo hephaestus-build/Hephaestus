@@ -35,6 +35,12 @@ public final class WebAppRequests {
     /** The documents under {@code /.well-known} that belong to the web app ({@link WebAppDiscoveryController}). */
     static final List<String> DOCUMENTS = List.of("/.well-known/hephaestus.json", "/.well-known/security.txt");
 
+    /**
+     * The request attribute that holds the script nonce of a page response. Only the page sets it, so a response that
+     * carries it is a page, and its policy names that nonce ({@code SecurityHeaders}).
+     */
+    public static final String SCRIPT_NONCE = WebAppRequests.class.getName() + ".scriptNonce";
+
     private static final PathPatternRequestMatcher.Builder PATHS = PathPatternRequestMatcher.withDefaults();
 
     private static final RequestMatcher READ =

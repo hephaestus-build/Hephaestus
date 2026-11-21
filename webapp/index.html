@@ -32,6 +32,13 @@
     <meta name="twitter:image" content="/hephaestus-social-card.png" />
     <meta name="twitter:image:alt" content="Hephaestus: Put good practice to work." />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <!--
+      Zod probes for eval with `new Function` when it builds an object schema, and the page's policy reports the refused probe.
+      Its settings live on this global, so they hold before any bundle chunk builds a schema.
+    -->
+    <script>
+      globalThis.__zod_globalConfig = { jitless: true };
+    </script>
     <!-- Applies the theme cookie before the first paint; the app's ThemeProvider takes over after. -->
     <script src="/theme-init.js"></script>
     <!-- Reloads once, then says the page could not load, if a script the app needs to start fails. -->

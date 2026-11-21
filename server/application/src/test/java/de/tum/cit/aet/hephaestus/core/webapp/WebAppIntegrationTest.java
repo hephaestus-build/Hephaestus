@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.webapp;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
@@ -15,7 +16,10 @@ import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import jakarta.servlet.Filter;
 import java.net.URI;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -23,6 +27,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -32,7 +37,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * The server serves the built web app (ADR 0100): the page with its config record for every client route, the files
  * with their cache rules, the legal pages, the two discovery documents, and the host rules of workspace subdomains.
  * The base class turns workspace subdomains on under {@code hephaestus.build}, and the test profile serves the fixture in
- * {@code src/test/resources/web-app}.
+ * {@code src/test/resources/web-app-fixture}, also when a built web app is on the classpath.
  */
 class WebAppIntegrationTest extends RealAuthIntegrationTest {
 
@@ -67,7 +72,7 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(header().string("Content-Type", startsWith("text/html")))
                     .andExpect(header().string("Cache-Control", "no-store"))
-                    .andExpect(header().string("Content-Security-Policy", containsString("script-src 'self';")))
+                    .andExpect(header().string("Content-Security-Policy", containsString("'strict-dynamic'")))
                     .andExpect(header().string("Referrer-Policy", "no-referrer"))
                     .andExpect(header().string("X-Frame-Options", "DENY"))
                     .andExpect(header().string("X-Content-Type-Options", "nosniff"))
@@ -82,7 +87,43 @@ class WebAppIntegrationTest extends RealAuthIntegrationTest {
                                             "\"workspaceSubdomains\":{\"enabled\":true,\"baseDomain\":\"hephaestus.build\"}"),
                                     containsString("\"xsrfCookieName\":\"__Host-XSRF-TOKEN\""))));
         }
-        mvc().perform(head("/w/acme")).andExpect(status().isOk());
+        mvc().perform(head("/w/acme"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Security-Policy", containsString("'strict-dynamic'")));
+    }
+
+    @Test
+    void shouldGiveEveryPageItsOwnScriptNonceAndAllowOnlyTheScriptsThatCarryIt() throws Exception {
+        var nonces = new HashSet<String>();
+        for (int read = 0; read < 2; read++) {
+            MvcResult result = mvc().perform(get("/w/acme/practices"))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string(
+                                    "Content-Security-Policy-Report-Only", "require-trusted-types-for 'script'"))
+                    .andReturn();
+            String policy = result.getResponse().getHeader("Content-Security-Policy");
+            Matcher scripts = Pattern.compile("script-src 'nonce-([A-Za-z0-9+/=]{24})' 'strict-dynamic';")
+                    .matcher(Objects.requireNonNull(policy));
+            assertThat(scripts.find()).as(policy).isTrue();
+            String nonce = scripts.group(1);
+            String page = result.getResponse().getContentAsString();
+            // The module script and the meta tag that Vite's preloads read both carry this response's nonce.
+            assertThat(page)
+                    .contains("src=\"/assets/index-abc123.js\" nonce=\"" + nonce + "\"")
+                    .contains("<meta property=\"csp-nonce\" nonce=\"" + nonce + "\"")
+                    .doesNotContain(WebAppIndex.NONCE_PLACEHOLDER);
+            assertThat(policy).doesNotContain("script-src 'self'");
+            nonces.add(nonce);
+        }
+        assertThat(nonces).as("a nonce per response").hasSize(2);
+    }
+
+    @Test
+    void shouldKeepTheSelfScriptPolicyAndNoTrustedTypesReportOnAFileThatIsNotThePage() throws Exception {
+        mvc().perform(get("/manifest.json"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Security-Policy", containsString("script-src 'self';")))
+                .andExpect(header().doesNotExist("Content-Security-Policy-Report-Only"));
     }
 
     @Test

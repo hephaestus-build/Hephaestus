@@ -1,11 +1,36 @@
-import { test as base, type BrowserContext, expect, type Page } from "@playwright/test";
+import {
+	test as base,
+	type BrowserContext,
+	expect,
+	type Page,
+	type TestInfo,
+} from "@playwright/test";
 
 import { E2E_BASE_URL } from "./urls.ts";
 
+declare global {
+	interface Window {
+		reportCspViolation: (
+			disposition: string,
+			directive: string,
+			blocked: string,
+			source: string,
+		) => void;
+	}
+}
+
 export const test = base.extend<
-	object,
+	{ cspViolations: undefined },
 	{ adminSession: Awaited<ReturnType<BrowserContext["storageState"]>> }
 >({
+	cspViolations: [
+		async ({ context }, use, testInfo) => {
+			const violations = await watchCspViolations(context, testInfo);
+			await use(undefined);
+			expect(violations(), "content security policy violations").toEqual([]);
+		},
+		{ auto: true },
+	],
 	// One sign-in for every test of a worker, for a spec that visits many routes as the same person.
 	adminSession: [
 		async ({ browser }, use) => {
@@ -19,6 +44,40 @@ export const test = base.extend<
 });
 
 export { expect } from "@playwright/test";
+
+/**
+ * Collects the page's content security policy violations in this context. The server's page policy allows only the
+ * scripts that carry its nonce, so a test fails on any violation of it. A Trusted Types report, which the page only
+ * reports for now, is noted on the test until Trusted Types can be enforced.
+ */
+export async function watchCspViolations(
+	context: BrowserContext,
+	testInfo: TestInfo,
+): Promise<() => string[]> {
+	const violations: string[] = [];
+	await context.exposeFunction(
+		"reportCspViolation",
+		(disposition: string, directive: string, blocked: string, source: string) => {
+			const violation = `${directive}: ${blocked} at ${source}`;
+			if (disposition === "enforce") {
+				violations.push(violation);
+			} else if (!testInfo.annotations.some(({ description }) => description === violation)) {
+				testInfo.annotations.push({ type: "csp-report", description: violation });
+			}
+		},
+	);
+	await context.addInitScript(() => {
+		document.addEventListener("securitypolicyviolation", (event) => {
+			window.reportCspViolation(
+				event.disposition,
+				event.effectiveDirective,
+				event.blockedURI,
+				`${event.sourceFile}:${event.lineNumber}:${event.columnNumber}`,
+			);
+		});
+	});
+	return () => violations;
+}
 
 export async function loginAsDevAdmin(page: Page, username = "e2e"): Promise<void> {
 	await page.goto("/login");
