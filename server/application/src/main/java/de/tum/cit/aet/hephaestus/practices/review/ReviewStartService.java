@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import java.time.Clock;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -73,14 +72,16 @@ public class ReviewStartService implements ReviewStart {
                 || review.isCancelRequested()) return false;
         var kind = items.find(workspaceId, review.getItemId()).map(ItemRef::kind);
         if (kind.isEmpty()) return false;
-        boolean moved = events.open(workspaceId, review.getItemId()).stream()
-                .anyMatch(waiting -> waiting.itemVersion() != null
+        var newer = events.open(workspaceId, review.getItemId()).stream()
+                .filter(waiting -> waiting.itemVersion() != null
                         && waiting.occurredAt().isAfter(review.getOrderedAt())
                         && itemOptions
                                 .occasion(kind.orElseThrow(), waiting.name())
-                                .joinsWindow());
-        if (!moved || membership.capturedCurrentness(workspaceId, reviewId) != Currentness.STALE) return false;
-        closure.close(review, ReviewStatus.CANCELLED, ReviewStopReason.REPLACED, clock.instant());
+                                .joinsWindow())
+                .map(ItemEventService.Open::name)
+                .toList();
+        if (newer.isEmpty() || membership.capturedCurrentness(workspaceId, reviewId) != Currentness.STALE) return false;
+        closure.replace(review, kind.orElseThrow(), newer, clock.instant());
         return true;
     }
 }

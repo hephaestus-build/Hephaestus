@@ -245,3 +245,39 @@ Enforced by:
 - `ResultAdmissionIntegrationTest#shouldAskOnceForAFollowUpThatReadsTheReviewsOwnOccasionWhenReviewsEndOwingPractices`
 - `ResultAdmissionServiceTest#shouldStopTheOpenPracticesAsNotRunAndSealWhenTheRetryFindsTheSourcesStale`
 - `ReviewJobCompletionServiceTest#shouldCarryEveryPracticeOfARunThatTimedOutBeforeItMeasuredOne`
+
+## Update — 2026-11-21: a push measures only practices whose feedback reaches someone
+
+Production reviewed a repository whose pull requests got several pushes within one review.
+A review of 40 practices took about 16 minutes, so nearly every review met a push before its one seal (§ 10).
+A push changes the sources of most practices, so most of the staged work ended `WORK_CHANGED`.
+The six practices in Approve first were among them, and no feedback reached anyone.
+Selection was the cause: each push measured every practice that reviews on pushes, including the 34 practices in feedback mode Off, whose feedback reaches no one.
+
+This update extends § 5 and § 6:
+
+- Occasions that all continue, such as a push, an edit or a follow-up occasion, leave out a practice in feedback mode Off.
+  The practice then waits for a milestone or an outcome of its item, such as opened, ready, merged, closed, published, or a request.
+  This also holds when the practice is carried.
+- A practice in feedback mode Off that reviews on no milestone or outcome of its item kind has no other moment.
+  So its continuing occasions keep it. A conversation thread is such a kind: its one event continues.
+- When every practice that a push selects is in Off, the push is withheld with `FEEDBACK_MODE_OFF`.
+- A queued review that a newer push replaces at claim withholds such a practice with `SOURCES_MOVED`, not `REPLACED`.
+  The review of the push does not measure it, and `REPLACED` means that a newer review measures the practice.
+  When a newer milestone waits, every practice is `REPLACED`, as before.
+- The selection reads the effective feedback mode when it decides. A practice that changes from Off to Approve first or Automatic is measured on the next push.
+
+The run already starts the practices whose feedback reaches someone first ([pipeline guide](../contributor/practice-review-pipeline.mdx#admit-results)).
+So a push now measures only what someone reads, and a review of a push is about as short as those practices.
+Feedback still describes only the head that it reviewed: the seal and delivery checks are unchanged.
+
+Considered and rejected:
+
+- A longer quiet window. It delays all feedback and does not make a review of 40 practices shorter.
+- A seal per practice. It breaks the one consistent result set of § 10.
+
+Enforced by:
+
+- `ScmEventReviewIntegrationTest#shouldMeasureAPracticeInFeedbackModeOffAtAMilestoneButNotOnAPushUntilItsFeedbackReachesSomeone`
+- `ScmEventReviewIntegrationTest#shouldWithholdAPushWhoseEverySelectedPracticeIsOffAndKeepAnOffPracticeThatReviewsOnNoMilestone`
+- `ScmEventReviewIntegrationTest#shouldReplaceOnlyThePracticesThatTheReviewOfANewerPushMeasures`

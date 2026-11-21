@@ -123,6 +123,7 @@ A script that fails does not fall back to it.
 
 Feedback mode is separate from Reviewed by.
 Off prevents feedback at every destination but does not prevent eligible observation recording.
+An Off practice records observations at milestones and outcomes, not on every push or edit ([Select a review](./practice-review-pipeline#select-a-review)).
 Approve first requires an admin decision before feedback leaves on the work.
 Automatic permits that delivery after the normal policy checks.
 The two active modes permit eligible practice-page and conversation feedback without public approval.
@@ -175,6 +176,9 @@ The next readiness edge of the item selects both again, also an edge whose event
 
 `ALREADY_CURRENT` marks a withheld item event whose selected practices all have a current result.
 Only a continuing occasion can end with it. A milestone measures its practices again.
+
+`FEEDBACK_MODE_OFF` marks a withheld item event whose selected practices are all in feedback mode Off and wait for a milestone.
+Only occasions that all continue can end with it.
 
 A `REUSED` membership keeps an earlier result, because a requested review found that the practice and everything it reads are unchanged. It is not a new measurement.
 

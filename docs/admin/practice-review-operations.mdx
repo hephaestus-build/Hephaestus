@@ -66,6 +66,7 @@ The item event records why an event waits or does not start a review:
 | `REVIEW_IN_PROGRESS` | An earlier review of the same work still measures a practice that the event selects. |
 | `CHECKS_PENDING`, `CHECKS_AWAITING_APPROVAL`, `NO_CHECKS_REPORTED` | A practice needs the work's checks, and the checks have not finished. The next event on the work selects the practice again. |
 | `ALREADY_CURRENT` | Each practice that the event selects already has a current observation. |
+| `FEEDBACK_MODE_OFF` | Each practice that the push or edit selects has feedback mode Off. Such a practice reviews when the work is opened, marked ready, merged, closed, published or archived. |
 
 [Select a review](/contributor/practice-review-pipeline#select-a-review) explains the selection.
 
