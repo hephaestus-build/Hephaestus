@@ -76,10 +76,14 @@ export function upgradeFromOf(head: string): string | undefined {
 }
 
 /**
- * The release whose docs the site root serves: the newest stable release from 1.0.0 on, and before the first stable
- * 1.0.0 the newest release of any kind, a release candidate included.
+ * The supported release that docs/admin/compatibility-policy.mdx § Support statement names: the newest stable release
+ * from 1.0.0 on, and before the first stable 1.0.0 the newest release of any kind, a release candidate included. The
+ * site root serves its docs, and the nightly release rescan scans it.
+ *
+ * When 2.0.0 ships, the support statement names a second supported release: the last 1.x minor release, for 12 months
+ * of security fixes. This returns one tag, so the release rescan must then also scan that release.
  */
-export function docsRelease(all: readonly string[]): string | undefined {
+export function supportedRelease(all: readonly string[]): string | undefined {
 	const stable = previousRelease(all, []);
 	return stable !== undefined && !stable.startsWith("v0.") ? stable : latestRelease(all, []);
 }

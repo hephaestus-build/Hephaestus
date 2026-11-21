@@ -119,7 +119,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          tag=$(gh release view --repo "${{ github.repository }}" --json tagName --jq .tagName)
+          # The support statement names the release, not GitHub's "latest", which skips release candidates.
+          tag=$(node scripts/supported-release.ts)
           mkdir release-evidence
           gh release download "$tag" --repo "${{ github.repository }}" --dir release-evidence
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
