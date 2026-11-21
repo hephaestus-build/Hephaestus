@@ -1,4 +1,7 @@
-import { defineMdastPlugin } from "satteri";
+import { defineMdastPlugin, type Features } from "satteri";
+
+/** The Markdown syntax that the site parses, for the Astro processor and for the address index without a build. */
+export const MARKDOWN_FEATURES = { directive: true, smartPunctuation: false } satisfies Features;
 
 /* The STE label of each callout (writing standard § Warnings, cautions, and notes), unless the author wrote a title. */
 const CALLOUT_LABELS: Record<string, string> = { note: "Note", tip: "Tip", caution: "CAUTION" };

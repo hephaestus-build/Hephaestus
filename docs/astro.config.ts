@@ -13,7 +13,12 @@ import { parse } from "yaml";
 
 import { migrationEntries } from "./src/lib/migration-entries.ts";
 import { linksWithBasePath } from "./src/lib/page-tree.ts";
-import { callouts, rejectUnparsedAdmonitions, restoreUnusedDirectives } from "./src/lib/plugins.ts";
+import {
+	callouts,
+	MARKDOWN_FEATURES,
+	rejectUnparsedAdmonitions,
+	restoreUnusedDirectives,
+} from "./src/lib/plugins.ts";
 import { RELEASED_REDIRECTS } from "./src/lib/released-redirects.ts";
 import { GUIDES, REPO_URL, SITE_URL } from "./src/lib/site.ts";
 
@@ -164,7 +169,7 @@ export default defineConfig({
 	// The site ships its images as committed. Without a transform, the build needs no `sharp`, which pnpm leaves out.
 	image: { service: passthroughImageService() },
 	// Directives carry the callouts and `::include`. Quotes stay as the author typed them.
-	markdown: { processor: satteri({ features: { directive: true, smartPunctuation: false } }) },
+	markdown: { processor: satteri({ features: MARKDOWN_FEATURES }) },
 	integrations: [
 		fumadocs({
 			components: "./src/components/mdx-island.tsx",
