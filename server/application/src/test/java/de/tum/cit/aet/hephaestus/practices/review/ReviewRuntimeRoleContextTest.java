@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackModeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
@@ -48,6 +49,7 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                             ReviewSnapshotQueryService.class,
                             ReviewStartService.class,
                             ReviewClosure.class,
+                            OffPracticeMilestones.class,
                             ReviewOutcomeMeters.class,
                             PracticeReviewCoverageService.class,
                             ResultAdmissionPolicy.class,
@@ -86,7 +88,8 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
             ReviewFreshness.class,
             ResultFreshness.class,
             PracticeItemOptions.class,
-            ItemEventService.class);
+            ItemEventService.class,
+            FeedbackModeQuery.class);
 
     // One withBean call per statement: NullAway infers a generic call chain through every receiver, so a long
     // chain of generic calls with lambdas grows its inference work exponentially.
@@ -108,6 +111,7 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
             assertThat(app).hasSingleBean(ReviewSnapshotQuery.class);
             assertThat(app).hasSingleBean(ReviewStart.class);
             assertThat(app).hasSingleBean(ReviewClosure.class);
+            assertThat(app).hasSingleBean(OffPracticeMilestones.class);
             assertThat(app).hasSingleBean(ReviewOutcomeMeters.class);
             assertThat(app).hasSingleBean(ResultViewQuery.class);
             assertThat(app).hasSingleBean(ResultPresentation.class);
