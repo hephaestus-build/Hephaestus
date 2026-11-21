@@ -420,6 +420,27 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
     }
 
     @Test
+    void shouldAdmitTheCandidateOfATrialOfADraftPractice() {
+        // Every query hides a draft; admission must still find the practice that the trial pinned.
+        jdbc.sql("UPDATE practice SET state = 'DRAFT' WHERE id = :id")
+                .param("id", scenario.practice().getId())
+                .update();
+        var pending = admissions.pending(
+                scenario, Instant.now(), scenarioAccountId, "item-version-" + UUID.randomUUID(), ReviewOrigin.TRIAL);
+
+        var receipt = admit(pending, ResultOutcome.NOT_MET);
+
+        assertThat(receipt.withheldItems()).isEmpty();
+        var report = json.treeToValue(
+                Objects.requireNonNull(
+                        reviews.findById(pending.review().getId()).orElseThrow().getReport()),
+                TrialReport.class);
+        assertThat(report.candidates())
+                .singleElement()
+                .satisfies(candidate -> assertThat(candidate.outcome()).isEqualTo(ResultOutcome.NOT_MET));
+    }
+
+    @Test
     void shouldRefuseInTheDatabaseAResultForATrial() {
         var request = admissions.pending(scenario, Instant.now(), scenarioAccountId);
         var saved = admit(request, ResultOutcome.NOT_MET).resultIds().getFirst();
@@ -788,6 +809,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 List.of(scenario.practice().getId()),
                 false,
                 Set.of(),
+                null,
                 null,
                 null,
                 null));

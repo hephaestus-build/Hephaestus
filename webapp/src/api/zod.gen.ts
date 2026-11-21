@@ -2536,6 +2536,34 @@ export const zPracticeReviewScopePreview = z.object({
 	widens: z.boolean(),
 });
 
+export const zPracticeState = z.enum(["ACTIVE", "DRAFT"]);
+
+/**
+ * The state to move a draft practice to. Only <code>ACTIVE</code> is a change a draft can make.
+ */
+export const zChangePracticeStateRequest = z.object({
+	state: zPracticeState,
+});
+
+/**
+ * A practice folder saved to be tried (ADR 0118 decision 7): a new draft practice, a new version of a draft, or a
+ * version of a practice in use that is not current.
+ */
+export const zPracticeDraft = z.object({
+	current: z.boolean(),
+	groupSlug: z.string().optional(),
+	kind: z.string(),
+	name: z.string(),
+	slug: z.string(),
+	state: zPracticeState,
+	versionId: z.string(),
+	versionNumber: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	warnings: z.array(zPracticeFileProblem),
+});
+
 /**
  * Developer guidance: one picture of the practice and what it shows. Never changes how the practice is reviewed
  */
@@ -4967,6 +4995,10 @@ export const zStartTrialRequest = z.object({
 		.optional(),
 	itemUrl: z.string().min(0).max(2048).optional(),
 	practiceSlug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
+	practiceVersionId: z
+		.string()
+		.regex(/^[1-9][0-9]*$/)
+		.optional(),
 });
 
 export const zStateBasis = zClaimBasis.and(
@@ -5288,12 +5320,14 @@ export const zTrialOutcome = z.object({
 export const zTrial = z.object({
 	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	currentVersion: z.boolean(),
 	id: z.uuid(),
 	itemId: z.string(),
 	itemVersion: z.string().optional(),
 	outcome: zTrialOutcome.optional(),
 	outcomeRemoved: z.boolean(),
 	practiceSlug: z.string(),
+	practiceState: zPracticeState,
 	practiceVersionId: z.string(),
 	practiceVersionNumber: z
 		.int()

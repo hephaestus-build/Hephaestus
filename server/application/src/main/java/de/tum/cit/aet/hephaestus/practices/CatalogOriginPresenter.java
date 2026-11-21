@@ -49,7 +49,8 @@ public class CatalogOriginPresenter {
 
     public List<PracticeVersionDTO> history(Practice practice) {
         long workspaceId = Objects.requireNonNull(practice.getWorkspace().getId());
-        var rows = versionRepository.findByWorkspaceIdAndPracticeIdOrderByNumberAsc(workspaceId, practice.getId());
+        var rows = versionRepository.findByWorkspaceIdAndPracticeIdAndTriedFalseOrderByNumberAsc(
+                workspaceId, practice.getId());
         var creators = creators(workspaceId, rows);
         List<PracticeVersionDTO> history = new ArrayList<>();
         PracticeVersion previous = null;

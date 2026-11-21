@@ -12,6 +12,8 @@ import de.tum.cit.aet.hephaestus.practices.dto.CreatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeState;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import de.tum.cit.aet.hephaestus.practices.review.feedbackmode.FeedbackModeResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
@@ -45,6 +47,7 @@ public class PracticeService {
     private final WorkspaceReviewDefaultsProvider defaults;
     private final ConfigAuditPort audit;
     private final JsonMapper mapper;
+    private final PracticeDrafts drafts;
 
     public List<Practice> listPractices(WorkspaceContext ctx, @Nullable FeedbackMode feedbackMode) {
         var mode = defaults.rawDefaultFeedbackMode(ctx.id());
@@ -80,7 +83,8 @@ public class PracticeService {
                 request.position(),
                 null,
                 SecurityUtils.getCurrentAccountId().orElseThrow(),
-                null);
+                null,
+                PracticeState.ACTIVE);
     }
 
     @Transactional
@@ -105,7 +109,8 @@ public class PracticeService {
                 null,
                 mode,
                 SecurityUtils.getCurrentAccountId().orElse(null),
-                document);
+                document,
+                PracticeState.ACTIVE);
         return created;
     }
 
@@ -118,9 +123,11 @@ public class PracticeService {
             @Nullable Integer position,
             @Nullable FeedbackMode mode,
             @Nullable Long creator,
-            @Nullable CatalogPracticeDocument catalogDocument) {
+            @Nullable CatalogPracticeDocument catalogDocument,
+            PracticeState state) {
         lock(ctx);
-        if (practices.existsByWorkspaceIdAndSlug(ctx.id(), slug))
+        // A draft practice holds its slug too.
+        if (drafts.withDrafts(() -> practices.existsByWorkspaceIdAndSlug(ctx.id(), slug)))
             throw new PracticeSlugConflictException("This practice slug already exists.");
         if (!slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*") || slug.length() > 64)
             throw new InvalidInputException("Use a lowercase practice slug with single hyphens.");
@@ -128,8 +135,8 @@ public class PracticeService {
         Long groupId = group == null ? null : group.getId();
         int order = position == null ? practices.findMaxPosition(ctx.id(), groupId) + 1 : position;
         if (order < 0) throw new InvalidInputException("Use a nonnegative position.");
-        Practice practice = versions.create(
-                new PracticeVersionService.NewPractice(ctx.id(), slug, kind, definition, groupId, order, creator));
+        Practice practice = versions.create(new PracticeVersionService.NewPractice(
+                ctx.id(), slug, kind, definition, groupId, order, creator, state));
         practice.setFeedbackMode(mode);
         if (catalogDocument != null) {
             practice.setCatalogSlug(slug);
@@ -213,6 +220,82 @@ public class PracticeService {
         }
     }
 
+    /** A draft practice to try (ADR 0118 decision 7): no event, schedule, scan or request selects it. */
+    @Transactional
+    public Practice createDraft(WorkspaceContext ctx, String slug, CatalogPracticeDocument document) {
+        return create(
+                ctx,
+                slug,
+                document.kind(),
+                document.definition(),
+                document.groupSlug(),
+                null,
+                null,
+                SecurityUtils.getCurrentAccountId().orElse(null),
+                null,
+                PracticeState.DRAFT);
+    }
+
+    /** A draft practice takes the folder as its next, current version. Call it in a session that sees drafts. */
+    @Transactional
+    public PracticeVersion updateDraft(WorkspaceContext ctx, Practice draft, CatalogPracticeDocument document) {
+        lock(ctx);
+        var before = PracticeDefinitionSnapshot.of(draft, mapper);
+        var version = versions.append(
+                draft,
+                document.definition(),
+                SecurityUtils.getCurrentAccountId().orElse(null));
+        draft.setGroup(group(ctx, document.groupSlug()));
+        practices.save(draft);
+        record(ctx, draft, before);
+        return version;
+    }
+
+    /**
+     * Puts a draft practice in use. It starts in feedback mode Off, so its first observations count for nobody until
+     * an admin chooses a mode (ADR 0118 decision 5). An active practice cannot become a draft again: removing it, or
+     * Reviewed by Nobody, takes it out of use.
+     */
+    @Transactional
+    public Practice activate(WorkspaceContext ctx, String slug) {
+        lock(ctx);
+        Practice practice = draft(ctx, slug);
+        var before = PracticeDefinitionSnapshot.of(practice, mapper);
+        practice.activate();
+        practice.setFeedbackMode(FeedbackMode.OFF);
+        var group = practice.getGroup();
+        practice.setPosition(practices.findMaxPosition(ctx.id(), group == null ? null : group.getId()) + 1);
+        practices.save(practice);
+        record(ctx, practice, before);
+        return practice;
+    }
+
+    /**
+     * Deletes a draft practice and its trials. A draft has no observation, so nothing else refers to it, and deleting
+     * it can never lose history.
+     */
+    @Transactional
+    public void deleteDraft(WorkspaceContext ctx, String slug) {
+        lock(ctx);
+        Practice practice = draft(ctx, slug);
+        audit.record(ConfigAuditEntry.deleted(
+                ConfigAuditEntityType.PRACTICE_DEFINITION,
+                practice.getId(),
+                ctx.id(),
+                PracticeDefinitionSnapshot.of(practice, mapper)));
+        practices.deleteTrialsOf(ctx.id(), practice.getId());
+        practices.delete(practice);
+        practices.flush();
+    }
+
+    private Practice draft(WorkspaceContext ctx, String slug) {
+        Practice practice =
+                drafts.find(ctx.id(), slug).orElseThrow(() -> new EntityNotFoundException("Practice", slug));
+        if (practice.getState() != PracticeState.DRAFT)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This practice is in use, not a draft.");
+        return practice;
+    }
+
     @Transactional
     public void deletePractice(WorkspaceContext ctx, String slug) {
         lock(ctx);
@@ -241,6 +324,16 @@ public class PracticeService {
     private void lock(WorkspaceContext ctx) {
         if (workspaces.findByIdForUpdate(ctx.id()).isEmpty())
             throw new EntityNotFoundException("Workspace", ctx.slug());
+    }
+
+    /**
+     * Records that a request on this practice changed no configuration in effect: a version tried beside the current
+     * one is never current, so the audit recorder writes no row for it.
+     */
+    public void recordUnchanged(WorkspaceContext ctx, Practice practice) {
+        var snapshot = PracticeDefinitionSnapshot.of(practice, mapper);
+        audit.record(ConfigAuditEntry.updated(
+                ConfigAuditEntityType.PRACTICE_DEFINITION, practice.getId(), ctx.id(), snapshot, snapshot));
     }
 
     private void record(WorkspaceContext ctx, Practice practice, PracticeDefinitionSnapshot before) {

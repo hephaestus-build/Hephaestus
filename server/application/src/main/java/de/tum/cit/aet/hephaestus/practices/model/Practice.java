@@ -20,6 +20,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -28,6 +29,8 @@ import lombok.ToString;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.CurrentTimestamp;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.SourceType;
 import org.hibernate.generator.EventType;
@@ -49,12 +52,19 @@ import org.jspecify.annotations.Nullable;
                     name = "uk_practice_workspace_slug",
                     columnNames = {"workspace_id", "slug"})
         })
+// Every session reads active practices only. Code that must see drafts loads them by id, or turns the filter off for
+// its own session (PracticeDrafts), so a draft never reaches selection, a member or a review (ADR 0118 decision 7).
+@FilterDef(name = Practice.ACTIVE, defaultCondition = "state = 'ACTIVE'", autoEnabled = true)
+@Filter(name = Practice.ACTIVE)
 @Getter
 @Setter
 @NoArgsConstructor
 @ToString
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class Practice {
+    /** The name of the filter that hides draft practices from every session that does not turn it off. */
+    public static final String ACTIVE = "activePractices";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @EqualsAndHashCode.Include
@@ -89,6 +99,12 @@ public class Practice {
     @Column(name = "feedback_mode", length = 16)
     private @Nullable FeedbackMode feedbackMode;
 
+    @Enumerated(EnumType.STRING)
+    @ColumnDefault("'ACTIVE'")
+    @Column(name = "state", nullable = false, length = 8)
+    @Setter(AccessLevel.NONE)
+    private PracticeState state = PracticeState.ACTIVE;
+
     @Column(name = "catalog_slug", length = 64)
     private @Nullable String catalogSlug;
 
@@ -105,4 +121,11 @@ public class Practice {
     @CurrentTimestamp(event = EventType.UPDATE, source = SourceType.VM)
     @Column(name = "updated_at")
     private @Nullable Instant updatedAt;
+
+    /** Puts a draft practice in use. A practice in use never becomes a draft again (ADR 0118 decision 7). */
+    public void activate() {
+        if (!state.canTransitionTo(PracticeState.ACTIVE))
+            throw new IllegalStateException("Only a draft practice can be put in use.");
+        state = PracticeState.ACTIVE;
+    }
 }

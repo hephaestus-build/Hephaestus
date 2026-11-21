@@ -28,6 +28,7 @@ class PracticeDefinitionSnapshotTest extends BaseUnitTest {
         assertThat(json.propertyNames())
                 .containsExactlyInAnyOrder(
                         "slug",
+                        "state",
                         "kind",
                         "versionId",
                         "reviewDigest",

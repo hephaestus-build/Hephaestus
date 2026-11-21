@@ -13,11 +13,14 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.UncapturableReads;
 import de.tum.cit.aet.hephaestus.practices.UnofferedItemCapabilities;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.ReviewWorkspace;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +64,27 @@ public class ReviewGate {
             return new GateDecision.Skip("No practice can review this item.", ReviewRequestReason.NO_ACTIVE_PRACTICE);
         return new GateDecision.Run(
                 workspace, matched, workspace.reviewSettings().rolloutRevision(), origin);
+    }
+
+    /**
+     * The one practice that a trial tries, in the version it tries. It is loaded by its id, so a draft practice runs
+     * here and nowhere else (ADR 0118 decision 7).
+     */
+    @Transactional(readOnly = true)
+    public GateDecision trial(
+            ReviewWorkspace workspace, ItemSnapshot item, Practice practice, PracticeVersion version) {
+        if (workspace.id() != item.item().workspaceId()
+                || !Objects.equals(practice.getWorkspace().getId(), workspace.id()))
+            throw new InvalidInputException("The item belongs to another workspace.");
+        var refusal = refusal(workspace, ReviewOrigin.TRIAL);
+        if (refusal.isPresent()) return refusal.orElseThrow();
+        var definition = json.convertValue(version.getDefinition(), PracticeDefinition.class);
+        if (!practice.getKind().equals(item.item().kind())
+                || selectable(definition, items.require(item.item().kind())).isEmpty())
+            return new GateDecision.Skip(
+                    "Hephaestus cannot review this practice on this work.", ReviewRequestReason.NO_ACTIVE_PRACTICE);
+        return new GateDecision.Run(
+                workspace, List.of(practice), workspace.reviewSettings().rolloutRevision(), ReviewOrigin.TRIAL);
     }
 
     Optional<GateDecision.Skip> refusal(ReviewWorkspace workspace, ReviewOrigin origin) {
@@ -109,7 +133,11 @@ public class ReviewGate {
      * reads the current source catalog can capture for that kind.
      */
     Optional<PracticeDefinition> selectable(Practice practice, ItemDescriptor descriptor) {
-        var definition = json.convertValue(practice.getCurrentVersion().getDefinition(), PracticeDefinition.class);
+        return selectable(
+                json.convertValue(practice.getCurrentVersion().getDefinition(), PracticeDefinition.class), descriptor);
+    }
+
+    private Optional<PracticeDefinition> selectable(PracticeDefinition definition, ItemDescriptor descriptor) {
         if (definition.reviewedBy().by() != ReviewedByKind.HEPHAESTUS) return Optional.empty();
         if (UnofferedItemCapabilities.of(descriptor, definition) != null) return Optional.empty();
         if (UncapturableReads.of(

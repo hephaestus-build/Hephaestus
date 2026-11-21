@@ -5,7 +5,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
-import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeDrafts;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.review.dto.StartTrialRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.TrialCitationDTO;
@@ -37,7 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
 @RequiredArgsConstructor
 public class PracticeTrialService {
     private final ProductItemQuery items;
-    private final PracticeRepository practices;
+    private final PracticeDrafts drafts;
     private final PracticeVersionRepository versions;
     private final ReviewService reviews;
     private final ReviewRepository reviewRows;
@@ -54,8 +54,8 @@ public class PracticeTrialService {
      */
     public UUID start(long workspaceId, StartTrialRequestDTO request, long accountId) {
         adminAssurance.require(true);
-        var practice = practices
-                .findByWorkspaceIdAndSlug(workspaceId, request.practiceSlug())
+        // A draft practice exists to be tried, so the trial reads drafts too.
+        var practice = drafts.find(workspaceId, request.practiceSlug())
                 .orElseThrow(() -> new EntityNotFoundException("Practice", request.practiceSlug()));
         var item = item(workspaceId, request);
         // ADR 0118 decision 8: in 1.0 a trial reads GitHub and GitLab work only. A kind without roles, such as a
@@ -75,6 +75,8 @@ public class PracticeTrialService {
                 .origin(ReviewOrigin.TRIAL)
                 .requestedById(accountId)
                 .practiceIds(List.of(practice.getId()))
+                .practiceVersionId(
+                        request.practiceVersionId() == null ? null : Long.parseLong(request.practiceVersionId()))
                 .build());
     }
 
@@ -119,6 +121,10 @@ public class PracticeTrialService {
                 version.getPractice().getSlug(),
                 String.valueOf(version.getId()),
                 version.getNumber(),
+                version.getPractice().getState(),
+                Objects.equals(
+                        version.getId(),
+                        version.getPractice().getCurrentVersion().getId()),
                 String.valueOf(review.getItemId()),
                 review.getItemVersion(),
                 review.getCreatedAt(),

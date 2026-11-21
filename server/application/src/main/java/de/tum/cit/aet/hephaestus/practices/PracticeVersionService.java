@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeVersionDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeState;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -16,6 +17,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @Service
@@ -25,6 +27,7 @@ public class PracticeVersionService {
     private final PracticeVersionRepository versions;
     private final JsonMapper mapper;
     private final PracticeDefinitionValidator validator;
+    private final PracticeDrafts drafts;
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
@@ -50,6 +53,32 @@ public class PracticeVersionService {
         return version;
     }
 
+    /**
+     * A version of the practice with this definition to try, beside its current one (ADR 0118 decision 7): the current
+     * version or a tried one when either has the same definition, otherwise a new tried version that never becomes
+     * current.
+     */
+    @Transactional
+    public PracticeVersion tryOut(Practice practice, PracticeDefinition definition, @Nullable Long createdByAccountId) {
+        Practice locked = practices
+                .findByIdForUpdate(practice.getId())
+                .orElseThrow(() -> new EntityNotFoundException("Practice", practice.getSlug()));
+        validator.validate(locked.getKind(), definition);
+        JsonNode tree = mapper.valueToTree(definition);
+        if (locked.getCurrentVersion().getDefinition().equals(tree)) return locked.getCurrentVersion();
+        var known = versions
+                .findByWorkspaceIdAndPracticeIdAndTriedTrueOrderByNumberAsc(
+                        locked.getWorkspace().getId(), locked.getId())
+                .stream()
+                .filter(version -> version.getDefinition().equals(tree))
+                .findFirst();
+        if (known.isPresent()) return known.orElseThrow();
+        int number = versions.findFirstByPracticeIdOrderByNumberDesc(locked.getId())
+                .map(version -> version.getNumber() + 1)
+                .orElse(1);
+        return versions.saveAndFlush(new PracticeVersion(locked, number, tree, createdByAccountId, true));
+    }
+
     @Transactional
     public Practice create(NewPractice request) {
         var workspace = request.workspaceId();
@@ -70,8 +99,8 @@ public class PracticeVersionService {
                 .getSingleResult();
         Objects.requireNonNull(entityManager)
                 .createNativeQuery("""
-                    INSERT INTO practice(id, workspace_id, slug, kind, group_id, position, current_version_id)
-                    VALUES (:id, :workspace, :slug, :kind, :group, :position, :version)
+                    INSERT INTO practice(id, workspace_id, slug, kind, group_id, position, current_version_id, state)
+                    VALUES (:id, :workspace, :slug, :kind, :group, :position, :version, :state)
                     """)
                 .setParameter("id", practiceId)
                 .setParameter("workspace", workspace)
@@ -80,6 +109,7 @@ public class PracticeVersionService {
                 .setParameter("group", groupId)
                 .setParameter("position", position)
                 .setParameter("version", versionId)
+                .setParameter("state", request.state().name())
                 .executeUpdate();
         Objects.requireNonNull(entityManager)
                 .createNativeQuery("""
@@ -92,7 +122,9 @@ public class PracticeVersionService {
                 .setParameter("definition", mapper.writeValueAsString(definition))
                 .setParameter("creator", createdByAccountId)
                 .executeUpdate();
-        return practices.findByWorkspaceIdAndSlug(workspace, slug).orElseThrow();
+        // Read with drafts visible, so a new draft is found too, with its version and group loaded.
+        return drafts.withDrafts(() -> practices.findByWorkspaceIdAndSlug(workspace, slug))
+                .orElseThrow();
     }
 
     public record NewPractice(
@@ -102,7 +134,19 @@ public class PracticeVersionService {
             PracticeDefinition definition,
             @Nullable Long groupId,
             int position,
-            @Nullable Long createdByAccountId) {}
+            @Nullable Long createdByAccountId,
+            PracticeState state) {
+        public NewPractice(
+                long workspaceId,
+                String slug,
+                ItemKind kind,
+                PracticeDefinition definition,
+                @Nullable Long groupId,
+                int position,
+                @Nullable Long createdByAccountId) {
+            this(workspaceId, slug, kind, definition, groupId, position, createdByAccountId, PracticeState.ACTIVE);
+        }
+    }
 
     public PracticeVersionDTO view(
             PracticeVersion version,

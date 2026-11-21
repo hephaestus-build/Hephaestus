@@ -18,6 +18,8 @@ import type {
 	AcknowledgeCatalogGroupResponses,
 	AcknowledgeCatalogPracticeData,
 	AcknowledgeCatalogPracticeResponses,
+	ActivatePracticeDraftData,
+	ActivatePracticeDraftResponses,
 	AddLabelToTeamData,
 	AddLabelToTeamResponses,
 	AddRepositoryToMonitorData,
@@ -222,6 +224,8 @@ import type {
 	DeleteOutlineCollectionErrors,
 	DeleteOutlineCollectionResponses,
 	DeletePracticeData,
+	DeletePracticeDraftData,
+	DeletePracticeDraftResponses,
 	DeletePracticeGroupData,
 	DeletePracticeGroupResponses,
 	DeletePracticeResponses,
@@ -517,6 +521,8 @@ import type {
 	ListOwnResultsResponses,
 	ListOwnReviewsData,
 	ListOwnReviewsResponses,
+	ListPracticeDraftsData,
+	ListPracticeDraftsResponses,
 	ListPracticeGroupsData,
 	ListPracticeGroupsResponses,
 	ListPracticeReleasesData,
@@ -685,6 +691,8 @@ import type {
 	RevokeOtherSessionsResponses,
 	RevokeSessionData,
 	RevokeSessionResponses,
+	SavePracticeDraftData,
+	SavePracticeDraftResponses,
 	SetCatalogGroupStatusData,
 	SetCatalogGroupStatusResponses,
 	SetCatalogPracticeStatusData,
@@ -4438,6 +4446,66 @@ export const adoptPractice = <ThrowOnError extends boolean = false>(
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-catalog/adoption/{slug}",
 		...options,
+	});
+
+/**
+ * List the draft practices
+ */
+export const listPracticeDrafts = <ThrowOnError extends boolean = false>(
+	options: Options<ListPracticeDraftsData, ThrowOnError>,
+): RequestResult<ListPracticeDraftsResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).get<ListPracticeDraftsResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practice-drafts",
+		...options,
+	});
+
+/**
+ * Delete a draft practice and its trials
+ */
+export const deletePracticeDraft = <ThrowOnError extends boolean = false>(
+	options: Options<DeletePracticeDraftData, ThrowOnError>,
+): RequestResult<DeletePracticeDraftResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).delete<DeletePracticeDraftResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}",
+		...options,
+	});
+
+/**
+ * Save a practice folder to try
+ *
+ * A slug that the workspace lacks becomes a draft practice. A draft takes the folder as its next version. A practice in use keeps its current version, and the folder becomes a version beside it to try. Nobody is reviewed, and no model is called.
+ */
+export const savePracticeDraft = <ThrowOnError extends boolean = false>(
+	options: Options<SavePracticeDraftData, ThrowOnError>,
+): RequestResult<SavePracticeDraftResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).put<SavePracticeDraftResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+/**
+ * Put a draft practice in use
+ *
+ * The practice starts in feedback mode Off.
+ */
+export const activatePracticeDraft = <ThrowOnError extends boolean = false>(
+	options: Options<ActivatePracticeDraftData, ThrowOnError>,
+): RequestResult<ActivatePracticeDraftResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).patch<ActivatePracticeDraftResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practice-drafts/{practiceSlug}/state",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const listPracticeGroups = <ThrowOnError extends boolean = false>(

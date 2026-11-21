@@ -1033,9 +1033,24 @@ A developer's disagreement does not mark a result automatically.
 
 ## Trials
 
+### Draft practices
+
+A draft practice has `practice.state` `DRAFT`. The Hibernate filter `Practice.ACTIVE` is on in every session, so no entity query sees a draft: no selection, schedule, scan, member view or MCP read tool.
+`PracticeDrafts` turns the filter off only for the admin paths that save, try, list, activate and delete drafts.
+
+Native SQL bypasses the filter. `DraftPracticeFilterArchTest` fails on a native read of `practice` that does not say `state = 'ACTIVE'`.
+It exempts only the classes that it names.
+They read practices only through results or scan memberships, or delete a purged workspace's practices.
+
+A version that `PracticeVersionService.tryOut` saves beside a practice in use has `tried` set. It never becomes current. The version at a point in time, the previous definition, the version history and the practice page leave tried versions out.
+Activation starts a draft in feedback mode Off. Deleting a draft deletes its trials first: they are all that refer to it.
+
+### Trial runs
+
 A trial is an item review with origin `TRIAL`, one practice and one item. `PracticeTrialService` requests it for a workspace admin.
 It passes the checks of a requested review, except the checks for delivery.
 A trial whose practice the plan would withhold is refused with that reason, and nothing is recorded.
+A trial can try a draft practice, or a tried version of a practice in use. `ReviewGate.trial` loads that one practice by its id and checks the tried version's definition.
 
 At most `hephaestus.practices.trials.max-active` trials of one workspace are queued or running.
 A trial keeps one run subject for each review, because the subject also keys the sandbox: two trials never share a sandbox.

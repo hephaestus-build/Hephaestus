@@ -18,7 +18,8 @@ class PracticeVersionServiceTest extends BaseUnitTest {
             mock(PracticeRepository.class),
             mock(PracticeVersionRepository.class),
             MAPPER,
-            mock(PracticeDefinitionValidator.class));
+            mock(PracticeDefinitionValidator.class),
+            mock(PracticeDrafts.class));
 
     @ParameterizedTest
     @MethodSource("incompleteDefinitions")

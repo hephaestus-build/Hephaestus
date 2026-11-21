@@ -80,6 +80,7 @@ export { acceptCatalogPracticeReleaseMutation } from "./react-query/acceptCatalo
 export { acceptPracticeReleaseMutation } from "./react-query/acceptPracticeRelease.gen.js";
 export { acknowledgeCatalogGroupMutation } from "./react-query/acknowledgeCatalogGroup.gen.js";
 export { acknowledgeCatalogPracticeMutation } from "./react-query/acknowledgeCatalogPractice.gen.js";
+export { activatePracticeDraftMutation } from "./react-query/activatePracticeDraft.gen.js";
 export { addLabelToTeamMutation } from "./react-query/addLabelToTeam.gen.js";
 export { addRepositoryToMonitorMutation } from "./react-query/addRepositoryToMonitor.gen.js";
 export { adminCheckReleaseMutation } from "./react-query/adminCheckRelease.gen.js";
@@ -252,6 +253,7 @@ export { deleteConversationEntryMutation } from "./react-query/deleteConversatio
 export { deleteCurrentUserMutation } from "./react-query/deleteCurrentUser.gen.js";
 export { deleteOutlineCollectionMutation } from "./react-query/deleteOutlineCollection.gen.js";
 export { deletePracticeMutation } from "./react-query/deletePractice.gen.js";
+export { deletePracticeDraftMutation } from "./react-query/deletePracticeDraft.gen.js";
 export { deletePracticeGroupMutation } from "./react-query/deletePracticeGroup.gen.js";
 export { deleteReviewScheduleMutation } from "./react-query/deleteReviewSchedule.gen.js";
 export { dismissMemberOnboardingMutation } from "./react-query/dismissMemberOnboarding.gen.js";
@@ -721,6 +723,10 @@ export {
 	listOwnReviewsQueryKey,
 } from "./react-query/listOwnReviews.gen.js";
 export {
+	listPracticeDraftsOptions,
+	listPracticeDraftsQueryKey,
+} from "./react-query/listPracticeDrafts.gen.js";
+export {
 	listPracticeGroupsOptions,
 	listPracticeGroupsQueryKey,
 } from "./react-query/listPracticeGroups.gen.js";
@@ -894,6 +900,7 @@ export { retryProductFeedbackFilingMutation } from "./react-query/retryProductFe
 export { revokeMcpClientGrantMutation } from "./react-query/revokeMcpClientGrant.gen.js";
 export { revokeOtherSessionsMutation } from "./react-query/revokeOtherSessions.gen.js";
 export { revokeSessionMutation } from "./react-query/revokeSession.gen.js";
+export { savePracticeDraftMutation } from "./react-query/savePracticeDraft.gen.js";
 export { setCatalogGroupStatusMutation } from "./react-query/setCatalogGroupStatus.gen.js";
 export { setCatalogPracticeStatusMutation } from "./react-query/setCatalogPracticeStatus.gen.js";
 export { setConversationVoteMutation } from "./react-query/setConversationVote.gen.js";

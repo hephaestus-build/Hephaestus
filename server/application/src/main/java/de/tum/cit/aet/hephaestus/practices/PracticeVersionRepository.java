@@ -21,16 +21,19 @@ public interface PracticeVersionRepository extends JpaRepository<PracticeVersion
 
     @Query("""
         SELECT v FROM PracticeVersion v
-        WHERE v.workspaceId = :workspaceId AND v.practice.id IN :practiceIds AND v.createdAt <= :at
+        WHERE v.workspaceId = :workspaceId AND v.practice.id IN :practiceIds AND v.createdAt <= :at AND v.tried = false
         AND NOT EXISTS (SELECT newer.id FROM PracticeVersion newer
             WHERE newer.workspaceId = :workspaceId AND newer.practice.id = v.practice.id
-            AND newer.createdAt <= :at AND newer.number > v.number)
+            AND newer.createdAt <= :at AND newer.number > v.number AND newer.tried = false)
         """)
     List<PracticeVersion> findAt(long workspaceId, Collection<Long> practiceIds, Instant at);
 
-    List<PracticeVersion> findByWorkspaceIdAndPracticeIdOrderByNumberAsc(Long workspaceId, Long practiceId);
+    List<PracticeVersion> findByWorkspaceIdAndPracticeIdAndTriedFalseOrderByNumberAsc(
+            Long workspaceId, Long practiceId);
 
-    List<PracticeVersion> findByWorkspaceIdAndPracticeIdInOrderByNumberAsc(
+    List<PracticeVersion> findByWorkspaceIdAndPracticeIdAndTriedTrueOrderByNumberAsc(Long workspaceId, Long practiceId);
+
+    List<PracticeVersion> findByWorkspaceIdAndPracticeIdInAndTriedFalseOrderByNumberAsc(
             long workspaceId, Collection<Long> practiceIds);
 
     @Query("""
@@ -41,7 +44,7 @@ public interface PracticeVersionRepository extends JpaRepository<PracticeVersion
         WHERE current.workspaceId = :workspaceId AND current.id IN :currentVersionIds
           AND previous.number = (SELECT MAX(older.number) FROM PracticeVersion older
             WHERE older.workspaceId = :workspaceId AND older.practice.id = current.practice.id
-              AND older.number < current.number)
+              AND older.number < current.number AND older.tried = false)
         """)
     List<PreviousDefinition> previousDefinitions(long workspaceId, Collection<Long> currentVersionIds);
 
