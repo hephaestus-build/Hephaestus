@@ -7,13 +7,7 @@ import { isDeepStrictEqual } from "node:util";
  * gate fails when a pin, a bundled tool version, a setup step or a command anywhere in the tree
  * drifts from that shape.
  */
-import {
-	BASE64_MITIGATION,
-	MITIGATED_BELOW,
-	hasBase64Mitigation,
-	serverBuildEnvironment,
-	versionBelow,
-} from "./lib/buildpack-descriptor.ts";
+import { JRE_FLOOR, versionBelow } from "./lib/buildpack-descriptor.ts";
 
 import packageArgument from "npm-package-arg";
 import { parse } from "yaml";
@@ -335,16 +329,9 @@ if (typeof jrePin.version !== "string" || jrePin.version.split(".")[0] !== javaV
 		".github/ci-tools/buildpack-liberica-jre.json must pin a JRE of the .java-version line",
 	);
 }
-const descriptorEnvironment = serverBuildEnvironment();
-if (
-	versionBelow(jrePin.version, MITIGATED_BELOW) &&
-	!hasBase64Mitigation(
-		descriptorEnvironment.get("TRAINING_RUN_JAVA_TOOL_OPTIONS") ?? "",
-		descriptorEnvironment.get("BPE_APPEND_JAVA_TOOL_OPTIONS") ?? "",
-	)
-) {
+if (versionBelow(jrePin.version, JRE_FLOOR)) {
 	throw new Error(
-		`The pinned JRE ${jrePin.version} is below ${MITIGATED_BELOW.join(".")}, the fix of CVE-2026-114938. server/application/project.toml must set ${BASE64_MITIGATION} for the training run and every launch, or pin a fixed JRE.`,
+		`The pinned JRE ${jrePin.version} is below ${JRE_FLOOR.join(".")}, the fix of CVE-2026-114938 to CVE-2026-114947. Pin a fixed JRE.`,
 	);
 }
 for (const file of execFileSync("git", ["ls-files", ".github"], { encoding: "utf8" }).split("\n")) {

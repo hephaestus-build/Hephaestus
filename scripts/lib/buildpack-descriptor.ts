@@ -32,11 +32,10 @@ export function addedModules(options: string): readonly string[] {
 }
 
 /**
- * The first JRE build that fixes CVE-2026-114938, a reported pre-auth flaw in the JVM's AVX-512 Base64
- * decoder. A pinned JRE below it must run with the decoder turned off.
+ * The first JRE build that fixes the OpenJDK advisory of 2026-11-17 (CVE-2026-114938 to CVE-2026-114947).
+ * gate:toolchain refuses a pin below it, without waiting for an image scan to match the runtime.
  */
-export const MITIGATED_BELOW = [25, 0, 5, 1] as const;
-export const BASE64_MITIGATION = "-XX:-UseBASE64Intrinsics";
+export const JRE_FLOOR = [25, 0, 5, 1] as const;
 
 /** Whether a Liberica version such as `25.0.5.0.3_5` is below `fixed`, compared part by part. */
 export function versionBelow(version: string, fixed: readonly number[]): boolean {
@@ -49,11 +48,6 @@ export function versionBelow(version: string, fixed: readonly number[]): boolean
 		}
 	}
 	return false;
-}
-
-/** Whether every option string names the Base64 mitigation as a whole option. */
-export function hasBase64Mitigation(...options: readonly string[]): boolean {
-	return options.every((value) => value.split(/\s+/u).includes(BASE64_MITIGATION));
 }
 
 /** The object-header layout that a `JAVA_TOOL_OPTIONS` value selects, or `undefined` for the JVM's default. */
