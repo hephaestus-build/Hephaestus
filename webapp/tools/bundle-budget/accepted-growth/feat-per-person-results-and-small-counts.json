@@ -1,8 +1,14 @@
 {
 	"accepted": [
 		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/problems.tsx?tsr-split=component",
+			"gzipBytes": 135887,
+			"acceptedBy": "branch feat/per-person-results-and-small-counts",
+			"reason": "The practice review lists gain the person filter's gate: they name people and offer the Developer filter and column only while per-person results are on, and they drop a saved person filter while they are off. It loads only with the admin review pages."
+		},
+		{
 			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/settings.tsx?tsr-split=component",
-			"gzipBytes": 41803,
+			"gzipBytes": 41871,
 			"acceptedBy": "branch feat/per-person-results-and-small-counts",
 			"reason": "Workspace settings gains the Per-person results for admins section: its switch, the owner's confirmation and what each state means. It loads only with the admin settings page."
 		}
