@@ -53,7 +53,8 @@ The folders live on the default branch, under `.hephaestus/practices/` unless yo
    When the folder's definition differs from the current version, it becomes the next version.
 
 **Change** and **Unset** in **Practice repository** first ask you to confirm.
-Changing the repository or the directory makes every practice edited in the old one editable in Hephaestus again.
+Changing the repository or the directory, or unsetting the practice repository, makes every practice edited in the old one editable in Hephaestus again.
+Nothing is deleted.
 Automation can do the same through the API, under `/api/workspaces/<slug>/practice-repository`.
 
 A practice edited in the repository is read-only in Hephaestus, except for its feedback mode and position.
@@ -66,7 +67,6 @@ In **Practice reviews**, the history of the practice shows the commit of each ve
 To change the practice in Hephaestus again, open it in **Practice setup** and choose **Edit in Hephaestus**.
 The practice keeps its current version.
 Later changes to its folder no longer reach the practice.
-Changing or unsetting the practice repository makes every practice edited there editable in Hephaestus again. Nothing is deleted.
 
 Anyone who can merge into the default branch of the practice repository changes what reviews judge, and the practice scripts that run in review sandboxes.
 Protect that branch as you protect your code: require a review before a merge.

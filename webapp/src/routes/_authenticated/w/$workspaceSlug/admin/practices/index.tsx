@@ -344,12 +344,7 @@ function PracticeCatalogRoute() {
 	const groups = groupsQuery.data;
 	const practices = practicesQuery.data;
 	const definitionOptions = definitionOptionsQuery.data;
-	// Ask for the practice repository only where a practice edited there can be on screen.
-	const practiceRepository = useEditInHephaestus(
-		workspaceSlug,
-		practices?.some((practice) => practice.editedIn === "REPOSITORY") === true ||
-			levelQueries.some((query) => workspacePracticeAt(query)?.editedIn === "REPOSITORY"),
-	);
+	const practiceRepository = useEditInHephaestus(workspaceSlug);
 	// Move to repository in each level of a practice edited here.
 	const moveToRepository = useMoveToRepository(
 		workspaceSlug,

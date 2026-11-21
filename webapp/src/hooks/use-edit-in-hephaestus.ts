@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "@/lib/toast";
 
@@ -6,18 +6,14 @@ import {
 	changePracticeEditedInMutation,
 	getPracticeOptions,
 	getPracticeQueryKey,
-	getPracticeRepositoryOptions,
-	listPracticesQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type { EditInHephaestusControl } from "@/components/admin/practices/WorkspaceEditInHephaestusDialog";
-import type { ConfirmAccessDialogProps } from "@/components/auth/ConfirmAccessDialog";
-import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import {
-	problemDetailOf,
-	problemStatusOf,
-	type StepUpChallenge,
-	stepUpChallengeOf,
-} from "@/lib/problem-detail";
+	usePracticeRepositoryRead,
+	usePracticeRepositoryRefresh,
+	useRecentSignIn,
+} from "@/hooks/use-practice-repository";
+import { problemDetailOf, problemStatusOf, stepUpChallengeOf } from "@/lib/problem-detail";
 
 /** Where one Edit in Hephaestus stands: asked, sent, or refused. Absent once it ends. */
 type EditInHephaestusRequest = { level: string; practiceSlug: string } & (
@@ -28,29 +24,14 @@ type EditInHephaestusRequest = { level: string; practiceSlug: string } & (
 
 /**
  * Edit in Hephaestus for a practice edited in the practice repository (ADR 0118), with the name of
- * that repository for the read-only notice and the confirmation. `enabled` reads the repository only
- * where a practice edited there is on screen, so a workspace without one sends no request.
+ * that repository for the read-only notice and the confirmation.
  */
-export function useEditInHephaestus(workspaceSlug: string, enabled: boolean) {
+export function useEditInHephaestus(workspaceSlug: string) {
 	const queryClient = useQueryClient();
-	// The server answers 204 with no body when the workspace has no practice repository, which the
-	// client hands over as `null`, so the name is absent in that case too.
-	const repository = useQuery({
-		...getPracticeRepositoryOptions({ path: { workspaceSlug } }),
-		enabled,
-	});
+	const { repository } = usePracticeRepositoryRead(workspaceSlug);
+	const { refreshPractice: refresh } = usePracticeRepositoryRefresh(workspaceSlug);
 	// Where a practice is edited decides what reviews judge, so the server asks for a recent sign-in.
-	const [challenge, setChallenge] = useState<StepUpChallenge>();
-	const confirmAccess = useConfirmAccess(challenge !== undefined);
-	const refresh = async (practiceSlug: string) =>
-		Promise.all([
-			queryClient.invalidateQueries({
-				queryKey: getPracticeQueryKey({ path: { workspaceSlug, practiceSlug } }),
-			}),
-			queryClient.invalidateQueries({
-				queryKey: listPracticesQueryKey({ path: { workspaceSlug } }),
-			}),
-		]);
+	const recentSignIn = useRecentSignIn();
 	// The one Edit in Hephaestus the page runs, and the only home of its dialog's open state. Keyed by
 	// level, because a stack can hold a practice's panel and its editor.
 	const [request, setRequest] = useState<EditInHephaestusRequest>();
@@ -78,7 +59,7 @@ export function useEditInHephaestus(workspaceSlug: string, enabled: boolean) {
 			const stepUp = stepUpChallengeOf(error);
 			if (stepUp !== undefined) {
 				setRequest(undefined);
-				setChallenge(stepUp);
+				recentSignIn.ask(stepUp);
 				return;
 			}
 			// A conflict means where the practice is edited changed meanwhile: show it as it now is. When
@@ -109,7 +90,7 @@ export function useEditInHephaestus(workspaceSlug: string, enabled: boolean) {
 		control: (level: string, practiceSlug: string): EditInHephaestusControl => {
 			const own = request?.level === level ? request : undefined;
 			return {
-				repositoryName: repository.data?.nameWithOwner,
+				repositoryName: repository?.nameWithOwner,
 				confirming: own !== undefined,
 				pending: own?.phase === "pending",
 				error: own?.phase === "refused" ? own.refusal : undefined,
@@ -129,19 +110,6 @@ export function useEditInHephaestus(workspaceSlug: string, enabled: boolean) {
 				},
 			};
 		},
-		confirmation: {
-			open: challenge !== undefined,
-			onOpenChange: (open) => {
-				if (!open) {
-					setChallenge(undefined);
-				}
-			},
-			maxAgeSeconds: challenge?.maxAgeSeconds,
-			providers: confirmAccess.providers,
-			loading: confirmAccess.loading,
-			error: confirmAccess.error,
-			onRetry: confirmAccess.retry,
-			onSignIn: confirmAccess.signIn,
-		} satisfies ConfirmAccessDialogProps,
+		confirmation: recentSignIn.confirmation,
 	};
 }
