@@ -8,6 +8,8 @@ import {
 	JVM_RESULT_TYPE,
 	jvmPackages,
 	jvmResult,
+	rangeMatches,
+	satisfiesConstraint,
 	withJvmResults,
 } from "./lib/jvm-runtime.ts";
 
@@ -132,4 +134,92 @@ void test("Grype's JVM matches become one Trivy result", () => {
 void test("a report without JVM results stays byte-identical", () => {
 	const report = { SchemaVersion: 2, ArtifactName: "x" };
 	assert.equal(withJvmResults(report, []), report);
+});
+
+// The `grype db search --pkg cpe:2.3:a:oracle:openjdk -o json` row of CVE-2026-114938 from Grype v0.121.3's
+// database of 2026-11-21, cut to the fields that the scan reads.
+const searchRow = (id: string, severity: string, ranges: readonly unknown[]) => ({
+	vulnerability: { id, severity },
+	packages: [
+		{ cpe: "cpe:2.3:a:oracle:openjdk:*:*:*:*:*:*:*:*", detail: { ranges } },
+		{
+			cpe: "cpe:2.3:a:oracle:graalvm:*:*:*:*:*:*:*:*",
+			detail: { ranges: [{ version: { constraint: ">= 1" } }] },
+		},
+	],
+});
+const java4Shell = searchRow("CVE-2026-114938", "high", [
+	{
+		version: { type: "jvm", constraint: ">= 12, < 17.0.21.1" },
+		fix: { version: "17.0.21.1", state: "fixed" },
+	},
+	{
+		version: { type: "jvm", constraint: ">= 22, < 25.0.5.1" },
+		fix: { version: "25.0.5.1", state: "fixed" },
+	},
+	{
+		version: { type: "jvm", constraint: ">= 26, < 27.0.1.1" },
+		fix: { version: "27.0.1.1", state: "fixed" },
+	},
+]);
+
+void test("a build of a fourth-part fix matches the range that Grype reads on three parts", () => {
+	const [jvm] = jvmPackages(sbom([jvmArtifact]));
+	assert.ok(jvm);
+	// Grype v0.121.3 matches none of these for 25.0.5.0.3; it matches 25.0.4.
+	const unfixed = searchRow("CVE-2026-9", "unknown", [
+		{ version: { type: "jvm", constraint: "= 8-update72 || >= 25, <= 25.0.5.0.3" } },
+	]);
+	const matches = rangeMatches([java4Shell, unfixed], jvm);
+	assert.deepEqual(matches, [
+		{
+			vulnerability: {
+				id: "CVE-2026-114938",
+				severity: "High",
+				fix: { state: "fixed", versions: ["25.0.5.1"] },
+			},
+			artifact: { name: "openjdk", version: "25.0.5.0.3+5-LTS" },
+		},
+		{
+			vulnerability: { id: "CVE-2026-9", severity: "Unknown", fix: { state: "unknown" } },
+			artifact: { name: "openjdk", version: "25.0.5.0.3+5-LTS" },
+		},
+	]);
+	assert.deepEqual(jvmResult({ matches }, jvm).Vulnerabilities, [
+		{
+			VulnerabilityID: "CVE-2026-114938",
+			PkgName: "openjdk",
+			InstalledVersion: "25.0.5.0.3+5-LTS",
+			FixedVersion: "25.0.5.1",
+			Severity: "HIGH",
+		},
+		{
+			VulnerabilityID: "CVE-2026-9",
+			PkgName: "openjdk",
+			InstalledVersion: "25.0.5.0.3+5-LTS",
+			Severity: "UNKNOWN",
+		},
+	]);
+	const fixed = { ...jvm, version: "25.0.5.1+5-LTS" };
+	assert.deepEqual(rangeMatches([java4Shell], fixed), []);
+	assert.equal(rangeMatches([java4Shell], { ...jvm, version: "25.0.4+7-LTS" }).length, 1);
+	// Only the JVM's own CPE product counts: the GraalVM range above would match every version.
+	assert.deepEqual(
+		rangeMatches([java4Shell], {
+			...jvm,
+			cpes: ["cpe:2.3:a:eclipse:temurin:25.0.5:*:*:*:*:*:*:*"],
+		}),
+		[],
+	);
+});
+
+void test("a constraint compares every part of the version", () => {
+	const parts = [25, 0, 5, 0, 3];
+	assert.equal(satisfiesConstraint(parts, "< 25.0.5.1"), true);
+	assert.equal(satisfiesConstraint(parts, "< 25.0.5"), false);
+	assert.equal(satisfiesConstraint(parts, "= 25.0.5.0.3"), true);
+	assert.equal(satisfiesConstraint(parts, "= 25.0.5"), false);
+	assert.equal(satisfiesConstraint(parts, ">= 26, < 27.0.1.1 || >= 22, <= 25.0.5.0.3"), true);
+	assert.equal(satisfiesConstraint([1, 8, 0, 512], "< 1.8.0_513"), true);
+	assert.throws(() => satisfiesConstraint(parts, "~> 25"), /not a comparison/u);
 });
