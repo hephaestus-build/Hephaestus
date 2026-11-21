@@ -2,9 +2,12 @@ import { Link } from "@tanstack/react-router";
 import { PencilIcon } from "lucide-react";
 
 import { cn } from "cn";
-import type { ReviewPracticeCounts } from "@/api/types.gen";
+import type { PracticeEditedIn, ReviewPracticeCounts } from "@/api/types.gen";
 import { STALE } from "@/components/activity/activity-tones";
-import { practiceFormLevel } from "@/components/admin/practices/practice-search";
+import {
+	practiceSetupLevel,
+	practiceSetupLevelFor,
+} from "@/components/admin/practices/practice-search";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -20,6 +23,8 @@ export interface PracticeResultsSummaryProps {
 	workspaceSlug: string;
 	practiceSlug: string;
 	practiceName: string | undefined;
+	/** Where the practice is edited, or `undefined` while unknown: the link then opens its panel. */
+	editedIn: PracticeEditedIn | undefined;
 	rangeLabel: string;
 	counts: PanelState<{ counts?: ReviewPracticeCounts; stale: boolean }>;
 }
@@ -28,6 +33,7 @@ export function PracticeResultsSummary({
 	workspaceSlug,
 	practiceSlug,
 	practiceName,
+	editedIn,
 	rangeLabel,
 	counts: state,
 }: PracticeResultsSummaryProps) {
@@ -60,12 +66,22 @@ export function PracticeResultsSummary({
 							<Link
 								to="/w/$workspaceSlug/admin/practices"
 								params={{ workspaceSlug }}
-								search={detailSearch(practiceFormLevel(practiceSlug))}
+								search={detailSearch(
+									editedIn === undefined
+										? practiceSetupLevel(practiceSlug)
+										: practiceSetupLevelFor(practiceSlug, editedIn),
+								)}
 							/>
 						}
 					>
-						<PencilIcon aria-hidden className="mr-1 inline size-3.5" />
-						Edit in Practice setup
+						{editedIn === "HEPHAESTUS" ? (
+							<>
+								<PencilIcon aria-hidden className="mr-1 inline size-3.5" />
+								Edit in Practice setup
+							</>
+						) : (
+							"Open in Practice setup"
+						)}
 					</InlineLink>
 				</p>
 			</div>

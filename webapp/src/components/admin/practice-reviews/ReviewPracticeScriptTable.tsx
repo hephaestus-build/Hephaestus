@@ -116,6 +116,7 @@ function ScriptRow({
 							workspaceSlug={workspaceSlug}
 							practiceSlug={practice.practiceSlug}
 							practiceName={practice.practiceName}
+							editedIn={practice.editedIn}
 							fix={fix}
 						/>
 					)}

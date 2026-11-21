@@ -199,6 +199,7 @@ const withCase = (
 const withheldPractice: ReviewPractice = {
 	practiceSlug: "product-language",
 	practiceName: practiceNameOf("product-language"),
+	editedIn: "HEPHAESTUS",
 	practiceVersionId: "201",
 	number: 1,
 	status: "WITHHELD",
@@ -671,6 +672,7 @@ export const richReviewFixture = (() => {
 		practices: results.map((result): ReviewPractice => ({
 			practiceSlug: result.practiceSlug,
 			practiceName: result.practiceName,
+			editedIn: "HEPHAESTUS",
 			practiceVersionId: result.practiceVersionId,
 			number: 1,
 			status: "DONE",

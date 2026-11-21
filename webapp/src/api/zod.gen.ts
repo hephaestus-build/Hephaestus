@@ -4740,6 +4740,7 @@ export const zPracticeScriptRun = z.object({
 });
 
 export const zReviewPractice = z.object({
+	editedIn: zPracticeEditedIn,
 	itemCounts: zReviewItemCounts,
 	number: z
 		.int()

@@ -13414,6 +13414,11 @@ export const ReviewOverviewSchema = {
 export const ReviewPracticeSchema = {
 	type: "object",
 	properties: {
+		editedIn: {
+			$ref: "#/components/schemas/PracticeEditedIn",
+			description:
+				"Where the practice is edited now, which decides whether Practice setup can edit it",
+		},
 		itemCounts: {
 			$ref: "#/components/schemas/ReviewItemCounts",
 		},
@@ -13452,6 +13457,7 @@ export const ReviewPracticeSchema = {
 		},
 	},
 	required: [
+		"editedIn",
 		"itemCounts",
 		"number",
 		"practiceName",

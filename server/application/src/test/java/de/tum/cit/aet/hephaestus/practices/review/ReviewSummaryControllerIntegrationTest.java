@@ -330,6 +330,28 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldSayWhereEachReviewedPracticeIsEditedNow() {
+        var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
+        get("/practices/reviews/" + result.getReviewId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.practices[0].editedIn")
+                .isEqualTo("HEPHAESTUS");
+
+        jdbc.sql("UPDATE practice SET edited_in = 'REPOSITORY' WHERE id = :id")
+                .param("id", scenario.practice().getId())
+                .update();
+
+        get("/practices/reviews/" + result.getReviewId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.practices[0].editedIn")
+                .isEqualTo("REPOSITORY");
+    }
+
+    @Test
     void shouldOrderReviewsCreatedAtTheSameInstantByTheirStableIdentity() {
         var at = Instant.parse("2026-10-13T00:00:00Z");
         var first = data.result(scenario, ResultOutcome.MET, at);

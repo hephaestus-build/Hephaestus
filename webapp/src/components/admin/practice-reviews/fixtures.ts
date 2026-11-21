@@ -2385,6 +2385,7 @@ function practicesOf(review: ReviewSpec): ReviewPractice[] {
 		return {
 			practiceSlug,
 			practiceName: practiceNameOf(practiceSlug),
+			editedIn: practice.editedIn,
 			practiceVersionId: practice.currentVersion.id,
 			number: practice.currentVersion.number,
 			status: results.length > 0 ? "DONE" : PRACTICE_STATUS_OF[review.status],
@@ -2403,6 +2404,7 @@ function practicesOf(review: ReviewSpec): ReviewPractice[] {
 	const withheld = (review.withheld ?? []).map(({ practiceSlug, reason }): ReviewPractice => ({
 		practiceSlug,
 		practiceName: practiceNameOf(practiceSlug),
+		editedIn: practiceOf(practiceSlug).editedIn,
 		practiceVersionId: practiceOf(practiceSlug).currentVersion.id,
 		number: practiceOf(practiceSlug).currentVersion.number,
 		status: "WITHHELD",

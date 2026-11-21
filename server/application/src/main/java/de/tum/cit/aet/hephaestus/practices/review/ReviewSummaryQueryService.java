@@ -384,6 +384,7 @@ public class ReviewSummaryQueryService {
                     return new ReviewPracticeDTO(
                             p.getSlug(),
                             v == null || v.getName() == null ? "Unknown practice version" : v.getName(),
+                            p.getEditedIn(),
                             a.getPracticeVersionId() == null
                                     ? null
                                     : a.getPracticeVersionId().toString(),

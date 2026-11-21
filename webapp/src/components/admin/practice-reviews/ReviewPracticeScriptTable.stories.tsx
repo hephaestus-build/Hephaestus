@@ -27,6 +27,7 @@ function scripted(run: PracticeScriptRun): ReviewPractice {
 	return {
 		practiceSlug: practice.slug,
 		practiceName: currentDefinition(practice).name,
+		editedIn: practice.editedIn,
 		practiceVersionId: run.practiceVersionId,
 		number: practice.currentVersion.number,
 		status: PRACTICE_STATUS_OF_RUN[run.status],

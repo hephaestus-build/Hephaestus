@@ -28037,6 +28037,10 @@ components:
     ReviewPractice:
       type: object
       properties:
+        editedIn:
+          $ref: "#/components/schemas/PracticeEditedIn"
+          description: "Where the practice is edited now, which decides whether Practice\
+            \ setup can edit it"
         itemCounts:
           $ref: "#/components/schemas/ReviewItemCounts"
         number:
@@ -28066,6 +28070,7 @@ components:
         status:
           $ref: "#/components/schemas/ReviewPracticeStatus"
       required:
+      - editedIn
       - itemCounts
       - number
       - practiceName
