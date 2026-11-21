@@ -123,9 +123,13 @@ done
 `;
 		await writeFile(path.join(directory, "syft"), syftScript, { mode: 0o755 });
 		// The server image runs the pinned JRE; Grype matches nothing against it.
-		await writeFile(path.join(directory, "grype"), `#!/bin/sh\nprintf '{"matches":[]}'\n`, {
-			mode: 0o755,
-		});
+		await writeFile(
+			path.join(directory, "grype"),
+			`#!/bin/sh\nif [ "$1" = db ]; then printf '[]'; else printf '{"matches":[]}'; fi\n`,
+			{
+				mode: 0o755,
+			},
+		);
 		const pin = asRecord(
 			await readJsonFile(".github/ci-tools/buildpack-liberica-jre.json"),
 			"JRE pin",
