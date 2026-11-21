@@ -91,3 +91,9 @@ We choose option 1.
 - [Fumadocs on Astro](https://fumadocs.dev/docs/astro/manual-installation): the content renders as static HTML inside a layout island.
 - [Astro content collections](https://docs.astro.build/en/guides/content-collections/): the collection schema and the filter of `getCollection()`.
 - [Langfuse docs `package.json`](https://github.com/langfuse/langfuse-docs/blob/main/package.json): Fumadocs 16 on Next.js 16, with a static export.
+
+## Update — 2026-11-21: no upstream report for the `cn` helper
+
+The maintainers decided not to report the `cn` helper to Fumadocs.
+Its `tailwind-merge` costs 9.6 KB (gzip) on each page, and we accept that cost. We do not patch it.
+This replaces "We report it upstream" in the last bad consequence of § Consequences.
