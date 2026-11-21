@@ -112,7 +112,7 @@ public class FeedbackPublicHistory {
                 freshness,
                 withdrawn,
                 !confirmed.isEmpty()
-                        && !copies.findResolvedByHephaestus(
+                        && !copies.findClosedAsFixed(
                                         row.getWorkspaceId(),
                                         confirmed.stream()
                                                 .map(FeedbackCopy::getId)
@@ -170,7 +170,8 @@ public class FeedbackPublicHistory {
             boolean bodyUnavailable,
             Currentness currentness,
             boolean withdrawn,
-            // A note of this piece started a thread that Hephaestus resolved as fixed, and it is still resolved.
+            // A note of this piece started a thread that Hephaestus resolved as fixed and never reopens: on GitLab. On
+            // GitHub, a reopen brings the advice back, so the piece keeps standing as advice there.
             boolean closedAsFixed,
             List<PublicBasis> basedOn,
             List<PublicCopy> copies) {}

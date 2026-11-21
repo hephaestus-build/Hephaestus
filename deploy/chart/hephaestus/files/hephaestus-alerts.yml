@@ -901,6 +901,18 @@ groups:
         annotations:
           summary: Hephaestus could not {{ $labels.direction }} a thread on the work
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A thread event that looks like Hephaestus's own write names another account or none. If the writing account never
+      # matches the event's actor, every own change reads as a person's: thread changes stop, and the notes' feedback is
+      # marked human-controlled, which also stops their corrections. A person who resolves while a write is in flight
+      # counts once too, so a single count needs a look, not an incident.
+      - alert: HephaestusFeedbackThreadActorMismatch
+        expr: >-
+          sum by (provider) (increase(practice_feedback_thread_actor_mismatch_total{job="hephaestus"}[1d])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A thread event that resembled Hephaestus's own write named another account on {{ $labels.provider }}
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A review that a push or a request started, and whose feedback no person approves first. The objective is 90 %
       # within 30 minutes; more than 30 % late spends its budget three times as fast.
       - alert: HephaestusFeedbackDeliverySlow

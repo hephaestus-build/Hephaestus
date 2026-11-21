@@ -340,4 +340,18 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
         """, nativeQuery = true)
     List<UUID> findResolvedByHephaestus(
             @Param("workspaceId") long workspaceId, @Param("copyIds") Collection<UUID> copyIds);
+
+    /**
+     * Of {@code copyIds}, the copies whose thread Hephaestus resolved as fixed and keeps resolved where it never
+     * reopens: a confirmed resolve on a provider that cannot tell its own reopen from a person's.
+     */
+    @Query(value = """
+        SELECT c.id FROM feedback_copy c
+        JOIN feedback f ON f.id = c.feedback_id AND f.workspace_id = c.workspace_id
+        JOIN feedback_thread_resolution t ON t.workspace_id = c.workspace_id AND t.item_id = f.item_id
+          AND t.thread_ref = c.thread_ref
+        WHERE c.workspace_id = :workspaceId AND c.id IN (:copyIds) AND t.resolved AND t.state = 'DONE'
+          AND t.reopens = false
+        """, nativeQuery = true)
+    List<UUID> findClosedAsFixed(@Param("workspaceId") long workspaceId, @Param("copyIds") Collection<UUID> copyIds);
 }

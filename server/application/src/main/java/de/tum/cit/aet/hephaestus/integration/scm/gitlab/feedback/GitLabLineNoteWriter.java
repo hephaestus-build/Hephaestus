@@ -706,9 +706,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
         }
     }
 
-    // GitLab reports a reopened discussion without the account that reopened it, so Hephaestus's own reopen would read
-    // as
-    // a person's. A problem that comes back reaches the developer through a new note instead.
+    // GitLab reports a reopened discussion without the account that reopened it, so Hephaestus's own reopen would
+    // read as a person's. A problem that comes back reaches the developer through a new note instead.
     @Override
     public boolean reopensThreads() {
         return false;

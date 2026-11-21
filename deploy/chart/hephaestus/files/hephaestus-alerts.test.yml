@@ -2408,6 +2408,27 @@ tests:
               summary: Hephaestus could not resolve a thread on the work
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: a thread event that resembles an own write but names another account fires
+    interval: 1m
+    input_series:
+      - series: 'practice_feedback_thread_actor_mismatch_total{job="hephaestus",instance="server:9090",provider="github"}'
+        values: "0 0 0 1x30"
+      - series: 'practice_feedback_thread_actor_mismatch_total{job="hephaestus",instance="server:9090",provider="gitlab"}'
+        values: "0x33"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusFeedbackThreadActorMismatch
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: HephaestusFeedbackThreadActorMismatch
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              provider: github
+            exp_annotations:
+              summary: A thread event that resembled Hephaestus's own write named another account on github
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: three reviews that all end partial stay below the floor of four
     interval: 1m
     input_series:

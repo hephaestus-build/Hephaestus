@@ -96,6 +96,8 @@ public class FeedbackThreadResolution {
                 && Objects.requireNonNull(stopReason).isFinal()) return false;
         if (resolve == resolved && state != FeedbackThreadResolutionState.STOPPED) return false;
         boolean undo = !resolve && resolved && actor == null;
+        // The same state asked again keeps the writer: a write of the earlier ask may have landed.
+        boolean flips = resolve != resolved;
         copyId = copy;
         resolved = resolve;
         generation++;
@@ -105,9 +107,11 @@ public class FeedbackThreadResolution {
             moveTo(FeedbackThreadResolutionState.DONE);
             return false;
         }
-        actor = null;
-        provider = null;
-        reopens = null;
+        if (flips) {
+            actor = null;
+            provider = null;
+            reopens = null;
+        }
         moveTo(FeedbackThreadResolutionState.PENDING);
         return true;
     }

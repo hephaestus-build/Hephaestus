@@ -223,6 +223,9 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         var resolved = resolution(thread);
         assertThat(resolved.getState()).isEqualTo(FeedbackThreadResolutionState.DONE);
         assertThat(resolved.getActor()).isEqualTo(Threads.BOT);
+        // GitHub reopens when the problem comes back, so the resolved note keeps standing as advice.
+        assertThat(copies.findClosedAsFixed(scenario.workspace().getId(), List.of(copyOf(thread))))
+                .isEmpty();
 
         // The thread event that the resolve causes names the bot: it is Hephaestus's own, so people keep nothing.
         changed(thread, true, Threads.BOT);
@@ -431,6 +434,8 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         // The note stays closed as fixed: a readback does not read it as a person's, and the history that the next
         // review on the work reads no longer offers it as advice, so the problem is raised again in a new note.
         assertThat(copies.findResolvedByHephaestus(scenario.workspace().getId(), List.of(copyOf(thread))))
+                .containsExactly(copyOf(thread));
+        assertThat(copies.findClosedAsFixed(scenario.workspace().getId(), List.of(copyOf(thread))))
                 .containsExactly(copyOf(thread));
     }
 
