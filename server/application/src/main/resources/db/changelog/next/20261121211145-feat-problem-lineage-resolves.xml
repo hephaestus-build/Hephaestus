@@ -6,13 +6,19 @@
         </addColumn>
     </changeSet>
     <changeSet id="1795295506022-2" author="hephaestus">
-        <comment>A lineage row now records the problem's identity, so a thread resolution can tell that a problem came back. A problem with a key has the identity "key:" and its key, which the row's problem holds. A problem without a key has a hash of the server's serialized source kind, normalized quote and ordinal among the result's problems. SQL cannot reproduce that serialization exactly, and a near match would split one problem across two identities. Rows of such problems exist only on servers that ran an unreleased build, and a later review compares again, so they are dropped.</comment>
+        <comment>A lineage row now records the problem's identity, so a thread resolution can tell that a problem came back. A problem with a key has the identity "key:" and its key, which the row's problem holds.</comment>
         <sql>UPDATE problem_lineage l SET identity = 'key:' || p.key
             FROM problem p
             WHERE p.workspace_id = l.workspace_id AND p.id = COALESCE(l.problem_id, l.prior_problem_id)
-              AND p.key IS NOT NULL;
-        DELETE FROM problem_lineage WHERE identity IS NULL;</sql>
-        <rollback/>
+              AND p.key IS NOT NULL;</sql>
+        <rollback>
+            <sql>UPDATE problem_lineage SET identity = NULL;</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795295506022-7" author="hephaestus">
+        <comment>A problem without a key has a hash of the server's serialized source kind, normalized quote and ordinal among the result's problems. SQL cannot reproduce that serialization exactly, and a near match would split one problem across two identities. Rows of such problems exist only on servers that ran an unreleased build, and a later review compares again, so they are dropped.</comment>
+        <sql>DELETE FROM problem_lineage WHERE identity IS NULL;</sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup to bring back the deleted rows. They are derived problem lineage of problems without a key, and the next review of each item records the comparison again, so nothing else is lost.</stop></rollback>
     </changeSet>
     <changeSet id="1795295506022-6" author="hephaestus">
         <addNotNullConstraint tableName="problem_lineage" columnName="identity" columnDataType="TEXT"/>
