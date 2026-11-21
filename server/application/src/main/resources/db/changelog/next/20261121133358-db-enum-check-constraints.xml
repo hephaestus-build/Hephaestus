@@ -21,7 +21,7 @@ BEGIN
   INTO counted FROM activity_event;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'activity_event', 'event_type', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of activity_event. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of activity_event. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE activity_event VALIDATE CONSTRAINT ck_activity_event_event_type</sql>
@@ -52,7 +52,7 @@ BEGIN
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'client_session', 'client_kind', counted.n1); END IF;
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'client_session', 'revoked_reason', counted.n2); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of client_session. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of client_session. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_session VALIDATE CONSTRAINT ck_client_session_client_kind; ALTER TABLE client_session VALIDATE CONSTRAINT ck_client_session_revoked_reason</sql>
@@ -81,7 +81,7 @@ BEGIN
   INTO counted FROM client_sign_in_handoff;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'client_sign_in_handoff', 'client_kind', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of client_sign_in_handoff. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of client_sign_in_handoff. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE client_sign_in_handoff VALIDATE CONSTRAINT ck_client_sign_in_handoff_client_kind</sql>
@@ -110,7 +110,7 @@ BEGIN
   INTO counted FROM commit_contributor;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'commit_contributor', 'role', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of commit_contributor. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of commit_contributor. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_contributor VALIDATE CONSTRAINT ck_commit_contributor_role</sql>
@@ -139,7 +139,7 @@ BEGIN
   INTO counted FROM commit_file_change;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'commit_file_change', 'change_type', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of commit_file_change. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of commit_file_change. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_file_change VALIDATE CONSTRAINT ck_commit_file_change_change_type</sql>
@@ -170,7 +170,7 @@ BEGIN
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'commit_identity_resolution', 'source', counted.n1); END IF;
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'commit_identity_resolution', 'state', counted.n2); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of commit_identity_resolution. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of commit_identity_resolution. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE commit_identity_resolution VALIDATE CONSTRAINT ck_commit_identity_resolution_source; ALTER TABLE commit_identity_resolution VALIDATE CONSTRAINT ck_commit_identity_resolution_state</sql>
@@ -199,7 +199,7 @@ BEGIN
   INTO counted FROM connection;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'connection', 'attention_problem', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of connection. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of connection. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection VALIDATE CONSTRAINT ck_connection_attention_problem</sql>
@@ -230,7 +230,7 @@ BEGIN
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'connection_audit', 'from_state', counted.n1); END IF;
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'connection_audit', 'to_state', counted.n2); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of connection_audit. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of connection_audit. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection_audit VALIDATE CONSTRAINT ck_connection_audit_from_state; ALTER TABLE connection_audit VALIDATE CONSTRAINT ck_connection_audit_to_state</sql>
@@ -259,7 +259,7 @@ BEGIN
   INTO counted FROM identity_provider;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'identity_provider', 'type', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of identity_provider. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of identity_provider. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE identity_provider VALIDATE CONSTRAINT ck_identity_provider_type</sql>
@@ -290,7 +290,7 @@ BEGIN
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue', 'head_check_state', counted.n1); END IF;
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue', 'state_reason', counted.n2); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue VALIDATE CONSTRAINT ck_issue_head_check_state; ALTER TABLE issue VALIDATE CONSTRAINT ck_issue_state_reason</sql>
@@ -319,7 +319,7 @@ BEGIN
   INTO counted FROM issue_comment;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue_comment', 'author_association', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue_comment. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue_comment. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_comment VALIDATE CONSTRAINT ck_issue_comment_author_association</sql>
@@ -348,7 +348,7 @@ BEGIN
   INTO counted FROM issue_type;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issue_type', 'color', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue_type. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issue_type. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issue_type VALIDATE CONSTRAINT ck_issue_type_color</sql>
@@ -377,7 +377,7 @@ BEGIN
   INTO counted FROM issued_jwt;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'issued_jwt', 'revoked_reason', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issued_jwt. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of issued_jwt. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE issued_jwt VALIDATE CONSTRAINT ck_issued_jwt_revoked_reason</sql>
@@ -406,7 +406,7 @@ BEGIN
   INTO counted FROM llm_connection;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'llm_connection', 'connection_platform', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of llm_connection. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of llm_connection. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_connection VALIDATE CONSTRAINT ck_llm_connection_connection_platform</sql>
@@ -437,7 +437,7 @@ BEGIN
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'llm_model', 'brand', counted.n1); END IF;
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'llm_model', 'reasoning_effort', counted.n2); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of llm_model. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of llm_model. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE llm_model VALIDATE CONSTRAINT ck_llm_model_brand; ALTER TABLE llm_model VALIDATE CONSTRAINT ck_llm_model_reasoning_effort</sql>
@@ -466,7 +466,7 @@ BEGIN
   INTO counted FROM mcp_client_grant;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'mcp_client_grant', 'status', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of mcp_client_grant. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of mcp_client_grant. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE mcp_client_grant VALIDATE CONSTRAINT ck_mcp_client_grant_status</sql>
@@ -495,7 +495,7 @@ BEGIN
   INTO counted FROM milestone;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'milestone', 'state', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of milestone. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of milestone. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE milestone VALIDATE CONSTRAINT ck_milestone_state</sql>
@@ -524,7 +524,7 @@ BEGIN
   INTO counted FROM notification_subscription;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'notification_subscription', 'kind', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of notification_subscription. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of notification_subscription. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE notification_subscription VALIDATE CONSTRAINT ck_notification_subscription_kind</sql>
@@ -553,7 +553,7 @@ BEGIN
   INTO counted FROM organization_membership;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'organization_membership', 'role', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of organization_membership. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of organization_membership. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE organization_membership VALIDATE CONSTRAINT ck_organization_membership_role</sql>
@@ -582,7 +582,7 @@ BEGIN
   INTO counted FROM product_feedback;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'product_feedback', 'kind', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of product_feedback. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of product_feedback. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback VALIDATE CONSTRAINT ck_product_feedback_kind</sql>
@@ -611,7 +611,7 @@ BEGIN
   INTO counted FROM product_feedback_cleanup;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'product_feedback_cleanup', 'manual_step', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of product_feedback_cleanup. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of product_feedback_cleanup. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_cleanup VALIDATE CONSTRAINT ck_product_feedback_cleanup_manual_step</sql>
@@ -642,7 +642,7 @@ BEGIN
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'product_feedback_filing', 'reason', counted.n1); END IF;
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'product_feedback_filing', 'route', counted.n2); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of product_feedback_filing. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of product_feedback_filing. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE product_feedback_filing VALIDATE CONSTRAINT ck_product_feedback_filing_reason; ALTER TABLE product_feedback_filing VALIDATE CONSTRAINT ck_product_feedback_filing_route</sql>
@@ -673,7 +673,7 @@ BEGIN
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'provider_resource_repair', 'kind', counted.n1); END IF;
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'provider_resource_repair', 'resource_type', counted.n2); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of provider_resource_repair. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of provider_resource_repair. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE provider_resource_repair VALIDATE CONSTRAINT ck_provider_resource_repair_kind; ALTER TABLE provider_resource_repair VALIDATE CONSTRAINT ck_provider_resource_repair_resource_type</sql>
@@ -702,7 +702,7 @@ BEGIN
   INTO counted FROM pull_request_requested_reviewers;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_requested_reviewers', 'review_state', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_requested_reviewers. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_requested_reviewers. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_requested_reviewers VALIDATE CONSTRAINT ck_pull_request_requested_reviewers_review_state</sql>
@@ -731,7 +731,7 @@ BEGIN
   INTO counted FROM pull_request_review;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review', 'state', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_review. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_review. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review VALIDATE CONSTRAINT ck_pull_request_review_state</sql>
@@ -764,7 +764,7 @@ BEGIN
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_comment', 'side', counted.n2); END IF;
   IF counted.n3 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_comment', 'start_side', counted.n3); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_review_comment. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_review_comment. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_comment VALIDATE CONSTRAINT ck_pull_request_review_comment_author_association; ALTER TABLE pull_request_review_comment VALIDATE CONSTRAINT ck_pull_request_review_comment_side; ALTER TABLE pull_request_review_comment VALIDATE CONSTRAINT ck_pull_request_review_comment_start_side</sql>
@@ -797,7 +797,7 @@ BEGIN
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_thread', 'start_side', counted.n2); END IF;
   IF counted.n3 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'pull_request_review_thread', 'state', counted.n3); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_review_thread. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of pull_request_review_thread. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE pull_request_review_thread VALIDATE CONSTRAINT ck_pull_request_review_thread_side; ALTER TABLE pull_request_review_thread VALIDATE CONSTRAINT ck_pull_request_review_thread_start_side; ALTER TABLE pull_request_review_thread VALIDATE CONSTRAINT ck_pull_request_review_thread_state</sql>
@@ -826,7 +826,7 @@ BEGIN
   INTO counted FROM repository;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'repository', 'visibility', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of repository. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of repository. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository VALIDATE CONSTRAINT ck_repository_visibility</sql>
@@ -855,7 +855,7 @@ BEGIN
   INTO counted FROM repository_collaborator;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'repository_collaborator', 'permission', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of repository_collaborator. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of repository_collaborator. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE repository_collaborator VALIDATE CONSTRAINT ck_repository_collaborator_permission</sql>
@@ -884,7 +884,7 @@ BEGIN
   INTO counted FROM sync_job;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'sync_job', 'kind', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of sync_job. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of sync_job. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE sync_job VALIDATE CONSTRAINT ck_sync_job_kind</sql>
@@ -913,7 +913,7 @@ BEGIN
   INTO counted FROM team;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'team', 'privacy', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of team. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of team. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team VALIDATE CONSTRAINT ck_team_privacy</sql>
@@ -942,7 +942,7 @@ BEGIN
   INTO counted FROM team_membership;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'team_membership', 'role', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of team_membership. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of team_membership. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_membership VALIDATE CONSTRAINT ck_team_membership_role</sql>
@@ -971,7 +971,7 @@ BEGIN
   INTO counted FROM team_repository_permission;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'team_repository_permission', 'permission', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of team_repository_permission. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of team_repository_permission. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE team_repository_permission VALIDATE CONSTRAINT ck_team_repository_permission_permission</sql>
@@ -1000,7 +1000,7 @@ BEGIN
   INTO counted FROM "user";
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'user', 'type', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of user. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of user. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE "user" VALIDATE CONSTRAINT ck_user_type</sql>
@@ -1031,7 +1031,7 @@ BEGIN
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace', 'account_type', counted.n1); END IF;
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace', 'repository_selection', counted.n2); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace VALIDATE CONSTRAINT ck_workspace_account_type; ALTER TABLE workspace VALIDATE CONSTRAINT ck_workspace_repository_selection</sql>
@@ -1060,7 +1060,7 @@ BEGIN
   INTO counted FROM workspace_llm_connection;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace_llm_connection', 'connection_platform', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace_llm_connection. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace_llm_connection. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_connection VALIDATE CONSTRAINT ck_workspace_llm_connection_connection_platform</sql>
@@ -1091,7 +1091,7 @@ BEGIN
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace_llm_model', 'brand', counted.n1); END IF;
   IF counted.n2 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace_llm_model', 'reasoning_effort', counted.n2); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace_llm_model. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace_llm_model. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_llm_model VALIDATE CONSTRAINT ck_workspace_llm_model_brand; ALTER TABLE workspace_llm_model VALIDATE CONSTRAINT ck_workspace_llm_model_reasoning_effort</sql>
@@ -1120,7 +1120,7 @@ BEGIN
   INTO counted FROM workspace_model_assignment;
   IF counted.n1 > 0 THEN found := found || format(E'\n  %s.%s: %s', 'workspace_model_assignment', 'purpose', counted.n1); END IF;
   IF found <> '' THEN
-    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace_model_assignment. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The upgrade notes for this release give the query that lists them.', found;
+    RAISE EXCEPTION E'The upgrade stopped before it checks the stored rows of workspace_model_assignment. Each column below holds rows with a value that the server cannot read, followed by their number:%\nCorrect or delete these rows, then start the upgrade again. The migration guide for this release gives the query that lists them.', found;
   END IF;
 END $$]]></sql>
     <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE workspace_model_assignment VALIDATE CONSTRAINT ck_workspace_model_assignment_purpose</sql>
