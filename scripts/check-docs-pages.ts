@@ -2,6 +2,11 @@
 import { statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import { gfmTableFromMarkdown } from "mdast-util-gfm-table";
+import { mdxFromMarkdown } from "mdast-util-mdx";
+import { gfmTable } from "micromark-extension-gfm-table";
+import { mdxjs } from "micromark-extension-mdxjs";
 import { parse } from "yaml";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
@@ -263,6 +268,19 @@ export function screenshotProblems(
 	return problems;
 }
 
+/** The parts of an MDX syntax tree node that the diagram check reads. */
+interface MdxNode {
+	readonly type: string;
+	readonly name?: string | null;
+	readonly attributes?: readonly {
+		readonly type: string;
+		readonly name?: string;
+		readonly value?: unknown;
+	}[];
+	readonly position?: { readonly start: { readonly line: number } };
+	readonly children?: readonly MdxNode[];
+}
+
 /**
  * Each `<SystemDiagram>` renders a committed source, states its view and scope, describes the image in a
  * literal `alt`, and holds a table of every connection, because the SVG draws its text as paths. MDX is
@@ -273,23 +291,40 @@ export function systemDiagramProblems(
 	source: string,
 	hasSource: (name: string) => boolean,
 ): string[] {
-	// Code fences and code spans show the component without using it. Blanking keeps every offset, so
-	// a tag found in `prose` reads its attributes from the same place in `text`.
-	const lines = source.split(/\r?\n/u).map(() => "");
-	for (const { number, text } of readPage(source).body) {
-		lines[number - 1] = text;
+	// The page parses as the site parses it, so code, quotes and tables follow MDX and GFM. Blank lines
+	// stand in for the front matter and keep the line numbers.
+	const { frontMatterLines } = readPage(source);
+	const body = `${"\n".repeat(frontMatterLines)}${source.split(/\r?\n/u).slice(frontMatterLines).join("\n")}`;
+	let tree: MdxNode;
+	try {
+		tree = fromMarkdown(body, {
+			extensions: [mdxjs(), gfmTable()],
+			mdastExtensions: [mdxFromMarkdown(), gfmTableFromMarkdown()],
+		});
+	} catch (error) {
+		return [
+			`${file}:1: The page is not valid MDX: ${error instanceof Error ? error.message : String(error)}`,
+		];
 	}
-	const text = lines.join("\n");
-	const prose = text.replaceAll(/`[^`\n]*`/gu, (code) => " ".repeat(code.length));
 	const problems: string[] = [];
-	// A quoted value or an expression may hold a `>`, such as "Server -> PostgreSQL".
-	const tags = /<SystemDiagram\b(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^>"'{])*>/gu;
-	for (const match of prose.matchAll(tags)) {
-		const tag = text.slice(match.index, match.index + match[0].length);
+	const visit = (node: MdxNode) => {
+		for (const child of node.children ?? []) {
+			visit(child);
+		}
+		if (
+			(node.type !== "mdxJsxFlowElement" && node.type !== "mdxJsxTextElement") ||
+			node.name !== "SystemDiagram"
+		) {
+			return;
+		}
 		const report = (message: string) =>
-			problems.push(`${file}:${prose.slice(0, match.index).split("\n").length}: ${message}`);
-		const attribute = (name: string) =>
-			new RegExp(`\\s${name}="(?<value>[^"]*)"`, "u").exec(tag)?.groups?.value?.trim();
+			problems.push(`${file}:${node.position?.start.line ?? 1}: ${message}`);
+		const attribute = (name: string) => {
+			const value = node.attributes?.find(
+				(entry) => entry.type === "mdxJsxAttribute" && entry.name === name,
+			)?.value;
+			return typeof value === "string" ? value.trim() : undefined;
+		};
 		const name = attribute("name");
 		if (name === undefined || name === "") {
 			report('Give the <SystemDiagram> a literal name, such as name="containers".');
@@ -307,18 +342,13 @@ export function systemDiagramProblems(
 		} else if (alt.length > MAX_ALT) {
 			report(`Shorten the alt text to ${MAX_ALT} characters (${alt.length}).`);
 		}
-		const start = match.index + match[0].length;
-		const end = prose.indexOf("</SystemDiagram>", start);
-		if (
-			match[0].endsWith("/>") ||
-			end === -1 ||
-			!/^\s*\|?(?:\s*:?-+:?\s*\|)+(?:\s*:?-+:?\s*)?$/mu.test(prose.slice(start, end))
-		) {
+		if (!(node.children ?? []).some((child) => child.type === "table")) {
 			report(
 				"Put a table of every connection of the view between <SystemDiagram> and </SystemDiagram>.",
 			);
 		}
-	}
+	};
+	visit(tree);
 	return problems;
 }
 
