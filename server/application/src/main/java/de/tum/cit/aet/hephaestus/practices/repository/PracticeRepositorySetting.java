@@ -17,6 +17,8 @@ import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -36,6 +38,8 @@ public class PracticeRepositorySetting {
 
     @MapsId
     @OneToOne(fetch = FetchType.LAZY)
+    // The setting belongs to its workspace, so a release that deletes the workspace row removes it too.
+    @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(
             name = "workspace_id",
             nullable = false,
