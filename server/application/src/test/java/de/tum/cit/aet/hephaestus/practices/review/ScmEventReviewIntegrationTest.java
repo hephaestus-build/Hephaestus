@@ -2520,6 +2520,47 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(membersOf(workspace, measured.getId())).containsOnlyKeys(off);
     }
 
+    /**
+     * A queued milestone review that lists only practices in feedback mode Off shares no practice with a push that
+     * selects only delivering practices. The push still waits for it, so its claim replaces it and no sandbox starts on
+     * the old head.
+     */
+    @Test
+    void shouldReplaceAQueuedReviewOfOnlyOffPracticesWhenAPushSelectsOthers() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        long workspace = prepared.item().workspaceId();
+        long off = practices
+                .findByWorkspaceIdAndSlug(workspace, "event-test")
+                .orElseThrow()
+                .getId();
+        setFeedbackMode(off, FeedbackMode.OFF);
+        long onPush = practiceOn(
+                prepared, "delivers-on-push", List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED), FeedbackMode.APPROVE_FIRST);
+        publish(prepared);
+        var stale = newestReview(prepared);
+        assertThat(membersOf(workspace, stale.getId())).containsOnlyKeys(off);
+
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
+        closeWindows(prepared);
+        assertThat(newestReview(prepared).getId()).isEqualTo(stale.getId());
+        assertThat(occasion(prepared, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED).getState())
+                .isEqualTo(ItemEventState.WAITING);
+
+        assertThat(replaced(workspace, stale.getId())).isTrue();
+        var ended = reviews.findById(stale.getId()).orElseThrow();
+        assertThat(ended.getStatus()).isEqualTo(ReviewStatus.CANCELLED);
+        assertThat(ended.getStopReason()).isEqualTo(ReviewStopReason.SOURCES_MOVED);
+
+        closeWindows(prepared);
+        var pushed = newestReview(prepared);
+        assertThat(pushed.getId()).isNotEqualTo(stale.getId());
+        assertThat(membersOf(workspace, pushed.getId())).containsOnlyKeys(onPush);
+    }
+
     @Test
     void shouldMeasureAPracticeRefusedAtStartOnTheNextEdgeThatDoesNotSelectIt() {
         var prepared = prepare(
