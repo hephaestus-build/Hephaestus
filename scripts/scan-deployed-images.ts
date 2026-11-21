@@ -15,8 +15,8 @@ import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
 import { type ScanOutcome, scanAll, type Subject } from "./lib/image-scan.ts";
-import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
-import { run } from "./lib/process.ts";
+import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
+import { output, run } from "./lib/process.ts";
 import { PLATFORMS, planUpstreamSubjects } from "./scan-upstream-images.ts";
 
 export const CHANNELS = ["staging", "production"] as const;
@@ -56,6 +56,25 @@ export function channelTarget(value: unknown, channel: Channel): ChannelTarget {
 		throw new Error(`${channel} channel names no images`);
 	}
 	return { kind: "commit", commit, images };
+}
+
+/**
+ * The image inventory of the commit that a commit channel deploys, read from that commit's tree, as the reconciler
+ * reads it. Main's inventory can lack an image that an older deployed build still runs, such as the web app image that
+ * main stopped building. The workflow's checkout is shallow, so the commit is fetched first.
+ */
+export async function commitInventory(
+	commit: string,
+	checkout = ".",
+	env?: NodeJS.ProcessEnv,
+): Promise<unknown> {
+	await run("git", ["fetch", "--quiet", "--no-tags", "--depth=1", "origin", commit], {
+		cwd: checkout,
+		env,
+	});
+	return parseJson(
+		await output("git", ["show", `${commit}:security/release-images.json`], { cwd: checkout, env }),
+	);
 }
 
 /**
@@ -116,7 +135,6 @@ if (import.meta.main) {
 	}
 	const repository = asString(process.env.GITHUB_REPOSITORY, "GITHUB_REPOSITORY");
 	const registry = process.env.IMAGE_REGISTRY ?? "ghcr.io/hephaestus-build";
-	const inventory = await readJsonFile("security/release-images.json");
 	const outcomes: ScanOutcome[] = [];
 	const targets: Record<string, ChannelTarget> = {};
 	for (const channel of CHANNELS) {
@@ -129,7 +147,11 @@ if (import.meta.main) {
 			}
 			continue;
 		}
-		const subjects = deployedSubjects(target.images, inventory, registry);
+		const subjects = deployedSubjects(
+			target.images,
+			await commitInventory(target.commit),
+			registry,
+		);
 		for (const platform of PLATFORMS) {
 			outcomes.push(
 				...(await scanAll(subjects, path.join(reports, channel), {
