@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+// The page's content security policy refuses `eval`, so zod cannot compile its parsers. Without `jitless`, zod still
+// probes for `eval` with `new Function`, and the page reports the probe as a violation although zod catches it. This
+// module parses first, when the page loads, so the setting holds before any parse.
+z.config({ jitless: true });
+
 /**
  * The config record that the server writes into `index.html` (ADR 0100; server `core.webapp.WebAppConfig`). The
  * development server serves the page without one, so every value has a default for a run on this origin.
