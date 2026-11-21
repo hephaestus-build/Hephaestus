@@ -97,7 +97,7 @@ const viteConfig = defineConfig({
 					name: "app",
 					environment: "jsdom",
 					exclude: [...configDefaults.exclude, "e2e/**/*.spec.ts", "tools/oxlint/rules/**"],
-					setupFiles: ["./src/test/setup-msw.ts"],
+					setupFiles: ["./src/test/setup-zod.ts", "./src/test/setup-msw.ts"],
 				},
 			},
 			{
