@@ -28,11 +28,11 @@ import java.util.stream.Collectors;
  *       does a quote of the old side, which the change removes by design.
  * </ul>
  *
- * Leading and trailing blanks of each line are ignored, so a reindented line is still present. The search reads at most
- * {@link #SEARCH_BUDGET_BYTES}; past that it cannot say.
+ * Leading and trailing blanks of each line are ignored, so a reindented line is still present. The search of one citation
+ * reads at most {@link #SEARCH_BUDGET_CHARS} characters; past that it cannot say.
  */
 final class CapturedQuoteProbe implements CapturedTextProbe {
-    static final long SEARCH_BUDGET_BYTES = 16L * 1024 * 1024;
+    static final long SEARCH_BUDGET_CHARS = 16L * 1024 * 1024;
 
     private final ReviewJob job;
     private final CapturedEvidence captured;
@@ -47,6 +47,7 @@ final class CapturedQuoteProbe implements CapturedTextProbe {
 
     @Override
     public Presence presence(EvidenceCitation cited) {
+        read = 0;
         var kind = cited.sourceKind();
         if (cited.side() == CitationSide.OLD || !captured.capturedWhole(kind) || captured.leftPartOut(kind))
             return Presence.UNKNOWN;
@@ -89,7 +90,7 @@ final class CapturedQuoteProbe implements CapturedTextProbe {
             var body = files.readText(job, text.stagedPath(), text.sha256());
             if (body.isEmpty()) return Optional.empty();
             read += body.orElseThrow().length();
-            if (read > SEARCH_BUDGET_BYTES) return Optional.empty();
+            if (read > SEARCH_BUDGET_CHARS) return Optional.empty();
             return Optional.of(blanksTrimmed(body.orElseThrow()));
         } catch (RuntimeException unreadable) {
             return Optional.empty();
