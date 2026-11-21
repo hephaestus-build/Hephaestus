@@ -1072,7 +1072,7 @@ explicit limit below the derived size fails, with its parts, and so does a reque
 {{- $_ := set $resources.limits "memory" $limit -}}
 {{- if eq (toString $resources.requests.memory) "auto" -}}
 {{- $_ := set $resources.requests "memory" $limit -}}
-{{- else if gt (include "hephaestus.quantityUnits" (dict "value" $resources.requests.memory "unit" 1048576) | int64) (include "hephaestus.quantityUnits" (dict "value" $limit "unit" 1048576 "roundDown" true) | int64) -}}
+{{- else if gt (include "hephaestus.quantityUnits" (dict "value" $resources.requests.memory "unit" 1) | int64) (include "hephaestus.quantityUnits" (dict "value" $limit "unit" 1) | int64) -}}
 {{- fail (printf "postgresql.resources.requests.memory (%s) is above the memory limit (%s)" (toString $resources.requests.memory) $limit) -}}
 {{- end -}}
 {{- toYaml $resources -}}

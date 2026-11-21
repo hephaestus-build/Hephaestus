@@ -828,6 +828,15 @@ await test("PostgreSQL refuses a memory limit below its derived size, a request 
 		overRequested.stderr,
 		/postgresql\.resources\.requests\.memory .* is above the memory limit/u,
 	);
+	// Equal decimal quantities are equal: only a larger request fails.
+	const decimal = rendered([
+		...layers,
+		{ postgresql: { resources: { requests: { memory: "4G" }, limits: { memory: "4G" } } } },
+	]);
+	assert.equal(
+		get(container(workload(decimal, "postgresql")), "resources", "requests", "memory"),
+		"4G",
+	);
 	const missing = render([...layers, { postgresql: { parameters: { work_mem: null } } }]);
 	assert.equal(missing.ok, false);
 	assert.match(missing.stderr, /postgresql\.parameters\.work_mem is required/u);
