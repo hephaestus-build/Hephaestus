@@ -3,6 +3,10 @@
  * docs/admin/compatibility-policy.mdx § Support statement owns the rule: before 1.0.0 the latest release
  * is supported, a release candidate included; from 1.0.0 the latest stable 1.x release is. GitHub's
  * "latest release" skips prereleases, so it kept naming 0.95.1 while the 1.0 candidates shipped.
+ *
+ * When 2.0.0 ships, the support statement names two supported releases: the latest stable release, and the
+ * last 1.x minor release for 12 months of security fixes. This returns one tag, so it and the `release` job
+ * of .github/workflows/rescan-images.yml must then return and rescan both.
  */
 import { pathToFileURL } from "node:url";
 
