@@ -28,7 +28,9 @@ class KubernetesBackupScheduleConfigurationTest extends BaseUnitTest {
             .withUserConfiguration(
                     Scanned.class, KubernetesBackupScheduleConfiguration.class, BackupScheduleMonitor.class)
             .withBean(Clock.class, Clock::systemUTC)
-            .withBean(MeterRegistry.class, SimpleMeterRegistry::new);
+            .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
+            // The client builds without a cluster: no host kubeconfig, credential plugin or in-cluster account.
+            .withSystemProperties("kubernetes.auth.tryKubeConfig=false", "kubernetes.auth.tryServiceAccount=false");
 
     @Test
     void shouldStartWithNoReaderWhenBackupsAreOff() {
@@ -55,9 +57,17 @@ class KubernetesBackupScheduleConfigurationTest extends BaseUnitTest {
         contextRunner
                 .withPropertyValues(
                         "hephaestus.database.backup.namespace=hephaestus", "hephaestus.database.backup.cron-jobs=")
-                .run(context -> assertThat(context).hasFailed());
+                .run(context -> assertThat(context)
+                        .getFailure()
+                        .rootCause()
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("must both be set"));
         contextRunner
                 .withPropertyValues("hephaestus.database.backup.cron-jobs=heph-postgresql-backup-full")
-                .run(context -> assertThat(context).hasFailed());
+                .run(context -> assertThat(context)
+                        .getFailure()
+                        .rootCause()
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("must both be set"));
     }
 }
