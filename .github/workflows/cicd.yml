@@ -506,6 +506,7 @@ jobs:
               - 'tsconfig.agent-runtime.json'
               - 'scripts/compile-agent-runtime.ts'
               - 'scripts/summarize-buildpack-log.ts'
+              - 'scripts/server-descriptor.ts'
               # The startup check of the image: a change to it runs it.
               - 'scripts/server-image-startup.ts'
               - 'scripts/lib/buildpack-descriptor.ts'

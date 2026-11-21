@@ -316,6 +316,9 @@ jobs:
           mapfile -t jars < <(find "$APPLICATION_DIRECTORY" -name 'hephaestus-application-*.jar')
           (( ${#jars[@]} == 1 ))
           PER_ARCH_TAG="$INPUT_REGISTRY/hephaestus-build/server:ci-$GITHUB_RUN_ID-$PLATFORM_PAIR"
+          # The JRE pin names the JVM buildpack, so the build reads the descriptor that adds it.
+          node scripts/server-descriptor.ts "$PROJECT_DESCRIPTOR" "$RUNNER_TEMP/project.toml"
+          PROJECT_DESCRIPTOR="$RUNNER_TEMP/project.toml"
           # The binding's file: URIs name the host path, so the files mount at that same path.
           dependencies=(--volume "$BUILDPACK_DEPENDENCIES/bindings:/platform/bindings:ro"
             --volume "$BUILDPACK_DEPENDENCIES/files:$BUILDPACK_DEPENDENCIES/files:ro")

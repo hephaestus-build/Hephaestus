@@ -120,7 +120,7 @@ export function issueBody(date: string, advisory: Advisory, pinned: string): str
 		"| --- | --- |",
 		...advisory.cves.map((cve) => `| ${cve.id} | ${cve.cvss ?? ""} |`),
 		"",
-		"The pin is `.github/ci-tools/buildpack-liberica-jre.json`. NVD often gives these CVEs a CPE days later, so image scans may not report them yet.",
+		"The pin is `.github/ci-tools/buildpack-jre.json`. NVD often gives these CVEs a CPE days later, so image scans may not report them yet.",
 		"Response: docs/contributor/vulnerability-remediation.mdx § Java runtime.",
 		"",
 		"Opened by `.github/workflows/jvm-watch.yml`. The title carries the advisory date, so the watcher never opens a second issue for it.",
@@ -160,7 +160,7 @@ async function fetchPage(url: string): Promise<string> {
 if (import.meta.main) {
 	const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
 	const pinned = asString(
-		asRecord(readJsonFileSync(".github/ci-tools/buildpack-liberica-jre.json"), "JRE pin").version,
+		asRecord(readJsonFileSync(".github/ci-tools/buildpack-jre.json"), "JRE pin").version,
 		"JRE pin version",
 	);
 	const line = readFileSync(".java-version", "utf8").trim();

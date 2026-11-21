@@ -70,7 +70,7 @@ void test("the server image fails its scan when the JRE leaves the inventory", (
 });
 
 void test("the server pin is the one file that names the image's JRE", () => {
-	const pin = readJsonFileSync(".github/ci-tools/buildpack-liberica-jre.json");
+	const pin = readJsonFileSync(".github/ci-tools/buildpack-jre.json");
 	assert.ok(typeof pin === "object" && pin !== null && "version" in pin);
 	assert.match(String(pin.version), /^\d+\.\d+\.\d+/u);
 });

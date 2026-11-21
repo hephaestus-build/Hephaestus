@@ -170,7 +170,12 @@ void test("an image whose JRE is not of the .java-version line fails the build",
 		),
 		fallback.stdout,
 	);
+	// Another JVM vendor's buildpack names its JRE the same way (the Temurin build of 2026-11-18).
+	assert.equal(
+		summarize(`[builder]   Adoptium JRE ${javaLine}.0.5: Contributing to layer\n`).status,
+		0,
+	);
 	const unknown = summarize("[builder] Paketo Buildpack for BellSoft Liberica 11.10.5\n");
 	assert.equal(unknown.status, 1);
-	assert.ok(unknown.stdout.includes("names no Liberica JRE"), unknown.stdout);
+	assert.ok(unknown.stdout.includes("names no JRE"), unknown.stdout);
 });
