@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { isRecord, parseJson } from "./lib/json.ts";
 import {
 	blockingFindings,
 	compareVersions,
@@ -251,14 +250,28 @@ await test("a rebuilt image replaces a kept exception's old digest without a dup
 	assert.deepEqual(mergeExceptions(merged, [current], [traefik]), merged);
 });
 
-await test("platform Traefik findings cannot replace reviewed Compose release exceptions", async () => {
-	const policy = parseJson(await readFile("security/vulnerability-policy.json", "utf8"));
-	assert.ok(isRecord(policy) && Array.isArray(policy.exceptions));
-	const historical: unknown = policy.exceptions.find(
-		(entry) => isRecord(entry) && entry.image === "traefik",
+await test("platform Traefik findings cannot replace reviewed Compose release exceptions", () => {
+	const refusal = {
+		platform: "linux/amd64",
+		digest,
+		vulnerability: "CVE-2026-1",
+		package: "p",
+		installedVersion: "1",
+		severity: "HIGH",
+	};
+	const today = new Date("2026-11-12T00:00:00Z");
+	// A reviewed decision for the Compose release's `traefik` subject, not one that the writer generated.
+	const historical = {
+		...exceptionFor({ ...refusal, image: "traefik" }, traefik, traefik.pinned, today),
+		status: "not_affected",
+		evidence: "https://github.com/hephaestus-build/Hephaestus/issues/3709",
+	};
+	const current = exceptionFor(
+		{ ...refusal, image: "platform-traefik" },
+		traefik,
+		traefik.pinned,
+		today,
 	);
-	assert.ok(isRecord(historical));
-	const current = { ...historical, image: "platform-traefik", digest, status: "affected" };
 	assert.deepEqual(mergeExceptions([historical], [current], [traefik]), [historical, current]);
 });
 

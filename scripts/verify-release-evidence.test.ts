@@ -313,18 +313,52 @@ ${failure === "wrong-signature" ? String.raw`printf '%s\n' 'signature refused' >
 	}
 });
 
+/**
+ * A policy whose one exception reuses a reviewed component claim, so its evidence needs an advisory file.
+ * Its own fixture, not the repository's policy: the coverage rule holds whether or not that policy names
+ * an advisory today.
+ */
+const componentPolicy = {
+	schemaVersion: 3,
+	componentInventories: [
+		{
+			id: "server-linux-amd64-go",
+			image: "server",
+			platform: "linux/amd64",
+			captureDigest: digest,
+			files: [{ path: "/cnb/lifecycle/launcher", sha256: "2".repeat(64) }],
+		},
+	],
+	goAdvisories: [{ id: "GO-2026-0001", sha256: "3".repeat(64) }],
+	jarInventories: [],
+	exceptions: [
+		{
+			componentInventory: "server-linux-amd64-go",
+			digest,
+			goAdvisory: "GO-2026-0001",
+			evidence: "https://github.com/example/project/issues/9",
+			expires: "2026-10-01T00:00:00Z",
+			image: "server",
+			installedVersion: "1.25.0",
+			justification: "the vulnerable function is not linked into the launcher",
+			justificationCategory: "vulnerable_code_not_present",
+			owner: "@security",
+			package: "stdlib",
+			platform: "linux/amd64",
+			status: "not_affected",
+			vulnerability: "CVE-9",
+		},
+	],
+};
+
 void describe("complete archived checksum coverage", { skip: process.platform === "win32" }, () => {
 	for (const omission of ["manifest", "policy", "syft", "advisory", "source", "time"] as const) {
 		void it(`a signed checksum list missing ${omission} cannot trust the unlisted forged file`, async () => {
 			const directory = await mkdtemp(path.join(tmpdir(), "release-coverage-"));
 			const bin = path.join(directory, "bin");
 			await mkdir(bin);
-			const policyText = await readFile(
-				new URL("../security/vulnerability-policy.json", import.meta.url),
-				"utf8",
-			);
-			const policyValue: unknown = JSON.parse(policyText);
-			const advisories = componentAdvisories(policyValue).map(advisoryFile);
+			const policyText = JSON.stringify(componentPolicy);
+			const advisories = componentAdvisories(componentPolicy).map(advisoryFile);
 			assert.ok(advisories.length > 0);
 			const files = new Map([
 				[

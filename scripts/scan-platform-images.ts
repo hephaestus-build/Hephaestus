@@ -51,7 +51,7 @@ export function platformPins(source: string) {
 			if (name === undefined || name === "") {
 				throw new Error("The platform image has no name");
 			}
-			// The old Compose release also has a Traefik subject, with its own reviewed exceptions.
+			// The v0.95.1 Compose release named its Traefik subject `traefik`, and its archived evidence keeps it.
 			subjects.push({
 				image: name === "traefik" ? "platform-traefik" : name,
 				repository,
