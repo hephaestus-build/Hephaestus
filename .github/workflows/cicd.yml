@@ -1202,8 +1202,6 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
-          # A re-run of failed jobs keeps this artifact; a re-run of all jobs replaces it.
-          overwrite: true
 
   Build:
     uses: ./.github/workflows/ci-build.yml

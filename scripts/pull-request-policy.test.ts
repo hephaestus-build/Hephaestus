@@ -164,7 +164,7 @@ void describe("pull request policy", () => {
 		const collectorJobs = asRecord(asRecord(parseYaml(collector), "collector").jobs, "jobs");
 		const trustedJobs = asRecord(asRecord(parseYaml(trusted), "trusted").jobs, "jobs");
 
-		void it("records the pull request with read access, checking out only the upload action from the base", () => {
+		void it("records the pull request with read access, checking out only the upload action from the default branch", () => {
 			assert.match(collector, /^ {2}pull_request:$/mu);
 			// On either event a checkout of the pull request would run its code with the base repository's token.
 			assert.doesNotMatch(collector, /pull_request_target|workflow_run/u);
@@ -178,7 +178,8 @@ void describe("pull request policy", () => {
 				.filter((step) => String(step.uses).startsWith("actions/checkout@"));
 			assert.equal(checkouts.length, 1);
 			assert.deepEqual(asRecord(checkouts[0]?.with, "checkout"), {
-				ref: "${{ github.event.pull_request.base.sha }}",
+				// The default branch, as pull-request-policy.yml runs: a stored base or a lower stacked branch can predate the action.
+				ref: `\${{ github.event.repository.default_branch }}`,
 				"sparse-checkout": ".github/actions/upload-artifact-retry",
 				"persist-credentials": false,
 			});

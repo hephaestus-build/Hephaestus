@@ -187,7 +187,6 @@ jobs:
         uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           name: release-notes
-          overwrite: true
           path: |
             notes.md
             release-body.md
@@ -245,7 +244,6 @@ jobs:
         uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           name: extension-package
-          overwrite: true
           path: hephaestus-chrome-extension-${{ needs.release.outputs.version }}.zip
           if-no-files-found: error
 

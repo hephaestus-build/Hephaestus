@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { glob, readFile } from "node:fs/promises";
 import { test } from "node:test";
 
@@ -29,9 +30,9 @@ const job = (
 	reported = true,
 ): AttemptJob => ({
 	// A stable ID per job and start, as the API gives one job of one attempt.
-	id: [...`${name} ${startedAt}`].reduce(
-		(hash, character) => (hash * 31 + character.charCodeAt(0)) % 2_147_483_647,
-		7,
+	id: Number.parseInt(
+		createHash("sha256").update(`${name} ${startedAt}`).digest("hex").slice(0, 8),
+		16,
 	),
 	name,
 	conclusion,

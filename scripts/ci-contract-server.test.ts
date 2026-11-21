@@ -605,7 +605,6 @@ void describe("ci-contract: server", () => {
 			(packageJob.match(/uses: \.\/\.github\/actions\/upload-artifact-retry$/gmu) ?? []).length,
 			1,
 		);
-		assert.match(packageJob, /overwrite: true/u);
 		for (const name of ["server-api", "server-database", "postgres-drill"]) {
 			const consumer = job(build, name);
 			assert.doesNotMatch(consumer, /needs:/u);

@@ -18,16 +18,16 @@ const OWN_ACTION = "./workflow-actions/.github/actions/upload-artifact-retry";
 const REPORTS = [
 	"ci-browser-tests.yml: Upload diagnostics (extension-e2e-results)",
 	"ci-browser-tests.yml: Upload diagnostics (webapp-e2e-results)",
-	"ci-build.yml: Retain full database test reports (database-test-reports-${{ github.run_attempt }})",
-	"ci-quality-gates.yml: Retain application test reports (${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}-unit-reports-${{ github.run_attempt }})",
-	"ci-quality-gates.yml: Retain full Storybook and visual test diagnostics (storybook-reports-${{ github.run_attempt }})",
-	"ci-quality-gates.yml: Retain the PMD report (server-pmd-report-${{ github.run_attempt }})",
-	"ci-quality-gates.yml: Upload application test metrics (test-metrics-${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}-unit)",
-	"ci-quality-gates.yml: Upload the extension package (extension-chrome-${{ github.run_attempt }})",
-	"ci-tests.yml: Keep the generated context map (server-context-map-${{ github.run_attempt }})",
-	"ci-tests.yml: Retain dependency verification reports (server-integration-${{ env.INTEGRATION_SHARD }}-dependency-verification-${{ github.run_attempt }})",
-	"ci-tests.yml: Retain raw test reports (server-${{ env.TEST_TIER }}-reports-${{ github.run_attempt }})",
-	"ci-tests.yml: Retain raw test reports (server-integration-${{ env.INTEGRATION_SHARD }}-reports-${{ github.run_attempt }})",
+	`ci-build.yml: Retain full database test reports (database-test-reports-\${{ github.run_attempt }})`,
+	`ci-quality-gates.yml: Retain application test reports (\${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}-unit-reports-\${{ github.run_attempt }})`,
+	`ci-quality-gates.yml: Retain full Storybook and visual test diagnostics (storybook-reports-\${{ github.run_attempt }})`,
+	`ci-quality-gates.yml: Retain the PMD report (server-pmd-report-\${{ github.run_attempt }})`,
+	`ci-quality-gates.yml: Upload application test metrics (test-metrics-\${{ env.QUALITY_LEG == 'extension' && 'extension' || 'webapp' }}-unit)`,
+	`ci-quality-gates.yml: Upload the extension package (extension-chrome-\${{ github.run_attempt }})`,
+	`ci-tests.yml: Keep the generated context map (server-context-map-\${{ github.run_attempt }})`,
+	`ci-tests.yml: Retain dependency verification reports (server-integration-\${{ env.INTEGRATION_SHARD }}-dependency-verification-\${{ github.run_attempt }})`,
+	`ci-tests.yml: Retain raw test reports (server-\${{ env.TEST_TIER }}-reports-\${{ github.run_attempt }})`,
+	`ci-tests.yml: Retain raw test reports (server-integration-\${{ env.INTEGRATION_SHARD }}-reports-\${{ github.run_attempt }})`,
 	"cicd.yml: Keep the gate result (feedback-eval-gate)",
 	"cicd.yml: Retain sandbox qualification summary (sandbox-security-preflight-summary)",
 	"extension-provider-slots.yml: Keep each provider result (extension-provider-slots)",
@@ -35,10 +35,10 @@ const REPORTS = [
 	"kubernetes-nightly.yml: Keep the report, the logs and the samples (sandbox-footprint)",
 	"release.yml: Keep the ratchet results (stable-release-ratchets)",
 	"release.yml: Retain sandbox qualification summary (sandbox-security-summary)",
-	"rescan-images.yml: Upload diagnostic reports (supported-release-rescan-${{ github.run_id }})",
-	"reusable-docker-build.yml: Retain complete buildpack diagnostics (buildpacks-log-${{ steps.prep.outputs.platform_pair }}-${{ github.run_attempt }})",
-	"scorecard-ratchet.yml: Preserve ratchet evidence (scorecard-ratchet-${{ github.sha }})",
-	"security-mutation.yml: Upload mutation report (security-mutation-report-${{ github.run_id }}-${{ github.run_attempt }})",
+	`rescan-images.yml: Upload diagnostic reports (supported-release-rescan-\${{ github.run_id }})`,
+	`reusable-docker-build.yml: Retain complete buildpack diagnostics (buildpacks-log-\${{ steps.prep.outputs.platform_pair }}-\${{ github.run_attempt }})`,
+	`scorecard-ratchet.yml: Preserve ratchet evidence (scorecard-ratchet-\${{ github.sha }})`,
+	`security-mutation.yml: Upload mutation report (security-mutation-report-\${{ github.run_id }}-\${{ github.run_attempt }})`,
 ];
 
 /**
@@ -75,7 +75,7 @@ function workflowSteps(): Step[] {
 						isRecord(step.with) &&
 						step.with.path === undefined &&
 						step.with.ref !== undefined &&
-						step.with.ref !== "${{ github.event.pull_request.base.sha }}",
+						step.with.ref !== `\${{ github.event.repository.default_branch }}`,
 				);
 				return steps.map((step, index) => ({
 					file,
@@ -98,7 +98,7 @@ function actionSteps(): Record<string, unknown>[] {
 	assert.ok(isRecord(action.outputs) && isRecord(action.outputs["artifact-id"]));
 	assert.equal(
 		action.outputs["artifact-id"].value,
-		"${{ steps.third.outputs.artifact-id || steps.second.outputs.artifact-id || steps.first.outputs.artifact-id }}",
+		`\${{ steps.third.outputs.artifact-id || steps.second.outputs.artifact-id || steps.first.outputs.artifact-id }}`,
 	);
 	return action.runs.steps.filter(isRecord);
 }
@@ -111,11 +111,10 @@ void test("an artifact uploads in three attempts, each after the attempt before 
 		// A failed attempt must not fail the job.
 		assert.equal(upload["continue-on-error"], true);
 	}
-	// A failed finalize can leave a partial artifact, so a retry replaces it. The first attempt replaces one only
-	// when its caller asks, so two uploads of one name still fail.
+	// A failed finalize can leave a partial artifact of the same name, which the next attempt must replace.
 	assert.deepEqual(
 		uploads.map((upload) => (isRecord(upload.with) ? upload.with.overwrite : undefined)),
-		["${{ inputs.overwrite }}", true, true],
+		[true, true, true],
 	);
 	assert.deepEqual(
 		uploads.map((upload) => upload.id),
@@ -215,12 +214,12 @@ void test("a job that checks out another ref uploads through this workflow's own
 			where,
 		);
 		assert.deepEqual(previous.with, {
-			ref: "${{ github.workflow_sha }}",
+			ref: `\${{ github.workflow_sha }}`,
 			path: "workflow-actions",
 			"sparse-checkout": ".github/actions/upload-artifact-retry",
 			"persist-credentials": false,
 		});
 		assert.equal(previous.if, step.if, `${where}: the copy is there whenever the upload runs`);
 	}
-	// pull-request.yml takes the action from the base commit; pull-request-policy.test.ts pins that checkout.
+	// pull-request.yml takes the action from the default branch; pull-request-policy.test.ts pins that checkout.
 });

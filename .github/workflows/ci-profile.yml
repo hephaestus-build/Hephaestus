@@ -145,7 +145,6 @@ jobs:
           path: ci-profile-history
           if-no-files-found: error
           retention-days: 90
-          overwrite: true
 
       - name: Upload profile
         if: always()

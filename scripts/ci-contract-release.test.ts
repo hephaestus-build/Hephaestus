@@ -1087,7 +1087,7 @@ void test("the site root publishes whichever folder the release tag's own docs b
 	const jobPath = ["jobs", "build-release"];
 	const shell = runScript(workflow, jobPath, "Find the release build");
 	assert.equal(
-		step(workflow, jobPath, "./.github/actions/upload-artifact-retry").get("path"),
+		step(workflow, jobPath, "./workflow-actions/.github/actions/upload-artifact-retry").get("path"),
 		`\${{ steps.release-build.outputs.path }}`,
 	);
 	const publishes = async (folders: string[]) => {
@@ -1375,7 +1375,11 @@ void test("stable publication requires ratchets for the planned version on the c
 	assert.ok(isSeq(workerSteps));
 	for (const item of workerSteps.items) {
 		assert.ok(isMap(item));
-		if (item.get("name") !== "Keep the ratchet results") {
+		// The results, and the upload action they need, are kept when a ratchet fails.
+		if (
+			item.get("name") !== "Keep the ratchet results" &&
+			item.get("name") !== "Check out the upload action of this workflow"
+		) {
 			assert.equal(item.get("if"), "needs.release.outputs.prerelease != 'true'");
 		}
 	}

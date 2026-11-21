@@ -2,7 +2,7 @@ name: Repo / Pull request
 
 # The unprivileged half of the pull request policy. It runs with the pull request's own workflow
 # files and read access only, and records only which pull request it ran for and why. It checks out
-# only the upload action, from the base commit, never from the pull request.
+# only the upload action, from the default branch, never from the pull request.
 # pull-request-policy.yml runs the policy from the default branch when this run completes, and
 # treats this record as untrusted data. docs/contributor/ci-cd.mdx § Pull request policy.
 
@@ -31,10 +31,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Check out the upload action from the base commit
+      - name: Check out the upload action from the default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/upload-artifact-retry
           persist-credentials: false
       - name: Write the pull request number and the event action

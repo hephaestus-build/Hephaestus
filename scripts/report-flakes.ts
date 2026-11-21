@@ -382,12 +382,18 @@ async function failedTestsOf(
 		)
 		.flatMap(([, jobs]) => jobs.filter((job) => job.conclusion === "failure" && job.reported));
 	const lost = new Set<number>();
-	for (const job of checked) {
-		if (
-			lostReports(await api(`repos/${repository}/check-runs/${job.id}/annotations?per_page=100`))
-		) {
-			lost.add(job.id);
+	try {
+		for (const job of checked) {
+			if (
+				lostReports(await api(`repos/${repository}/check-runs/${job.id}/annotations?per_page=100`))
+			) {
+				lost.add(job.id);
+			}
 		}
+	} catch (error) {
+		// Unread annotations leave this run's tests unknown, not the whole report.
+		process.stderr.write(`Run ${runId}: annotations unreadable (${String(error)})\n`);
+		return null;
 	}
 	if (!attributable(withoutLost(attempts, lost), flaky, lastAttempt)) {
 		return null;
