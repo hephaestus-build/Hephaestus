@@ -204,7 +204,7 @@ public class ActivityContentSource implements ContentSource {
 
     private static void putWords(ObjectNode node, @Nullable String words) {
         if (words != null && !words.isBlank()) {
-            MergeReadinessContentSource.putText(node, "words", words, MAX_WORDS_CHARS);
+            ScmContextJson.putText(node, "words", words, MAX_WORDS_CHARS);
         }
     }
 
