@@ -1147,6 +1147,20 @@ drain. docs/admin/kubernetes.mdx § Sandbox prerequisites.
 {{/*
 Refuses to render sandboxes without the Kubernetes API endpoint that the network plugin sees.
 */}}
+{{/*
+"true" when the server reads the backup CronJobs of the bundled PostgreSQL, for the backup staleness alert. It then
+needs the Kubernetes API, with only the Role of templates/postgresql-backup.yaml.
+*/}}
+{{- define "hephaestus.backupsRead" -}}
+{{- and .Values.postgresql.bundled .Values.postgresql.backup.enabled -}}
+{{- end -}}
+
+{{/* The backup CronJobs of templates/postgresql-backup.yaml, as a list. */}}
+{{- define "hephaestus.backupCronJobs" -}}
+{{- $name := include "hephaestus.name" (dict "root" . "component" "postgresql-backup") -}}
+{{- list (printf "%s-full" $name) (printf "%s-diff" $name) | toJson -}}
+{{- end -}}
+
 {{- define "hephaestus.kubernetesApiCheck" -}}
 {{- $api := .Values.networkPolicy.kubernetesApi }}
 {{- $_ := required "networkPolicy.kubernetesApi.cidr is required: state the API endpoint that the network plugin sees" $api.cidr }}

@@ -90,7 +90,7 @@ Public traffic goes through the Gateway data plane, the proxy or load balancer o
 | Gateway data plane | Server Pods | HTTP, port 8080 | The SPA, the API and the webhooks, after TLS ends at the Gateway |
 | Server Pods | GitHub, GitLab, Slack, Outline | HTTPS | Provider reads and writes |
 | Server Pods | Model provider, email server | HTTPS, SMTP | Model calls, email |
-| Server Pods | Kubernetes API server | HTTPS, the API server port | `SandboxClaim` writes, with the server's ServiceAccount |
+| Server Pods | Kubernetes API server | HTTPS, the API server port | `SandboxClaim` writes, and reads of the backup CronJobs, with the server's ServiceAccount |
 | agent-sandbox controller Pod | Kubernetes API server | HTTPS, the API server port | Watches the claims and creates the sandbox Pods, with the controller's ServiceAccount |
 | Server Pods | PostgreSQL Pod | TCP, port 5432 | SQL, with the database login |
 | PostgreSQL Pod | Persistent volume | Volume mount | The database files |
@@ -360,7 +360,16 @@ Each pod meets the Kubernetes Restricted Pod Security Standard:
 - A non-root user, `RuntimeDefault` seccomp, and no privilege escalation.
 - All capabilities dropped and a read-only root filesystem.
 - No host path, host network, or container runtime socket.
-- No service account token, except on the server with `sandbox.enabled`, the agent-sandbox controller, and the VictoriaMetrics Pod of the monitoring stack. The server's Role reaches only the sandbox namespace.
+- No service account token, except on three Pods. The server has one with `sandbox.enabled` or `postgresql.backup.enabled`. The agent-sandbox controller and the VictoriaMetrics Pod of the monitoring stack also have one.
+
+The server's service account has two Roles, and only with the feature that needs it:
+
+- With `sandbox.enabled`: the sandbox Role, in the sandbox namespace only ([Sandboxes](./sandboxes)).
+- With `postgresql.backup.enabled`: `get` on the two backup CronJobs `<release>-postgresql-backup-full` and `<release>-postgresql-backup-diff`, by name, in the release namespace. No `list`, no `watch`, and no other resource.
+  The server reads when the last backup succeeded, for `HephaestusBackupStale` ([Backup metrics](./metrics#backup-metrics)).
+  A backup that never runs, such as a Job that waits `Pending`, fails no Job. Only its CronJob shows that no backup succeeded.
+
+Without either feature, the server has no token and no egress to the Kubernetes API.
 
 The bundled PostgreSQL runs as the image user 999 and owns its volume through `fsGroup`.
 The volume is at `/var/lib/postgresql` ([ADR 0038](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md)).

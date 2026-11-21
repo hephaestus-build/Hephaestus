@@ -23,6 +23,8 @@ public final class CoreMetrics {
     public static final String DATABASE_TRANSACTION_DURATION = "database.transaction.duration";
     public static final String DATABASE_TRANSACTION_HTTP_REQUESTS = "database.transaction.http.requests";
     public static final String DATABASE_WAL_ARCHIVE_FAILING = "database.wal.archive.failing";
+    public static final String DATABASE_BACKUP_AGE = "database.backup.age";
+    public static final String DATABASE_BACKUP_SAMPLE_FAILURES = "database.backup.sample.failures";
     public static final String DATABASE_WAL_ARCHIVE_SAMPLE_FAILURES = "database.wal.archive.sample.failures";
     public static final String DATABASE_SIZE = "database.size.bytes";
     public static final String DATABASE_VOLUME_CAPACITY = "database.volume.capacity.bytes";

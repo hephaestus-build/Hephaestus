@@ -170,6 +170,34 @@ spec:
         {{- include "hephaestus.backup.pod" (dict "root" $ "command" (printf "pgbackrest --stanza=hephaestus --type=%s backup" $type)) | nindent 8 }}
 {{- end }}
 ---
+# The server reads the backup CronJobs for the backup staleness alert: get on exactly these two, nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "backup-reader") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "postgresql-backup") | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    resourceNames: {{ include "hephaestus.backupCronJobs" . }}
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "backup-reader") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "postgresql-backup") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "hephaestus.name" (dict "root" . "component" "backup-reader") }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
+    namespace: {{ .Release.Namespace }}
+---
 # The backup Jobs reach PostgreSQL's TLS server and the repository, and nothing else.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

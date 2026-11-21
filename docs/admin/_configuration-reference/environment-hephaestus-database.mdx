@@ -2,4 +2,6 @@
 
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
+| `HEPHAESTUS_DATABASE_BACKUP_CRONJOBS` | `hephaestus.database.backup.cron-jobs` |  | `server` | Names of the backup CronJobs, comma-separated. The chart sets them when backups are on; empty reads no schedule and reports no backup age. |
+| `HEPHAESTUS_DATABASE_BACKUP_NAMESPACE` | `hephaestus.database.backup.namespace` |  | `server` | The namespace of the backup CronJobs. The chart sets it to the release namespace. |
 | `HEPHAESTUS_DATABASE_VOLUME_SIZE` | `hephaestus.database.volume-size` |  | `server` | Size of the bundled PostgreSQL's volume. The chart sets it; empty reports no volume capacity. |
