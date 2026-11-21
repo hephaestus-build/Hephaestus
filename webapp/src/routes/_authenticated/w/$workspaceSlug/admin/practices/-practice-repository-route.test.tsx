@@ -18,7 +18,11 @@ import { practiceSetupHandlers, practicesHandlers, wirePractice } from "./-pract
 beforeAll(async () => loadRouteCode("/w/acme/admin/practices"), ROUTE_RENDER_WAIT.timeout);
 
 beforeEach(() => {
-	server.use(...practiceSetupHandlers());
+	server.use(
+		...practiceSetupHandlers(),
+		// The admin chrome reads the integration catalog for its menu.
+		http.get("*/workspaces/:workspaceSlug/connections/catalog", () => HttpResponse.json([])),
+	);
 });
 
 const SETTING_URL = "*/workspaces/:workspaceSlug/practice-repository";
