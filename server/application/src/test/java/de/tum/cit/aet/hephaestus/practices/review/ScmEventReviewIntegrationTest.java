@@ -80,7 +80,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabHeadPipeline;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadiness;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadinessReader;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
@@ -296,7 +296,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     ReviewStart starts;
 
     @Autowired
-    GitLabMergeRequestProcessor mergeRequests;
+    GitLabMergeRequestReadiness mergeRequestReadiness;
 
     @Autowired
     GitHubPullRequestProcessor pullRequestProcessor;
@@ -4378,7 +4378,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
                 null,
                 diffRefs);
-        return mergeRequests.applyReadiness(
+        return mergeRequestReadiness.applyReadiness(
                 repository,
                 pull.getNumber(),
                 facts,

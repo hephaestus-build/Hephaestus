@@ -39,7 +39,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabHeadPipeline;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadiness;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadinessReader;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
@@ -148,7 +148,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
     private IssueRepository issueRepository;
 
     @Autowired
-    private GitLabMergeRequestProcessor mergeRequestProcessor;
+    private GitLabMergeRequestReadiness mergeRequestReadiness;
 
     private final AtomicLong nativeIds = new AtomicLong(90_000);
 
@@ -865,7 +865,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(inspect(mr).path("checksObserved").asString()).isEqualTo("NOT_CAPTURED");
         Instant readAt = Instant.now();
 
-        boolean recorded = mergeRequestProcessor.applyReadiness(
+        boolean recorded = mergeRequestReadiness.applyReadiness(
                 course,
                 18,
                 new GitLabMergeRequestReadinessReader.Facts(

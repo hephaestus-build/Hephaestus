@@ -60,6 +60,9 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
     private GitLabMergeRequestProcessor mergeRequestProcessor;
 
     @Mock
+    private GitLabMergeRequestReadiness readiness;
+
+    @Mock
     private GitLabWebhookContextResolver contextResolver;
 
     @Mock
@@ -96,6 +99,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
         handler = new GitLabMergeRequestMessageHandler(
                 mergeRequestProcessor,
+                readiness,
                 contextResolver,
                 closingIssueClient,
                 readinessReader,
@@ -212,7 +216,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
             handler.onMessage(mockMessage(event));
 
-            verify(mergeRequestProcessor).applyReadiness(any(), eq(5), eq(facts), any(), any());
+            verify(readiness).applyReadiness(any(), eq(5), eq(facts), any(), any());
         }
 
         @Test
@@ -224,10 +228,10 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
             handler.onMessage(mockMessage(event));
 
-            InOrder order = inOrder(readinessReader, mergeRequestProcessor);
+            InOrder order = inOrder(readinessReader, readiness, mergeRequestProcessor);
             order.verify(readinessReader).read(eq(1L), anyString(), eq(5));
-            order.verify(mergeRequestProcessor).applyTerminalFacts(any(), eq(5), eq(facts));
-            order.verify(mergeRequestProcessor).applyReadiness(any(), eq(5), eq(facts), any(), any());
+            order.verify(readiness).applyTerminalFacts(any(), eq(5), eq(facts));
+            order.verify(readiness).applyReadiness(any(), eq(5), eq(facts), any(), any());
             order.verify(mergeRequestProcessor).offerMerge(any(), eq(5), any());
             verify(closingIssueClient, never()).closesIssues(any(), anyLong(), anyInt());
         }
@@ -240,7 +244,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
             handler.onMessage(mockMessage(event));
 
-            verify(mergeRequestProcessor, never()).applyTerminalFacts(any(), anyInt(), any());
+            verify(readiness, never()).applyTerminalFacts(any(), anyInt(), any());
             verify(mergeRequestProcessor).offerMerge(any(), eq(5), any());
         }
 
@@ -253,7 +257,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
             handler.onMessage(mockMessage(event));
 
-            verify(mergeRequestProcessor, never()).applyTerminalFacts(any(), anyInt(), any());
+            verify(readiness, never()).applyTerminalFacts(any(), anyInt(), any());
             verify(mergeRequestProcessor, never()).offerMerge(any(), anyInt(), any());
         }
 
@@ -265,7 +269,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
             handler.onMessage(mockMessage(event));
 
-            verify(mergeRequestProcessor, never()).applyReadiness(any(), anyInt(), any(), any(), any());
+            verify(readiness, never()).applyReadiness(any(), anyInt(), any(), any(), any());
         }
 
         @Test
@@ -278,7 +282,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
             handler.onMessage(mockMessage(event));
 
-            verify(mergeRequestProcessor, never()).applyReadiness(any(), anyInt(), any(), any(), any());
+            verify(readiness, never()).applyReadiness(any(), anyInt(), any(), any(), any());
             verify(mergeRequestProcessor, never()).replaceClosingIssues(any(), anyInt(), any(), any(), any());
         }
 

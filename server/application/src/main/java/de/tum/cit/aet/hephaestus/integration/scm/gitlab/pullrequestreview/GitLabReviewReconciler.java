@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Unlike GitHub, GitLab has no first-class "review" entity. We derive one COMMENTED
  * review for the starter of a discussion so that inline feedback is attributed
  * to a review, as on GitHub. Approvals are handled separately (see
- * {@code GitLabMergeRequestProcessor}).
+ * {@code GitLabMergeRequestReadiness}).
  * <p>
  * Idempotency: a deterministic {@code nativeId} is derived by hashing
  * {@code (discussionGlobalId, authorNativeId)}; re-running the sync reuses the same

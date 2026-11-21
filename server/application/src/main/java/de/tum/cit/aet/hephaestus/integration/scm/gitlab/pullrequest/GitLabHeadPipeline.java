@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
@@ -45,7 +46,7 @@ public record GitLabHeadPipeline(
             case REPORTED ->
                 pr.observeHeadChecks(
                         Objects.requireNonNull(sha),
-                        GitLabMergeRequestProcessor.mapPipelineStatus(Objects.requireNonNull(status)),
+                        mapPipelineStatus(Objects.requireNonNull(status)),
                         true,
                         requestedAt);
             case NO_PIPELINE -> {
@@ -53,6 +54,21 @@ public record GitLabHeadPipeline(
                 yield head != null && pr.observeHeadChecks(head, CheckState.NO_PIPELINE, true, requestedAt);
             }
             case NOT_CAPTURED -> false;
+        };
+    }
+
+    /**
+     * The status of a pipeline GitLab reported as one {@link CheckState}: a pipeline that has not finished is pending
+     * whatever stage it is in. A head with no pipeline has no status to map: {@link Kind} tells it apart from a pipeline
+     * that was not read.
+     */
+    public static CheckState mapPipelineStatus(String status) {
+        return switch (status.toUpperCase(Locale.ROOT)) {
+            case "SUCCESS" -> CheckState.SUCCESS;
+            case "FAILED" -> CheckState.FAILURE;
+            case "CANCELED", "CANCELING" -> CheckState.CANCELLED;
+            case "SKIPPED" -> CheckState.SKIPPED;
+            default -> CheckState.PENDING;
         };
     }
 }

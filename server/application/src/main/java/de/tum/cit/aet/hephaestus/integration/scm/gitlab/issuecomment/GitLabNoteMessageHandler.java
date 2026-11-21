@@ -18,7 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventAction
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadiness;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiffNoteWebhookProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
@@ -41,7 +41,7 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
 
     private final GitLabIssueCommentProcessor issueCommentProcessor;
     private final GitLabDiffNoteWebhookProcessor diffNoteProcessor;
-    private final GitLabMergeRequestProcessor mergeRequestProcessor;
+    private final GitLabMergeRequestReadiness mergeRequestReadiness;
     private final GitLabWebhookContextResolver contextResolver;
     private final PullRequestRepository pullRequestRepository;
     private final GitLabUserService userService;
@@ -52,7 +52,7 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
     GitLabNoteMessageHandler(
             GitLabIssueCommentProcessor issueCommentProcessor,
             GitLabDiffNoteWebhookProcessor diffNoteProcessor,
-            GitLabMergeRequestProcessor mergeRequestProcessor,
+            GitLabMergeRequestReadiness mergeRequestReadiness,
             GitLabWebhookContextResolver contextResolver,
             PullRequestRepository pullRequestRepository,
             GitLabUserService userService,
@@ -69,7 +69,7 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
                 transactionTemplate);
         this.issueCommentProcessor = issueCommentProcessor;
         this.diffNoteProcessor = diffNoteProcessor;
-        this.mergeRequestProcessor = mergeRequestProcessor;
+        this.mergeRequestReadiness = mergeRequestReadiness;
         this.contextResolver = contextResolver;
         this.userService = userService;
         this.reviewReconciler = reviewReconciler;
@@ -220,7 +220,7 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
                 author,
                 new GitLabReviewReconciler.SystemNote(note.note(), at, "gid://gitlab/Note/" + note.id(), true),
                 pullRequest.getProvider())) {
-            mergeRequestProcessor.forgetReviewReadiness(pullRequest);
+            mergeRequestReadiness.forgetReviewReadiness(pullRequest);
         }
     }
 

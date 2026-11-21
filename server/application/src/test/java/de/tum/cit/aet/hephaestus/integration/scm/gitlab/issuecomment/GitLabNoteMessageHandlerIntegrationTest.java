@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabHeadPipeline;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadiness;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadinessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
@@ -186,7 +187,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
     private GitLabReviewReconciler reviewReconciler;
 
     @Autowired
-    private GitLabMergeRequestProcessor mergeRequestProcessor;
+    private GitLabMergeRequestReadiness mergeRequestReadiness;
 
     @Autowired
     private GitLabGraphQlResponseHandler graphQlResponseHandler;
@@ -329,7 +330,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
     class ReviewDecisions {
 
         private static final long APPROVAL_NATIVE_ID =
-                GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR_ID, NATIVE_USER_ID);
+                GitLabMergeRequestReadiness.generateApprovalNativeId(NATIVE_MR_ID, NATIVE_USER_ID);
 
         @BeforeEach
         void approveAsTheCommenter() {
@@ -361,7 +362,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     List.of(approver),
                     GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
                     null);
-            assertThat(mergeRequestProcessor.applyReadiness(
+            assertThat(mergeRequestReadiness.applyReadiness(
                             savedRepo, MR_IID, facts, Instant.now(), ProcessingContext.forSync(null, savedRepo)))
                     .isTrue();
             assertThat(reviewState(APPROVAL_NATIVE_ID)).isEqualTo(PullRequestReview.State.APPROVED);
