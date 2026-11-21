@@ -223,12 +223,6 @@ function OverviewBody({
 					<PlugZapIcon className="size-4" />
 					Not connected
 				</p>
-				{entry.attentionProblem === "PROVIDER_CLEANUP_UNCONFIRMED" && (
-					<WorkspaceConnectionStateNotice
-						providerCleanupUnconfirmed
-						displayName={entry.displayName}
-					/>
-				)}
 				<DisconnectedAction
 					entry={entry}
 					isScm={isScm}

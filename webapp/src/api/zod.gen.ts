@@ -1553,7 +1553,6 @@ export const zIntegrationAttentionChangedEventProblem = z.enum([
 	"CREDENTIAL_EXPIRING",
 	"CREDENTIAL_REVOKED",
 	"PROVIDER_SUSPENDED",
-	"PROVIDER_CLEANUP_UNCONFIRMED",
 	"WEBHOOK_UNAVAILABLE",
 ]);
 

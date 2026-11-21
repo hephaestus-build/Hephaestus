@@ -5341,13 +5341,7 @@ export const InstanceSettingsSchema = {
 
 export const IntegrationAttentionChangedEventProblemSchema = {
 	type: "string",
-	enum: [
-		"CREDENTIAL_EXPIRING",
-		"CREDENTIAL_REVOKED",
-		"PROVIDER_SUSPENDED",
-		"PROVIDER_CLEANUP_UNCONFIRMED",
-		"WEBHOOK_UNAVAILABLE",
-	],
+	enum: ["CREDENTIAL_EXPIRING", "CREDENTIAL_REVOKED", "PROVIDER_SUSPENDED", "WEBHOOK_UNAVAILABLE"],
 } as const;
 
 export const IntegrationCatalogEntrySchema = {

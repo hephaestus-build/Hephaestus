@@ -3,7 +3,6 @@ import {
 	CircleDashedIcon,
 	KeyRoundIcon,
 	PlugZapIcon,
-	ShieldAlertIcon,
 	WebhookOffIcon,
 } from "lucide-react";
 import type * as React from "react";
@@ -68,11 +67,6 @@ export interface WorkspaceConnectionStateNoticeProps {
 	 */
 	credentialRecovery?: string;
 	/**
-	 * A disconnect could not confirm that the provider removed the app, token, or webhook that
-	 * Hephaestus set up there, so the admin must check at the provider.
-	 */
-	providerCleanupUnconfirmed?: boolean;
-	/**
 	 * The provider refused every webhook that Hephaestus tried to register, so new work arrives only with
 	 * a sync. Only GitLab reports it.
 	 */
@@ -98,13 +92,12 @@ export function WorkspaceConnectionStateNotice({
 	connectionState,
 	credentialsUnreadableSince,
 	credentialRecovery = "The connection’s page says how to replace it",
-	providerCleanupUnconfirmed = false,
 	webhookUnavailable = false,
 	displayName,
 	className,
 }: WorkspaceConnectionStateNoticeProps) {
 	const copy = connectionState ? STATE_COPY[connectionState] : undefined;
-	if (!copy && !credentialsUnreadableSince && !providerCleanupUnconfirmed && !webhookUnavailable) {
+	if (!copy && !credentialsUnreadableSince && !webhookUnavailable) {
 		return null;
 	}
 	return (
@@ -126,24 +119,10 @@ export function WorkspaceConnectionStateNotice({
 					<AlertDescription>{copy.describe(displayName)}</AlertDescription>
 				</Alert>
 			)}
-			{providerCleanupUnconfirmed && (
-				<Alert
-					variant="warning"
-					className={copy || credentialsUnreadableSince ? "mt-3" : undefined}
-				>
-					<ShieldAlertIcon />
-					<AlertTitle>{`Check ${displayName} for what Hephaestus left`}</AlertTitle>
-					<AlertDescription>
-						{`We could not confirm that ${displayName} removed the app, token, or webhook that Hephaestus set up there. It may still work. Remove it in your ${displayName} settings.`}
-					</AlertDescription>
-				</Alert>
-			)}
 			{webhookUnavailable && (
 				<Alert
 					variant="warning"
-					className={
-						copy || credentialsUnreadableSince || providerCleanupUnconfirmed ? "mt-3" : undefined
-					}
+					className={copy || credentialsUnreadableSince ? "mt-3" : undefined}
 				>
 					<WebhookOffIcon />
 					<AlertTitle>New work shows only after a sync</AlertTitle>

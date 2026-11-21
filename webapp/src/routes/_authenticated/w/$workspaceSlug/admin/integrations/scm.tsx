@@ -73,7 +73,6 @@ function ScmIntegrationPage() {
 				<WorkspaceConnectionStateNotice
 					connectionState={scm.connectionState}
 					credentialsUnreadableSince={scm.credentialsUnreadableSince}
-					providerCleanupUnconfirmed={scm.providerCleanupUnconfirmed}
 					webhookUnavailable={scm.tokenSettingsProps.attentionProblem === "WEBHOOK_UNAVAILABLE"}
 					credentialRecovery={credentialRecovery}
 					displayName={label}

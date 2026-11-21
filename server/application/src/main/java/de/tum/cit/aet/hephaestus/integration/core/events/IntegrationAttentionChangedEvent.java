@@ -16,8 +16,6 @@ public record IntegrationAttentionChangedEvent(
         CREDENTIAL_EXPIRING,
         CREDENTIAL_REVOKED,
         PROVIDER_SUSPENDED,
-        /** A disconnect could not confirm that the provider removed what the connection created there. */
-        PROVIDER_CLEANUP_UNCONFIRMED,
         /** The provider refused every webhook Hephaestus can register, so changes arrive only with a sync. */
         WEBHOOK_UNAVAILABLE
     }
