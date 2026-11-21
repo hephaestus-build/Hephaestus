@@ -11,6 +11,7 @@ import { evaluate } from "satteri";
 
 import {
 	callouts,
+	MARKDOWN_FEATURES,
 	rejectUnparsedAdmonitions,
 	restoreUnusedDirectives,
 	systemDiagrams,
@@ -57,7 +58,7 @@ async function render(source: string): Promise<string> {
 		Fragment,
 		jsx: element(jsx),
 		jsxs: element(jsxs),
-		features: { directive: true },
+		features: MARKDOWN_FEATURES,
 		mdastPlugins: [
 			rejectUnparsedAdmonitions,
 			callouts,
