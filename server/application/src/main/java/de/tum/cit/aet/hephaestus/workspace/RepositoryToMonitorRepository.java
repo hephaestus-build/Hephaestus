@@ -68,10 +68,6 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
 
     boolean existsByWorkspaceIdAndIdAndUnavailableSinceIsNotNull(Long workspaceId, Long id);
 
-    /** Resolves which workspace a repository belongs to during sync, by full name (owner/name). */
-    @WorkspaceAgnostic("Resolves the workspace of a repository by its full name, before any workspace is known")
-    Optional<RepositoryToMonitor> findByNameWithOwner(String nameWithOwner);
-
     @WorkspaceAgnostic("The receiver fans out a verified event to each workspace that monitors its repository")
     @Query("SELECT m.workspace.id FROM RepositoryToMonitor m WHERE m.nameWithOwner = :nameWithOwner"
             + " ORDER BY m.workspace.id")

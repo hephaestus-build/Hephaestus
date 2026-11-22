@@ -17,6 +17,9 @@ import tools.jackson.databind.ObjectMapper;
  * The sandbox writes that file, so only codes of the runner's own diagnostic vocabulary are shown.
  */
 final class RunnerEnd {
+    /** The capture key of a review program's crash in a running attempt. */
+    static final String PROGRAM_FAILURE_KEY = "programFailure";
+
     /** The vocabulary of the runner's diagnostics: the one home of its error kinds and stop reasons. */
     private static final String VOCABULARY = "agent/pi-diagnostics.json";
 
@@ -96,7 +99,7 @@ final class RunnerEnd {
      * the lease epoch: a claim that waits raises the epoch, but runs no attempt and spends no retry.
      */
     static @Nullable String describeProgramFailure(@Nullable JsonNode capture, int spentBeforeLastAttempt) {
-        JsonNode record = capture == null ? null : capture.get("programFailure");
+        JsonNode record = capture == null ? null : capture.get(PROGRAM_FAILURE_KEY);
         if (record == null || record.path("spent").asInt(-1) != spentBeforeLastAttempt) return null;
         JsonNode recorded = record.get("failure");
         String failure = programFailure(recorded != null && recorded.isString() ? recorded.asString() : null);

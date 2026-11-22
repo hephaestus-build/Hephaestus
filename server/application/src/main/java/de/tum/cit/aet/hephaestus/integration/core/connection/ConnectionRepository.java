@@ -96,8 +96,6 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
         return findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(workspaceId, kind, IntegrationState.ACTIVE);
     }
 
-    List<Connection> findByWorkspaceIdAndState(long workspaceId, IntegrationState state);
-
     /** Permission events invalidate catalog answers even when no monitor changes. JPA updates the managed version too. */
     @Lock(LockModeType.PESSIMISTIC_FORCE_INCREMENT)
     @Query("""
@@ -159,25 +157,16 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     List<Connection> findByStateAndProviderTeardownRequestedAtBeforeOrderByProviderTeardownRequestedAtAsc(
             IntegrationState state, Instant cutoff);
 
+    /** The suspended connections of one kind, whose provider webhooks a cleanup removes. */
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMaintenanceQueries$WebhookCleanupCandidate(
             c.id, c.workspace.id)
         FROM Connection c
-        WHERE c.kind = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITLAB
+        WHERE c.kind = :kind
           AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.SUSPENDED
         """)
-    List<ConnectionMaintenanceQueries.WebhookCleanupCandidate> findSuspendedGitLabWebhookCandidates();
-
-    @Query("""
-        SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WebhookCleanupCandidate(
-            c.id, c.workspace.id)
-        FROM Connection c
-        WHERE c.kind = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.OUTLINE
-          AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.SUSPENDED
-        """)
-    List<WebhookCleanupCandidate> findSuspendedOutlineWebhookCandidates();
-
-    record WebhookCleanupCandidate(long connectionId, long workspaceId) {}
+    List<ConnectionMaintenanceQueries.WebhookCleanupCandidate> findSuspendedWebhookCandidates(
+            @Param("kind") IntegrationKind kind);
 
     /**
      * The Connection by primary key, scoped to its workspace (the predicate the tenancy inspector
