@@ -10,13 +10,11 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
-import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -38,7 +36,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -111,9 +108,6 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
     private PullRequestRepository pulls;
 
     @Autowired
-    private PullRequestReviewRepository reviews;
-
-    @Autowired
     private UserRepository users;
 
     @Autowired
@@ -153,10 +147,7 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
     private RepositoryTreeContentSource repositoryTree;
 
     @Autowired
-    private ItemEventService events;
-
-    @Autowired
-    private PersonDataWriteFence fence;
+    private ScmRetainedOccasionEvidence occasionEvidence;
 
     @Autowired
     private ObjectMapper mapper;
@@ -219,22 +210,19 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
                 git,
                 preparer,
                 workLookup,
-                reviews,
-                events,
-                fence,
-                mapper,
+                occasionEvidence,
                 Clock.systemUTC());
         var service = new ScmItemService(
                 items,
                 access,
                 repositories,
                 workLookup,
-                reviews,
                 issueVersions,
                 tree,
                 fileVersions,
                 mapper,
                 capture,
+                occasionEvidence,
                 itemTransactions,
                 Clock.systemUTC());
         return new Pipeline(service, new ScmSourceFingerprints(service, capture, itemTransactions));

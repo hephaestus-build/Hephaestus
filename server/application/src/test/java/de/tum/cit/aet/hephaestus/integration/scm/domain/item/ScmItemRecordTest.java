@@ -28,7 +28,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.RepositoryTreeContentSource;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
@@ -77,18 +76,17 @@ class ScmItemRecordTest extends BaseUnitTest {
     private final ScmItemAccess items = mock(ScmItemAccess.class);
     private final RepositoryRepository repositories = mock(RepositoryRepository.class);
     private final ScmWorkLookup workLookup = mock(ScmWorkLookup.class);
-    private final PullRequestReviewRepository reviews = mock(PullRequestReviewRepository.class);
     private final ScmItemService service = new ScmItemService(
             items,
             access,
             repositories,
             workLookup,
-            reviews,
             mock(IssueEvidenceVersion.class),
             tree,
             mock(ScmFileVersions.class),
             mapper,
             mock(ScmWorkCapture.class),
+            mock(ScmRetainedOccasionEvidence.class),
             new ScmItemTransactions(),
             Clock.systemUTC());
 
@@ -303,7 +301,7 @@ class ScmItemRecordTest extends BaseUnitTest {
         var source = service;
         assertThat(source.record(pinned, Map.of(path, mapper.writeValueAsBytes(record))))
                 .isEqualTo(record);
-        verifyNoInteractions(items, repositories, workLookup, reviews);
+        verifyNoInteractions(items, repositories, workLookup);
     }
 
     @Test
@@ -322,7 +320,7 @@ class ScmItemRecordTest extends BaseUnitTest {
                             ItemCaptureException.class,
                             failure -> assertThat(failure.code()).isEqualTo(ItemCaptureCode.CAPTURE_FAILED));
         }
-        verifyNoInteractions(items, repositories, workLookup, reviews);
+        verifyNoInteractions(items, repositories, workLookup);
     }
 
     @ParameterizedTest

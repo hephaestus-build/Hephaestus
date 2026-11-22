@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class PullRequestChecksSource implements ItemChecksSource {
     private final PullRequestRepository pulls;
-    private final ScmWorkCapture capture;
+    private final ScmRetainedOccasionEvidence occasionEvidence;
 
     @Override
     public ItemKind kind() {
@@ -45,7 +45,7 @@ class PullRequestChecksSource implements ItemChecksSource {
         var item = pinned.item();
         var checks = eventId != null
                 ? PullRequestChecksRecord.retained(
-                        capture.occasion(item, eventId).record())
+                        occasionEvidence.occasion(item, eventId).record())
                 : pulls.findById(Objects.requireNonNull(item.sourceId()))
                         .map(pull ->
                                 PullRequestChecksRecord.current(pull, Objects.requireNonNull(pull.getHeadRefOid())))

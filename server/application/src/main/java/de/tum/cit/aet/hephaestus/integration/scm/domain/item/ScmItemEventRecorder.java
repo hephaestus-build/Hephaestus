@@ -41,7 +41,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class ScmItemEventRecorder {
     private final ItemIndexService writer;
     private final ScmItemService items;
-    private final ScmWorkCapture capture;
+    private final ScmRetainedOccasionEvidence occasionEvidence;
     private final ScmRepositoryAccess access;
     private final RepositoryRepository repositories;
     private final ScmItemSourceQuery queries;
@@ -288,7 +288,7 @@ public class ScmItemEventRecorder {
                 else if (version != null) {
                     String completed;
                     try {
-                        completed = capture.complete(events.pendingEvidence(workspace, event.id()), version);
+                        completed = occasionEvidence.complete(events.pendingEvidence(workspace, event.id()), version);
                     } catch (ItemCaptureException invalid) {
                         if (invalid.code() != ItemCaptureCode.CAPTURE_FAILED) throw invalid;
                         // A bad retained record is local to its occasion, not a failed shared provider read.
