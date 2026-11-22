@@ -56,6 +56,42 @@ void test("a new image or new arguments restart PostgreSQL once, as the release 
 	);
 });
 
+const memory = (request: string, limit: string) => ({
+	resources: { requests: { memory: request }, limits: { memory: limit } },
+});
+
+void test("a new memory request or limit restarts PostgreSQL once, because the chart derives it from the settings", () => {
+	assert.deepEqual(
+		changedPostgresql(
+			chart(statefulSet(memory("2Gi", "2Gi"))),
+			chart(statefulSet(memory("3Gi", "3Gi"))),
+		),
+		[
+			".spec.containers[postgresql].resources.requests.memory",
+			".spec.containers[postgresql].resources.limits.memory",
+		],
+	);
+});
+
+void test("a memory change together with any other template change still fails", () => {
+	assert.throws(
+		() =>
+			changedPostgresql(
+				chart(statefulSet(memory("2Gi", "2Gi"))),
+				chart(statefulSet({ ...memory("3Gi", "3Gi"), env: env("A") })),
+			),
+		/\.spec\.containers\[postgresql\]\.env/u,
+	);
+	assert.throws(
+		() =>
+			changedPostgresql(
+				chart(statefulSet({ resources: { requests: { memory: "2Gi", cpu: "1" } } })),
+				chart(statefulSet({ resources: { requests: { memory: "3Gi", cpu: "2" } } })),
+			),
+		/resources\.requests\.cpu/u,
+	);
+});
+
 void test("any other change to the Pod template fails, because it would cut the database on every upgrade", () => {
 	assert.throws(
 		() =>
@@ -63,7 +99,7 @@ void test("any other change to the Pod template fails, because it would cut the 
 				chart(statefulSet({})),
 				chart(statefulSet({}, { annotations: { version: "1.0.0" } })),
 			),
-		/beyond its image and arguments: \.metadata\.annotations/u,
+		/beyond its image, arguments and memory: \.metadata\.annotations/u,
 	);
 	assert.throws(
 		() => changedPostgresql(chart(service), chart(service)),
