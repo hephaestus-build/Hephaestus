@@ -14,9 +14,12 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppresse
 import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult.Outcome;
 import jakarta.mail.MessagingException;
 import jakarta.mail.SendFailedException;
+import jakarta.mail.Session;
 import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -38,6 +41,7 @@ import org.springframework.mail.MailAuthenticationException;
 import org.springframework.mail.MailException;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -62,6 +66,9 @@ public class EmailAdapter implements ActionAdapter {
     static final String PAYLOAD_KIND = "kind";
 
     static final String PAYLOAD_EVENT = "event";
+
+    /** The address of the message that the constructor composes and never sends. */
+    private static final String INITIALIZATION_ADDRESS = "initialization@example.invalid";
 
     private final Optional<JavaMailSender> mailSender;
     private final EmailProperties properties;
@@ -88,6 +95,54 @@ public class EmailAdapter implements ActionAdapter {
         for (EmailNotice<?> notice : notices)
             if (this.notices.put(notice.kind(), notice) != null)
                 throw new IllegalStateException("Two notices write " + notice.kind());
+        // Two concurrent first deliveries raced to initialize InternetAddress, and the loser waited 39 ms with its
+        // carrier pinned: a virtual thread that waits for another thread's class initialization keeps its carrier, as
+        // one that parks under a native frame does (the provider lookups of a Session, the multipart handler and the
+        // SMTP transport load through Class.forName). This constructor runs on a platform thread, so it takes the
+        // first delivery's path to the network once and initializes all of them.
+        mailSender.ifPresent(sender -> initializeMailClasses(
+                sender,
+                properties.hasFrom() ? Objects.requireNonNull(properties.from()) : INITIALIZATION_ADDRESS,
+                properties.fromName(),
+                properties.hasReplyTo() ? properties.replyTo() : null));
+    }
+
+    /**
+     * Composes a message as a delivery does, writes it nowhere and creates the transport without connecting, so that
+     * this thread initializes the classes of a delivery. Composing looks the local host name up once, as the first
+     * send would.
+     */
+    static void initializeMailClasses(JavaMailSender sender, String from, String fromName, @Nullable String replyTo) {
+        try {
+            MimeMessage message = compose(
+                    sender,
+                    new EmailMessage(
+                            EmailKind.TEST_MESSAGE,
+                            INITIALIZATION_ADDRESS,
+                            "initialization",
+                            "initialization",
+                            "<p>initialization</p>",
+                            "https://example.invalid/unsubscribe"),
+                    Objects.requireNonNull(parseSingleAddress(INITIALIZATION_ADDRESS)),
+                    from,
+                    fromName,
+                    replyTo,
+                    "<initialization@example.invalid>");
+            message.writeTo(OutputStream.nullOutputStream());
+            if (sender instanceof JavaMailSenderImpl configured) {
+                // The protocol that JavaMailSenderImpl connects with, as EmailTransportConfiguration resolves it.
+                Session session = configured.getSession();
+                String protocol = configured.getProtocol();
+                if (protocol == null) protocol = session.getProperty("mail.transport.protocol");
+                session.getTransport(protocol == null ? JavaMailSenderImpl.DEFAULT_PROTOCOL : protocol)
+                        .close();
+            }
+        } catch (MessagingException | IOException e) {
+            // Nothing is sent. A failure only leaves the rest of the classes to the first delivery.
+            log.debug(
+                    "email: mail class initialization incomplete cause={}",
+                    e.getClass().getName());
+        }
     }
 
     @Override
@@ -190,30 +245,16 @@ public class EmailAdapter implements ActionAdapter {
         }
 
         String messageId = messageId(attempt.idempotencyKey(), from);
-        MimeMessage mimeMessage = sender.createMimeMessage();
+        MimeMessage mimeMessage;
         try {
-            MimeMessageHelper helper = new MimeMessageHelper(
-                    mimeMessage, MimeMessageHelper.MULTIPART_MODE_MIXED, StandardCharsets.UTF_8.name());
-            helper.setFrom(from, properties.fromName());
-            helper.setTo(to);
-            String replyTo = properties.replyTo();
-            if (replyTo != null && properties.hasReplyTo()) {
-                helper.setReplyTo(replyTo);
-            }
-            helper.setSubject(message.subject());
-            helper.setText(message.text(), message.html());
-            // JavaMailSenderImpl keeps an explicitly set Message-ID across saveChanges().
-            mimeMessage.setHeader("Message-ID", messageId);
-            mimeMessage.setHeader("Auto-Submitted", "auto-generated");
-            mimeMessage.setHeader("X-Auto-Response-Suppress", "All");
-            String unsubscribeUrl = message.unsubscribeUrl();
-            if (unsubscribeUrl != null) {
-                mimeMessage.setHeader("List-Unsubscribe", "<" + unsubscribeUrl + ">");
-                // RFC 8058 requires HTTPS. Local Mailpit links remain usable without advertising one-click.
-                if (unsubscribeUrl.startsWith("https://")) {
-                    mimeMessage.setHeader("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
-                }
-            }
+            mimeMessage = compose(
+                    sender,
+                    message,
+                    to,
+                    from,
+                    properties.fromName(),
+                    properties.hasReplyTo() ? properties.replyTo() : null,
+                    messageId);
         } catch (MessagingException | UnsupportedEncodingException e) {
             log.error(
                     "email: could not build message kind={} messageId={} cause={}",
@@ -332,6 +373,41 @@ public class EmailAdapter implements ActionAdapter {
     @SuppressWarnings("ReferenceEquality") // cycle guard: a Jakarta Mail next-exception chain can point at itself
     private static boolean causesItself(Throwable failure) {
         return failure.getCause() == failure;
+    }
+
+    /** The message of one delivery, in {@code sender}'s session. The constructor composes one too. */
+    private static MimeMessage compose(
+            JavaMailSender sender,
+            EmailMessage message,
+            InternetAddress to,
+            String from,
+            String fromName,
+            @Nullable String replyTo,
+            String messageId)
+            throws MessagingException, UnsupportedEncodingException {
+        MimeMessage mimeMessage = sender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(
+                mimeMessage, MimeMessageHelper.MULTIPART_MODE_MIXED, StandardCharsets.UTF_8.name());
+        helper.setFrom(from, fromName);
+        helper.setTo(to);
+        if (replyTo != null) {
+            helper.setReplyTo(replyTo);
+        }
+        helper.setSubject(message.subject());
+        helper.setText(message.text(), message.html());
+        // JavaMailSenderImpl keeps an explicitly set Message-ID across saveChanges().
+        mimeMessage.setHeader("Message-ID", messageId);
+        mimeMessage.setHeader("Auto-Submitted", "auto-generated");
+        mimeMessage.setHeader("X-Auto-Response-Suppress", "All");
+        String unsubscribeUrl = message.unsubscribeUrl();
+        if (unsubscribeUrl != null) {
+            mimeMessage.setHeader("List-Unsubscribe", "<" + unsubscribeUrl + ">");
+            // RFC 8058 requires HTTPS. Local Mailpit links remain usable without advertising one-click.
+            if (unsubscribeUrl.startsWith("https://")) {
+                mimeMessage.setHeader("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+            }
+        }
+        return mimeMessage;
     }
 
     /** Strict RFC 822 parse of exactly one mailbox; CR/LF or a second address fails it. */
