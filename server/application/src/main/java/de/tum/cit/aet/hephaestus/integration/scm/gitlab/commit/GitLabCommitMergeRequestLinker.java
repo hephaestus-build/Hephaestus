@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncExcepti
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -75,7 +76,7 @@ public class GitLabCommitMergeRequestLinker {
     private final GitLabGraphQlResponseHandler responseHandler;
     private final GitLabProperties gitLabProperties;
     private final ApplicationEventPublisher eventPublisher;
-    private final GitLabRouteAdmission routeAdmission;
+    private final GitLabRouteWrites routeWrites;
     private final TransactionTemplate transactions;
 
     private final Clock clock;
@@ -88,7 +89,7 @@ public class GitLabCommitMergeRequestLinker {
             GitLabGraphQlResponseHandler responseHandler,
             GitLabProperties gitLabProperties,
             ApplicationEventPublisher eventPublisher,
-            GitLabRouteAdmission routeAdmission,
+            GitLabRouteWrites routeWrites,
             TransactionTemplate transactions,
             Clock clock,
             GitLabProjectAdmission admission) {
@@ -101,7 +102,7 @@ public class GitLabCommitMergeRequestLinker {
         this.responseHandler = responseHandler;
         this.gitLabProperties = gitLabProperties;
         this.eventPublisher = eventPublisher;
-        this.routeAdmission = routeAdmission;
+        this.routeWrites = routeWrites;
         this.transactions = transactions;
     }
 
@@ -113,7 +114,7 @@ public class GitLabCommitMergeRequestLinker {
         return Objects.requireNonNull(transactions.execute(status -> {
             if (!admission.hold(read)) return 0;
             var route = GitLabRouteAdmission.current();
-            if (route.isPresent() && !routeAdmission.holdActive(route.get())) return 0;
+            if (route.isPresent() && !routeWrites.holdActive(route.get())) return 0;
             return write.getAsInt();
         }));
     }

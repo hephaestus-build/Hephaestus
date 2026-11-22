@@ -1,17 +1,15 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMemberRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembership;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupMemberResponse;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSelectionSnapshots.Capture;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSelectionSnapshots.Monitored;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSelectionSnapshots.Snapshot;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.collaborator.GitLabCollaboratorSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.collaborator.GitLabCollaboratorSyncService.ListedCollaborator;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.collaborator.GitLabCollaboratorSyncService.ProjectMembers;
@@ -19,28 +17,18 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncServi
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
-import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
-import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
-import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
-import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -83,74 +71,36 @@ public class GitLabSelectedMembershipProjection {
         STALE
     }
 
-    private record Monitored(long nativeId, String path) {}
-
-    private record Snapshot(
-            long workspaceId,
-            long connectionId,
-            Long connectionVersion,
-            @Nullable String serverUrl,
-            long providerId,
-            String group,
-            @Nullable Long organizationId,
-            Map<Long, Monitored> monitors) {}
-
-    /** The snapshot GitLab is read for, or, without one, the outcome that asks GitLab nothing. */
-    private record Capture(Outcome outcome, @Nullable Snapshot snapshot) {
-        static Capture skip(Outcome outcome) {
-            return new Capture(outcome, null);
-        }
-
-        static Capture of(Snapshot snapshot) {
-            return new Capture(Outcome.APPLIED, snapshot);
-        }
-    }
-
     private final WorkspaceLocks workspaceLocks;
 
-    private final WorkspaceLookup workspaceLookup;
-    private final WorkspaceProviderAccounts providerAccounts;
-    private final WorkspaceRepositoryMonitors monitors;
     private final ConnectionCommands connections;
-    private final ConnectionQueries connectionQueries;
-    private final WorkspaceActorSelector actorSelector;
     private final OrganizationMembershipRepository roster;
     private final GitLabCollaboratorSyncService collaboratorSync;
     private final GitLabTeamSyncService teamSync;
     private final GitLabUserService userService;
     private final MembershipService membershipService;
     private final TransactionTemplate transactionTemplate;
-
-    @PersistenceContext
-    private @Nullable EntityManager entityManager;
+    private final GitLabSelectionSnapshots snapshots;
 
     public GitLabSelectedMembershipProjection(
             WorkspaceLocks workspaceLocks,
-            WorkspaceLookup workspaceLookup,
-            WorkspaceProviderAccounts providerAccounts,
-            WorkspaceRepositoryMonitors monitors,
             ConnectionCommands connections,
-            ConnectionQueries connectionQueries,
-            WorkspaceActorSelector actorSelector,
             OrganizationMembershipRepository roster,
             GitLabCollaboratorSyncService collaboratorSync,
             GitLabTeamSyncService teamSync,
             GitLabUserService userService,
             MembershipService membershipService,
-            TransactionTemplate transactionTemplate) {
+            TransactionTemplate transactionTemplate,
+            GitLabSelectionSnapshots snapshots) {
         this.workspaceLocks = workspaceLocks;
-        this.workspaceLookup = workspaceLookup;
-        this.providerAccounts = providerAccounts;
-        this.monitors = monitors;
         this.connections = connections;
-        this.connectionQueries = connectionQueries;
-        this.actorSelector = actorSelector;
         this.roster = roster;
         this.collaboratorSync = collaboratorSync;
         this.teamSync = teamSync;
         this.userService = userService;
         this.membershipService = membershipService;
         this.transactionTemplate = transactionTemplate;
+        this.snapshots = snapshots;
     }
 
     /**
@@ -159,7 +109,7 @@ public class GitLabSelectedMembershipProjection {
      * @return what changed; only {@link Outcome#APPLIED} changed a membership
      */
     public Outcome project(long workspaceId) {
-        Capture capture = Objects.requireNonNull(transactionTemplate.execute(status -> capture(workspaceId)));
+        Capture capture = Objects.requireNonNull(transactionTemplate.execute(status -> snapshots.capture(workspaceId)));
         Snapshot snapshot = capture.snapshot();
         return snapshot == null ? capture.outcome() : readAndApply(snapshot);
     }
@@ -183,61 +133,6 @@ public class GitLabSelectedMembershipProjection {
         Collection<GitLabUserLookup> people = granted.get();
         return Objects.requireNonNullElse(
                 transactionTemplate.execute(status -> apply(snapshot, people, status)), Outcome.UNKNOWN);
-    }
-
-    private Capture capture(long workspaceId) {
-        WorkspaceProviderAccounts.ProviderAccount policy =
-                providerAccounts.providerAccount(workspaceId).orElse(null);
-        ConnectionQueries.ConnectionSnapshot connection = connectionQueries
-                .findActive(workspaceId, IntegrationKind.GITLAB)
-                .orElse(null);
-        Workspace workspace = workspaceLookup.find(workspaceId).orElse(null);
-        if (policy == null
-                || policy.repositorySelection() != RepositorySelection.SELECTED
-                || connection == null
-                || workspace == null) {
-            return Capture.skip(Outcome.NOT_SELECTED);
-        }
-        EntityManager em = Objects.requireNonNull(entityManager);
-        em.refresh(workspace);
-        if (!(connection.config() instanceof GitLabConfig config)) {
-            return Capture.skip(Outcome.NOT_SELECTED);
-        }
-        Optional<Long> providerId = actorSelector.connectedProviderId(workspaceId);
-        Optional<Map<Long, Monitored>> monitored = monitored(workspaceId, policy.accountLogin());
-        if (providerId.isEmpty() || monitored.isEmpty()) {
-            log.warn("Skipped selected membership changes: reason=unresolvedMonitor, workspaceId={}", workspaceId);
-            return Capture.skip(Outcome.UNKNOWN);
-        }
-        return Capture.of(new Snapshot(
-                workspaceId,
-                connection.id(),
-                connection.version(),
-                config.serverUrl(),
-                providerId.get(),
-                policy.accountLogin(),
-                workspace.getOrganizationId(),
-                monitored.get()));
-    }
-
-    /**
-     * The workspace's monitors by id, each with the project id it names and its path; empty when a monitor names no
-     * project id or a path outside the connected group, so it cannot say which project it selected.
-     */
-    private Optional<Map<Long, Monitored>> monitored(long workspaceId, String group) {
-        EntityManager em = Objects.requireNonNull(entityManager);
-        String root = group.toLowerCase(Locale.ROOT) + "/";
-        Map<Long, Monitored> monitored = new HashMap<>();
-        for (RepositoryToMonitor monitor : monitors.monitors(workspaceId)) {
-            em.refresh(monitor);
-            Long nativeId = monitor.getNativeId();
-            String path = monitor.getNameWithOwner();
-            if (nativeId == null || !path.toLowerCase(Locale.ROOT).startsWith(root)) {
-                return Optional.empty();
-            }
-            monitored.put(monitor.getId(), new Monitored(nativeId, path));
-        }
-        return Optional.of(Map.copyOf(monitored));
     }
 
     /**
@@ -289,7 +184,7 @@ public class GitLabSelectedMembershipProjection {
             return Outcome.STALE;
         }
         connections.holdLifecycleLock(workspaceId, snapshot.connectionId());
-        if (!unchanged(snapshot, workspace)) {
+        if (!snapshots.unchanged(snapshot, workspace)) {
             log.info("Skipped selected membership changes: reason=changedWhileRead, workspaceId={}", workspaceId);
             return Outcome.STALE;
         }
@@ -318,40 +213,5 @@ public class GitLabSelectedMembershipProjection {
         membershipService.syncWorkspaceMembers(workspace, desired);
         log.info("Synced selected workspace members: workspaceId={}, memberCount={}", workspaceId, desired.size());
         return Outcome.APPLIED;
-    }
-
-    /** Whether the connection, the selection, the group link and every monitor are still as the snapshot read them. */
-    private boolean unchanged(Snapshot snapshot, Workspace workspace) {
-        long workspaceId = snapshot.workspaceId();
-        EntityManager em = Objects.requireNonNull(entityManager);
-        em.refresh(workspace);
-        Connection connection = connections
-                .findHeldConnection(workspaceId, snapshot.connectionId())
-                .orElse(null);
-        if (connection == null) {
-            return false;
-        }
-        em.refresh(connection);
-        return connection.getState() == IntegrationState.ACTIVE
-                && Objects.equals(connection.getVersion(), snapshot.connectionVersion())
-                && connection.getConfig() instanceof GitLabConfig config
-                && Objects.equals(config.serverUrl(), snapshot.serverUrl())
-                && connectionQueries
-                        .findActive(workspaceId, IntegrationKind.GITLAB)
-                        .filter(active -> active.id() == snapshot.connectionId())
-                        .isPresent()
-                && providerAccounts
-                        .providerAccount(workspaceId)
-                        .filter(policy -> policy.repositorySelection() == RepositorySelection.SELECTED
-                                && policy.accountLogin().equals(snapshot.group()))
-                        .isPresent()
-                && actorSelector
-                        .connectedProviderId(workspaceId)
-                        .filter(providerId -> providerId == snapshot.providerId())
-                        .isPresent()
-                && Objects.equals(workspace.getOrganizationId(), snapshot.organizationId())
-                && monitored(workspaceId, snapshot.group())
-                        .filter(snapshot.monitors()::equals)
-                        .isPresent();
     }
 }

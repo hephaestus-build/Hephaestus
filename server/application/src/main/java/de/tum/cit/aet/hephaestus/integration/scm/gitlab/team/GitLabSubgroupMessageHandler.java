@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabDescendantGroupResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.dto.GitLabSubgroupEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites;
 import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -39,14 +40,14 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
     private final GitLabTeamProcessor teamProcessor;
     private final SourceProviderNamespaces providerNamespaces;
     private final GitLabProperties gitLabProperties;
-    private final GitLabRouteAdmission routeAdmission;
+    private final GitLabRouteWrites routeWrites;
     private final TeamRepository teamRepository;
 
     GitLabSubgroupMessageHandler(
             GitLabTeamProcessor teamProcessor,
             SourceProviderNamespaces providerNamespaces,
             GitLabProperties gitLabProperties,
-            GitLabRouteAdmission routeAdmission,
+            GitLabRouteWrites routeWrites,
             TeamRepository teamRepository,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
@@ -59,7 +60,7 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
         this.teamProcessor = teamProcessor;
         this.providerNamespaces = providerNamespaces;
         this.gitLabProperties = gitLabProperties;
-        this.routeAdmission = routeAdmission;
+        this.routeWrites = routeWrites;
         this.teamRepository = teamRepository;
     }
 
@@ -103,7 +104,7 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
         if (reported == null
                 || groupId == route.groupId()
                 || !route.contains(reported.fullPath())
-                || !routeAdmission.holdActive(route)) {
+                || !routeWrites.holdActive(route)) {
             log.info("Skipped subgroup event: reason=notReportedInsideConnectedGroup, groupId={}", groupId);
             return;
         }

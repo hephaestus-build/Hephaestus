@@ -330,22 +330,20 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
                 transactionTemplate,
                 workspaceLinkService,
                 projectAdmission);
+        var snapshots = new GitLabSelectionSnapshots(
+                workspaceLookup, providerAccounts, monitorPort, connectionCommands, connectionQueries, actorSelector);
+        // Its persistence context, as the container injects it.
+        beanFactory.autowireBean(snapshots);
         projection = new GitLabSelectedMembershipProjection(
                 workspaceLocks,
-                workspaceLookup,
-                providerAccounts,
-                monitorPort,
                 connectionCommands,
-                connectionQueries,
-                actorSelector,
                 roster,
                 collaboratorSync,
                 teamSync,
                 gitLabUserService,
                 membershipService,
-                transactionTemplate);
-        // Its persistence context, as the container injects it.
-        beanFactory.autowireBean(projection);
+                transactionTemplate,
+                snapshots);
     }
 
     @Test

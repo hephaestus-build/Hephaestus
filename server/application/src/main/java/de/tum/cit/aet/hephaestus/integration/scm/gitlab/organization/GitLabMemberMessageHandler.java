@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.dto.GitLabM
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.Comparator;
 import java.util.List;
@@ -56,7 +57,7 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
     private final UserRepository userRepository;
     private final TeamRepository teamRepository;
     private final TeamMembershipRepository teamMembershipRepository;
-    private final GitLabRouteAdmission routeAdmission;
+    private final GitLabRouteWrites routeWrites;
     private final GitLabUserService gitLabUserService;
     private final WorkspaceSummaryQuery workspaces;
 
@@ -69,7 +70,7 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
             UserRepository userRepository,
             TeamRepository teamRepository,
             TeamMembershipRepository teamMembershipRepository,
-            GitLabRouteAdmission routeAdmission,
+            GitLabRouteWrites routeWrites,
             GitLabUserService gitLabUserService,
             WorkspaceSummaryQuery workspaces,
             @Nullable OrganizationMembershipListener membershipListener,
@@ -86,7 +87,7 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
         this.userRepository = userRepository;
         this.teamRepository = teamRepository;
         this.teamMembershipRepository = teamMembershipRepository;
-        this.routeAdmission = routeAdmission;
+        this.routeWrites = routeWrites;
         this.gitLabUserService = gitLabUserService;
         this.workspaces = workspaces;
         this.membershipListener = membershipListener;
@@ -113,7 +114,7 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
         Optional<GitLabRouteAdmission.ReportedMembership> reported = GitLabRouteAdmission.reportedMembership();
         if (reported.isPresent()
                 && workspaces.findStateForUpdate(route.get().workspaceId()).isPresent()
-                && routeAdmission.holdActive(route.get())) {
+                && routeWrites.holdActive(route.get())) {
             applyReportedMembership(event.userId(), route.get(), reported.get());
         }
     }

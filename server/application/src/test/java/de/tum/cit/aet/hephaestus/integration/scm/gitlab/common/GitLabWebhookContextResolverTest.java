@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabAdmissio
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -40,9 +41,9 @@ class GitLabWebhookContextResolverTest {
 
     private final GitLabProjectAdmission projectAdmission = mock(GitLabProjectAdmission.class);
     private final RepositoryRepository repositories = mock(RepositoryRepository.class);
-    private final GitLabRouteAdmission routeAdmission = mock(GitLabRouteAdmission.class);
+    private final GitLabRouteWrites routeWrites = mock(GitLabRouteWrites.class);
     private final GitLabWebhookContextResolver resolver =
-            new GitLabWebhookContextResolver(repositories, routeAdmission, projectAdmission);
+            new GitLabWebhookContextResolver(repositories, routeWrites, projectAdmission);
 
     private final ProcessingContext resolved = ProcessingContext.forWebhook(WORKSPACE_ID, repository(PATH), "update");
 
@@ -54,8 +55,8 @@ class GitLabWebhookContextResolverTest {
         when(repositories.findByNameWithOwnerAndProviderId(PATH, PROVIDER_ID))
                 .thenReturn(Optional.of(repository(PATH)));
         when(repositories.findById(REPOSITORY_ID)).thenReturn(Optional.of(repository(PATH)));
-        when(routeAdmission.holdActive(ROUTE)).thenReturn(true);
-        when(routeAdmission.admitRepository(eq(ROUTE), any()))
+        when(routeWrites.holdActive(ROUTE)).thenReturn(true);
+        when(routeWrites.admitRepository(eq(ROUTE), any()))
                 .thenAnswer(invocation ->
                         PATH.equals(invocation.<Repository>getArgument(1).getNameWithOwner()));
     }
@@ -98,7 +99,7 @@ class GitLabWebhookContextResolverTest {
 
     @Test
     void shouldNotLetTheDeliveryWriteOnceTheConnectionIsNoLongerActive() {
-        when(routeAdmission.holdActive(ROUTE)).thenReturn(false);
+        when(routeWrites.holdActive(ROUTE)).thenReturn(false);
 
         assertThat(onRoute(() -> resolver.mayStillWrite(resolved, originalPermit)))
                 .isFalse();
