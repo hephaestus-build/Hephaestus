@@ -10,7 +10,9 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
@@ -182,19 +184,29 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
     }
 
     private JobEvidenceFiles files(String replica) {
-        var copies = mock(
-                EvidenceFolderPersonDataCatalog.class,
+        var receipts = mock(
+                EvidenceReceipts.class,
                 invocation -> switch (invocation.getMethod().getName()) {
                     case "vouchesForLiveAttempt" -> true;
-                    case "finishCapture" -> (AutoCloseable) () -> {};
                     case "withLiveAttempt" -> {
                         Supplier<?> restore = invocation.getArgument(1);
                         yield restore.get();
                     }
                     default -> Answers.RETURNS_DEFAULTS.answer(invocation);
                 });
+        var captures = mock(
+                EvidenceCaptures.class,
+                invocation -> invocation.getMethod().getName().equals("finishCapture")
+                        ? (AutoCloseable) () -> {}
+                        : Answers.RETURNS_DEFAULTS.answer(invocation));
         return new JobEvidenceFiles(
-                new FabricLayout(root.resolve(replica).toString()), jobs, Clock.systemUTC(), copies, inputs);
+                new FabricLayout(root.resolve(replica).toString()),
+                jobs,
+                Clock.systemUTC(),
+                mock(EvidenceFolderPersonDataCatalog.class),
+                receipts,
+                captures,
+                inputs);
     }
 
     private PreparedJobInputs capture() {

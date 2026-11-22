@@ -10,8 +10,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -48,11 +50,19 @@ class JobEvidenceRebuildTest {
     Path root;
 
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
-    private final EvidenceFolderPersonDataCatalog copies = mock(EvidenceFolderPersonDataCatalog.class);
+    private final EvidenceReceipts copies = mock(EvidenceReceipts.class);
+    private final EvidenceCaptures captures = mock(EvidenceCaptures.class);
     private final AttemptInputs inputs = mock(AttemptInputs.class);
 
     private JobEvidenceFiles files() {
-        return new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), copies, inputs);
+        return new JobEvidenceFiles(
+                new FabricLayout(root.toString()),
+                jobs,
+                Clock.systemUTC(),
+                mock(EvidenceFolderPersonDataCatalog.class),
+                copies,
+                captures,
+                inputs);
     }
 
     private EvidenceFileReads reads(JobEvidenceFiles files) {
@@ -60,7 +70,7 @@ class JobEvidenceRebuildTest {
     }
 
     private AttemptCopyReceipts receipts(JobEvidenceFiles files) {
-        return new AttemptCopyReceipts(copies, files, new FabricLayout(root.toString()), jobs);
+        return new AttemptCopyReceipts(copies, captures, files, new FabricLayout(root.toString()), jobs);
     }
 
     @Test

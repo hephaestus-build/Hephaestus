@@ -4,8 +4,10 @@ import static de.tum.cit.aet.hephaestus.agent.context.EvidenceFolders.delete;
 import static de.tum.cit.aet.hephaestus.agent.context.EvidenceFolders.directory;
 import static de.tum.cit.aet.hephaestus.agent.context.EvidenceFolders.safePath;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxResultListener;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
@@ -103,7 +105,8 @@ public class JobEvidenceFiles implements SandboxResultListener {
     private final FabricLayout layout;
     private final ReviewJobRepository jobs;
     private final Clock clock;
-    private final EvidenceFolderPersonDataCatalog personCopies;
+    private final EvidenceReceipts receipts;
+    private final EvidenceCaptures captures;
     private final AttemptInputs attemptInputs;
     private final AttemptTranscripts transcripts;
     private final AttemptFolderSweep sweep;
@@ -113,13 +116,16 @@ public class JobEvidenceFiles implements SandboxResultListener {
             ReviewJobRepository jobs,
             Clock clock,
             EvidenceFolderPersonDataCatalog personCopies,
+            EvidenceReceipts receipts,
+            EvidenceCaptures captures,
             AttemptInputs attemptInputs) {
         this.layout = layout;
         this.jobs = jobs;
         this.clock = clock;
-        this.personCopies = personCopies;
+        this.receipts = receipts;
+        this.captures = captures;
         this.attemptInputs = attemptInputs;
-        this.transcripts = new AttemptTranscripts(layout, jobs, clock, personCopies);
+        this.transcripts = new AttemptTranscripts(layout, jobs, clock, receipts);
         this.sweep = new AttemptFolderSweep(layout, jobs, clock, personCopies);
     }
 
@@ -141,10 +147,10 @@ public class JobEvidenceFiles implements SandboxResultListener {
         if (published && capture != null)
             return recorded
                             && !expired(capture)
-                            && personCopies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt())
+                            && receipts.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt())
                     ? Preparation.PUBLISHED
                     : Preparation.UNAVAILABLE;
-        return recorded || personCopies.hasAttemptCapture(job) ? Preparation.INTERRUPTED : Preparation.NEW;
+        return recorded || receipts.hasAttemptCapture(job) ? Preparation.INTERRUPTED : Preparation.NEW;
     }
 
     private boolean expired(JsonNode capture) {
@@ -154,7 +160,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
     /** Reuses exactly the frozen files; a resumed epoch never captures the providers again. */
     public PreparedJobInputs resume(ReviewJob job) {
-        return personCopies.withLiveAttempt(job, () -> {
+        return receipts.withLiveAttempt(job, () -> {
             JsonNode capture = Objects.requireNonNull(job.getCapture());
             var lease = acquireForRebuild(job);
             Path root = directory(layout.jobsRoot(), job);
@@ -222,11 +228,11 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     public void beginPersonCapture(ReviewJob job) {
-        personCopies.beginCapture(job);
+        captures.beginCapture(job);
     }
 
     public void abortPersonCapture(ReviewJob job) {
-        personCopies.abortCapture(job);
+        captures.abortCapture(job);
     }
 
     /** Rendering scratch belongs to the fenced attempt and has the same cleanup boundary as its frozen folder. */
@@ -311,7 +317,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
                     sweep.retire(root);
                 }
             });
-            cleanups.add(personCopies.finishCapture(job));
+            cleanups.add(captures.finishCapture(job));
             return new PreparedJobInputs(staged, directories, cleanups, inputs.manifest(), report);
         } catch (DataAccessException | TransactionException exception) {
             if (staging != null) delete(staging);
@@ -463,7 +469,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
     private boolean live(ReviewJob job) {
         return job.getStatus() == ReviewJobStatus.RUNNING
-                && personCopies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt());
+                && receipts.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt());
     }
 
     /** The job's folder lease, waited for while a sweep or a runtime of this or another process holds it briefly. */

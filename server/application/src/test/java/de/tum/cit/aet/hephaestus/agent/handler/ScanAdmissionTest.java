@@ -5,7 +5,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptInputs;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
@@ -81,6 +83,7 @@ class ScanAdmissionTest extends BaseUnitTest {
     private List<ResultCandidate> staged = List.of();
     private final ReviewAssignmentStore membership = mock(ReviewAssignmentStore.class);
     private final EvidenceFolderPersonDataCatalog copies = mock(EvidenceFolderPersonDataCatalog.class);
+    private final EvidenceCaptures captures = mock(EvidenceCaptures.class);
     private @Nullable PreparedJobInputs inputs;
     private final ReviewJob job = RuntimeReviewTestData.job();
 
@@ -135,13 +138,15 @@ class ScanAdmissionTest extends BaseUnitTest {
                 mock(ReviewJobRepository.class),
                 clock,
                 copies,
+                mock(EvidenceReceipts.class),
+                captures,
                 mock(AttemptInputs.class));
     }
 
     @BeforeEach
     void setup() {
         job.setRunId(LEASE);
-        when(copies.finishCapture(job)).thenReturn(() -> {});
+        when(captures.finishCapture(job)).thenReturn(() -> {});
         var assigned = assignment();
         when(assignments.admissible(job)).thenReturn(List.of(assigned));
         when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.SCAN, assigned));

@@ -8,7 +8,9 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.AgentControllerAdvice;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
@@ -422,19 +424,27 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
         var layout = new FabricLayout(root.toString());
         var custody = new ReviewAttemptCustody(runs);
         var localSessions = new SandboxGatewaySessions();
+        var copyFence = beans.getBean(PersonDataCopyFence.class);
+        var evidenceReceipts = new EvidenceReceipts(layout, jdbc, mapper, copyFence);
+        var evidenceCaptures = new EvidenceCaptures(
+                layout, jdbc, mapper, beans.getBean(PersonDataCopyRecorder.class), copyFence, evidenceReceipts);
         var catalog = new EvidenceFolderPersonDataCatalog(
                 layout,
                 jdbc,
                 beans.getBean(NamedParameterJdbcTemplate.class),
                 mapper,
-                beans.getBean(PersonDataCopyRecorder.class),
-                beans.getBean(PersonDataCopyFence.class),
                 beans.getBeanProvider(ReviewAttemptCustody.class),
                 beans.getBeanProvider(AgentSandboxes.class),
                 beans.getBeanProvider(SandboxGatewaySessions.class),
                 beans.getBeanProvider(ReviewJobLifecycleService.class));
         var files = new JobEvidenceFiles(
-                layout, jobs, beans.getBean(Clock.class), catalog, beans.getBean(AttemptInputs.class));
+                layout,
+                jobs,
+                beans.getBean(Clock.class),
+                catalog,
+                evidenceReceipts,
+                evidenceCaptures,
+                beans.getBean(AttemptInputs.class));
         var handler = mock(DefaultReviewExecutionHandler.class, invocation -> {
             if (invocation.getMethod().getName().equals("completeWithoutExecution")
                     && publication == Publication.COMPLETION_FAILED) {
@@ -547,7 +557,7 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                 beans.getBean(ReviewRunKind.class),
                 runs,
                 files,
-                new AttemptCopyReceipts(catalog, files, layout, jobs),
+                new AttemptCopyReceipts(evidenceReceipts, evidenceCaptures, files, layout, jobs),
                 beans.getBean(ClusterLock.class));
         return new Replica(gateway(kind, localSessions), kind, custody, layout, job.getId(), preparation);
     }

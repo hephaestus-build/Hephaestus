@@ -2,7 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import static de.tum.cit.aet.hephaestus.agent.context.EvidenceFolders.directory;
 
-import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -24,17 +25,20 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class AttemptCopyReceipts {
-    private final EvidenceFolderPersonDataCatalog personCopies;
+    private final EvidenceReceipts receipts;
+    private final EvidenceCaptures captures;
     private final JobEvidenceFiles folders;
     private final FabricLayout layout;
     private final ReviewJobRepository jobs;
 
     public AttemptCopyReceipts(
-            EvidenceFolderPersonDataCatalog personCopies,
+            EvidenceReceipts receipts,
+            EvidenceCaptures captures,
             JobEvidenceFiles folders,
             FabricLayout layout,
             ReviewJobRepository jobs) {
-        this.personCopies = personCopies;
+        this.receipts = receipts;
+        this.captures = captures;
         this.folders = folders;
         this.layout = layout;
         this.jobs = jobs;
@@ -56,34 +60,34 @@ public class AttemptCopyReceipts {
                 .ifPresent(folders::ensureAttemptFolder);
     }
 
-    /** See {@link EvidenceFolderPersonDataCatalog#completeReceipt}. */
+    /** See {@link EvidenceReceipts#completeReceipt}. */
     public Optional<UUID> completeReceipt(ResultAdmissionService.AdmissionIdentity identity) {
-        return personCopies.completeReceipt(identity.jobId(), identity.workspaceId(), identity.attempt());
+        return receipts.completeReceipt(identity.jobId(), identity.workspaceId(), identity.attempt());
     }
 
-    /** See {@link EvidenceFolderPersonDataCatalog#holdCopyAdmission}. */
+    /** See {@link EvidenceReceipts#holdCopyAdmission}. */
     public void holdCopyAdmission() {
-        personCopies.holdCopyAdmission();
+        receipts.holdCopyAdmission();
     }
 
-    /** See {@link EvidenceFolderPersonDataCatalog#vouchesForLiveAttempt}. */
+    /** See {@link EvidenceReceipts#vouchesForLiveAttempt}. */
     public boolean vouchesForLiveAttempt(ResultAdmissionService.AdmissionIdentity identity) {
-        return personCopies.vouchesForLiveAttempt(identity.jobId(), identity.workspaceId(), identity.attempt());
+        return receipts.vouchesForLiveAttempt(identity.jobId(), identity.workspaceId(), identity.attempt());
     }
 
-    /** See {@link EvidenceFolderPersonDataCatalog#vouchesForOriginalCopy}. */
+    /** See {@link EvidenceReceipts#vouchesForOriginalCopy}. */
     public boolean vouchesForOriginalCopy(UUID copyId, UUID jobId, long workspaceId, int attempt) {
-        return personCopies.vouchesForOriginalCopy(copyId, jobId, workspaceId, attempt);
+        return receipts.vouchesForOriginalCopy(copyId, jobId, workspaceId, attempt);
     }
 
-    /** See {@link EvidenceFolderPersonDataCatalog#holdVouchingReceipt}. */
+    /** See {@link EvidenceReceipts#holdVouchingReceipt}. */
     public boolean holdVouchingReceipt(ResultAdmissionService.AdmissionIdentity identity, UUID copyId) {
-        return personCopies.holdVouchingReceipt(copyId, identity.jobId(), identity.workspaceId(), identity.attempt());
+        return receipts.holdVouchingReceipt(copyId, identity.jobId(), identity.workspaceId(), identity.attempt());
     }
 
-    /** See {@link EvidenceFolderPersonDataCatalog#inheritReceipt}. */
+    /** See {@link EvidenceCaptures#inheritReceipt}. */
     public void inheritPersonCapture(ReviewJob job, UUID originalCopyId, int originalAttempt) {
-        personCopies.inheritReceipt(job, originalCopyId, originalAttempt);
+        captures.inheritReceipt(job, originalCopyId, originalAttempt);
     }
 
     /** The exact rows a read during runtime returned, by the tables that own them. */
@@ -93,10 +97,10 @@ public class AttemptCopyReceipts {
         }
     }
 
-    /** See {@link EvidenceFolderPersonDataCatalog#indexLateRead}. */
+    /** See {@link EvidenceCaptures#indexLateRead}. */
     public <T> T indexLateRead(
             ResultAdmissionService.AdmissionIdentity identity, Supplier<T> read, Function<T, LateCopies> copies) {
-        return personCopies.indexLateRead(
+        return captures.indexLateRead(
                 identity.jobId(),
                 identity.workspaceId(),
                 identity.attempt(),
