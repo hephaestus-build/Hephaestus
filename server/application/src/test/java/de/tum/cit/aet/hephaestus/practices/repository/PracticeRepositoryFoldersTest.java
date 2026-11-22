@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -34,7 +35,8 @@ class PracticeRepositoryFoldersTest extends BaseUnitTest {
     private final PracticeRepositorySettingRepository settings = mock(PracticeRepositorySettingRepository.class);
     private final MonitoredRepositoryQuery monitored = mock(MonitoredRepositoryQuery.class);
     private final RepositoryCheckouts checkouts = mock(RepositoryCheckouts.class);
-    private final PracticeRepositoryFolders folders = new PracticeRepositoryFolders(settings, monitored, checkouts);
+    private final PracticeRepositoryFolders folders =
+            new PracticeRepositoryFolders(settings, monitored, checkouts, Clock.systemUTC());
 
     @BeforeEach
     void setUp() {

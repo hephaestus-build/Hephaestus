@@ -99,6 +99,7 @@ The new version is then in use without a trial:
 | Invalid | The folder is not valid, so it changed nothing. The report lists each problem with its file and, where known, its line and column. |
 | Retired | The folder of a practice edited in the repository is gone. The practice now has a version that nobody reviews. Its history and observations stay. Each later sync says Retired again while the folder stays gone, and adds no version. If the folder comes back, the next sync makes it a version again. |
 | Retire refused | The folder of a practice edited in the repository is gone, but its current version no longer passes the checks of a save, for example because it reads an older source contract. The practice stays as it is, and keeps its reviews. Restore the folder, or choose **Edit in Hephaestus** and change the practice there. |
+| Changed during sync | The practice was created, moved to the repository or given a version while the sync read the folders. The sync leaves it as it is, because the folders it read may be older than that change. The next sync decides from a fresh read. |
 
 A folder that names another kind of work than its practice, or a group that the workspace does not have, is invalid.
 If the default branch has no practice directory, or holds more than 200 folders, the sync changes nothing and the report says why.

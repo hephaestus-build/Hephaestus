@@ -71,6 +71,9 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
     private static final String DIRECTORY = ".hephaestus/practices";
     private static final Instant SET_AT = Instant.parse("2026-11-21T10:00:00Z");
     private static final Instant NOW = Instant.parse("2026-11-22T09:00:00Z");
+    /** When the folders in these tests were read: after every practice the tests build. */
+    private static final Instant READ_STARTED_AT = Instant.parse("2026-11-22T08:00:00Z");
+
     private static final ItemKind KIND = new ItemKind("scm.pull_request");
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
     private static final PracticeDefinition DEFINITION = DefinitionTestFixtures.definition();
@@ -242,6 +245,26 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
     }
 
     /**
+     * A practice moved to the repository, or given a version, after the folders were read is newer than the read. Its
+     * folder may be missing only from the older read, so the sync leaves it, and a folder of its slug, alone.
+     */
+    @Test
+    void shouldLeaveAPracticeThatChangedWhileTheFoldersWereRead() {
+        var moved = practice("moved-meanwhile", DEFINITION, PracticeEditedIn.REPOSITORY);
+        ReflectionTestUtils.setField(moved, "updatedAt", READ_STARTED_AT.plusSeconds(1));
+        var versioned = practice("versioned-meanwhile", DEFINITION, PracticeEditedIn.REPOSITORY);
+        ReflectionTestUtils.setField(versioned.getCurrentVersion(), "createdAt", READ_STARTED_AT.plusSeconds(2));
+
+        var report = apply(Map.of("versioned-meanwhile", valid(CHANGED)));
+
+        verifyNoInteractions(practices);
+        assertThat(report.practices())
+                .containsExactly(
+                        result("moved-meanwhile", PracticeSyncStatus.CHANGED_DURING_SYNC),
+                        result("versioned-meanwhile", PracticeSyncStatus.CHANGED_DURING_SYNC));
+    }
+
+    /**
      * A current version on an older source contract fails the checks of a save, and so would its Nobody version. The
      * write would roll back the whole sync, and every later one: the practice stays, and the other folders apply.
      */
@@ -279,7 +302,7 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
                 PracticeFileProblemDTO.DIRECTORY_MISSING,
                 "The default branch has no directory.");
         var tree = new PracticeRepositoryFolders.Tree(
-                COMMIT, new TreeMap<>(), new TreeMap<>(), List.of(missing), readAt(SET_AT), null);
+                COMMIT, new TreeMap<>(), new TreeMap<>(), List.of(missing), readAt(SET_AT), null, READ_STARTED_AT);
 
         var report = sync.apply(CONTEXT, tree, Map.of());
 
@@ -342,7 +365,13 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
     private static PracticeRepositoryFolders.Tree tree(
             Map<String, Map<String, String>> folders, Map<String, List<PracticeFileProblemDTO>> unreadable) {
         return new PracticeRepositoryFolders.Tree(
-                COMMIT, new TreeMap<>(folders), new TreeMap<>(unreadable), List.of(), readAt(SET_AT), null);
+                COMMIT,
+                new TreeMap<>(folders),
+                new TreeMap<>(unreadable),
+                List.of(),
+                readAt(SET_AT),
+                null,
+                READ_STARTED_AT);
     }
 
     private static PracticeRepositoryFolders.ReadUnder readAt(Instant settingUpdatedAt) {
@@ -373,6 +402,7 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
         practice.setEditedIn(editedIn);
         practice.setCurrentVersion(TestEntities.practiceVersion(
                 ids.incrementAndGet(), 1, MAPPER.valueToTree(definition), "v6:" + "a".repeat(64)));
+        ReflectionTestUtils.setField(practice, "createdAt", SET_AT);
         return practice;
     }
 

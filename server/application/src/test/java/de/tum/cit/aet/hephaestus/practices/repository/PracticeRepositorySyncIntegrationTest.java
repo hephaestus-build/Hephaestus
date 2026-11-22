@@ -86,6 +86,9 @@ class PracticeRepositorySyncIntegrationTest extends BaseIntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    @Autowired
+    PracticeRepositoryService repositoryService;
+
     @TempDir
     Path tree;
 
@@ -242,6 +245,41 @@ class PracticeRepositorySyncIntegrationTest extends BaseIntegrationTest {
         assertThat(currentVersionId(slug)).isEqualTo(older);
         assertThat(versionCount(slug)).isEqualTo(2);
         assertThat(practiceRow("explain-why")).containsEntry("source_commit", COMMIT);
+    }
+
+    /**
+     * A practice moved to the repository while the folders were read is newer than the read, which lacks its folder. The
+     * sync leaves it alone instead of retiring it, so its reviews go on, and the next sync decides from a fresh read.
+     */
+    @Test
+    void shouldLeaveAPracticeMovedToTheRepositoryWhileTheFoldersWereRead() throws IOException {
+        var slug = scenario.practice().getSlug();
+        folder("explain-why", "Explain why the change is needed.");
+        var older = folders.readAll(workspaceId());
+        // Committed and moved after that read began.
+        folder(slug, "Say what the change does.");
+        repositoryService.moveToRepository(context(), slug);
+        int versionsAfterMove = versionCount(slug);
+        long currentAfterMove = currentVersionId(slug);
+        var reads = new TreeMap<String, PracticeFiles.Read>();
+        older.folders().forEach((name, folder) -> reads.put(name, files.read(name, folder)));
+
+        var report = syncs.apply(context(), older, reads);
+
+        assertThat(statuses(report))
+                .containsExactly(
+                        Map.entry("explain-why", PracticeSyncStatus.CREATED),
+                        Map.entry(slug, PracticeSyncStatus.CHANGED_DURING_SYNC));
+        assertThat(practiceRow(slug))
+                .containsEntry("edited_in", "REPOSITORY")
+                .containsEntry("reviewed_by", "HEPHAESTUS");
+        assertThat(currentVersionId(slug)).isEqualTo(currentAfterMove);
+        assertThat(versionCount(slug)).isEqualTo(versionsAfterMove);
+
+        // A fresh read holds the folder, so the next sync treats the practice like any other.
+        var next = sync();
+        AuditedRequestCheck.acceptUnchanged(PracticeRepositoryController.class, "sync");
+        assertThat(statuses(next)).containsEntry(slug, PracticeSyncStatus.UNCHANGED);
     }
 
     /** A read that started before another sync finished may hold an older commit, so it must not apply after it. */

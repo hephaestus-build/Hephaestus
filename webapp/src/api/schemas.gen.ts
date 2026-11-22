@@ -9686,6 +9686,7 @@ export const PracticeSyncStatusSchema = {
 		"INVALID",
 		"RETIRED",
 		"RETIRE_REFUSED",
+		"CHANGED_DURING_SYNC",
 	],
 } as const;
 

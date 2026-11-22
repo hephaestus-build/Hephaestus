@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -90,14 +91,25 @@ class PracticeRepositorySync {
             Map<String, Practice> existing = drafts.withDrafts(() -> rows.findByWorkspaceId(ctx.id())).stream()
                     .collect(Collectors.toMap(Practice::getSlug, Function.identity()));
             tree.unreadable().forEach((slug, problems) -> results.add(invalid(slug, problems)));
-            reads.forEach((slug, read) -> results.add(folder(ctx, slug, read, existing.get(slug), tree.commit())));
+            reads.forEach((slug, read) -> {
+                var practice = existing.get(slug);
+                results.add(
+                        practice != null && changedSince(practice, tree.readStartedAt())
+                                ? result(slug, PracticeSyncStatus.CHANGED_DURING_SYNC)
+                                : folder(ctx, slug, read, practice, tree.commit()));
+            });
             for (var practice : existing.values()) {
                 var slug = practice.getSlug();
                 if (practice.getEditedIn() != PracticeEditedIn.REPOSITORY
                         || practice.getState() != PracticeState.ACTIVE
                         || reads.containsKey(slug)
                         || tree.unreadable().containsKey(slug)) continue;
-                results.add(retire(ctx, practice, tree.commit()));
+                // Moved to the repository, or given a version, after these folders were read: its folder may be
+                // newer than this read, so retiring it would stop reviewing a practice for no reason anyone sees.
+                results.add(
+                        changedSince(practice, tree.readStartedAt())
+                                ? result(slug, PracticeSyncStatus.CHANGED_DURING_SYNC)
+                                : retire(ctx, practice, tree.commit()));
             }
             results.sort(Comparator.comparing(PracticeSyncResultDTO::slug));
         }
@@ -106,6 +118,13 @@ class PracticeRepositorySync {
         var syncedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         settings.recordSync(ctx.id(), tree.commit(), syncedAt, mapper.writeValueAsString(report));
         return new PracticeRepositorySyncDTO(tree.commit(), syncedAt, report.practices(), report.problems());
+    }
+
+    /** Whether the practice was created, changed or given a version after {@code readStartedAt}. */
+    private static boolean changedSince(Practice practice, Instant readStartedAt) {
+        return practice.getCreatedAt().isAfter(readStartedAt)
+                || (practice.getUpdatedAt() != null && practice.getUpdatedAt().isAfter(readStartedAt))
+                || practice.getCurrentVersion().getCreatedAt().isAfter(readStartedAt);
     }
 
     private PracticeSyncResultDTO folder(

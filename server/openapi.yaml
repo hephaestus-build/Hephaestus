@@ -25227,6 +25227,7 @@ components:
       - INVALID
       - RETIRED
       - RETIRE_REFUSED
+      - CHANGED_DURING_SYNC
     PracticeTraceEntry:
       type: object
       properties:

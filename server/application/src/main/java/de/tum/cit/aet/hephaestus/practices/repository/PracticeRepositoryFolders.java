@@ -15,7 +15,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,6 +56,7 @@ public class PracticeRepositoryFolders {
     private final PracticeRepositorySettingRepository settings;
     private final MonitoredRepositoryQuery monitored;
     private final RepositoryCheckouts checkouts;
+    private final Clock clock;
 
     /**
      * The setting that a read was made under. A change of the setting raises its revision. A setting unset and set
@@ -94,6 +97,8 @@ public class PracticeRepositoryFolders {
      * @param problems why the directory itself cannot be read. A sync then changes nothing, and both maps are empty.
      * @param lastSyncedAt when the sync before this read finished, or null before the first one. A sync that finishes
      *     while these folders are read may have applied a newer commit, so this read must not apply after it.
+     * @param readStartedAt when this read began. A practice created or changed after it, such as one moved to the
+     *     repository meanwhile, is newer than these folders, so a sync leaves it to the next read.
      */
     public record Tree(
             String commit,
@@ -101,7 +106,8 @@ public class PracticeRepositoryFolders {
             SortedMap<String, List<PracticeFileProblemDTO>> unreadable,
             List<PracticeFileProblemDTO> problems,
             ReadUnder readUnder,
-            @Nullable Instant lastSyncedAt) {}
+            @Nullable Instant lastSyncedAt,
+            Instant readStartedAt) {}
 
     /**
      * The folder of {@code slug} at the head of the default branch, or empty when the branch has no such folder.
@@ -134,6 +140,8 @@ public class PracticeRepositoryFolders {
      * @throws ResponseStatusException 409 when the workspace has no practice repository, or it cannot be read now
      */
     public Tree readAll(long workspaceId) {
+        // Taken before the setting is read, so a change that lands while the folders are fetched is newer than it.
+        var readStartedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         var setting = setting(workspaceId);
         var readUnder = ReadUnder.of(setting);
         var lastSyncedAt = setting.getSyncedAt();
@@ -152,7 +160,8 @@ public class PracticeRepositoryFolders {
                                 setting.getDirectory(),
                                 "The directory of the practice folders is a link. Make it a directory.")),
                         readUnder,
-                        lastSyncedAt);
+                        lastSyncedAt,
+                        readStartedAt);
             // A missing directory is a wrong setting more often than the removal of every practice.
             if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS))
                 return new Tree(
@@ -165,7 +174,8 @@ public class PracticeRepositoryFolders {
                                 "The default branch has no directory " + setting.getDirectory()
                                         + ". Commit the practice folders there, or change the directory.")),
                         readUnder,
-                        lastSyncedAt);
+                        lastSyncedAt,
+                        readStartedAt);
             List<Path> children;
             try (var list = Files.list(directory)) {
                 children = list.filter(child ->
@@ -183,7 +193,8 @@ public class PracticeRepositoryFolders {
                                 setting.getDirectory(),
                                 "Keep at most " + MAX_FOLDERS + " practice folders in the directory.")),
                         readUnder,
-                        lastSyncedAt);
+                        lastSyncedAt,
+                        readStartedAt);
             for (var child : children) {
                 var name = child.getFileName().toString();
                 if (Files.isSymbolicLink(child)) {
@@ -199,7 +210,7 @@ public class PracticeRepositoryFolders {
                     unreadable.put(name, invalid.problems());
                 }
             }
-            return new Tree(checkout.head(), folders, unreadable, List.of(), readUnder, lastSyncedAt);
+            return new Tree(checkout.head(), folders, unreadable, List.of(), readUnder, lastSyncedAt, readStartedAt);
         } catch (IOException failed) {
             throw readFailed(workspaceId, failed);
         }

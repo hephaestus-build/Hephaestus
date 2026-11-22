@@ -26,5 +26,10 @@ public enum PracticeSyncStatus {
      * The folder of a practice edited in the repository is gone, but its current version no longer passes the checks
      * of a save, so it cannot get a version that nobody reviews. The practice stays as it is. Its problems say why.
      */
-    RETIRE_REFUSED
+    RETIRE_REFUSED,
+    /**
+     * The practice was created, moved to the repository or given a version while the folders were read, so this sync
+     * left it alone. The next sync decides from a fresh read.
+     */
+    CHANGED_DURING_SYNC
 }
