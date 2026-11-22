@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -27,15 +28,15 @@ public class GitLabWebhookContextResolver {
     private static final Logger log = LoggerFactory.getLogger(GitLabWebhookContextResolver.class);
 
     private final RepositoryRepository repositoryRepository;
-    private final GitLabRouteAdmission routeAdmission;
+    private final GitLabRouteWrites routeWrites;
     private final GitLabProjectAdmission admission;
 
     GitLabWebhookContextResolver(
             RepositoryRepository repositoryRepository,
-            GitLabRouteAdmission routeAdmission,
+            GitLabRouteWrites routeWrites,
             GitLabProjectAdmission admission) {
         this.repositoryRepository = repositoryRepository;
-        this.routeAdmission = routeAdmission;
+        this.routeWrites = routeWrites;
         this.admission = admission;
     }
 
@@ -62,7 +63,7 @@ public class GitLabWebhookContextResolver {
             log.debug("Skipped {} event: reason=repositoryNotFound, repoName={}", eventLabel, safePath);
             return null;
         }
-        if (!routeAdmission.admitRepository(route.get(), repository)) {
+        if (!routeWrites.admitRepository(route.get(), repository)) {
             return null;
         }
         return ProcessingContext.forWebhook(route.get().workspaceId(), repository, action);
@@ -72,7 +73,7 @@ public class GitLabWebhookContextResolver {
      * For a write transaction after the one {@link #resolve} ran in, with GitLab read in between: whether the delivery
      * may still write to the repository {@code context} was resolved for, judged on that repository as stored now. The
      * connection is held active until the transaction ends, and only then is the repository loaded and admitted again
-     * ({@link GitLabRouteAdmission#admitRepository}), so a project the workspace stopped monitoring, or that moved out
+     * ({@link GitLabRouteWrites#admitRepository}), so a project the workspace stopped monitoring, or that moved out
      * of the group, meanwhile takes nothing from the read.
      */
     public Optional<GitLabProjectAdmission.ProjectRead> capture(ProcessingContext context) {
@@ -89,10 +90,10 @@ public class GitLabWebhookContextResolver {
             return false;
         }
         return Objects.equals(context.scopeId(), route.get().workspaceId())
-                && routeAdmission.holdActive(route.get())
+                && routeWrites.holdActive(route.get())
                 && repositoryRepository
                         .findById(resolved.getId())
-                        .filter(current -> routeAdmission.admitRepository(route.get(), current))
+                        .filter(current -> routeWrites.admitRepository(route.get(), current))
                         .isPresent();
     }
 }

@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabAdmissio
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteWrites;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.PassThroughTransactionTemplate;
@@ -59,7 +60,7 @@ import org.springframework.dao.TransientDataAccessResourceException;
 class GitLabPushMessageHandlerTest extends BaseUnitTest {
 
     private final GitLabProjectAdmission projectAdmission = mock(GitLabProjectAdmission.class);
-    private final GitLabRouteAdmission routeAdmission = mock(GitLabRouteAdmission.class);
+    private final GitLabRouteWrites routeWrites = mock(GitLabRouteWrites.class);
 
     private static final Long PROVIDER_ID = 2L;
     private static final String DEFAULT_SERVER_URL = "https://gitlab.lrz.de";
@@ -106,8 +107,8 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
         gitLabProvider.setType(IdentityProviderType.GITLAB);
         gitLabProvider.setServerUrl(DEFAULT_SERVER_URL);
 
-        handler = new GitLabPushMessageHandler(
-                repositoryRepository,
+        var transactions = new PassThroughTransactionTemplate();
+        var pushCommits = new GitLabPushCommits(
                 commitRepository,
                 persister,
                 gitRepositoryManager,
@@ -115,10 +116,18 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
                 authorResolver,
                 syncTargetProvider,
                 eventPublisher,
+                routeWrites,
+                transactions,
+                projectAdmission);
+        handler = new GitLabPushMessageHandler(
+                repositoryRepository,
+                gitRepositoryManager,
+                syncTargetProvider,
                 commitMergeRequestLinker,
-                routeAdmission,
+                routeWrites,
+                pushCommits,
                 deserializer,
-                new PassThroughTransactionTemplate(),
+                transactions,
                 projectAdmission);
     }
 
@@ -151,7 +160,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
     void shouldSkipAProjectAdmissionDoesNotAdmit() throws IOException {
         var projectInfo = createProjectInfo(42L, "org/proj");
         Repository repo = activeLocalGitRepository(projectInfo);
-        when(routeAdmission.admitRepository(ROUTE, repo)).thenReturn(false);
+        when(routeWrites.admitRepository(ROUTE, repo)).thenReturn(false);
 
         onRoute(mockMessage("gitlab.?connection.1.push", createPushEvent(projectInfo)));
 
@@ -334,10 +343,12 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
         });
         var message = mockMessage("gitlab.?connection.1.push", createPushEvent(project));
         var rejected = new TransientDataAccessResourceException("fixture write rejected");
-        try (var logs = new LogCapture(GitLabPushMessageHandler.class)) {
+        try (var logs = new LogCapture(GitLabPushMessageHandler.class);
+                var commitLogs = new LogCapture(GitLabPushCommits.class)) {
             assertThatThrownBy(() -> RejectedInboxWrite.during(rejected, () -> onRoute(message)))
                     .isSameAs(rejected);
             assertThat(logs.messagesAtLeast(Level.WARN)).isEmpty();
+            assertThat(commitLogs.messagesAtLeast(Level.WARN)).isEmpty();
         }
     }
 
@@ -349,10 +360,12 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
                 "push", "refs/heads/main", "before", null, null, 42L, project, 1, List.of(webhookCommit("blocked")));
         var message = mockMessage("gitlab.?connection.1.push", event);
         var rejected = new TransientDataAccessResourceException("fixture write rejected");
-        try (var logs = new LogCapture(GitLabPushMessageHandler.class)) {
+        try (var logs = new LogCapture(GitLabPushMessageHandler.class);
+                var commitLogs = new LogCapture(GitLabPushCommits.class)) {
             assertThatThrownBy(() -> RejectedInboxWrite.during(rejected, () -> onRoute(message)))
                     .isSameAs(rejected);
             assertThat(logs.messagesAtLeast(Level.WARN)).isEmpty();
+            assertThat(commitLogs.messagesAtLeast(Level.WARN)).isEmpty();
         }
     }
 
@@ -380,8 +393,8 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
         lenient()
                 .when(repositoryRepository.findByIdWithOrganization(repository.getId()))
                 .thenReturn(Optional.of(repository));
-        lenient().when(routeAdmission.admitRepository(ROUTE, repository)).thenReturn(true);
-        lenient().when(routeAdmission.holdActive(ROUTE)).thenReturn(true);
+        lenient().when(routeWrites.admitRepository(ROUTE, repository)).thenReturn(true);
+        lenient().when(routeWrites.holdActive(ROUTE)).thenReturn(true);
         return GitLabAdmissionTestFixtures.permit(projectAdmission, 7L, repository, 7L);
     }
 

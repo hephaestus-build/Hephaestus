@@ -56,6 +56,9 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
     private GitLabPushMessageHandler handler;
 
     @Autowired
+    private GitLabPushCommits pushCommits;
+
+    @Autowired
     private IdentityProviderRepository providers;
 
     @Autowired
@@ -213,7 +216,7 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
         Workspace target = workspace;
         Repository project = repository;
         Runnable handling = () -> deliveries.handle(target, project, push, () -> handler.handleEvent(push));
-        ReflectionTestUtils.setField(handler, "commitRepository", interrupted);
+        ReflectionTestUtils.setField(pushCommits, "commitRepository", interrupted);
         try {
             assertThatThrownBy(() -> inbox.dispatch(delivery, 1, Instant.now(), handling))
                     .isInstanceOf(IllegalStateException.class);
@@ -234,7 +237,7 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             .toList())
                     .containsExactlyInAnyOrder(first.id(), failedSha, thirdSha);
         } finally {
-            ReflectionTestUtils.setField(handler, "commitRepository", commits);
+            ReflectionTestUtils.setField(pushCommits, "commitRepository", commits);
         }
     }
 }

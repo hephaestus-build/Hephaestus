@@ -1,37 +1,23 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
-import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
-
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.RouteAdmission;
 import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabDescendantGroupResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupMemberResponse;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabSubjectKeyDeriver;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
-import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -45,7 +31,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -61,7 +46,8 @@ import tools.jackson.databind.ObjectMapper;
  * Hephaestus write to rows other workspaces share: the project it names, the users it names, the membership a member
  * event changes and the subgroup a subgroup event names. Handlers write what GitLab reported, never the body's copy.
  * Those reads happen outside any transaction; every write happens in a transaction that first holds the connection's
- * lifecycle lock ({@link #holdActive}), so a disconnect either happens before and nothing is written, or after.
+ * lifecycle lock ({@link GitLabRouteWrites#holdActive}), so a disconnect either happens before and nothing is
+ * written, or after.
  *
  * <p>A failed lookup, in the database or at GitLab, throws and the delivery is redelivered; a route, project or group
  * that does not match is acknowledged unhandled.
@@ -106,47 +92,35 @@ public class GitLabRouteAdmission implements RouteAdmission {
     private final ConnectionCommands connectionCommands;
     private final IdentityProviderLookup identityProviders;
     private final RepositoryRepository repositoryRepository;
-    private final WorkspaceRepositoryMonitors monitors;
-    private final WorkspaceScopeFilter workspaceScopeFilter;
-    private final GitLabRepositoryMonitors repositoryMonitors;
-    private final GitLabProjectSyncService projectSyncService;
     private final GitLabTeamSyncService teamSyncService;
     private final GitLabUserService userService;
-    private final SyncTargetProvider syncTargetProvider;
     private final GitLabProperties gitLabProperties;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transaction;
     private final GitLabProjectAdmission projectAdmission;
+    private final GitLabRouteWrites routeWrites;
 
     public GitLabRouteAdmission(
             ConnectionCommands connectionCommands,
             IdentityProviderLookup identityProviders,
             RepositoryRepository repositoryRepository,
-            WorkspaceRepositoryMonitors monitors,
-            WorkspaceScopeFilter workspaceScopeFilter,
-            GitLabRepositoryMonitors repositoryMonitors,
-            GitLabProjectSyncService projectSyncService,
             GitLabTeamSyncService teamSyncService,
             GitLabUserService userService,
-            SyncTargetProvider syncTargetProvider,
             GitLabProperties gitLabProperties,
             ObjectMapper objectMapper,
             PlatformTransactionManager transactionManager,
-            GitLabProjectAdmission projectAdmission) {
+            GitLabProjectAdmission projectAdmission,
+            GitLabRouteWrites routeWrites) {
         this.connectionCommands = connectionCommands;
         this.identityProviders = identityProviders;
         this.repositoryRepository = repositoryRepository;
-        this.monitors = monitors;
-        this.workspaceScopeFilter = workspaceScopeFilter;
-        this.repositoryMonitors = repositoryMonitors;
-        this.projectSyncService = projectSyncService;
         this.teamSyncService = teamSyncService;
         this.userService = userService;
-        this.syncTargetProvider = syncTargetProvider;
         this.gitLabProperties = gitLabProperties;
         this.objectMapper = objectMapper;
         this.transaction = new TransactionTemplate(transactionManager);
         this.projectAdmission = projectAdmission;
+        this.routeWrites = routeWrites;
     }
 
     /** The route the delivery being handled on this thread was admitted for, when it came through one. */
@@ -168,6 +142,12 @@ public class GitLabRouteAdmission implements RouteAdmission {
     /** The group GitLab reported for the subgroup event being handled on this thread, when it still reports one. */
     public static Optional<GitLabDescendantGroupResponse> reportedGroup() {
         return Optional.ofNullable(CURRENT.get()).map(Delivery::group);
+    }
+
+    /** The project admission stored for the delivery being handled on this thread, when it names one. */
+    static GitLabProjectAdmission.@Nullable ProjectRead currentProject() {
+        Delivery delivery = CURRENT.get();
+        return delivery == null ? null : delivery.project();
     }
 
     @Override
@@ -195,7 +175,9 @@ public class GitLabRouteAdmission implements RouteAdmission {
         var read = projectAdmission
                 .captureConnection(route.workspaceId(), route.providerId())
                 .orElse(null);
-        if (read == null || read.connectionId() != route.connectionId() || !admitProject(route, payload, read)) {
+        if (read == null
+                || read.connectionId() != route.connectionId()
+                || !routeWrites.admitProject(route, payload, read)) {
             return false;
         }
         Long projectId = number(payload.path("project"), "id");
@@ -248,71 +230,6 @@ public class GitLabRouteAdmission implements RouteAdmission {
         }
     }
 
-    /**
-     * Locks the admitted connection for the rest of the caller's write transaction, the way every connection lifecycle
-     * change does, and confirms everything the route was admitted for still holds. A handler calls this before its
-     * first write, so a disconnect either finishes first and the handler writes nothing, or waits until it is done.
-     */
-    public boolean holdActive(AdmittedRoute route) {
-        connectionCommands.holdLifecycleLock(route.workspaceId(), route.connectionId());
-        boolean active = connectionCommands
-                .findHeldConnection(route.workspaceId(), route.connectionId())
-                .filter(connection -> mismatch(connection, route.groupId(), route.groupPath()) == null)
-                .isPresent();
-        if (!active) {
-            log.info("Skipped GitLab delivery: reason=connectionInactive, connectionId={}", route.connectionId());
-        }
-        return active;
-    }
-
-    /**
-     * Whether the admitted workspace may handle work on {@code repository}. Called inside the handler's write
-     * transaction: the connection is held active, the repository must be on the connection's GitLab instance and
-     * inside its group, and the workspace must monitor it now. A monitor is only ever created where GitLab has just
-     * reported the project ({@link #monitorIfAllowed}), so a monitor removed meanwhile, say by a transfer out of the
-     * group, is never recreated from the shared row's old path.
-     */
-    public boolean admitRepository(AdmittedRoute route, Repository repository) {
-        if (!holdActive(route)) {
-            return false;
-        }
-        String path = repository.getNameWithOwner();
-        if (!Objects.equals(repository.getProvider().getId(), route.providerId()) || !route.contains(path)) {
-            log.warn(
-                    "Skipped GitLab delivery: reason=outsideConnectedGroup, connectionId={}, repoId={}",
-                    route.connectionId(),
-                    repository.getId());
-            return false;
-        }
-        Delivery delivery = CURRENT.get();
-        return delivery != null
-                && delivery.project() != null
-                && delivery.project().repositoryId() == repository.getId()
-                && projectAdmission.hold(delivery.project())
-                && workspaceScopeFilter.isRepositoryAllowed(workspace(route), path);
-    }
-
-    /**
-     * Brings this workspace's monitor of {@code repository}, which GitLab has just reported inside the connected group,
-     * in line with it, and monitors it when the policy allows and no monitor exists; called in the transaction that
-     * stored it, holding the lifecycle lock.
-     */
-    private void monitorIfAllowed(AdmittedRoute route, Repository repository) {
-        repositoryMonitors.monitorAllowed(workspace(route), List.of(repository));
-    }
-
-    /** This workspace's monitors of the exact provider project. */
-    private List<RepositoryToMonitor> ownMonitors(AdmittedRoute route, long nativeId) {
-        return monitors.monitorsOf(route.workspaceId(), nativeId);
-    }
-
-    private Workspace workspace(AdmittedRoute route) {
-        return connectionCommands
-                .findHeldConnection(route.workspaceId(), route.connectionId())
-                .orElseThrow()
-                .getWorkspace();
-    }
-
     private @Nullable AdmittedRoute resolve(GitLabRouteCredential.Route claims, @Nullable Long scopeId) {
         long connectionId = claims.connectionId();
         long workspaceId = claims.workspaceId();
@@ -330,7 +247,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
         String mismatch =
                 !ScmOrigin.of(gitLabProperties.defaultServerUrl()).equals(Optional.of(claims.providerOrigin()))
                         ? "instanceMismatch"
-                        : mismatch(connection, claims.groupId(), claims.groupPath());
+                        : routeWrites.mismatch(connection, claims.groupId(), claims.groupPath());
         if (mismatch != null) {
             log.warn("Skipped GitLab delivery: reason={}, connectionId={}", mismatch, connectionId);
             return null;
@@ -344,160 +261,6 @@ public class GitLabRouteAdmission implements RouteAdmission {
                 provider,
                 claims.groupId(),
                 Objects.requireNonNull(connection.getWorkspace().getAccountLogin()));
-    }
-
-    /** Why {@code connection} is no longer the active GitLab connection of group {@code groupId} at {@code groupPath}. */
-    private @Nullable String mismatch(Connection connection, long groupId, String groupPath) {
-        if (connection.getKind() != IntegrationKind.GITLAB
-                || connection.getState() != IntegrationState.ACTIVE
-                || !(connection.getConfig() instanceof ConnectionConfig.GitLabConfig config)) {
-            return "connectionInactive";
-        }
-        Workspace workspace = connection.getWorkspace();
-        if (workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE
-                || !workspaceScopeFilter.isWorkspaceAllowed(workspace)) {
-            return "workspaceInactive";
-        }
-        Optional<String> configured = ScmOrigin.of(gitLabProperties.defaultServerUrl());
-        if (configured.isEmpty() || !ScmOrigin.of(config.serverUrl()).equals(configured)) {
-            return "instanceMismatch";
-        }
-        String accountLogin = workspace.getAccountLogin();
-        if (!Objects.equals(config.gitlabGroupId(), groupId)
-                || accountLogin == null
-                || !accountLogin.equalsIgnoreCase(groupPath)) {
-            return "groupMismatch";
-        }
-        return null;
-    }
-
-    /**
-     * Whether the project {@code payload} names, if any, is one GitLab reports inside the connected group, after storing
-     * what GitLab reported. A created, renamed, moved or deleted project is looked up by its id, so a stale or invented
-     * path cannot move it. A project GitLab reports elsewhere, or not at all, only stops being monitored by this
-     * workspace: its shared row is left as last stored, since not being reported to one connection proves neither a
-     * deletion nor where it went.
-     */
-    private boolean admitProject(AdmittedRoute route, JsonNode payload, GitLabProjectAdmission.ConnectionRead read) {
-        String eventName = text(payload, "event_name");
-        if (eventName != null && eventName.startsWith("project_")) {
-            Long nativeId = number(payload, "project_id");
-            return nativeId != null && admitProjectEvent(route, nativeId, read);
-        }
-        JsonNode project = payload.path("project");
-        String path = text(project, "path_with_namespace");
-        if (path == null) {
-            return true;
-        }
-        Long nativeId = number(project, "id");
-        Long projectId = nativeId != null ? nativeId : number(payload, "project_id");
-        if (!route.contains(path)) {
-            log.warn("Skipped GitLab delivery: reason=outsideConnectedGroup, path={}", sanitizeForLog(path));
-            return false;
-        }
-        // A stored project is trusted without asking GitLab only while this workspace monitors it: the shared row may
-        // still hold a path its project was moved away from, and monitoring it again needs GitLab's word.
-        Boolean monitoredKnown = transaction.execute(status -> holdActive(route)
-                && projectAllowed(route, projectId)
-                && monitors.monitorsPath(route.workspaceId(), path)
-                && repositoryRepository
-                        .findByNameWithOwnerAndProviderId(path, route.providerId())
-                        .filter(known -> projectId == null || projectId.equals(known.getNativeId()))
-                        .isPresent());
-        if (Boolean.TRUE.equals(monitoredKnown)) {
-            return true;
-        }
-        GitLabProjectResponse reported =
-                projectSyncService.fetchProject(route.workspaceId(), path).orElse(null);
-        if (reported == null
-                || !route.contains(reported.fullPath())
-                || (projectId != null && projectId != extractId(reported))) {
-            log.info("Skipped GitLab delivery: reason=projectNotReported, connectionId={}", route.connectionId());
-            return false;
-        }
-        return projectAdmission
-                .discover(
-                        read,
-                        extractId(reported),
-                        Objects.requireNonNull(reported.fullPath()),
-                        gitLabProperties.defaultServerUrl(),
-                        () -> {
-                            if (!holdActive(route)) return false;
-                            if (!DeliveryInbox.claim("gitlab.route.discover." + extractId(reported))) {
-                                return repositoryRepository
-                                        .findByNativeIdAndProviderId(extractId(reported), route.providerId())
-                                        .isPresent();
-                            }
-                            Optional<Repository> stored = projectSyncService.persistProject(reported);
-                            stored.ifPresent(repository -> monitorIfAllowed(route, repository));
-                            return stored.isPresent();
-                        })
-                .orElse(false);
-    }
-
-    private boolean admitProjectEvent(AdmittedRoute route, long nativeId, GitLabProjectAdmission.ConnectionRead read) {
-        final GitLabProjectResponse reported;
-        try {
-            reported = projectSyncService
-                    .fetchProjectById(route.workspaceId(), nativeId)
-                    .orElse(null);
-        } catch (RepositoryNotFoundOnGitProviderException | WebClientResponseException.NotFound e) {
-            transaction.executeWithoutResult(status -> {
-                if (holdActive(route) && DeliveryInbox.claim("gitlab.route.unavailable." + nativeId)) {
-                    ownMonitors(route, nativeId).stream()
-                            .filter(monitor -> read.originalMonitors().values().stream()
-                                    .anyMatch(ids -> ids.contains(monitor.getId())))
-                            .forEach(monitor -> syncTargetProvider.recordRepositoryUnavailable(
-                                    route.workspaceId(), monitor.getId()));
-                }
-            });
-            return false;
-        }
-        boolean inside = reported != null && route.contains(reported.fullPath());
-        Boolean applied = transaction.execute(status -> {
-            if (!holdActive(route)) {
-                return false;
-            }
-            if (!DeliveryInbox.claim("gitlab.route.project." + nativeId)) {
-                return repositoryRepository
-                        .findByNativeIdAndProviderId(nativeId, route.providerId())
-                        .filter(repository -> route.contains(repository.getNameWithOwner()))
-                        .isPresent();
-            }
-            // The shared row may already carry another workspace's view of the move, so this workspace's monitor is
-            // found by the project's id, not by the row's current path.
-            List<RepositoryToMonitor> own = ownMonitors(route, nativeId);
-            Repository stored = inside && reported != null
-                    ? projectAdmission
-                            .discover(
-                                    read,
-                                    nativeId,
-                                    Objects.requireNonNull(reported.fullPath()),
-                                    gitLabProperties.defaultServerUrl(),
-                                    () -> projectSyncService
-                                            .persistProject(reported)
-                                            .orElse(null))
-                            .orElse(null)
-                    : null;
-            if (!inside) {
-                own.stream()
-                        .filter(monitor -> read.originalMonitors().values().stream()
-                                .anyMatch(ids -> ids.contains(monitor.getId())))
-                        .forEach(monitor -> syncTargetProvider.removeSyncTarget(monitor.getId()));
-            }
-            if (stored == null) {
-                return false;
-            }
-            monitorIfAllowed(route, stored);
-            return true;
-        });
-        if (!inside) {
-            log.info(
-                    "Skipped GitLab project event: reason={}, projectId={}",
-                    reported == null ? "projectNotReported" : "outsideConnectedGroup",
-                    nativeId);
-        }
-        return Boolean.TRUE.equals(applied);
     }
 
     /**
@@ -547,27 +310,12 @@ public class GitLabRouteAdmission implements RouteAdmission {
         }
     }
 
-    private boolean projectAllowed(AdmittedRoute route, @Nullable Long nativeId) {
-        if (nativeId == null) return false;
-        return connectionCommands
-                .configurationInState(route.workspaceId(), route.connectionId(), IntegrationState.ACTIVE)
-                .filter(ConnectionConfig.GitLabConfig.class::isInstance)
-                .map(ConnectionConfig.GitLabConfig.class::cast)
-                .filter(config -> !config.projectExclusions().excludes(nativeId))
-                .isPresent();
-    }
-
-    private static long extractId(GitLabProjectResponse project) {
-        String id = project.id();
-        return Long.parseLong(id.substring(id.lastIndexOf('/') + 1));
-    }
-
-    private static @Nullable String text(JsonNode node, String field) {
+    static @Nullable String text(JsonNode node, String field) {
         JsonNode value = node.path(field);
         return value.isString() && !value.asString().isBlank() ? value.asString() : null;
     }
 
-    private static @Nullable Long number(JsonNode node, String field) {
+    static @Nullable Long number(JsonNode node, String field) {
         JsonNode value = node.path(field);
         return value.isIntegralNumber() && value.canConvertToLong() ? value.asLong() : null;
     }

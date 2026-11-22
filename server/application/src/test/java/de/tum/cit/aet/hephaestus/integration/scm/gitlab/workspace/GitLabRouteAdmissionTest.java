@@ -99,6 +99,7 @@ class GitLabRouteAdmissionTest {
     private final List<Repository> permittedRepositories = new ArrayList<>();
     private final List<RepositoryToMonitor> originalMonitors = new ArrayList<>();
     private GitLabRouteAdmission admission;
+    private GitLabRouteWrites routeWrites;
     private GitLabProjectAdmission.ConnectionRead originalConnection =
             new GitLabProjectAdmission.ConnectionRead(CONNECTION_ID, WORKSPACE_ID, PROVIDER_ID, GROUP, Map.of());
 
@@ -108,21 +109,29 @@ class GitLabRouteAdmissionTest {
                 .thenAnswer(invocation -> Optional.of(originalConnection));
         GitLabProperties properties = mock(GitLabProperties.class);
         when(properties.defaultServerUrl()).thenReturn(ORIGIN + "/");
-        admission = new GitLabRouteAdmission(
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        routeWrites = new GitLabRouteWrites(
                 connectionCommands,
-                identityProviders,
                 repositoryRepository,
                 monitors,
                 scopeFilter,
                 repositoryMonitors,
                 projectSync,
-                teamSync,
-                userService,
                 syncTargets,
                 properties,
-                new ObjectMapper(),
-                mock(PlatformTransactionManager.class),
+                transactionManager,
                 projectAdmission);
+        admission = new GitLabRouteAdmission(
+                connectionCommands,
+                identityProviders,
+                repositoryRepository,
+                teamSync,
+                userService,
+                properties,
+                new ObjectMapper(),
+                transactionManager,
+                projectAdmission,
+                routeWrites);
 
         provider.setId(PROVIDER_ID);
         provider.setType(IdentityProviderType.GITLAB);
@@ -445,15 +454,15 @@ class GitLabRouteAdmissionTest {
 
         @Test
         void shouldHandleWorkOnlyOnARepositoryOfTheInstanceThisWorkspaceMonitorsInsideTheGroup() {
-            assertThat(admission.admitRepository(route, repository(PROJECT_A, "hephaestustest/introcourse-other/p")))
+            assertThat(routeWrites.admitRepository(route, repository(PROJECT_A, "hephaestustest/introcourse-other/p")))
                     .isFalse();
             Repository elsewhere = repository(PROJECT_A, GROUP + "/sub/unmonitored");
             IdentityProvider github = new IdentityProvider();
             github.setId(PROVIDER_ID + 1);
             elsewhere.setProvider(github);
-            assertThat(admission.admitRepository(route, elsewhere)).isFalse();
+            assertThat(routeWrites.admitRepository(route, elsewhere)).isFalse();
             // Monitoring starts only where GitLab has just reported the project, never at the handler.
-            assertThat(admission.admitRepository(route, repository(PROJECT_A, GROUP + "/sub/unmonitored")))
+            assertThat(routeWrites.admitRepository(route, repository(PROJECT_A, GROUP + "/sub/unmonitored")))
                     .isFalse();
             verify(repositoryMonitors, never()).monitorAllowed(any(), any());
         }
@@ -473,7 +482,7 @@ class GitLabRouteAdmissionTest {
             assertThat(admission.admit(
                             WORKSPACE_ID,
                             message(workEvent(PROJECT_A, GROUP + "/selected"), h -> {}),
-                            () -> assertThat(admission.admitRepository(route, selected))
+                            () -> assertThat(routeWrites.admitRepository(route, selected))
                                     .isTrue()))
                     .isTrue();
             verify(repositoryMonitors, never()).monitorAllowed(any(), any());
@@ -483,7 +492,7 @@ class GitLabRouteAdmissionTest {
         void shouldWriteNothingOnceTheConnectionLeftActive() {
             when(connection.getState()).thenReturn(IntegrationState.SUSPENDED);
 
-            assertThat(admission.admitRepository(route, repository(PROJECT_A, GROUP + "/a")))
+            assertThat(routeWrites.admitRepository(route, repository(PROJECT_A, GROUP + "/a")))
                     .isFalse();
             verify(connectionCommands).holdLifecycleLock(WORKSPACE_ID, CONNECTION_ID);
             verify(repositoryMonitors, never()).monitorAllowed(any(), any());
