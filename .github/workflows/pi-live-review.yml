@@ -108,18 +108,9 @@ jobs:
 
       # The test report and the runner's log: a failure is read from these. Neither holds a secret: the runner
       # holds only the stand-in's token, and the stand-in logs no request content.
-      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
-      - name: Check out the upload action of this workflow
-        if: ${{ !cancelled() && steps.check.outputs.configured == 'true' }}
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: workflow-actions
-          sparse-checkout: .github/actions/upload-artifact-retry
-          persist-credentials: false
       - name: Keep the test report
         if: ${{ !cancelled() && steps.check.outputs.configured == 'true' }}
-        uses: ./workflow-actions/.github/actions/upload-artifact-retry
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: pi-live-review
           path: server/application/build/test-results/liveTest
