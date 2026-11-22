@@ -101,7 +101,7 @@ class WebAppConfiguration implements WebMvcConfigurer {
                 .setCacheControl(CacheControl.maxAge(Duration.ofMinutes(5)).mustRevalidate());
         if (!properties.legalOverrides().isBlank()) {
             registry.addResourceHandler("/legal-overrides/*.md")
-                    .addResourceLocations("file:" + properties.legalOverrides().replaceAll("/*$", "/"))
+                    .addResourceLocations(legalOverridesLocation(properties.legalOverrides()))
                     .setCacheControl(CacheControl.noCache());
         }
         registry.addResourceHandler("/**")
@@ -109,6 +109,14 @@ class WebAppConfiguration implements WebMvcConfigurer {
                 .setCacheControl(CacheControl.noCache())
                 .resourceChain(true)
                 .addResolver(new EncodedResourceResolver());
+    }
+
+    /**
+     * The operator's directory, as a resource location. The chart mounts it from a ConfigMap, where each file is a
+     * symbolic link into a hidden versioned directory.
+     */
+    static String legalOverridesLocation(String directory) {
+        return "file:" + directory.replaceAll("/*$", "/");
     }
 
     /** Legal pages are for readers of this deployment, not for search engines or other origins. */
