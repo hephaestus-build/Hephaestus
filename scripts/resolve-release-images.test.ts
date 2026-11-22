@@ -11,6 +11,7 @@ import {
 	formatResolvedImages,
 	parseResolvedImages,
 	resolveReleaseImages,
+	selectSubjects,
 } from "./resolve-release-images.ts";
 
 const DIGEST = `sha256:${"a".repeat(64)}`;
@@ -72,6 +73,47 @@ void describe("resolveReleaseImages", () => {
 				},
 			}),
 			/could not resolve an index digest/u,
+		);
+	});
+});
+
+void describe("selectSubjects", () => {
+	const server = {
+		image: "server",
+		reference: "ghcr.io/hephaestus-build/server:run-1-1",
+		repository: "ghcr.io/hephaestus-build/server",
+	};
+	const inventory = [server, subject];
+
+	void test("keeps the whole inventory when the caller names no image", () => {
+		assert.deepEqual(selectSubjects(inventory, []), inventory);
+	});
+
+	void test("resolves a named image although an unrelated one was never published", async () => {
+		const inspect = async (reference: string) => {
+			if (reference === server.reference) {
+				throw new Error("MANIFEST_UNKNOWN");
+			}
+			return DIGEST;
+		};
+		const images = await resolveReleaseImages(selectSubjects(inventory, ["agent"]), {
+			inspect,
+			sleep: noSleep,
+		});
+		assert.deepEqual(images, [
+			{ image: "agent", indexDigest: DIGEST, repository: "ghcr.io/hephaestus-build/agent" },
+		]);
+		// The whole inventory still refuses the missing image, as a release must.
+		await assert.rejects(
+			resolveReleaseImages(selectSubjects(inventory, []), { attempts: 2, delayMs: 0, inspect }),
+			/could not resolve an index digest for ghcr\.io\/hephaestus-build\/server/u,
+		);
+	});
+
+	void test("refuses a name that is not in the inventory", () => {
+		assert.throws(
+			() => selectSubjects(inventory, ["agent", "webhook"]),
+			/not a release image: webhook/u,
 		);
 	});
 });

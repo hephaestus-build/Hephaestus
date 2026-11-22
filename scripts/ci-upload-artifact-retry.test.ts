@@ -33,6 +33,7 @@ const REPORTS = [
 	"extension-provider-slots.yml: Keep each provider result (extension-provider-slots)",
 	"feedback-eval-panel.yml: Keep the panel result (feedback-eval-panel)",
 	"kubernetes-nightly.yml: Keep the report, the logs and the samples (sandbox-footprint)",
+	"pi-live-review.yml: Keep the test report (pi-live-review)",
 	"release.yml: Keep the ratchet results (stable-release-ratchets)",
 	"release.yml: Retain sandbox qualification summary (sandbox-security-summary)",
 	`rescan-images.yml: Upload diagnostic reports (supported-release-rescan-\${{ github.run_id }})`,

@@ -147,7 +147,7 @@ jobs:
   # One job per replicate. Each composes both arms, case by case in turn, so both meet the same
   # endpoint conditions. The suite gives the 29 withhold cases a third replicate. The replicates run one after
   # another, so at most one composer calls the endpoint: the concurrency that the noise plan measured.
-  # Every job that calls the CI model endpoint, here and in feedback-eval-panel.yml, shares one concurrency group, so
+  # Every composer job that calls the CI model endpoint, here and in feedback-eval-panel.yml, shares one concurrency group, so
   # one composer at a time calls it, across runs and pull requests. None cancels a running one: a person started it,
   # and it may have spent model calls. GitHub keeps one waiting job per group, so a job that starts to wait replaces
   # the one that waited before it, and that run ends without a verdict.
