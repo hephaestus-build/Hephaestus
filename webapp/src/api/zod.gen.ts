@@ -2529,16 +2529,6 @@ export const zPracticeReleaseField = z.object({
 	offeredChanged: z.boolean(),
 });
 
-/**
- * The workspace's practice repository (ADR 0118).
- */
-export const zPracticeRepository = z.object({
-	defaultBranch: z.string().optional(),
-	directory: z.string(),
-	nameWithOwner: z.string().optional(),
-	repositoryItemId: z.string(),
-});
-
 export const zPracticeReviewField = z.enum([
 	"DELIVER_TO_MERGED",
 	"COOLDOWN_MINUTES",
@@ -2605,6 +2595,41 @@ export const zPracticeDraft = z.object({
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	warnings: z.array(zPracticeFileProblem),
+});
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zPracticeSyncStatus = z.string();
+
+/**
+ * What a sync of the practice repository did with one folder, or with a practice whose folder is gone.
+ */
+export const zPracticeSyncResult = z.object({
+	problems: z.array(zPracticeFileProblem),
+	slug: z.string(),
+	status: zPracticeSyncStatus,
+});
+
+/**
+ * The report of a sync of the practice repository from its default branch (ADR 0118).
+ */
+export const zPracticeRepositorySync = z.object({
+	commit: z.string(),
+	practices: z.array(zPracticeSyncResult),
+	problems: z.array(zPracticeFileProblem),
+	syncedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+});
+
+/**
+ * The workspace's practice repository (ADR 0118).
+ */
+export const zPracticeRepository = z.object({
+	defaultBranch: z.string().optional(),
+	directory: z.string(),
+	lastSync: zPracticeRepositorySync.optional(),
+	nameWithOwner: z.string().optional(),
+	repositoryItemId: z.string(),
 });
 
 /**

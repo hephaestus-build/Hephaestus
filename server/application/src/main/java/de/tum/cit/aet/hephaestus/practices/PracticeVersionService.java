@@ -131,20 +131,26 @@ public class PracticeVersionService {
                 .executeUpdate();
         Objects.requireNonNull(entityManager)
                 .createNativeQuery("""
-                    INSERT INTO practice_version(id, workspace_id, practice_id, number, definition, created_by_account_id)
-                    VALUES (:id, :workspace, :practice, 1, CAST(:definition AS jsonb), :creator)
+                    INSERT INTO practice_version(
+                        id, workspace_id, practice_id, number, definition, created_by_account_id, source_commit)
+                    VALUES (:id, :workspace, :practice, 1, CAST(:definition AS jsonb), :creator, :commit)
                     """)
                 .setParameter("id", versionId)
                 .setParameter("workspace", workspace)
                 .setParameter("practice", practiceId)
                 .setParameter("definition", mapper.writeValueAsString(definition))
                 .setParameter("creator", createdByAccountId)
+                .setParameter("commit", request.sourceCommit())
                 .executeUpdate();
         // Read with drafts visible, so a new draft is found too, with its version and group loaded.
         return drafts.withDrafts(() -> practices.findByWorkspaceIdAndSlug(workspace, slug))
                 .orElseThrow();
     }
 
+    /**
+     * A practice to create with its first version. {@code sourceCommit} is the commit of the practice repository that
+     * the definition was read at, or null for a practice made in Hephaestus.
+     */
     public record NewPractice(
             long workspaceId,
             String slug,
@@ -153,7 +159,8 @@ public class PracticeVersionService {
             @Nullable Long groupId,
             int position,
             @Nullable Long createdByAccountId,
-            PracticeState state) {
+            PracticeState state,
+            @Nullable String sourceCommit) {
         public NewPractice(
                 long workspaceId,
                 String slug,
@@ -162,7 +169,16 @@ public class PracticeVersionService {
                 @Nullable Long groupId,
                 int position,
                 @Nullable Long createdByAccountId) {
-            this(workspaceId, slug, kind, definition, groupId, position, createdByAccountId, PracticeState.ACTIVE);
+            this(
+                    workspaceId,
+                    slug,
+                    kind,
+                    definition,
+                    groupId,
+                    position,
+                    createdByAccountId,
+                    PracticeState.ACTIVE,
+                    null);
         }
     }
 

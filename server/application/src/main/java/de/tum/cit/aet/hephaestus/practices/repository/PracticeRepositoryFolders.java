@@ -18,7 +18,9 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -41,27 +43,62 @@ public class PracticeRepositoryFolders {
     /** More than a folder may hold, so a reader stops before it loads a large tree into memory. */
     private static final int MAX_FILES = 64;
 
-    /** The limit that {@code PracticeFiles} applies, checked before a file is read into memory. */
+    /** The limits that {@code PracticeFiles} applies, checked before a file is read into memory. */
     private static final long MAX_FILE_BYTES = 128 * 1024;
+
+    private static final long MAX_FOLDER_BYTES = 256 * 1024;
+
+    /** The most practice folders that a sync reads, so it stops before it loads a large tree into memory. */
+    static final int MAX_FOLDERS = 200;
 
     private final PracticeRepositorySettingRepository settings;
     private final MonitoredRepositoryQuery monitored;
     private final RepositoryCheckouts checkouts;
 
     /**
-     * A practice folder at one commit: its files by their path in the folder, and the setting it was read under.
-     *
-     * @param revision the setting's revision, which a change of the setting raises
-     * @param settingUpdatedAt when the setting was last written: a setting unset and set again is a new row whose
-     *     revision starts at 0 again, so this tells it apart from the one the folder came from
+     * The setting that a read was made under. A change of the setting raises its revision. A setting unset and set
+     * again is a new row whose revision starts at 0 again, so its update time tells it apart from the one read.
      */
-    public record Folder(
-            String commit,
-            Map<String, String> files,
+    public record ReadUnder(
             long repositoryItemId,
             String directory,
             long revision,
-            @Nullable Instant settingUpdatedAt) {}
+            @Nullable Instant settingUpdatedAt) {
+        static ReadUnder of(PracticeRepositorySetting setting) {
+            return new ReadUnder(
+                    setting.getRepositoryItemId(),
+                    setting.getDirectory(),
+                    setting.getRevision(),
+                    setting.getUpdatedAt());
+        }
+
+        /** Whether {@code setting} is still the one that the read was made under. */
+        boolean isCurrent(@Nullable PracticeRepositorySetting setting) {
+            return setting != null
+                    && setting.getRepositoryItemId() == repositoryItemId
+                    && setting.getDirectory().equals(directory)
+                    && setting.getRevision() == revision
+                    && Objects.equals(setting.getUpdatedAt(), settingUpdatedAt);
+        }
+    }
+
+    /** A practice folder at one commit: its files by their path in the folder, and the setting it was read under. */
+    public record Folder(String commit, Map<String, String> files, ReadUnder readUnder) {}
+
+    /**
+     * Every practice folder in the directory at one commit, by folder name, and the setting it was read under.
+     *
+     * @param folders the files of each folder that could be read, by their path in the folder
+     * @param unreadable the problems of each folder that holds a link, a file that is too large, or a file that is not
+     *     text: it is not a practice now, but it is not gone either
+     * @param problems why the directory itself cannot be read. A sync then changes nothing, and both maps are empty.
+     */
+    public record Tree(
+            String commit,
+            SortedMap<String, Map<String, String>> folders,
+            SortedMap<String, List<PracticeFileProblemDTO>> unreadable,
+            List<PracticeFileProblemDTO> problems,
+            ReadUnder readUnder) {}
 
     /**
      * The folder of {@code slug} at the head of the default branch, or empty when the branch has no such folder.
@@ -70,43 +107,138 @@ public class PracticeRepositoryFolders {
      * @throws PracticeFolderInvalidException when the folder holds a file that is too large, not text, or a link
      */
     public Optional<Folder> read(long workspaceId, String slug) {
-        var setting = settings.findById(workspaceId)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.CONFLICT, "This workspace has no practice repository."));
-        var repository = monitored.repositories(workspaceId).get(setting.getRepositoryItemId());
-        if (repository == null || repository.defaultBranch() == null)
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "The practice repository is not monitored, or its default branch is not known yet.");
-        try (var checkout =
-                checkouts.checkout(workspaceId, repository.nameWithOwner(), repository.defaultBranch(), null)) {
+        var setting = setting(workspaceId);
+        try (var checkout = checkout(workspaceId, setting)) {
             var root = checkout.directory().toRealPath();
             var folder = root.resolve(setting.getDirectory()).resolve(slug).normalize();
             if (!folder.startsWith(root)) return Optional.empty();
             // A link anywhere on the path makes the folder unreadable, never absent: a sync must not take it for
             // removed.
-            for (Path path = folder; path != null && !path.equals(root); path = path.getParent())
-                if (Files.isSymbolicLink(path))
-                    throw invalid(PracticeFileProblemDTO.FILE_INVALID, slug, "The folder or its directory is a link.");
+            if (linkOnPath(root, folder))
+                throw invalid(PracticeFileProblemDTO.FILE_INVALID, slug, "The folder or its directory is a link.");
             if (!Files.isDirectory(folder, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
-            return Optional.of(new Folder(
-                    checkout.head(),
-                    files(folder),
-                    setting.getRepositoryItemId(),
-                    setting.getDirectory(),
-                    setting.getRevision(),
-                    setting.getUpdatedAt()));
+            return Optional.of(new Folder(checkout.head(), files(folder), ReadUnder.of(setting)));
+        } catch (IOException failed) {
+            throw readFailed(workspaceId, failed);
+        }
+    }
+
+    /**
+     * Every folder in the directory of the practice folders at the head of the default branch. A file beside the
+     * folders, such as a README, is not a practice and is skipped. A folder whose name is not a slug is read like any
+     * other, so that its check reports the name.
+     *
+     * @throws ResponseStatusException 409 when the workspace has no practice repository, or it cannot be read now
+     */
+    public Tree readAll(long workspaceId) {
+        var setting = setting(workspaceId);
+        var readUnder = ReadUnder.of(setting);
+        try (var checkout = checkout(workspaceId, setting)) {
+            var root = checkout.directory().toRealPath();
+            var directory = root.resolve(setting.getDirectory()).normalize();
+            var folders = new TreeMap<String, Map<String, String>>();
+            var unreadable = new TreeMap<String, List<PracticeFileProblemDTO>>();
+            if (!directory.startsWith(root) || linkOnPath(root, directory))
+                return new Tree(
+                        checkout.head(),
+                        folders,
+                        unreadable,
+                        List.of(problem(
+                                PracticeFileProblemDTO.FILE_INVALID,
+                                setting.getDirectory(),
+                                "The directory of the practice folders is a link. Make it a directory.")),
+                        readUnder);
+            // A missing directory is a wrong setting more often than the removal of every practice.
+            if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS))
+                return new Tree(
+                        checkout.head(),
+                        folders,
+                        unreadable,
+                        List.of(problem(
+                                PracticeFileProblemDTO.DIRECTORY_MISSING,
+                                setting.getDirectory(),
+                                "The default branch has no directory " + setting.getDirectory()
+                                        + ". Commit the practice folders there, or change the directory.")),
+                        readUnder);
+            List<Path> children;
+            try (var list = Files.list(directory)) {
+                children = list.filter(child ->
+                                Files.isSymbolicLink(child) || Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS))
+                        .sorted()
+                        .toList();
+            }
+            if (children.size() > MAX_FOLDERS)
+                return new Tree(
+                        checkout.head(),
+                        new TreeMap<>(),
+                        new TreeMap<>(),
+                        List.of(problem(
+                                PracticeFileProblemDTO.TOO_MANY_FOLDERS,
+                                setting.getDirectory(),
+                                "Keep at most " + MAX_FOLDERS + " practice folders in the directory.")),
+                        readUnder);
+            for (var child : children) {
+                var name = child.getFileName().toString();
+                if (Files.isSymbolicLink(child)) {
+                    unreadable.put(
+                            name,
+                            List.of(problem(
+                                    PracticeFileProblemDTO.FILE_INVALID, name, "A practice folder is not a link.")));
+                    continue;
+                }
+                try {
+                    folders.put(name, files(child));
+                } catch (PracticeFolderInvalidException invalid) {
+                    unreadable.put(name, invalid.problems());
+                }
+            }
+            return new Tree(checkout.head(), folders, unreadable, List.of(), readUnder);
+        } catch (IOException failed) {
+            throw readFailed(workspaceId, failed);
+        }
+    }
+
+    private PracticeRepositorySetting setting(long workspaceId) {
+        return settings.findById(workspaceId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.CONFLICT, "This workspace has no practice repository."));
+    }
+
+    /** A checkout of the default branch's head, or a 409 that one log line records with the workspace and a code. */
+    private RepositoryCheckouts.Checkout checkout(long workspaceId, PracticeRepositorySetting setting) {
+        var repository = monitored.repositories(workspaceId).get(setting.getRepositoryItemId());
+        if (repository == null || repository.defaultBranch() == null) {
+            log.warn(
+                    "Could not read the practice repository: workspaceId={}, code={}",
+                    workspaceId,
+                    repository == null ? "REPOSITORY_NOT_MONITORED" : "DEFAULT_BRANCH_UNKNOWN");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "The practice repository is not monitored, or its default branch is not known yet.");
+        }
+        try {
+            return checkouts.checkout(workspaceId, repository.nameWithOwner(), repository.defaultBranch(), null);
         } catch (RepositoryCheckoutException unavailable) {
             log.warn(
                     "Could not read the practice repository: workspaceId={}, code={}", workspaceId, unavailable.code());
             throw new ResponseStatusException(HttpStatus.CONFLICT, reason(unavailable), unavailable);
-        } catch (IOException failed) {
-            throw new UncheckedIOException(failed);
         }
+    }
+
+    private static UncheckedIOException readFailed(long workspaceId, IOException failed) {
+        log.warn("Could not read the practice repository: workspaceId={}, code=READ_FAILED", workspaceId);
+        return new UncheckedIOException(failed);
+    }
+
+    private static boolean linkOnPath(Path root, Path path) {
+        for (Path step = path; step != null && !step.equals(root); step = step.getParent())
+            if (Files.isSymbolicLink(step)) return true;
+        return false;
     }
 
     private static Map<String, String> files(Path folder) throws IOException {
         var files = new TreeMap<String, String>();
+        long total = 0;
         try (var walk = Files.walk(folder)) {
             for (var paths = walk.iterator(); paths.hasNext(); ) {
                 var path = paths.next();
@@ -121,8 +253,13 @@ public class PracticeRepositoryFolders {
                 if (files.size() >= MAX_FILES)
                     throw invalid(
                             PracticeFileProblemDTO.FOLDER_TOO_LARGE, name, "A practice folder holds a few files.");
-                if (Files.size(path) > MAX_FILE_BYTES)
+                long size = Files.size(path);
+                if (size > MAX_FILE_BYTES)
                     throw invalid(PracticeFileProblemDTO.FILE_TOO_LARGE, name, "Keep each file under 128 KiB.");
+                total += size;
+                if (total > MAX_FOLDER_BYTES)
+                    throw invalid(
+                            PracticeFileProblemDTO.FOLDER_TOO_LARGE, name, "Keep a practice folder under 256 KiB.");
                 files.put(name, text(path, name));
             }
         }
@@ -159,6 +296,10 @@ public class PracticeRepositoryFolders {
     }
 
     private static PracticeFolderInvalidException invalid(String code, String file, String message) {
-        return new PracticeFolderInvalidException(List.of(new PracticeFileProblemDTO(file, null, null, code, message)));
+        return new PracticeFolderInvalidException(List.of(problem(code, file, message)));
+    }
+
+    private static PracticeFileProblemDTO problem(String code, String file, String message) {
+        return new PracticeFileProblemDTO(file, null, null, code, message);
     }
 }

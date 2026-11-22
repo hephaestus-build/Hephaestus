@@ -33,6 +33,7 @@ class PracticeDefinitionSnapshotTest extends BaseUnitTest {
                         "kind",
                         "versionId",
                         "reviewDigest",
+                        "sourceCommit",
                         "groupSlug",
                         "position",
                         "feedbackMode",

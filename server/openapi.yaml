@@ -158,8 +158,9 @@ tags:
 - name: practice-profile-review
 - description: |-
     The workspace's practice repository, and where each practice is edited: workspace admins only (ADR 0118). Each change
-     needs a recent sign-in. A stale session could otherwise point the workspace at a repository its holder can merge
-     into and move practices there, so that the criteria and scripts of reviews come from that repository.
+     of the setting or of where a practice is edited needs a recent sign-in. A stale session could otherwise point the
+     workspace at a repository its holder can merge into and move practices there, so that the criteria and scripts of
+     reviews come from that repository.
   name: practice-repository
 - name: practice-review-output
 - description: |-
@@ -11557,6 +11558,53 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
           description: A problem. Its type names the kind.
       summary: "Move a practice to the practice repository, or edit it in Hephaestus"
+      tags:
+      - practice-repository
+  /workspaces/{workspaceSlug}/practice-repository/sync:
+    post:
+      description: Reads every practice folder at the head of the default branch and
+        applies it. A new practice starts with feedback mode Off. A practice edited
+        in Hephaestus does not change. An invalid folder changes nothing. A practice
+        edited in the repository whose folder is gone is reviewed by nobody. A second
+        sync of the same commit changes nothing.
+      operationId: syncPracticeRepository
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeRepositorySync"
+          description: The report of the sync
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "No practice repository, it cannot be read now, or the setting\
+            \ changed while its folders were read"
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Sync practices from the practice repository
       tags:
       - practice-repository
   /workspaces/{workspaceSlug}/practice-trials:
@@ -24262,6 +24310,10 @@ components:
           - FILE_INVALID
           - FIGURE_UNUSED
           - DEFINITION_INVALID
+          - UNKNOWN_GROUP
+          - KIND_CHANGED
+          - DIRECTORY_MISSING
+          - TOO_MANY_FOLDERS
         column:
           type: integer
           format: int32
@@ -24795,6 +24847,10 @@ components:
             has named it
         directory:
           type: string
+        lastSync:
+          $ref: "#/components/schemas/PracticeRepositorySync"
+          description: the report of the last sync; null until a sync of this repository
+            and directory ran
         nameWithOwner:
           type: string
           description: the repository's provider path; null when it is no longer monitored
@@ -24803,6 +24859,35 @@ components:
       required:
       - directory
       - repositoryItemId
+    PracticeRepositorySync:
+      type: object
+      description: The report of a sync of the practice repository from its default
+        branch (ADR 0118).
+      properties:
+        commit:
+          type: string
+          description: the commit at the head of the default branch that the sync
+            read
+        practices:
+          type: array
+          description: "each folder, and each practice edited in the repository whose\
+            \ folder is gone, by slug"
+          items:
+            $ref: "#/components/schemas/PracticeSyncResult"
+        problems:
+          type: array
+          description: why the directory of the practice folders could not be read.
+            The sync then changed nothing.
+          items:
+            $ref: "#/components/schemas/PracticeFileProblem"
+        syncedAt:
+          type: string
+          format: date-time
+      required:
+      - commit
+      - practices
+      - problems
+      - syncedAt
     PracticeReviewField:
       type: string
       enum:
@@ -25103,6 +25188,37 @@ components:
       enum:
       - ACTIVE
       - DRAFT
+    PracticeSyncResult:
+      type: object
+      description: "What a sync of the practice repository did with one folder, or\
+        \ with a practice whose folder is gone."
+      properties:
+        problems:
+          type: array
+          description: why the folder is not valid; empty for every other status
+          items:
+            $ref: "#/components/schemas/PracticeFileProblem"
+        slug:
+          type: string
+          description: "the folder's name, which is the practice's slug"
+        status:
+          $ref: "#/components/schemas/PracticeSyncStatus"
+      required:
+      - problems
+      - slug
+      - status
+    PracticeSyncStatus:
+      type: string
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
+      - CREATED
+      - UPDATED
+      - UNCHANGED
+      - TAKEN_OVER
+      - EDITED_IN_HEPHAESTUS
+      - INVALID
+      - RETIRED
     PracticeTraceEntry:
       type: object
       properties:

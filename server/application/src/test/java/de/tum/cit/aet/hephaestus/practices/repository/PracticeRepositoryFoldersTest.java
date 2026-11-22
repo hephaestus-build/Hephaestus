@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckoutException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckouts;
 import de.tum.cit.aet.hephaestus.practices.PracticeFolderInvalidException;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeFileProblemDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -93,6 +94,63 @@ class PracticeRepositoryFoldersTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> folders.read(WORKSPACE, "explain-the-change"))
                 .isInstanceOf(PracticeFolderInvalidException.class);
+    }
+
+    @Test
+    void shouldReadEveryFolderOfTheDirectoryAndSkipTheFilesBesideThem() throws IOException {
+        write("explain-the-change/practice.md", "---\nname: x\n---\n");
+        write("Not_A_Slug/practice.md", "---\nname: y\n---\n");
+        write("README.md", "The practices of this repository.");
+
+        var tree = folders.readAll(WORKSPACE);
+
+        assertThat(tree.commit()).isEqualTo(COMMIT);
+        // A name that is not a slug is read, so that the check of the folder reports it.
+        assertThat(tree.folders()).containsOnlyKeys("Not_A_Slug", "explain-the-change");
+        assertThat(tree.unreadable()).isEmpty();
+        assertThat(tree.problems()).isEmpty();
+    }
+
+    /** A linked or oversized folder is unreadable, not gone, so a sync never retires its practice. */
+    @Test
+    void shouldReportAFolderThatCannotBeReadApartFromTheOthers() throws IOException {
+        write("explain-the-change/practice.md", "---\nname: x\n---\n");
+        write("elsewhere/practice.md", "---\nname: y\n---\n");
+        Files.createSymbolicLink(base().resolve("linked"), base().resolve("elsewhere"));
+        write("large/practice.md", "x".repeat(100 * 1024));
+        write("large/guide.md", "x".repeat(100 * 1024));
+        write("large/script.ts", "x".repeat(100 * 1024));
+
+        var tree = folders.readAll(WORKSPACE);
+
+        assertThat(tree.folders()).containsOnlyKeys("elsewhere", "explain-the-change");
+        assertThat(tree.unreadable()).containsOnlyKeys("large", "linked");
+        assertThat(tree.unreadable().get("large"))
+                .extracting(PracticeFileProblemDTO::code)
+                .containsExactly(PracticeFileProblemDTO.FOLDER_TOO_LARGE);
+    }
+
+    @Test
+    void shouldReportADirectoryThatTheDefaultBranchLacks() {
+        var tree = folders.readAll(WORKSPACE);
+
+        assertThat(tree.folders()).isEmpty();
+        assertThat(tree.problems())
+                .extracting(PracticeFileProblemDTO::code)
+                .containsExactly(PracticeFileProblemDTO.DIRECTORY_MISSING);
+    }
+
+    @Test
+    void shouldStopBeforeItReadsMoreFoldersThanAWorkspaceKeeps() throws IOException {
+        for (int i = 0; i <= PracticeRepositoryFolders.MAX_FOLDERS; i++)
+            write("practice-" + i + "/practice.md", "---\n---\n");
+
+        var tree = folders.readAll(WORKSPACE);
+
+        assertThat(tree.folders()).isEmpty();
+        assertThat(tree.problems())
+                .extracting(PracticeFileProblemDTO::code)
+                .containsExactly(PracticeFileProblemDTO.TOO_MANY_FOLDERS);
     }
 
     @Test

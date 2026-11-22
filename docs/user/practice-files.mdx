@@ -73,6 +73,35 @@ Anyone who can merge into the default branch of the practice repository changes 
 Protect that branch as you protect your code: require a review before a merge.
 Setting or unsetting the practice repository, and moving a practice to it or back, each need a recent sign-in.
 
+## Sync from the default branch
+
+A sync reads every folder in the practice directory at the head of the default branch, and applies each one to your practices.
+Hephaestus syncs when you ask it to:
+
+- An MCP client with permission to change practices uses the tool `sync_practice_repository`.
+- Automation calls `POST /api/workspaces/<slug>/practice-repository/sync`.
+
+A sync needs no recent sign-in, because it applies only what the default branch already holds.
+Syncing the same commit again changes nothing.
+Each change is in the configuration history, with the commit that it came from.
+
+The sync report gives a status for each folder, and for each practice whose folder is gone:
+
+| Status | What happened |
+| --- | --- |
+| Created | The folder became a new practice, edited in the repository. It starts with feedback mode **Off**, so nobody sees its feedback until you choose a mode. |
+| Taken over | A draft practice had the folder's name. It is now in use, with the folder as its next version, feedback mode **Off**, and edited in the repository. |
+| Updated | The folder changed a practice edited in the repository. The practice has a new version, and keeps its feedback mode. |
+| Unchanged | The folder holds what the practice already has. |
+| Edited in Hephaestus | The practice is edited in Hephaestus, so the folder changed nothing. To use the folder, choose **Move to repository**. |
+| Invalid | The folder is not valid, so it changed nothing. The report lists each problem with its file and, where known, its line and column. |
+| Retired | The folder of a practice edited in the repository is gone. The practice now has a version that nobody reviews. Its history and observations stay. If the folder comes back, the next sync makes it a version again. |
+
+A folder that names another kind of work than its practice, or a group that the workspace does not have, is invalid.
+If the default branch has no practice directory, or holds more than 200 folders, the sync changes nothing and the report says why.
+Files beside the folders, such as a README, are not practices, and a sync skips them.
+`get_practice_repository` returns the last sync report.
+
 ## The folder
 
 The folder name is the practice's slug: lowercase letters and digits, with single hyphens.

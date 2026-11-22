@@ -997,6 +997,9 @@ import type {
 	SubmitWorkspaceProductFeedbackData,
 	SubmitWorkspaceProductFeedbackErrors,
 	SubmitWorkspaceProductFeedbackResponses,
+	SyncPracticeRepositoryData,
+	SyncPracticeRepositoryErrors,
+	SyncPracticeRepositoryResponses,
 	TriggerSyncJobData,
 	TriggerSyncJobErrors,
 	TriggerSyncJobResponses,
@@ -5955,6 +5958,24 @@ export const changePracticeEditedIn = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+/**
+ * Sync practices from the practice repository
+ *
+ * Reads every practice folder at the head of the default branch and applies it. A new practice starts with feedback mode Off. A practice edited in Hephaestus does not change. An invalid folder changes nothing. A practice edited in the repository whose folder is gone is reviewed by nobody. A second sync of the same commit changes nothing.
+ */
+export const syncPracticeRepository = <ThrowOnError extends boolean = false>(
+	options: Options<SyncPracticeRepositoryData, ThrowOnError>,
+): RequestResult<SyncPracticeRepositoryResponses, SyncPracticeRepositoryErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		SyncPracticeRepositoryResponses,
+		SyncPracticeRepositoryErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/practice-repository/sync",
+		...options,
 	});
 
 /**

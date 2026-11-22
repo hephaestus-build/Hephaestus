@@ -34,7 +34,11 @@ public record PracticeFileProblemDTO(
                     "VISUAL_ALT_MISSING",
                     "FILE_INVALID",
                     "FIGURE_UNUSED",
-                    "DEFINITION_INVALID"
+                    "DEFINITION_INVALID",
+                    "UNKNOWN_GROUP",
+                    "KIND_CHANGED",
+                    "DIRECTORY_MISSING",
+                    "TOO_MANY_FOLDERS"
                 })
         String code,
 
@@ -57,4 +61,8 @@ public record PracticeFileProblemDTO(
     public static final String FILE_INVALID = "FILE_INVALID";
     public static final String FIGURE_UNUSED = "FIGURE_UNUSED";
     public static final String DEFINITION_INVALID = "DEFINITION_INVALID";
+    public static final String UNKNOWN_GROUP = "UNKNOWN_GROUP";
+    public static final String KIND_CHANGED = "KIND_CHANGED";
+    public static final String DIRECTORY_MISSING = "DIRECTORY_MISSING";
+    public static final String TOO_MANY_FOLDERS = "TOO_MANY_FOLDERS";
 }

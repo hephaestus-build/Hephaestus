@@ -47,7 +47,7 @@ public class PracticeDraftService {
                     PracticeFiles.PRACTICE,
                     null,
                     null,
-                    "UNKNOWN_GROUP",
+                    PracticeFileProblemDTO.UNKNOWN_GROUP,
                     "This workspace has no group " + groupSlug + ". The practice stays ungrouped."));
             document = new CatalogPracticeDocument(document.kind(), null, document.definition());
         }

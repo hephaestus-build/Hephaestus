@@ -81,6 +81,7 @@ import type {
 	GetOwnReviewResponse,
 	GetPasskeyStatusResponse,
 	GetPracticeGroupResponse,
+	GetPracticeRepositoryResponse,
 	GetPracticeResponse,
 	GetPracticeTrialResponse,
 	GetProductFeedbackDestinationsResponse,
@@ -167,12 +168,14 @@ import type {
 	SetGroupFeedbackModeResponse,
 	SetMemberHiddenResponse,
 	SetPracticeFeedbackModeResponse,
+	SetPracticeRepositoryResponse,
 	SetReviewScheduleEnabledResponse,
 	StartPracticeTrialResponse,
 	StartScanResponse,
 	SubmitConversationTurnResponse,
 	SubmitInstanceProductFeedbackResponse,
 	SubmitWorkspaceProductFeedbackResponse,
+	SyncPracticeRepositoryResponse,
 	TriggerSyncJobResponse,
 	UpdateAccountAiChoiceResponse,
 	UpdateConnectionStatusResponse,
@@ -1941,6 +1944,41 @@ const profileReviewDetailSchemaResponseTransformer = (data: any) => {
 
 export const getOwnReviewResponseTransformer = async (data: any): Promise<GetOwnReviewResponse> => {
 	data = profileReviewDetailSchemaResponseTransformer(data);
+	return data;
+};
+
+const practiceRepositorySyncSchemaResponseTransformer = (data: any) => {
+	data.syncedAt = new Date(data.syncedAt);
+	return data;
+};
+
+const practiceRepositorySchemaResponseTransformer = (data: any) => {
+	if (data.lastSync) {
+		data.lastSync = practiceRepositorySyncSchemaResponseTransformer(data.lastSync);
+	}
+	return data;
+};
+
+export const getPracticeRepositoryResponseTransformer = async (
+	data: any,
+): Promise<GetPracticeRepositoryResponse> => {
+	if (data) {
+		data = practiceRepositorySchemaResponseTransformer(data);
+	}
+	return data;
+};
+
+export const setPracticeRepositoryResponseTransformer = async (
+	data: any,
+): Promise<SetPracticeRepositoryResponse> => {
+	data = practiceRepositorySchemaResponseTransformer(data);
+	return data;
+};
+
+export const syncPracticeRepositoryResponseTransformer = async (
+	data: any,
+): Promise<SyncPracticeRepositoryResponse> => {
+	data = practiceRepositorySyncSchemaResponseTransformer(data);
 	return data;
 };
 

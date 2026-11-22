@@ -45,6 +45,7 @@
   "POST /workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs",
   "POST /workspaces/{workspaceSlug}/conversation/turns",
   "POST /workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays",
+  "POST /workspaces/{workspaceSlug}/practice-repository/sync",
   "POST /workspaces/{workspaceSlug}/practices/review-requests",
   "POST /workspaces/{workspaceSlug}/practices/scans",
   "PUT /admin/llm/call-pools/{id}",

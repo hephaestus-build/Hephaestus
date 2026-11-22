@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.practices.PracticeService;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -36,12 +35,7 @@ class PracticeRepositoryMove {
             PracticeRepositoryFolders.Folder folder) {
         if (workspaces.findByIdForUpdate(ctx.id()).isEmpty())
             throw new EntityNotFoundException("Workspace", ctx.slug());
-        var setting = settings.findById(ctx.id()).orElse(null);
-        if (setting == null
-                || setting.getRepositoryItemId() != folder.repositoryItemId()
-                || !setting.getDirectory().equals(folder.directory())
-                || setting.getRevision() != folder.revision()
-                || !Objects.equals(setting.getUpdatedAt(), folder.settingUpdatedAt()))
+        if (!folder.readUnder().isCurrent(settings.findById(ctx.id()).orElse(null)))
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "The practice repository changed while its folder was read. Try again.");
         practices.moveToRepository(ctx, slug, document, folder.commit());

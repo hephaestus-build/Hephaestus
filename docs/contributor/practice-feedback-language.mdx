@@ -115,6 +115,7 @@ This table records only their retired names.
 | **Trial** | One run of a practice version on one piece of work, for a workspace admin. A trial records no observation and sends no feedback. | dry run, test run, preview |
 | **Tried version** | A version of a practice in use that is saved beside its current version to be tried. It never becomes current, and the version history leaves it out. | candidate version, shadow version |
 | **Practice repository** | The one monitored repository of a workspace whose default branch holds the folders of the practices that are edited there. | practices repo, config repository |
+| **Practice repository sync** | Hephaestus reads every practice folder at the head of the practice repository's default branch, and applies each folder to the workspace's practices. **Sync now** starts one. Its report gives the status of each folder. | practice import, repository pull |
 | **Edited in** | Where a practice's definition and group are changed: in Hephaestus, or in the practice repository. **Move to repository** and **Edit in Hephaestus** change it. A practice edited in the repository is read-only in the consoles and the MCP write tools, except for its feedback mode and position. | source of truth, managed by |
 | **Catalog** | The practices that an instance offers to its workspaces. Hephaestus supplies a catalog. | curated catalog |
 | **Workspace practices** | The independent practices that one workspace uses for reviews. | workspace catalog |

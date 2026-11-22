@@ -4624,10 +4624,33 @@ export type PracticeRepository = {
 	defaultBranch?: string;
 	directory: string;
 	/**
+	 * the report of the last sync; null until a sync of this repository and directory ran
+	 */
+	lastSync?: PracticeRepositorySync;
+	/**
 	 * the repository's provider path; null when it is no longer monitored
 	 */
 	nameWithOwner?: string;
 	repositoryItemId: string;
+};
+
+/**
+ * The report of a sync of the practice repository from its default branch (ADR 0118).
+ */
+export type PracticeRepositorySync = {
+	/**
+	 * the commit at the head of the default branch that the sync read
+	 */
+	commit: string;
+	/**
+	 * each folder, and each practice edited in the repository whose folder is gone, by slug
+	 */
+	practices: Array<PracticeSyncResult>;
+	/**
+	 * why the directory of the practice folders could not be read. The sync then changed nothing.
+	 */
+	problems: Array<PracticeFileProblem>;
+	syncedAt: Date;
 };
 
 export type PracticeReviewField =
@@ -4782,6 +4805,26 @@ export type PracticeStandingResult = {
 };
 
 export type PracticeState = "ACTIVE" | "DRAFT";
+
+/**
+ * What a sync of the practice repository did with one folder, or with a practice whose folder is gone.
+ */
+export type PracticeSyncResult = {
+	/**
+	 * why the folder is not valid; empty for every other status
+	 */
+	problems: Array<PracticeFileProblem>;
+	/**
+	 * the folder's name, which is the practice's slug
+	 */
+	slug: string;
+	status: PracticeSyncStatus;
+};
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type PracticeSyncStatus = string;
 
 export type PracticeTraceEntry = {
 	about: AboutRole | null;
@@ -18844,6 +18887,46 @@ export type ChangePracticeEditedInResponses = {
 
 export type ChangePracticeEditedInResponse =
 	ChangePracticeEditedInResponses[keyof ChangePracticeEditedInResponses];
+
+export type SyncPracticeRepositoryData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/practice-repository/sync";
+};
+
+export type SyncPracticeRepositoryErrors = {
+	/**
+	 * No practice repository, it cannot be read now, or the setting changed while its folders were read
+	 */
+	409: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type SyncPracticeRepositoryError =
+	SyncPracticeRepositoryErrors[keyof SyncPracticeRepositoryErrors];
+
+export type SyncPracticeRepositoryResponses = {
+	/**
+	 * The report of the sync
+	 */
+	200: PracticeRepositorySync;
+};
+
+export type SyncPracticeRepositoryResponse =
+	SyncPracticeRepositoryResponses[keyof SyncPracticeRepositoryResponses];
 
 export type StartPracticeTrialData = {
 	body: StartTrialRequest;

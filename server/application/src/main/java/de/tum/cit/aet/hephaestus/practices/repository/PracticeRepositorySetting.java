@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.repository;
 
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeFileProblemDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeSyncResultDTO;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,11 +16,14 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -61,6 +66,30 @@ public class PracticeRepositorySetting {
     @ColumnDefault("0")
     @Column(nullable = false)
     private long revision = 0;
+
+    /**
+     * The commit that the last sync read. The sync columns are written only through {@link
+     * PracticeRepositorySettingRepository#recordSync}, so a sync does not count as a change of the setting.
+     */
+    @Column(name = "sync_commit", length = 64)
+    private @Nullable String syncCommit;
+
+    @Column(name = "synced_at")
+    private @Nullable Instant syncedAt;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "sync_report", columnDefinition = "jsonb")
+    private @Nullable SyncReport syncReport;
+
+    /** What the last sync found: the status of each folder and practice, and the problems of the directory. */
+    public record SyncReport(List<PracticeSyncResultDTO> practices, List<PracticeFileProblemDTO> problems) {}
+
+    /** A changed repository or directory holds other folders, so the last sync no longer describes it. */
+    void forgetSync() {
+        syncCommit = null;
+        syncedAt = null;
+        syncReport = null;
+    }
 
     @PrePersist
     @PreUpdate

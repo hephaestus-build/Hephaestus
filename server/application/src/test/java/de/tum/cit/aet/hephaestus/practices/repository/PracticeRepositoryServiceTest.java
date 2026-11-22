@@ -31,8 +31,8 @@ class PracticeRepositoryServiceTest extends BaseUnitTest {
     private static final String COMMIT = "0123456789abcdef0123456789abcdef01234567";
     private static final WorkspaceContext CONTEXT = new WorkspaceContext(7L, "acme", "Acme", null, null, Set.of());
     private static final Map<String, String> FILES = Map.of("practice.md", "---\n---\n");
-    private static final PracticeRepositoryFolders.Folder FOLDER =
-            new PracticeRepositoryFolders.Folder(COMMIT, FILES, 42, ".hephaestus/practices", 0, null);
+    private static final PracticeRepositoryFolders.Folder FOLDER = new PracticeRepositoryFolders.Folder(
+            COMMIT, FILES, new PracticeRepositoryFolders.ReadUnder(42, ".hephaestus/practices", 0, null));
 
     private final PracticeRepositoryFolders folders = mock(PracticeRepositoryFolders.class);
     private final PracticeFiles files = mock(PracticeFiles.class);
@@ -45,6 +45,7 @@ class PracticeRepositoryServiceTest extends BaseUnitTest {
             files,
             practices,
             move,
+            mock(PracticeRepositorySync.class),
             mock(WorkspaceQueries.class),
             mock(ConfigAuditPort.class));
 

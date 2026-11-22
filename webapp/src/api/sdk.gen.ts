@@ -349,6 +349,7 @@ export { startScan } from "./sdk/startScan.gen.js";
 export { submitConversationTurn } from "./sdk/submitConversationTurn.gen.js";
 export { submitInstanceProductFeedback } from "./sdk/submitInstanceProductFeedback.gen.js";
 export { submitWorkspaceProductFeedback } from "./sdk/submitWorkspaceProductFeedback.gen.js";
+export { syncPracticeRepository } from "./sdk/syncPracticeRepository.gen.js";
 export { triggerSyncJob } from "./sdk/triggerSyncJob.gen.js";
 export { unlinkIdentity } from "./sdk/unlinkIdentity.gen.js";
 export { unsetPracticeRepository } from "./sdk/unsetPracticeRepository.gen.js";

@@ -3,6 +3,7 @@
 import { client } from "../client.gen.js";
 import type { RequestResult } from "../client/index.js";
 import type { Options } from "../sdk.gen.js";
+import { getPracticeRepositoryResponseTransformer } from "../transformers.gen.js";
 import type {
 	GetPracticeRepositoryData,
 	GetPracticeRepositoryErrors,
@@ -20,6 +21,7 @@ export const getPracticeRepository = <ThrowOnError extends boolean = false>(
 		GetPracticeRepositoryErrors,
 		ThrowOnError
 	>({
+		responseTransformer: getPracticeRepositoryResponseTransformer,
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/practice-repository",
 		...options,
