@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPus
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -43,13 +44,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
-@RecordApplicationEvents
 class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
@@ -101,7 +99,7 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
     private JdbcTemplate eventJdbc;
 
     @Autowired
-    private ApplicationEvents events;
+    private SharedEventRecorder events;
 
     private Workspace workspace;
     private Repository repository;

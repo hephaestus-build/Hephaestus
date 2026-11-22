@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewthread.dto.GitHubPullRequestReviewThreadEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -28,15 +29,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import tools.jackson.databind.ObjectMapper;
 
-@RecordApplicationEvents
 class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
-    private ApplicationEvents publications;
+    private SharedEventRecorder publications;
 
     @Autowired
     private GitHubPullRequestReviewThreadMessageHandler handler;
@@ -194,7 +192,8 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
         handler.handleEvent(event);
         handler.handleEvent(event);
 
-        assertThat(publications.stream(ScmDomainEvent.ReviewThreadResolved.class))
+        assertThat(publications.stream(ScmDomainEvent.ReviewThreadResolved.class)
+                        .filter(change -> change.thread().id().equals(thread.getId())))
                 .singleElement()
                 .satisfies(resolved ->
                         assertThat(resolved.thread().resolvedAt()).isEqualTo(Instant.parse("2025-11-05T12:15:24Z")));
@@ -256,7 +255,8 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
             assertThat(stored.getResolvedAt()).isNull();
             assertThat(stored.getResolutionChangedAt()).isEqualTo(Instant.parse("2025-11-05T12:15:37Z"));
         });
-        assertThat(publications.stream(ScmDomainEvent.ReviewThreadResolved.class))
+        assertThat(publications.stream(ScmDomainEvent.ReviewThreadResolved.class)
+                        .filter(change -> change.thread().id().equals(thread.getId())))
                 .isEmpty();
     }
 
@@ -281,7 +281,8 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
             assertThat(stored.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
             assertThat(stored.getResolvedAt()).isEqualTo(resolvedAgainAt);
         });
-        assertThat(publications.stream(ScmDomainEvent.ReviewThreadUnresolved.class))
+        assertThat(publications.stream(ScmDomainEvent.ReviewThreadUnresolved.class)
+                        .filter(change -> change.thread().id().equals(thread.getId())))
                 .isEmpty();
     }
 

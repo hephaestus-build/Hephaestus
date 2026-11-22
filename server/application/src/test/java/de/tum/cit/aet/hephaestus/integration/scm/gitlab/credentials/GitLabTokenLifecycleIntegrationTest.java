@@ -32,7 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenServic
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.status.GitLabConnectionSyncStateProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService;
-import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -102,7 +102,7 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
     // The credential health filter publishes a change on the reactor thread that answers the call, before the call
     // returns (testing.mdx § Flaky tests).
     @Autowired
-    private RecordingScmEventListener recorder;
+    private SharedEventRecorder recorder;
 
     @Autowired
     private SyncTargetProvider syncTargets;

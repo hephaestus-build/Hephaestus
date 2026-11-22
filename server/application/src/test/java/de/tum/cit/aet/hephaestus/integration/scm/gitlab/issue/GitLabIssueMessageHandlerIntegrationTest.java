@@ -36,7 +36,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -137,7 +137,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
     private TransactionTemplate transactionTemplate;
 
     @Autowired
-    private RecordingScmEventListener eventListener;
+    private SharedEventRecorder eventListener;
 
     @Autowired
     private IssueTypeRepository issueTypeRepository;

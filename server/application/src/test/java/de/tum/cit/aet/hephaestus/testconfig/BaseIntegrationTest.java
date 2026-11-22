@@ -29,7 +29,7 @@ import org.springframework.test.context.TestPropertySource;
     ApiWebTestClient.class,
     TestSecurityConfig.class,
     TestAsyncConfiguration.class,
-    RecordingScmEventListener.class,
+    SharedEventRecorder.class,
     StubInstallationRepositoryEnumerator.class,
     SharedTestDoubles.class,
     AgentHandlerTestDoubles.class,
@@ -56,10 +56,18 @@ public abstract class BaseIntegrationTest {
     @Autowired
     protected DatabaseTestUtils databaseTestUtils;
 
+    @Autowired
+    private SharedEventRecorder sharedEventRecorder;
+
     @BeforeEach
     void forgetEarlierAuditedRequests() {
         AuditedRequestCheck.reset();
         HttpInTransactionCheck.reset();
+    }
+
+    @BeforeEach
+    void forgetEarlierEvents() {
+        sharedEventRecorder.clear();
     }
 
     @AfterEach

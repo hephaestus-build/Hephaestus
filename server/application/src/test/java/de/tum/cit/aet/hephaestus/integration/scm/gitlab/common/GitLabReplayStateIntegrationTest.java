@@ -18,7 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.dto.GitLabIssueEve
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -61,7 +61,7 @@ class GitLabReplayStateIntegrationTest extends BaseIntegrationTest {
     private ObjectMapper mapper;
 
     @Autowired
-    private RecordingScmEventListener eventListener;
+    private SharedEventRecorder eventListener;
 
     private Repository repository;
     private Workspace workspace;

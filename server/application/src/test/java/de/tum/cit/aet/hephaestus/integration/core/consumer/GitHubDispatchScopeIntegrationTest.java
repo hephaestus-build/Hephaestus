@@ -15,7 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -79,7 +79,7 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
     private JdbcTemplate jdbc;
 
     @Autowired
-    private RecordingScmEventListener events;
+    private SharedEventRecorder events;
 
     private Repository repository;
 

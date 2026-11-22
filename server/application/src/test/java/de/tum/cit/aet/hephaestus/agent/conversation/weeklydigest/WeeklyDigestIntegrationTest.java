@@ -77,6 +77,7 @@ import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestWindow;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.WeeklyDigestTestFixtures;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Timestamp;
@@ -109,8 +110,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -120,10 +119,9 @@ import tools.jackson.databind.ObjectMapper;
  * rendering and the document Hephaestus reads in its thread. The evidence authorization boundary permits every stored
  * result of the workspace, as in the other review-evidence tests.
  */
-@RecordApplicationEvents
 class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     @Autowired
-    private ApplicationEvents observedEvents;
+    private SharedEventRecorder observedEvents;
 
     private static final ZoneId BERLIN = ZoneId.of("Europe/Berlin");
 

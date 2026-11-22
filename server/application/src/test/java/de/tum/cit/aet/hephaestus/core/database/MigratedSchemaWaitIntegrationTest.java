@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.handler.AgentHandlerTestDoubles;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
-import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.SharedTestDoubles;
 import de.tum.cit.aet.hephaestus.testconfig.StubInstallationRepositoryEnumerator;
 import de.tum.cit.aet.hephaestus.testconfig.TestAsyncConfiguration;
@@ -68,7 +68,7 @@ class MigratedSchemaWaitIntegrationTest {
                 Application.class,
                 TestSecurityConfig.class,
                 TestAsyncConfiguration.class,
-                RecordingScmEventListener.class,
+                SharedEventRecorder.class,
                 StubInstallationRepositoryEnumerator.class,
                 SharedTestDoubles.class,
                 AgentHandlerTestDoubles.class);

@@ -47,8 +47,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectA
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.GraphQlResponses;
-import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGraphQlClient;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -171,7 +171,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private RecordingScmEventListener eventListener;
+    private SharedEventRecorder eventListener;
 
     @Autowired
     private GitLabGraphQlResponseHandler graphQlResponseHandler;

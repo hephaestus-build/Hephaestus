@@ -8,9 +8,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.springframework.test.context.event.RecordApplicationEvents;
 
-@RecordApplicationEvents
 public abstract class AbstractResultAdmissionIntegrationTest extends BaseIntegrationTest {
     @MockitoSpyBean
     protected ProductItemQuery productItems;

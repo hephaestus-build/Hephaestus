@@ -23,7 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -126,7 +126,7 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
     private TransactionTemplate transactionTemplate;
 
     @Autowired
-    private RecordingScmEventListener eventListener;
+    private SharedEventRecorder eventListener;
 
     private Repository testRepository;
     private IdentityProvider testProvider;
