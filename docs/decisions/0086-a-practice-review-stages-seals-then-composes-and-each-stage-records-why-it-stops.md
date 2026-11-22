@@ -517,8 +517,12 @@ The composer's view of lineage stays decided, not shipped.
   So the readback after a send lists such a repeat.
   It is a found, unresolved note of this piece.
   A note of another review on the work cites its problem, with the same practice and identity.
-  That other note counts as the check counts it.
+  The other note was posted after this piece was prepared (`feedback.created_at`).
+  An older note was in the check's history, because preparation refuses a history that changed after the check.
+  The other note is the newest revision of its provider comment.
   It is posted and not retracted, its piece is not withdrawn, and it is not closed as fixed.
+  Neither the note nor its piece is marked incorrect.
+  Its words follow the public history's rule for words.
   Pairs inside the piece are not listed again.
   The item names the other note's path, lines and link.
   It quotes the opening words of the other note when the read may copy them.

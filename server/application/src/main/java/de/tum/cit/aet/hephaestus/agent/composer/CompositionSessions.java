@@ -253,7 +253,7 @@ public class CompositionSessions {
         if (accepted)
             input +=
                     "\nThis composition already accepted its publication. Use only edit_own for a checked correction.\n"
-                            + readbackText(mapper, repairs.status(job.getWorkspaceId(), job.getReviewId()));
+                            + readbackText(mapper, repairs.statusWithRepeats(job.getWorkspaceId(), job.getReviewId()));
         var tools = List.of(
                 new Tool("check_package", ReviewOnWork.TOOL_DESCRIPTION, turn.toolParameters()),
                 publishTool(),
@@ -639,13 +639,14 @@ public class CompositionSessions {
                 .orElse(null);
     }
 
+    /** Polls the cheap status; only the status the composer reads carries the repeats. */
     private FeedbackRepairStatus awaitReadback(ReviewJob job, Instant deadline) {
         while (Instant.now().isBefore(deadline)) {
-            var observed = repairs.status(job.getWorkspaceId(), job.getReviewId());
-            if (observed.state() != FeedbackRepairStatus.State.WAITING) return observed;
+            if (repairs.status(job.getWorkspaceId(), job.getReviewId()).state() != FeedbackRepairStatus.State.WAITING)
+                break;
             if (!pause(deadline)) break;
         }
-        return repairs.status(job.getWorkspaceId(), job.getReviewId());
+        return repairs.statusWithRepeats(job.getWorkspaceId(), job.getReviewId());
     }
 
     /** Waits once for a readback, never past the deadline. */

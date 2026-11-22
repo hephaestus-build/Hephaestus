@@ -9,7 +9,9 @@ import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -21,6 +23,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -28,9 +31,13 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * The repeats that the readback of a piece on the work flags: each of its notes, found and not resolved on the
  * provider, that cites a problem with the same practice and identity as a note of another review on the same work.
- * That note was delivered, its copy is posted, its piece is not withdrawn, and Hephaestus did not close it as fixed.
- * The check before publication saw only the history it read, so this catches a note posted on the work after it. Pairs
- * inside one composition are left out: the check already listed them, and the composer chose.
+ *
+ * <p>The other note reached the work after this piece was prepared ({@code feedback.created_at}, the preparation
+ * receipt's time). The check read the history before that, and preparation refuses a history that changed since, so an
+ * older note was in the check's history and the composer chose. The other note is the newest revision of its provider
+ * comment, posted, of a piece that is not withdrawn and not marked incorrect, does not rest on an incorrect result, and
+ * Hephaestus did not close it as fixed. Its words are shown only as the public history shows them. Pairs inside one
+ * composition are left out: the check listed them.
  */
 @Component
 @ConditionalOnServerRole
@@ -38,6 +45,7 @@ import tools.jackson.databind.ObjectMapper;
 class FeedbackReadbackRepeats {
     private final FeedbackRepository feedback;
     private final FeedbackCopyRepository copies;
+    private final FeedbackBasisRepository basis;
     private final FeedbackVisibilityService visibility;
     private final ReviewRepository reviews;
     private final ResultRepository results;
@@ -56,37 +64,34 @@ class FeedbackReadbackRepeats {
                 .filter(copy -> NoteCitations.note(copy) && standing.contains(copy.getId()))
                 .toList();
         if (own.isEmpty()) return List.of();
-        var pieces = feedback.findDeliveredOnWorkOfOtherReviews(
-                workspaceId, row.getDeveloperId(), itemId, row.getReviewId());
-        var withdrawn = visibility
-                .withdrawnAt(
-                        workspaceId,
-                        pieces.stream().map(FeedbackRepository.OnWorkPiece::id).toList())
-                .keySet();
-        var reviewOf = new HashMap<UUID, UUID>();
-        pieces.stream()
-                .filter(piece -> !withdrawn.contains(piece.id()))
-                .forEach(piece -> reviewOf.put(piece.id(), piece.reviewId()));
-        var others = posted(workspaceId, reviewOf.keySet());
+        var pieces = feedback.findDeliveredOnWorkOfOtherReviews(workspaceId, itemId, row.getReviewId());
+        var others = standingNotes(workspaceId, pieces, row.getCreatedAt());
         if (others.isEmpty()) return List.of();
+        var reviewOf = new HashMap<UUID, UUID>();
+        pieces.forEach(piece -> reviewOf.put(piece.id(), piece.reviewId()));
         reviewOf.put(row.getId(), row.getReviewId());
         var traces = traces(workspaceId, reviewOf);
-        var notes = new ArrayList<FeedbackCopy>(own);
-        notes.addAll(others);
         var support = new HashMap<UUID, List<FeedbackCompositionTrace.Support>>();
-        for (var note : notes) {
+        Stream.concat(own.stream(), others.stream()).forEach(note -> {
             var trace = traces.get(note.getFeedbackId());
             support.put(note.getId(), trace == null ? List.of() : NoteCitations.support(trace, note));
-        }
+        });
+        var basisOf = new HashMap<UUID, Set<UUID>>();
+        basis.findReadRows(
+                        workspaceId,
+                        others.stream()
+                                .map(FeedbackCopy::getFeedbackId)
+                                .distinct()
+                                .toList())
+                .forEach(edge -> basisOf.computeIfAbsent(edge.feedbackId(), ignored -> new HashSet<>())
+                        .add(edge.resultId()));
         var cited = support.values().stream().flatMap(List::stream).toList();
+        var resultIds = new HashSet<UUID>();
+        cited.forEach(entry -> resultIds.add(entry.resultId()));
+        basisOf.values().forEach(resultIds::addAll);
         var authorized = publicHistory.authorizeAll(
                 workspaceId,
-                results.findByWorkspaceIdAndIdIn(
-                        workspaceId,
-                        cited.stream()
-                                .map(FeedbackCompositionTrace.Support::resultId)
-                                .distinct()
-                                .toList()),
+                results.findByWorkspaceIdAndIdIn(workspaceId, List.copyOf(resultIds)),
                 SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         var practices = new HashMap<UUID, String>();
         authorized.forEach((resultId, entry) -> practices.put(resultId, entry.practiceSlug()));
@@ -123,7 +128,7 @@ class FeedbackReadbackRepeats {
                             other.getStartLine(),
                             other.getEndLine(),
                             other.getExternalUrl(),
-                            copyable(support.getOrDefault(other.getId(), List.of()), authorized)
+                            textAllowed(basisOf.getOrDefault(other.getFeedbackId(), Set.of()), authorized)
                                     ? other.getBody()
                                     : null))));
         }
@@ -131,24 +136,54 @@ class FeedbackReadbackRepeats {
     }
 
     /**
-     * The posted notes of these pieces that Hephaestus did not close as fixed, one for each provider comment: an edit
-     * keeps the comment, and its newer revision, which comes later, speaks for it.
+     * The other notes that count: for each provider comment, the copy of its newest piece, posted after {@code since}.
+     * An edit keeps the comment, so its newer revision speaks for it, also when that revision retracted it. Then the
+     * copy must be posted, its piece not withdrawn or marked incorrect, and it may not rest on an incorrect result or be
+     * closed as fixed.
      */
-    private List<FeedbackCopy> posted(long workspaceId, Set<UUID> pieces) {
+    private List<FeedbackCopy> standingNotes(
+            long workspaceId, List<FeedbackRepository.OnWorkPiece> pieces, Instant since) {
         if (pieces.isEmpty()) return List.of();
-        var notes = copies.findByWorkspaceIdAndFeedbackIdInOrderByPositionAsc(workspaceId, pieces).stream()
-                .filter(copy -> NoteCitations.note(copy)
-                        && copy.getState() == FeedbackCopyState.POSTED
-                        && copy.getExternalRef() != null)
+        var ids = pieces.stream().map(FeedbackRepository.OnWorkPiece::id).toList();
+        var newestFirst = new HashMap<UUID, Integer>();
+        for (int index = 0; index < ids.size(); index++) newestFirst.put(ids.get(index), index);
+        var all = copies.findByWorkspaceIdAndFeedbackIdInOrderByPositionAsc(workspaceId, ids).stream()
+                .filter(copy -> copy.getExternalRef() != null)
+                .sorted(Comparator.comparingInt(
+                                (FeedbackCopy copy) -> newestFirst.getOrDefault(copy.getFeedbackId(), ids.size()))
+                        .thenComparingInt(FeedbackCopy::getPosition))
                 .toList();
-        if (notes.isEmpty()) return List.of();
+        var newest = new LinkedHashMap<String, FeedbackCopy>();
+        var firstPosted = new HashMap<String, Instant>();
+        for (var copy : all) {
+            String comment = Objects.requireNonNull(copy.getExternalRef());
+            newest.putIfAbsent(comment, copy);
+            var posted = copy.getPostedAt();
+            if (posted != null)
+                firstPosted.merge(comment, posted, (left, right) -> left.isBefore(right) ? left : right);
+        }
+        var excluded = new HashSet<>(visibility.withdrawnAt(workspaceId, ids).keySet());
+        excluded.addAll(basis.incorrectFeedbackIds(workspaceId, ids));
+        var incorrectCopies = copies.incorrectCopyIdsOf(workspaceId, ids);
+        var candidates = newest.entrySet().stream()
+                .filter(entry -> {
+                    var copy = entry.getValue();
+                    var posted = firstPosted.get(entry.getKey());
+                    return NoteCitations.note(copy)
+                            && copy.getState() == FeedbackCopyState.POSTED
+                            && !excluded.contains(copy.getFeedbackId())
+                            && !incorrectCopies.contains(copy.getId())
+                            && posted != null
+                            && posted.isAfter(since);
+                })
+                .map(Map.Entry::getValue)
+                .toList();
+        if (candidates.isEmpty()) return List.of();
         var closed = new HashSet<>(copies.findClosedAsFixed(
-                workspaceId, notes.stream().map(FeedbackCopy::getId).toList()));
-        var byComment = new LinkedHashMap<String, FeedbackCopy>();
-        notes.stream()
+                workspaceId, candidates.stream().map(FeedbackCopy::getId).toList()));
+        return candidates.stream()
                 .filter(copy -> !closed.contains(copy.getId()))
-                .forEach(copy -> byComment.put(Objects.requireNonNull(copy.getExternalRef()), copy));
-        return List.copyOf(byComment.values());
+                .toList();
     }
 
     private Map<UUID, FeedbackCompositionTrace> traces(long workspaceId, Map<UUID, UUID> reviewOf) {
@@ -163,12 +198,14 @@ class FeedbackReadbackRepeats {
         return traces;
     }
 
-    /** The other note's words may be copied only when the read may use every result it rests on, as the history. */
-    private static boolean copyable(
-            List<FeedbackCompositionTrace.Support> support, Map<UUID, FeedbackPublicHistory.AuthorizedSupport> read) {
-        return !support.isEmpty()
-                && support.stream().allMatch(basis -> {
-                    var entry = read.get(basis.resultId());
+    /**
+     * The other note's words, as the public history allows them: the read may use every result of its piece's basis,
+     * with complete custody. A withdrawn or incorrect piece never gets here.
+     */
+    private static boolean textAllowed(Set<UUID> pieceBasis, Map<UUID, FeedbackPublicHistory.AuthorizedSupport> read) {
+        return !pieceBasis.isEmpty()
+                && pieceBasis.stream().allMatch(resultId -> {
+                    var entry = read.get(resultId);
                     return entry != null && entry.custody().complete();
                 });
     }

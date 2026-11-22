@@ -94,6 +94,12 @@ public class FeedbackRepairService implements FeedbackRepair {
     @Override
     @Transactional(readOnly = true)
     public FeedbackRepairStatus status(long workspaceId, UUID reviewId) {
+        return readStatus(workspaceId, reviewId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public FeedbackRepairStatus statusWithRepeats(long workspaceId, UUID reviewId) {
         var status = readStatus(workspaceId, reviewId);
         UUID feedbackId = status.feedbackId();
         if (feedbackId == null || status.state() != FeedbackRepairStatus.State.READBACK) return status;

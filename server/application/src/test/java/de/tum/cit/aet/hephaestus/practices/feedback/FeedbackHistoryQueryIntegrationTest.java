@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.workspace.Membership;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -798,10 +799,15 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
         var earlierResult = negativeResult();
         authorize(earlierResult);
         var earlier = piece(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, AT);
-        var earlierNote = postedNote(earlier, earlierResult, "https://github.com/acme/app/pull/7#discussion_r1");
+        // Another review's note reached the work after this piece was prepared, at AT: it raced this review.
+        var earlierNote = postedNote(
+                earlier, earlierResult, "https://github.com/acme/app/pull/7#discussion_r1", AT.plusSeconds(120));
         var earlierReview = reviewId;
-        // A later review of the same work measures the same practice and finds the same problem.
+        // This review measures the same practice on the same work for another developer, and finds the same problem.
         reviewId = UUID.randomUUID();
+        developerId = Objects.requireNonNull(
+                ensureMembership(workspace, persistUser("second-developer"), Membership.WorkspaceRole.MEMBER)
+                        .getAccountId());
         jdbc.update("""
                 INSERT INTO review SELECT (jsonb_populate_record(NULL::review, to_jsonb(v)
                   || jsonb_build_object('id', ?::text))).* FROM review v WHERE v.id = ?
@@ -816,16 +822,22 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 """, reviewId.toString(), earlierReview);
         UUID laterResultId = UUID.randomUUID();
         // One statement: a NOT_MET result must hold its problem when the statement ends.
-        jdbc.update("""
+        jdbc.update(
+                """
                 WITH copied AS (
                   INSERT INTO result SELECT (jsonb_populate_record(NULL::result, to_jsonb(r)
-                    || jsonb_build_object('id', ?::text, 'review_id', ?::text, 'ended_at', r.recorded_at,
-                      'end_reason', 'REPLACED'))).*
+                    || jsonb_build_object('id', ?::text, 'review_id', ?::text, 'developer_id', ?::bigint,
+                      'ended_at', r.recorded_at, 'end_reason', 'REPLACED'))).*
                   FROM result r WHERE r.id = ? RETURNING id)
                 INSERT INTO problem SELECT (jsonb_populate_record(NULL::problem, to_jsonb(p)
                   || jsonb_build_object('id', gen_random_uuid()::text, 'result_id', (SELECT id FROM copied)::text))).*
                 FROM problem p WHERE p.result_id = ?
-                """, laterResultId.toString(), reviewId.toString(), earlierResult.getId(), earlierResult.getId());
+                """,
+                laterResultId.toString(),
+                reviewId.toString(),
+                developerId,
+                earlierResult.getId(),
+                earlierResult.getId());
         jdbc.update(
                 "UPDATE problem SET identity = 'key:missing-test' WHERE workspace_id = ? AND result_id IN (?, ?)",
                 workspace.getId(),
@@ -835,7 +847,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 results.findByIdAndWorkspaceId(laterResultId, workspace.getId()).orElseThrow();
         authorize(laterResult);
         var later = piece(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, AT.plusSeconds(60));
-        var laterNote = postedNote(later, laterResult, "https://github.com/acme/app/pull/7#discussion_r2");
+        var laterNote = postedNote(later, laterResult, "https://github.com/acme/app/pull/7#discussion_r2", AT);
         var readback = mapper.createArrayNode();
         readback.addObject()
                 .put("copyId", laterNote.getId().toString())
@@ -849,7 +861,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
         state.set("readback", readback);
         feedback.updateComposition(workspace.getId(), later.getId(), state);
 
-        var status = repairs.status(workspace.getId(), reviewId);
+        var status = repairs.statusWithRepeats(workspace.getId(), reviewId);
 
         assertThat(status.state()).isEqualTo(FeedbackRepairStatus.State.READBACK);
         assertThat(status.repeats())
@@ -865,7 +877,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
     }
 
     /** A posted line note at position 1 of the piece, resting on the result's problem, with its composition support. */
-    private FeedbackCopy postedNote(Feedback row, Result proof, String url) {
+    private FeedbackCopy postedNote(Feedback row, Result proof, String url, Instant postedAt) {
         var problem = problemOf(proof);
         basis.saveAndFlush(FeedbackBasis.builder()
                 .id(FeedbackIds.basis(row.getId(), proof.getId(), problem))
@@ -891,8 +903,8 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 .side(CitationSide.NEW)
                 .writeKey(copyId.toString())
                 .writeMarker(FeedbackIds.writeMarker(copyId))
-                .writeStartedAt(AT)
-                .postedAt(AT)
+                .writeStartedAt(postedAt)
+                .postedAt(postedAt)
                 .externalRef("note-" + copyId)
                 .externalUrl(url)
                 .createdAt(AT)
