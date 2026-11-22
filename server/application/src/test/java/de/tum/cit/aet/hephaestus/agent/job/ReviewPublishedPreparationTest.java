@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
@@ -85,6 +86,7 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
     private final JsonMapper mapper = new JsonMapper();
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final DefaultReviewExecutionHandler handler = mock(DefaultReviewExecutionHandler.class);
+    private final ResultAdmissionService admission = mock(ResultAdmissionService.class);
     private final PracticePiAdapter adapter = mock(PracticePiAdapter.class);
     private final AttemptTokenIssuer issuer = mock(AttemptTokenIssuer.class);
     private final AttemptInputs inputs = mock(AttemptInputs.class);
@@ -153,7 +155,7 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
                     tokenDeadlines.add(invocation.getArgument(4));
                     return "attempt-token";
                 });
-        when(handler.endedPractices(job)).thenAnswer(_ -> ended.get());
+        when(admission.endedPractices(job)).thenAnswer(_ -> ended.get());
         when(handler.prepareInputs(job)).thenAnswer(_ -> capture());
         doAnswer(invocation -> {
                     Map<String, Path> paths = invocation.getArgument(3);
@@ -241,6 +243,7 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
         return new ReviewAttemptPreparation(
                 jobs,
                 handler,
+                admission,
                 adapter,
                 issuer,
                 SandboxTestLimits.PROPERTIES,

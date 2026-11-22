@@ -89,7 +89,7 @@ class SandboxDatabaseLossAnswerTest extends BaseUnitTest {
 
     @Test
     void shouldKeepAnAnswerThatTheRouteAlreadyDecidedWhateverItsCause() throws Exception {
-        // As review preparation answers a lost commit reply (ReviewSandboxRuns.preparationUnavailable).
+        // As review preparation answers a lost commit reply (ReviewAttemptMeasurements.preparationUnavailable).
         var decided = new ErrorResponseException(
                 HttpStatus.SERVICE_UNAVAILABLE, new TransactionSystemException("The commit reply was lost"));
         decided.getHeaders().set("Retry-After", "1");

@@ -79,7 +79,7 @@ class AttemptServerErrorsIntegrationTest extends BaseIntegrationTest {
         ReviewJob job = runningJob();
         var noPractice = new AgentResult(false, Map.of(PiResultParser.PRACTICES_EVALUATED, 0));
 
-        assertThat(ReviewAttemptResults.factsOf(job, noPractice, usageEvents).nothingRan())
+        assertThat(ReviewAttemptOutputs.factsOf(job, noPractice, usageEvents).nothingRan())
                 .isTrue();
 
         // A call that the proxy opened and the sandbox never reported still counts.
@@ -92,7 +92,7 @@ class AttemptServerErrorsIntegrationTest extends BaseIntegrationTest {
                 FROM review_job j JOIN agent_run r ON r.id = j.run_id WHERE j.id = ?
                 """, job.getId());
 
-        assertThat(ReviewAttemptResults.factsOf(job, noPractice, usageEvents).nothingRan())
+        assertThat(ReviewAttemptOutputs.factsOf(job, noPractice, usageEvents).nothingRan())
                 .isFalse();
     }
 

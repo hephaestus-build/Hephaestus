@@ -92,7 +92,6 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         var workspaces = mock(SandboxWorkspaceManager.class);
         var sessions = new SandboxGatewaySessions();
         var transactions = mock(TransactionTemplate.class);
-        var terminal = mock(ReviewJobTerminal.class);
         var results = mock(ReviewAttemptResults.class);
         var reviewRuns = mock(ReviewRunKind.class);
         UUID jobId = UUID.randomUUID();
@@ -140,20 +139,27 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         when(workspaces.createInputTar(any(), anyMap(), anyMap(), anyList())).thenReturn(archive);
         var runtime = new ReviewSandboxRuns(
                 mock(ReviewJobClaimService.class),
-                preparation,
                 custody,
-                terminal,
                 jobs,
-                workspaces,
                 sessions,
-                transactions,
                 mapper,
                 results,
                 reviewRuns,
                 runs,
-                mock(JobEvidenceFiles.class),
                 mock(AttemptCopyReceipts.class),
-                preparationLocks());
+                new ReviewAttemptMeasurements(
+                        preparation,
+                        custody,
+                        jobs,
+                        workspaces,
+                        mock(JobEvidenceFiles.class),
+                        sessions,
+                        transactions,
+                        mapper,
+                        results,
+                        reviewRuns,
+                        runs,
+                        preparationLocks()));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, "review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
@@ -166,7 +172,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
             assertThat(busy.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
             assertThat(busy.getHeaders().getFirst("Retry-After")).isEqualTo("1");
         });
-        verifyNoInteractions(terminal, results, reviewRuns, transactions, runs, workspaces);
+        verifyNoInteractions(results, reviewRuns, transactions, runs, workspaces);
         when(preparation.prepare(eq(jobId), eq(job), eq(fence), any(), any()))
                 .thenReturn(new ReviewAttemptPreparation.PreparedSandbox(spec, inputs, false));
         runtime.context(run);
@@ -216,27 +222,35 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         when(jobs.findByRunIdAndWorkspaceId(fence.runId(), 7)).thenReturn(Optional.of(job));
         var preparation = mock(ReviewAttemptPreparation.class);
         var results = mock(ReviewAttemptResults.class);
-        var terminal = mock(ReviewJobTerminal.class);
         var reviewRuns = mock(ReviewRunKind.class);
         var transactions = mock(TransactionTemplate.class);
         var runs = mock(AgentRuns.class);
         var workspaces = mock(SandboxWorkspaceManager.class);
+        var attemptCustody = new ReviewAttemptCustody(runs);
+        var gatewaySessions = new SandboxGatewaySessions();
         var runtime = new ReviewSandboxRuns(
                 mock(ReviewJobClaimService.class),
-                preparation,
-                new ReviewAttemptCustody(runs),
-                terminal,
+                attemptCustody,
                 jobs,
-                workspaces,
-                new SandboxGatewaySessions(),
-                transactions,
+                gatewaySessions,
                 mapper,
                 results,
                 reviewRuns,
                 runs,
-                mock(JobEvidenceFiles.class),
                 mock(AttemptCopyReceipts.class),
-                preparationLocks());
+                new ReviewAttemptMeasurements(
+                        preparation,
+                        attemptCustody,
+                        jobs,
+                        workspaces,
+                        mock(JobEvidenceFiles.class),
+                        gatewaySessions,
+                        transactions,
+                        mapper,
+                        results,
+                        reviewRuns,
+                        runs,
+                        preparationLocks()));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
@@ -257,7 +271,7 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
             assertThatThrownBy(() -> runtime.context(run)).isInstanceOf(StaleRunException.class);
         }
         assertThat(job.getStatus()).isEqualTo(unreadable ? ReviewJobStatus.RUNNING : ReviewJobStatus.CANCELLED);
-        verifyNoInteractions(terminal, results, reviewRuns, transactions, runs, workspaces);
+        verifyNoInteractions(results, reviewRuns, transactions, runs, workspaces);
     }
 
     @Test
@@ -303,22 +317,32 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 .when(transactions)
                 .executeWithoutResult(any());
         var runs = mock(AgentRuns.class);
+        var attemptCustody = new ReviewAttemptCustody(runs);
+        var gatewaySessions = new SandboxGatewaySessions();
+        var attemptResults = mock(ReviewAttemptResults.class);
         var runtime = new ReviewSandboxRuns(
                 mock(ReviewJobClaimService.class),
-                preparation,
-                new ReviewAttemptCustody(runs),
-                mock(ReviewJobTerminal.class),
+                attemptCustody,
                 jobs,
-                mock(SandboxWorkspaceManager.class),
-                new SandboxGatewaySessions(),
-                transactions,
+                gatewaySessions,
                 mapper,
-                mock(ReviewAttemptResults.class),
+                attemptResults,
                 reviewRuns,
                 runs,
-                mock(JobEvidenceFiles.class),
                 mock(AttemptCopyReceipts.class),
-                preparationLocks());
+                new ReviewAttemptMeasurements(
+                        preparation,
+                        attemptCustody,
+                        jobs,
+                        mock(SandboxWorkspaceManager.class),
+                        mock(JobEvidenceFiles.class),
+                        gatewaySessions,
+                        transactions,
+                        mapper,
+                        attemptResults,
+                        reviewRuns,
+                        runs,
+                        preparationLocks()));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
@@ -353,20 +377,15 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         });
         var runtime = new ReviewSandboxRuns(
                 mock(ReviewJobClaimService.class),
-                mock(ReviewAttemptPreparation.class),
                 mock(ReviewAttemptCustody.class),
-                mock(ReviewJobTerminal.class),
                 jobs,
-                mock(SandboxWorkspaceManager.class),
                 new SandboxGatewaySessions(),
-                mock(TransactionTemplate.class),
                 JsonMapper.builder().build(),
                 mock(ReviewAttemptResults.class),
                 reviewRuns,
                 mock(AgentRuns.class),
-                mock(JobEvidenceFiles.class),
                 mock(AttemptCopyReceipts.class),
-                mock(ClusterLock.class));
+                mock(ReviewAttemptMeasurements.class));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
@@ -390,7 +409,6 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
     @Test
     void shouldLockTheParentReviewBeforeItRecordsAProgramCrashOnTheJob() {
         var jobs = mock(ReviewJobRepository.class);
-        var evidenceFiles = mock(JobEvidenceFiles.class);
         var receipts = mock(AttemptCopyReceipts.class);
         var reviewRuns = mock(ReviewRunKind.class);
         var runs = mock(AgentRuns.class);
@@ -407,20 +425,15 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 .thenReturn(true);
         var runtime = new ReviewSandboxRuns(
                 mock(ReviewJobClaimService.class),
-                mock(ReviewAttemptPreparation.class),
                 new ReviewAttemptCustody(runs),
-                mock(ReviewJobTerminal.class),
                 jobs,
-                mock(SandboxWorkspaceManager.class),
                 new SandboxGatewaySessions(),
-                mock(TransactionTemplate.class),
                 JsonMapper.builder().build(),
                 mock(ReviewAttemptResults.class),
                 reviewRuns,
                 runs,
-                evidenceFiles,
                 receipts,
-                mock(ClusterLock.class));
+                mock(ReviewAttemptMeasurements.class));
         var run = new SandboxRun(
                 new AgentSandboxes.LiveSandbox(
                         UUID.randomUUID(), 7, "review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW),

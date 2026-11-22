@@ -36,13 +36,12 @@ import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
-import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
@@ -59,7 +58,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
@@ -71,7 +69,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
-import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
@@ -455,13 +452,13 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     void shouldKeepStagedPracticesThroughAnOutageAndWithholdTheRestPastItsWindow() {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var fence = claimLeased(job).orElseThrow().fence();
-        var handler = mock(DefaultReviewExecutionHandler.class);
-        when(handler.hasStaged(any())).thenReturn(true);
-        when(handler.completeStaged(any())).thenReturn(false);
+        var admission = mock(ResultAdmissionService.class);
+        when(admission.hasStaged(any())).thenReturn(true);
+        when(admission.sealIfComplete(any())).thenReturn(false);
         var stalled = new ModelCallFailure("upstream_stalled", null);
 
         measure(
-                results(new SimpleMeterRegistry(), stalled, handler),
+                results(new SimpleMeterRegistry(), stalled, admission),
                 job,
                 fence,
                 SandboxLayout.EXIT_PROVIDER_UNREACHABLE);
@@ -471,7 +468,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .as("inside the window it waits, keeping what it staged")
                 .isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(waiting.spentAttempts()).isZero();
-        verify(handler, never()).finishInterrupted(any(), any());
+        verify(admission, never()).finishInterrupted(any(), any());
 
         jdbc.update("UPDATE agent_run SET available_at=clock_timestamp() WHERE id=?", waiting.getRunId());
         var again = claimLeased(waiting).orElseThrow().fence();
@@ -481,12 +478,12 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 runs().modelOutageWindow().plusMinutes(1).toSeconds(),
                 job.getId());
         measure(
-                results(new SimpleMeterRegistry(), stalled, handler),
+                results(new SimpleMeterRegistry(), stalled, admission),
                 waiting,
                 again,
                 SandboxLayout.EXIT_PROVIDER_UNREACHABLE);
 
-        verify(handler).finishInterrupted(any(), eq(ReviewStopReason.PROVIDER_UNAVAILABLE));
+        verify(admission).finishInterrupted(any(), eq(ReviewStopReason.PROVIDER_UNAVAILABLE));
     }
 
     @Test
@@ -857,13 +854,11 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
 
     /** @param latestFailure the newest failed model call of the attempt's claim, as the proxy recorded it */
     private ReviewAttemptResults results(SimpleMeterRegistry metrics, @Nullable ModelCallFailure latestFailure) {
-        return results(metrics, latestFailure, mock(DefaultReviewExecutionHandler.class));
+        return results(metrics, latestFailure, mock(ResultAdmissionService.class));
     }
 
     private ReviewAttemptResults results(
-            SimpleMeterRegistry metrics,
-            @Nullable ModelCallFailure latestFailure,
-            DefaultReviewExecutionHandler handler) {
+            SimpleMeterRegistry metrics, @Nullable ModelCallFailure latestFailure, ResultAdmissionService admission) {
         var preparation = mock(ReviewAttemptPreparation.class);
         when(preparation.owned(any(), any()))
                 .thenAnswer(call -> jobs.findById(call.getArgument(0)).orElseThrow());
@@ -874,20 +869,29 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .thenAnswer(call -> new AgentResult(
                         false,
                         Map.of("exitCode", call.<SandboxResult>getArgument(0).exitCode())));
+        var terminal =
+                new ReviewJobTerminal(jobs, agentRuns, context.getBeanProvider(ReviewCompositionContinuation.class));
         return new ReviewAttemptResults(
                 jobs,
-                handler,
+                admission,
                 practiceAgent,
                 preparation,
-                new ReviewJobTerminal(jobs, agentRuns, context.getBeanProvider(ReviewCompositionContinuation.class)),
+                terminal,
                 reviewRuns,
                 outages(metrics, latestFailure),
-                mock(PracticeScriptRunRecorder.class),
+                new ReviewAttemptOutputs(
+                        jobs,
+                        terminal,
+                        reviewRuns,
+                        mock(PracticeScriptRunRecorder.class),
+                        transactions,
+                        mapper,
+                        metrics,
+                        usageEvents),
                 transactions,
                 mapper,
                 metrics,
-                new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                usageEvents);
+                new ReviewJobTelemetry(metrics, Tracer.NOOP));
     }
 
     private ReviewJobClaimService claimService(ReviewJobRepository repository) {
@@ -1461,20 +1465,15 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     private ReviewSandboxRuns reviewSandboxRuns(ReviewJobClaimService claims) {
         return new ReviewSandboxRuns(
                 claims,
-                mock(ReviewAttemptPreparation.class),
                 mock(ReviewAttemptCustody.class),
-                mock(ReviewJobTerminal.class),
                 jobs,
-                mock(SandboxWorkspaceManager.class),
                 mock(SandboxGatewaySessions.class),
-                transactions,
                 mapper,
                 mock(ReviewAttemptResults.class),
                 reviewRuns,
                 agentRuns,
-                mock(JobEvidenceFiles.class),
                 mock(AttemptCopyReceipts.class),
-                mock(ClusterLock.class));
+                mock(ReviewAttemptMeasurements.class));
     }
 
     /** Leases the job's review run as its review sandbox's pull does; false when the sandbox has nothing to measure. */
