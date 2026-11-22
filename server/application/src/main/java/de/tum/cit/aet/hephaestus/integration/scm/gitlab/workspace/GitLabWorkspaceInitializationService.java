@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncR
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.collaborator.GitLabCollaboratorSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.subissue.GitLabSubIssueSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabSyncReports;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -1143,15 +1144,6 @@ public class GitLabWorkspaceInitializationService {
             SyncPhase phase,
             String operation,
             @Nullable String resource) {
-        if (handle == null || result.status() == SyncResult.Status.COMPLETED) {
-            return;
-        }
-        String outcome = switch (result.status()) {
-            case ABORTED_RATE_LIMIT -> " stopped at the provider rate limit.";
-            case COMPLETED_WITH_WARNINGS -> " completed with warnings.";
-            case ABORTED_ERROR -> " did not complete.";
-            case COMPLETED -> throw new IllegalStateException("Completed result already excluded");
-        };
-        handle.reportWarnings(SyncProgress.ofResource(phase, operation + outcome, resource, null, null));
+        GitLabSyncReports.warn(handle, result.status(), phase, operation, resource);
     }
 }

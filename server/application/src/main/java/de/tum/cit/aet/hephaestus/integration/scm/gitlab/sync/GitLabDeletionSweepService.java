@@ -268,6 +268,8 @@ public class GitLabDeletionSweepService {
      * @param handle  live job handle for progress + cancellation; {@code null} outside a recorded job
      */
     public SweepOutcome sweepScope(Long scopeId, @Nullable SyncExecutionHandle handle) {
+        // One set of checkpoints for the whole pass, so a cancel is reported once however many projects it skips.
+        var cancellation = new GitLabSyncReports.Cancellation(handle);
         // Only the connected instance's rows: another instance can host a project at the same path, and this
         // scope's credentials list only its own.
         List<Repository> repositories = actorSelector
@@ -296,7 +298,7 @@ public class GitLabDeletionSweepService {
                 skipped = true;
                 continue;
             }
-            if (isCancelled(handle)) {
+            if (cancellation.stopsHere()) {
                 log.info(
                         "GitLab deletion sweep cancelled between projects: scopeId={}, projectsSwept={}, projectsRemaining={}",
                         scopeId,
@@ -313,7 +315,7 @@ public class GitLabDeletionSweepService {
 
             SweepOutcome outcome;
             try {
-                outcome = sweepRepository(scopeId, repository, handle);
+                outcome = sweepRepository(scopeId, repository, cancellation);
             } catch (RuntimeException e) {
                 // sweepRepository is written not to throw, but a sweep must never be the reason a
                 // reconciliation job fails — it is drift repair, not the sync itself.
@@ -387,16 +389,21 @@ public class GitLabDeletionSweepService {
      *                   {@code null} when the sweep runs outside a recorded job
      */
     public SweepOutcome sweepRepository(Long scopeId, Repository repository, @Nullable SyncExecutionHandle handle) {
+        return sweepRepository(scopeId, repository, new GitLabSyncReports.Cancellation(handle));
+    }
+
+    private SweepOutcome sweepRepository(
+            Long scopeId, Repository repository, GitLabSyncReports.Cancellation cancellation) {
         return admission
                 .capture(scopeId, repository)
-                .map(read -> sweepRepository(scopeId, repository, handle, read))
+                .map(read -> sweepRepository(scopeId, repository, cancellation, read))
                 .orElse(SweepOutcome.NOTHING);
     }
 
     public SweepOutcome sweepRepository(
             Long scopeId,
             Repository repository,
-            @Nullable SyncExecutionHandle handle,
+            GitLabSyncReports.Cancellation cancellation,
             GitLabProjectAdmission.ProjectRead read) {
         String fullPath = repository.getNameWithOwner();
         String safeProjectPath = Objects.requireNonNullElse(sanitizeForLog(fullPath), "<unknown>");
@@ -406,7 +413,7 @@ public class GitLabDeletionSweepService {
             return SweepOutcome.NOTHING;
         }
 
-        if (isCancelled(handle)) {
+        if (cancellation.stopsHere()) {
             return SweepOutcome.NOTHING;
         }
 
@@ -416,7 +423,7 @@ public class GitLabDeletionSweepService {
         boolean featureOff = false;
 
         for (SweptEntity entity : SweptEntity.values()) {
-            if (isCancelled(handle)) {
+            if (cancellation.stopsHere()) {
                 // An operator-requested cancel is not a degraded sweep; the job already finalizes CANCELLED.
                 break;
             }
@@ -428,7 +435,7 @@ public class GitLabDeletionSweepService {
             // window are left for the next sweep, by which point they are in the listing.
             List<Integer> localBeforeListing = localLiveNumbers(repository.getId(), entity);
 
-            UpstreamListing listing = listUpstreamNumbers(scopeId, fullPath, entity, safeProjectPath, handle);
+            UpstreamListing listing = listUpstreamNumbers(scopeId, fullPath, entity, safeProjectPath, cancellation);
             if (!admission.current(read)) return SweepOutcome.NOTHING;
             // The count cross-check inside the listing cannot see this one: an empty listing reconciles
             // with an upstream count of zero perfectly, so "complete" is earned without proving anything.
@@ -482,7 +489,7 @@ public class GitLabDeletionSweepService {
             }
         }
 
-        var noteOutcome = noteReconciliation.reconcileRepository(scopeId, repository, handle, read);
+        var noteOutcome = noteReconciliation.reconcileRepository(scopeId, repository, cancellation, read);
         unverifiedNoteParents.increment(noteOutcome.unverified());
         if (!admission.current(read)) return SweepOutcome.NOTHING;
         return new SweepOutcome(
@@ -551,7 +558,7 @@ public class GitLabDeletionSweepService {
             String fullPath,
             SweptEntity entity,
             String safeProjectPath,
-            @Nullable SyncExecutionHandle handle) {
+            GitLabSyncReports.Cancellation cancellation) {
         String context = entity.plural + " numbers for " + safeProjectPath;
 
         Set<Integer> numbers = new LinkedHashSet<>();
@@ -562,7 +569,7 @@ public class GitLabDeletionSweepService {
         int retryAttempts = 0;
 
         while (true) {
-            if (isCancelled(handle)) {
+            if (cancellation.stopsHere()) {
                 return UpstreamListing.incomplete("cancelled");
             }
             if (page >= GitLabSyncConstants.MAX_PAGINATION_PAGES) {
@@ -752,9 +759,5 @@ public class GitLabDeletionSweepService {
         } catch (NumberFormatException e) {
             return null;
         }
-    }
-
-    private static boolean isCancelled(@Nullable SyncExecutionHandle handle) {
-        return handle != null && handle.isCancellationRequested();
     }
 }

@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
@@ -113,7 +115,8 @@ public class GitLabScopeSync {
 
             if (session.accountLogin() == null || session.accountLogin().isBlank()) {
                 log.warn("No accountLogin for GitLab workspace, skipping: scopeId={}", scopeId);
-                reportWarning(handle);
+                GitLabSyncReports.warn(
+                        handle, SyncResult.Status.ABORTED_ERROR, SyncPhase.CONNECTION, "Connected group check", null);
                 return;
             }
 
@@ -138,15 +141,22 @@ public class GitLabScopeSync {
             // the dominant-cost phase, where cancel/progress are threaded through the handle.
             Map<Long, String> resourceErrors = new HashMap<>();
             Map<Long, GitLabProjectAdmission.ProjectRead> reads = new HashMap<>();
-            List<Repository> availableRepos = repositorySync.syncRepositories(session, handle, resourceErrors, reads);
+            var cancellation = new GitLabSyncReports.Cancellation(handle);
+            List<Repository> availableRepos =
+                    repositorySync.syncRepositories(session, handle, cancellation, resourceErrors, reads);
             if (!syncTargetProvider.isScopeActiveForSync(scopeId)) {
                 log.info("Stopped GitLab workspace sync: reason=scopeNotEligible, scopeId={}", scopeId);
-                reportWarning(handle);
+                GitLabSyncReports.warn(
+                        handle,
+                        SyncResult.Status.ABORTED_ERROR,
+                        SyncPhase.CONNECTION,
+                        "Sync eligibility check",
+                        session.accountLogin());
                 return;
             }
 
             // A cancel observed during the repo phase skips the remaining phases (cooperative best-effort).
-            if (handle == null || !handle.isCancellationRequested()) {
+            if (!cancellation.stopsHere()) {
                 // Phase 4: Post-repo sync (sub-issues, dependencies — needs issues to exist)
                 repositorySync.syncPostRepo(session, handle, resourceErrors, availableRepos, reads);
             }
@@ -157,12 +167,12 @@ public class GitLabScopeSync {
                 }
             });
 
-            if (handle == null || !handle.isCancellationRequested()) {
+            if (!cancellation.stopsHere()) {
                 // Phase 5: Sync teams (subgroups)
                 syncTeams(session, handle);
 
                 // Phase 5.5: A workspace that selected its projects takes its members from what they grant
-                projectSelectedMembers(session, handle);
+                projectSelectedMembers(session, handle, cancellation);
 
                 // Phase 6: Deletion sweep — RECONCILIATION only, and the one thing that makes
                 // RECONCILIATION different from INITIAL. Every phase above only ever upserts, so an
@@ -176,28 +186,28 @@ public class GitLabScopeSync {
                 // Last, deliberately: the sweep's set difference is only meaningful against a mirror that
                 // has already had this run's upserts applied. Sweeping first would race the fetch and
                 // tombstone rows that were about to arrive.
-                if (type == SyncJobType.RECONCILIATION) {
+                // A cancel that the member projection consumed skips the sweep without a second report, and nothing
+                // after the sweep checks again, so the sweep's own checkpoints report a cancel at most once.
+                if (type == SyncJobType.RECONCILIATION && !cancellation.stopsHere()) {
                     GitLabDeletionSweepService.SweepOutcome sweep = deletionSweepService.sweepScope(scopeId, handle);
                     if (sweep.skipped()) {
                         // At least one project's upstream listing could not be proven complete, so its
                         // deletions are still outstanding. Surface it rather than reporting a clean
                         // reconciliation that did not fully reconcile.
-                        reportWarning(handle);
+                        GitLabSyncReports.warn(
+                                handle,
+                                SyncResult.Status.ABORTED_ERROR,
+                                SyncPhase.SWEEP,
+                                "Deletion sweep",
+                                session.accountLogin());
                     }
                 }
             }
 
-            // A still-set cancel flag means the repo phase aborted on a checkpoint; declare it so the job
-            // finalizes CANCELLED rather than a false SUCCEEDED.
-            if (handle != null && handle.isCancellationRequested()) {
-                handle.reportCancelled();
-            }
-
             log.info("Completed GitLab workspace sync: scopeId={}", scopeId);
-        } catch (Exception e) {
-            if (handle != null) {
-                throw new IllegalStateException("Failed to sync GitLab scope " + scopeId, e);
-            }
+        } catch (RuntimeException e) {
+            // The job records the exception's own message as its error, so the cause is not wrapped.
+            if (handle != null) throw e;
             log.error("Failed GitLab workspace sync: scopeId={}", scopeId, e);
         } finally {
             syncContextProvider.clearContext();
@@ -207,11 +217,21 @@ public class GitLabScopeSync {
     private void openMissingWebhook(SyncSession session, @Nullable SyncExecutionHandle handle) {
         try {
             if (initializationService.initializeIfWebhookMissing(session.scopeId())) {
-                reportWarning(handle);
+                GitLabSyncReports.warn(
+                        handle,
+                        SyncResult.Status.ABORTED_ERROR,
+                        SyncPhase.CONNECTION,
+                        "Webhook setup",
+                        session.accountLogin());
             }
         } catch (Exception e) {
             log.error("Failed GitLab webhook recovery: scopeId={}", session.scopeId(), e);
-            reportWarning(handle);
+            GitLabSyncReports.warn(
+                    handle,
+                    SyncResult.Status.ABORTED_ERROR,
+                    SyncPhase.CONNECTION,
+                    "Webhook setup",
+                    session.accountLogin());
         }
     }
 
@@ -236,11 +256,25 @@ public class GitLabScopeSync {
                         .find(session.scopeId())
                         .ifPresent(workspace -> repositoryMonitors.monitorAllowed(workspace, result.synced()));
             } else {
-                reportWarning(handle);
+                GitLabSyncReports.warn(
+                        handle,
+                        switch (result.status()) {
+                            case COMPLETED_WITH_ERRORS -> SyncResult.Status.COMPLETED_WITH_WARNINGS;
+                            case ABORTED_RATE_LIMIT -> SyncResult.Status.ABORTED_RATE_LIMIT;
+                            case COMPLETED, ABORTED_ERROR -> SyncResult.Status.ABORTED_ERROR;
+                        },
+                        SyncPhase.REPOSITORIES,
+                        "Project discovery",
+                        session.accountLogin());
             }
         } catch (Exception e) {
             log.error("Failed GitLab group project sync: scopeId={}", session.scopeId(), e);
-            reportWarning(handle);
+            GitLabSyncReports.warn(
+                    handle,
+                    SyncResult.Status.ABORTED_ERROR,
+                    SyncPhase.REPOSITORIES,
+                    "Project discovery",
+                    session.accountLogin());
         }
     }
 
@@ -255,12 +289,22 @@ public class GitLabScopeSync {
                                 groupMemberSync.syncGroupMemberships(session.scopeId(), session.accountLogin(), org);
                         log.info("GitLab membership sync: scopeId={}, membersSynced={}", session.scopeId(), count);
                         if (count < 0) {
-                            reportWarning(handle);
+                            GitLabSyncReports.warn(
+                                    handle,
+                                    SyncResult.Status.ABORTED_ERROR,
+                                    SyncPhase.ORGANIZATION,
+                                    "Group membership sync",
+                                    session.accountLogin());
                         }
                     });
         } catch (Exception e) {
             log.error("Failed GitLab membership sync: scopeId={}", session.scopeId(), e);
-            reportWarning(handle);
+            GitLabSyncReports.warn(
+                    handle,
+                    SyncResult.Status.ABORTED_ERROR,
+                    SyncPhase.ORGANIZATION,
+                    "Group membership sync",
+                    session.accountLogin());
         }
     }
 
@@ -272,7 +316,12 @@ public class GitLabScopeSync {
             log.info("GitLab issue type sync: scopeId={}, types={}", session.scopeId(), count);
         } catch (Exception e) {
             log.error("Failed GitLab issue type sync: scopeId={}", session.scopeId(), e);
-            reportWarning(handle);
+            GitLabSyncReports.warn(
+                    handle,
+                    SyncResult.Status.ABORTED_ERROR,
+                    SyncPhase.ISSUES,
+                    "Issue type sync",
+                    session.accountLogin());
         }
     }
 
@@ -290,17 +339,20 @@ public class GitLabScopeSync {
             if (result.complete()) {
                 syncTargetProvider.updateTeamsSyncTimestamp(session.scopeId(), Instant.now());
             } else {
-                reportWarning(handle);
+                GitLabSyncReports.warn(
+                        handle, SyncResult.Status.ABORTED_ERROR, SyncPhase.TEAMS, "Team sync", session.accountLogin());
             }
         } catch (Exception e) {
             log.error("Failed GitLab team sync: scopeId={}", session.scopeId(), e);
-            reportWarning(handle);
+            GitLabSyncReports.warn(
+                    handle, SyncResult.Status.ABORTED_ERROR, SyncPhase.TEAMS, "Team sync", session.accountLogin());
         }
     }
 
-    private void projectSelectedMembers(SyncSession session, @Nullable SyncExecutionHandle handle) {
+    private void projectSelectedMembers(
+            SyncSession session, @Nullable SyncExecutionHandle handle, GitLabSyncReports.Cancellation cancellation) {
         // A cancel may arrive during the team phase, after the outer check.
-        if (selectedMembershipProjection == null || (handle != null && handle.isCancellationRequested())) return;
+        if (selectedMembershipProjection == null || cancellation.stopsHere()) return;
 
         try {
             GitLabSelectedMembershipProjection.Outcome outcome =
@@ -309,17 +361,21 @@ public class GitLabScopeSync {
             // Nothing changed; the next sync reads again.
             if (outcome == GitLabSelectedMembershipProjection.Outcome.UNKNOWN
                     || outcome == GitLabSelectedMembershipProjection.Outcome.STALE) {
-                reportWarning(handle);
+                GitLabSyncReports.warn(
+                        handle,
+                        SyncResult.Status.ABORTED_ERROR,
+                        SyncPhase.ORGANIZATION,
+                        "Member projection",
+                        session.accountLogin());
             }
         } catch (Exception e) {
             log.error("Failed GitLab selected membership projection: scopeId={}", session.scopeId(), e);
-            reportWarning(handle);
-        }
-    }
-
-    private static void reportWarning(@Nullable SyncExecutionHandle handle) {
-        if (handle != null) {
-            handle.reportWarnings();
+            GitLabSyncReports.warn(
+                    handle,
+                    SyncResult.Status.ABORTED_ERROR,
+                    SyncPhase.ORGANIZATION,
+                    "Member projection",
+                    session.accountLogin());
         }
     }
 }

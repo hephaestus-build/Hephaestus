@@ -46,10 +46,9 @@ public class GitLabIntegrationSyncRunner implements IntegrationSyncRunner {
      */
     @Override
     public void reconcile(IntegrationRef ref, SyncExecutionHandle handle, SyncJobType type) {
+        // The scope sync reports a cancel where a checkpoint consumed it; one that arrived after the last stopped
+        // nothing.
         scopeSync.syncWorkspaceNow(ref.workspaceId(), handle, type);
-        if (handle.isCancellationRequested()) {
-            handle.reportCancelled();
-        }
     }
 
     /**
