@@ -46,26 +46,6 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
     List<TurnStatus> findStatusesByWorkspaceIdAndIdIn(
             @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
-    interface RunningSlackTurn {
-        UUID getId();
-
-        int getAttempt();
-    }
-
-    /**
-     * The Slack turn of a conversation that runs now, as the database holds it at this statement: a projection, so no
-     * turn that the transaction loaded earlier answers with its older state. A claim lets at most one turn of a
-     * conversation run.
-     */
-    @Query("""
-            SELECT t.id AS id, t.attempt AS attempt FROM ConversationTurn t
-            WHERE t.workspaceId = :workspaceId AND t.conversationId = :conversationId
-              AND t.status = de.tum.cit.aet.hephaestus.conversation.ConversationTurn.Status.RUNNING
-              AND t.surface = de.tum.cit.aet.hephaestus.conversation.ConversationTurn.Surface.SLACK
-            """)
-    Optional<RunningSlackTurn> findRunningSlackTurn(
-            @Param("workspaceId") Long workspaceId, @Param("conversationId") UUID conversationId);
-
     /** The queued and running turns of a main conversation and its threads, oldest first. */
     @Query("""
             SELECT t FROM ConversationTurn t JOIN Conversation c ON c.id = t.conversationId
@@ -126,27 +106,6 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
         Instant getFinishedAt();
     }
 
-    /**
-     * The attempt, while it holds its live lease, running or stopped, on the database clock.
-     *
-     * @return empty when the attempt lost its lease or ended
-     */
-    @WorkspaceAgnostic("The turn credential names the workspace; the statement filters by it")
-    @Query(value = """
-            SELECT t.status AS status, t.conversation_id AS conversationId, c.account_id AS accountId,
-                   t.started_at AS startedAt, t.finished_at AS finishedAt
-              FROM conversation_turn t
-              JOIN conversation c ON c.id = t.conversation_id AND c.workspace_id = t.workspace_id
-            """ + LIVE_CLAIM + """
-             WHERE t.workspace_id = :workspaceId AND t.id = :id AND t.attempt = :epoch AND t.run_id = :runId
-               AND t.status IN ('RUNNING', 'STOPPED')
-            """, nativeQuery = true)
-    Optional<HeldAttempt> findHeldAttempt(
-            @Param("workspaceId") long workspaceId,
-            @Param("id") UUID id,
-            @Param("epoch") int epoch,
-            @Param("runId") UUID runId);
-
     /** A sandbox's attempt by its run: the turn the run drives, and when the run ends whatever its lease. */
     interface RunAttempt extends HeldAttempt {
         UUID getId();
@@ -172,32 +131,6 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
             """, nativeQuery = true)
     Optional<RunAttempt> findRunAttempt(
             @Param("workspaceId") long workspaceId, @Param("runId") UUID runId, @Param("epoch") int epoch);
-
-    /** An attempt that holds its lease, so an erasure can end it. */
-    interface LeasedAttempt {
-        UUID getId();
-
-        Long getWorkspaceId();
-
-        int getAttempt();
-
-        UUID getRunId();
-
-        @Nullable
-        Instant getStartedAt();
-    }
-
-    /** The attempts whose run is leased now, in one workspace, or in every workspace when it is {@code null}. */
-    @WorkspaceAgnostic("Erasure ends the leased attempts of the workspace it names, or of all after a reconnect")
-    @Query(value = """
-            SELECT t.id, t.workspace_id AS workspaceId, t.attempt, t.run_id AS runId, t.started_at AS startedAt
-              FROM conversation_turn t
-              JOIN agent_run r ON r.id = t.run_id AND r.workspace_id = t.workspace_id AND r.state = 'LEASED'
-                               AND r.lease_epoch = t.attempt AND r.leased_until > clock_timestamp()
-             WHERE (CAST(:workspaceId AS bigint) IS NULL OR t.workspace_id = :workspaceId)
-               AND t.status IN ('RUNNING', 'STOPPED')
-            """, nativeQuery = true)
-    List<LeasedAttempt> findLeasedAttempts(@Param("workspaceId") @Nullable Long workspaceId);
 
     /**
      * Counts one load of the attempt's context folder, on the database clock, while the attempt holds its live lease

@@ -116,9 +116,8 @@ public class ConnectionService {
 
     @Transactional(readOnly = true)
     public List<Connection> findActiveConnections(long workspaceId, IntegrationKind kind) {
-        return connectionRepository.findByWorkspaceIdAndState(workspaceId, IntegrationState.ACTIVE).stream()
-                .filter(connection -> connection.getKind() == kind)
-                .toList();
+        return connectionRepository.findByWorkspaceIdAndStateAndKindIn(
+                workspaceId, IntegrationState.ACTIVE, List.of(kind));
     }
 
     @Transactional(readOnly = true)
@@ -415,11 +414,8 @@ public class ConnectionService {
                 null);
 
         // Invariant: one ACTIVE GitHub Connection per workspace.
-        for (Connection existing :
-                connectionRepository.findByWorkspaceIdAndState(workspace.getId(), IntegrationState.ACTIVE)) {
-            if (existing.getKind() != IntegrationKind.GITHUB) {
-                continue;
-            }
+        for (Connection existing : connectionRepository.findByWorkspaceIdAndStateAndKindIn(
+                workspace.getId(), IntegrationState.ACTIVE, List.of(IntegrationKind.GITHUB))) {
             if (instanceKey.equals(existing.getInstanceKey())) {
                 continue;
             }

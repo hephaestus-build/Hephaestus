@@ -449,7 +449,13 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         order.verify(receipts).holdCopyAdmission();
         order.verify(jobs).lockParentOfJob(jobId);
         order.verify(jobs)
-                .recordProgramFailure(eq(jobId), anyLong(), anyInt(), eq(fence.runId()), contains("init:TypeError"));
+                .recordDiagnosis(
+                        eq(jobId),
+                        anyLong(),
+                        anyInt(),
+                        eq(fence.runId()),
+                        eq(RunnerEnd.PROGRAM_FAILURE_KEY),
+                        contains("init:TypeError"));
         order.verify(reviewRuns).requeue(eq(jobId), eq(fence), eq(AgentRuns.Charge.SPEND), any(), isNull());
     }
 }

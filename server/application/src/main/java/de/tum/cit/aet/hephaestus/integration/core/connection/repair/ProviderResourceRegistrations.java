@@ -6,6 +6,7 @@ import static de.tum.cit.aet.hephaestus.integration.core.connection.repair.Provi
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMaintenanceQueries;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -106,8 +107,8 @@ public class ProviderResourceRegistrations {
 
     @Transactional(readOnly = true)
     @WorkspaceAgnostic("Finds suspended Outline hooks; capture rereads each connection under its scoped lock")
-    public List<ConnectionRepository.WebhookCleanupCandidate> suspendedOutlineHooks() {
-        return connections.findSuspendedOutlineWebhookCandidates();
+    public List<ConnectionMaintenanceQueries.WebhookCleanupCandidate> suspendedOutlineHooks() {
+        return connections.findSuspendedWebhookCandidates(IntegrationKind.OUTLINE);
     }
 
     @Transactional

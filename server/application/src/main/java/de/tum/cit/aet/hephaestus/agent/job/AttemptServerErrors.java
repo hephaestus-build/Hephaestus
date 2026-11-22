@@ -19,6 +19,9 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnAgentRuntime
 public class AttemptServerErrors {
+    /** The capture key of the server's own error while it answered a running attempt. */
+    static final String SERVER_ERROR_KEY = "serverError";
+
     private static final Logger log = LoggerFactory.getLogger(AttemptServerErrors.class);
 
     /** A request of the review sandbox that this server answers. */
@@ -54,8 +57,13 @@ public class AttemptServerErrors {
                 .put("kind", kind.name())
                 .toString();
         try {
-            transactions.executeWithoutResult(status -> jobs.recordServerError(
-                    identity.jobId(), identity.workspaceId(), identity.attempt(), identity.runId(), diagnosis));
+            transactions.executeWithoutResult(status -> jobs.recordDiagnosis(
+                    identity.jobId(),
+                    identity.workspaceId(),
+                    identity.attempt(),
+                    identity.runId(),
+                    SERVER_ERROR_KEY,
+                    diagnosis));
         } catch (RuntimeException unrecorded) {
             log.warn(
                     "Could not keep the server's error on its attempt: jobId={}, error={}",
@@ -66,7 +74,7 @@ public class AttemptServerErrors {
 
     /** How this server failed the attempt's results, for its terminal error; null when it kept no such error. */
     static @Nullable String describe(@Nullable JsonNode capture, int attempt) {
-        JsonNode error = capture == null ? null : capture.get("serverError");
+        JsonNode error = capture == null ? null : capture.get(SERVER_ERROR_KEY);
         if (error == null || error.path("attempt").asInt(-1) != attempt) return null;
         try {
             var request = Request.valueOf(error.path("request").asString());

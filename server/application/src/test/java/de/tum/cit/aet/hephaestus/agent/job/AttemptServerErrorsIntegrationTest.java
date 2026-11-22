@@ -102,14 +102,20 @@ class AttemptServerErrorsIntegrationTest extends BaseIntegrationTest {
         UUID run = Objects.requireNonNull(job.getRunId());
         var write = new TransactionTemplate(transactions);
 
-        Integer other = write.execute(status -> jobs.recordProgramFailure(
-                job.getId(), job.getWorkspaceId(), job.getAttempt() + 1, run, "{\"failure\":\"init:Error\"}"));
+        Integer other = write.execute(status -> jobs.recordDiagnosis(
+                job.getId(),
+                job.getWorkspaceId(),
+                job.getAttempt() + 1,
+                run,
+                RunnerEnd.PROGRAM_FAILURE_KEY,
+                "{\"failure\":\"init:Error\"}"));
         assertThat(other).as("another attempt writes nothing").isZero();
-        Integer own = write.execute(status -> jobs.recordProgramFailure(
+        Integer own = write.execute(status -> jobs.recordDiagnosis(
                 job.getId(),
                 job.getWorkspaceId(),
                 job.getAttempt(),
                 run,
+                RunnerEnd.PROGRAM_FAILURE_KEY,
                 "{\"spent\":0,\"failure\":\"init:TypeError\"}"));
         assertThat(own).isOne();
 

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,7 @@ public class ConnectionMaintenanceQueries {
     @Transactional(readOnly = true)
     @WorkspaceAgnostic("Finds suspended GitLab hooks across workspaces; each removal takes its scoped lifecycle lock")
     public List<WebhookCleanupCandidate> findSuspendedGitLabWebhookCandidates() {
-        return connections.findSuspendedGitLabWebhookCandidates();
+        return connections.findSuspendedWebhookCandidates(IntegrationKind.GITLAB);
     }
 
     public record WebhookCleanupCandidate(long connectionId, long workspaceId) {}

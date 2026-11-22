@@ -59,23 +59,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 class ConnectionServiceTest extends BaseUnitTest {
 
     @Test
-    void shouldReturnEveryActiveConnectionOfTheRequestedKindWithinItsWorkspace() {
-        var first = connection(
-                56,
-                IntegrationKind.OUTLINE,
-                new ConnectionConfig.OutlineConfig("https://first.example.test", null, null, Set.of()));
-        var second = connection(
-                57,
-                IntegrationKind.OUTLINE,
-                new ConnectionConfig.OutlineConfig("https://second.example.test", null, null, Set.of()));
-        var github = connectionInState(IntegrationState.ACTIVE);
-        when(connectionRepository.findByWorkspaceIdAndState(7, IntegrationState.ACTIVE))
-                .thenReturn(List.of(first, github, second));
-        assertThat(service.findActiveConnections(7, IntegrationKind.OUTLINE)).containsExactly(first, second);
-        assertThat(service.findActiveConnections(8, IntegrationKind.OUTLINE)).isEmpty();
-    }
-
-    @Test
     void shouldResolveExactlyOneActiveWorkspaceAndRefuseAnAmbiguousProviderInstance() {
         when(connectionRepository.findWorkspaceIdsByKindAndInstanceKeyAndState(
                         eq(IntegrationKind.SLACK), eq("T1"), eq(IntegrationState.ACTIVE), any()))

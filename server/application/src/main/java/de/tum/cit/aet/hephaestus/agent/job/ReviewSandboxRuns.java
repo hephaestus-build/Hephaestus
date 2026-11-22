@@ -213,11 +213,12 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                 // parent, then the job. The requeue below takes them again in this transaction.
                 receipts.holdCopyAdmission();
                 jobs.lockParentOfJob(job.getId());
-                jobs.recordProgramFailure(
+                jobs.recordDiagnosis(
                         attempt.jobId(),
                         attempt.workspaceId(),
                         attempt.attempt(),
                         attempt.runId(),
+                        RunnerEnd.PROGRAM_FAILURE_KEY,
                         objectMapper
                                 .createObjectNode()
                                 .put("attempt", attempt.attempt())

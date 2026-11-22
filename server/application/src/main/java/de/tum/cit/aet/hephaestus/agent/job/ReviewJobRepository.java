@@ -250,8 +250,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
 
     List<ReviewJob> findByStatus(ReviewJobStatus status);
 
-    List<ReviewJob> findByStatusIn(Collection<ReviewJobStatus> statuses);
-
     /**
      * Takes the attempt's scan call lease when no live lease holds it: one model call of a scan attempt at a time, on
      * any server replica ({@code ScanCallLeases}).
@@ -549,53 +547,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("attempt") int attempt,
             @Param("nextRunId") UUID nextRunId);
 
-    /**
-     * Cancels this worker's attempt for capacity: nothing of its sandbox ran, so it has no execution time either.
-     *
-     * @return rows updated (0 or 1)
-     */
-    @WorkspaceAgnostic("ID-based fenced cancel; caller is the claiming worker itself")
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.CANCELLED, "
-            + "j.completedAt = :now, j.errorMessage = :error, j.executionStartedAt = null, "
-            + "j.cancellationReason = de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason.NO_SANDBOX_ROOM "
-            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.runId = :runId AND j.attempt = :attempt")
-    int cancelForRoomOwnedBy(
-            @Param("id") UUID id,
-            @Param("now") Instant now,
-            @Param("error") String error,
-            @Param("runId") UUID runId,
-            @Param("attempt") int attempt);
-
-    /**
-     * Cancels for capacity every queued review that needs a sandbox and is due: the sandbox runtime cannot hold it.
-     * Admitted reviews that only compose need no sandbox and stay. A budget hold outlives its {@code availableAt} until
-     * the next claim, and such a review waits for money, not room, so it stays too. Several workers may run it; the
-     * second changes nothing.
-     *
-     * @return the runs of the reviews cancelled, which the caller ends
-     */
-    @WorkspaceAgnostic("Fleet-wide capacity verdict over the shared queue; caller is a worker's admission check")
-    // A list result runs as a query, which neither flushes nor clears; Hibernate flushes before a native statement.
-    @Query(value = """
-            UPDATE review_job j SET status = 'CANCELLED', completed_at = :now, error_message = :error,
-                   cancellation_reason = 'NO_SANDBOX_ROOM'
-              FROM agent_run r
-             WHERE r.id = j.run_id AND j.status = 'QUEUED' AND r.available_at <= clock_timestamp()
-               AND j.admission_digest IS NULL AND (r.hold_reason IS NULL OR r.hold_reason <> 'BUDGET')
-            RETURNING j.run_id
-            """, nativeQuery = true)
-    List<UUID> cancelQueuedForRoom(@Param("now") Instant now, @Param("error") String error);
-
-    /** Whether a queued review still needs a sandbox: one held for its budget waits for money, not room. */
-    @WorkspaceAgnostic("Fleet-wide capacity verdict over the shared queue; caller is a worker's admission check")
-    @Query(value = """
-            SELECT EXISTS (SELECT 1 FROM review_job j JOIN agent_run r ON r.id = j.run_id
-             WHERE j.status = 'QUEUED' AND j.admission_digest IS NULL
-               AND (r.hold_reason IS NULL OR r.hold_reason <> 'BUDGET'))
-            """, nativeQuery = true)
-    boolean existsQueuedForRoom();
-
     /** Settlement reads the capture and output of a job that is not yet DONE or FAILED, so only a settled job loses them. */
     @WorkspaceAgnostic("Cross-workspace retention batch; caller is @WorkspaceAgnostic retention service")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
@@ -686,36 +637,27 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("runId") UUID runId,
             @Param("diagnosis") String diagnosis);
 
-    /** A review program's crash in a running attempt's sandbox; the error of a job whose retries run out names it. */
+    /**
+     * Keeps a diagnosis on a running attempt's capture, under {@code key}: a review program's crash in its sandbox
+     * ({@link RunnerEnd#PROGRAM_FAILURE_KEY}), which the error of a job whose retries run out names, or the server's own
+     * error while it answered the attempt's results ({@link AttemptServerErrors#SERVER_ERROR_KEY}), which the attempt's
+     * terminal error names.
+     */
     @Modifying(flushAutomatically = true)
     @Query(
-            value = "UPDATE review_job SET capture = jsonb_set(COALESCE(capture, '{}'::jsonb), '{programFailure}',"
-                    + " CAST(:diagnosis AS jsonb)) WHERE id = :id AND workspace_id = :workspaceId AND status ="
-                    + " 'RUNNING' AND run_id = :runId AND (SELECT " + ReviewRunKind.ATTEMPT_OF_RUN
-                    + " FROM agent_run r WHERE r.id = run_id)"
-                    + " = :attempt",
+            value =
+                    "UPDATE review_job SET capture = jsonb_set(COALESCE(capture, '{}'::jsonb), ARRAY[CAST(:key AS text)],"
+                            + " CAST(:diagnosis AS jsonb)) WHERE id = :id AND workspace_id = :workspaceId AND status ="
+                            + " 'RUNNING' AND run_id = :runId AND (SELECT " + ReviewRunKind.ATTEMPT_OF_RUN
+                            + " FROM agent_run r WHERE r.id = run_id)"
+                            + " = :attempt",
             nativeQuery = true)
-    int recordProgramFailure(
+    int recordDiagnosis(
             @Param("id") UUID id,
             @Param("workspaceId") long workspaceId,
             @Param("attempt") int attempt,
             @Param("runId") UUID runId,
-            @Param("diagnosis") String diagnosis);
-
-    /** The server's own error while it answered a running attempt's results; the attempt's terminal error names it. */
-    @Modifying(flushAutomatically = true)
-    @Query(
-            value = "UPDATE review_job SET capture = jsonb_set(COALESCE(capture, '{}'::jsonb), '{serverError}',"
-                    + " CAST(:diagnosis AS jsonb)) WHERE id = :id AND workspace_id = :workspaceId AND status ="
-                    + " 'RUNNING' AND run_id = :runId AND (SELECT " + ReviewRunKind.ATTEMPT_OF_RUN
-                    + " FROM agent_run r WHERE r.id = run_id)"
-                    + " = :attempt",
-            nativeQuery = true)
-    int recordServerError(
-            @Param("id") UUID id,
-            @Param("workspaceId") long workspaceId,
-            @Param("attempt") int attempt,
-            @Param("runId") UUID runId,
+            @Param("key") String key,
             @Param("diagnosis") String diagnosis);
 
     /** Its own transaction: a caller may run outside one. */
