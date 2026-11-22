@@ -43,6 +43,7 @@ public class FeedbackRepairService implements FeedbackRepair {
     private final FeedbackDeliveryPolicy policy;
     private final ReviewRepository reviews;
     private final ResultRepository results;
+    private final FeedbackReadbackRepeats repeats;
 
     @Override
     public FeedbackRepairStatus readback(long workspaceId, UUID reviewId, UUID targetId) {
@@ -93,7 +94,12 @@ public class FeedbackRepairService implements FeedbackRepair {
     @Override
     @Transactional(readOnly = true)
     public FeedbackRepairStatus status(long workspaceId, UUID reviewId) {
-        return readStatus(workspaceId, reviewId);
+        var status = readStatus(workspaceId, reviewId);
+        UUID feedbackId = status.feedbackId();
+        if (feedbackId == null || status.state() != FeedbackRepairStatus.State.READBACK) return status;
+        var row = feedback.findByIdAndWorkspaceId(feedbackId, workspaceId).orElseThrow();
+        return new FeedbackRepairStatus(
+                feedbackId, status.state(), status.edits(), status.copies(), repeats.of(row, status.copies()));
     }
 
     private FeedbackRepairStatus readStatus(long workspaceId, UUID reviewId) {

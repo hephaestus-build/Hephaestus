@@ -799,6 +799,7 @@ Such a repeat names the earlier note's path, lines and link, with its opening wo
 The receipt says that the earlier note raised the problem, because the composer does not see whether a person resolved its thread.
 The composer drops the entry, or keeps it only when it says what the earlier note does not.
 The composer has no tool that replies in an earlier thread.
+The readback applies the same rule to a note that reached the work after the check.
 
 `publish_package` takes only that ID, checks the same package again and returns its durable acceptance receipt.
 The server publishes the package that its own check of this attempt stored under that ID, never a package that the loop sends.
@@ -812,6 +813,13 @@ After a send settles, its tools return the provider readback recorded under that
 An approval wait can resume the same admitted composition from its retained inputs.
 [ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) owns the correction budgets, immutable revisions, approval and human-thread-state rules.
 [Data retention](/admin/data-retention) owns the capsule and tool trace's expiry.
+
+The readback of the review on the work also lists its repeats.
+Each is a note of this piece that the provider found and that is not resolved.
+A note of another review on the work cites its problem.
+The check could not see a note that reached the work after it.
+The rule for the other note is the check's rule below, and pairs inside the piece are not listed again.
+The composer can correct the note with `edit_own` so that it points to the other note, or keep it.
 
 Each turn shows everything its session may use, so no session reads files.
 A session makes at most the model calls of one practice's turn for each practice that it decides, and at most three practices' worth.
