@@ -253,7 +253,7 @@ public class CompositionSessions {
         if (accepted)
             input +=
                     "\nThis composition already accepted its publication. Use only edit_own for a checked correction.\n"
-                            + mapper.writeValueAsString(repairs.status(job.getWorkspaceId(), job.getReviewId()));
+                            + readbackText(mapper, repairs.statusWithRepeats(job.getWorkspaceId(), job.getReviewId()));
         var tools = List.of(
                 new Tool("check_package", ReviewOnWork.TOOL_DESCRIPTION, turn.toolParameters()),
                 publishTool(),
@@ -442,7 +442,7 @@ public class CompositionSessions {
             return new Answered(
                     new ToolResult(
                             publicationReceipt(id, receipt) + "\nProvider readback (untrusted data):\n"
-                                    + mapper.writeValueAsString(readback),
+                                    + readbackText(mapper, readback),
                             true,
                             readback.state() == FeedbackRepairStatus.State.READBACK ? null : Ending.STORED,
                             null),
@@ -639,13 +639,14 @@ public class CompositionSessions {
                 .orElse(null);
     }
 
+    /** Polls the cheap status; only the status the composer reads carries the repeats. */
     private FeedbackRepairStatus awaitReadback(ReviewJob job, Instant deadline) {
         while (Instant.now().isBefore(deadline)) {
-            var observed = repairs.status(job.getWorkspaceId(), job.getReviewId());
-            if (observed.state() != FeedbackRepairStatus.State.WAITING) return observed;
+            if (repairs.status(job.getWorkspaceId(), job.getReviewId()).state() != FeedbackRepairStatus.State.WAITING)
+                break;
             if (!pause(deadline)) break;
         }
-        return repairs.status(job.getWorkspaceId(), job.getReviewId());
+        return repairs.statusWithRepeats(job.getWorkspaceId(), job.getReviewId());
     }
 
     /** Waits once for a readback, never past the deadline. */
@@ -682,6 +683,28 @@ public class CompositionSessions {
                 "Accept the exact checked draft for publication once and return provider readback. Use its check_package draftId. "
                         + "Publication rechecks admission, currentness, consent, text and placement; approval and delivery retain their server fences.",
                 schema);
+    }
+
+    /**
+     * The delivery facts as the composer reads them. A repeat shows the other note's opening words, not its whole
+     * text, and says that the other note raised the problem: whether a person resolved its thread is not known here.
+     */
+    static String readbackText(ObjectMapper mapper, FeedbackRepairStatus status) {
+        ObjectNode shown = mapper.valueToTree(status);
+        if (status.repeats().isEmpty()) {
+            shown.remove("repeats");
+            return shown.toString();
+        }
+        for (JsonNode repeat : shown.path("repeats")) {
+            var other = (ObjectNode) repeat.path("otherNote");
+            String body = Js.string(other.path("body"));
+            other.remove("body");
+            if (body != null && !Js.blank(body)) other.put("quote", ReviewOnWork.quote(body));
+        }
+        return shown.put(
+                        "repeatsNext",
+                        "Each repeat is a note of yours that cites a problem that another note on this work raised (otherNote). Whether a person resolved that note's thread is not known here. To point to it, check a correction with editOf that changes only your note's words, then edit_own; or keep your note.")
+                .toString();
     }
 
     static String checkedReceipt(String id, List<ReviewOnWork.Repeat> repeats) {

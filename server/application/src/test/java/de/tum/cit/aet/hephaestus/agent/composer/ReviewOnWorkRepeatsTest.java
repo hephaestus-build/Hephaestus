@@ -2,10 +2,12 @@ package de.tum.cit.aet.hephaestus.agent.composer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -118,6 +120,55 @@ class ReviewOnWorkRepeatsTest {
                 .contains("an earlier note on this work raised")
                 .contains("whether a person resolved its thread is not known")
                 .doesNotContain("still raises");
+    }
+
+    /**
+     * The readback names a later note on the work that cites the same problem by its place, link and opening words,
+     * says that it raised the problem, and leaves the state as it is.
+     */
+    @Test
+    void shouldShowAReadbackRepeatWithTheOtherNotesOpeningWordsAndNoClaimThatItStillRaisesTheProblem() {
+        var copy = UUID.randomUUID();
+        var problem = UUID.randomUUID();
+        var status = new FeedbackRepairStatus(
+                UUID.randomUUID(),
+                FeedbackRepairStatus.State.READBACK,
+                0,
+                List.of(),
+                List.of(new FeedbackRepairStatus.Repeat(
+                        copy,
+                        List.of(problem),
+                        new FeedbackRepairStatus.OtherNote(
+                                "src/App.java",
+                                15,
+                                15,
+                                WORK_URL + "#discussion_r9",
+                                EARLIER + " " + "x".repeat(200)))));
+
+        var shown = MAPPER.readTree(CompositionSessions.readbackText(MAPPER, status));
+
+        assertThat(shown.path("state").asString()).isEqualTo("READBACK");
+        var repeat = shown.path("repeats").get(0);
+        assertThat(repeat.path("copyId").asString()).isEqualTo(copy.toString());
+        assertThat(repeat.path("otherNote").path("link").asString()).isEqualTo(WORK_URL + "#discussion_r9");
+        assertThat(repeat.path("otherNote").has("body")).isFalse();
+        assertThat(repeat.path("otherNote").path("quote").asString())
+                .startsWith(EARLIER)
+                .endsWith("…");
+        assertThat(shown.path("repeatsNext").asString())
+                .contains("another note on this work raised")
+                .contains("edit_own")
+                .doesNotContain("still raises");
+    }
+
+    @Test
+    void shouldShowAReadbackWithoutRepeatsAsBefore() {
+        var status = new FeedbackRepairStatus(UUID.randomUUID(), FeedbackRepairStatus.State.READBACK, 0, List.of());
+
+        var shown = MAPPER.readTree(CompositionSessions.readbackText(MAPPER, status));
+
+        assertThat(shown.has("repeats")).isFalse();
+        assertThat(shown.has("repeatsNext")).isFalse();
     }
 
     @Test

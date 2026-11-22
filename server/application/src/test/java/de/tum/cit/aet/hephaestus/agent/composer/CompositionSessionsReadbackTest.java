@@ -154,6 +154,8 @@ class CompositionSessionsReadbackTest extends BaseUnitTest {
                     : List.<CopyReadback>of();
             when(repairs.status(job.getWorkspaceId(), job.getReviewId()))
                     .thenReturn(new FeedbackRepairStatus(FEEDBACK, state, 0, copies));
+            when(repairs.statusWithRepeats(job.getWorkspaceId(), job.getReviewId()))
+                    .thenReturn(new FeedbackRepairStatus(FEEDBACK, state, 0, copies));
             sessions = new CompositionSessions(
                     admission,
                     new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 342_000, Duration.ofMinutes(10)),

@@ -43,6 +43,7 @@ public class FeedbackRepairService implements FeedbackRepair {
     private final FeedbackDeliveryPolicy policy;
     private final ReviewRepository reviews;
     private final ResultRepository results;
+    private final FeedbackReadbackRepeats repeats;
 
     @Override
     public FeedbackRepairStatus readback(long workspaceId, UUID reviewId, UUID targetId) {
@@ -94,6 +95,28 @@ public class FeedbackRepairService implements FeedbackRepair {
     @Transactional(readOnly = true)
     public FeedbackRepairStatus status(long workspaceId, UUID reviewId) {
         return readStatus(workspaceId, reviewId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public FeedbackRepairStatus statusWithRepeats(long workspaceId, UUID reviewId) {
+        var status = readStatus(workspaceId, reviewId);
+        UUID feedbackId = status.feedbackId();
+        if (feedbackId == null || status.state() != FeedbackRepairStatus.State.READBACK) return status;
+        var row = feedback.findByIdAndWorkspaceId(feedbackId, workspaceId).orElseThrow();
+        // A quiet edit is checked against the history its session read before the first publication, so the cutoff is
+        // the first revision's preparation: the review's earliest piece on the work.
+        var prepared = feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(workspaceId, reviewId).stream()
+                .filter(piece -> piece.getDestination() == FeedbackDestination.ON_WORK)
+                .findFirst()
+                .orElse(row)
+                .getCreatedAt();
+        return new FeedbackRepairStatus(
+                feedbackId,
+                status.state(),
+                status.edits(),
+                status.copies(),
+                repeats.of(row, status.copies(), prepared));
     }
 
     private FeedbackRepairStatus readStatus(long workspaceId, UUID reviewId) {

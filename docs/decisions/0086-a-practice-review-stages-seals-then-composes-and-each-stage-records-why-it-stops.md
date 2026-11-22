@@ -512,10 +512,32 @@ The composer's view of lineage stays decided, not shipped.
   Both quote the opening words of the earlier note.
   The composer merges or drops the entry, or keeps it only when it says what the earlier note does not.
   The composer has no tool that replies in an earlier thread, so the receipt does not offer a reply.
+- **The readback flags a repeat too.** A note of another review can arrive after the check.
+  A review that ran at the same time is an example.
+  So the readback after a send lists such a repeat.
+  It is a found, unresolved note of this piece.
+  A note of another review on the work cites its problem, with the same practice and identity.
+  The other note was posted after this piece's first revision was prepared (`feedback.created_at`).
+  An older note was in the check's history, because preparation refuses a history that changed after the check.
+  A quiet edit is checked against that history too, so its readback keeps the first revision's cutoff.
+  A note counts from the first post of its provider comment.
+  So an edit of that note does not make it new.
+  The other note is the newest revision of its provider comment.
+  It is posted and not retracted, its piece is not withdrawn, and it is not closed as fixed.
+  Neither the note nor its piece is marked incorrect.
+  Its words follow the public history's rule for words.
+  Pairs inside the piece are not listed again.
+  The item names the other note's path, lines and link.
+  It quotes the opening words of the other note when the read may copy them.
+  It says that the other note raised the problem.
+  The next step is to point this note to the other note with `edit_own`, or to keep it.
+  The readback stays advice: it changes no state and refuses nothing.
 
 Enforced by:
 
 - `ReviewOnWorkRepeatsTest`
+- `FeedbackReadbackRepeatsTest`
+- `FeedbackHistoryQueryIntegrationTest#shouldFlagInTheReadbackANoteWhoseProblemANoteOfAnotherReviewOnTheWorkCites`
 - `ResultAdmissionIntegrationTest#shouldWriteTheIdentityOfEachProblemThatTheSealWrites`
 - `FeedbackHistoryQueryIntegrationTest#shouldGiveEachNoteThePracticeAndIdentityOfTheProblemsItCites`
 - `ProblemIdentityMigrationTest`

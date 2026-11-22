@@ -34,6 +34,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
@@ -42,6 +44,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.workspace.Membership;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -69,6 +72,9 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
 
     @Autowired
     FeedbackHistoryQueryService history;
+
+    @Autowired
+    FeedbackRepair repairs;
 
     @MockitoBean
     ResultHistoryQuery permission;
@@ -786,6 +792,178 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
         assertThat(cites.get("SUMMARY" + "copy-" + FeedbackIds.copy(row.getId(), FeedbackCopyKind.SUMMARY, 0)))
                 .as("a summary may point to its notes, so it cites nothing")
                 .isEqualTo(mapper.createArrayNode());
+    }
+
+    @Test
+    void shouldFlagInTheReadbackANoteWhoseProblemANoteOfAnotherReviewOnTheWorkCites() {
+        // Another review's note reached the work after this piece was prepared, at AT: it raced this review.
+        var race = race(AT.plusSeconds(120));
+        var later = piece(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, AT.plusSeconds(60));
+        var laterNote = postedNote(later, race.result(), "https://github.com/acme/app/pull/7#discussion_r2", AT);
+        readBack(later, laterNote);
+
+        var status = repairs.statusWithRepeats(workspace.getId(), reviewId);
+
+        assertThat(status.state()).isEqualTo(FeedbackRepairStatus.State.READBACK);
+        assertThat(status.repeats()).containsExactly(race.repeatOf(laterNote));
+    }
+
+    @Test
+    void shouldFlagAtAQuietEditsReadbackANoteThatAnotherReviewPostedBetweenTheFirstPublicationAndTheEdit() {
+        // The other note arrived after this composition first published, at AT, and before its quiet edit.
+        var race = race(AT.plusSeconds(120));
+        var root = piece(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, AT);
+        postedNote(root, race.result(), "https://github.com/acme/app/pull/7#discussion_r2", AT);
+        var edit = piece(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, AT.plusSeconds(300));
+        jdbc.update(
+                "UPDATE feedback SET created_at = ? WHERE id = ?", Timestamp.from(AT.plusSeconds(300)), edit.getId());
+        var editNote = postedNote(edit, race.result(), "https://github.com/acme/app/pull/7#discussion_r2", AT);
+        feedback.updateComposition(
+                workspace.getId(),
+                root.getId(),
+                mapper.createObjectNode().put("latest", edit.getId().toString()));
+        readBack(edit, editNote);
+        jdbc.update(
+                """
+                UPDATE feedback SET composition = composition || jsonb_build_object('root', ?::text, 'editOf', ?::text,
+                  'latest', ?::text) WHERE id = ?
+                """,
+                root.getId().toString(),
+                root.getId().toString(),
+                edit.getId().toString(),
+                edit.getId());
+
+        var status = repairs.statusWithRepeats(workspace.getId(), reviewId);
+
+        assertThat(status.feedbackId()).isEqualTo(edit.getId());
+        assertThat(status.repeats()).containsExactly(race.repeatOf(editNote));
+    }
+
+    /** Another review's note on the work, and this review's result of the same problem for another developer. */
+    private record Race(Result result, FeedbackCopy other, UUID problem) {
+        FeedbackRepairStatus.Repeat repeatOf(FeedbackCopy mine) {
+            return new FeedbackRepairStatus.Repeat(
+                    mine.getId(),
+                    List.of(problem),
+                    new FeedbackRepairStatus.OtherNote(
+                            "src/A.java", 1, 1, "https://github.com/acme/app/pull/7#discussion_r1", other.getBody()));
+        }
+    }
+
+    private Race race(Instant otherPostedAt) {
+        var earlierResult = negativeResult();
+        authorize(earlierResult);
+        var earlier = piece(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, AT);
+        var earlierNote =
+                postedNote(earlier, earlierResult, "https://github.com/acme/app/pull/7#discussion_r1", otherPostedAt);
+        var earlierReview = reviewId;
+        // This review measures the same practice on the same work for another developer, and finds the same problem.
+        reviewId = UUID.randomUUID();
+        developerId = Objects.requireNonNull(
+                ensureMembership(workspace, persistUser("second-developer"), Membership.WorkspaceRole.MEMBER)
+                        .getAccountId());
+        jdbc.update("""
+                INSERT INTO review SELECT (jsonb_populate_record(NULL::review, to_jsonb(v)
+                  || jsonb_build_object('id', ?::text))).* FROM review v WHERE v.id = ?
+                """, reviewId.toString(), earlierReview);
+        jdbc.update("""
+                INSERT INTO review_practice SELECT (jsonb_populate_record(NULL::review_practice, to_jsonb(p)
+                  || jsonb_build_object('review_id', ?::text))).* FROM review_practice p WHERE p.review_id = ?
+                """, reviewId.toString(), earlierReview);
+        jdbc.update("""
+                INSERT INTO review_item SELECT (jsonb_populate_record(NULL::review_item, to_jsonb(m)
+                  || jsonb_build_object('review_id', ?::text))).* FROM review_item m WHERE m.review_id = ?
+                """, reviewId.toString(), earlierReview);
+        UUID laterResultId = UUID.randomUUID();
+        // One statement: a NOT_MET result must hold its problem when the statement ends.
+        jdbc.update(
+                """
+                WITH copied AS (
+                  INSERT INTO result SELECT (jsonb_populate_record(NULL::result, to_jsonb(r)
+                    || jsonb_build_object('id', ?::text, 'review_id', ?::text, 'developer_id', ?::bigint,
+                      'ended_at', r.recorded_at, 'end_reason', 'REPLACED'))).*
+                  FROM result r WHERE r.id = ? RETURNING id)
+                INSERT INTO problem SELECT (jsonb_populate_record(NULL::problem, to_jsonb(p)
+                  || jsonb_build_object('id', gen_random_uuid()::text, 'result_id', (SELECT id FROM copied)::text))).*
+                FROM problem p WHERE p.result_id = ?
+                """,
+                laterResultId.toString(),
+                reviewId.toString(),
+                developerId,
+                earlierResult.getId(),
+                earlierResult.getId());
+        jdbc.update(
+                "UPDATE problem SET identity = 'key:missing-test' WHERE workspace_id = ? AND result_id IN (?, ?)",
+                workspace.getId(),
+                earlierResult.getId(),
+                laterResultId);
+        var laterResult =
+                results.findByIdAndWorkspaceId(laterResultId, workspace.getId()).orElseThrow();
+        authorize(laterResult);
+        return new Race(laterResult, earlierNote, problemOf(laterResult));
+    }
+
+    /** The provider found the note and it is not resolved. */
+    private void readBack(Feedback row, FeedbackCopy note) {
+        var readback = mapper.createArrayNode();
+        readback.addObject()
+                .put("copyId", note.getId().toString())
+                .put("status", "FOUND")
+                .put("body", "Cover the failure case here.")
+                .put("renderedBody", "Cover the failure case here.")
+                .putNull("anchor")
+                .put("resolved", false)
+                .put("outdated", false);
+        var state = mapper.createObjectNode();
+        state.set("readback", readback);
+        feedback.updateComposition(workspace.getId(), row.getId(), state);
+    }
+
+    /** A posted line note at position 1 of the piece, resting on the result's problem, with its composition support. */
+    private FeedbackCopy postedNote(Feedback row, Result proof, String url, Instant postedAt) {
+        var problem = problemOf(proof);
+        basis.saveAndFlush(FeedbackBasis.builder()
+                .id(FeedbackIds.basis(row.getId(), proof.getId(), problem))
+                .workspaceId(workspace.getId())
+                .feedbackId(row.getId())
+                .resultId(proof.getId())
+                .problemId(problem)
+                .developerId(developerId)
+                .ordinal(0)
+                .build());
+        var copyId = FeedbackIds.copy(row.getId(), FeedbackCopyKind.LINE_NOTE, 1);
+        var note = copies.saveAndFlush(FeedbackCopy.builder()
+                .id(copyId)
+                .workspaceId(workspace.getId())
+                .feedbackId(row.getId())
+                .kind(FeedbackCopyKind.LINE_NOTE)
+                .position(1)
+                .state(FeedbackCopyState.POSTED)
+                .body("Cover the failure case here.")
+                .path("src/A.java")
+                .startLine(1)
+                .endLine(1)
+                .side(CitationSide.NEW)
+                .writeKey(copyId.toString())
+                .writeMarker(FeedbackIds.writeMarker(copyId))
+                .writeStartedAt(postedAt)
+                .postedAt(postedAt)
+                .externalRef("note-" + copyId)
+                .externalUrl(url)
+                .createdAt(AT)
+                .build());
+        var support = List.of(new FeedbackCompositionTrace.CopySupport(
+                FeedbackCopyKind.LINE_NOTE, 1, List.of(new FeedbackCompositionTrace.Support(proof.getId(), problem))));
+        jdbc.update(
+                """
+                UPDATE review SET checks = jsonb_set(COALESCE(checks, '{}'::jsonb), '{feedbackComposition}',
+                  COALESCE(checks->'feedbackComposition', '{}'::jsonb) || jsonb_build_object(?::text, ?::jsonb))
+                WHERE id = ?
+                """,
+                row.getId().toString(),
+                mapper.writeValueAsString(new FeedbackCompositionTrace(support, List.of(), null, null)),
+                reviewId);
+        return note;
     }
 
     private UUID problemOf(Result proof) {

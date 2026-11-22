@@ -813,6 +813,15 @@ An approval wait can resume the same admitted composition from its retained inpu
 [ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) owns the correction budgets, immutable revisions, approval and human-thread-state rules.
 [Data retention](/admin/data-retention) owns the capsule and tool trace's expiry.
 
+The readback of the review on the work also lists its repeats, by the check's rule above.
+Each is a note of this piece that the provider found and that is not resolved.
+A note of another review on the work cites its problem, and it was posted after this piece first was prepared.
+The check could not see that note, and preparation refuses a history that changed after the check.
+The other note also may not rest on a result marked incorrect, and its piece may not be marked incorrect.
+
+Pairs inside the piece are not listed again.
+The composer can correct the note with `edit_own` so that it points to the other note, or keep it.
+
 Each turn shows everything its session may use, so no session reads files.
 A session makes at most the model calls of one practice's turn for each practice that it decides, and at most three practices' worth.
 Each attempt makes at most 12 model calls across its feedback destinations.

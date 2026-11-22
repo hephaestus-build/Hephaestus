@@ -64,6 +64,23 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID>, JpaSp
 
     List<Feedback> findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(long workspaceId, UUID reviewId);
 
+    /**
+     * Every developer's delivered pieces on one work item from reviews other than {@code reviewId}, newest first: the
+     * work is one destination.
+     */
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository$OnWorkPiece(f.id, f.reviewId)
+        FROM Feedback f
+        WHERE f.workspaceId = :workspaceId
+          AND f.destination = de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination.ON_WORK
+          AND f.itemId = :itemId AND f.reviewId <> :reviewId AND f.deliveredAt IS NOT NULL
+        ORDER BY f.createdAt DESC, f.id DESC
+        """)
+    List<OnWorkPiece> findDeliveredOnWorkOfOtherReviews(
+            @Param("workspaceId") long workspaceId, @Param("itemId") long itemId, @Param("reviewId") UUID reviewId);
+
+    record OnWorkPiece(UUID id, UUID reviewId) {}
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT f FROM Feedback f WHERE f.id = :id AND f.workspaceId = :workspaceId")
     Optional<Feedback> lockByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
