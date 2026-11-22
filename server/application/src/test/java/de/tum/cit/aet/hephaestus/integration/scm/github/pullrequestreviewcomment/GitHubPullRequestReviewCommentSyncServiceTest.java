@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcommen
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -12,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -38,10 +40,12 @@ class GitHubPullRequestReviewCommentSyncServiceTest extends BaseUnitTest {
     private static final long THREAD_ID = 11L;
 
     private final PullRequestReviewThreadRepository threads = mock(PullRequestReviewThreadRepository.class);
+    private final GitHubPullRequestReviewCommentProcessor comments =
+            mock(GitHubPullRequestReviewCommentProcessor.class);
     private final GitHubPullRequestReviewCommentSyncService service = new GitHubPullRequestReviewCommentSyncService(
             threads,
             mock(GitHubGraphQlClientProvider.class),
-            mock(GitHubPullRequestReviewCommentProcessor.class),
+            comments,
             mock(GitHubUserProcessor.class),
             mock(GitHubSyncProperties.class),
             mock(GitHubExceptionClassifier.class),
@@ -52,11 +56,15 @@ class GitHubPullRequestReviewCommentSyncServiceTest extends BaseUnitTest {
     void shouldRecordTheNodeIdWhenTheWebhookStoredTheThreadWithoutOne() {
         // The review-comment webhook stores a thread under its root comment's id, with no node id and unresolved.
         var stored = storedThread(null);
+        var root = new PullRequestReviewComment();
+        when(comments.processCreated(any(), anyLong(), anyInt(), any())).thenReturn(root);
 
         service.processThread(read("PRRT_kwDOQNWqEc5hJ2Ab", true), pullRequest(), 1L, SyncResult.Status.COMPLETED);
 
-        // Only the node id column is written; the loaded row, read without a lock, is never saved back.
+        // Only the node id and root comment columns are written; the loaded row, read without a lock, is never saved
+        // back, so a resolve that a webhook commits meanwhile stays as written.
         verify(threads).completeNodeId(THREAD_ID, "PRRT_kwDOQNWqEc5hJ2Ab");
+        verify(threads).completeRootComment(THREAD_ID, root);
         verify(threads, never()).save(any());
         assertThat(stored.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
     }

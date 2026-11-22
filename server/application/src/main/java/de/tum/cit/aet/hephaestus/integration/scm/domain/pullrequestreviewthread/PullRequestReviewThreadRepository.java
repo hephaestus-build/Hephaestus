@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -33,9 +34,15 @@ public interface PullRequestReviewThreadRepository extends JpaRepository<PullReq
      * commits meanwhile stays as written.
      */
     @WorkspaceAgnostic("Sync completes the identity of one shared mirror row that it read by its provider id")
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("UPDATE PullRequestReviewThread t SET t.nodeId = :nodeId WHERE t.id = :id AND t.nodeId IS NULL")
     int completeNodeId(@Param("id") long id, @Param("nodeId") String nodeId);
+
+    /** Records the thread's root comment when it has none, in that column alone, like {@link #completeNodeId}. */
+    @WorkspaceAgnostic("Sync completes the root comment of one shared mirror row that it read by its provider id")
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE PullRequestReviewThread t SET t.rootComment = :root WHERE t.id = :id AND t.rootComment IS NULL")
+    int completeRootComment(@Param("id") long id, @Param("root") PullRequestReviewComment root);
 
     /**
      * Locks the thread without loading it, so a compare with its stored resolution and the write after it are atomic.

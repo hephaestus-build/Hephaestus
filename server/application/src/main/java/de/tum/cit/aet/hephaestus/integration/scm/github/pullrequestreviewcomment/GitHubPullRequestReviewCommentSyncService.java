@@ -216,11 +216,10 @@ public class GitHubPullRequestReviewCommentSyncService {
             }
         }
 
-        // Set the root comment on the thread if not already set
-        if (rootComment != null && thread.getRootComment() == null) {
-            thread.setRootComment(rootComment);
-            threadRepository.save(thread);
-        }
+        // The root comment goes into its column alone: this read holds no thread lock, so saving the loaded row back
+        // could overwrite a resolve or a node id written meanwhile.
+        if (rootComment != null && thread.getRootComment() == null)
+            threadRepository.completeRootComment(Objects.requireNonNull(thread.getId()), rootComment);
 
         return new ThreadSync(synced, read);
     }
@@ -550,11 +549,10 @@ public class GitHubPullRequestReviewCommentSyncService {
             }
         }
 
-        // Set the root comment on the thread if not already set
-        if (rootComment != null && thread.getRootComment() == null) {
-            thread.setRootComment(rootComment);
-            threadRepository.save(thread);
-        }
+        // The root comment goes into its column alone: this read holds no thread lock, so saving the loaded row back
+        // could overwrite a resolve or a node id written meanwhile.
+        if (rootComment != null && thread.getRootComment() == null)
+            threadRepository.completeRootComment(Objects.requireNonNull(thread.getId()), rootComment);
 
         return new ThreadSync(synced, read);
     }
