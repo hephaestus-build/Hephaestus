@@ -4,6 +4,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -111,6 +113,14 @@ public record SyncSchedulerProperties(
         public boolean isRepositoryAllowed(String repositoryFullName) {
             return allowedRepositories.isEmpty() || allowedRepositories.contains(repositoryFullName);
         }
+    }
+
+    /**
+     * Whether work that last succeeded at {@code succeededAt} is still within the cooldown, so that syncing it again
+     * now would repeat it.
+     */
+    public boolean withinCooldown(@Nullable Instant succeededAt, Instant now) {
+        return succeededAt != null && succeededAt.isAfter(now.minus(Duration.ofMinutes(cooldownMinutes)));
     }
 
     /** Compact constructor ensuring nested records are never null. */

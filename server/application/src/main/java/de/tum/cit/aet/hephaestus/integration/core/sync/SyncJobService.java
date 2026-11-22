@@ -9,9 +9,11 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -42,6 +44,8 @@ public class SyncJobService implements SmartLifecycle {
     private static final int RETENTION_LIMIT = 50;
 
     private static final int ERROR_SUMMARY_MAX_LENGTH = 2000;
+
+    private static final Set<SyncJobType> FORWARD_SYNC_TYPES = Set.of(SyncJobType.INITIAL, SyncJobType.RECONCILIATION);
 
     private final SyncJobRepository syncJobRepository;
     private final ConnectionRepository connectionRepository;
@@ -237,6 +241,17 @@ public class SyncJobService implements SmartLifecycle {
     public void run(SyncJobRequest request, Consumer<? super SyncJobHandle> body) {
         Started started = beginJob(request);
         executeBody(started, body);
+    }
+
+    /**
+     * When the connection's last successful forward sync ({@code INITIAL} or {@code RECONCILIATION}) finished. A
+     * {@code BACKFILL} reads only older history, so it does not bring the connection up to date.
+     */
+    public Optional<Instant> lastForwardSyncSucceededAt(long connectionId) {
+        return syncJobRepository
+                .findFirstByConnection_IdAndTypeInAndStatusInOrderByFinishedAtDesc(
+                        connectionId, FORWARD_SYNC_TYPES, SyncJobStatus.SUCCESSFUL)
+                .map(SyncJob::getFinishedAt);
     }
 
     /**

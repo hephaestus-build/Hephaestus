@@ -674,10 +674,13 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                 total, skippedByStatus, skippedByFilter, activeAndAllowed, workspaceScopeFilter.isActive());
     }
 
-    /** A GitLab project can share the excluded GitHub repository's path, and it is a different repository. */
+    /**
+     * A GitLab project can share the excluded GitHub repository's path, and it is a different repository. A GitLab
+     * workspace's monitors sit in its group, which may be a nested group that the organization filter names.
+     */
     private Predicate<RepositoryToMonitor> allowedIn(Workspace workspace) {
         return hasActiveProvider(workspace, IntegrationKind.GITLAB)
-                ? workspaceScopeFilter::isRepositoryAllowed
+                ? monitor -> workspaceScopeFilter.isRepositoryAllowed(workspace, monitor.getNameWithOwner())
                 : workspaceScopeFilter::isGitHubRepositoryAllowed;
     }
 

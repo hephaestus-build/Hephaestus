@@ -20,8 +20,9 @@ public interface WorkspaceDataSyncTrigger {
      *
      * <p>For GitHub this means: organization + teams + per-repo (labels, milestones, issues,
      * PRs, comments) + workspace relationships (issue types, dependencies, sub-issues).
-     * For GitLab this is handled by the GitLab workspace initialization service. The exact
-     * scope is the implementation's contract.
+     * For GitLab: initialization, then the scope sync that every GitLab sync runs, as an
+     * {@code INITIAL} sync; the GitLab implementation states when it skips the scope sync and what an
+     * {@code INITIAL} sync leaves out. The exact scope is the implementation's contract.
      */
     void syncAllRepositories(long workspaceId);
 

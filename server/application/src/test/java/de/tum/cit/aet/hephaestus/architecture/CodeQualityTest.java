@@ -70,9 +70,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     "GitHubPullRequestSyncService", // Coordinates review, review comment, and project item sub-sync
                     // services
                     "WorkspaceProvisioningService", // Orchestrates provisioning across GitHub and GitLab providers
-                    // Full provider-lifecycle orchestrators with broad ConnectionService usage —
-                    // splitting them further scatters related logic without reducing coupling.
-                    "GitLabWorkspaceInitializationService",
+                    // A full provider-lifecycle orchestrator with broad ConnectionService usage —
+                    // splitting it further scatters related logic without reducing coupling.
                     "WorkspaceRepositoryMonitorService",
                     // One ordered refusal chain: the first refusal wins. The chain needs about 17 separate facts.
                     // Grouping the approval and currentness reads into beans of their own would still leave it over.

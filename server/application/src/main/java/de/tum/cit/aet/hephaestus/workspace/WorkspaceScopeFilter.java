@@ -95,7 +95,7 @@ public class WorkspaceScopeFilter {
      * Whether no workspace may hold this GitHub repository at all, which the allow-lists cannot override. The rule
      * lives here because monitor enumeration, added repositories, subscriptions, sync and webhook handling all ask
      * this filter, so one check covers them. It names a GitHub repository, so a GitLab project on the same path is a
-     * different repository, and GitLab paths ask {@link #isRepositoryAllowed(String)}.
+     * different repository, and GitLab paths ask {@link #isRepositoryAllowed(Workspace, String)}.
      */
     public boolean isExcluded(String nameWithOwner) {
         return exclusions.stream().anyMatch(exclusion -> exclusion.excludes(nameWithOwner));
@@ -108,10 +108,6 @@ public class WorkspaceScopeFilter {
 
     public boolean isGitHubRepositoryAllowed(@Nullable RepositoryToMonitor repository) {
         return isGitHubRepositoryAllowed(repository != null ? repository.getNameWithOwner() : null);
-    }
-
-    public boolean isRepositoryAllowed(@Nullable RepositoryToMonitor repository) {
-        return isRepositoryAllowed(repository != null ? repository.getNameWithOwner() : null);
     }
 
     public boolean isRepositoryAllowed(@Nullable String nameWithOwner) {

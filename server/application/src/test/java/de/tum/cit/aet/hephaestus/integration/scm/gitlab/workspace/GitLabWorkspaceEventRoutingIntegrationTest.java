@@ -38,7 +38,6 @@ import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventClaimers
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventNotifications;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.StoredEventHandling;
-import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -126,7 +125,6 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
-import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
@@ -218,7 +216,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         return executor;
     }
 
-    // Discovery and issue types are the only GitLab sync services that the scope sync and full data sync use here.
+    // Discovery and issue types are the only GitLab sync services that the scope sync uses here.
     @MockitoBean
     private GitLabGroupSyncService groupSync;
 
@@ -330,6 +328,9 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     @MockitoSpyBean
     private GitLabWorkspaceInitializationService initializationService;
 
+    @MockitoSpyBean
+    private GitLabScopeSync scopeSync;
+
     @Autowired
     private ApplicationContext beans;
 
@@ -399,11 +400,11 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         claimers = StoredEventHandling.runningClaimers(eventConsumer, eventNotifications);
         doReturn(GROUP_ID).when(preflightService).resolveAccountId(anyString(), any(), anyString());
 
-        GitLabWorkspaceInitializationService fullDataSync = initializationWithoutRepositoryServices();
-        doAnswer(invocation -> fullDataSync.syncFullData(
-                        invocation.getArgument(0), invocation.getArgument(1), invocation.getArgument(2)))
-                .when(initializationService)
-                .syncFullData(any(), any(), any());
+        // The lifecycle sync after initialization runs the scope sync with discovery and issue types only.
+        doAnswer(invocation -> scopeSyncWithoutRepositoryServices()
+                        .syncIfActive(invocation.getArgument(0), invocation.getArgument(1), invocation.getArgument(2)))
+                .when(scopeSync)
+                .syncIfActive(anyLong(), any(), any());
         when(groupSync.syncGroupProjects(anyLong(), eq(GROUP), eq(SERVER_URL)))
                 .thenAnswer(invocation -> GitLabSyncResult.completed(List.of(discoveredRepository()), 1, 0, 0));
         doAnswer(invocation -> repositoryRepository
@@ -2124,39 +2125,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 .findFirstByConnection_IdAndStatusInOrderByFinishedAtDesc(connectionId, SyncJobStatus.TERMINAL)
                 .orElseThrow()
                 .getStatus();
-    }
-
-    /** The full data sync with discovery and issue types, and no other GitLab sync service. */
-    private GitLabWorkspaceInitializationService initializationWithoutRepositoryServices() {
-        return new GitLabWorkspaceInitializationService(
-                beans.getBean(WorkspaceLookup.class),
-                beans.getBean(WorkspaceRepositoryMonitors.class),
-                repositoryRepository,
-                beans.getBean(SyncSchedulerProperties.class),
-                beans.getBean(SyncTargetProvider.class),
-                groupSync,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                issueTypeSync,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                beans.getBeanProvider(GitLabWebhookService.class),
-                beans.getBeanProvider(GitLabRateLimitTracker.class),
-                beans.getBeanProvider(GitLabWorkspaceDataSyncTrigger.class),
-                connectionService,
-                beans.getBean(GitLabWorkspaceLinkService.class),
-                repositoryMonitors,
-                Objects.requireNonNull(monitoringExecutor),
-                admission);
     }
 
     /** The scope sync with discovery and issue types, and no other GitLab sync service. */

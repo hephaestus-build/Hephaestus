@@ -87,17 +87,28 @@ public class GitLabScopeSync {
     /**
      * Run the same warning-aware body used by the scheduled path for one manual job.
      *
-     * <p>{@code type} is forwarded rather than dropped: it is what decides whether the body ends with a
-     * deletion sweep, and it is the only difference between an {@code INITIAL} and a
-     * {@code RECONCILIATION} run.
+     * <p>{@code type} is forwarded rather than dropped. It decides the only two differences between an
+     * {@code INITIAL} and a {@code RECONCILIATION} run: a {@code RECONCILIATION} ends with the deletion sweep, and
+     * an {@code INITIAL} links commits to every merge request instead of only to those updated since the
+     * repository's watermark.
      */
     public void syncWorkspaceNow(long workspaceId, SyncExecutionHandle handle, SyncJobType type) {
-        SyncSession session = syncTargetProvider
-                .getSyncSession(workspaceId, IntegrationKind.GITLAB)
-                .orElseThrow(() -> new IllegalStateException("No GitLab sync scope for workspace "
-                        + workspaceId
-                        + ": it is not active, or its provider refused its credential"));
-        run(session, handle, type);
+        if (!syncIfActive(workspaceId, handle, type))
+            throw new IllegalStateException("No GitLab sync scope for workspace "
+                    + workspaceId
+                    + ": it is not active, or its provider refused its credential");
+    }
+
+    /**
+     * Runs the same body for a workspace whose scope can sync now; the lifecycle sync after initialization runs it so
+     * that a GitLab workspace has one sync path.
+     *
+     * @return false, without a provider call, when the scope is not active or its provider refused its credential
+     */
+    public boolean syncIfActive(long workspaceId, @Nullable SyncExecutionHandle handle, SyncJobType type) {
+        var session = syncTargetProvider.getSyncSession(workspaceId, IntegrationKind.GITLAB);
+        session.ifPresent(active -> run(active, handle, type));
+        return session.isPresent();
     }
 
     /**
@@ -143,7 +154,7 @@ public class GitLabScopeSync {
             Map<Long, GitLabProjectAdmission.ProjectRead> reads = new HashMap<>();
             var cancellation = new GitLabSyncReports.Cancellation(handle);
             List<Repository> availableRepos =
-                    repositorySync.syncRepositories(session, handle, cancellation, resourceErrors, reads);
+                    repositorySync.syncRepositories(session, handle, cancellation, resourceErrors, reads, type);
             if (!syncTargetProvider.isScopeActiveForSync(scopeId)) {
                 log.info("Stopped GitLab workspace sync: reason=scopeNotEligible, scopeId={}", scopeId);
                 GitLabSyncReports.warn(
@@ -174,8 +185,8 @@ public class GitLabScopeSync {
                 // Phase 5.5: A workspace that selected its projects takes its members from what they grant
                 projectSelectedMembers(session, handle, cancellation);
 
-                // Phase 6: Deletion sweep — RECONCILIATION only, and the one thing that makes
-                // RECONCILIATION different from INITIAL. Every phase above only ever upserts, so an
+                // Phase 6: Deletion sweep — RECONCILIATION only (syncWorkspaceNow lists how the two types
+                // differ). Every phase above only ever upserts, so an
                 // issue or merge request deleted upstream would otherwise survive here forever and keep
                 // inflating the per-project counts — and GitLab emits no issue/MR-deletion webhook at
                 // all, so there is not even a missed event that could heal it.
