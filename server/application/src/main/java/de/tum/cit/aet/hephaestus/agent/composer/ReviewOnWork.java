@@ -61,7 +61,10 @@ final class ReviewOnWork {
         return isTrue(result.path("publicEligible")) && "NOT_MET".equals(string(result.path("outcome")));
     }
 
-    /** The admitted results the review on the work may speak about: public NOT_MET results without their digests. */
+    /**
+     * The admitted results the review on the work may speak about: public NOT_MET results without their digests and
+     * without their problems' identities, which only the server compares.
+     */
     static List<ObjectNode> publicResults(List<ObjectNode> results) {
         var reviewable = new ArrayList<ObjectNode>();
         for (ObjectNode result : results) {
@@ -85,12 +88,18 @@ final class ReviewOnWork {
                 if (isRecord(problem)) {
                     var copy = ((ObjectNode) problem).deepCopy();
                     copy.set("citations", withoutDigests(problem.path("citations")));
+                    copy.remove("identity");
                     problems.add(copy);
                 } else problems.add(problem);
             }
             reviewable.add(shown);
         }
         return reviewable;
+    }
+
+    /** What each public NOT_MET result rests on, from the admitted results whole, problem identities included. */
+    static Map<String, Evidence.Result> restable(List<ObjectNode> results) {
+        return Evidence.byId(results.stream().filter(ReviewOnWork::publicNotMet).toList());
     }
 
     static boolean isTrue(JsonNode value) {
@@ -198,13 +207,8 @@ final class ReviewOnWork {
                 putDefined(note, "endLine", copy.path("endLine"));
                 putDefined(note, "side", copy.path("side"));
                 note.put("body", copy.path("body").asString());
-                if (copy.path("externalUrl").isString()) note.set("externalUrl", copy.path("externalUrl"));
                 // The composer sees which note Hephaestus closed as fixed: it no longer stands as advice.
                 if (isTrue(copy.path("closedAsFixed"))) note.put("closedAsFixed", true);
-                // The problems a note cites, by practice and identity: an admitted problem with the same practice and
-                // identity is the problem this note raised.
-                if (copy.path("cites").isArray() && !copy.path("cites").isEmpty())
-                    note.set("cites", copy.path("cites"));
                 notes.add(note);
             }
         }
@@ -215,8 +219,9 @@ final class ReviewOnWork {
     record Cite(String practiceSlug, String identity) {}
 
     /**
-     * A note of an earlier review on this work that still raises the problems it cites: its piece is not withdrawn, the
-     * note is posted, not retracted, and Hephaestus did not close it as fixed.
+     * A note of an earlier review on this work that may still stand: its piece is not withdrawn, the note is posted, not
+     * retracted, and Hephaestus did not close it as fixed. Whether a person resolved its thread is unknown here: the
+     * capture leaves Hephaestus's own notes and threads out, so the composer never sees their provider state.
      */
     record EarlierNote(
             @Nullable String path,
@@ -231,11 +236,12 @@ final class ReviewOnWork {
     }
 
     /**
-     * The notes of earlier reviews on this work that still raise a problem with an identity, from a public history read
+     * The notes of earlier reviews on this work that may still stand and cite a problem with an identity, from a public
+     * history read
      * as {@link #publicHistory} returns it. Only a cited problem with an identity can match, so a note without one is
      * left out.
      */
-    static List<EarlierNote> openNotes(JsonNode history, @Nullable String thisWork) {
+    static List<EarlierNote> earlierNotes(JsonNode history, @Nullable String thisWork) {
         if (thisWork == null || !isRecord(history)) return List.of();
         var notes = new ArrayList<EarlierNote>();
         for (JsonNode entry : listOf(history.path("feedback"))) {
@@ -453,8 +459,8 @@ final class ReviewOnWork {
                     + " is refused for correction, never truncated. "
                     + "A checked draft lists its repeats: line notes that cite a problem that another note already cites. "
                     + "A repeat does not refuse the draft; merge the notes, drop one, or keep both when each says something the other does not. "
-                    + "It also lists each text that cites a problem that an open note of an earlier review on this work still raises, with that note: "
-                    + "drop the text, or keep it only when it says what the earlier note does not. "
+                    + "It also lists each text that cites a problem that a note of an earlier review on this work raised, with that note, when Hephaestus did not close that note as fixed; "
+                    + "whether a person resolved its thread is not known. Drop the text, or keep it only when it says what the earlier note does not. "
                     + "Input example with one useful line note: {\"decisions\":[{\"resultId\":\"<admitted NOT_MET resultId>\",\"disposition\":\"RAISE\"}],\"inline\":[{\"basedOn\":[\"<its problemId>\"],\"body\":\"Explain the local concern and its remedy.\",\"anchor\":{\"problemId\":\"<same problemId>\",\"citationIndex\":0}}],\"summary\":null}. "
                     + "For a quiet review, use summary:null, inline:[] and a supported withholding decision for each result. Unused inline and witnessIds lists may be null or omitted.";
 
@@ -864,7 +870,7 @@ final class ReviewOnWork {
 
     /**
      * An entry that cites a problem that another note already cites, with that note's opening words: an earlier line
-     * note of the draft ({@code alreadyCitedBy}), or an open note of an earlier review on this work
+     * note of the draft ({@code alreadyCitedBy}), or an {@link EarlierNote} of an earlier review on this work
      * ({@code earlierNote}). Exactly one of the two is set. An earlier note whose words the read could not copy has no
      * quote.
      */
@@ -884,7 +890,7 @@ final class ReviewOnWork {
     /**
      * The repeats of {@code review}, found by the problem, not by the words. A line note repeats an earlier line note of
      * the draft that cites one of its problems; a summary may point to its notes, so it never counts there. Each entry,
-     * the summary included, repeats an open note of an earlier review on this work that cites a problem of the same
+     * the summary included, repeats an {@link EarlierNote} of an earlier review on this work that cites a problem of the same
      * practice with the same identity; a problem without an identity never matches. A repeat is advice: the composer
      * decides what to keep.
      */

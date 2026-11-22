@@ -117,14 +117,14 @@ final class ComposerTurns {
                 notReached,
                 lineNotes,
                 slug -> files.text(ComposerFiles.criteria(slug)).orElse(null)));
-        var restable = Evidence.byId(reviewable);
+        var restable = ReviewOnWork.restable(state.results());
         return new ReviewCompositionTurn(
                 text,
                 ReviewOnWork.toolParameters(restable, lineNotes, eligible),
                 restable,
                 lineNotes,
                 witnesses,
-                ReviewOnWork.openNotes(publicHistory, work),
+                ReviewOnWork.earlierNotes(publicHistory, work),
                 Js.string(read.path("publicationContext")));
     }
 

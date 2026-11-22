@@ -708,11 +708,13 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
         var proofs = List.of(identified, unidentified);
         for (int ordinal = 0; ordinal < proofs.size(); ordinal++) {
             var proof = proofs.get(ordinal);
+            // The basis of a piece on the work is the support of its copies, problems included.
             basis.saveAndFlush(FeedbackBasis.builder()
-                    .id(FeedbackIds.basis(row.getId(), proof.getId(), null))
+                    .id(FeedbackIds.basis(row.getId(), proof.getId(), problemOf(proof)))
                     .workspaceId(workspace.getId())
                     .feedbackId(row.getId())
                     .resultId(proof.getId())
+                    .problemId(problemOf(proof))
                     .developerId(developerId)
                     .ordinal(ordinal)
                     .build());

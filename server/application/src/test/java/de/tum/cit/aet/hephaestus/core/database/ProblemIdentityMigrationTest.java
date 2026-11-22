@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
@@ -87,6 +88,41 @@ class ProblemIdentityMigrationTest {
                                 Map.entry("00000000-0000-0000-0000-000000000001", NEW),
                                 Map.entry("00000000-0000-0000-0000-000000000002", ABSENT),
                                 Map.entry("00000000-0000-0000-0000-000000000003", UNCHANGED));
+            }
+        }
+    }
+
+    @Test
+    void shouldStopWhenAProblemWouldGetTwoDifferentIdentities() throws Exception {
+        var database = PostgreSQLTestContainer.createDatabase("problem_identity_conflict");
+        try (Connection connection =
+                        DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
+                var statement = connection.createStatement()) {
+            connection.setAutoCommit(false);
+            statement.execute("""
+                    CREATE TABLE problem (id uuid PRIMARY KEY, workspace_id bigint, key varchar(64));
+                    CREATE TABLE problem_lineage (
+                        id uuid PRIMARY KEY, workspace_id bigint, problem_id uuid, prior_problem_id uuid,
+                        comparison varchar(16), identity text NOT NULL);
+                    CREATE INDEX idx_problem_lineage_identity ON problem_lineage (workspace_id, identity);
+                    INSERT INTO problem VALUES ('00000000-0000-0000-0000-00000000000a', 1, NULL);
+                    """);
+            // The same problem as the newer problem of one row and the previous problem of another, with two values.
+            statement.execute("INSERT INTO problem_lineage VALUES"
+                    + " ('00000000-0000-0000-0000-000000000001', 1, '00000000-0000-0000-0000-00000000000a', NULL,"
+                    + " 'NEW', '" + NEW + "'),"
+                    + " ('00000000-0000-0000-0000-000000000002', 1, NULL, '00000000-0000-0000-0000-00000000000a',"
+                    + " 'ABSENT', '" + ABSENT + "')");
+            connection.commit();
+
+            var liquibaseDatabase =
+                    DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
+            try (Liquibase liquibase = new Liquibase(CHANGELOG, new ClassLoaderResourceAccessor(), liquibaseDatabase)) {
+                assertThatThrownBy(() -> liquibase.update(new Contexts("prod"), new LabelExpression()))
+                        .hasStackTraceContaining("two different identities");
+                connection.rollback();
+
+                assertThat(lineageHasIdentity(connection)).isTrue();
             }
         }
     }

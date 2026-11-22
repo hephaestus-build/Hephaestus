@@ -115,7 +115,10 @@ function additions(sets: readonly ChangeSet[]): Additions {
 	return { tables, columns, defaults };
 }
 
-/** A drop of an object that a new changelog adds: the previous release does not know it, so it never uses it. */
+/**
+ * Each table or column that a change set drops while the previous release still uses it. That release uses an object
+ * unless its pending contractions list it, or a new changelog adds it: then the previous release does not know it.
+ */
 function contractionProblems(
 	changes: Element,
 	contractions: ReadonlySet<string>,

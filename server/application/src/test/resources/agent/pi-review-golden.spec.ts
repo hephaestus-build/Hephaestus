@@ -285,7 +285,7 @@ if (scenario !== undefined && scenario !== "") {
 			});
 		}
 		return Response.json({
-			contractVersion: 5,
+			contractVersion: 4,
 			admissionDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			admitted: [],
 			withheld: [],

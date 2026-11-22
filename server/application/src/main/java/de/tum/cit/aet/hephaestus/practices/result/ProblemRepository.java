@@ -43,9 +43,10 @@ public interface ProblemRepository extends JpaRepository<Problem, UUID> {
 
     /**
      * Records the identity of a problem sealed before problems recorded their identity, once a comparison computed it.
-     * A problem that has an identity keeps it.
+     * A problem that has an identity keeps it. The update does not clear the persistence context: the seal still changes
+     * the review item and practice it holds, and a loaded problem is immutable and its identity unread there.
      */
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query(value = """
         UPDATE problem SET identity = :identity
         WHERE workspace_id = :workspaceId AND id = :id AND identity IS NULL

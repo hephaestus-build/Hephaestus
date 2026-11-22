@@ -66,7 +66,7 @@ class ReviewOnWorkRepeatsTest {
     }
 
     @Test
-    void shouldListTheSummaryAndALineNoteWhenAnOpenEarlierNoteStillRaisesTheirProblem() {
+    void shouldListTheSummaryAndALineNoteWhenAStandingEarlierNoteCitesTheirProblem() {
         var history = history();
         var open = entry(history, false);
         copy(open, "POSTED", false, cite("handles-errors", DROPPED));
@@ -90,6 +90,49 @@ class ReviewOnWorkRepeatsTest {
                 .containsExactly(
                         new ReviewOnWork.Repeat("summary", List.of("p1"), null, note, EARLIER),
                         new ReviewOnWork.Repeat("inline #1", List.of("p1"), null, note, EARLIER));
+    }
+
+    /**
+     * The capture leaves Hephaestus's own notes and threads out, so whether a person resolved an earlier note's thread
+     * is unknown: the receipt says the note raised the problem, never that it still raises it.
+     */
+    @Test
+    void shouldSayTheEarlierNoteRaisedTheProblemWhenItsThreadStateIsUnknown() {
+        var history = history();
+        copy(entry(history, false), "POSTED", false, cite("handles-errors", DROPPED));
+        var draft = draft();
+        note(draft, "p1", 0, FIRST);
+        var read = ReviewOnWork.read(draft, RESULTS, true, Map.of());
+
+        var receipt = MAPPER.readTree(CompositionSessions.checkedReceipt(
+                "draft-1",
+                ReviewOnWork.repeats(Objects.requireNonNull(read.review()), earlierNotes(history), RESULTS)));
+
+        assertThat(receipt.path("repeats")
+                        .get(0)
+                        .path("earlierNote")
+                        .path("link")
+                        .asString())
+                .isEqualTo(WORK_URL + "#discussion_r1");
+        assertThat(receipt.path("next").asString())
+                .contains("an earlier note on this work raised")
+                .contains("whether a person resolved its thread is not known")
+                .doesNotContain("still raises");
+    }
+
+    @Test
+    void shouldShowTheModelEarlierNotesWithoutTheirLinkOrCitedProblems() {
+        var history = history();
+        var entry = entry(history, false);
+        entry.put("id", "70000000-0000-4000-8000-000000000001");
+        copy(entry, "POSTED", false, cite("handles-errors", DROPPED));
+
+        var shown = ReviewOnWork.priorPublicFeedback(ReviewOnWork.publicHistory(history), work(), null, null);
+
+        var note = shown.feedback().getFirst().path("notes").get(0);
+        assertThat(note.path("body").asString()).isEqualTo(EARLIER);
+        assertThat(note.has("externalUrl")).isFalse();
+        assertThat(note.has("cites")).isFalse();
     }
 
     @Test
@@ -202,8 +245,14 @@ class ReviewOnWorkRepeatsTest {
         return MAPPER.createObjectNode().put("practiceSlug", practiceSlug).put("identity", identity);
     }
 
+    private static String work() {
+        return Objects.requireNonNull(ReviewOnWork.workIdentity(
+                MAPPER.getNodeFactory().stringNode("scm.pull_request"),
+                MAPPER.getNodeFactory().stringNode(WORK_URL)));
+    }
+
     private static List<ReviewOnWork.EarlierNote> earlierNotes(ObjectNode read) {
-        return ReviewOnWork.openNotes(
+        return ReviewOnWork.earlierNotes(
                 ReviewOnWork.publicHistory(read),
                 ReviewOnWork.workIdentity(
                         MAPPER.getNodeFactory().stringNode("scm.pull_request"),

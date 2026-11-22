@@ -1,5 +1,5 @@
 {
-	"contractVersion": 5,
+	"contractVersion": 4,
 	"reviewId": "10000000-0000-4000-8000-000000000001",
 	"jobId": "20000000-0000-4000-8000-000000000001",
 	"attempt": 0,
@@ -112,7 +112,8 @@
 						"explanation": "The change adds the catch that drops the failure."
 					},
 					"nextStep": "Record or rethrow the failure.",
-					"publicEligible": true
+					"publicEligible": true,
+					"identity": "key:swallowed-io"
 				}
 			],
 			"summaryOnly": false,

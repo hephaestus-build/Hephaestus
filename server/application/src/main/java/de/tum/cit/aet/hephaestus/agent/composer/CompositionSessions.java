@@ -684,7 +684,7 @@ public class CompositionSessions {
                 schema);
     }
 
-    private static String checkedReceipt(String id, List<ReviewOnWork.Repeat> repeats) {
+    static String checkedReceipt(String id, List<ReviewOnWork.Repeat> repeats) {
         var receipt = JSON.objectNode().put("draftId", id).put("checked", true);
         if (!repeats.isEmpty()) {
             var listed = receipt.putArray("repeats");
@@ -708,7 +708,7 @@ public class CompositionSessions {
                     "A repeat with alreadyCitedBy cites a problem that another note of this draft already cites: merge the notes, drop one, or keep both when each says something the other does not.");
         if (repeats.stream().anyMatch(repeat -> repeat.earlierNote() != null))
             next.add(
-                    "A repeat with earlierNote cites a problem that the earlier note still raises on this work: drop the entry, or keep it only when it says what the earlier note does not.");
+                    "A repeat with earlierNote cites a problem that an earlier note on this work raised. Hephaestus did not close that note as fixed; whether a person resolved its thread is not known here. Drop the entry, or keep it only when it says what the earlier note does not.");
         next.add(
                 repeats.isEmpty()
                         ? "Correct the draft and check again, or publish_package with this draftId."
