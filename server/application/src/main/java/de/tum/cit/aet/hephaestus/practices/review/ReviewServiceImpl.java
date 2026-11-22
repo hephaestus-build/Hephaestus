@@ -63,7 +63,7 @@ public class ReviewServiceImpl implements ReviewService {
             case ReviewRequestAdmission.Admission.Replay replay -> replay.reviewId();
             case ReviewRequestAdmission.Admission.Admitted admitted -> {
                 var pinned = pin(request, admitted.item());
-                var early = earlyRead(request, admitted.item(), pinned);
+                var unlocked = unlockedRead(request, admitted.item(), pinned);
                 yield transactions.write(() -> {
                     var workspace =
                             workspaces.findByIdForUpdate(request.workspaceId()).orElseThrow();
@@ -75,8 +75,8 @@ public class ReviewServiceImpl implements ReviewService {
                                     request,
                                     workspace,
                                     pinned,
-                                    planner.plan(request, workspace, locked.item(), pinned, early.currentness()),
-                                    early);
+                                    planner.plan(request, workspace, locked.item(), pinned, unlocked.currentness()),
+                                    unlocked);
                         }
                     };
                 });
@@ -124,15 +124,15 @@ public class ReviewServiceImpl implements ReviewService {
         }
     }
 
-    private ReviewSourceReads.EarlyRead earlyRead(ReviewRequest request, ItemRef ref, ItemSnapshot pinned) {
-        if (request.kind() != ReviewKind.ITEM) return ReviewSourceReads.EarlyRead.NONE;
+    private ReviewSourceReads.UnlockedRead unlockedRead(ReviewRequest request, ItemRef ref, ItemSnapshot pinned) {
+        if (request.kind() != ReviewKind.ITEM) return ReviewSourceReads.UnlockedRead.NONE;
         var currentness = readinessEdge.currentness(request, pinned);
         var kinds = transactions.read(() -> sourceReads.readKinds(
                 pinned,
                 planner.plan(request, workspace(request), ref, pinned, currentness).gated().stream()
                         .map(practice -> planner.version(request, practice))
                         .toList()));
-        return new ReviewSourceReads.EarlyRead(
+        return new ReviewSourceReads.UnlockedRead(
                 currentness, kinds, items.fingerprints(pinned.item(), kinds, occasion(request)));
     }
 

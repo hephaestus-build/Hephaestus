@@ -297,7 +297,7 @@ class ReviewRequestPinIntegrationTest extends AbstractResultAdmissionIntegration
     }
 
     @Test
-    void shouldAskForTheItemReviewAgainWhenAPracticeReadsAnotherSourceDuringTheEarlyRead() throws Exception {
+    void shouldAskForTheItemReviewAgainWhenAPracticeReadsAnotherSourceDuringTheUnlockedRead() throws Exception {
         var review = itemReview();
         var reading = new CountDownLatch(1);
         var release = new CountDownLatch(1);

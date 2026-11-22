@@ -21,7 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Names the sources that a review's practice versions read, those that their applicability conditions read, and the
  * source fingerprints that the review queues for the practices it measures. It compares the sources that the locked
- * plan queues with those of the early read, which ran with no transaction.
+ * plan queues with those of the unlocked read, which ran before the workspace lock.
  */
 @Component
 @ConditionalOnServerRole
@@ -31,24 +31,25 @@ class ReviewSourceReads {
     private final List<CapturedApplicability> applicability;
 
     /**
-     * What an item review reads with no transaction before its locked step: the currentness of the item's open results
-     * that an event review compares, the sources that every practice the gate selects reads, and their fingerprints. A
-     * practice that the item's results or its readiness leave out still counts, because the locked step can queue it.
+     * What an item review reads before it takes the workspace lock: the currentness of the item's open results that an
+     * event review compares, the sources that every practice the gate selects reads, and their fingerprints. A practice
+     * that the item's results or its readiness leave out still counts, because the locked step can queue it.
      */
-    record EarlyRead(Map<UUID, Currentness> currentness, Set<SourceKind> kinds, Map<SourceKind, String> fingerprints) {
-        static final EarlyRead NONE = new EarlyRead(Map.of(), Set.of(), Map.of());
+    record UnlockedRead(
+            Map<UUID, Currentness> currentness, Set<SourceKind> kinds, Map<SourceKind, String> fingerprints) {
+        static final UnlockedRead NONE = new UnlockedRead(Map.of(), Set.of(), Map.of());
     }
 
     /**
-     * The fingerprints of the sources that the locked plan queues, from the early read. A practice that came to read
-     * another source after the early read refuses the request until it is asked again.
+     * The fingerprints of the sources that the locked plan queues, from the unlocked read. A practice that came to read
+     * another source after the unlocked read refuses the request until it is asked again.
      */
-    static Map<SourceKind, String> fingerprints(Set<SourceKind> kinds, EarlyRead early) {
-        if (!early.kinds().containsAll(kinds))
+    static Map<SourceKind, String> fingerprints(Set<SourceKind> kinds, UnlockedRead unlocked) {
+        if (!unlocked.kinds().containsAll(kinds))
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.PRACTICES_CHANGED,
                     "The practices changed while the review was requested. Ask for the review again.");
-        return early.fingerprints();
+        return unlocked.fingerprints();
     }
 
     Set<SourceKind> queuedKinds(ItemSnapshot item, List<ReviewPlanner.SelectedPractice> plans) {
