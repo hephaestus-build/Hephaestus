@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 @Tag("database")
 class ProblemLineageIdentityMigrationTest {
     private static final TestDatabase DATABASE = PostgreSQLTestContainer.createDatabase("problem_lineage_identity");
-    private static final String CHANGELOG = "db/changelog/next/20261121211145-feat-problem-lineage-resolves.xml";
+    private static final String CHANGELOG = "db/changelog/next/20261122034612-feat-problem-lineage-resolves.xml";
 
     @Test
     void shouldDeriveTheIdentityOfAKeyedProblemAndDropTheRowsOfAProblemWithoutAKey() throws Exception {

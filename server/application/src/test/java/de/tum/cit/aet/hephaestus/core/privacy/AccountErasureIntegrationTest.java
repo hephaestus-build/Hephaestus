@@ -1349,10 +1349,13 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(counts.get("feedback")).isEqualTo(5L);
         assertThat(preview.externalDeliveries()).isEmpty();
         // Each delivered feedback has its own conversation copy and the copy in another person's conversation.
+        // The feedback on the work has the copy that the fixture's thread resolution goes with.
         assertThat(export.path("stores").path("feedback_copy"))
                 .extracting(row -> row.path("feedback_id").asString())
-                .containsExactlyInAnyOrderElementsOf(targetDerived.stream()
-                        .flatMap(derived -> Stream.of(derived.deliveredId(), derived.deliveredId()))
+                .containsExactlyInAnyOrderElementsOf(Stream.concat(
+                                targetDerived.stream()
+                                        .flatMap(derived -> Stream.of(derived.deliveredId(), derived.deliveredId())),
+                                Stream.of(onWork.getId()))
                         .map(UUID::toString)
                         .toList());
         // One of them is the earlier result that the fixture's problem lineage compares with.
