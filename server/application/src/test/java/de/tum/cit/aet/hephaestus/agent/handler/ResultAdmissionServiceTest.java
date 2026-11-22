@@ -769,6 +769,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                 Currentness.CURRENT,
                 withdrawn,
                 List.of(),
+                List.of(),
                 List.of());
     }
 

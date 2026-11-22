@@ -22,6 +22,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -42,7 +43,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -56,6 +58,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -76,7 +79,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -90,6 +94,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -110,7 +115,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -124,6 +130,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -144,7 +151,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -158,6 +166,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -178,7 +187,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -192,6 +202,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -212,7 +223,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -226,6 +238,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -246,7 +259,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -260,6 +274,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -280,7 +295,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -294,6 +310,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -314,7 +331,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -328,6 +346,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -348,7 +367,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -362,6 +382,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -382,7 +403,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -396,6 +418,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -416,7 +439,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -430,6 +454,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -450,7 +475,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -464,6 +490,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -484,7 +511,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -498,6 +526,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -518,7 +547,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -532,6 +562,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -552,7 +583,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -566,6 +598,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -586,7 +619,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -600,6 +634,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -620,7 +655,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -634,6 +670,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -654,7 +691,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -668,6 +706,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -688,7 +727,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -702,6 +742,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -722,7 +763,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -736,6 +778,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -756,7 +799,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -770,6 +814,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -790,7 +835,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -804,6 +850,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -824,7 +871,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -838,6 +886,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -858,7 +907,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -872,6 +922,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -892,7 +943,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -906,6 +958,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -926,7 +979,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -940,6 +994,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -960,7 +1015,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -974,6 +1030,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -994,7 +1051,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -1008,6 +1066,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -1028,7 +1087,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -1042,6 +1102,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -1062,7 +1123,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -1076,6 +1138,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -1096,7 +1159,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -1110,6 +1174,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -1130,7 +1195,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -1144,6 +1210,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -1164,7 +1231,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -1178,6 +1246,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -1198,7 +1267,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -1212,6 +1282,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -1232,7 +1303,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -1246,6 +1318,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -1266,7 +1339,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -1280,6 +1354,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -1300,7 +1375,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -1314,6 +1390,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -1334,7 +1411,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			},
@@ -1348,6 +1426,7 @@
 				"bodyUnavailable": false,
 				"currentness": "CURRENT",
 				"withdrawn": false,
+				"closedPractices": [],
 				"basedOn": [
 					{
 						"resultId": "50000000-0000-4000-8000-000000000001",
@@ -1368,7 +1447,8 @@
 						"externalRef": "c1",
 						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
 						"postedAt": "2026-10-19T12:00:00Z",
-						"state": "POSTED"
+						"state": "POSTED",
+						"closedAsFixed": false
 					}
 				]
 			}

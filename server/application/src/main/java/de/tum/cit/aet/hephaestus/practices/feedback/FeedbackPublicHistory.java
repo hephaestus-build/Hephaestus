@@ -164,8 +164,9 @@ public class FeedbackPublicHistory {
     }
 
     /**
-     * The practices that this piece no longer advises on: each of its notes that rests on the practice is closed as
-     * fixed, and its summary does not rest on it. A note rests on the results that its composition support names.
+     * The practices that this piece no longer advises on: it has a note that rests on the practice, and each such note
+     * is closed as fixed. A practice that only the summary rests on stays standing. A note rests on the results that
+     * its composition support names.
      */
     private List<String> closedPractices(
             Feedback row,
@@ -186,6 +187,7 @@ public class FeedbackPublicHistory {
         var open = new HashSet<String>();
         var closing = new HashSet<String>();
         for (var copy : confirmed) {
+            if (copy.getKind() == FeedbackCopyKind.SUMMARY) continue;
             var practices = trace.copies().stream()
                     // Positions are unique within a piece; a note placed as a file note keeps its line note support.
                     .filter(support -> support.position() == copy.getPosition())
@@ -211,8 +213,9 @@ public class FeedbackPublicHistory {
             boolean bodyUnavailable,
             Currentness currentness,
             boolean withdrawn,
-            // The practices whose every note of this piece Hephaestus resolved as fixed and never reopens (GitLab), and
-            // that the summary does not carry. The piece no longer stands as their advice; its other notes still do.
+            // The practices whose every note of this piece Hephaestus resolved as fixed and never reopens (GitLab). The
+            // piece no longer stands as their advice; its other notes still do, and a practice only the summary carries
+            // stays standing.
             List<String> closedPractices,
             List<PublicBasis> basedOn,
             List<PublicCopy> copies) {}

@@ -626,6 +626,7 @@ final class CompositionEvalCases {
             entry.put("bodyUnavailable", false);
             entry.put("currentness", said.path("currentness").asString("CURRENT"));
             entry.put("withdrawn", false);
+            entry.putArray("closedPractices");
             entry.putArray("basedOn")
                     .addObject()
                     .put("resultId", uuid(id, "earlier:" + said.path("id").asString()))
@@ -647,7 +648,8 @@ final class CompositionEvalCases {
                         .put("externalRef", "n" + copy)
                         .put("externalUrl", url + "#note-" + copy)
                         .put("postedAt", said.path("deliveredAt").asString())
-                        .put("state", "POSTED");
+                        .put("state", "POSTED")
+                        .put("closedAsFixed", false);
             }
         }
 

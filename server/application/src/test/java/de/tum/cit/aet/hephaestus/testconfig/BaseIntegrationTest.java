@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.testconfig;
 
 import de.tum.cit.aet.hephaestus.agent.handler.AgentHandlerTestDoubles;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.ScriptedGitLabTransport;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewLookupData;
@@ -36,6 +37,7 @@ import org.springframework.test.context.TestPropertySource;
     WorkspaceEchoControllers.ScopedEchoController.class,
     WorkspaceEchoControllers.WorkspaceContextEchoController.class,
     ScriptedGitHubTransport.class,
+    ScriptedGitLabTransport.class,
     // Stateless review fixtures: one shared import keeps every test that uses them in this context.
     // ScanReportTestData needs the server role, which every subclass keeps.
     ReviewIntegrationData.class,

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import java.util.Objects;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +41,28 @@ class FeedbackCopyDeliveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         assertThat(repeated.repeats(workspace.getId(), itemId, developerId + 1, body))
                 .isFalse();
         assertThat(repeated.repeats(workspace.getId(), itemId, developerId, body + " Add another test."))
+                .isFalse();
+    }
+
+    @Test
+    void shouldNotRepeatTheSummaryWordsWhenANoteOfThatFeedbackWasClosedAsFixedWhereThreadsNeverReopen() {
+        prepare(true);
+        String body = Objects.requireNonNull(current().getBody());
+        sender.send(workspace.getId(), feedbackId);
+        assertThat(repeated.repeats(workspace.getId(), itemId, developerId, body))
+                .isTrue();
+
+        // Hephaestus resolved the note's thread on a provider where it never reopens one: the problem came back.
+        var note = children().get(1);
+        String thread = "gid://gitlab/Discussion/" + note.getId();
+        jdbc.update("UPDATE feedback_copy SET thread_ref = ? WHERE id = ?", thread, note.getId());
+        jdbc.update("""
+                INSERT INTO feedback_thread_resolution (id, workspace_id, item_id, thread_ref, copy_id, generation,
+                  resolved, resolve_written, reopens, provider, state, changed_at)
+                VALUES (?, ?, ?, ?, ?, 1, true, true, false, 'GITLAB', 'DONE', now())
+                """, UUID.randomUUID(), workspace.getId(), itemId, thread, note.getId());
+
+        assertThat(repeated.repeats(workspace.getId(), itemId, developerId, body))
                 .isFalse();
     }
 
