@@ -503,6 +503,16 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
                         result -> assertThat(result).isEmpty(),
                         result -> assertThat(result).containsInstanceOf(ActionResult.Cancelled.class));
         assertThat(provider.changes).isEmpty();
+        // The resolve began, so it may stand: the note no longer holds the returning problem back.
+        assertThat(copies.findClosedAsFixed(scenario.workspace().getId(), List.of(copyOf(thread))))
+                .containsExactly(copyOf(thread));
+
+        // A person reopens the thread after the stop: it is theirs, and its note says the problem again.
+        changed(thread, false, "7");
+
+        assertThat(humanControlled(thread)).isTrue();
+        assertThat(copies.findClosedAsFixed(scenario.workspace().getId(), List.of(copyOf(thread))))
+                .isEmpty();
     }
 
     private UUID sealed(

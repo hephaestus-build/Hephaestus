@@ -347,8 +347,9 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
 
     /**
      * Of {@code copyIds}, the copies whose thread a resolve of Hephaestus may hold resolved where it never reopens: a
-     * provider that cannot tell its own reopen from a person's. A resolve whose confirmation failed counts too, so a
-     * problem that came back is raised again rather than held back behind a resolved thread.
+     * provider that cannot tell its own reopen from a person's. Any resolve that began counts, also one that was
+     * withdrawn or whose confirmation failed, so a problem that came back is raised again rather than held back behind
+     * a resolved thread. A thread that a person changed is theirs: its note counts as said, even after a stop.
      */
     @Query(value = """
         SELECT c.id FROM feedback_copy c
@@ -356,7 +357,10 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
         JOIN feedback_thread_resolution t ON t.workspace_id = c.workspace_id AND t.item_id = f.item_id
           AND t.thread_ref = c.thread_ref
         WHERE c.workspace_id = :workspaceId AND c.id IN (:copyIds) AND t.resolve_written AND t.reopens = false
-          AND t.stop_reason IS DISTINCT FROM 'HUMAN_CONTROLLED'
+          AND NOT EXISTS (SELECT 1 FROM feedback_copy h JOIN feedback hf ON hf.id = h.feedback_id
+              AND hf.workspace_id = h.workspace_id
+            WHERE h.workspace_id = t.workspace_id AND h.thread_ref = t.thread_ref AND hf.item_id = t.item_id
+              AND hf.composition->>'humanControlled' = 'true')
         """, nativeQuery = true)
     List<UUID> findClosedAsFixed(@Param("workspaceId") long workspaceId, @Param("copyIds") Collection<UUID> copyIds);
 }
