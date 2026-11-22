@@ -127,8 +127,8 @@ public class FeedbackThreadResolution {
 
     /**
      * Withdraws a waiting resolve, begun or not, where Hephaestus may not reopen: the problem came back, so the resolve
-     * must not land. A write of it may already be in effect, so {@code resolveWritten} stays. True when the waiting
-     * action must go.
+     * must not land. A write of it may already be in effect, so {@code resolveWritten} stays. An attempt already inside
+     * its provider call cannot be stopped; that window is one call. True when the waiting action must go.
      */
     boolean withdrawPending(Instant at) {
         if (state != FeedbackThreadResolutionState.PENDING || !resolved) return false;
