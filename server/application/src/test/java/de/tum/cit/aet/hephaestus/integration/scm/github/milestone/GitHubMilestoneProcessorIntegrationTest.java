@@ -175,7 +175,7 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
                     .isPresent();
 
             // Verify MilestoneCreated event published
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneCreated.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -184,7 +184,7 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
                         assertNotNull(event.context().repository());
                         assertThat(event.context().repository().id()).isEqualTo(testRepository.getId());
                     });
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneUpdated.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -227,13 +227,13 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getState()).isEqualTo(Milestone.State.CLOSED);
 
             // Verify MilestoneUpdated event published
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneUpdated.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
                         assertThat(event.milestone().title()).isEqualTo("Updated Title");
                     });
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneCreated.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -242,9 +242,9 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
             Milestone result = processor.process(null, testRepository, createCreatorDto(), createContext());
 
             assertThat(result).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneCreated.class, testRepository.getId()))
                     .isEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneUpdated.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -273,7 +273,7 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getNativeId()).isNegative(); // Generated IDs are negative to avoid collision
             assertThat(result.getNumber()).isEqualTo(1);
             assertThat(result.getTitle()).isEqualTo("GraphQL Synced Milestone");
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneCreated.class, testRepository.getId()))
                     .hasSize(1);
         }
 
@@ -397,9 +397,9 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
             processor.process(dto, testRepository, null, createContext());
 
             assertThat(milestoneRepository.count()).isEqualTo(1);
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneUpdated.class, testRepository.getId()))
                     .hasSize(1);
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneCreated.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -584,7 +584,7 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(stored().getTitle()).isEqualTo("Release");
             assertThat(stored().getState()).isEqualTo(Milestone.State.CLOSED);
             assertThat(stored().getUpdatedAt()).isEqualTo(LATER);
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneUpdated.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -621,7 +621,7 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
             processor.process(snapshot("Release", "open", 3, finer), testRepository, null, readAfterTheWrite);
 
             assertThat(stored().getClosedIssuesCount()).isEqualTo(3);
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneUpdated.class, testRepository.getId()))
                     .hasSize(1);
         }
 
@@ -714,7 +714,7 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
                     .isEmpty();
 
             // Verify event published
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneDeleted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneDeleted.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -736,7 +736,7 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
                     .doesNotThrowAnyException();
 
             // No event published
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneDeleted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneDeleted.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -745,7 +745,7 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
             assertThatCode(() -> processor.delete(null, createContext())).doesNotThrowAnyException();
 
             // No event published
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneDeleted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneDeleted.class, testRepository.getId()))
                     .isEmpty();
         }
     }

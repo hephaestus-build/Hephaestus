@@ -261,7 +261,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             });
 
             // Domain event
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestCreated.class, savedRepo.getId()))
                     .hasSize(1);
         }
 
@@ -290,7 +290,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             receive(update("2026-01-31 19:10:00 +0100", repaired));
             receive(update("2026-01-31 19:12:00 +0100", repaired));
 
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestUpdated.class, savedRepo.getId()))
                     .extracting(ScmDomainEvent.PullRequestUpdated::changedFields)
                     .containsExactly(Set.of("body"), Set.of());
         }
@@ -311,10 +311,10 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 assertThat(pr.getClosedAt()).isNull();
             });
 
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestClosed.class, savedRepo.getId()))
                     .hasSize(1);
             assertThat(eventListener
-                            .ofType(ScmDomainEvent.PullRequestClosed.class)
+                            .inRepository(ScmDomainEvent.PullRequestClosed.class, savedRepo.getId())
                             .get(0)
                             .wasMerged())
                     .isFalse();
@@ -337,14 +337,14 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 assertThat(pr.getMergedAt()).isNull();
             });
 
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestClosed.class, savedRepo.getId()))
                     .hasSize(1);
             assertThat(eventListener
-                            .ofType(ScmDomainEvent.PullRequestClosed.class)
+                            .inRepository(ScmDomainEvent.PullRequestClosed.class, savedRepo.getId())
                             .get(0)
                             .wasMerged())
                     .isTrue();
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestMerged.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestMerged.class, savedRepo.getId()))
                     .hasSize(1);
         }
 
@@ -363,7 +363,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 assertThat(pr.getState()).isEqualTo(Issue.State.OPEN);
             });
 
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestReopened.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestReopened.class, savedRepo.getId()))
                     .hasSize(1);
         }
 
@@ -381,7 +381,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                             .orElseThrow()
                             .getState())
                     .isEqualTo(Issue.State.OPEN));
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestClosed.class, savedRepo.getId()))
                     .isEmpty();
         }
     }
@@ -414,7 +414,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 assertThat(review.getNativeId()).isEqualTo(expectedNativeId);
             });
 
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .hasSize(1);
         }
 
@@ -433,7 +433,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 assertThat(review.get().getState()).isEqualTo(PullRequestReview.State.DISMISSED);
             });
 
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewDismissed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewDismissed.class, savedRepo.getId()))
                     .hasSize(1);
         }
     }
@@ -847,7 +847,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
             assertThat(approval(NATIVE_APPROVER_ID)).isNull();
             assertThat(storedHead()).isEqualTo(NEXT_HEAD);
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .isEmpty();
         }
 
@@ -869,7 +869,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     .as("a hook names the merge request's current head, not the approved revision")
                     .isNull();
             assertThat(reviewDecision()).isEqualTo(ReviewDecision.APPROVED);
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewDismissed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewDismissed.class, savedRepo.getId()))
                     .isEmpty();
         }
 
@@ -887,7 +887,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(reviewDecision()).isNull();
             assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getState())
                     .isEqualTo(PullRequestReview.State.APPROVED);
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewDismissed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewDismissed.class, savedRepo.getId()))
                     .isEmpty();
         }
 
@@ -900,7 +900,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:20:00 +0100"), Instant.now());
 
             assertThat(approval(NATIVE_APPROVER_ID)).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .isEmpty();
         }
 
@@ -924,7 +924,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(approval.getState()).isEqualTo(PullRequestReview.State.APPROVED);
             assertThat(approval.isDismissed()).isFalse();
             assertThat(reviewDecision()).isEqualTo(ReviewDecision.APPROVED);
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewDismissed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewDismissed.class, savedRepo.getId()))
                     .isEmpty();
         }
 
@@ -940,7 +940,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getState())
                     .isEqualTo(PullRequestReview.State.APPROVED);
             assertThat(reviewDecision()).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewDismissed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewDismissed.class, savedRepo.getId()))
                     .isEmpty();
         }
 
@@ -965,7 +965,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(approval.getState()).isEqualTo(PullRequestReview.State.APPROVED);
             assertThat(approval.getCommitId()).isNull();
             assertThat(approval.getSubmittedAt()).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .isEmpty();
         }
 
@@ -983,7 +983,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(approval.getCommitId())
                     .as("a hook names the merge request's current head, not the approved revision")
                     .isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .isEmpty();
         }
 
@@ -993,7 +993,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             receive(headless("merge_request.approved", "2026-01-31 19:41:31 +0100", blank));
 
             assertThat(approval(NATIVE_APPROVER_ID)).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .isEmpty();
         }
 
@@ -1006,7 +1006,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
             assertThat(approval(NATIVE_APPROVER_ID)).isNull();
             assertThat(approval(NATIVE_TUTOR_ID)).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .isEmpty();
         }
     }
@@ -1069,7 +1069,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(current.getState()).isEqualTo(PullRequestReview.State.APPROVED);
             assertThat(current.isDismissed()).isFalse();
             assertThat(current.getCommitId()).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .isEmpty();
         }
 
@@ -1121,7 +1121,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             PullRequestReview dated = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
             assertThat(dated.getSubmittedAt()).isEqualTo(actualDate);
             assertThat(dated.getCommitId()).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .isEmpty();
             assertThat(read(merged.withApprovalRows(null), readAt.plusSeconds(1)))
                     .isTrue();
@@ -1562,7 +1562,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             syncPage(node, List.of(), rows);
             assertThat(Objects.requireNonNull(mr2Approval(NATIVE_APPROVER_ID)).getSubmittedAt())
                     .isEqualTo(actualDate);
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .isEmpty();
             var preciseVersion = Instant.parse("2026-01-31T18:30:00.080Z");
             transactionTemplate.executeWithoutResult(tx -> {
@@ -1586,7 +1586,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(Objects.requireNonNull(mr2Approval(NATIVE_APPROVER_ID)).getSubmittedAt())
                     .isEqualTo(actualDate);
             assertThat(mr2().getUpdatedAt()).isEqualTo(preciseVersion);
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .isEmpty();
         }
 
@@ -1980,9 +1980,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             PullRequestReviewThread thread = thread();
             assertThat(thread.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
             assertThat(thread.getNodeId()).isEqualTo(DISCUSSION_GID);
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewThreadResolved.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewThreadResolved.class, savedRepo.getId()))
                     .hasSize(1);
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestUpdated.class, savedRepo.getId()))
                     .extracting(ScmDomainEvent.PullRequestUpdated::changedFields)
                     .allSatisfy(changed -> assertThat(changed).doesNotContain("title", "body"));
         }
@@ -2182,20 +2182,20 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void domainEvents_mr3Lifecycle() throws Exception {
             receive(loadPayload("merge_request.open"));
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestCreated.class, savedRepo.getId()))
                     .hasSize(1);
             receive(loadPayload("merge_request.close"));
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestClosed.class, savedRepo.getId()))
                     .hasSize(1);
             assertThat(eventListener
-                            .ofType(ScmDomainEvent.PullRequestClosed.class)
+                            .inRepository(ScmDomainEvent.PullRequestClosed.class, savedRepo.getId())
                             .get(0)
                             .wasMerged())
                     .isFalse();
 
             eventListener.clear();
             receive(loadPayload("merge_request.reopen"));
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestReopened.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestReopened.class, savedRepo.getId()))
                     .hasSize(1);
         }
 
@@ -2207,14 +2207,14 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             // Merge -> PullRequestClosed(wasMerged=true), then PullRequestMerged once the read
             // after it ran
             deliver(loadPayload("merge_request.merge"));
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestClosed.class, savedRepo.getId()))
                     .hasSize(1);
             assertThat(eventListener
-                            .ofType(ScmDomainEvent.PullRequestClosed.class)
+                            .inRepository(ScmDomainEvent.PullRequestClosed.class, savedRepo.getId())
                             .get(0)
                             .wasMerged())
                     .isTrue();
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestMerged.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestMerged.class, savedRepo.getId()))
                     .hasSize(1);
         }
 
@@ -2222,14 +2222,14 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         void domainEvents_mr4Approval() throws Exception {
             // A native approval snapshot publishes ReviewSubmitted.
             receiveWithApprovals(loadPayload("merge_request.approved"), List.of(approver()));
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .hasSize(1);
 
             eventListener.clear();
 
             // A native withdrawal snapshot publishes ReviewDismissed, never CHANGES_REQUESTED.
             receiveWithApprovals(loadPayload("merge_request.unapproved"), List.of());
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewDismissed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewDismissed.class, savedRepo.getId()))
                     .hasSize(1);
         }
     }

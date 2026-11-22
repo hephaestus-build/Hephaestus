@@ -148,7 +148,7 @@ class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(milestone.getHtmlUrl()).isEqualTo(FIXTURE_MILESTONE_HTML_URL);
             assertThat(milestone.getRepository().getId()).isEqualTo(savedRepo.getId());
 
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneCreated.class, savedRepo.getId()))
                     .hasSize(1);
         }
 
@@ -168,7 +168,7 @@ class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(milestone.getState()).isEqualTo(Milestone.State.CLOSED);
             assertThat(milestone.getClosedAt()).isNotNull();
 
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneUpdated.class, savedRepo.getId()))
                     .hasSize(1);
         }
 
@@ -189,7 +189,7 @@ class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(milestone.getState()).isEqualTo(Milestone.State.OPEN);
             assertThat(milestone.getClosedAt()).isNull();
 
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneUpdated.class, savedRepo.getId()))
                     .hasSize(1);
         }
     }

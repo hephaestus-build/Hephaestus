@@ -233,9 +233,7 @@ class GitHubPullRequestReviewCommentMessageHandlerIntegrationTest extends BaseIn
                         deleteEvent.comment().id(), gitProviderId()))
                 .isEmpty();
         // The redelivered delete finds no comment and announces nothing.
-        assertThat(publications.stream(ScmDomainEvent.ReviewCommentDeleted.class)
-                        .filter(deleted ->
-                                deleted.commentId().equals(deleteEvent.comment().id())))
+        assertThat(publications.inRepository(ScmDomainEvent.ReviewCommentDeleted.class, testRepository.getId()))
                 .hasSize(1);
     }
 

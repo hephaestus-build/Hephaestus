@@ -291,12 +291,14 @@ class GitHubSubIssueScopeIntegrationTest extends BaseIntegrationTest {
 
         assertThat(summary(parent)).isEqualTo(2);
         assertThat(itemSource.pin(item, null).version()).isEqualTo(canonical);
-        assertThat(publications.stream(ScmDomainEvent.IssueUpdated.class)
-                        .filter(event -> event.issue().id().equals(parent.getId()))
+        assertThat(publications.stream(
+                                ScmDomainEvent.IssueUpdated.class,
+                                event -> event.issue().id(),
+                                parent.getId())
                         .count())
                 .isEqualTo(1);
-        assertThat(publications.stream(ItemSourceObserved.class)
-                        .filter(event -> event.workspaceId() == item.workspaceId() && event.itemId() == item.itemId())
+        assertThat(publications.stream(ItemSourceObserved.class, ItemSourceObserved::itemId, item.itemId())
+                        .filter(event -> event.workspaceId() == item.workspaceId())
                         .count())
                 .isZero();
         assertThat(occasionRows

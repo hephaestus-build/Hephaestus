@@ -229,8 +229,10 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 assertThat(commits.findByShaAndRepositoryId(commit.id(), repository.getId()))
                         .isPresent();
             }
-            assertThat(events.stream(ScmDomainEvent.CommitCreated.class)
-                            .filter(event -> event.commit().repositoryId().equals(repository.getId()))
+            assertThat(events.stream(
+                                    ScmDomainEvent.CommitCreated.class,
+                                    event -> event.commit().repositoryId(),
+                                    repository.getId())
                             .map(event -> event.commit().sha())
                             .toList())
                     .containsExactlyInAnyOrder(first.id(), failedSha, thirdSha);

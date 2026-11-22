@@ -289,12 +289,13 @@ class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegratio
                 .isEmpty();
     }
 
-    /** The queued turns published since the last {@code published.clear()}. */
-    private List<UUID> publishedQueued() {
-        return published.stream(ConversationLedgerEvents.TurnChanged.class)
-                .filter(change -> change.status() == ConversationTurn.Status.QUEUED)
-                .map(ConversationLedgerEvents.TurnChanged::turnId)
-                .toList();
+    /** Whether the turn was published as queued since the last {@code published.clear()}. */
+    private boolean publishedQueued(ConversationTurnService.Submission submission) {
+        return published.stream(
+                        ConversationLedgerEvents.TurnChanged.class,
+                        ConversationLedgerEvents.TurnChanged::turnId,
+                        submission.turn().getId())
+                .anyMatch(change -> change.status() == ConversationTurn.Status.QUEUED);
     }
 
     @Test
@@ -306,9 +307,9 @@ class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegratio
 
         assertThat(claims.claimNext()).isPresent();
 
-        assertThat(publishedQueued())
+        assertThat(publishedQueued(inThread))
                 .as("the start can have taken the last Hephaestus slot")
-                .contains(inThread.turn().getId());
+                .isTrue();
     }
 
     @Test
@@ -321,9 +322,10 @@ class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegratio
 
         assertThat(turns.requeueRunning(workspace.getId(), main.getId())).isPresent();
 
-        assertThat(publishedQueued())
+        assertThat(publishedQueued(inThread))
                 .as("the requeue gave a Hephaestus slot back")
-                .contains(inThread.turn().getId(), first.turn().getId());
+                .isTrue();
+        assertThat(publishedQueued(first)).isTrue();
     }
 
     @Test
@@ -336,10 +338,10 @@ class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegratio
 
         turns.stop(workspace.getId(), first.turn().getId());
 
-        assertThat(publishedQueued())
+        assertThat(publishedQueued(followUp)).isTrue();
+        assertThat(publishedQueued(inThread))
                 .as("a stop of a question that never started gives back no Hephaestus slot")
-                .contains(followUp.turn().getId())
-                .doesNotContain(inThread.turn().getId());
+                .isFalse();
     }
 
     @Test
@@ -356,9 +358,9 @@ class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegratio
                 Objects.requireNonNull(running.getRunId()),
                 new ConversationTurnService.Ending(ConversationTurn.Status.DONE, List.of(), null, null));
 
-        assertThat(publishedQueued())
+        assertThat(publishedQueued(followUp))
                 .as("the follow-up is now the one its conversation starts next")
-                .contains(followUp.turn().getId());
+                .isTrue();
     }
 
     @Test
@@ -375,9 +377,9 @@ class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegratio
                 Objects.requireNonNull(running.getRunId()),
                 new ConversationTurnService.Ending(ConversationTurn.Status.DONE, List.of(), null, null));
 
-        assertThat(publishedQueued())
+        assertThat(publishedQueued(elsewhere))
                 .as("every workspace shares the Hephaestus slot that the end gave back")
-                .contains(elsewhere.turn().getId());
+                .isTrue();
     }
 
     @Test
@@ -388,7 +390,7 @@ class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegratio
 
         entryService.deleteMessage(workspace.getId(), first.question().getId());
 
-        assertThat(publishedQueued()).contains(followUp.turn().getId());
+        assertThat(publishedQueued(followUp)).isTrue();
     }
 
     /** Claims turns until the submitted one starts; a turn of another test that starts first is left running. */
@@ -641,8 +643,11 @@ class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegratio
                 ConversationPartialUpdates.whole(snapshot));
 
         assertThat(rowVersion(running)).as("a partial answer writes no row").isEqualTo(version);
-        assertThat(published.stream(ConversationLedgerEvents.ProgressChanged.class))
-                .anySatisfy(frame -> assertThat(frame.turnId()).isEqualTo(running.getId()));
+        assertThat(published.of(
+                        ConversationLedgerEvents.ProgressChanged.class,
+                        ConversationLedgerEvents.ProgressChanged::turnId,
+                        running.getId()))
+                .isNotEmpty();
         turns.stop(workspace.getId(), running.getId());
         assertThatThrownBy(() -> turns.updatePartial(
                         running.getWorkspaceId(),

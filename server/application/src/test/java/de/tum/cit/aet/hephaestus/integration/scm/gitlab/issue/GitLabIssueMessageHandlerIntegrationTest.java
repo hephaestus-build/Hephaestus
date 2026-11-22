@@ -221,7 +221,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             processor.processFromSync(closed, ProcessingContext.forSync(null, savedRepo));
 
             // Re-reading a closed issue is no event: its close is reported once.
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueClosed.class, savedRepo.getId()))
+                    .hasSize(1);
 
             // Reopened and closed again between two syncs: the new close is a new event.
             processor.processFromSync(
@@ -250,7 +251,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             null),
                     ProcessingContext.forSync(null, savedRepo));
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).hasSize(2);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueClosed.class, savedRepo.getId()))
+                    .hasSize(2);
         }
 
         @Test
@@ -290,7 +292,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             null),
                     ProcessingContext.forSync(null, savedRepo));
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, savedRepo.getId()))
+                    .hasSize(1);
             Issue after = issueRepository
                     .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
                     .orElseThrow();
@@ -339,7 +342,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             });
 
             // Domain event
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueCreated.class, savedRepo.getId()))
+                    .hasSize(1);
         }
 
         @Test
@@ -356,7 +360,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(issue).isNotNull();
             assertThat(issue.getState()).isEqualTo(Issue.State.CLOSED);
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueClosed.class, savedRepo.getId()))
+                    .hasSize(1);
         }
 
         @Test
@@ -374,7 +379,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(issue).isNotNull();
             assertThat(issue.getState()).isEqualTo(Issue.State.OPEN);
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueReopened.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueReopened.class, savedRepo.getId()))
+                    .hasSize(1);
         }
 
         @Test
@@ -391,7 +397,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             .orElseThrow()
                             .getState())
                     .isEqualTo(Issue.State.OPEN);
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueClosed.class, savedRepo.getId()))
+                    .isEmpty();
         }
 
         @Test
@@ -428,7 +435,9 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             Issue issue = issueRepository
                     .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
                     .orElseThrow();
-            var update = eventListener.ofType(ScmDomainEvent.IssueUpdated.class).getFirst();
+            var update = eventListener
+                    .inRepository(ScmDomainEvent.IssueUpdated.class, savedRepo.getId())
+                    .getFirst();
             var context = Objects.requireNonNull(update.context());
             assertThat(context.actorUserId())
                     .isNotNull()
@@ -457,7 +466,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     reopened.changes()));
 
             var context = Objects.requireNonNull(eventListener
-                    .ofType(ScmDomainEvent.IssueUpdated.class)
+                    .inRepository(ScmDomainEvent.IssueUpdated.class, savedRepo.getId())
                     .getFirst()
                     .context());
             assertThat(context.actorUserId())
@@ -494,7 +503,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             processor.processFromSync(
                     sync(REVIEWED_BODY, List.of(FIXTURE_LABEL_NAME)), ProcessingContext.forSync(null, savedRepo));
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, savedRepo.getId()))
+                    .isEmpty();
             assertThat(reviewRevision()).isEqualTo(reviewedRevision);
             assertThat(practiceResultRepository
                             .findById(practiceResultId)
@@ -508,7 +518,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             : sync(REVIEWED_BODY, List.of()),
                     ProcessingContext.forSync(null, savedRepo));
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, savedRepo.getId()))
+                    .hasSize(1);
             assertThat(reviewRevision()).isNotEqualTo(reviewedRevision);
             assertThat(practiceResultRepository
                             .findById(practiceResultId)
@@ -644,7 +655,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             handleOnRoute(loadPayload("issue.confidential.open"));
 
             assertThat(issueRepository.count()).isZero();
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueCreated.class, savedRepo.getId()))
+                    .isEmpty();
         }
 
         @Test
@@ -659,7 +671,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             handleOnRoute(loadPayload("issue.confidential.close"));
 
             assertThat(issueRepository.count()).isZero();
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueClosed.class, savedRepo.getId()))
+                    .isEmpty();
         }
     }
 

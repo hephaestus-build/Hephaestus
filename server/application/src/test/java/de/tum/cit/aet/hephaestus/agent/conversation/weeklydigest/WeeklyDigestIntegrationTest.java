@@ -788,9 +788,10 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(entryRepository.searchByWorkspaceId(
                         workspaceId, List.of(stimulus.getConversationId()), null, null, null, 50))
                 .noneMatch(hit -> hit.getId().equals(stimulus.getId()));
-        assertThat(observedEvents.stream(ConversationLedgerEvents.ProgressChanged.class)
-                        .filter(event -> event.turnId().equals(turnId))
-                        .toList())
+        assertThat(observedEvents.of(
+                        ConversationLedgerEvents.ProgressChanged.class,
+                        ConversationLedgerEvents.ProgressChanged::turnId,
+                        turnId))
                 .isEmpty();
         assertThat(written()).isEmpty();
     }

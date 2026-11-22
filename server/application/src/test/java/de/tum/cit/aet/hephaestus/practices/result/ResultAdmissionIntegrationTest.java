@@ -611,9 +611,10 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         pending.review().getOrderedAt()));
         assertThat(reviews.findById(pending.review().getId()).orElseThrow().getStatus())
                 .isEqualTo(ReviewStatus.COMPLETE);
-        assertThat(applicationEvents.stream(ReviewCompleted.class)
-                        .filter(completed ->
-                                completed.reviewId().equals(pending.review().getId())))
+        assertThat(applicationEvents.stream(
+                        ReviewCompleted.class,
+                        ReviewCompleted::reviewId,
+                        pending.review().getId()))
                 .isEmpty();
         assertThat(jdbc.sql("""
                         SELECT (SELECT COUNT(*) FROM feedback f WHERE f.workspace_id=:ws AND f.review_id=:review)
@@ -1555,10 +1556,10 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         .orElseThrow()
                         .getStatus())
                 .isEqualTo(status);
-        assertThat(applicationEvents.stream(ReviewCompleted.class)
-                        .filter(completed ->
-                                completed.reviewId().equals(pending.review().getId()))
-                        .toList())
+        assertThat(applicationEvents.of(
+                        ReviewCompleted.class,
+                        ReviewCompleted::reviewId,
+                        pending.review().getId()))
                 .containsExactlyElementsOf(
                         status == ReviewStatus.COMPLETE || status == ReviewStatus.PARTIAL
                                 ? List.of(new ReviewCompleted(
@@ -1580,9 +1581,10 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         ReviewStopReason.EXECUTION_INCOMPLETE,
                         Instant.now(),
                         pending.review().getOrderedAt()));
-        assertThat(applicationEvents.stream(ReviewCompleted.class)
-                        .filter(completed ->
-                                completed.reviewId().equals(pending.review().getId())))
+        assertThat(applicationEvents.stream(
+                        ReviewCompleted.class,
+                        ReviewCompleted::reviewId,
+                        pending.review().getId()))
                 .isEmpty();
     }
 

@@ -91,7 +91,8 @@ class GitLabLabelProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getLastSyncAt()).isNotNull();
             assertThat(result.getNativeId()).isNegative(); // deterministic ID
 
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelCreated.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelCreated.class, testRepository.getId()))
+                    .hasSize(1);
         }
 
         @Test
@@ -119,7 +120,8 @@ class GitLabLabelProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getColor()).isEqualTo("#00FF00");
             assertThat(result.getDescription()).isEqualTo("New description");
 
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelUpdated.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelUpdated.class, testRepository.getId()))
+                    .hasSize(1);
             assertThat(labelRepository.findAllByRepository_Id(testRepository.getId()))
                     .hasSize(1);
         }
@@ -189,7 +191,8 @@ class GitLabLabelProcessorIntegrationTest extends BaseIntegrationTest {
             labelProcessor.delete(label.getId(), testContext());
 
             assertThat(labelRepository.findById(label.getId())).isEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelDeleted.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelDeleted.class, testRepository.getId()))
+                    .hasSize(1);
         }
 
         @Test
@@ -201,7 +204,8 @@ class GitLabLabelProcessorIntegrationTest extends BaseIntegrationTest {
         @Test
         void shouldHandleNonExistentLabel() {
             labelProcessor.delete(-999L, testContext());
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelDeleted.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelDeleted.class, testRepository.getId()))
+                    .isEmpty();
         }
     }
 

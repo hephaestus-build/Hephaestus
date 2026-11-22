@@ -113,10 +113,14 @@ class GitLabReplayStateIntegrationTest extends BaseIntegrationTest {
         }
 
         assertStored(stored, secondsNewer);
-        assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).isEmpty();
-        assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).isEmpty();
-        assertThat(eventListener.ofType(ScmDomainEvent.IssueReopened.class)).isEmpty();
-        assertThat(eventListener.ofType(ScmDomainEvent.IssueLabeled.class)).isEmpty();
+        assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, repository.getId()))
+                .isEmpty();
+        assertThat(eventListener.inRepository(ScmDomainEvent.IssueClosed.class, repository.getId()))
+                .isEmpty();
+        assertThat(eventListener.inRepository(ScmDomainEvent.IssueReopened.class, repository.getId()))
+                .isEmpty();
+        assertThat(eventListener.inRepository(ScmDomainEvent.IssueLabeled.class, repository.getId()))
+                .isEmpty();
     }
 
     @ParameterizedTest

@@ -142,7 +142,7 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
                     .isPresent();
 
             // Verify LabelCreated event published
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelCreated.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -151,7 +151,8 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
                         assertNotNull(event.context().repository());
                         assertThat(event.context().repository().id()).isEqualTo(testRepository.getId());
                     });
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelUpdated.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelUpdated.class, testRepository.getId()))
+                    .isEmpty();
         }
 
         @Test
@@ -179,13 +180,14 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getDescription()).isEqualTo("Updated description");
 
             // Verify LabelUpdated event published
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelUpdated.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
                         assertThat(event.label().name()).isEqualTo("updated-name");
                     });
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelCreated.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelCreated.class, testRepository.getId()))
+                    .isEmpty();
         }
 
         @Test
@@ -193,8 +195,10 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
             Label result = processor.process(null, testRepository, createContext());
 
             assertThat(result).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelCreated.class)).isEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelUpdated.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelCreated.class, testRepository.getId()))
+                    .isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelUpdated.class, testRepository.getId()))
+                    .isEmpty();
         }
 
         @Test
@@ -215,7 +219,8 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getNativeId()).isNotNull();
             assertThat(result.getNativeId()).isNegative(); // Generated IDs are negative to avoid collision
             assertThat(result.getName()).isEqualTo("graphql-synced-label");
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelCreated.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelCreated.class, testRepository.getId()))
+                    .hasSize(1);
         }
 
         @Test
@@ -284,8 +289,10 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
             processor.process(dto, testRepository, createContext());
 
             assertThat(labelRepository.count()).isEqualTo(1);
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelUpdated.class)).hasSize(1);
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelCreated.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelUpdated.class, testRepository.getId()))
+                    .hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelCreated.class, testRepository.getId()))
+                    .isEmpty();
         }
     }
 
@@ -315,7 +322,7 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
                     .isEmpty();
 
             // Verify event published
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelDeleted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelDeleted.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -337,7 +344,8 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
                     .doesNotThrowAnyException();
 
             // No event published
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelDeleted.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelDeleted.class, testRepository.getId()))
+                    .isEmpty();
         }
 
         @Test
@@ -345,7 +353,8 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
             assertThatCode(() -> processor.delete(null, createContext())).doesNotThrowAnyException();
 
             // No event published
-            assertThat(eventListener.ofType(ScmDomainEvent.LabelDeleted.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.LabelDeleted.class, testRepository.getId()))
+                    .isEmpty();
         }
     }
 

@@ -192,8 +192,10 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
         handler.handleEvent(event);
         handler.handleEvent(event);
 
-        assertThat(publications.stream(ScmDomainEvent.ReviewThreadResolved.class)
-                        .filter(change -> change.thread().id().equals(thread.getId())))
+        assertThat(publications.stream(
+                        ScmDomainEvent.ReviewThreadResolved.class,
+                        change -> change.thread().id(),
+                        thread.getId()))
                 .singleElement()
                 .satisfies(resolved ->
                         assertThat(resolved.thread().resolvedAt()).isEqualTo(Instant.parse("2025-11-05T12:15:24Z")));
@@ -255,8 +257,10 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
             assertThat(stored.getResolvedAt()).isNull();
             assertThat(stored.getResolutionChangedAt()).isEqualTo(Instant.parse("2025-11-05T12:15:37Z"));
         });
-        assertThat(publications.stream(ScmDomainEvent.ReviewThreadResolved.class)
-                        .filter(change -> change.thread().id().equals(thread.getId())))
+        assertThat(publications.stream(
+                        ScmDomainEvent.ReviewThreadResolved.class,
+                        change -> change.thread().id(),
+                        thread.getId()))
                 .isEmpty();
     }
 
@@ -281,8 +285,10 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
             assertThat(stored.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
             assertThat(stored.getResolvedAt()).isEqualTo(resolvedAgainAt);
         });
-        assertThat(publications.stream(ScmDomainEvent.ReviewThreadUnresolved.class)
-                        .filter(change -> change.thread().id().equals(thread.getId())))
+        assertThat(publications.stream(
+                        ScmDomainEvent.ReviewThreadUnresolved.class,
+                        change -> change.thread().id(),
+                        thread.getId()))
                 .isEmpty();
     }
 

@@ -1781,9 +1781,11 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         assertThat(merged.getMergeCommitSha()).isEqualTo(HOOK_MERGE_COMMIT);
         assertThat(merged.getMergedBy()).isNull();
         assertThat(merged.getMergedAt()).isNull();
-        assertThat(scmEvents.ofType(ScmDomainEvent.PullRequestClosed.class))
-                .anyMatch(closed -> closed.wasMerged()
-                        && Objects.equals(closed.pullRequest().id(), merged.getId()));
+        assertThat(scmEvents.of(
+                        ScmDomainEvent.PullRequestClosed.class,
+                        closed -> closed.pullRequest().id(),
+                        merged.getId()))
+                .anyMatch(ScmDomainEvent.PullRequestClosed::wasMerged);
         assertThat(mergesOffered(merged)).isZero();
     }
 
@@ -1836,8 +1838,10 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     }
 
     private long mergesOffered(PullRequest mergeRequest) {
-        return scmEvents.ofType(ScmDomainEvent.PullRequestMerged.class).stream()
-                .filter(offered -> Objects.equals(offered.pullRequest().id(), mergeRequest.getId()))
+        return scmEvents.stream(
+                        ScmDomainEvent.PullRequestMerged.class,
+                        offered -> offered.pullRequest().id(),
+                        mergeRequest.getId())
                 .count();
     }
 

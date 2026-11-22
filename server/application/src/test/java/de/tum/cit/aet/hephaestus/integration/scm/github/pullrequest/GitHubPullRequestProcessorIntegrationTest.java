@@ -409,7 +409,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             PullRequest result = processor.process(dto, createContext());
 
             assertThat(result).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestCreated.class, testRepository.getId()))
                     .isEmpty();
         }
     }
@@ -468,7 +468,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     .isPresent();
 
             // Verify Created event was published (treated as new from PR perspective)
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestCreated.class, testRepository.getId()))
                     .hasSize(1);
         }
     }
@@ -569,7 +569,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(hydrated.getUpdatedAt())
                     .isEqualTo(seconds > 0 ? stubUpdatedAt.plusSeconds(seconds) : stubUpdatedAt);
             if (seconds <= 0) {
-                assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+                assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestUpdated.class, testRepository.getId()))
                         .isEmpty();
             }
         }
@@ -769,7 +769,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
         assertThat(actual.getTitle()).isEqualTo("Newer title");
         assertThat(actual.getBody()).isEqualTo("Newer body");
         assertThat(actual.getUpdatedAt()).isEqualTo(replayVersion.plusSeconds(secondsNewer));
-        assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+        assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestUpdated.class, testRepository.getId()))
                 .isEmpty();
     }
 
@@ -860,7 +860,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                 assertThat(stored.getMergeStateStatus()).isEqualTo(initialStatus);
                 assertThat(pullRequestRepository.findClosingIssuesById(stored.getId()))
                         .isEmpty();
-                assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+                assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestUpdated.class, testRepository.getId()))
                         .isEmpty();
                 return;
             }
@@ -871,7 +871,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(pullRequestRepository.findClosingIssuesById(stored.getId()))
                     .extracting(Issue::getId)
                     .containsExactly(closed.getId());
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestUpdated.class, testRepository.getId()))
                     .filteredOn(event -> event.changedFields().contains("closingIssues"))
                     .singleElement()
                     .satisfies(event -> assertThat(event.context().isSync()).isTrue());
@@ -1019,9 +1019,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.isMerged()).isFalse();
             assertThat(result.requireRepository().getNativeId()).isEqualTo(FIXTURE_REPO_ID);
 
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestCreated.class, testRepository.getId()))
                     .hasSize(1);
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestUpdated.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -1226,9 +1226,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
             assertThat(result.getState()).isEqualTo(PullRequest.State.CLOSED);
             assertThat(result.isMerged()).isFalse();
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestClosed.class, testRepository.getId()))
                     .hasSize(1);
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestMerged.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestMerged.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -1286,9 +1286,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
             assertThat(result.getState()).isEqualTo(PullRequest.State.CLOSED);
             assertThat(result.isMerged()).isTrue();
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestClosed.class, testRepository.getId()))
                     .hasSize(1);
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestMerged.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestMerged.class, testRepository.getId()))
                     .hasSize(1);
         }
     }
@@ -1307,7 +1307,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     createBasicPullRequestDto(FIXTURE_PR_ID, 28, null, updatedAt),
                     ProcessingContext.forWebhook(testWorkspace.getId(), testRepository, "ready_for_review"));
 
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestReady.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestReady.class, testRepository.getId()))
                     .hasSize(1);
         }
 
@@ -1405,7 +1405,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             assertNotNull(result);
 
             assertThat(result.isDraft()).isFalse();
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestReady.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestReady.class, testRepository.getId()))
                     .hasSize(1);
         }
     }
@@ -1465,7 +1465,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             assertNotNull(result);
 
             assertThat(result.isDraft()).isTrue();
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestDrafted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestDrafted.class, testRepository.getId()))
                     .hasSize(1);
         }
     }
@@ -1525,7 +1525,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             assertNotNull(result);
 
             assertThat(result.getCommits()).isEqualTo(3);
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestSynchronized.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestSynchronized.class, testRepository.getId()))
                     .hasSize(1);
         }
     }
@@ -1546,7 +1546,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     createBasicPullRequestDto(FIXTURE_PR_ID, 27, repaired, Instant.parse("2025-11-01T21:55:00Z")),
                     createContext());
 
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestUpdated.class, testRepository.getId()))
                     .extracting(ScmDomainEvent.PullRequestUpdated::changedFields)
                     .containsExactly(Set.of("body"));
         }
@@ -1609,7 +1609,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
             processor.processLabeled(labeledDto, labelDto, createContext());
 
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestLabeled.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestLabeled.class, testRepository.getId()))
                     .hasSize(1);
         }
 
@@ -1709,7 +1709,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
             processor.processUnlabeled(unlabeledDto, labelDto, createContext());
 
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUnlabeled.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestUnlabeled.class, testRepository.getId()))
                     .hasSize(1);
         }
     }

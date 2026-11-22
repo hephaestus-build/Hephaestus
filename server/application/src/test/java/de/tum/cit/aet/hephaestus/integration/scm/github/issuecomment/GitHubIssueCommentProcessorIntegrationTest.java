@@ -289,9 +289,9 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(parentOf(replayed)).isEqualTo(pr.getId());
             assertThat(issueRepository.findById(Objects.requireNonNull(testIssue.getId())))
                     .isPresent();
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentUpdated.class, testRepository.getId()))
                     .isEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentCreated.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -442,7 +442,7 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getIssue().getId()).isEqualTo(testIssue.getId());
 
             // Verify CommentCreated event was published
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentCreated.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -457,7 +457,7 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
             IssueComment result = processor.process(null, testIssue.getNumber(), createContext());
 
             assertThat(result).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentCreated.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -468,7 +468,7 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
             IssueComment result = processor.process(dto, 999999, createContext());
 
             assertThat(result).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentCreated.class, testRepository.getId()))
                     .isEmpty();
         }
     }
@@ -498,7 +498,7 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getBody()).isEqualTo("Updated body");
 
             // Verify CommentUpdated event was published
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentUpdated.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -528,9 +528,9 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
             processor.process(dto, testIssue.getNumber(), createContext());
 
             // No events should be published for unchanged data
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentCreated.class, testRepository.getId()))
                     .isEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentUpdated.class, testRepository.getId()))
                     .isEmpty();
         }
     }
@@ -753,7 +753,7 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                     .isEmpty();
 
             // Verify CommentDeleted event was published
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentDeleted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentDeleted.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -794,7 +794,7 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
         void shouldHandleNullCommentId() {
             processor.delete(null, createContext());
 
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentDeleted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentDeleted.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -803,7 +803,7 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
             processor.delete(999999L, createContext());
 
             // No event should be published for non-existent comment
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentDeleted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentDeleted.class, testRepository.getId()))
                     .isEmpty();
         }
     }
@@ -850,7 +850,8 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                         assertThat(parent.getId()).isEqualTo(testIssue.getId());
                     });
         }
-        assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class)).hasSize(2);
+        assertThat(eventListener.inRepository(ScmDomainEvent.CommentCreated.class, testRepository.getId()))
+                .hasSize(2);
     }
 
     private ClientGraphQlResponse commentPage(long nativeId, boolean hasNext) {

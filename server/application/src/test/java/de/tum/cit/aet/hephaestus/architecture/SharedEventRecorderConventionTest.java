@@ -55,7 +55,7 @@ class SharedEventRecorderConventionTest extends HephaestusArchitectureTest {
                 .belongToAnyOf(RecordApplicationEvents.class, ApplicationEvents.class)
                 .because("@RecordApplicationEvents loses an event that a pooled thread publishes. Inject the shared "
                         + "SharedEventRecorder (imported by BaseIntegrationTest) and read "
-                        + "recorder.stream(SomeEvent.class) instead")
+                        + "recorder.of(SomeEvent.class, SomeEvent::id, ownedId) instead")
                 .check(TEST_CLASSES);
     }
 

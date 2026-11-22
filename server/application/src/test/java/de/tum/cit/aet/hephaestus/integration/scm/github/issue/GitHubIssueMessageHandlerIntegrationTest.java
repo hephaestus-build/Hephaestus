@@ -219,7 +219,8 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             });
 
             // Domain event published
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueCreated.class, testRepository.getId()))
+                    .hasSize(1);
         }
 
         @Test
@@ -253,7 +254,8 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     .orElseThrow();
             assertThat(issue.getBody()).isEqualTo(editedEvent.issue().body());
             assertThat(issue.getUpdatedAt()).isEqualTo(editedEvent.issue().updatedAt());
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId()))
+                    .isEmpty();
         }
 
         @Test
@@ -275,7 +277,9 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             Issue issue = issueRepository
                     .findByRepositoryIdAndNumber(testRepository.getId(), 20)
                     .orElseThrow();
-            var update = eventListener.ofType(ScmDomainEvent.IssueUpdated.class).getFirst();
+            var update = eventListener
+                    .inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId())
+                    .getFirst();
             var context = Objects.requireNonNull(update.context());
             assertThat(context.actorUserId())
                     .isNotNull()
@@ -311,7 +315,7 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     .orElseThrow()
                     .getId();
             assertThat(Objects.requireNonNull(eventListener
-                                    .ofType(ScmDomainEvent.IssueUpdated.class)
+                                    .inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId())
                                     .getFirst()
                                     .context())
                             .actorUserId())
@@ -330,7 +334,7 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     reopened.issueType(),
                     reopened.changes()));
             assertThat(Objects.requireNonNull(eventListener
-                                    .ofType(ScmDomainEvent.IssueUpdated.class)
+                                    .inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId())
                                     .getFirst()
                                     .context())
                             .actorUserId())
@@ -353,7 +357,8 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(issue.getState()).isEqualTo(Issue.State.CLOSED);
 
             // Verify Closed event was published
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueClosed.class, testRepository.getId()))
+                    .hasSize(1);
         }
 
         @Test
@@ -465,7 +470,8 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     .isPresent();
 
             // Verify Labeled event was published
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueLabeled.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueLabeled.class, testRepository.getId()))
+                    .hasSize(1);
         }
 
         @Test
@@ -483,7 +489,8 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 assertThat(labelNames(issue)).containsExactly("etl-sample");
                 assertThat(issue.getUpdatedAt()).isEqualTo(FIXTURE_ISSUE_UPDATED_AT);
             });
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueLabeled.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueLabeled.class, testRepository.getId()))
+                    .isEmpty();
         }
 
         @Test
@@ -496,7 +503,7 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
             handler.handleEvent(unlabeledEvent);
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUnlabeled.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUnlabeled.class, testRepository.getId()))
                     .hasSize(1);
         }
     }
@@ -608,7 +615,8 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             });
 
             // Verify Typed event was published
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueTyped.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueTyped.class, testRepository.getId()))
+                    .hasSize(1);
         }
 
         @Test
@@ -629,7 +637,8 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             });
 
             // Verify Untyped event was published
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUntyped.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUntyped.class, testRepository.getId()))
+                    .hasSize(1);
         }
     }
 
