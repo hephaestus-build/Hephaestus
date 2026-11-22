@@ -3,38 +3,28 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
-import de.tum.cit.aet.hephaestus.integration.core.spi.CapturedApplicability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemChecks;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
-import de.tum.cit.aet.hephaestus.integration.core.spi.OccasionKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RoleHolder;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
-import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
-import de.tum.cit.aet.hephaestus.practices.model.Result;
-import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewModelBindings;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.ReviewWorkspace;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -46,19 +36,15 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Plans a review request: the practices it measures and those it withholds with their reasons, the frozen review
- * method, the checks the review records, and the sources the planned practices read. It also answers whether a review
- * still has an active or unsettled job, which planning asks of earlier reviews, and completing or cancelling a review
- * asks of that review.
+ * method, and the checks the review records.
  */
 @Component
 @ConditionalOnServerRole
@@ -73,15 +59,9 @@ class ReviewPlanner {
     private final ReviewGate gate;
     private final AccountIdentityQuery identities;
     private final ReviewModelBindings bindings;
-    private final ReviewRuntimeQuery runtime;
     private final ProductItemRepository itemRows;
     private final JsonMapper json;
-    private final Clock clock;
-    private final PracticeItemOptions itemOptions;
-    private final ResultRepository results;
-    private final List<CapturedApplicability> applicability;
-    private final ItemEventService itemEvents;
-    private final OffPracticeMilestones offMilestones;
+    private final ReviewReadinessEdge readinessEdge;
 
     /** @param gated every practice that the gate selects for an item review, before its results and readiness */
     record Plan(
@@ -155,7 +135,7 @@ class ReviewPlanner {
                 case GateDecision.Run run -> run.matchedPractices();
             };
             gated = selected;
-            if (event) selected = pending(pinned, occasions, selected, currentness);
+            if (event) selected = readinessEdge.pending(pinned, occasions, selected, currentness);
         }
         if (selected.isEmpty()
                 || (!request.practiceIds().isEmpty()
@@ -234,76 +214,6 @@ class ReviewPlanner {
             }
         }
         return new Plan(occurredAt, gated, planned, method, checks);
-    }
-
-    /**
-     * Of the practices the occasions select, those to measure now. Occasions that all continue leave out a practice in
-     * feedback mode Off that reviews at a milestone: it waits for that milestone and never follows a newer head. One
-     * that this version still owes, such as for its checks or a spent deadline, finishes here. A practice that an
-     * earlier review of the item still measures (queued, or running with an unsettled job) holds the whole window until
-     * that review ends, so its occasions are never lost. An event review that never started holds a window of
-     * occasions that join it whatever it lists, so that its claim replaces it instead of starting a sandbox on work
-     * that moved. A continuing occasion leaves out every practice whose result is current; a milestone measures them
-     * again.
-     */
-    private List<Practice> pending(
-            ItemSnapshot pinned,
-            Set<ItemEventName> occasions,
-            List<Practice> gated,
-            Map<UUID, Currentness> currentness) {
-        long workspaceId = pinned.item().workspaceId();
-        long itemId = pinned.item().itemId();
-        var kind = pinned.item().kind();
-        var waiting = new HashSet<Long>();
-        if (offMilestones.continuing(kind, occasions)) {
-            waiting.addAll(offMilestones.waitingForAMilestone(workspaceId, kind, gated));
-            waiting.removeAll(memberships.owedAtVersion(
-                    workspaceId, itemId, pinned.version().value(), ReviewWithholdings.CARRIED));
-        }
-        var selected = gated.stream().filter(p -> !waiting.contains(p.getId())).toList();
-        var selectedIds = selected.stream().map(Practice::getId).collect(Collectors.toSet());
-        // Starting a review commits before its job is enqueued, so a running review with no job yet still measures.
-        // One that never got a job stops holding the window one cap after it started.
-        Instant enqueuedBy = clock.instant().minus(itemEvents.quietWindowCap());
-        // An event review that never started holds a window whatever it lists: its claim replaces it while this
-        // occasion waits, so no sandbox starts on work that moved. Only an occasion that joins a window can replace it.
-        boolean replaceable = occasions.stream()
-                .allMatch(name -> itemOptions.occasion(kind, name).joinsWindow());
-        boolean measured = memberships.listedPractices(workspaceId, itemId).stream()
-                .anyMatch(listed -> (replaceable
-                                && listed.getStatus().equals(ReviewStatus.QUEUED.name())
-                                && listed.getStartedAt() == null
-                                && listed.getOrigin().equals(ReviewOrigin.EVENT.name()))
-                        || (selectedIds.contains(listed.getPracticeId())
-                                && (listed.getStatus().equals(ReviewStatus.QUEUED.name())
-                                        || hasUnsettledInvocation(workspaceId, listed.getReviewId())
-                                        || listed.getStartedAt() == null
-                                        || listed.getStartedAt().isAfter(enqueuedBy))));
-        if (measured)
-            throw new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.REQUEST_CONFLICT,
-                    "An earlier review of this item still measures a selected practice.",
-                    ReviewRequestReason.REVIEW_IN_PROGRESS);
-        if (selected.isEmpty() && !waiting.isEmpty())
-            throw new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
-                    "Every selected practice has feedback mode Off and waits for a milestone of the work.",
-                    ReviewRequestReason.FEEDBACK_MODE_OFF);
-        if (occasions.stream().anyMatch(name -> itemOptions.occasion(kind, name) == OccasionKind.MILESTONE))
-            return selected;
-        var current = results.findByWorkspaceIdAndItemIdAndEndedAtIsNull(workspaceId, itemId).stream()
-                .filter(result -> currentness.get(result.getId()) == Currentness.CURRENT)
-                .map(Result::getPracticeVersionId)
-                .collect(Collectors.toSet());
-        var pending = selected.stream()
-                .filter(p -> !current.contains(p.getCurrentVersion().getId()))
-                .toList();
-        if (pending.isEmpty())
-            throw new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
-                    "Every selected practice already has a current result.",
-                    ReviewRequestReason.ALREADY_CURRENT);
-        return pending;
     }
 
     private PracticeDefinition definition(PracticeVersion version) {
@@ -404,46 +314,6 @@ class ReviewPlanner {
                 : ReviewWithholdings.ROLE_UNAVAILABLE;
     }
 
-    Set<SourceKind> queuedKinds(ItemSnapshot item, List<SelectedPractice> plans) {
-        return readKinds(
-                item,
-                plans.stream()
-                        .filter(plan -> plan.reason() == null)
-                        .map(SelectedPractice::version)
-                        .toList());
-    }
-
-    /** The sources that these practice versions read, and those that their applicability conditions read. */
-    Set<SourceKind> readKinds(ItemSnapshot item, List<PracticeVersion> versions) {
-        var kinds = new HashSet<SourceKind>();
-        for (var version : versions) {
-            var definition = json.treeToValue(version.getDefinition(), PracticeDefinition.class);
-            definition.reads().sources().forEach(read -> kinds.add(read.source()));
-            var conditions = definition.appliesWhen();
-            if (conditions == null) continue;
-            var clauses = conditions.anyOf().stream()
-                    .map(condition -> new CapturedApplicability.Condition(
-                            condition.changedPath(),
-                            condition.diffContains(),
-                            condition.hasItems(),
-                            Boolean.TRUE.equals(condition.merged())))
-                    .toList();
-            for (var adapter : applicability)
-                adapter.evaluate(item.item().kind(), clauses, List.of(), Map.of())
-                        .forEach(clause -> kinds.add(clause.readFrom()));
-        }
-        return Set.copyOf(kinds);
-    }
-
-    JsonNode queuedSources(Set<SourceKind> kinds, Map<SourceKind, String> fingerprints) {
-        var facts = json.createObjectNode();
-        var queued = facts.putObject(ReviewCaptureDecision.SOURCE_FINGERPRINTS);
-        fingerprints.forEach((kind, value) -> {
-            if (kinds.contains(kind)) queued.put(kind.value(), value);
-        });
-        return facts;
-    }
-
     record SelectedPractice(
             Practice practice,
             PracticeVersion version,
@@ -477,10 +347,5 @@ class ReviewPlanner {
                 admission,
                 coverage.repositoryItemId(workspace.id(), pinned.item().itemId()),
                 accounts);
-    }
-
-    boolean hasUnsettledInvocation(long workspaceId, UUID reviewId) {
-        return !runtime.activeJobIds(workspaceId, reviewId).isEmpty()
-                || !runtime.unsettledJobIds(workspaceId, reviewId).isEmpty();
     }
 }

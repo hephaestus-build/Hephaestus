@@ -2,56 +2,33 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
-import de.tum.cit.aet.hephaestus.integration.core.spi.OccasionKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
-import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
-import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
-import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
-import de.tum.cit.aet.hephaestus.practices.review.model.Review;
-import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
-import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
-import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewCancellationRequested;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompletion;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequested;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.ReviewWorkspace;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 @Service
 @ConditionalOnServerRole
@@ -60,26 +37,17 @@ public class ReviewServiceImpl implements ReviewService {
     /** Where a review that a comment requested answers that comment when no feedback does. */
     static final String COMMENT_ANSWER = "commentAnswer";
 
-    private final ReviewRepository reviews;
     private final ReviewStart starts;
-    private final ReviewPracticeRepository assignments;
-    private final ReviewItemRepository memberships;
     private final ReviewSnapshotQueryService snapshots;
     private final WorkspaceQueries workspaces;
     private final ProductItemQuery items;
-    private final ReviewGate gate;
-    private final ReviewBudget budget;
-    private final JsonMapper json;
-    private final Clock clock;
-    private final ApplicationEventPublisher events;
-    private final PracticeItemOptions itemOptions;
-    private final ResultRepository results;
-    private final ResultFreshness freshness;
-    private final ReviewClosure closure;
     private final ReviewRequestTransactions transactions;
-    private final ReviewRequestPolicy policy;
-    private final PracticeTrialProperties trials;
     private final ReviewPlanner planner;
+    private final ReviewReadinessEdge readinessEdge;
+    private final ReviewSourceReads sourceReads;
+    private final ReviewRequestAdmission requestAdmission;
+    private final ReviewRecorder recorder;
+    private final ReviewTermination termination;
 
     /**
      * Admits the request without a lock. Then it pins the item, judges the item's results and reads the sources that
@@ -91,19 +59,19 @@ public class ReviewServiceImpl implements ReviewService {
         if (TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("A review request runs only outside a database transaction");
         validate(request);
-        return switch (transactions.read(() -> admit(request, workspace(request)))) {
-            case Admission.Replay replay -> replay.reviewId();
-            case Admission.Admitted admitted -> {
+        return switch (transactions.read(() -> requestAdmission.admit(request, workspace(request)))) {
+            case ReviewRequestAdmission.Admission.Replay replay -> replay.reviewId();
+            case ReviewRequestAdmission.Admission.Admitted admitted -> {
                 var pinned = pin(request, admitted.item());
                 var early = earlyRead(request, admitted.item(), pinned);
                 yield transactions.write(() -> {
                     var workspace =
                             workspaces.findByIdForUpdate(request.workspaceId()).orElseThrow();
-                    return switch (admit(request, workspace)) {
-                        case Admission.Replay replay -> replay.reviewId();
-                        case Admission.Admitted locked -> {
+                    return switch (requestAdmission.admit(request, workspace)) {
+                        case ReviewRequestAdmission.Admission.Replay replay -> replay.reviewId();
+                        case ReviewRequestAdmission.Admission.Admitted locked -> {
                             requirePinnedVersion(request, pinned);
-                            yield recordReview(
+                            yield recorder.record(
                                     request,
                                     workspace,
                                     pinned,
@@ -135,63 +103,6 @@ public class ReviewServiceImpl implements ReviewService {
         return workspaces.findById(request.workspaceId()).orElseThrow();
     }
 
-    private sealed interface Admission {
-        record Replay(UUID reviewId) implements Admission {}
-
-        record Admitted(ItemRef item) implements Admission {}
-    }
-
-    private Admission admit(ReviewRequest request, ReviewWorkspace workspace) {
-        if (request.requestKey() != null) {
-            var existing = reviews.findByWorkspaceIdAndRequestKey(request.workspaceId(), request.requestKey());
-            if (existing.isPresent()) {
-                if (!Objects.equals(existing.orElseThrow().getRequestDigest(), request.requestDigest()))
-                    throw replayConflict(existing.orElseThrow());
-                return new Admission.Replay(existing.orElseThrow().getId());
-            }
-        }
-        if (request.eventId() != null) {
-            var prior = reviews.findByWorkspaceIdAndEventId(request.workspaceId(), request.eventId());
-            if (prior.isPresent())
-                return new Admission.Replay(prior.orElseThrow().getId());
-        }
-        if (request.origin() == ReviewOrigin.REQUEST && request.kind() == ReviewKind.ITEM)
-            policy.refusal(workspace, request.itemId(), Objects.requireNonNull(request.requestedById()))
-                    .ifPresent(reason -> {
-                        throw new ReviewRequestRefused(reason);
-                    });
-        if (!workspace.active())
-            throw new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.WORKSPACE_INACTIVE, "The workspace is inactive.");
-        gate.refusal(workspace, request.origin()).ifPresent(skip -> {
-            throw new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.ITEM_INELIGIBLE, skip.reason(), skip.eventReason());
-        });
-        if (request.origin() == ReviewOrigin.TRIAL
-                && reviews.countByWorkspaceIdAndOriginAndStatusIn(
-                                request.workspaceId(),
-                                ReviewOrigin.TRIAL,
-                                List.of(ReviewStatus.QUEUED, ReviewStatus.RUNNING))
-                        >= trials.maxActive())
-            throw new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.TRIAL_ACTIVE,
-                    "Another trial is still running in this workspace. Try again when it ends.");
-        if (request.kind() == ReviewKind.SCAN) {
-            var active = reviews.findFirstByWorkspaceIdAndKindAndStatusInOrderByCreatedAtAsc(
-                    request.workspaceId(), ReviewKind.SCAN, List.of(ReviewStatus.QUEUED, ReviewStatus.RUNNING));
-            if (active.isPresent()) {
-                var refusal = new ReviewRequestRejected(
-                        ReviewRequestRejected.Reason.SCAN_ACTIVE, "A scan is already active in this workspace.");
-                refusal.getBody()
-                        .setProperty("activeScanId", active.orElseThrow().getId());
-                throw refusal;
-            }
-        }
-        if (!budget.canRequest(request.workspaceId(), request.kind(), request.budgetUsd()))
-            throw ReviewRequestRejected.budgetUnavailable();
-        return new Admission.Admitted(items.require(request.workspaceId(), request.itemId()));
-    }
-
     private ItemSnapshot pin(ReviewRequest request, ItemRef ref) {
         // An event review keeps the occasion's own version, state and roles once its source retained them. Every
         // decision after the pin still reads the workspace, its members and their choices as they are now.
@@ -213,137 +124,20 @@ public class ReviewServiceImpl implements ReviewService {
         }
     }
 
-    /**
-     * What an item review reads with no transaction before its locked step: the currentness of the item's open results
-     * that an event review compares, the sources that every practice the gate selects reads, and their fingerprints. A
-     * practice that the item's results or its readiness leave out still counts, because the locked step can queue it.
-     */
-    private record EarlyRead(
-            Map<UUID, Currentness> currentness, Set<SourceKind> kinds, Map<SourceKind, String> fingerprints) {
-        static final EarlyRead NONE = new EarlyRead(Map.of(), Set.of(), Map.of());
-    }
-
-    private EarlyRead earlyRead(ReviewRequest request, ItemRef ref, ItemSnapshot pinned) {
-        if (request.kind() != ReviewKind.ITEM) return EarlyRead.NONE;
-        var currentness = currentness(request, pinned);
-        var kinds = transactions.read(() -> planner.readKinds(
+    private ReviewSourceReads.EarlyRead earlyRead(ReviewRequest request, ItemRef ref, ItemSnapshot pinned) {
+        if (request.kind() != ReviewKind.ITEM) return ReviewSourceReads.EarlyRead.NONE;
+        var currentness = readinessEdge.currentness(request, pinned);
+        var kinds = transactions.read(() -> sourceReads.readKinds(
                 pinned,
                 planner.plan(request, workspace(request), ref, pinned, currentness).gated().stream()
                         .map(practice -> planner.version(request, practice))
                         .toList()));
-        return new EarlyRead(currentness, kinds, items.fingerprints(pinned.item(), kinds, occasion(request)));
-    }
-
-    /**
-     * The currentness of the item's open results, for an event review whose occasions a continuing result can skip. A
-     * result that the locked step finds but this read did not judge is not current, so its practice is measured.
-     */
-    private Map<UUID, Currentness> currentness(ReviewRequest request, ItemSnapshot pinned) {
-        if (request.origin() != ReviewOrigin.EVENT
-                || request.occasions().stream()
-                        .anyMatch(name -> itemOptions.occasion(pinned.item().kind(), name) == OccasionKind.MILESTONE))
-            return Map.of();
-        var claims = results.findByWorkspaceIdAndItemIdAndEndedAtIsNull(request.workspaceId(), request.itemId());
-        return freshness.states(request.workspaceId(), claims);
-    }
-
-    /**
-     * The fingerprints of the sources that the locked plan queues, from the early read. A practice that came to read
-     * another source after the early read refuses the request until it is asked again.
-     */
-    private static Map<SourceKind, String> fingerprints(Set<SourceKind> kinds, EarlyRead early) {
-        if (!early.kinds().containsAll(kinds))
-            throw new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.PRACTICES_CHANGED,
-                    "The practices changed while the review was requested. Ask for the review again.");
-        return early.fingerprints();
+        return new ReviewSourceReads.EarlyRead(
+                currentness, kinds, items.fingerprints(pinned.item(), kinds, occasion(request)));
     }
 
     static @Nullable UUID occasion(ReviewRequest request) {
         return request.origin() == ReviewOrigin.EVENT ? request.eventId() : null;
-    }
-
-    private UUID recordReview(
-            ReviewRequest request,
-            ReviewWorkspace workspace,
-            ItemSnapshot pinned,
-            ReviewPlanner.Plan plan,
-            EarlyRead early) {
-        var now = clock.instant();
-        var ordered = plan.occurredAt() != null ? plan.occurredAt() : now;
-        var planned = plan.planned();
-        JsonNode queuedSources = null;
-        if (request.kind() == ReviewKind.ITEM) {
-            var kinds = planner.queuedKinds(pinned, planned);
-            queuedSources = planner.queuedSources(kinds, fingerprints(kinds, early));
-        }
-        var review = reviews.save(Review.builder()
-                .id(UUID.randomUUID())
-                .workspaceId(request.workspaceId())
-                .itemId(request.itemId())
-                .kind(request.kind())
-                .itemVersion(pinned.version().value())
-                .baseVersion(pinned.version().baseVersion())
-                .origin(request.origin())
-                .eventId(request.eventId())
-                .batchId(request.batchId())
-                .requestedById(request.requestedById())
-                .budgetUsd(request.budgetUsd())
-                .requestKey(request.requestKey())
-                .requestDigest(request.requestDigest())
-                .rolloutRevision(workspace.reviewSettings().rolloutRevision())
-                .orderedAt(ordered)
-                .createdAt(now)
-                .checks(plan.checks())
-                .build());
-        for (var selected : planned) {
-            var practice = selected.practice();
-            var version = selected.version();
-            var assignment = assignments.save(ReviewPractice.builder()
-                    .reviewId(review.getId())
-                    .workspaceId(request.workspaceId())
-                    .practiceId(practice.getId())
-                    .practiceVersionId(version.getId())
-                    .captureDecision(selected.reason() == null ? queuedSources : null)
-                    .method(plan.method())
-                    .build());
-            if (request.kind() == ReviewKind.ITEM) {
-                var roles = selected.roles();
-                var detail = json.createObjectNode();
-                if (roles.size() == 1) detail.put("developerId", roles.getFirst());
-                else detail.putNull("developerId");
-                var reason = selected.reason();
-                memberships.save(ReviewItem.builder()
-                        .workspaceId(request.workspaceId())
-                        .reviewId(review.getId())
-                        .practiceId(practice.getId())
-                        .itemId(request.itemId())
-                        .itemVersion(pinned.version().value())
-                        .state(reason == null ? ReviewItemState.LISTED : ReviewItemState.WITHHELD)
-                        .reason(reason)
-                        .detail(detail)
-                        .build());
-                assignment.setItemsListed(1);
-                assignment.setListingComplete(true);
-                if (reason != null) assignment.withhold(reason);
-            }
-        }
-        if (request.kind() == ReviewKind.ITEM
-                && memberships
-                        .findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(
-                                request.workspaceId(), review.getId())
-                        .stream()
-                        .allMatch(m -> m.getState() == ReviewItemState.WITHHELD)) {
-            closure.close(review, ReviewStatus.PARTIAL, ReviewStopReason.READINESS_REFUSED, now);
-        } else events.publishEvent(new ReviewRequested(review.getId(), request.workspaceId()));
-        return review.getId();
-    }
-
-    private static ReviewRequestRejected replayConflict(Review prior) {
-        var refusal = new ReviewRequestRejected(
-                ReviewRequestRejected.Reason.REQUEST_CONFLICT, "This request key has a different body.");
-        if (prior.getKind() == ReviewKind.SCAN) refusal.getBody().setProperty("scanId", prior.getId());
-        return refusal;
     }
 
     @Override
@@ -379,88 +173,13 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional
     public void complete(long workspaceId, UUID reviewId, ReviewCompletion completion) {
-        var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
-        if (review.getStatus().isTerminal()) return;
-        if (!completion.status().isTerminal())
-            throw new IllegalArgumentException("Completion requires a terminal status.");
-        if (planner.hasUnsettledInvocation(workspaceId, reviewId))
-            throw new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.REQUEST_CONFLICT, "The active invocation must settle before closure.");
-        boolean incomplete = (review.getKind() == ReviewKind.SCAN
-                        && (review.getInventoryReceipt() == null
-                                || !review.getInventoryReceipt()
-                                        .path("complete")
-                                        .asBoolean()
-                                || assignments
-                                        .findByWorkspaceIdAndReviewIdOrderByPracticeIdAsc(workspaceId, reviewId)
-                                        .stream()
-                                        .anyMatch(p -> !Boolean.TRUE.equals(p.getListingComplete()))))
-                || memberships.existsByWorkspaceIdAndReviewIdAndStateIn(
-                        workspaceId,
-                        reviewId,
-                        List.of(ReviewItemState.WITHHELD, ReviewItemState.LISTED, ReviewItemState.STAGED));
-        boolean cancellationRequested = review.isCancelRequested();
-        var status = cancellationRequested
-                ? ReviewStatus.CANCELLED
-                : completion.status() == ReviewStatus.COMPLETE && incomplete
-                        ? ReviewStatus.PARTIAL
-                        : completion.status();
-        // A cancellation that nobody requested keeps the runtime's recorded reason.
-        var reason = status == ReviewStatus.COMPLETE
-                ? null
-                : status == ReviewStatus.CANCELLED
-                        ? cancellationRequested || completion.reason() == null
-                                ? ReviewStopReason.CANCELLED
-                                : completion.reason()
-                        : completion.reason() == null ? unmeasuredReason(review) : completion.reason();
-        closure.close(review, status, reason, completion.completedAt());
+        termination.complete(workspaceId, reviewId, completion);
     }
 
     @Override
     @Transactional
     public boolean cancel(long workspaceId, UUID reviewId) {
-        var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
-        if (review.getStatus().isTerminal()) return false;
-        if (!review.requestCancel()) return true;
-        events.publishEvent(new ReviewCancellationRequested(reviewId, workspaceId));
-        if (!planner.hasUnsettledInvocation(workspaceId, reviewId))
-            closure.close(review, ReviewStatus.CANCELLED, ReviewStopReason.CANCELLED, clock.instant());
-        return true;
-    }
-
-    /**
-     * Why a review whose run ended without a reason of its own left practices unmeasured. When Hephaestus withheld
-     * each of them on purpose ({@link ReviewWithholdings#DELIBERATE}), the review was not ready, as selection records
-     * when it withholds every practice: {@code REPLACED} when a newer review replaced every one of them,
-     * {@code SOURCES_MOVED} when the sources moved for every one of them and not every one was replaced,
-     * {@code STALE_ROLLOUT_REVISION} when the review settings changed for every one of them, and
-     * {@code READINESS_REFUSED} otherwise. A practice that the run left open, or one that a run or admission withheld
-     * for a fault, is execution that did not finish. Measured practices count neither way.
-     */
-    private ReviewStopReason unmeasuredReason(Review review) {
-        if (review.getKind() != ReviewKind.ITEM) return ReviewStopReason.EXECUTION_INCOMPLETE;
-        var reasons = new HashSet<@Nullable String>();
-        for (var member : memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(
-                review.getWorkspaceId(), review.getId())) {
-            if (member.getState() == ReviewItemState.LISTED || member.getState() == ReviewItemState.STAGED)
-                return ReviewStopReason.EXECUTION_INCOMPLETE;
-            if (member.getState() == ReviewItemState.WITHHELD) reasons.add(member.getReason());
-        }
-        return unmeasuredReason(reasons);
-    }
-
-    /** {@link #unmeasuredReason(Review)} for the reasons of the review's withheld memberships. */
-    static ReviewStopReason unmeasuredReason(Set<@Nullable String> withheld) {
-        if (withheld.isEmpty()
-                || !withheld.stream()
-                        .allMatch(reason -> reason != null && ReviewWithholdings.DELIBERATE.contains(reason)))
-            return ReviewStopReason.EXECUTION_INCOMPLETE;
-        if (withheld.equals(Set.of(ReviewStopReason.REPLACED.name()))) return ReviewStopReason.REPLACED;
-        if (Set.of(ReviewStopReason.REPLACED.name(), ReviewStopReason.SOURCES_MOVED.name())
-                .containsAll(withheld)) return ReviewStopReason.SOURCES_MOVED;
-        if (withheld.equals(Set.of(ReviewWithholdings.STALE_ROLLOUT_REVISION)))
-            return ReviewStopReason.STALE_ROLLOUT_REVISION;
-        return ReviewStopReason.READINESS_REFUSED;
+        return termination.cancel(workspaceId, reviewId);
     }
 
     private static void validate(ReviewRequest r) {

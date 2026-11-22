@@ -168,7 +168,10 @@ Its practices are the union of what the window's events select, together with ev
 Selection never takes a practice whose stored version declares an event or About role that the item kind does not offer.
 It also never takes a practice with a read that the current source catalog cannot capture for the item kind (`UncapturableReads`).
 Capture would withhold such a practice on every review and leave each review Partial.
-`ReviewPlanner` then removes practices that do not run now:
+
+`ReviewPlanner` then removes practices that do not run now, in four steps.
+`ReviewReadinessEdge` does steps 1 to 3.
+`ReviewPlanner` does step 4.
 
 1. Occasions that all continue leave out a practice in feedback mode Off with a milestone or outcome event. Its feedback reaches no one, so it waits for that moment. A practice that the pinned version still owes, for any carried reason, stays. Thus, it finishes that version but never follows a newer head. A practice in Off with no such event keeps its continuing occasions. If nothing is left, the event is withheld with `FEEDBACK_MODE_OFF`. An earlier review that still measures one of them holds the window first, as in step 2.
 2. A practice that a queued or running review of the item still measures holds the whole window. The events wait with `REVIEW_IN_PROGRESS` and are offered again one window later. An event review that has not started holds the window whatever it lists. Thus, its claim replaces it while the newer occasion waits, and no sandbox starts on moved work. Merged, closed and a submitted review do not wait for it, because they cannot replace it.
