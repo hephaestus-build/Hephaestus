@@ -34,7 +34,7 @@ class HistoryCustodyQueryAdapterTest extends BaseUnitTest {
     private final JsonMapper mapper = new JsonMapper();
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final HistoryCustodyQueryAdapter adapter =
-            new HistoryCustodyQueryAdapter(mock(EvidenceFolderPersonDataCatalog.class), jobs, mapper);
+            new HistoryCustodyQueryAdapter(mock(EvidenceReceipts.class), jobs, mapper);
     private final ReviewJob job = RuntimeReviewTestData.job();
 
     @BeforeEach

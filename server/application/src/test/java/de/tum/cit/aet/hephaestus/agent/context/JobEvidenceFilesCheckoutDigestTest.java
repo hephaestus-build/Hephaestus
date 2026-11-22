@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.agent.context;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -78,6 +80,8 @@ class JobEvidenceFilesCheckoutDigestTest extends BaseUnitTest {
                 mock(ReviewJobRepository.class),
                 Clock.systemUTC(),
                 mock(EvidenceFolderPersonDataCatalog.class),
+                mock(EvidenceReceipts.class),
+                mock(EvidenceCaptures.class),
                 mock(AttemptInputs.class));
     }
 

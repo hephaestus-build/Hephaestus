@@ -20,7 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @RequiredArgsConstructor
 public class HistoryCustodyQueryAdapter implements HistoryCustodyQuery {
-    private final EvidenceFolderPersonDataCatalog copies;
+    private final EvidenceReceipts copies;
     private final ReviewJobRepository jobs;
     private final ObjectMapper mapper;
 

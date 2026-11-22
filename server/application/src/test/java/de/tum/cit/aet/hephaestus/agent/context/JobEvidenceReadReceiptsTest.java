@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -56,8 +58,8 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
 
     private JobEvidenceFiles files() {
         AutoCloseable released = () -> {};
-        var copies = mock(
-                EvidenceFolderPersonDataCatalog.class,
+        var captures = mock(
+                EvidenceCaptures.class,
                 invocation -> invocation.getMethod().getName().equals("finishCapture")
                         ? released
                         : Answers.RETURNS_DEFAULTS.answer(invocation));
@@ -65,7 +67,9 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
                 new FabricLayout(root.toString()),
                 mock(ReviewJobRepository.class),
                 Clock.systemUTC(),
-                copies,
+                mock(EvidenceFolderPersonDataCatalog.class),
+                mock(EvidenceReceipts.class),
+                captures,
                 mock(AttemptInputs.class));
     }
 

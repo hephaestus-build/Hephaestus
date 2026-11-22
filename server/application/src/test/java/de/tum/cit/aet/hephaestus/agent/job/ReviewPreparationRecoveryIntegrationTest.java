@@ -6,7 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
@@ -281,7 +283,13 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 """, job.getWorkspaceId(), job.getId(), erased ? "ERASED" : "READY");
         var layout = new FabricLayout(root.toString());
         var files = new JobEvidenceFiles(
-                layout, jobs, Clock.systemUTC(), context.getBean(EvidenceFolderPersonDataCatalog.class), inputs);
+                layout,
+                jobs,
+                Clock.systemUTC(),
+                context.getBean(EvidenceFolderPersonDataCatalog.class),
+                context.getBean(EvidenceReceipts.class),
+                context.getBean(EvidenceCaptures.class),
+                inputs);
         @SuppressWarnings("unchecked")
         ObjectProvider<SandboxResultListener> listeners = mock(ObjectProvider.class);
         when(listeners.orderedStream()).thenAnswer(invocation -> Stream.of(files));
@@ -350,8 +358,7 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 "UPDATE person_evidence_copy SET state='ERASED',payload='{}'::jsonb WHERE id=? AND workspace_id=?",
                 copy,
                 job.getWorkspaceId());
-        assertThatThrownBy(() -> files.resume(job))
-                .isInstanceOf(EvidenceFolderPersonDataCatalog.CopyUnavailableException.class);
+        assertThatThrownBy(() -> files.resume(job)).isInstanceOf(EvidenceReceipts.CopyUnavailableException.class);
     }
 
     private ReviewJob running(String slug) {

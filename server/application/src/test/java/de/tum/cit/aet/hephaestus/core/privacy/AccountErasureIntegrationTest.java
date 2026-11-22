@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityFact;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
@@ -1078,13 +1080,14 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         link(targetAccount, scm, "42", null);
         link(otherAccount, scm, "84", null);
         var recorder = new ExactPersonDataCopyRecorder();
+        var evidenceLayout = new FabricLayout(evidenceRoot.toString());
+        var workerReceipts = new EvidenceReceipts(evidenceLayout, jdbc, mapper, copyFence);
+        var workerCaptures = new EvidenceCaptures(evidenceLayout, jdbc, mapper, recorder, copyFence, workerReceipts);
         var worker = new EvidenceFolderPersonDataCatalog(
-                new FabricLayout(evidenceRoot.toString()),
+                evidenceLayout,
                 jdbc,
                 namedJdbc,
                 mapper,
-                recorder,
-                copyFence,
                 new DefaultListableBeanFactory().getBeanProvider(ReviewAttemptCustody.class),
                 new DefaultListableBeanFactory().getBeanProvider(AgentSandboxes.class),
                 new DefaultListableBeanFactory().getBeanProvider(SandboxGatewaySessions.class),
@@ -1136,8 +1139,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             targetDerived.add(seedDerivedConversation(workspace, shared.getId(), target, index == 1));
             otherDerived.add(seedDerivedConversation(workspace, unrelated.getId(), other));
             copiedFeedback.add(seedFeedbackCopy(targetDerived.getLast(), otherDerived.getLast()));
-            targetFolders.add(captureMountedEvidence(worker, recorder, targetDerived.getLast(), target));
-            otherFolders.add(captureMountedEvidence(worker, recorder, otherDerived.getLast(), other));
+            targetFolders.add(captureMountedEvidence(
+                    worker, workerReceipts, workerCaptures, recorder, targetDerived.getLast(), target));
+            otherFolders.add(captureMountedEvidence(
+                    worker, workerReceipts, workerCaptures, recorder, otherDerived.getLast(), other));
         }
         Stream.concat(targetDerived.stream(), otherDerived.stream()).forEach(this::keepCompositionInputs);
         for (var derived : targetDerived) {
@@ -1994,6 +1999,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
     private Path captureMountedEvidence(
             EvidenceFolderPersonDataCatalog worker,
+            EvidenceReceipts receipts,
+            EvidenceCaptures captures,
             PersonDataCopyRecorder recorder,
             DerivedConversation derived,
             User owner)
@@ -2009,6 +2016,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 agentJobRepository,
                 Clock.systemUTC(),
                 worker,
+                receipts,
+                captures,
                 attemptInputs);
         files.beginPersonCapture(job);
         recorder.recordIdentity(new PersonCopyIdentity(

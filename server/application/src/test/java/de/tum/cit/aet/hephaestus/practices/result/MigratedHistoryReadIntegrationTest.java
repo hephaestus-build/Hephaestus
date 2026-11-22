@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
@@ -73,7 +73,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
     JsonMapper json;
 
     @Autowired
-    EvidenceFolderPersonDataCatalog copies;
+    EvidenceReceipts copies;
 
     @Autowired
     ResultSourceAuthorization authorization;

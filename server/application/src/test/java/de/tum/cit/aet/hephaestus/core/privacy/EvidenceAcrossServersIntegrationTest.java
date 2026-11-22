@@ -7,8 +7,10 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog.ErasedFolders;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptInputs;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceFileReads;
@@ -696,19 +698,16 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                     workspace));
             var layout = new FabricLayout(args[0]);
             var recorder = new ExactPersonDataCopyRecorder();
-            var beans = new DefaultListableBeanFactory();
-            var catalog = new EvidenceFolderPersonDataCatalog(
+            var objectMapper = new ObjectMapper();
+            var copyFence = new PostgresPersonDataCopyFence(source, jdbc);
+            var captures = new EvidenceCaptures(
                     layout,
                     jdbc,
-                    new NamedParameterJdbcTemplate(jdbc),
-                    new ObjectMapper(),
+                    objectMapper,
                     recorder,
-                    new PostgresPersonDataCopyFence(source, jdbc),
-                    beans.getBeanProvider(ReviewAttemptCustody.class),
-                    beans.getBeanProvider(AgentSandboxes.class),
-                    beans.getBeanProvider(SandboxGatewaySessions.class),
-                    beans.getBeanProvider(ReviewJobLifecycleService.class));
-            catalog.beginCapture(job);
+                    copyFence,
+                    new EvidenceReceipts(layout, jdbc, objectMapper, copyFence));
+            captures.beginCapture(job);
             recorder.recordIdentity(new PersonCopyIdentity("GITLAB", args[4], "42", null));
             var copy = layout.spool().directory(workspace);
             Files.writeString(copy.path().resolve("private.java"), SOURCE);
@@ -815,13 +814,13 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
             snapshots = new GitTreeSnapshots(git, properties, locks, layout, transports, fence);
             // The server's sync has mirrored the monitored repository.
             git.ensureRepository(key, upstream.toUri().toString(), null);
+            var evidenceReceipts = new EvidenceReceipts(layout, jdbc, mapper, fence);
+            var captures = new EvidenceCaptures(layout, jdbc, mapper, recorder, fence, evidenceReceipts);
             catalog = new EvidenceFolderPersonDataCatalog(
                     new FabricLayout(root.toString()),
                     jdbc,
                     namedJdbc,
                     mapper,
-                    recorder,
-                    fence,
                     new DefaultListableBeanFactory().getBeanProvider(ReviewAttemptCustody.class),
                     new DefaultListableBeanFactory().getBeanProvider(AgentSandboxes.class),
                     new DefaultListableBeanFactory().getBeanProvider(SandboxGatewaySessions.class),
@@ -831,13 +830,16 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                     jobs,
                     Clock.systemUTC(),
                     catalog,
+                    evidenceReceipts,
+                    captures,
                     new AttemptInputs(
                             inputRows,
                             checkouts.apply(new ScmCapturedCheckouts(
                                     git, snapshots, mock(ReviewRepositoryPreparer.class), new SimpleMeterRegistry())),
                             transactions));
             reads = new EvidenceFileReads(files, new FabricLayout(root.toString()), jobs);
-            receipts = new AttemptCopyReceipts(catalog, files, new FabricLayout(root.toString()), jobs);
+            receipts =
+                    new AttemptCopyReceipts(evidenceReceipts, captures, files, new FabricLayout(root.toString()), jobs);
         }
 
         /** Captures the attempt as a review does: the checkout with its recorded refs, and an API record. */

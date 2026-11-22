@@ -8,7 +8,7 @@ import static de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles.TRACE_BYT
 import static de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles.TRACE_RETENTION;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
-import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
@@ -64,14 +64,13 @@ final class AttemptTranscripts {
     private final FabricLayout layout;
     private final ReviewJobRepository jobs;
     private final Clock clock;
-    private final EvidenceFolderPersonDataCatalog personCopies;
+    private final EvidenceReceipts receipts;
 
-    AttemptTranscripts(
-            FabricLayout layout, ReviewJobRepository jobs, Clock clock, EvidenceFolderPersonDataCatalog personCopies) {
+    AttemptTranscripts(FabricLayout layout, ReviewJobRepository jobs, Clock clock, EvidenceReceipts receipts) {
         this.layout = layout;
         this.jobs = jobs;
         this.clock = clock;
-        this.personCopies = personCopies;
+        this.receipts = receipts;
     }
 
     /**
@@ -154,9 +153,9 @@ final class AttemptTranscripts {
                     layout.jobsRoot(), launched.workspaceId(), launched.jobId(), launched.attempt(), launched.runId());
             Path trace = root.resolveSibling(root.getFileName() + TRACE_SUFFIX);
             writeTranscript(owned.get(), () -> {
-                var custody = personCopies.traceCustody(launched.jobId(), launched.workspaceId(), launched.attempt());
-                if (custody == EvidenceFolderPersonDataCatalog.TraceCustody.NOT_HELD
-                        || Files.exists(trace, LinkOption.NOFOLLOW_LINKS)) return;
+                var custody = receipts.traceCustody(launched.jobId(), launched.workspaceId(), launched.attempt());
+                if (custody == EvidenceReceipts.TraceCustody.NOT_HELD || Files.exists(trace, LinkOption.NOFOLLOW_LINKS))
+                    return;
                 Files.createDirectories(root.getParent());
                 Path staging = Files.createTempDirectory(root.getParent(), "." + trace.getFileName() + ".preparing-");
                 try {
@@ -165,9 +164,7 @@ final class AttemptTranscripts {
                     var occasionExpiry = launched.copiesExpireAt();
                     boolean occasionKept = occasionExpiry == null || occasionExpiry.isAfter(now);
                     boolean withinBudget = boundedTraces(traces);
-                    boolean raw = custody == EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED
-                            && withinBudget
-                            && occasionKept;
+                    boolean raw = custody == EvidenceReceipts.TraceCustody.INDEXED && withinBudget && occasionKept;
                     // The sessions' words may repeat the occasion's record, so they go when it expires. The summary
                     // that replaces them names no person and copies none of those words.
                     if (raw && occasionExpiry != null && occasionExpiry.isBefore(expiresAt)) expiresAt = occasionExpiry;
@@ -220,7 +217,7 @@ final class AttemptTranscripts {
 
     /** Copy admission precedes the local folder lock, as it does during restoration and erasure. */
     private void writeTranscript(ReviewJob job, EvidenceFolderLease.Removal write) {
-        personCopies.withLiveAttempt(job, () -> {
+        receipts.withLiveAttempt(job, () -> {
             try {
                 return EvidenceFolderLease.removeAsOwner(layout.root(), job.getWorkspaceId(), job.getId(), write);
             } catch (IOException failure) {

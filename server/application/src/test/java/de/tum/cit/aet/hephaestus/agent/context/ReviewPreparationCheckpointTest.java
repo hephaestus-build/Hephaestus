@@ -7,7 +7,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceCaptures;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceReceipts;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
@@ -42,7 +44,7 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
     private static final byte[] FROZEN = "Frozen inputs".getBytes(StandardCharsets.UTF_8);
     private final JsonMapper mapper = new JsonMapper();
     private final AttemptInputs inputs = mock(AttemptInputs.class);
-    private final EvidenceFolderPersonDataCatalog copies = mock(EvidenceFolderPersonDataCatalog.class);
+    private final EvidenceReceipts copies = mock(EvidenceReceipts.class);
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
 
     @TempDir
@@ -58,7 +60,14 @@ class ReviewPreparationCheckpointTest extends BaseUnitTest {
     }
 
     private JobEvidenceFiles files() {
-        return new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), copies, inputs);
+        return new JobEvidenceFiles(
+                new FabricLayout(root.toString()),
+                jobs,
+                Clock.systemUTC(),
+                mock(EvidenceFolderPersonDataCatalog.class),
+                copies,
+                mock(EvidenceCaptures.class),
+                inputs);
     }
 
     private void publish(ReviewJob job) {
