@@ -36,15 +36,15 @@ class ReviewUnmeasuredReasonTest {
 
     @Test
     void shouldEndAsReplacedWhenTheWorkChangedForEveryWithheldPractice() {
-        assertThat(ReviewServiceImpl.unmeasuredReason(Set.of(ReviewStopReason.REPLACED.name())))
+        assertThat(ReviewTermination.unmeasuredReason(Set.of(ReviewStopReason.REPLACED.name())))
                 .isEqualTo(ReviewStopReason.REPLACED);
     }
 
     @Test
     void shouldEndAsSourcesMovedWhenTheSourcesMovedForEveryWithheldPracticeAndNotEveryOneWasReplaced() {
-        assertThat(ReviewServiceImpl.unmeasuredReason(Set.of(ReviewStopReason.SOURCES_MOVED.name())))
+        assertThat(ReviewTermination.unmeasuredReason(Set.of(ReviewStopReason.SOURCES_MOVED.name())))
                 .isEqualTo(ReviewStopReason.SOURCES_MOVED);
-        assertThat(ReviewServiceImpl.unmeasuredReason(
+        assertThat(ReviewTermination.unmeasuredReason(
                         Set.of(ReviewStopReason.REPLACED.name(), ReviewStopReason.SOURCES_MOVED.name())))
                 .isEqualTo(ReviewStopReason.SOURCES_MOVED);
     }
@@ -52,14 +52,14 @@ class ReviewUnmeasuredReasonTest {
     /** A practice that never ran is owed, not withheld on purpose: its review's execution did not finish. */
     @Test
     void shouldEndAsExecutionIncompleteWhenAPracticeNeverRan() {
-        assertThat(ReviewServiceImpl.unmeasuredReason(Set.of(ReviewStopReason.NOT_RUN.name())))
+        assertThat(ReviewTermination.unmeasuredReason(Set.of(ReviewStopReason.NOT_RUN.name())))
                 .isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE);
         assertThat(ReviewWithholdings.CARRIED).contains(ReviewStopReason.NOT_RUN.name());
     }
 
     @Test
     void shouldEndAsStaleRolloutWhenTheReviewSettingsChangedForEveryWithheldPractice() {
-        assertThat(ReviewServiceImpl.unmeasuredReason(Set.of(ReviewWithholdings.STALE_ROLLOUT_REVISION)))
+        assertThat(ReviewTermination.unmeasuredReason(Set.of(ReviewWithholdings.STALE_ROLLOUT_REVISION)))
                 .isEqualTo(ReviewStopReason.STALE_ROLLOUT_REVISION);
     }
 
@@ -69,23 +69,23 @@ class ReviewUnmeasuredReasonTest {
                 .filteredOn(reason -> !reason.equals(ReviewStopReason.REPLACED.name())
                         && !reason.equals(ReviewStopReason.SOURCES_MOVED.name())
                         && !reason.equals(ReviewWithholdings.STALE_ROLLOUT_REVISION))
-                .allSatisfy(reason -> assertThat(ReviewServiceImpl.unmeasuredReason(Set.of(reason)))
+                .allSatisfy(reason -> assertThat(ReviewTermination.unmeasuredReason(Set.of(reason)))
                         .as(reason)
                         .isEqualTo(ReviewStopReason.READINESS_REFUSED));
     }
 
     @Test
     void shouldEndAsNotReadyForAMixOfASelectionReasonACaptureRefusalAndAReplacement() {
-        assertThat(ReviewServiceImpl.unmeasuredReason(
+        assertThat(ReviewTermination.unmeasuredReason(
                         Set.of(ReviewWithholdings.ROLE_UNAVAILABLE, ReviewStopReason.READINESS_REFUSED.name())))
                 .isEqualTo(ReviewStopReason.READINESS_REFUSED);
-        assertThat(ReviewServiceImpl.unmeasuredReason(
+        assertThat(ReviewTermination.unmeasuredReason(
                         Set.of(ReviewStopReason.REPLACED.name(), ReviewWithholdings.SOURCE_CONTRACT_UNSUPPORTED)))
                 .isEqualTo(ReviewStopReason.READINESS_REFUSED);
-        assertThat(ReviewServiceImpl.unmeasuredReason(
+        assertThat(ReviewTermination.unmeasuredReason(
                         Set.of(ReviewWithholdings.STALE_ROLLOUT_REVISION, ReviewWithholdings.WORKSPACE_INACTIVE)))
                 .isEqualTo(ReviewStopReason.READINESS_REFUSED);
-        assertThat(ReviewServiceImpl.unmeasuredReason(
+        assertThat(ReviewTermination.unmeasuredReason(
                         Set.of(ReviewStopReason.REPLACED.name(), ReviewWithholdings.STALE_ROLLOUT_REVISION)))
                 .isEqualTo(ReviewStopReason.READINESS_REFUSED);
     }
@@ -93,9 +93,9 @@ class ReviewUnmeasuredReasonTest {
     @ParameterizedTest
     @MethodSource("failures")
     void shouldStayIncompleteWhenARunOrAdmissionWithheldAPractice(String failure) {
-        assertThat(ReviewServiceImpl.unmeasuredReason(Set.of(failure)))
+        assertThat(ReviewTermination.unmeasuredReason(Set.of(failure)))
                 .isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE);
-        assertThat(ReviewServiceImpl.unmeasuredReason(Set.of(failure, ReviewWithholdings.ROLE_UNAVAILABLE)))
+        assertThat(ReviewTermination.unmeasuredReason(Set.of(failure, ReviewWithholdings.ROLE_UNAVAILABLE)))
                 .isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE);
     }
 
@@ -103,7 +103,7 @@ class ReviewUnmeasuredReasonTest {
     void shouldStayIncompleteWithoutAWithheldReason() {
         Set<@Nullable String> unknown = new HashSet<>();
         unknown.add(null);
-        assertThat(ReviewServiceImpl.unmeasuredReason(unknown)).isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE);
-        assertThat(ReviewServiceImpl.unmeasuredReason(Set.of())).isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE);
+        assertThat(ReviewTermination.unmeasuredReason(unknown)).isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE);
+        assertThat(ReviewTermination.unmeasuredReason(Set.of())).isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE);
     }
 }
