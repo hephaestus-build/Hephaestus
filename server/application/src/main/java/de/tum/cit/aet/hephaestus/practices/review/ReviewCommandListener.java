@@ -70,8 +70,8 @@ public class ReviewCommandListener {
                     command.itemId());
             if (outcome.status() != ReviewRequestStatus.REFUSED) return;
             // A comment delivered again replays its review before the policy. Its review can still commit between the
-            // replay check and the policy check of the unlocked read: then the policy finds it, and that review
-            // answers.
+            // replay check and the policy check of the admission before the workspace lock: then the policy finds it,
+            // and that review answers.
             if (reviews.findByWorkspaceIdAndRequestKey(command.workspaceId(), key)
                     .isPresent()) return;
             refusal = refused(outcome.reason(), command.kind());

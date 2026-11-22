@@ -43,14 +43,14 @@ class ReviewRecorder {
             ReviewWorkspace workspace,
             ItemSnapshot pinned,
             ReviewPlanner.Plan plan,
-            ReviewSourceReads.EarlyRead early) {
+            ReviewSourceReads.UnlockedRead unlocked) {
         var now = clock.instant();
         var ordered = plan.occurredAt() != null ? plan.occurredAt() : now;
         var planned = plan.planned();
         JsonNode queuedSources = null;
         if (request.kind() == ReviewKind.ITEM) {
             var kinds = sourceReads.queuedKinds(pinned, planned);
-            queuedSources = sourceReads.queuedSources(kinds, ReviewSourceReads.fingerprints(kinds, early));
+            queuedSources = sourceReads.queuedSources(kinds, ReviewSourceReads.fingerprints(kinds, unlocked));
         }
         var review = reviews.save(Review.builder()
                 .id(UUID.randomUUID())
