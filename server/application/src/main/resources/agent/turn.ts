@@ -53,7 +53,10 @@ import type { KindRunner, RunContext } from "./driver.ts";
 import { untilGatewayTakes } from "./gateway-connection.ts";
 import {
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
+	outsideWorkspace,
+	redactCredentials,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
+	TOOL_SPAWN_HOOK,
 } from "./pi-agent-sandbox.ts";
 import { errorText } from "./pi-error-text.ts";
 import {
@@ -376,7 +379,8 @@ export function httpTurnApi(
 								...endpoint.headers,
 								...(body === undefined ? {} : { "content-type": "application/json" }),
 							},
-							body: body === undefined ? undefined : JSON.stringify(body),
+							// What the worker stores carries no credential-shaped string, even one that a tool found.
+							body: body === undefined ? undefined : redactCredentials(JSON.stringify(body)),
 							// The run's end also ends a call in flight: nothing is left to answer for.
 							signal: AbortSignal.any(
 								[endpoint.patience, signal, timeout].filter((part) => part !== undefined),
@@ -848,15 +852,18 @@ const LOAD_DESCRIPTION =
 
 /**
  * `read`, `bash` and `load_context` in the turn's context folder. `read` and `bash` are Pi's own, so they keep the
- * contracts models know; each first prepares the folder for the turn. `bash` runs at most a minute, with no Pi session
- * variables in its environment.
+ * contracts models know; each first prepares the folder for the turn. `bash` runs at most a minute, with only the tool
+ * environment.
  */
 function contextFolderTools(
 	folder: ContextFolder,
 	signalOf: (signal: AbortSignal | undefined) => AbortSignal,
 ) {
 	const piRead = createReadToolDefinition(folder.root);
-	const piBash = createBashToolDefinition(folder.root, { exposeSessionEnvironment: false });
+	const piBash = createBashToolDefinition(folder.root, {
+		exposeSessionEnvironment: false,
+		spawnHook: TOOL_SPAWN_HOOK,
+	});
 	async function prepared(signal: AbortSignal): Promise<void> {
 		const refusal = await folder.prepare(signal);
 		// Pi treats a thrown error as the tool's failure.
@@ -870,6 +877,10 @@ function contextFolderTools(
 		execute: async (toolCallId, params, signal, onUpdate, ctx) => {
 			const bounded = signalOf(signal);
 			await prepared(bounded);
+			const outside = outsideWorkspace(params.path, folder.root, folder.root);
+			if (outside !== undefined) {
+				throw new Error(outside);
+			}
 			await folder.document(params.path, bounded);
 			return piRead.execute(toolCallId, params, bounded, onUpdate, ctx);
 		},

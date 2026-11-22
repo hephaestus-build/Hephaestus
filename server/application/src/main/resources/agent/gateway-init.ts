@@ -13,6 +13,7 @@ import {
 	recordProgramFailure,
 } from "./gateway-capabilities.ts";
 import { upload } from "./gateway-run.ts";
+import { toolEnvironment } from "./pi-agent-sandbox.ts";
 import { parseProxyClaim } from "./pi-provider.ts";
 
 /**
@@ -165,15 +166,6 @@ export async function extract(
 /** Staged for a review; a host has none. */
 const CHANGE_VIEW = "/workspace/pi-change-view.js";
 
-/** What the change view may see of this process's environment: Git's settings, and no credential. */
-export function changeViewEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-	return Object.fromEntries(
-		Object.entries(env).filter(
-			([name]) => ["PATH", "HOME", "LANG", "TMPDIR"].includes(name) || name.startsWith("GIT_"),
-		),
-	);
-}
-
 /** Runs before the loop or the tools start: see pi-change-view.ts. A failure here is a failure to capture. */
 function deriveChangeView(): void {
 	if (!existsSync(CHANGE_VIEW)) {
@@ -181,7 +173,7 @@ function deriveChangeView(): void {
 	}
 	const view = spawnSync("node", [CHANGE_VIEW], {
 		cwd: "/workspace",
-		env: changeViewEnvironment(process.env),
+		env: toolEnvironment(process.env),
 		stdio: "inherit",
 	});
 	if (view.status === null) {

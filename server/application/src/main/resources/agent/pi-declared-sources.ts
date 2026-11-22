@@ -4,6 +4,7 @@ import path from "node:path";
 
 import type { ToolCallEvent, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
 
+import { outsideWorkspace } from "./pi-agent-sandbox.ts";
 import { CHANGE_ROOT } from "./pi-change.ts";
 import { DIFF_SOURCE, TREE_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
 import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
@@ -171,12 +172,14 @@ export function declaredSourcesExtension(
 				return;
 			}
 			const target: unknown = isRecord(event.input) ? event.input.path : undefined;
-			const reason = refusedContextRead(
-				event.toolName,
-				typeof target === "string" ? target : undefined,
-				cwd,
-				sources,
-			);
+			const reason =
+				outsideWorkspace(typeof target === "string" ? target : ".", cwd, cwd) ??
+				refusedContextRead(
+					event.toolName,
+					typeof target === "string" ? target : undefined,
+					cwd,
+					sources,
+				);
 			return reason === undefined ? undefined : { block: true, reason };
 		});
 	};

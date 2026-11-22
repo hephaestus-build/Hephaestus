@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.practice.live;
 
+import de.tum.cit.aet.hephaestus.agent.practice.PracticeRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.Task;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
@@ -20,7 +21,9 @@ import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalogLoader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -29,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -273,10 +277,11 @@ final class PracticeCriteriaCaseFixtures {
 
     /**
      * The change view that the runner derives at its start ({@code writeChangeView} in {@code pi-change.js}), derived
-     * here as well, because the staged sources are checked against it before any runner starts. Needs
-     * {@code pi-change.js} beside the workspace's other files.
+     * here as well, because the staged sources are checked against it before any runner starts. The runner's modules
+     * are staged first, as a sandbox stages them, so that {@code pi-change.js} finds every module that it imports.
      */
     static void deriveChangeView(Path workspace) throws IOException, InterruptedException {
+        stageRunnerModules(workspace);
         String context = SandboxLayout.CONTEXT_PREFIX.replaceFirst("/$", "");
         String repository = SandboxLayout.REPO_MOUNT_RELATIVE.replaceFirst("/$", "");
         fixtureCommand(
@@ -288,6 +293,22 @@ final class PracticeCriteriaCaseFixtures {
                         + " const change = readChange('" + context + "');"
                         + " if (change !== null) writeChangeView('.', '" + repository + "', change,"
                         + " readDescription('" + context + "'));");
+    }
+
+    /**
+     * The runner and the modules that a sandbox stages beside it ({@link PracticeRunnerProfile}), from the classpath.
+     * {@code RunnerProfileSidecarTest} keeps that set closed under the runner's relative imports.
+     */
+    static void stageRunnerModules(Path workspace) throws IOException {
+        var profile = new PracticeRunnerProfile();
+        var modules = new ArrayList<String>();
+        modules.add(profile.runnerScript());
+        modules.addAll(profile.sidecarScripts());
+        for (String module : modules) {
+            try (var input = new ClassPathResource("agent/" + module).getInputStream()) {
+                Files.copy(input, workspace.resolve(module), StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
     }
 
     static String fixtureCommand(Path workspace, String... command) throws IOException, InterruptedException {

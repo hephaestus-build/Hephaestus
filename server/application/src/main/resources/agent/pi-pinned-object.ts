@@ -13,6 +13,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 
+import { toolEnvironment } from "./pi-agent-sandbox.ts";
 import { isCommitId, type PinnedBlob, safeRepositoryPath } from "./pi-change.ts";
 
 export type ObjectType = "commit" | "tree" | "blob";
@@ -53,7 +54,7 @@ export function repositoryObjects(repository: string): ObjectSource {
 				encoding: "buffer",
 				maxBuffer: limit,
 				timeout: OBJECT_TIMEOUT_MS,
-				env: { ...process.env, GIT_NO_REPLACE_OBJECTS: "1" },
+				env: { ...toolEnvironment(process.env), GIT_NO_REPLACE_OBJECTS: "1" },
 			});
 			return stdout;
 		} catch {
