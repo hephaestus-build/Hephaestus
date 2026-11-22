@@ -7,7 +7,8 @@ page_type: reference
 An agent run (`agent_run`) is the lease of one piece of agent work on one subject.
 A subject is the review, conversation or action that the work belongs to, such as `review:<id>`.
 Each kind's domain row points to its run and keeps its own lifecycle.
-Review jobs and conversation turns are on runs. `AgentRuns` in `agent.run` is the only writer of a run.
+Review jobs and conversation turns are on runs. Every transition that a caller makes on a run goes through `AgentRuns` in `agent.run`.
+`AgentRunReaper` is the only other writer: it takes back expired leases and ends overdue runs.
 
 ## Proactive digests
 

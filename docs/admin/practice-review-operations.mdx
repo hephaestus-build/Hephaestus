@@ -79,7 +79,7 @@ The copies are a cache. A missing mirror is cloned again on the next sync or rev
 | --- | --- | --- |
 | Capture spools and context snapshots | `.evidence-spool/<workspaceId>/` | When the capture closes. The server retries a failed removal. |
 | Repository mirrors and checkout caches | The mirror of each repository and its `hephaestus-checkouts` directory | When the workspace stops monitoring the repository, or when the cache is full |
-| Attempt inputs and input archives | `jobs/<workspaceId>/<jobId>/` | One hour after the attempt ends, and at startup |
+| Attempt inputs and input archives | `jobs/<workspaceId>/<jobId>/` | As [Data retention](./data-retention.mdx#server-disk) gives |
 
 At startup, the server removes abandoned spool copies before it admits work.
 If it cannot read a directory or remove a copy, it logs `event.name=evidence.spool.cleanup.failed` and does not start.
