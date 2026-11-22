@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRe
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewthread.dto.GitHubPullRequestReviewThreadEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import java.time.Instant;
-import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -102,10 +101,12 @@ public class GitHubPullRequestReviewThreadMessageHandler
         prProcessor.process(prDto, context);
 
         // The sender resolved or reopened the thread, not the pull request. A listener tells Hephaestus's own change
-        // from a person's by it.
-        User sender = event.sender() == null
+        // from a person's by it. An event without a sender, or a context without its provider, names no actor, so the
+        // listener takes it as a person's.
+        Long providerId = context.providerId();
+        User sender = event.sender() == null || providerId == null
                 ? null
-                : userProcessor.ensureExists(event.sender(), Objects.requireNonNull(context.providerId()));
+                : userProcessor.ensureExists(event.sender(), providerId);
         context = context.withActorUserId(sender == null ? null : sender.getId());
 
         // Delegate thread state changes to processor
