@@ -1,17 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
-import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.GeneralReviewCommentContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.IssueContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.LinkedWorkItemContentSource;
@@ -24,36 +17,24 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturePrepar
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturedWork;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
 
 /**
- * Prepares the evidence of SCM work: the record an occasion retains, and the capture of the current work or of what an
- * occasion retained. The caller has already pinned the item and checked current access to it.
+ * Prepares the evidence of SCM work: the capture of the current work or of what an occasion retained. The caller has
+ * already pinned the item and checked current access to it.
  */
 @Component
-@Slf4j
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ScmWorkCapture {
-    static final String NOT_OBSERVED = "NOT_OBSERVED";
-    static final String SUPPRESSED = "SUPPRESSED";
-    static final String SIZE_LIMIT = "SIZE_LIMIT";
-
     private final PullRequestContentSource pullContent;
     private final IssueContentSource issueContent;
     private final GeneralReviewCommentContentSource generalComments;
@@ -64,10 +45,7 @@ public class ScmWorkCapture {
     private final GitRepositoryManager git;
     private final ReviewRepositoryPreparer preparer;
     private final ScmWorkLookup workLookup;
-    private final PullRequestReviewRepository reviews;
-    private final ItemEventService events;
-    private final PersonDataWriteFence fence;
-    private final ObjectMapper mapper;
+    private final ScmRetainedOccasionEvidence occasionEvidence;
     private final Clock clock;
 
     /** The item kinds whose event reviews read only what their occasion retained. */
@@ -92,95 +70,15 @@ public class ScmWorkCapture {
     ReviewRepositoryPreparer.Remote reviewedRepository(ItemSnapshot pinned, @Nullable UUID eventId) {
         var item = pinned.item();
         if (eventId != null)
-            return preparer.remote(pinned, occasion(item, eventId).work());
-        var current = currentWork(item);
+            return preparer.remote(
+                    pinned, occasionEvidence.occasion(item, eventId).work());
+        var current = workLookup.current(item);
         return preparer.remote(pinned, ScmCapturedWork.of(current.work(), current.review()));
     }
 
     /** Fetches the reviewed repository; the caller runs it with no transaction. */
     void fetch(ReviewRepositoryPreparer.Remote reviewed) {
         preparer.fetch(reviewed);
-    }
-
-    record Work(Issue work, @Nullable PullRequestReview review) {}
-
-    /** The work as stored now: a review's pull request, or the issue or pull request itself. */
-    Work currentWork(ItemRef item) {
-        long sourceId = Objects.requireNonNull(item.sourceId());
-        if (item.kind().equals(ScmItemEvents.PULL_REQUEST_REVIEW)) {
-            var review = reviews.findById(sourceId).orElseThrow(ScmItemService::gone);
-            return new Work(Objects.requireNonNull(review.getPullRequest()), review);
-        }
-        return new Work(workLookup.find(item.kind(), sourceId).orElseThrow(ScmItemService::gone), null);
-    }
-
-    /**
-     * The serialized record of an occasion, or an {@link ItemEventInput#unretained} statement of why it is not kept: a
-     * copied person's content may not be written ({@code SUPPRESSED}), or the record exceeds what an occasion may
-     * retain ({@code SIZE_LIMIT}).
-     */
-    @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = ItemCaptureException.class)
-    public String retain(ScmOccasionEvidence evidence, long itemId) {
-        var participants = evidence.participants();
-        // The erasure of any of these people finishes before, or waits until this write commits and then finds it by
-        // their native identity, which the record keeps.
-        if (!participants.isEmpty()
-                && !fence.holdForWrite(participants.stream()
-                        .map(ScmOccasionEvidence.Participant::identity)
-                        .toList())) return ItemEventInput.unretained(SUPPRESSED);
-        String json = mapper.writeValueAsString(evidence);
-        if (!ItemEventInput.fits(json)) {
-            log.info("Occasion evidence not retained: reason=sizeLimit, itemId={}", itemId);
-            return ItemEventInput.unretained(SIZE_LIMIT);
-        }
-        return json;
-    }
-
-    /**
-     * The evidence of a pending occasion completed with the diff base its version adds. The caller pins the version
-     * only while the occasion's fence holds; the record's state, roles, people and words stay as first retained. A
-     * statement that nothing was kept stays as it is, and null stays null.
-     */
-    @Transactional(readOnly = true, noRollbackFor = ItemCaptureException.class)
-    public @Nullable String complete(@Nullable String retained, ItemVersion version) {
-        if (retained == null) return null;
-        ScmOccasionEvidence evidence;
-        try {
-            if (mapper.readTree(retained).has(ItemEventInput.UNRETAINED)) return retained;
-            evidence = mapper.readValue(retained, ScmOccasionEvidence.class);
-        } catch (JacksonException | IllegalArgumentException unreadable) {
-            throw new ItemCaptureException(
-                    ItemCaptureCode.CAPTURE_FAILED, "Retained occasion evidence is unreadable", unreadable);
-        }
-        try {
-            return mapper.writeValueAsString(evidence.pinned(version));
-        } catch (IllegalArgumentException notThisOccasion) {
-            // The unchanged pending fence already proved the occasion's material. A different retained record is
-            // inconsistent, not an original that was never kept; keep the fault visible for repair and retry.
-            throw new ItemCaptureException(
-                    ItemCaptureCode.CAPTURE_FAILED,
-                    "Retained occasion evidence does not match its version",
-                    notThisOccasion);
-        }
-    }
-
-    /**
-     * The record exactly this occasion of {@code item} retained. Without one it refuses with
-     * {@link ItemCaptureCode#OCCASION_EVIDENCE_UNAVAILABLE}; a record that cannot be read is a fault.
-     */
-    ScmOccasionEvidence occasion(ItemRef item, UUID eventId) {
-        var retained = events.evidence(item.workspaceId(), item.itemId(), eventId);
-        var json = retained.record();
-        if (json == null)
-            throw new ItemCaptureException(
-                    ItemCaptureCode.OCCASION_EVIDENCE_UNAVAILABLE,
-                    "The occasion kept no record of the work: " + retained.unretained());
-        try {
-            return mapper.readValue(json, ScmOccasionEvidence.class);
-        } catch (JacksonException | IllegalArgumentException unreadable) {
-            throw new ItemCaptureException(
-                    ItemCaptureCode.CAPTURE_FAILED, "Retained occasion evidence is unreadable", unreadable);
-        }
     }
 
     /**

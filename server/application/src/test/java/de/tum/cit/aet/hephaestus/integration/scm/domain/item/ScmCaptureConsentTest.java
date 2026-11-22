@@ -15,13 +15,11 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
-import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
@@ -40,7 +38,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewThreadCont
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -245,6 +242,7 @@ class ScmCaptureConsentTest extends BaseUnitTest {
                 .thenReturn(new IntegrationRef(IntegrationKind.valueOf(kind.name()), 99, null));
         var lookup = mock(ScmWorkLookup.class);
         when(lookup.find(item.kind(), 456L)).thenReturn(Optional.of(work));
+        when(lookup.current(item)).thenCallRealMethod();
         var pullRequests = mock(PullRequestRepository.class);
         when(pullRequests.findByIdForReviewContext(456L)).thenReturn(Optional.of(work));
         var git = mock(GitRepositoryManager.class);
@@ -277,22 +275,19 @@ class ScmCaptureConsentTest extends BaseUnitTest {
                 mock(GitRepositoryManager.class),
                 preparer,
                 lookup,
-                mock(PullRequestReviewRepository.class),
-                mock(ItemEventService.class),
-                mock(PersonDataWriteFence.class),
-                mapper,
+                mock(ScmRetainedOccasionEvidence.class),
                 Clock.systemUTC());
         var service = new ScmItemService(
                 items,
                 access,
                 mock(RepositoryRepository.class),
                 lookup,
-                mock(PullRequestReviewRepository.class),
                 mock(IssueEvidenceVersion.class),
                 mock(ScmGitTree.class),
                 mock(ScmFileVersions.class),
                 mapper,
                 capture,
+                mock(ScmRetainedOccasionEvidence.class),
                 new ScmItemTransactions(),
                 Clock.systemUTC());
         var pinned = service.pin(item, null);

@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
@@ -48,12 +47,12 @@ class ScmRepositorySnapshotTest extends BaseUnitTest {
                 access,
                 rows,
                 mock(ScmWorkLookup.class),
-                mock(PullRequestReviewRepository.class),
                 mock(IssueEvidenceVersion.class),
                 tree,
                 mock(ScmFileVersions.class),
                 new ObjectMapper(),
                 mock(ScmWorkCapture.class),
+                mock(ScmRetainedOccasionEvidence.class),
                 new ScmItemTransactions(),
                 Clock.systemUTC());
         var snapshot = service.pin(ref, null);

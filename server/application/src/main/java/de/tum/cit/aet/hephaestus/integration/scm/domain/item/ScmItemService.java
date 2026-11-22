@@ -36,7 +36,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCitableTexts;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -78,12 +77,12 @@ public class ScmItemService implements ItemSource {
     private final ScmRepositoryAccess repositories;
     private final RepositoryRepository repositoryRows;
     private final ScmWorkLookup workLookup;
-    private final PullRequestReviewRepository reviews;
     private final IssueEvidenceVersion issueVersions;
     private final ScmGitTree tree;
     private final ScmFileVersions fileVersions;
     private final ObjectMapper mapper;
     private final ScmWorkCapture workCapture;
+    private final ScmRetainedOccasionEvidence occasionEvidence;
     private final ScmItemTransactions transactions;
     private final Clock clock;
 
@@ -179,7 +178,7 @@ public class ScmItemService implements ItemSource {
         ItemRef workItem = item;
         Issue work;
         if (item.kind().equals(ScmItemEvents.PULL_REQUEST_REVIEW)) {
-            review = reviews.findById(Objects.requireNonNull(item.sourceId())).orElseThrow(ScmItemService::gone);
+            review = workLookup.review(Objects.requireNonNull(item.sourceId()));
             work = Objects.requireNonNull(review.getPullRequest(), "Provider review has no pull request");
             workItem = items.parent(item, ScmItemEvents.PULL_REQUEST);
             if (!Objects.equals(workItem.sourceId(), work.getId())) throw invisible();
@@ -258,8 +257,8 @@ public class ScmItemService implements ItemSource {
      * What an occasion on {@code item} retains, read in the transaction that records it: the work as this transaction
      * stores it at {@code version}, which the caller pinned under the item lock. Null for an item kind that retains
      * nothing. When the record cannot be kept, it is an {@link ItemEventInput#unretained} statement of why: the work
-     * no longer has that version ({@code NOT_OBSERVED}), or {@link ScmWorkCapture#retain} refuses to keep it. The
-     * first record of an occasion stays; a redelivery never replaces it.
+     * no longer has that version ({@code NOT_OBSERVED}), or {@link ScmRetainedOccasionEvidence#retain} refuses to keep
+     * it. The first record of an occasion stays; a redelivery never replaces it.
      */
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = ItemCaptureException.class)
     public @Nullable String retain(ItemRef item, @Nullable ItemVersion version, FoundBy foundBy) {
@@ -269,9 +268,10 @@ public class ScmItemService implements ItemSource {
             observed = observe(item, false);
         } catch (ItemCaptureException unavailable) {
             // The occasion is still recorded; it keeps only the statement that its work could not be read.
-            return ItemEventInput.unretained(ScmWorkCapture.NOT_OBSERVED);
+            return ItemEventInput.unretained(ScmRetainedOccasionEvidence.NOT_OBSERVED);
         }
-        if (!Objects.equals(observed.version(), version)) return ItemEventInput.unretained(ScmWorkCapture.NOT_OBSERVED);
+        if (!Objects.equals(observed.version(), version))
+            return ItemEventInput.unretained(ScmRetainedOccasionEvidence.NOT_OBSERVED);
         PullRequest pull = (PullRequest) observed.work();
         PullRequestReview review = observed.review();
         // Every person the record names, whatever their role: the author, assignees, merger and reviewer.
@@ -305,7 +305,7 @@ public class ScmItemService implements ItemSource {
                 participants,
                 observedAt,
                 foundBy);
-        return workCapture.retain(evidence, item.itemId());
+        return occasionEvidence.retain(evidence, item.itemId());
     }
 
     /**
@@ -328,14 +328,14 @@ public class ScmItemService implements ItemSource {
             @Nullable PullRequestReview review) {}
 
     private Retained occasion(ItemRef item, ItemVersion requested, UUID eventId) {
-        var evidence = workCapture.occasion(item, eventId);
+        var evidence = occasionEvidence.occasion(item, eventId);
         if (!evidence.matches(item, requested)) throw versionUnavailable();
         items.require(item);
         PullRequestReview review = null;
         ItemRef workItem = item;
         Issue work;
         if (item.kind().equals(ScmItemEvents.PULL_REQUEST_REVIEW)) {
-            review = reviews.findById(Objects.requireNonNull(item.sourceId())).orElseThrow(ScmItemService::gone);
+            review = workLookup.review(Objects.requireNonNull(item.sourceId()));
             work = Objects.requireNonNull(review.getPullRequest(), "Provider review has no pull request");
             workItem = items.parent(item, ScmItemEvents.PULL_REQUEST);
             if (!Objects.equals(workItem.sourceId(), work.getId())) throw invisible();
@@ -476,8 +476,8 @@ public class ScmItemService implements ItemSource {
             if (pinned.item().kind().equals(ScmItemEvents.REPOSITORY)
                     || pinned.item().kind().equals(ScmItemEvents.FILE)) return captureTree(pinned, request);
             var work = occasion != null
-                    ? new ScmWorkCapture.Work(occasion.work(), occasion.review())
-                    : workCapture.currentWork(pinned.item());
+                    ? new ScmWorkLookup.Work(occasion.work(), occasion.review())
+                    : workLookup.current(pinned.item());
             return workCapture.capture(
                     pinned,
                     request,

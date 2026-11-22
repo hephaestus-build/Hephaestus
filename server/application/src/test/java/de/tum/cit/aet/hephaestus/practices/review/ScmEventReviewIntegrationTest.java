@@ -60,8 +60,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemService;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmRetainedOccasionEvidence;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmWorkCapture;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRunsRecorder;
@@ -257,7 +257,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     ScmItemService source;
 
     @Autowired
-    ScmWorkCapture workCapture;
+    ScmRetainedOccasionEvidence occasionEvidence;
 
     @Autowired
     ApplicationEventPublisher publisher;
@@ -3857,7 +3857,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var unresolved = itemEvents
                 .unresolved(prepared.item().workspaceId(), prepared.item().itemId())
                 .getFirst();
-        var staleCompletion = workCapture.complete(
+        var staleCompletion = occasionEvidence.complete(
                 itemEvents.pendingEvidence(prepared.item().workspaceId(), pending.getId()), prepared.version());
         assertThat(staleCompletion).contains("Describe this change");
         // Completion already read the words when erasure, expiry or removal commits its durable statement.
@@ -3893,7 +3893,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var unresolved = itemEvents
                 .unresolved(prepared.item().workspaceId(), prepared.item().itemId())
                 .getFirst();
-        var staleCompletion = workCapture.complete(
+        var staleCompletion = occasionEvidence.complete(
                 itemEvents.pendingEvidence(prepared.item().workspaceId(), pending.getId()), prepared.version());
         jdbc.update("UPDATE item_event SET evidence=NULL, evidence_expires_at=NULL WHERE id=?", pending.getId());
 

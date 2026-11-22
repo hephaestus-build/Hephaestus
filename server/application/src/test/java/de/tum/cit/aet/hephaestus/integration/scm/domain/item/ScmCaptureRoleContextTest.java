@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CitationVerifier;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScanItemVersions;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
@@ -44,10 +43,10 @@ class ScmCaptureRoleContextTest extends BaseUnitTest {
                 .withBean(ScmGitTree.class, () -> mock(ScmGitTree.class))
                 .withBean(ScmFileVersions.class, () -> mock(ScmFileVersions.class))
                 .withBean(ScmWorkCapture.class, () -> mock(ScmWorkCapture.class))
+                .withBean(ScmRetainedOccasionEvidence.class, () -> mock(ScmRetainedOccasionEvidence.class))
                 .withBean(ScmItemTransactions.class, ScmItemTransactions::new)
                 .withBean(ScmCaptureContributors.class, () -> mock(ScmCaptureContributors.class))
                 .withBean(RepositoryRepository.class, () -> mock(RepositoryRepository.class))
-                .withBean(PullRequestReviewRepository.class, () -> mock(PullRequestReviewRepository.class))
                 .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
                 .withBean(AccountDirectory.class, () -> mock(AccountDirectory.class))
                 .withBean(ItemEventService.class, () -> mock(ItemEventService.class))
