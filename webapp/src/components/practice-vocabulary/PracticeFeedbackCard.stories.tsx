@@ -600,7 +600,7 @@ export const ResponseLabels: Story = {
 			"The card moves to Marked by you, and your next work confirms it.",
 		);
 		await expect(doesNotFit).toHaveAccessibleDescription(
-			"The card moves to Marked by you, and a later review of the same work does not send you this point again.",
+			"The card moves to Marked by you, and a later review of the same work does not send you this point again here or in a conversation.",
 		);
 		// No visible explanation: the effect waits in each button's tooltip.
 		await expect(

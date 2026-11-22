@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback.delivery;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import java.util.Collection;
@@ -17,9 +18,12 @@ import org.springframework.stereotype.Component;
 public class FeedbackResponseSuppressionFilter {
     private final FeedbackBasisRepository basis;
 
-    public Map<UUID, FeedbackStopReason> suppressedProblems(long workspaceId, Collection<UUID> problemIds) {
+    public Map<UUID, FeedbackStopReason> suppressedProblems(
+            long workspaceId, FeedbackDestination destination, Collection<UUID> problemIds) {
         if (problemIds.isEmpty()) return Map.of();
-        return basis.findSuppressedProblems(workspaceId, problemIds).stream()
+        return basis
+                .findSuppressedProblems(workspaceId, problemIds, destination == FeedbackDestination.ON_WORK)
+                .stream()
                 .collect(Collectors.toUnmodifiableMap(
                         FeedbackBasisRepository.SuppressedProblem::getId,
                         row -> row.getResolution() == FeedbackResolution.DISAGREE

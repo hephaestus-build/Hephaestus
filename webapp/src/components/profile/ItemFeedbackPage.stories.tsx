@@ -43,6 +43,12 @@ export const Default: Story = {
 			detailReviews[0]?.review.item.url ?? "",
 		);
 		await expect(canvas.getByText(/Workspace admins read your reason/u)).toBeVisible();
+		// An answer to private feedback holds back only private feedback, so the promise names both places.
+		await expect(
+			canvas.getByText(
+				/later private feedback does not raise the same point again\. If you answered a comment on the work, a later comment on the work does not raise it either\./u,
+			),
+		).toBeVisible();
 		await expect(canvas.getByRole("list", { name: "Reviews" })).toBeVisible();
 		await expect(
 			canvas.getAllByRole("group", { name: /^Your response to the feedback/u }),

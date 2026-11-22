@@ -152,3 +152,8 @@ observation incorrect or withdraw the feedback.
 ## Update — 2026-10-14 (#2656): the practice model cutover
 
 Superseded by [ADR 0056](0056-one-practice-model-for-items-and-scans.md) for outcomes and problem records.
+
+## Update — 2026-11-22: a private answer stays private
+
+Amends the 2026-09-28 update. An answer to private feedback no longer holds back feedback on the work.
+The [practice review pipeline](../contributor/practice-review-pipeline.mdx#placement-and-support) owns the rule.

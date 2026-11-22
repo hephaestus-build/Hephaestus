@@ -216,7 +216,7 @@ public class FeedbackPreparationService {
                                 .computeIfAbsent(problem.getResultId(), ignored -> new ArrayList<>())
                                 .add(problem.getId());
                     });
-        var suppressed = suppression.suppressedProblems(draft.workspaceId(), communicatedProblems);
+        var suppressed = suppression.suppressedProblems(draft.workspaceId(), draft.destination(), communicatedProblems);
         var withheldCopies = new HashMap<UUID, FeedbackStopReason>();
         if (draft.destination() == FeedbackDestination.ON_WORK
                 && trace != null

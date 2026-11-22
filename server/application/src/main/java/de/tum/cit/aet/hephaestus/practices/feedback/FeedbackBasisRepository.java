@@ -177,6 +177,11 @@ public interface FeedbackBasisRepository extends JpaRepository<FeedbackBasis, UU
         Boolean getDeliverToMerged();
     }
 
+    /**
+     * The problems that the developer's newest answer to earlier feedback about the same problem key holds back. For
+     * feedback on the work, only an answer to feedback on the work counts: an answer on a private destination stays
+     * private.
+     */
     @Query(value = """
         SELECT DISTINCT fresh.id AS id,answer.resolution AS resolution FROM problem fresh JOIN result current_result ON current_result.id=fresh.result_id AND current_result.workspace_id=fresh.workspace_id
          JOIN result prior ON prior.workspace_id=current_result.workspace_id AND prior.practice_id=current_result.practice_id
@@ -184,13 +189,16 @@ public interface FeedbackBasisRepository extends JpaRepository<FeedbackBasis, UU
          JOIN problem old ON old.result_id=prior.id AND old.workspace_id=prior.workspace_id AND old.key=fresh.key
          JOIN feedback_basis b ON b.result_id=prior.id AND b.workspace_id=prior.workspace_id AND (b.problem_id IS NULL OR b.problem_id=old.id)
          JOIN feedback f ON f.id=b.feedback_id AND f.workspace_id=b.workspace_id AND f.developer_id=current_result.developer_id AND f.delivered_at IS NOT NULL
+           AND (f.destination='ON_WORK' OR NOT :onWork)
          JOIN LATERAL (SELECT r.resolution FROM feedback_response r WHERE r.feedback_id=f.id AND r.workspace_id=f.workspace_id
            ORDER BY r.created_at DESC,r.id::text DESC LIMIT 1) answer ON true
         WHERE fresh.workspace_id=:workspaceId AND fresh.id IN (:problemIds) AND fresh.key IS NOT NULL
           AND answer.resolution IN ('DISAGREE','NOT_APPLICABLE')
         """, nativeQuery = true)
     List<SuppressedProblem> findSuppressedProblems(
-            @Param("workspaceId") long workspaceId, @Param("problemIds") Collection<UUID> problemIds);
+            @Param("workspaceId") long workspaceId,
+            @Param("problemIds") Collection<UUID> problemIds,
+            @Param("onWork") boolean onWork);
 
     interface SuppressedProblem {
         UUID getId();
