@@ -204,7 +204,8 @@ const RESOLVING_ANSWERS: ResolvingAnswer[] = ["ADDRESSED", "NOT_APPLICABLE"];
  * to press. Both close the card as "Marked by
  * you" and the clean work count goes on (`practice-review-glossary.mdx` § How feedback resolves);
  * only "Not applicable" also holds back the same claim on the same work in a later review
- * (`FeedbackResponseSuppressionFilter`), so only its line says so. A press on the chosen answer
+ * (`FeedbackResponseSuppressionFilter`), so only its line says so. The card is private, so the
+ * answer holds back only private feedback, never a comment on the work. A press on the chosen answer
  * takes it back.
  */
 const ANSWER_WORDS: Record<ResolvingAnswer, { label: string; effect: string }> = {
@@ -215,7 +216,7 @@ const ANSWER_WORDS: Record<ResolvingAnswer, { label: string; effect: string }> =
 	NOT_APPLICABLE: {
 		label: "Does not fit my work",
 		effect:
-			"The card moves to Marked by you, and a later review of the same work does not send you this point again.",
+			"The card moves to Marked by you, and a later review of the same work does not send you this point again here or in a conversation.",
 	},
 };
 

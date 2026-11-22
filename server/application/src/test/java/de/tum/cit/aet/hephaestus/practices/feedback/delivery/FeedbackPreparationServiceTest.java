@@ -231,10 +231,11 @@ class FeedbackPreparationServiceTest {
                 .thenReturn(List.of(
                         Problem.builder().id(suppressedId).build(),
                         Problem.builder().id(communicatedId).build()));
-        when(suppression.suppressedProblems(1, Set.of(communicatedId))).thenReturn(Map.of());
+        when(suppression.suppressedProblems(1, original.destination(), Set.of(communicatedId)))
+                .thenReturn(Map.of());
         var prepared = service.prepare(exact, Optional.empty()).draft();
         assertThat(prepared.state()).isEqualTo(FeedbackState.READY);
-        verify(suppression).suppressedProblems(1, Set.of(communicatedId));
+        verify(suppression).suppressedProblems(1, original.destination(), Set.of(communicatedId));
         verify(problems, never()).findByWorkspaceIdAndResultIdInOrderByResultIdAscPositionAsc(anyLong(), anyList());
     }
 }

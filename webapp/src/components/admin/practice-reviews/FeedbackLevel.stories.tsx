@@ -460,6 +460,16 @@ export const Disagreed: Story = {
 	},
 };
 
+/** A disagreement with private feedback holds back only private feedback, so the panel says so. */
+export const DisagreedPrivately: Story = {
+	args: { feedback: ready({ ...longFeedbackDetail, destination: "PRACTICE_PAGE" }) },
+	play: async () => {
+		const panelElement = await settledDrawerPanel();
+		await expectHeaderChip(panelElement, "Disagreed");
+		within(panelElement).getByText(/in private feedback\. Feedback on the work still can\./u);
+	},
+};
+
 export const ClearedResponse: Story = {
 	args: {
 		feedback: ready({

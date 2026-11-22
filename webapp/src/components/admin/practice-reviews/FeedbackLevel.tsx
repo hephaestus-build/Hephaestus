@@ -761,7 +761,9 @@ function feedbackNow(feedback: FeedbackRecord): ReactNode {
 				);
 	}
 	if (feedback.disagreedAt !== null) {
-		return "While the developer’s disagreement stands, a later review of the same work does not raise the same point again.";
+		return feedback.destination === "ON_WORK"
+			? "While the developer’s disagreement stands, a later review of the same work does not raise the same point again."
+			: "While the developer’s disagreement stands, a later review of the same work does not raise the same point again in private feedback. Feedback on the work still can.";
 	}
 	switch (feedback.state) {
 		case "AWAITING_APPROVAL": {

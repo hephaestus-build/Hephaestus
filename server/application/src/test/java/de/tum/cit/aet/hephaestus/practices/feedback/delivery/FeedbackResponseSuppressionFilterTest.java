@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import java.util.List;
@@ -24,15 +25,16 @@ class FeedbackResponseSuppressionFilterTest {
         var response = mock(FeedbackBasisRepository.SuppressedProblem.class);
         when(response.getId()).thenReturn(id);
         when(response.getResolution()).thenReturn(FeedbackResolution.DISAGREE);
-        when(basis.findSuppressedProblems(7, List.of(id, other))).thenReturn(List.of(response));
-        assertThat(new FeedbackResponseSuppressionFilter(basis).suppressedProblems(7, List.of(id, other)))
+        when(basis.findSuppressedProblems(7, List.of(id, other), true)).thenReturn(List.of(response));
+        assertThat(new FeedbackResponseSuppressionFilter(basis)
+                        .suppressedProblems(7, FeedbackDestination.ON_WORK, List.of(id, other)))
                 .containsExactlyEntriesOf(Map.of(id, FeedbackStopReason.REACTED_DISAGREE));
     }
 
     @Test
     void shouldReturnNoSuppressionForEmptyProblemBasis() {
         assertThat(new FeedbackResponseSuppressionFilter(mock(FeedbackBasisRepository.class))
-                        .suppressedProblems(7, List.of()))
+                        .suppressedProblems(7, FeedbackDestination.ON_WORK, List.of()))
                 .isEmpty();
     }
 }
