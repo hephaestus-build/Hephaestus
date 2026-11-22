@@ -1,4 +1,4 @@
-// Kept apart from changelog.ts: the push gate imports that file where no dependency is installed.
+// Kept apart from changelog.ts, so that file needs no installed dependency.
 import { XMLParser } from "fast-xml-parser";
 
 import { isRecord } from "./json.ts";

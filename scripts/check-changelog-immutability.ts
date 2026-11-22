@@ -17,7 +17,8 @@ import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 const directory = `${CHANGELOG_DIRECTORY}/`;
-const master = "server/application/src/main/resources/db/master.xml";
+export const MASTER_CHANGELOG = "server/application/src/main/resources/db/master.xml";
+const master = MASTER_CHANGELOG;
 export interface ChangelogSnapshot {
 	blobs: ReadonlyMap<string, string>;
 	master: string;
@@ -160,7 +161,8 @@ function git(...args: string[]): string {
 	return execFileSync("git", args, { encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES });
 }
 
-function snapshot(revision: string): ChangelogSnapshot {
+/** The changelogs and master.xml of a commit, as git stores them. */
+export function snapshot(revision: string): ChangelogSnapshot {
 	const commit = git("rev-parse", "--verify", "--end-of-options", `${revision}^{commit}`).trim();
 	const entries = git("ls-tree", "-r", "-z", commit, "--", directory, master);
 	const blobs = new Map<string, string>();
