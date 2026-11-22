@@ -429,8 +429,6 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     "SlackNoticeAdapter", // Account-link blocks exist only while the Slack integration is enabled.
                     "SlackPostAdapter", // Breaks the executor -> its adapters -> this adapter -> projector ->
                     // executor cycle; the projector exists only with Slack (@ConditionalOnProperty)
-                    "GitLabDataSyncScheduler", // Optional GitLab beans gated by @ConditionalOnProperty
-                    "GitLabHistoricalBackfillService", // Optional GitLab beans gated by @ConditionalOnProperty
                     "HistoricalBackfillScheduler", // Optional GitLab backfill service gated by @ConditionalOnProperty
                     "GitHubWorkspaceDataSyncTrigger", // Lazy-loads GitHubDataSyncService + SyncTargetProvider to break
                     // the same circular reference WorkspaceProvisioningAdapter

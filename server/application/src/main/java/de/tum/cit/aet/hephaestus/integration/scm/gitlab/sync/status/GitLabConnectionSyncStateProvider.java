@@ -132,7 +132,7 @@ public class GitLabConnectionSyncStateProvider implements ConnectionSyncStatePro
                 repo == null ? null : countsByRepositoryId.getOrDefault(repo.getId(), ScmResourceCounts.empty());
         Long itemCount = counts == null ? null : counts.headlineItemCount();
 
-        // GitLabDataSyncScheduler.updateSyncTimestamp persists per-class watermarks on
+        // GitLabRepositorySync's updateSyncTimestamp calls persist per-class watermarks on
         // repository_to_monitor (issues_synced_at / pull_requests_synced_at) on every completed phase,
         // keyed by the same monitor row iterated here.
         Instant issuesSyncedAt = monitor.getIssuesSyncedAt();

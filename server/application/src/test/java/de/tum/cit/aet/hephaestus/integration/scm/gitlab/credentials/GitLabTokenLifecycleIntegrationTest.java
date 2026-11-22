@@ -29,7 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDataSyncScheduler;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.status.GitLabConnectionSyncStateProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -108,7 +108,7 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
     private SyncTargetProvider syncTargets;
 
     @Autowired
-    private GitLabDataSyncScheduler scheduler;
+    private GitLabScopeSync scopeSync;
 
     @Autowired
     private MeterRegistry meters;
@@ -148,7 +148,7 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .isEmpty();
         assertThat(syncTargets.isScopeActiveForSync(workspace)).isFalse();
         // A manual sync is refused before any GitLab call, with the reason in its message.
-        assertThatThrownBy(() -> scheduler.syncWorkspaceNow(workspace, mock(), SyncJobType.RECONCILIATION))
+        assertThatThrownBy(() -> scopeSync.syncWorkspaceNow(workspace, mock(), SyncJobType.RECONCILIATION))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("refused its credential");
         assertThat(paused() - pausedBefore).isEqualTo(3);

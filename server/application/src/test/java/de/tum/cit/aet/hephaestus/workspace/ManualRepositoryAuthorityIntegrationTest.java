@@ -35,7 +35,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlFragments;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.RepositoryOriginNotSupportedException;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
 import de.tum.cit.aet.hephaestus.practices.groupdetail.ProductItemDirectoryQuery;
@@ -127,9 +126,6 @@ class ManualRepositoryAuthorityIntegrationTest extends AbstractWorkspaceIntegrat
 
     @MockitoBean
     private GitHubGraphQlClientProvider gitHubClients;
-
-    @MockitoBean
-    private GitLabSyncServiceHolder syncServices;
 
     @Test
     void shouldRefuseAGitLabAddWhoseTokenCannotReadTheSharedMirrorAndKeepTheAuthorizedWorkspace() {

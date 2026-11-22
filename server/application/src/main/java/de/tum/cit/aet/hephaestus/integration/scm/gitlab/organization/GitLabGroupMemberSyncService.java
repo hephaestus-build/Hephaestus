@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipList
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMemberRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
@@ -23,11 +24,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGro
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -70,9 +73,11 @@ public class GitLabGroupMemberSyncService {
 
     private final GitLabGraphQlClientProvider graphQlClientProvider;
     private final GitLabGraphQlResponseHandler responseHandler;
+    private final OrganizationRepository organizationRepository;
     private final OrganizationMembershipRepository organizationMembershipRepository;
     private final UserRepository userRepository;
     private final GitLabWorkspaceLinkService workspaceLinkService;
+    private final WorkspaceActorSelector actorSelector;
     private final GitLabProperties gitLabProperties;
     private final @Nullable OrganizationMembershipListener organizationMembershipListener;
     private final TransactionTemplate transactionTemplate;
@@ -81,17 +86,21 @@ public class GitLabGroupMemberSyncService {
     public GitLabGroupMemberSyncService(
             GitLabGraphQlClientProvider graphQlClientProvider,
             GitLabGraphQlResponseHandler responseHandler,
+            OrganizationRepository organizationRepository,
             OrganizationMembershipRepository organizationMembershipRepository,
             UserRepository userRepository,
             GitLabWorkspaceLinkService workspaceLinkService,
+            WorkspaceActorSelector actorSelector,
             GitLabProperties gitLabProperties,
             @Nullable OrganizationMembershipListener organizationMembershipListener,
             TransactionTemplate transactionTemplate) {
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
+        this.organizationRepository = organizationRepository;
         this.organizationMembershipRepository = organizationMembershipRepository;
         this.userRepository = userRepository;
         this.workspaceLinkService = workspaceLinkService;
+        this.actorSelector = actorSelector;
         this.gitLabProperties = gitLabProperties;
         this.organizationMembershipListener = organizationMembershipListener;
         this.transactionTemplate = transactionTemplate;
@@ -99,6 +108,21 @@ public class GitLabGroupMemberSyncService {
         this.requiresNewTransaction =
                 new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
         this.requiresNewTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
+    /**
+     * The organization of the scope's connected group: the one with the group's login on the instance that the
+     * scope's active connection reads from. Empty without a connection, or before the group was synced from that
+     * instance.
+     *
+     * @param scopeId       the workspace/scope ID
+     * @param groupFullPath the full path of the connected group (e.g., "org/team")
+     */
+    public Optional<Organization> connectedOrganization(long scopeId, String groupFullPath) {
+        return actorSelector
+                .connectedProviderId(scopeId)
+                .flatMap(providerId ->
+                        organizationRepository.findByLoginIgnoreCaseAndProviderId(groupFullPath, providerId));
     }
 
     /**

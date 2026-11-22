@@ -302,9 +302,11 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
         memberSync = new GitLabGroupMemberSyncService(
                 clients,
                 responseHandler,
+                organizations,
                 roster,
                 users,
                 workspaceLinkService,
+                actorSelector,
                 gitLabProperties,
                 organizationMembershipListener,
                 transactionTemplate);

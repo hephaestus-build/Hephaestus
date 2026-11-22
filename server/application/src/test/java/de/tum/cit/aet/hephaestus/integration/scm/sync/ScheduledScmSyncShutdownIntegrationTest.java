@@ -27,7 +27,6 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobStatus;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.check.GitHubHeadCheckRunsReread;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
@@ -40,10 +39,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDeletionSweep
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.GitHubTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDataSyncScheduler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDeletionSweepService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabRepositorySync;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService;
@@ -83,7 +83,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
 import org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration;
@@ -481,25 +480,43 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
                     passGate();
                     return false;
                 });
+        GitLabRepositorySync repositorySync = new GitLabRepositorySync(
+                targets,
+                mock(RepositoryRepository.class),
+                mock(GitLabRateLimitTracker.class),
+                mock(WorkspaceActorSelector.class),
+                mock(GitLabProjectSyncService.class),
+                mock(ActivityLedgerRepair.class),
+                mock(GitLabProjectAdmission.class),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         return new GitLabDataSyncScheduler(
                 targets,
-                contextProvider(),
-                mock(OrganizationRepository.class),
-                mock(RepositoryRepository.class),
-                providerOf(mock(GitLabSyncServiceHolder.class)),
-                providerOf(mock(GitLabRateLimitTracker.class)),
                 properties(),
                 executor,
                 connectionQueries,
                 jobs,
-                mock(GitLabDeletionSweepService.class),
-                initialization,
-                mock(GitLabRepositoryMonitors.class),
-                workspaceLookup,
-                mock(WorkspaceActorSelector.class),
-                mock(GitLabProjectSyncService.class),
-                mock(ActivityLedgerRepair.class),
-                mock(GitLabProjectAdmission.class));
+                new GitLabScopeSync(
+                        targets,
+                        contextProvider(),
+                        mock(GitLabDeletionSweepService.class),
+                        initialization,
+                        mock(GitLabRepositoryMonitors.class),
+                        workspaceLookup,
+                        repositorySync,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
     }
 
     /** Records whether cancellation was already requested when the drain began, then holds the drain. */
@@ -579,13 +596,6 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
         } catch (NoSuchMethodException e) {
             throw new IllegalStateException(e);
         }
-    }
-
-    @SuppressWarnings("unchecked") // mock() cannot carry the type argument of ObjectProvider
-    private static <T> ObjectProvider<T> providerOf(T value) {
-        ObjectProvider<T> provider = mock(ObjectProvider.class);
-        when(provider.getIfAvailable()).thenReturn(value);
-        return provider;
     }
 
     private static Connection activeConnection(Workspace workspace, Provider provider) {

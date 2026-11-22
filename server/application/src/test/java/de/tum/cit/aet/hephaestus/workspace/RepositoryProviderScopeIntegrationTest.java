@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -16,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
@@ -34,13 +36,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuedependency.GitLabIssueDependencySyncService;
@@ -52,7 +54,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCrede
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceDataSyncTrigger;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabRepositorySelectionService;
@@ -61,6 +66,8 @@ import de.tum.cit.aet.hephaestus.testconfig.ProviderEvents;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceSyncTargetProvider;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -82,7 +89,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.graphql.client.ClientGraphQlRequest;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.GraphQlClientInterceptor;
@@ -146,9 +155,6 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
     private WorkspaceRepository workspaces;
 
     @Autowired
-    private GitLabWorkspaceInitializationService initialization;
-
-    @Autowired
     private GitLabIssueSyncService issueSync;
 
     @Autowired
@@ -170,7 +176,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
     private GitLabProjectAdmission projectAdmission;
 
     @Autowired
-    private GitLabHistoricalBackfillService backfill;
+    private ApplicationContext beans;
 
     @Autowired
     private GitLabProjectSyncService projects;
@@ -186,9 +192,6 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
 
     @MockitoBean
     private GitLabGraphQlClientProvider clients;
-
-    @MockitoBean
-    private GitLabSyncServiceHolder syncServices;
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
@@ -218,7 +221,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                         held,
                         source.getServerUrl(),
                         issueResponse(source.getServerUrl(), "shared-org/healthy-sibling", 99002)));
-        when(syncServices.getIssueSyncService()).thenReturn(issueSync);
+        var initialization = initializationWithIssuesOnly();
         try (var executor = Executors.newSingleThreadExecutor()) {
             var result = executor.submit(() -> initialization.syncFullData(own));
             try {
@@ -292,7 +295,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                         held,
                         source.getServerUrl(),
                         issueResponse(source.getServerUrl(), "shared-org/healthy-sibling", 99002)));
-        when(syncServices.getIssueSyncService()).thenReturn(issueSync);
+        var backfill = backfillWithIssuesOnly();
         try (var executor = Executors.newSingleThreadExecutor()) {
             var result = executor.submit(() -> backfill.runBackfillPass(own.getId(), null));
             try {
@@ -1504,5 +1507,53 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 workspace.getId(), new ItemKind("scm.repository"), sourceRepository.getId(), null, null));
         return itemWriter.upsert(new ItemRegistration(
                 workspace.getId(), new ItemKind("scm.issue"), issue.getId(), repository.itemId(), null));
+    }
+
+    /** The full data sync with the issue sync and no other GitLab sync service. */
+    private GitLabWorkspaceInitializationService initializationWithIssuesOnly() {
+        return new GitLabWorkspaceInitializationService(
+                beans.getBean(WorkspaceLookup.class),
+                beans.getBean(WorkspaceRepositoryMonitors.class),
+                repositories,
+                beans.getBean(SyncSchedulerProperties.class),
+                syncTargets,
+                null,
+                null,
+                null,
+                null,
+                issueSync,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                beans.getBeanProvider(GitLabWebhookService.class),
+                beans.getBeanProvider(GitLabRateLimitTracker.class),
+                beans.getBeanProvider(GitLabWorkspaceDataSyncTrigger.class),
+                connectionService,
+                beans.getBean(GitLabWorkspaceLinkService.class),
+                gitLabMonitors,
+                beans.getBean("monitoringExecutor", AsyncTaskExecutor.class),
+                projectAdmission);
+    }
+
+    /** The historical backfill with the issue sync and no merge request sync. */
+    private GitLabHistoricalBackfillService backfillWithIssuesOnly() {
+        return new GitLabHistoricalBackfillService(
+                syncTargets,
+                repositories,
+                beans.getBean(WorkspaceActorSelector.class),
+                issueSync,
+                null,
+                beans.getBean(SyncSchedulerProperties.class),
+                beans.getBean(ActivityLedgerRepair.class),
+                beans.getBean(PullRequestRepository.class),
+                issues,
+                projectAdmission);
     }
 }

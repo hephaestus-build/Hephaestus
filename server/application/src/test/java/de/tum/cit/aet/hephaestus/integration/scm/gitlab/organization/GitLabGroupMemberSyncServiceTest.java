@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipList
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMemberRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
@@ -35,6 +36,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPag
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -70,6 +72,9 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
     private GitLabGraphQlResponseHandler responseHandler;
 
     @Mock
+    private OrganizationRepository organizationRepository;
+
+    @Mock
     private OrganizationMembershipRepository organizationMembershipRepository;
 
     @Mock
@@ -77,6 +82,9 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
 
     @Mock
     private GitLabWorkspaceLinkService workspaceLinkService;
+
+    @Mock
+    private WorkspaceActorSelector actorSelector;
 
     @Mock
     private OrganizationMembershipListener organizationMembershipListener;
@@ -118,9 +126,11 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
         service = new GitLabGroupMemberSyncService(
                 graphQlClientProvider,
                 responseHandler,
+                organizationRepository,
                 organizationMembershipRepository,
                 userRepository,
                 workspaceLinkService,
+                actorSelector,
                 gitLabProperties,
                 organizationMembershipListener,
                 txTemplate);
@@ -166,6 +176,36 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             int result = service.syncGroupMemberships(SCOPE_ID, "   ", testOrg);
             assertThat(result).isEqualTo(-1);
             verifyNoInteractions(graphQlClientProvider);
+        }
+    }
+
+    @Nested
+    class ConnectedOrganization {
+
+        @Test
+        void shouldResolveTheGroupOnTheConnectedInstanceWhenTheScopeHasAConnection() {
+            when(actorSelector.connectedProviderId(SCOPE_ID)).thenReturn(Optional.of(TEST_PROVIDER_ID));
+            when(organizationRepository.findByLoginIgnoreCaseAndProviderId(GROUP_PATH, TEST_PROVIDER_ID))
+                    .thenReturn(Optional.of(testOrg));
+
+            assertThat(service.connectedOrganization(SCOPE_ID, GROUP_PATH)).contains(testOrg);
+        }
+
+        @Test
+        void shouldResolveNothingWhenTheScopeHasNoConnectedInstance() {
+            when(actorSelector.connectedProviderId(SCOPE_ID)).thenReturn(Optional.empty());
+
+            assertThat(service.connectedOrganization(SCOPE_ID, GROUP_PATH)).isEmpty();
+            verifyNoInteractions(organizationRepository);
+        }
+
+        @Test
+        void shouldResolveNothingWhenTheGroupWasNotSyncedFromTheConnectedInstance() {
+            when(actorSelector.connectedProviderId(SCOPE_ID)).thenReturn(Optional.of(TEST_PROVIDER_ID));
+            when(organizationRepository.findByLoginIgnoreCaseAndProviderId(GROUP_PATH, TEST_PROVIDER_ID))
+                    .thenReturn(Optional.empty());
+
+            assertThat(service.connectedOrganization(SCOPE_ID, GROUP_PATH)).isEmpty();
         }
     }
 
@@ -546,9 +586,11 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             var serviceNoListener = new GitLabGroupMemberSyncService(
                     graphQlClientProvider,
                     responseHandler,
+                    organizationRepository,
                     organizationMembershipRepository,
                     userRepository,
                     workspaceLinkService,
+                    actorSelector,
                     gitLabProperties,
                     null,
                     txTemplate);

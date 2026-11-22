@@ -97,7 +97,7 @@ A set difference would treat every row not yet fetched as an upstream deletion. 
 
 This holds **uniformly across every integration that infers deletion from absence**, not just the SCM
 pair. Each runner forwards its `SyncJobType` rather than dropping it, and the inference sits behind a
-`type == RECONCILIATION` gate: `GitHubScopeSync` / `GitLabDataSyncScheduler` before the
+`type == RECONCILIATION` gate: `GitHubScopeSync` / `GitLabScopeSync` before the
 deletion sweep, and `OutlineDocumentSyncService#syncOneCollection` before `tombstoneVanished`. Slack
 needs no `type` gate, and its runner does not use `type`. It compares only rows that it already stores
 with a complete read of their range. A mirror that is still filling cannot read as a deletion.

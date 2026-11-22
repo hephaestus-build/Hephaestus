@@ -390,7 +390,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
         @Test
         void shouldReportThePerClassWatermarksGitlabPersistsAndNoOthers() {
             RepositoryToMonitor monitor = monitor(5L, "group/honest-repo");
-            // GitLabDataSyncScheduler.updateSyncTimestamp writes these two columns on every completed
+            // GitLabRepositorySync's updateSyncTimestamp calls write these two columns on every completed
             // phase, keyed by this monitor row — so the provider must read them rather than discard them.
             monitor.setIssuesSyncedAt(Instant.parse("2026-07-10T03:00:00Z"));
             monitor.setPullRequestsSyncedAt(Instant.parse("2026-07-14T03:00:00Z"));
