@@ -460,13 +460,30 @@ export const Disagreed: Story = {
 	},
 };
 
+const PRIVATE_DISAGREED_AT = new Date("2026-07-26T09:12:00Z");
+
 /** A disagreement with private feedback holds back only private feedback, so the panel says so. */
 export const DisagreedPrivately: Story = {
-	args: { feedback: ready({ ...longFeedbackDetail, destination: "PRACTICE_PAGE" }) },
+	args: {
+		feedback: ready({
+			...practicePageCard,
+			item: null,
+			copies: [],
+			disagreedAt: PRIVATE_DISAGREED_AT,
+			answer: {
+				resolution: "DISAGREE",
+				comment: "The runbook already opens with this step.",
+				createdAt: PRIVATE_DISAGREED_AT,
+			},
+		}),
+	},
 	play: async () => {
 		const panelElement = await settledDrawerPanel();
 		await expectHeaderChip(panelElement, "Disagreed");
-		within(panelElement).getByText(/in private feedback\. Feedback on the work still can\./u);
+		const panel = within(panelElement);
+		panel.getByText(/later private feedback does not raise the same point again/u);
+		panel.getByText(/Feedback on that work still can\./u);
+		await expect(panel.queryByText(/a later review of the same work does not raise/u)).toBeNull();
 	},
 };
 

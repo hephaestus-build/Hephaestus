@@ -23,7 +23,7 @@ export interface ItemFeedbackPageProps {
 }
 
 const RESPONSE_GUIDE =
-	"Mark feedback addressed or not applicable, or disagree and say why. Workspace admins read your reason. While your disagreement stands, a later review of this work does not raise the same point again.";
+	"Mark feedback addressed or not applicable, or disagree and say why. Workspace admins read your reason. While your disagreement stands, later private feedback does not raise the same point again. If you answered a comment on the work, a later comment on the work does not raise it either.";
 
 /**
  * "Your feedback on pull request #16", so a reader who arrives from a comment on the work can tell
