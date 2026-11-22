@@ -74,6 +74,21 @@ Private feedback on your Practice profile and in conversation can arrive either 
 On GitLab, a line note opens a discussion on the reviewed diff lines.
 If GitLab cannot place it on the diff, Hephaestus opens an overview discussion that links to the reviewed code.
 
+### When Hephaestus resolves a thread
+
+When a later review shows that you fixed every problem a line note or file note named, Hephaestus resolves that note's thread.
+The review must read the new version of your work in full, and the code that the note quoted must be gone.
+If one of those problems comes back, Hephaestus reopens the thread on GitHub.
+On GitLab, Hephaestus only resolves threads and never reopens them.
+GitLab does not say who reopened a thread, so a reopen by Hephaestus would look like yours.
+Instead, a problem that comes back gets a new note.
+
+Your own actions on a thread win.
+If you or anyone else resolves or reopens a thread, Hephaestus leaves that thread alone from then on.
+If someone replies after the note, Hephaestus does not resolve the thread.
+One exception: when your workspace connects with the personal access token of a person, Hephaestus acts as that person.
+A change that this person makes can then look like Hephaestus's own, so Hephaestus may change that thread again.
+
 Mentions, issue references, and links in feedback appear as code.
 Thus, a comment notifies no one and runs no GitLab quick action.
 

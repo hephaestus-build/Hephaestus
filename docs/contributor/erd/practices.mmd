@@ -99,6 +99,23 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
     }
 
+    FeedbackThreadResolution {
+        UUID id PK
+        TEXT actor
+        TIMESTAMPTZ changed_at "NOT NULL"
+        UUID copy_id FK "NOT NULL"
+        INTEGER generation "NOT NULL"
+        BIGINT item_id UK "NOT NULL"
+        VARCHAR(16) provider
+        BOOLEAN reopens
+        BOOLEAN resolve_written "NOT NULL"
+        BOOLEAN resolved "NOT NULL"
+        VARCHAR(16) state "NOT NULL"
+        VARCHAR(32) stop_reason
+        TEXT thread_ref UK "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
     Practice {
         BIGINT id PK,FK,UK
         BIGINT workspace_id FK,UK "NOT NULL"
@@ -170,6 +187,7 @@ erDiagram
         UUID result_id FK,UK "NOT NULL"
         VARCHAR(16) comparison "NOT NULL"
         BIGINT workspace_id FK,UK "NOT NULL"
+        TEXT identity "NOT NULL"
     }
 
     ResearchDisclosure {
@@ -391,6 +409,7 @@ erDiagram
     Workspace ||--o{ FeedbackDecision : has
     Feedback ||--o{ FeedbackResponse : has
     Workspace ||--o{ FeedbackResponse : has
+    FeedbackCopy ||--o{ FeedbackThreadResolution : has
     Workspace ||--o{ Practice : has
     PracticeGroup ||--o{ Practice : has
     Workspace ||--o{ PracticeGroup : has

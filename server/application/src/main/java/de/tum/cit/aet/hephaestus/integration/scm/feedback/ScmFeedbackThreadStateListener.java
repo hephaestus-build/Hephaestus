@@ -4,12 +4,18 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkFeedbackThreadChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Announces a resolved or reopened thread with the provider account that changed it. The event's sender says who; a
+ * resolution the provider reports without a sender, such as one a GitLab sync reads, names the thread's resolver. A
+ * reopening without a sender names nobody.
+ */
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
@@ -20,9 +26,16 @@ public class ScmFeedbackThreadStateListener {
     @EventListener
     @Transactional(propagation = Propagation.MANDATORY)
     public void changed(ScmDomainEvent.ReviewThreadEvent event) {
-        for (var thread : rows.find(event.thread().id())) {
+        boolean resolved = event instanceof ScmDomainEvent.ReviewThreadResolved;
+        for (var thread : rows.find(event.thread().id(), event.context().actorUserId())) {
+            Long sender = thread.getSender();
+            Long changedBy = sender != null ? sender : resolved ? thread.getResolvedBy() : null;
             events.publishEvent(new WorkFeedbackThreadChangedEvent(
-                    thread.getWorkspaceId(), thread.getItemId(), thread.getThreadRef()));
+                    thread.getWorkspaceId(), thread.getItemId(), thread.getThreadRef(), resolved, text(changedBy)));
         }
+    }
+
+    private static @Nullable String text(@Nullable Long id) {
+        return id == null ? null : Long.toString(id);
     }
 }

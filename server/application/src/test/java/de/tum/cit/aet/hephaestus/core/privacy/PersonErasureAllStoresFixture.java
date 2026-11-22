@@ -459,6 +459,8 @@ final class PersonErasureAllStoresFixture {
                 priorProblem,
                 "comparison",
                 "UNCHANGED",
+                "identity",
+                "key:erasure-fixture",
                 "recorded_at",
                 Timestamp.from(Instant.now()));
         row(
@@ -475,6 +477,95 @@ final class PersonErasureAllStoresFixture {
                 account,
                 "ordinal",
                 1);
+        // A thread resolution goes with the person's copy on the work.
+        UUID copyId = jdbc
+                .query(
+                        "SELECT id FROM feedback_copy WHERE feedback_id=? AND workspace_id=? ORDER BY position LIMIT 1",
+                        (rows, index) -> Objects.requireNonNull(rows.getObject(1, UUID.class)),
+                        person.feedback(),
+                        workspace)
+                .stream()
+                .findFirst()
+                .orElse(null);
+        if (copyId == null) {
+            copyId = UUID.randomUUID();
+            row(
+                    "feedback_copy",
+                    "id",
+                    copyId,
+                    "workspace_id",
+                    workspace,
+                    "feedback_id",
+                    person.feedback(),
+                    "kind",
+                    "SUMMARY",
+                    "position",
+                    0,
+                    "state",
+                    "PLANNED",
+                    "created_at",
+                    Timestamp.from(Instant.now()));
+        }
+        row(
+                "feedback_thread_resolution",
+                "workspace_id",
+                workspace,
+                "item_id",
+                Objects.requireNonNull(jdbc.queryForObject(
+                        "SELECT item_id FROM result WHERE id=? AND workspace_id=?",
+                        Long.class,
+                        person.result(),
+                        workspace)),
+                "thread_ref",
+                "thread-" + copyId,
+                "copy_id",
+                copyId,
+                "resolved",
+                true,
+                "state",
+                "DONE",
+                "generation",
+                1,
+                "resolve_written",
+                false,
+                "changed_at",
+                Timestamp.from(Instant.now()));
+        // A resolution written with the person's own provider account, as a personal token does: only its actor goes.
+        jdbc.query(
+                        "SELECT i.provider_user_key,p.type FROM identity i JOIN identity_provider p ON p.id=i.provider_id"
+                                + " WHERE i.account_id=? AND p.type IN ('GITHUB','GITLAB') ORDER BY i.id LIMIT 1",
+                        (rows, index) -> new String[] {rows.getString(1), rows.getString(2)},
+                        account)
+                .forEach(identity -> row(
+                        "feedback_thread_resolution",
+                        "workspace_id",
+                        workspace,
+                        "item_id",
+                        Objects.requireNonNull(jdbc.queryForObject(
+                                "SELECT item_id FROM result WHERE id=? AND workspace_id=?",
+                                Long.class,
+                                person.result(),
+                                workspace)),
+                        "thread_ref",
+                        "thread-actor-" + account,
+                        "copy_id",
+                        copyIdOf(person.feedback(), workspace),
+                        "resolved",
+                        true,
+                        "state",
+                        "DONE",
+                        "generation",
+                        1,
+                        "actor",
+                        identity[0],
+                        "provider",
+                        identity[1],
+                        "reopens",
+                        true,
+                        "resolve_written",
+                        true,
+                        "changed_at",
+                        Timestamp.from(Instant.now())));
         row(
                 "feedback_decision",
                 "workspace_id",
@@ -804,6 +895,14 @@ final class PersonErasureAllStoresFixture {
         } else {
             seeded.add(new SeededRow(table, Map.of("id", 1L)));
         }
+    }
+
+    private UUID copyIdOf(UUID feedbackId, long workspace) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT id FROM feedback_copy WHERE feedback_id=? AND workspace_id=? ORDER BY position LIMIT 1",
+                UUID.class,
+                feedbackId,
+                workspace));
     }
 
     private void row(String table, Object... fields) {

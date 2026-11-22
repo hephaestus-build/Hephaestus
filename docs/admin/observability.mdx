@@ -56,6 +56,8 @@ The alert or the objective tells the operator when the answer needs work.
 | Is the data safe? | The WAL archive, backup and volume metrics | The critical alerts |
 | Which release runs in each Pod? | `application_build_info` | None |
 | Did feedback whose write was in doubt reach the work? | `practice_feedback_readback_total` | `HephaestusFeedbackReadbackUnknown` |
+| Did Hephaestus resolve or reopen the threads it asked to? | `practice_feedback_thread_changes_total` | `HephaestusFeedbackThreadChangeFailing` |
+| Do thread events of Hephaestus's own writes name its account? | `practice_feedback_thread_actor_mismatch_total` | `HephaestusFeedbackThreadActorMismatch` |
 | Is the monitoring itself working? | `up` | `HephaestusWatchdog`, at an outside dead-man check |
 | Does the cluster evaluate the rules of the release that runs? | The [monitoring stack](./monitoring#run-the-monitoring-stack), or the ConfigMap or the PrometheusRule of `observability.alertRules` | None |
 

@@ -76,12 +76,13 @@ The product calls a `Result` an observation, and the `Membership` that it concer
 | **Coverage**            | What an observation read and what it did not read.                                                                                                            | result.coverage                                     |
 | **Report**              | A scan's summary and supported observations for workspace admins and exports.                                                                                 | review.report                                       |
 | **Quiet window**        | The wait before the occasions of an item reach their readiness edge, so that newer occasions of the same item join them. The [operations guide](../admin/practice-review-operations#quiet-window) sets its length and its cap. | item_event.reason QUIET_WINDOW, item_event.retry_at |
-| **Problem lineage**     | How a problem compares with the previous comparable result of the same practice on the same item.              | planned: problem.lineage_id                         |
+| **Problem lineage**     | How a problem compares with the previous comparable result of the same practice on the same item.              | problem_lineage                                     |
+| **Thread resolution**   | Hephaestus's own resolve or reopen of the thread that its note starts on the work, decided from problem lineage. A person's change to the thread ends it for good. | feedback_thread_resolution, RESOLVE_FEEDBACK_THREAD |
 | **Readiness edge**      | The moment the server decides which selected practices of an item run. It comes when the quiet window closes, or at once for an occasion that never joins a window. A milestone measures every practice it selects. Any other occasion measures only those with no current result. | item_event.reason, review_item.reason |
 | **Milestone**           | An occasion that is the first or a renewed moment for feedback: opened, ready, or a request. Its readiness edge measures every practice it selects, also one with a current result. The item kind decides which of its events are milestones. | ItemEventDefinition.occasion |
 | **Source fingerprint**  | A value for one source kind of an item, computed by its source contract. Equal fingerprints mean equal captured bytes. A result stays current while the fingerprints of every source its session could read do not change. | capture facts `sourceFingerprints`                  |
 
-Problem lineage is decided for 1.0 and not shipped yet ([ADR 0062](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0062-the-item-is-the-review-scope.md)).
+Item reviews record problem lineage, and it resolves and reopens threads on the work ([ADR 0086](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md)).
 
 Use Review as the short product name where the page establishes the practice context.
 Use practice review in prose that does not establish that context.

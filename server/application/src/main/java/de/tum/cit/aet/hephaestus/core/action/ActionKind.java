@@ -34,6 +34,12 @@ public enum ActionKind {
     RETRACT_FEEDBACK(false, false),
 
     /**
+     * Resolves or reopens the provider thread of one posted note, when the problems it cites are no longer present or
+     * come back. The thread's state is its readback, so an attempt whose write may have started reads it first.
+     */
+    RESOLVE_FEEDBACK_THREAD(false, false),
+
+    /**
      * One Slack message of Hephaestus: the reply to a Slack turn, or a weekly digest's note. Each carries its entry in
      * its metadata, so an attempt whose post may have reached Slack reads the history first.
      */

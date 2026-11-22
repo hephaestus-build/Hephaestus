@@ -12,6 +12,8 @@ public final class PracticeMetrics {
     public static final String TRIAL_ENDED = "practice.trial.ended";
     public static final String FEEDBACK_READBACK = "practice.feedback.readback";
     public static final String FEEDBACK_RESPONSE = "practice.feedback.response";
+    public static final String FEEDBACK_THREAD_CHANGES = "practice.feedback.thread.changes";
+    public static final String FEEDBACK_THREAD_ACTOR_MISMATCH = "practice.feedback.thread.actor.mismatch";
     public static final String RESULT_RECORDED = "practice.result.recorded";
     public static final String RESULT_MARKED = "practice.result.marked";
 

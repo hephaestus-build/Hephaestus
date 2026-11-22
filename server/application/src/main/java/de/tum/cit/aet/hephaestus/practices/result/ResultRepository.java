@@ -72,6 +72,13 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
 
     List<Result> findByWorkspaceIdAndIdIn(long workspaceId, Collection<UUID> ids);
 
+    /** The results that a feedback rests on. */
+    @Query(value = """
+        SELECT r.* FROM result r WHERE r.workspace_id = :workspaceId AND r.id IN (
+          SELECT b.result_id FROM feedback_basis b WHERE b.workspace_id = :workspaceId AND b.feedback_id = :feedbackId)
+        """, nativeQuery = true)
+    List<Result> findBasisOfFeedback(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM Result r WHERE r.id = :id AND r.workspaceId = :workspaceId")
     Optional<Result> lockByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") long workspaceId);

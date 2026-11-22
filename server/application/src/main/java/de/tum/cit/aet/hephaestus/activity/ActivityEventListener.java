@@ -713,8 +713,9 @@ public class ActivityEventListener {
                     "Skipping review thread unresolved event (missing PR or repository): threadId={}", threadData.id());
             return;
         }
-        // For unresolved, we use the PR author since we don't track who unresolved it
-        Long userId = thread.pullRequestAuthorId();
+        // The event's sender reopened the thread. A sync reports no sender, so the PR author stands in.
+        Long sender = event.context().actorUserId();
+        Long userId = sender != null ? sender : thread.pullRequestAuthorId();
         if (userId == null) {
             log.debug("Skipping review thread unresolved event (no user found): threadId={}", threadData.id());
             return;

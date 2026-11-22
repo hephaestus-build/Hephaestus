@@ -80,6 +80,87 @@ class ReviewOnWorkPriorAdviceTest {
                 .contains("newSince goes only with RAISE");
     }
 
+    @Test
+    void shouldRaiseAProblemAgainWhenHephaestusClosedTheNoteThatGaveItsAdviceAsFixed() {
+        var open = ReviewOnWork.priorAdviceWitnesses(
+                ReviewOnWork.priorPublicFeedback(history(false), WORK, CAPTURED, CAPTURED)
+                        .feedback(),
+                MAPPER.createArrayNode());
+        assertThat(ReviewOnWork.read(raise(null), RESULTS, false, open).errors())
+                .as("an open note still stands as advice")
+                .isNotEmpty();
+
+        // On GitLab the thread stays resolved when the problem comes back, so its note must not hold the problem back.
+        var closed = ReviewOnWork.priorAdviceWitnesses(
+                ReviewOnWork.priorPublicFeedback(history(true), WORK, CAPTURED, CAPTURED)
+                        .feedback(),
+                MAPPER.createArrayNode());
+        assertThat(ReviewOnWork.read(raise(null), RESULTS, false, closed).errors())
+                .isEmpty();
+        var withheld = MAPPER.createObjectNode();
+        withheld.putArray("decisions")
+                .addObject()
+                .put("resultId", "r1")
+                .put("disposition", "ALREADY_SAID")
+                .putArray("witnessIds")
+                .add("feedback:" + PRIOR);
+        withheld.putNull("summary");
+        withheld.putArray("inline");
+        assertThat(ReviewOnWork.read(withheld, RESULTS, false, closed).errors())
+                .singleElement()
+                .asString()
+                .contains("feedback:" + PRIOR);
+    }
+
+    @Test
+    void shouldKeepAPieceStandingAsAdviceOnThePracticesWhoseNotesStayOpen() {
+        var history = history(true);
+        var entry = (ObjectNode) history.path("feedback").get(0);
+        entry.withArray("basedOn")
+                .addObject()
+                .put("practiceSlug", "describes-changes")
+                .put("outcome", "NOT_MET");
+        var witnesses = ReviewOnWork.priorAdviceWitnesses(
+                ReviewOnWork.priorPublicFeedback(history, WORK, CAPTURED, CAPTURED)
+                        .feedback(),
+                MAPPER.createArrayNode());
+
+        var witness = witnesses.get("feedback:" + PRIOR);
+        assertThat(witness).isNotNull();
+        assertThat(witness.eligibleForAlreadySaid()).isTrue();
+        assertThat(witness.practices()).containsExactly("describes-changes");
+        assertThat(witness.closedPractices()).containsExactly("handles-errors");
+        // The returning problem is raised without being asked back, and cannot hide behind the closed note.
+        assertThat(ReviewOnWork.read(raise(null), RESULTS, false, witnesses).errors())
+                .isEmpty();
+    }
+
+    private static final String PRIOR = "0b6c8c38-55a4-4d55-9d0a-2a2f6c1f6e01";
+    private static final String KIND = "scm.pull_request";
+    private static final String URL = "https://gitlab.example.com/group/project/-/merge_requests/42";
+    private static final String WORK = KIND + ":" + URL;
+    private static final String CAPTURED = "2026-11-21T12:00:00Z";
+
+    /** One delivered note on this work about the same practice; {@code closed} when Hephaestus resolved it as fixed. */
+    private static ObjectNode history(boolean closed) {
+        var history = MAPPER.createObjectNode();
+        var entry = history.putArray("feedback").addObject();
+        entry.put("id", PRIOR)
+                .put("destination", "ON_WORK")
+                .put("publicEligible", true)
+                .put("body", SUMMARY)
+                .put("recordedClaimCurrentness", "CURRENT")
+                .put("withdrawn", false)
+                .put("deliveredAt", "2026-11-20T12:00:00Z");
+        entry.putObject("item").put("kind", KIND).put("url", URL);
+        entry.putArray("basedOn")
+                .addObject()
+                .put("practiceSlug", "handles-errors")
+                .put("outcome", "NOT_MET");
+        if (closed) entry.putArray("closedPractices").add("handles-errors");
+        return history;
+    }
+
     private static Map<String, ReviewOnWork.Witness> advice(boolean current, String practice) {
         return Map.of("feedback:w1", new ReviewOnWork.Witness(current, true, Set.of(practice)));
     }

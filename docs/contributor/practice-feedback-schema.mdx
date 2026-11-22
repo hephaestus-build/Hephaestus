@@ -104,6 +104,17 @@ No longer present needs a judged result of a changed version with trusted covera
 It also needs every text that the previous problem quoted to be gone from the newer review's capture.
 The [problem states](./practice-feedback-language.mdx#problems-and-severity) define the four states.
 
+Each row keeps the problem's identity, so a reader can tell that a problem came back in a later comparison.
+
+`feedback_thread_resolution` holds Hephaestus's own resolve or reopen of one thread on the work.
+It has one row for each workspace, item and thread.
+It names the copy whose note starts the thread, in the newest revision that owns it.
+It also holds the state that it asks for, and how far that change got.
+
+`actor` is the provider account that writes the change. It is set before the write starts.
+A person's change, a removed thread or a reply after the note stops the row for good.
+The row goes with its copy.
+
 Historical evidence uses `evidence_version=0` and retains unknown fields.
 New admission requires version 1.
 It never constructs strict current proof from missing historical coverage, roles or quotations.

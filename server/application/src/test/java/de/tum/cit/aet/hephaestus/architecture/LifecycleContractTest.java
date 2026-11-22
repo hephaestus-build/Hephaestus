@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.practices.feedback.thread.FeedbackThreadResolutionState;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
@@ -79,6 +80,8 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                         PracticeState.class,
                         Set.of(PracticeState.DRAFT, PracticeState.ACTIVE),
                         Set.of(PracticeState.ACTIVE)),
+                new Contract<>(
+                        FeedbackThreadResolutionState.class, Set.of(FeedbackThreadResolutionState.PENDING), Set.of()),
                 new Contract<>(
                         PersonDataRequest.State.class,
                         Set.of(PersonDataRequest.State.PREVIEW),

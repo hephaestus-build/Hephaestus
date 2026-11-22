@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRe
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewthread.dto.GitHubPullRequestReviewThreadEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import java.time.Instant;
-import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -101,6 +100,15 @@ public class GitHubPullRequestReviewThreadMessageHandler
         // Ensure PR exists
         prProcessor.process(prDto, context);
 
+        // The sender resolved or reopened the thread, not the pull request. A listener tells Hephaestus's own change
+        // from a person's by it. An event without a sender, or a context without its provider, names no actor, so the
+        // listener takes it as a person's.
+        Long providerId = context.providerId();
+        User sender = event.sender() == null || providerId == null
+                ? null
+                : userProcessor.ensureExists(event.sender(), providerId);
+        context = context.withActorUserId(sender == null ? null : sender.getId());
+
         // Delegate thread state changes to processor
         switch (event.actionType()) {
             case GitHubEventAction.PullRequestReviewThread.RESOLVED -> {
@@ -116,9 +124,6 @@ public class GitHubPullRequestReviewThreadMessageHandler
                                     : "unknown");
                     return;
                 }
-                // Ensure the sender (who resolved the thread) exists
-                User resolvedBy =
-                        userProcessor.ensureExists(event.sender(), Objects.requireNonNull(context.providerId()));
                 // The payload's top-level updated_at dates the act and orders it against the thread's other resolve and
                 // unresolve events; a redelivery repeats it. The pull request's updated_at does not move on a
                 // resolution, so it only stands in for the resolution time when the payload carries no date.
@@ -127,7 +132,7 @@ public class GitHubPullRequestReviewThreadMessageHandler
                         : prDto.updatedAt() != null ? prDto.updatedAt() : Instant.now();
                 threadProcessor.resolve(
                         threadId,
-                        resolvedBy,
+                        sender,
                         resolvedAt,
                         ProviderStateVersion.atStoredPrecision(event.updatedAt()),
                         context);
