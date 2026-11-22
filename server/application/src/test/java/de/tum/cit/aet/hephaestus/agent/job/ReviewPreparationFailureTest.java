@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
@@ -88,6 +89,7 @@ class ReviewPreparationFailureTest extends BaseUnitTest {
         var preparation = new ReviewAttemptPreparation(
                 jobs,
                 handler,
+                mock(ResultAdmissionService.class),
                 adapter,
                 issuer,
                 SandboxTestLimits.PROPERTIES,

@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptResults.AttemptFacts;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptOutputs.AttemptFacts;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
@@ -33,7 +33,7 @@ class ReviewAttemptTerminalErrorTest extends BaseUnitTest {
                     "runner-debug.json",
                     ("{\"attempts\":[],\"turns\":[],\"practiceSources\":{},\"end\":" + end + "}").getBytes(UTF_8));
         var sandbox = new SandboxResult(exitCode, files, "", false, Duration.ZERO);
-        return ReviewAttemptResults.terminalError(ReviewJobStatus.FAILED, sandbox, parser.parse(sandbox), facts, true);
+        return ReviewAttemptOutputs.terminalError(ReviewJobStatus.FAILED, sandbox, parser.parse(sandbox), facts, true);
     }
 
     @Test

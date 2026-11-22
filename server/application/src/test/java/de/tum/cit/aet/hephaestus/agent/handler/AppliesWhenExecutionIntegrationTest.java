@@ -325,17 +325,18 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                 List.of(source),
                 contexts,
                 files,
-                new PracticeCatalogInjector(mapper),
-                new PracticeScriptInputs(mapper),
-                mock(ReviewHistoryContentSource.class),
                 members,
                 descriptors,
                 List.of(),
                 mapper,
                 Clock.systemUTC(),
                 new AppliesWhenEvaluator(List.of(new ScmCapturedApplicability(mapper))),
-                mock(ResultAdmissionService.class),
-                catalogs);
+                catalogs,
+                new ReadyPracticeInputs(
+                        new PracticeCatalogInjector(mapper),
+                        new PracticeScriptInputs(mapper),
+                        mock(ReviewHistoryContentSource.class),
+                        mapper));
     }
 
     private void captureFiles(ReviewJob job) {

@@ -1,19 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import com.github.benmanes.caffeine.cache.AsyncCache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptCopyReceipts;
-import de.tum.cit.aet.hephaestus.agent.context.AttemptFolderBusyException;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionIdentity;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
@@ -23,30 +17,19 @@ import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxEnvBlocklist;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxGitHardening;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
-import de.tum.cit.aet.hephaestus.core.CacheLoads;
-import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
-import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,10 +37,7 @@ import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.PessimisticLockingFailureException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.ErrorResponseException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -75,66 +55,38 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     private static final Logger log = LoggerFactory.getLogger(ReviewSandboxRuns.class);
 
     private final ReviewJobClaimService claims;
-    private final ReviewAttemptPreparation preparation;
     private final ReviewAttemptCustody custody;
-    private final ReviewJobTerminal terminal;
     private final ReviewJobRepository jobs;
-    private final SandboxWorkspaceManager workspaces;
-    private final JobEvidenceFiles evidenceFiles;
     private final AttemptCopyReceipts receipts;
     private final SandboxGatewaySessions sessions;
-    private final TransactionTemplate transactions;
     private final ObjectMapper objectMapper;
     private final ReviewAttemptResults results;
     private final ReviewRunKind reviewRuns;
     private final AgentRuns runs;
-    private final ClusterLock preparationLocks;
-    /**
-     * The measurement of each attempt this replica runs. Preparing one reads the providers and writes the attempt's
-     * folder, so it loads outside the map's lock ({@link CacheLoads}).
-     */
-    private final AsyncCache<AdmissionIdentity, Measurement> measurements =
-            Caffeine.newBuilder().buildAsync();
+    private final ReviewAttemptMeasurements measurements;
 
     public ReviewSandboxRuns(
             ReviewJobClaimService claims,
-            ReviewAttemptPreparation preparation,
             ReviewAttemptCustody custody,
-            ReviewJobTerminal terminal,
             ReviewJobRepository jobs,
-            SandboxWorkspaceManager workspaces,
             SandboxGatewaySessions sessions,
-            TransactionTemplate transactions,
             ObjectMapper objectMapper,
             ReviewAttemptResults results,
             ReviewRunKind reviewRuns,
             AgentRuns runs,
-            JobEvidenceFiles evidenceFiles,
             AttemptCopyReceipts receipts,
-            ClusterLock preparationLocks) {
+            ReviewAttemptMeasurements measurements) {
         this.claims = claims;
-        this.preparation = preparation;
         this.custody = custody;
-        this.terminal = terminal;
         this.jobs = jobs;
-        this.workspaces = workspaces;
         this.sessions = sessions;
-        this.transactions = transactions;
         this.objectMapper = objectMapper;
         this.results = results;
         this.reviewRuns = reviewRuns;
         this.runs = runs;
-        this.evidenceFiles = evidenceFiles;
         this.receipts = receipts;
-        this.preparationLocks = preparationLocks;
+        this.measurements = measurements;
     }
-
-    /**
-     * An attempt as its sandbox measures it.
-     *
-     * @param workDeadline when the attempt's work ends, from the start of its execution
-     */
-    record Measurement(SandboxSpec spec, Instant workDeadline, SandboxGatewaySessions.Session session) {}
 
     @Override
     public AgentRunKind kind() {
@@ -178,7 +130,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
 
     @Override
     public JsonNode context(SandboxRun run) {
-        Measurement measurement = measurement(run);
+        ReviewAttemptMeasurements.Measurement measurement = measurements.get(run);
         var context = objectMapper.createObjectNode();
         context.set("command", objectMapper.valueToTree(measurement.spec().command()));
         context.set("env", objectMapper.valueToTree(runnerEnvironment(measurement.spec())));
@@ -194,7 +146,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
 
     /** The attempt's local archive, held while the replica serves its workspace. */
     SandboxGatewaySessions.Session session(SandboxRun run) {
-        return measurement(run).session();
+        return measurements.get(run).session();
     }
 
     SandboxGatewaySessions.ReceivedResult receive(SandboxRun run, InputStream input, String contentDigest)
@@ -208,7 +160,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
             if (image == null) throw new ReviewAttemptPreparation.FreshEpochRequired();
             return sessions.receiveAttempt(job, image, input, contentDigest);
         } catch (ReviewAttemptPreparation.FreshEpochRequired incomplete) {
-            throw restart(run, job, identity(run, job), incomplete);
+            throw measurements.restart(run, job, ReviewAttemptMeasurements.identity(run, job), incomplete);
         } finally {
             logScope.close();
         }
@@ -222,12 +174,12 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         ReviewJob job = job(run).orElseThrow(() -> new StaleRunException(run.fence()));
         var logScope = new ReviewJobLogScope(job, run.fence());
         try {
-            AdmissionIdentity attempt = identity(run, job);
+            AdmissionIdentity attempt = ReviewAttemptMeasurements.identity(run, job);
             int baseline;
             try {
                 baseline = ReviewAttemptPreparation.endedBefore(job);
             } catch (ReviewAttemptPreparation.FreshEpochRequired incomplete) {
-                throw restart(run, job, attempt, incomplete);
+                throw measurements.restart(run, job, attempt, incomplete);
             }
             try {
                 results.measured(job.getId(), job, run.fence(), baseline, result);
@@ -256,7 +208,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         String failure = RunnerEnd.programFailure(cause);
         if (failure != null)
             found.ifPresent(job -> {
-                var attempt = identity(run, job);
+                var attempt = ReviewAttemptMeasurements.identity(run, job);
                 // The order of every writer of a review and its job (ReviewRunKind#requeue): the copy fence, the
                 // parent, then the job. The requeue below takes them again in this transaction.
                 receipts.holdCopyAdmission();
@@ -289,7 +241,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         if (job.isEmpty()) return true;
         var logScope = new ReviewJobLogScope(job.get(), run.fence());
         try {
-            AdmissionIdentity attempt = identity(run, job.get());
+            AdmissionIdentity attempt = ReviewAttemptMeasurements.identity(run, job.get());
             boolean held =
                     reviewRuns.requeue(job.get().getId(), run.fence(), AgentRuns.Charge.SPEND, Duration.ZERO, null);
             custody.release(attempt);
@@ -303,188 +255,9 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         }
     }
 
-    private static void close(SandboxGatewaySessions.Session session) {
-        try {
-            session.close();
-        } catch (IOException failure) {
-            throw new UncheckedIOException(failure);
-        }
-    }
-
-    /** The attempt's measurement, prepared by the first request of its run on this replica. */
-    private Measurement measurement(SandboxRun run) {
-        ReviewJob job = job(run).orElseThrow(() -> new StaleRunException(run.fence()));
-        AdmissionIdentity attempt = identity(run, job);
-        try {
-            return CacheLoads.get(
-                    measurements,
-                    attempt,
-                    key -> preparationLocks
-                            .call(
-                                    "review-preparation:" + key.workspaceId() + ":" + key.runId() + ":" + key.attempt(),
-                                    Duration.ofSeconds(ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper)
-                                            .timeoutSeconds()),
-                                    () -> prepare(
-                                            run, job(run).orElseThrow(() -> new StaleRunException(run.fence())), key))
-                            .orElseThrow(() ->
-                                    new AttemptFolderBusyException("Another server is preparing this review attempt")));
-        } catch (AttemptFolderBusyException
-                | ClusterLock.UnavailableException
-                | PessimisticLockingFailureException unavailable) {
-            throw preparationUnavailable(unavailable);
-        }
-    }
-
-    private Measurement prepare(SandboxRun run, ReviewJob job, AdmissionIdentity attempt) {
-        var logScope = new ReviewJobLogScope(job, run.fence());
-        try {
-            var measurement = new AtomicReference<Measurement>();
-            custody.hold(attempt, () -> {
-                ConfigSnapshot snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
-                var stage = new AtomicReference<>(PreparationFailure.Stage.INPUTS);
-                ReviewAttemptPreparation.PreparedSandbox prepared;
-                try {
-                    prepared = preparation.prepare(job.getId(), job, run.fence(), snapshot, stage);
-                } catch (ReviewAttemptPreparation.FreshEpochRequired incomplete) {
-                    throw restart(run, job, attempt, incomplete);
-                } catch (AttemptFolderBusyException | PessimisticLockingFailureException busy) {
-                    throw busy;
-                } catch (ResultAdmissionService.StaleAttemptException lost) {
-                    throw new StaleRunException(run.fence(), lost);
-                } catch (RuntimeException failed) {
-                    throw preparationFailed(run, job, stage.get(), failed);
-                }
-                PreparedJobInputs inputs = prepared.stagedInputs();
-                boolean transferred = false;
-                try {
-                    SandboxSpec spec = prepared.spec();
-                    if (spec == null) {
-                        // Nothing is left to measure: the attempt completes without its sandbox. When its seal
-                        // admitted results that an earlier attempt staged, their feedback is composed first.
-                        if (!prepared.sealedStaged() || !results.handOnUnmeasured(job.getId(), run.fence()))
-                            transactions.executeWithoutResult(status -> {
-                                if (terminal.transition(
-                                                job.getId(),
-                                                run.fence(),
-                                                ReviewJobStatus.COMPLETED,
-                                                Instant.now(),
-                                                null)
-                                        > 0)
-                                    jobs.findById(job.getId()).ifPresent(completed -> {
-                                        completed.setProcessingStatus(ProcessingStatus.PENDING);
-                                        jobs.saveAndFlush(completed);
-                                    });
-                            });
-                        custody.release(attempt);
-                        throw new StaleRunException(run.fence());
-                    }
-                    if (!runs.isCurrent(run.fence().run(), run.fence().epoch())) {
-                        custody.release(attempt);
-                        throw new StaleRunException(run.fence());
-                    }
-                    try {
-                        Path input = workspaces.createInputTar(
-                                evidenceFiles.archiveDirectory(job),
-                                spec.inputFiles(),
-                                spec.inputFilesOnDisk(),
-                                spec.inputDirectories());
-                        try {
-                            var session = sessions.register(job.getId(), input);
-                            measurement.set(
-                                    new Measurement(spec, Objects.requireNonNull(spec.workDeadline()), session));
-                            var retained = new PreparedJobInputs(
-                                    inputs.filesOnDisk(),
-                                    inputs.directories(),
-                                    List.of(
-                                            () -> measurements.synchronous().invalidate(attempt),
-                                            () -> close(session),
-                                            inputs),
-                                    inputs.folderIndex(),
-                                    inputs.automatedReviewReadinessReport(),
-                                    inputs.copiesExpireAt());
-                            transferred = true;
-                            return retained;
-                        } catch (IOException | RuntimeException failure) {
-                            Files.deleteIfExists(input);
-                            throw failure;
-                        }
-                    } catch (IOException failure) {
-                        throw unstarted(run, job, attempt, new UncheckedIOException(failure));
-                    } catch (RuntimeException failure) {
-                        throw unstarted(run, job, attempt, failure);
-                    }
-                } finally {
-                    if (!transferred) inputs.close();
-                }
-            });
-            return Objects.requireNonNull(measurement.get());
-        } finally {
-            logScope.close();
-        }
-    }
-
-    /** A lost commit reply is resolved from the durable checkpoint before any terminal write. */
-    private RuntimeException preparationFailed(
-            SandboxRun run, ReviewJob job, PreparationFailure.Stage stage, RuntimeException failure) {
-        Optional<Boolean> published;
-        try {
-            published = preparation.published(job.getId(), run.fence());
-        } catch (RuntimeException unreadable) {
-            if (!unreadable.equals(failure)) unreadable.addSuppressed(failure);
-            return preparationUnavailable(unreadable);
-        }
-        if (published.isEmpty()) return new StaleRunException(run.fence(), failure);
-        if (stage == PreparationFailure.Stage.PROVENANCE
-                && published.get()
-                && !(failure instanceof JobPreparationException)) return preparationUnavailable(failure);
-        results.unprepared(job, run.fence(), PreparationFailure.of(stage, failure), failure);
-        return new StaleRunException(run.fence(), failure);
-    }
-
-    private static ErrorResponseException preparationUnavailable(RuntimeException cause) {
-        var busy = new ErrorResponseException(HttpStatus.SERVICE_UNAVAILABLE, cause);
-        busy.setDetail("Review preparation is temporarily unavailable");
-        busy.getHeaders().set("Retry-After", "1");
-        return busy;
-    }
-
-    private StaleRunException restart(
-            SandboxRun run,
-            ReviewJob job,
-            AdmissionIdentity attempt,
-            ReviewAttemptPreparation.FreshEpochRequired incomplete) {
-        transactions.executeWithoutResult(status -> {
-            if (!reviewRuns.requeue(job.getId(), run.fence(), AgentRuns.Charge.SPEND, Duration.ZERO, null))
-                throw new StaleRunException(run.fence());
-        });
-        custody.release(attempt);
-        log.atInfo()
-                .addKeyValue("event.name", "agent.review.preparation_restarted")
-                .log("Review preparation requires a fresh epoch");
-        return new StaleRunException(run.fence(), incomplete);
-    }
-
-    /** Its execution started, and its sandbox cannot measure it: the attempt ends, or goes back to the queue. */
-    private StaleRunException unstarted(
-            SandboxRun run, ReviewJob job, AdmissionIdentity attempt, RuntimeException failure) {
-        custody.release(attempt);
-        results.unprepared(job, run.fence(), null, failure);
-        return new StaleRunException(run.fence(), failure);
-    }
-
     /** The job that the run measures, while the run's claim still holds it. */
     private Optional<ReviewJob> job(SandboxRun run) {
-        return jobs.findByRunIdAndWorkspaceId(run.fence().runId(), run.fence().workspaceId())
-                .filter(job ->
-                        job.getAttempt() == ReviewRunKind.attempt(run.fence().epoch()));
-    }
-
-    private static AdmissionIdentity identity(SandboxRun run, ReviewJob job) {
-        return new AdmissionIdentity(
-                job.getId(),
-                job.getWorkspaceId(),
-                job.getAttempt(),
-                Objects.requireNonNull(run.fence().runId()));
+        return ReviewAttemptMeasurements.job(jobs, run);
     }
 
     /**

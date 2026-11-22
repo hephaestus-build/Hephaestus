@@ -1,16 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.agent.context.AppliesWhenEvaluator;
 import de.tum.cit.aet.hephaestus.agent.context.CapturedSourceFingerprints;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
-import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -37,7 +34,6 @@ import de.tum.cit.aet.hephaestus.practices.PracticeReads;
 import de.tum.cit.aet.hephaestus.practices.UncapturableReads;
 import de.tum.cit.aet.hephaestus.practices.UnofferedItemCapabilities;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultEvidence;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
@@ -74,17 +70,14 @@ public class DefaultReviewExecutionHandler {
     private final List<ItemSource> sources;
     private final WorkspaceContextBuilder context;
     private final JobEvidenceFiles files;
-    private final PracticeCatalogInjector catalog;
-    private final PracticeScriptInputs inputs;
-    private final ReviewHistoryContentSource history;
     private final ReviewAssignmentStore capture;
     private final ItemDescriptorRegistry items;
     private final List<ScanItemVersions> scanVersions;
     private final ObjectMapper mapper;
     private final Clock clock;
     private final AppliesWhenEvaluator applicability;
-    private final ResultAdmissionService admission;
     private final ClasspathSourceCatalogRegistry sourceCatalog;
+    private final ReadyPracticeInputs readyInputs;
 
     public PreparedJobInputs prepareInputs(ReviewJob job) {
         var review = assignments.review(job);
@@ -228,36 +221,13 @@ public class DefaultReviewExecutionHandler {
                         .filter(a -> decisions.stream()
                                 .anyMatch(d -> d.practiceSlug().equals(a.practiceSlug()) && report.runs(d)))
                         .toList();
-                catalog.inject(staged, ready, review.kind(), grantedContext);
-                if (!ready.isEmpty()) {
-                    var record = source.record(snapshot, evidence.files());
-                    for (var assignment : ready) {
-                        JsonNode previous = mapper.nullNode();
-                        if (review.kind() == ReviewKind.ITEM) {
-                            var retained = history.previousResults(assignment);
-                            if (!retained.isEmpty()) {
-                                var prior = retained.getFirst();
-                                var coordinates = mapper.createObjectNode()
-                                        .put("resultId", prior.resultId().toString())
-                                        .put("reviewedAt", prior.recordedAt().toString())
-                                        .put("origin", prior.origin().name())
-                                        .put("itemVersion", prior.itemVersion())
-                                        .put("outcome", prior.outcome().name());
-                                var priorEvidence = prior.evidence();
-                                if (priorEvidence != null) {
-                                    coordinates.set("citations", previousCitations(priorEvidence));
-                                    previous = coordinates;
-                                }
-                            }
-                        }
-                        staged.putAll(inputs.stage(
-                                review,
-                                assignment,
-                                record,
-                                Objects.requireNonNullElse(job.getStartedAt(), now),
-                                previous));
-                    }
-                }
+                readyInputs.stage(
+                        staged,
+                        review,
+                        ready,
+                        grantedContext,
+                        () -> source.record(snapshot, evidence.files()),
+                        Objects.requireNonNullElse(job.getStartedAt(), now));
                 staged.put(
                         SandboxLayout.TASK_ENVELOPE_FILENAME,
                         mapper.writeValueAsBytes(TaskEnvelope.practiceReview(
@@ -390,68 +360,10 @@ public class DefaultReviewExecutionHandler {
         return facts;
     }
 
-    public boolean hasStaged(ReviewJob job) {
-        return admission.hasStaged(job);
-    }
-
-    /** How many practices of the job some attempt ended, with a result or with a reason. */
-    public int endedPractices(ReviewJob job) {
-        return admission.endedPractices(job);
-    }
-
     /** Whether every practice of the job ended, with a result or with a reason, so that nothing is left to capture. */
     public boolean endedEveryPractice(ReviewJob job) {
         return assignments.open(job).isEmpty();
     }
-
-    public void finishInterrupted(ReviewJob job, ReviewStopReason reason) {
-        admission.finishInterrupted(
-                new ResultAdmissionService.AdmissionIdentity(
-                        job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()),
-                reason);
-    }
-
-    public boolean completeStaged(ReviewJob job) {
-        return admission.sealIfComplete(new ResultAdmissionService.AdmissionIdentity(
-                job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()));
-    }
-
-    public boolean admittedResults(ReviewJob job) {
-        return admission.admittedResults(job);
-    }
-
-    /** @return whether the seal admitted a result that an earlier attempt staged, whose feedback is then composed */
-    public boolean completeWithoutExecution(ReviewJob job) {
-        return admission.sealUnmeasured(
-                new ResultAdmissionService.AdmissionIdentity(
-                        job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()),
-                new SealResultsRequestDTO(
-                        SandboxLayout.PRACTICE_CONTRACT_VERSION, job.getReviewId(), job.getId(), job.getAttempt()));
-    }
-
-    private JsonNode previousCitations(JsonNode evidence) {
-        var stored = mapper.treeToValue(evidence, ResultEvidence.class);
-        return mapper.valueToTree(stored.citations().stream()
-                .map(c -> new PreviousCitation(
-                        c.sourceKind().value(),
-                        c.sourcePath(),
-                        c.path(),
-                        c.startLine(),
-                        c.endLine(),
-                        c.side() == null ? null : c.side().name(),
-                        c.commit()))
-                .toList());
-    }
-
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    private record PreviousCitation(
-            String sourceKind,
-            String sourcePath,
-            String path,
-            int startLine,
-            int endLine,
-            @Nullable String side,
-            @Nullable String commit) {}
 
     private AutomatedReviewReadinessDecision readiness(
             ReviewAssignmentSnapshot assignment, JobFolderIndex manifest, Instant now, ReviewKind scope) {

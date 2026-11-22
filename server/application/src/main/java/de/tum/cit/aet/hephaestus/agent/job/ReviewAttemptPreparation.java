@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -63,6 +64,7 @@ public class ReviewAttemptPreparation {
 
     private final ReviewJobRepository jobRepository;
     private final DefaultReviewExecutionHandler handler;
+    private final ResultAdmissionService admission;
     private final PracticePiAdapter practiceAgent;
     private final AttemptTokenIssuer attemptTokenIssuer;
     private final SandboxProperties.DefaultResourceLimits reviewLimits;
@@ -74,6 +76,7 @@ public class ReviewAttemptPreparation {
     public ReviewAttemptPreparation(
             ReviewJobRepository jobRepository,
             DefaultReviewExecutionHandler handler,
+            ResultAdmissionService admission,
             PracticePiAdapter practiceAgent,
             AttemptTokenIssuer attemptTokenIssuer,
             SandboxProperties sandboxProperties,
@@ -83,6 +86,7 @@ public class ReviewAttemptPreparation {
             JobEvidenceFiles evidenceFiles) {
         this.jobRepository = jobRepository;
         this.handler = handler;
+        this.admission = admission;
         this.practiceAgent = practiceAgent;
         this.attemptTokenIssuer = attemptTokenIssuer;
         this.reviewLimits = sandboxProperties.defaultResourceLimits();
@@ -229,7 +233,11 @@ public class ReviewAttemptPreparation {
      */
     private boolean completeWithoutExecution(ReviewJob job) {
         try {
-            return handler.completeWithoutExecution(job);
+            return admission.sealUnmeasured(
+                    new ResultAdmissionService.AdmissionIdentity(
+                            job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId()),
+                    new SealResultsRequestDTO(
+                            SandboxLayout.PRACTICE_CONTRACT_VERSION, job.getReviewId(), job.getId(), job.getAttempt()));
         } catch (RuntimeException failure) {
             throw new JobPreparationException("Could not complete the prepared review inputs", failure);
         }
@@ -307,7 +315,7 @@ public class ReviewAttemptPreparation {
         String inputsDigest = ProvenanceDigest.inputsDigestHex(inputFiles, inputPaths, inputDirectories, jobId);
         JsonNode capture = capture(snapshotMetadata(inputFiles, inputPaths), inputs.automatedReviewReadinessReport());
         var stamp = capture instanceof ObjectNode object ? object : objectMapper.createObjectNode();
-        int baseline = handler.endedPractices(owned(jobId, fence));
+        int baseline = admission.endedPractices(owned(jobId, fence));
         stamp.put("attempt", attempt);
         stamp.put("runId", fence.runId().toString());
         stamp.put("endedBefore", baseline);

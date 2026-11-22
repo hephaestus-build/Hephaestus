@@ -118,17 +118,14 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
             List.of(source),
             context,
             files,
-            catalog,
-            new PracticeScriptInputs(mapper),
-            history,
             members,
             items,
             List.of(),
             mapper,
             Clock.fixed(NOW, ZoneOffset.UTC),
             new AppliesWhenEvaluator(List.of(new ScmCapturedApplicability(mapper))),
-            mock(ResultAdmissionService.class),
-            sourceCatalog);
+            sourceCatalog,
+            new ReadyPracticeInputs(catalog, new PracticeScriptInputs(mapper), history, mapper));
 
     private ReviewJob prepare(boolean available) {
         return prepare(
@@ -276,17 +273,15 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                 List.of(source),
                 context,
                 files,
-                new PracticeCatalogInjector(mapper),
-                new PracticeScriptInputs(mapper),
-                history,
                 members,
                 items,
                 List.of(composer),
                 mapper,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new AppliesWhenEvaluator(List.of(new ScmCapturedApplicability(mapper))),
-                mock(ResultAdmissionService.class),
-                sourceCatalog);
+                sourceCatalog,
+                new ReadyPracticeInputs(
+                        new PracticeCatalogInjector(mapper), new PracticeScriptInputs(mapper), history, mapper));
         try (var prepared = scanHandler.prepareInputs(job)) {
             assertThat(prepared.folderIndex()).isNotNull();
         }
@@ -861,17 +856,14 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                         sourceCatalog,
                         new JobFolderIndexBuilder(sourceCatalog, mapper, clock)),
                 files,
-                catalog,
-                new PracticeScriptInputs(mapper),
-                history,
                 members,
                 items,
                 List.of(),
                 mapper,
                 clock,
                 new AppliesWhenEvaluator(List.of(new ScmCapturedApplicability(mapper))),
-                mock(ResultAdmissionService.class),
-                sourceCatalog);
+                sourceCatalog,
+                new ReadyPracticeInputs(catalog, new PracticeScriptInputs(mapper), history, mapper));
     }
 
     private List<ReviewCaptureDecision> recordedDecisions(ReviewJob job) {

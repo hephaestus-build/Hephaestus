@@ -172,7 +172,8 @@ public class ResultAdmissionService {
      * the attempt's copied evidence, which an attempt that captured nothing does not have.
      *
      * @return whether the seal admitted a result that an earlier attempt staged, whose feedback is then composed; false
-     *     when it refused every staged copy, and on a repeated seal
+     *     when it refused every staged copy. A repeated seal answers as the first one did, so a retry after a failed
+     *     hand-on still composes.
      */
     public boolean sealUnmeasured(AdmissionIdentity identity, SealResultsRequestDTO request) {
         return withAttemptFolder(identity, () -> seal(identity, request)).tookStaged();
@@ -180,6 +181,9 @@ public class ResultAdmissionService {
 
     /** @param tookStaged whether this seal admitted a result that an earlier attempt staged */
     private record Sealed(ReviewJob job, boolean tookStaged) {}
+
+    /** The capture key that keeps {@link Sealed#tookStaged} of the attempt's seal. */
+    private static final String ADMITTED_STAGED = "admittedStaged";
 
     private Sealed seal(AdmissionIdentity identity, SealResultsRequestDTO request) {
         String digest = ProvenanceDigest.sha256Hex(mapper.writeValueAsBytes(request));
@@ -190,7 +194,11 @@ public class ResultAdmissionService {
             if (isAdmitted(owned)) {
                 if (isContinuation(owned) || !digest.equals(owned.getAdmissionDigest()))
                     throw new AdmissionConflictException();
-                return new Sealed(owned, false);
+                return new Sealed(
+                        owned,
+                        Objects.requireNonNull(owned.getCapture())
+                                .path(ADMITTED_STAGED)
+                                .asBoolean(false));
             }
             if (!assignments.open(owned).isEmpty()) throw new AdmissionConflictException();
             var staged = staging.staged(owned);
@@ -234,11 +242,6 @@ public class ResultAdmissionService {
                                     Long.toString(value.getKey().itemId()),
                                     value.getValue()))
                             .toList()));
-            owned.setCapture(retained);
-            owned.setAdmissionDigest(digest);
-            owned.setAdmissionAttempt(identity.attempt());
-            staging.retainSealBasis(identity, owned, digest, staged);
-            jobs.saveAndFlush(owned);
             // The receipt also holds the Does-not-apply results that capture recorded, so it cannot say alone whether a
             // staged result was taken. The seal withholds a staged candidate by its practice and item, for example for
             // its processing policy, and admits every other one.
@@ -249,6 +252,13 @@ public class ResultAdmissionService {
                 var candidate = value.candidate();
                 return candidate != null && !withheld.contains(List.of(candidate.practiceId(), candidate.itemId()));
             });
+            // Kept with the seal: the staged copies can expire before a repeated seal, which must answer the same.
+            retained.put(ADMITTED_STAGED, tookStaged);
+            owned.setCapture(retained);
+            owned.setAdmissionDigest(digest);
+            owned.setAdmissionAttempt(identity.attempt());
+            staging.retainSealBasis(identity, owned, digest, staged);
+            jobs.saveAndFlush(owned);
             return new Sealed(owned, tookStaged);
         }));
     }

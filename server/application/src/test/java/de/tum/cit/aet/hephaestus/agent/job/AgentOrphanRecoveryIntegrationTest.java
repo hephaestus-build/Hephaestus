@@ -1129,13 +1129,15 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         var agent = mock(PracticePiAdapter.class);
         when(agent.parseResult(TIMED_OUT)).thenReturn(new AgentResult(false, Map.of()));
         var telemetry = new ReviewJobTelemetry(meterRegistry, Tracer.NOOP);
+        var terminal = new ReviewJobTerminal(jobRepository, agentRuns, continuation);
         return new ReviewAttemptResults(
                 jobRepository,
-                mock(DefaultReviewExecutionHandler.class),
+                mock(ResultAdmissionService.class),
                 agent,
                 new ReviewAttemptPreparation(
                         jobRepository,
                         mock(DefaultReviewExecutionHandler.class),
+                        mock(ResultAdmissionService.class),
                         agent,
                         mock(AttemptTokenIssuer.class),
                         SandboxTestLimits.PROPERTIES,
@@ -1143,15 +1145,23 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                         objectMapper,
                         telemetry,
                         context.getBean(JobEvidenceFiles.class)),
-                new ReviewJobTerminal(jobRepository, agentRuns, continuation),
+                terminal,
                 reviewRuns,
                 context.getBean(ProviderOutages.class),
-                new PracticeScriptRunRecorder(scriptReports, scriptRuns, meterRegistry, objectMapper, assignments),
+                new ReviewAttemptOutputs(
+                        jobRepository,
+                        terminal,
+                        reviewRuns,
+                        new PracticeScriptRunRecorder(
+                                scriptReports, scriptRuns, meterRegistry, objectMapper, assignments),
+                        transactionTemplate,
+                        objectMapper,
+                        meterRegistry,
+                        usageEvents),
                 transactionTemplate,
                 objectMapper,
                 meterRegistry,
-                telemetry,
-                usageEvents);
+                telemetry);
     }
 
     @Test

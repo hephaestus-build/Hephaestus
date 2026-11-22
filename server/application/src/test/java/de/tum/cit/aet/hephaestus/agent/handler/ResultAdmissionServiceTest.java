@@ -11,6 +11,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -595,6 +596,40 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         verify(stagingStore, never()).refuseCopy(anyLong(), any(), anyInt(), any());
         assertThat(response.withheld()).isEmpty();
         assertThat(ResultAdmissionService.isAdmitted(job)).isTrue();
+    }
+
+    /**
+     * The hand-on to composition can fail after the seal commits. The retry seals again under the same fence and finds
+     * the job admitted. It answers as the first seal did, from the job and without reading the staged copies again,
+     * so the staged result's feedback is still composed.
+     */
+    @Test
+    void shouldAnswerARepeatedUnmeasuredSealAsTheFirstSealDid() {
+        var assignment = sealable();
+        var copy = UUID.randomUUID();
+        var candidate = mock(ResultCandidate.class);
+        var staged = stagedCandidate(assignment, candidate, copy, Instant.now().plusSeconds(3600));
+        when(stagingStore.staged(1, job.getReviewId(), job.getId())).thenReturn(List.of(staged));
+        when(receipts.vouchesForOriginalCopy(copy, job.getId(), 1L, 0)).thenReturn(true);
+        when(output.seal(job, List.of(candidate))).thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        assertThat(service.sealUnmeasured(identity(), sealRequest())).isTrue();
+        assertThat(service.sealUnmeasured(identity(), sealRequest())).isTrue();
+
+        verify(output).seal(any(), any());
+        // The first seal reads the staged copies before and after it refuses any; the repeated seal reads none.
+        verify(stagingStore, times(2)).staged(1, job.getReviewId(), job.getId());
+    }
+
+    @Test
+    void shouldAnswerARepeatedUnmeasuredSealThatTookNothingStagedAsFalse() {
+        sealable();
+        when(output.seal(job, List.of())).thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        assertThat(service.sealUnmeasured(identity(), sealRequest())).isFalse();
+        assertThat(service.sealUnmeasured(identity(), sealRequest())).isFalse();
+
+        verify(output).seal(any(), any());
     }
 
     @Test

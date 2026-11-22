@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
@@ -445,12 +446,15 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                 evidenceReceipts,
                 evidenceCaptures,
                 beans.getBean(AttemptInputs.class));
-        var handler = mock(DefaultReviewExecutionHandler.class, invocation -> {
-            if (invocation.getMethod().getName().equals("completeWithoutExecution")
+        var admission = mock(ResultAdmissionService.class, invocation -> {
+            if (invocation.getMethod().getName().equals("sealUnmeasured")
                     && publication == Publication.COMPLETION_FAILED) {
                 completions.incrementAndGet();
                 throw new DataIntegrityViolationException("Prepared input completion failed");
             }
+            return Answers.RETURNS_DEFAULTS.answer(invocation);
+        });
+        var handler = mock(DefaultReviewExecutionHandler.class, invocation -> {
             if (!invocation.getMethod().getName().equals("prepareInputs"))
                 return Answers.RETURNS_DEFAULTS.answer(invocation);
             ReviewJob current = invocation.getArgument(0);
@@ -521,6 +525,7 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
         var preparation = new ReviewAttemptPreparation(
                 preparationJobs,
                 handler,
+                admission,
                 adapter,
                 issuer,
                 SandboxTestLimits.PROPERTIES,
@@ -531,34 +536,49 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
         var terminal = SandboxReviewClaims.terminal(beans);
         var results = new ReviewAttemptResults(
                 jobs,
-                handler,
+                admission,
                 adapter,
                 preparation,
                 terminal,
                 beans.getBean(ReviewRunKind.class),
                 beans.getBean(ProviderOutages.class),
-                mock(PracticeScriptRunRecorder.class),
+                new ReviewAttemptOutputs(
+                        jobs,
+                        terminal,
+                        beans.getBean(ReviewRunKind.class),
+                        mock(PracticeScriptRunRecorder.class),
+                        transactions,
+                        mapper,
+                        meters,
+                        usageEvents),
                 transactions,
                 mapper,
                 meters,
-                telemetry,
-                usageEvents);
+                telemetry);
+        var runKinds = beans.getBean(ReviewRunKind.class);
         var kind = new ReviewSandboxRuns(
                 mock(ReviewJobClaimService.class),
-                preparation,
                 custody,
-                terminal,
                 jobs,
-                new SandboxWorkspaceManager(),
                 localSessions,
-                transactions,
                 mapper,
                 results,
-                beans.getBean(ReviewRunKind.class),
+                runKinds,
                 runs,
-                files,
                 new AttemptCopyReceipts(evidenceReceipts, evidenceCaptures, files, layout, jobs),
-                beans.getBean(ClusterLock.class));
+                new ReviewAttemptMeasurements(
+                        preparation,
+                        custody,
+                        jobs,
+                        new SandboxWorkspaceManager(),
+                        files,
+                        localSessions,
+                        transactions,
+                        mapper,
+                        results,
+                        runKinds,
+                        runs,
+                        beans.getBean(ClusterLock.class)));
         return new Replica(gateway(kind, localSessions), kind, custody, layout, job.getId(), preparation);
     }
 

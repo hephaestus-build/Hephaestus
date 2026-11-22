@@ -654,8 +654,10 @@ When a parallel review session loses its gateway, or meets the server's own erro
 
 ADR [0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) keeps the sandbox as the lease writer.
 A server restart does not assign a new epoch by itself.
+
 `JobEvidenceFiles.Preparation` classifies the durable checkpoint before a replica prepares the attempt.
 One `ClusterLock` serializes this work by workspace, run and epoch.
+`ReviewAttemptMeasurements` holds that lock and the preparation cache of the replica.
 The PostgreSQL session releases that lock if the server dies.
 No database transaction stays open while a provider is read.
 

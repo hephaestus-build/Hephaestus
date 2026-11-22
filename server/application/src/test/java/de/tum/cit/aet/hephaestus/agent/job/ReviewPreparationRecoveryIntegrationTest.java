@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxResultListener;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
@@ -134,7 +135,7 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                     Map.of("INDEX.json", source));
             return new PreparedJobInputs(Map.of("INDEX.json", source), List.of(), List.of(), null, null);
         });
-        var replacement = replacement(handler, new AgentResult(false, Map.of()));
+        var replacement = replacement(handler, mock(ResultAdmissionService.class), new AgentResult(false, Map.of()));
         String subject = Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT concurrency_key FROM agent_run WHERE id=? AND workspace_id=?",
                 String.class,
@@ -195,10 +196,11 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 .put("image", "agent:test"));
         jobs.saveAndFlush(job);
         var fence = RuntimeJobTestData.fence(jdbc, job);
-        var handler = mock(DefaultReviewExecutionHandler.class);
-        when(handler.hasStaged(any())).thenReturn(true);
-        when(handler.endedPractices(any())).thenReturn(3);
-        var replacement = replacement(handler, new AgentResult(false, Map.of()));
+        var admission = mock(ResultAdmissionService.class);
+        when(admission.hasStaged(any())).thenReturn(true);
+        when(admission.endedPractices(any())).thenReturn(3);
+        var replacement =
+                replacement(mock(DefaultReviewExecutionHandler.class), admission, new AgentResult(false, Map.of()));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(),
                 job.getWorkspaceId(),
@@ -247,7 +249,9 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
         var replacement = replacement(
-                mock(DefaultReviewExecutionHandler.class), new AgentResult(true, Map.of("runnerFinished", true)));
+                mock(DefaultReviewExecutionHandler.class),
+                mock(ResultAdmissionService.class),
+                new AgentResult(true, Map.of("runnerFinished", true)));
         byte[] body = resultArchive();
         String digest = "sha-256=:"
                 + Base64.getEncoder()
@@ -372,7 +376,8 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
         return jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
     }
 
-    private ReviewSandboxRuns replacement(DefaultReviewExecutionHandler handler, AgentResult parsedResult) {
+    private ReviewSandboxRuns replacement(
+            DefaultReviewExecutionHandler handler, ResultAdmissionService admission, AgentResult parsedResult) {
         var mapper = new JsonMapper();
         var files = context.getBean(JobEvidenceFiles.class);
         var agent = mock(PracticePiAdapter.class);
@@ -381,6 +386,7 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
         var preparation = new ReviewAttemptPreparation(
                 jobs,
                 handler,
+                admission,
                 agent,
                 mock(AttemptTokenIssuer.class),
                 SandboxTestLimits.PROPERTIES,
@@ -390,36 +396,53 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 files);
         var reviewRuns = context.getBean(ReviewRunKind.class);
         var terminal = new ReviewJobTerminal(jobs, runs, mock(ReviewCompositionContinuation.class));
+        var meters = new SimpleMeterRegistry();
         var results = new ReviewAttemptResults(
                 jobs,
-                handler,
+                admission,
                 agent,
                 preparation,
                 terminal,
                 reviewRuns,
                 context.getBean(ProviderOutages.class),
-                mock(PracticeScriptRunRecorder.class),
+                new ReviewAttemptOutputs(
+                        jobs,
+                        terminal,
+                        reviewRuns,
+                        mock(PracticeScriptRunRecorder.class),
+                        transactions,
+                        mapper,
+                        meters,
+                        usageEvents),
                 transactions,
                 mapper,
-                new SimpleMeterRegistry(),
-                telemetry,
-                usageEvents);
+                meters,
+                telemetry);
+        var attemptCustody = new ReviewAttemptCustody(runs);
+        var gatewaySessions = new SandboxGatewaySessions();
         return new ReviewSandboxRuns(
                 mock(ReviewJobClaimService.class),
-                preparation,
-                new ReviewAttemptCustody(runs),
-                terminal,
+                attemptCustody,
                 jobs,
-                mock(SandboxWorkspaceManager.class),
-                new SandboxGatewaySessions(),
-                transactions,
+                gatewaySessions,
                 mapper,
                 results,
                 reviewRuns,
                 runs,
-                files,
                 context.getBean(AttemptCopyReceipts.class),
-                context.getBean(ClusterLock.class));
+                new ReviewAttemptMeasurements(
+                        preparation,
+                        attemptCustody,
+                        jobs,
+                        mock(SandboxWorkspaceManager.class),
+                        files,
+                        gatewaySessions,
+                        transactions,
+                        mapper,
+                        results,
+                        reviewRuns,
+                        runs,
+                        context.getBean(ClusterLock.class)));
     }
 
     private static ConfigSnapshot snapshot() {
