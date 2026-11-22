@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -7,9 +8,10 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Shared passive recorder for SCM domain events, imported once by {@link BaseIntegrationTest} so
- * handler/processor tests reuse one Spring context instead of each declaring (and forking a context
- * for) their own listener. Read back with {@link #ofType(Class)}; {@link #clear()} between tests.
+ * Shared passive recorder for SCM domain events and integration attention changes, imported once by
+ * {@link BaseIntegrationTest} so handler/processor tests reuse one Spring context instead of each declaring (and
+ * forking a context for) their own listener. Read back with {@link #ofType(Class)}; {@link #clear()} between tests.
+ * It records an event from any thread (testing.mdx § Flaky tests).
  */
 @Component
 public class RecordingScmEventListener {
@@ -18,6 +20,11 @@ public class RecordingScmEventListener {
 
     @EventListener
     void onScmEvent(ScmDomainEvent.Event event) {
+        events.add(event);
+    }
+
+    @EventListener
+    void onAttentionChanged(IntegrationAttentionChangedEvent event) {
         events.add(event);
     }
 
