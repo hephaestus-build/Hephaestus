@@ -55,15 +55,15 @@ A rule that main does not satisfy yet says "1.0 target" and names its pull reque
    Enforced by: `CitationVerificationTest#retainedProofDoesNotDependOnARuntimeJobOrAttempt`, `PracticeReviewModuleBoundaryTest#shouldKeepProductProofIndependentOfRetainedJobs`.
 8. **No replay.** Delivery checks the stored verdict, the digest of the stored quote and the source-use decision for delivery. It never reads the captured bytes again, and the current upstream never stands in for them.
    Enforced by: `CitationVerificationTest#refusesMissingOrChangedQuoteProof`. Code review catches a delivery that reads a folder or the provider.
-9. **Copies are short-lived.** The attempt folder goes when admission commits. An unadmitted folder goes 1 hour after its attempt ends. A restart removes the folders of unknown and finished attempts. The composition inputs ([ADR 0063](0063-each-practice-is-staged-when-it-ends.md)) stay at most 24 hours. So does the debug transcript ([ADR 0041](0041-compose-1x-kubernetes-2.md#update--2026-10-09-debug-transcripts)). Neither stays past the expiry of its occasion's evidence. [Data retention](../admin/data-retention.mdx) owns every period.
-   Enforced by: `JobEvidenceFilesTest#shouldDeleteAdmittedFinalEvidenceImmediatelyWithoutDeletingAReplacementHandle`, `#shouldRetainUnadmittedEvidenceForOneHourAfterTheOwningHandleCloses`, `#shouldCleanUnknownAndFinishedFoldersImmediatelyAfterRestartButKeepRunningJobs`, `#shouldRemoveRawTranscriptAtTheOriginalOccasionDeadline`, `ResultAdmissionServiceTest#shouldBoundRetainedWriterInputsByTheirOriginalOccasionDeadline`.
+9. **Copies are short-lived.** The attempt folder goes when admission commits. The folder of an attempt that no longer runs goes at the next reconcile pass. A restart removes the folders of unknown and finished attempts. The composition inputs ([ADR 0063](0063-each-practice-is-staged-when-it-ends.md)) stay at most 24 hours. So does the debug transcript ([ADR 0041](0041-compose-1x-kubernetes-2.md#update--2026-10-09-debug-transcripts)). Neither stays past the expiry of its occasion's evidence. [Data retention](../admin/data-retention.mdx) owns every period.
+   Enforced by: `JobEvidenceFilesTest#shouldDeleteAdmittedFinalEvidenceImmediatelyWithoutDeletingAReplacementHandle`, `#shouldCleanUnknownAndFinishedFoldersImmediatelyAfterRestartButKeepRunningJobs`, `#shouldRemoveRawTranscriptAtTheOriginalOccasionDeadline`, `JobEvidenceSweepIntegrationTest#shouldRemoveEveryFolderThatNoRunningAttemptReadsInAReconcilePass`, `ResultAdmissionServiceTest#shouldBoundRetainedWriterInputsByTheirOriginalOccasionDeadline`.
 10. **No evidence store.** There is no object store, no content-addressed store, no keep-ref and no shared evidence volume. The Git mirror and the attempt folder on a server are caches. PostgreSQL is the record.
     Not enforced. Code review catches a new store.
 11. **Every server can verify every attempt.** Capture records each checkout's key (repository, commit and tree) and the folder's other files in PostgreSQL while the attempt runs. A server without the folder rebuilds it from its own mirror and checks the tree and the checkout digest. A rebuild that fails or differs is the capture failure `CHECKOUT_UNVERIFIED`, never a citation refusal.
-    1.0 target: [#4094](https://github.com/hephaestus-build/Hephaestus/pull/4094), with `EvidenceAcrossServersIntegrationTest`. On main, only the process that captured an attempt holds its folder.
+    Enforced by: `EvidenceAcrossServersIntegrationTest`, since [#4094](https://github.com/hephaestus-build/Hephaestus/pull/4094).
 12. **Erasure follows every copied person.** A person erasure removes each attempt folder, composition input and transcript that copied that person ([personal data map](../admin/dsms/personal-data-map.mdx)).
-    1.0 target: on main, erasure waits for the acknowledgement of the process that holds each copy. [#4094](https://github.com/hephaestus-build/Hephaestus/pull/4094) marks copies `ERASED` in PostgreSQL, so erasure waits for no server. Each server then removes erased folders within 2 minutes.
-    Enforced by: `EvidenceFolderAccountErasureIntegrationTest#waitsForTheRuntimeAndErasesEveryAttemptInTwoWorkspacesWithoutTouchingAnotherPerson`, `EvidenceReceiptRetentionIntegrationTest`.
+    Since [#4094](https://github.com/hephaestus-build/Hephaestus/pull/4094), erasure marks copies `ERASED` in PostgreSQL, so it waits for no server. Each server then removes erased folders within 2 minutes.
+    Enforced by: `EvidenceFolderAccountErasureIntegrationTest#erasesEveryAttemptInTwoWorkspacesAtOnceAndRemovesTheFoldersOnceTheRuntimeReleasesThem`, `#anErasureCompletesWithoutTheServerThatWroteTheCopyWhichRemovesItsFolderInItsNextPass`, `EvidenceReceiptRetentionIntegrationTest`.
 
 The [pipeline](../contributor/practice-review-pipeline.mdx#admit-results) owns the details of capture and admission.
 
@@ -86,7 +86,7 @@ The [pipeline](../contributor/practice-review-pipeline.mdx#admit-results) owns t
 ## Confirmation
 
 Each decision names its test or says that it is not enforced.
-Decisions 1 and 10 rely on code review. Decisions 11 and 12 are enforced once #4094 merges.
+Decisions 1 and 10 rely on code review.
 
 ## Revisit trigger
 
@@ -112,3 +112,12 @@ Decisions 1 and 10 rely on code review. Decisions 11 and 12 are enforced once #4
 - [ADR 0039](0039-git-and-postgresql-own-evidence.md#considered-options): S3-compatible storage.
 - [ADR 0039](0039-git-and-postgresql-own-evidence.md#materialization-and-limits): a partial clone (`--filter=blob:none`) on the evidence path.
 - [ADR 0041](0041-compose-1x-kubernetes-2.md#rejected-alternatives): evidence copies in PostgreSQL, object storage, a Git server, and context as Git repositories.
+
+## Update — 2026-11-22: corrected references
+
+Decision 9 named a one-hour grace for an unadmitted folder.
+[ADR 0041](0041-compose-1x-kubernetes-2.md#update--2026-11-14-ended-attempts-leave-at-the-next-sweep) removed that grace, so the decision now names the next reconcile pass.
+Two test references in decisions 9 and 12 named tests that were renamed or that did not test the new period. They now name the current tests.
+
+Decisions 11 and 12 named [#4094](https://github.com/hephaestus-build/Hephaestus/pull/4094) as a 1.0 target. It merged, so they now say what is enforced.
+No other decision changes.
