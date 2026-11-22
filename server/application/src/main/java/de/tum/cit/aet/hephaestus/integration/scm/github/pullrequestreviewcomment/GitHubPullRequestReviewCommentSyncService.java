@@ -458,16 +458,16 @@ public class GitHubPullRequestReviewCommentSyncService {
     }
 
     /**
-     * Completes the node id of a thread that the review-comment webhook stored without one. Only the identity: the
-     * resolve and unresolve events own a stored thread's resolution and order it.
+     * Completes the node id of a thread that the review-comment webhook stored without one. Only the identity, in one
+     * column: the resolve and unresolve events own a stored thread's resolution and order it, and this read holds no
+     * lock, so the loaded row is never saved back.
      */
     private PullRequestReviewThread completeNodeId(PullRequestReviewThread thread, @Nullable String nodeId) {
-        boolean missing = thread.getNodeId() == null;
-        if (!thread.completeNodeId(nodeId)) {
+        if (nodeId == null || nodeId.equals(thread.getNodeId())) return thread;
+        if (thread.getNodeId() != null)
             log.warn("Kept stored thread node id: reason=readNamesAnother, threadId={}", thread.getId());
-            return thread;
-        }
-        return missing && thread.getNodeId() != null ? threadRepository.save(thread) : thread;
+        else threadRepository.completeNodeId(Objects.requireNonNull(thread.getId()), nodeId);
+        return thread;
     }
 
     /**

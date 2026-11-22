@@ -29,6 +29,15 @@ public interface PullRequestReviewThreadRepository extends JpaRepository<PullReq
     Optional<PullRequestReviewThread> findByNativeIdAndProviderId(Long nativeId, Long providerId);
 
     /**
+     * Records the thread's node id when it has none. It writes only that column, so a resolution that a webhook
+     * commits meanwhile stays as written.
+     */
+    @WorkspaceAgnostic("Sync completes the identity of one shared mirror row that it read by its provider id")
+    @Modifying
+    @Query("UPDATE PullRequestReviewThread t SET t.nodeId = :nodeId WHERE t.id = :id AND t.nodeId IS NULL")
+    int completeNodeId(@Param("id") long id, @Param("nodeId") String nodeId);
+
+    /**
      * Locks the thread without loading it, so a compare with its stored resolution and the write after it are atomic.
      * It must be the transaction's first read of the thread: the caller then reads it through
      * {@link #findByNativeIdAndProviderId}, which sees what the last writer committed.

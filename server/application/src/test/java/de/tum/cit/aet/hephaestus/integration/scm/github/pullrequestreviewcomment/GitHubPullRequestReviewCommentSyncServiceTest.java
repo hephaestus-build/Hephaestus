@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcommen
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,6 +35,7 @@ class GitHubPullRequestReviewCommentSyncServiceTest extends BaseUnitTest {
 
     private static final long ROOT_COMMENT_ID = 2494208170L;
     private static final long PROVIDER_ID = 7L;
+    private static final long THREAD_ID = 11L;
 
     private final PullRequestReviewThreadRepository threads = mock(PullRequestReviewThreadRepository.class);
     private final GitHubPullRequestReviewCommentSyncService service = new GitHubPullRequestReviewCommentSyncService(
@@ -50,13 +52,13 @@ class GitHubPullRequestReviewCommentSyncServiceTest extends BaseUnitTest {
     void shouldRecordTheNodeIdWhenTheWebhookStoredTheThreadWithoutOne() {
         // The review-comment webhook stores a thread under its root comment's id, with no node id and unresolved.
         var stored = storedThread(null);
-        when(threads.save(any())).thenAnswer(call -> call.getArgument(0));
 
         service.processThread(read("PRRT_kwDOQNWqEc5hJ2Ab", true), pullRequest(), 1L, SyncResult.Status.COMPLETED);
 
-        assertThat(stored.getNodeId()).isEqualTo("PRRT_kwDOQNWqEc5hJ2Ab");
+        // Only the node id column is written; the loaded row, read without a lock, is never saved back.
+        verify(threads).completeNodeId(THREAD_ID, "PRRT_kwDOQNWqEc5hJ2Ab");
+        verify(threads, never()).save(any());
         assertThat(stored.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
-        verify(threads).save(stored);
     }
 
     @Test
@@ -66,11 +68,13 @@ class GitHubPullRequestReviewCommentSyncServiceTest extends BaseUnitTest {
         service.processThread(read("PRRT_other", false), pullRequest(), 1L, SyncResult.Status.COMPLETED);
 
         assertThat(stored.getNodeId()).isEqualTo("PRRT_stored");
+        verify(threads, never()).completeNodeId(anyLong(), any());
         verify(threads, never()).save(any());
     }
 
     private PullRequestReviewThread storedThread(@Nullable String nodeId) {
         var thread = new PullRequestReviewThread();
+        thread.setId(THREAD_ID);
         thread.setNativeId(ROOT_COMMENT_ID);
         if (nodeId != null) thread.setNodeId(nodeId);
         thread.setState(PullRequestReviewThread.State.UNRESOLVED);
