@@ -34,7 +34,7 @@ class PracticeRepositoryToolsTest {
             "0123456789abcdef0123456789abcdef01234567",
             Instant.parse("2026-11-22T09:00:00Z"),
             List.of(
-                    new PracticeSyncResultDTO("explain", PracticeSyncStatus.CREATED, List.of()),
+                    new PracticeSyncResultDTO("explain", PracticeSyncStatus.CREATED, List.of(), true),
                     new PracticeSyncResultDTO(
                             "broken",
                             PracticeSyncStatus.INVALID,
@@ -43,7 +43,8 @@ class PracticeRepositoryToolsTest {
                                     null,
                                     null,
                                     PracticeFileProblemDTO.FRONT_MATTER_MISSING,
-                                    "Start practice.md with a line ---.")))),
+                                    "Start practice.md with a line ---.")),
+                            false)),
             List.of());
 
     private final PracticeRepositoryService repositories = mock(PracticeRepositoryService.class);

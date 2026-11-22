@@ -4811,7 +4811,7 @@ export type PracticeState = "ACTIVE" | "DRAFT";
  */
 export type PracticeSyncResult = {
 	/**
-	 * why the folder is not valid; empty for every other status
+	 * why the folder is not valid, or why its practice cannot be retired; empty for every other status
 	 */
 	problems: Array<PracticeFileProblem>;
 	/**
@@ -4819,6 +4819,11 @@ export type PracticeSyncResult = {
 	 */
 	slug: string;
 	status: PracticeSyncStatus;
+	/**
+	 * whether the sync made a new current version whose review digest no trial of the practice ran. Only a
+	 * created, taken-over or updated practice can be untried.
+	 */
+	untried: boolean;
 };
 
 /**

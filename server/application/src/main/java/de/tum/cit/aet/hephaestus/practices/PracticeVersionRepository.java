@@ -53,4 +53,15 @@ public interface PracticeVersionRepository extends JpaRepository<PracticeVersion
     @Modifying
     @Query(value = "DELETE FROM practice_version WHERE workspace_id = :workspaceId", nativeQuery = true)
     void deleteAllByWorkspaceId(Long workspaceId);
+
+    /** Whether a trial of the practice ran a version with this review digest (ADR 0118 decision 5). */
+    @Query(value = """
+                    SELECT EXISTS (
+                        SELECT 1 FROM review r
+                        JOIN review_practice rp ON rp.workspace_id = r.workspace_id AND rp.review_id = r.id
+                        JOIN practice_version v ON v.workspace_id = rp.workspace_id AND v.id = rp.practice_version_id
+                        WHERE r.workspace_id = :workspaceId AND r.origin = 'TRIAL' AND rp.practice_id = :practiceId
+                          AND v.review_digest = :reviewDigest)
+                    """, nativeQuery = true)
+    boolean existsTrialWithDigest(long workspaceId, long practiceId, String reviewDigest);
 }

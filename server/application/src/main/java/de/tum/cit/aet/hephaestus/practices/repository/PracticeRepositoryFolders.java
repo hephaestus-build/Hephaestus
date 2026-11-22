@@ -92,13 +92,16 @@ public class PracticeRepositoryFolders {
      * @param unreadable the problems of each folder that holds a link, a file that is too large, or a file that is not
      *     text: it is not a practice now, but it is not gone either
      * @param problems why the directory itself cannot be read. A sync then changes nothing, and both maps are empty.
+     * @param lastSyncedAt when the sync before this read finished, or null before the first one. A sync that finishes
+     *     while these folders are read may have applied a newer commit, so this read must not apply after it.
      */
     public record Tree(
             String commit,
             SortedMap<String, Map<String, String>> folders,
             SortedMap<String, List<PracticeFileProblemDTO>> unreadable,
             List<PracticeFileProblemDTO> problems,
-            ReadUnder readUnder) {}
+            ReadUnder readUnder,
+            @Nullable Instant lastSyncedAt) {}
 
     /**
      * The folder of {@code slug} at the head of the default branch, or empty when the branch has no such folder.
@@ -133,6 +136,7 @@ public class PracticeRepositoryFolders {
     public Tree readAll(long workspaceId) {
         var setting = setting(workspaceId);
         var readUnder = ReadUnder.of(setting);
+        var lastSyncedAt = setting.getSyncedAt();
         try (var checkout = checkout(workspaceId, setting)) {
             var root = checkout.directory().toRealPath();
             var directory = root.resolve(setting.getDirectory()).normalize();
@@ -147,7 +151,8 @@ public class PracticeRepositoryFolders {
                                 PracticeFileProblemDTO.FILE_INVALID,
                                 setting.getDirectory(),
                                 "The directory of the practice folders is a link. Make it a directory.")),
-                        readUnder);
+                        readUnder,
+                        lastSyncedAt);
             // A missing directory is a wrong setting more often than the removal of every practice.
             if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS))
                 return new Tree(
@@ -159,7 +164,8 @@ public class PracticeRepositoryFolders {
                                 setting.getDirectory(),
                                 "The default branch has no directory " + setting.getDirectory()
                                         + ". Commit the practice folders there, or change the directory.")),
-                        readUnder);
+                        readUnder,
+                        lastSyncedAt);
             List<Path> children;
             try (var list = Files.list(directory)) {
                 children = list.filter(child ->
@@ -176,7 +182,8 @@ public class PracticeRepositoryFolders {
                                 PracticeFileProblemDTO.TOO_MANY_FOLDERS,
                                 setting.getDirectory(),
                                 "Keep at most " + MAX_FOLDERS + " practice folders in the directory.")),
-                        readUnder);
+                        readUnder,
+                        lastSyncedAt);
             for (var child : children) {
                 var name = child.getFileName().toString();
                 if (Files.isSymbolicLink(child)) {
@@ -192,7 +199,7 @@ public class PracticeRepositoryFolders {
                     unreadable.put(name, invalid.problems());
                 }
             }
-            return new Tree(checkout.head(), folders, unreadable, List.of(), readUnder);
+            return new Tree(checkout.head(), folders, unreadable, List.of(), readUnder, lastSyncedAt);
         } catch (IOException failed) {
             throw readFailed(workspaceId, failed);
         }

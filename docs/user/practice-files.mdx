@@ -85,7 +85,9 @@ A sync needs no recent sign-in, because it applies only what the default branch 
 Syncing the same commit again changes nothing.
 Each change is in the configuration history, with the commit that it came from.
 
-The sync report gives a status for each folder, and for each practice whose folder is gone:
+The sync report gives a status for each folder, and for each practice whose folder is gone.
+For a created, taken-over or updated practice, it also says when no trial ran the new version.
+The new version is then in use without a trial:
 
 | Status | What happened |
 | --- | --- |
@@ -95,10 +97,15 @@ The sync report gives a status for each folder, and for each practice whose fold
 | Unchanged | The folder holds what the practice already has. |
 | Edited in Hephaestus | The practice is edited in Hephaestus, so the folder changed nothing. To use the folder, choose **Move to repository**. |
 | Invalid | The folder is not valid, so it changed nothing. The report lists each problem with its file and, where known, its line and column. |
-| Retired | The folder of a practice edited in the repository is gone. The practice now has a version that nobody reviews. Its history and observations stay. If the folder comes back, the next sync makes it a version again. |
+| Retired | The folder of a practice edited in the repository is gone. The practice now has a version that nobody reviews. Its history and observations stay. Each later sync says Retired again while the folder stays gone, and adds no version. If the folder comes back, the next sync makes it a version again. |
+| Retire refused | The folder of a practice edited in the repository is gone, but its current version no longer passes the checks of a save, for example because it reads an older source contract. The practice stays as it is, and keeps its reviews. Restore the folder, or choose **Edit in Hephaestus** and change the practice there. |
 
 A folder that names another kind of work than its practice, or a group that the workspace does not have, is invalid.
 If the default branch has no practice directory, or holds more than 200 folders, the sync changes nothing and the report says why.
+Git keeps no empty directories.
+If you remove the last folder, the directory is gone too, and the sync changes nothing.
+To retire the last practice, keep another file in the directory, such as a README.
+A folder whose name changes, even only in case, is a new folder: its old practice is retired.
 Files beside the folders, such as a README, are not practices, and a sync skips them.
 `get_practice_repository` returns the last sync report.
 

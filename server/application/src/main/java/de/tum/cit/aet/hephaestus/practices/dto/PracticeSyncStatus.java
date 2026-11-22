@@ -17,6 +17,14 @@ public enum PracticeSyncStatus {
     EDITED_IN_HEPHAESTUS,
     /** The folder is not valid, so it changed nothing. Its problems say why. */
     INVALID,
-    /** The folder of a practice edited in the repository is gone, so nobody reviews the practice. */
-    RETIRED
+    /**
+     * The folder of a practice edited in the repository is gone, so nobody reviews the practice. Later syncs report it
+     * again while the folder stays gone.
+     */
+    RETIRED,
+    /**
+     * The folder of a practice edited in the repository is gone, but its current version no longer passes the checks
+     * of a save, so it cannot get a version that nobody reviews. The practice stays as it is. Its problems say why.
+     */
+    RETIRE_REFUSED
 }

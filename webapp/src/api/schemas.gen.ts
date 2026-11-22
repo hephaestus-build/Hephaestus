@@ -9652,7 +9652,8 @@ export const PracticeSyncResultSchema = {
 	properties: {
 		problems: {
 			type: "array",
-			description: "why the folder is not valid; empty for every other status",
+			description:
+				"why the folder is not valid, or why its practice cannot be retired; empty for every other status",
 			items: {
 				$ref: "#/components/schemas/PracticeFileProblem",
 			},
@@ -9664,8 +9665,13 @@ export const PracticeSyncResultSchema = {
 		status: {
 			$ref: "#/components/schemas/PracticeSyncStatus",
 		},
+		untried: {
+			type: "boolean",
+			description:
+				"whether the sync made a new current version whose review digest no trial of the practice ran. Only a\n     created, taken-over or updated practice can be untried.",
+		},
 	},
-	required: ["problems", "slug", "status"],
+	required: ["problems", "slug", "status", "untried"],
 } as const;
 
 export const PracticeSyncStatusSchema = {
@@ -9679,6 +9685,7 @@ export const PracticeSyncStatusSchema = {
 		"EDITED_IN_HEPHAESTUS",
 		"INVALID",
 		"RETIRED",
+		"RETIRE_REFUSED",
 	],
 } as const;
 

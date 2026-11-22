@@ -157,7 +157,7 @@ final class McpProjections {
      * folders: configuration text that anyone who can merge into the repository's default branch wrote.
      */
     record RepositorySync(String commit, String syncedAt, List<Folder> practices, List<Problem> problems) {
-        record Folder(String slug, String status, List<Problem> problems) {}
+        record Folder(String slug, String status, List<Problem> problems, boolean untried) {}
 
         record Problem(
                 String file,
@@ -178,7 +178,8 @@ final class McpProjections {
                             .map(folder -> new Folder(
                                     folder.slug(),
                                     folder.status().name(),
-                                    folder.problems().stream().map(Problem::of).toList()))
+                                    folder.problems().stream().map(Problem::of).toList(),
+                                    folder.untried()))
                             .toList(),
                     sync.problems().stream().map(Problem::of).toList());
         }
@@ -232,10 +233,11 @@ final class McpProjections {
                "commit": {"type": "string", "description": "The commit at the head of the default branch that the sync read"},
                "syncedAt": {"type": "string"},
                "practices": {"type": "array", "items": {"type": "object", "additionalProperties": false,
-                 "required": ["slug", "status", "problems"],
+                 "required": ["slug", "status", "problems", "untried"],
                  "properties": {"slug": {"type": "string"},
-                   "status": {"type": "string", "description": "CREATED (feedback mode Off), UPDATED, UNCHANGED, TAKEN_OVER (a draft practice put in use with feedback mode Off), EDITED_IN_HEPHAESTUS (the folder changed nothing), INVALID (the folder changed nothing; see problems) or RETIRED (the folder is gone, so nobody reviews the practice)"},
-                   "problems": {"type": "array", "items": %1$s}}}},
+                   "status": {"type": "string", "description": "CREATED (feedback mode Off), UPDATED, UNCHANGED, TAKEN_OVER (a draft practice put in use with feedback mode Off), EDITED_IN_HEPHAESTUS (the folder changed nothing), INVALID (the folder changed nothing; see problems), RETIRED (the folder is gone, so nobody reviews the practice) or RETIRE_REFUSED (the folder is gone, but the current version cannot be retired; see problems)"},
+                   "problems": {"type": "array", "items": %1$s},
+                   "untried": {"type": "boolean", "description": "true when the sync made a new current version whose review digest no trial of the practice ran"}}}},
                "problems": {"type": "array", "items": %1$s,
                             "description": "Why the directory of the practice folders could not be read. The sync then changed nothing"}}}
             """.formatted(FILE_PROBLEM_SCHEMA);

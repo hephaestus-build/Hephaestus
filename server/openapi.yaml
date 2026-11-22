@@ -25195,7 +25195,8 @@ components:
       properties:
         problems:
           type: array
-          description: why the folder is not valid; empty for every other status
+          description: "why the folder is not valid, or why its practice cannot be\
+            \ retired; empty for every other status"
           items:
             $ref: "#/components/schemas/PracticeFileProblem"
         slug:
@@ -25203,10 +25204,16 @@ components:
           description: "the folder's name, which is the practice's slug"
         status:
           $ref: "#/components/schemas/PracticeSyncStatus"
+        untried:
+          type: boolean
+          description: |-
+            whether the sync made a new current version whose review digest no trial of the practice ran. Only a
+                 created, taken-over or updated practice can be untried.
       required:
       - problems
       - slug
       - status
+      - untried
     PracticeSyncStatus:
       type: string
       description: "Extensible enum: a client accepts a value that the examples do\
@@ -25219,6 +25226,7 @@ components:
       - EDITED_IN_HEPHAESTUS
       - INVALID
       - RETIRED
+      - RETIRE_REFUSED
     PracticeTraceEntry:
       type: object
       properties:

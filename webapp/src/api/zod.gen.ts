@@ -2609,6 +2609,7 @@ export const zPracticeSyncResult = z.object({
 	problems: z.array(zPracticeFileProblem),
 	slug: z.string(),
 	status: zPracticeSyncStatus,
+	untried: z.boolean(),
 });
 
 /**

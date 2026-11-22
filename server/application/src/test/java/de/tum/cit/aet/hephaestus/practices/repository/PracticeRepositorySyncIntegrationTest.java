@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
@@ -16,18 +17,23 @@ import de.tum.cit.aet.hephaestus.practices.dto.PracticeRepositoryDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeRepositorySyncDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeSyncResultDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeSyncStatus;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.testconfig.AuditedRequestCheck;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +43,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.util.FileSystemUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Sync now through the controller (ADR 0118), with a checkout of a fixture tree. The checkout is the one place where
@@ -63,6 +70,15 @@ class PracticeRepositorySyncIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     PracticeFiles files;
+
+    @Autowired
+    ReviewAdmissionData admissions;
+
+    @Autowired
+    PracticeRepositoryFolders folders;
+
+    @Autowired
+    PracticeRepositorySync syncs;
 
     @Autowired
     WebTestClient http;
@@ -96,7 +112,13 @@ class PracticeRepositorySyncIntegrationTest extends BaseIntegrationTest {
         folder("explain-why", "Explain why the change is needed.");
         // The scenario's practice is edited in Hephaestus, so its folder must not change it.
         folder(scenario.practice().getSlug(), "Something else entirely.");
-        practiceService.createDraft(context(), "draft-practice", document("Say what the change does."));
+        var draft = practiceService.createDraft(context(), "draft-practice", document("Say what the change does."));
+        admissions.pending(
+                new Scenario(scenario.workspace(), scenario.account(), draft, scenario.item()),
+                Instant.now(),
+                null,
+                "item-version-" + UUID.randomUUID(),
+                ReviewOrigin.TRIAL);
         folder("draft-practice", "Say what the change does.");
         write("broken/practice.md", "no front matter\n");
         long scenarioVersion = currentVersionId(scenario.practice().getSlug());
@@ -111,6 +133,11 @@ class PracticeRepositorySyncIntegrationTest extends BaseIntegrationTest {
                         Map.entry("explain-why", PracticeSyncStatus.CREATED),
                         Map.entry(scenario.practice().getSlug(), PracticeSyncStatus.EDITED_IN_HEPHAESTUS));
         assertThat(first.practices().getFirst().problems()).isNotEmpty();
+        // The draft's trial ran the review digest that went live; nobody tried the new practice.
+        assertThat(first.practices())
+                .filteredOn(PracticeSyncResultDTO::untried)
+                .extracting(PracticeSyncResultDTO::slug)
+                .containsExactly("explain-why");
         for (String slug : new String[] {"explain-why", "draft-practice"}) {
             assertThat(practiceRow(slug))
                     .containsEntry("state", "ACTIVE")
@@ -162,18 +189,71 @@ class PracticeRepositorySyncIntegrationTest extends BaseIntegrationTest {
         assertThat(practiceRow("explain-why"))
                 .containsEntry("reviewed_by", "NOBODY")
                 .containsEntry("source_commit", LATER);
+        long retired = currentVersionId("explain-why");
+
+        var again = sync();
+        AuditedRequestCheck.acceptUnchanged(PracticeRepositoryController.class, "sync");
+
+        assertThat(statuses(again)).containsExactly(Map.entry("explain-why", PracticeSyncStatus.RETIRED));
+        assertThat(currentVersionId("explain-why")).isEqualTo(retired);
+        assertThat(versionCount("explain-why")).isEqualTo(2);
 
         folder("explain-why", "Explain why the change is needed.");
         var restored = sync();
 
         assertThat(statuses(restored)).containsExactly(Map.entry("explain-why", PracticeSyncStatus.UPDATED));
         assertThat(practiceRow("explain-why")).containsEntry("reviewed_by", "HEPHAESTUS");
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM practice_version v JOIN practice p ON p.id = v.practice_id"
-                                + " WHERE p.workspace_id = ? AND p.slug = 'explain-why'",
-                        Integer.class,
-                        workspaceId()))
-                .isEqualTo(3);
+        assertThat(versionCount("explain-why")).isEqualTo(3);
+    }
+
+    /**
+     * A version on an older source contract fails the checks of a save, and so would its Nobody version. Writing it
+     * would roll back this sync and every later one, so the practice stays and the other folders apply.
+     */
+    @Test
+    void shouldKeepAPracticeWhoseVersionCannotBeRetiredAndApplyTheOtherFolders() throws IOException {
+        var slug = scenario.practice().getSlug();
+        long older = Objects.requireNonNull(
+                jdbc.queryForObject("""
+                INSERT INTO practice_version (workspace_id, practice_id, number, definition)
+                SELECT workspace_id, practice_id, 2, jsonb_set(definition, '{reads,contract}', '"2.0.0"')
+                FROM practice_version WHERE id = (SELECT current_version_id FROM practice WHERE id = ?)
+                RETURNING id
+                """, Long.class, scenario.practice().getId()));
+        jdbc.update(
+                "UPDATE practice SET current_version_id = ?, edited_in = 'REPOSITORY' WHERE id = ?",
+                older,
+                scenario.practice().getId());
+        folder("explain-why", "Explain why the change is needed.");
+
+        var report = sync();
+        AuditedRequestCheck.acceptBulk(PracticeRepositoryController.class, "sync", 1);
+
+        assertThat(statuses(report))
+                .containsExactly(
+                        Map.entry("explain-why", PracticeSyncStatus.CREATED),
+                        Map.entry(slug, PracticeSyncStatus.RETIRE_REFUSED));
+        assertThat(report.practices().get(1).problems()).isNotEmpty();
+        assertThat(currentVersionId(slug)).isEqualTo(older);
+        assertThat(versionCount(slug)).isEqualTo(2);
+        assertThat(practiceRow("explain-why")).containsEntry("source_commit", COMMIT);
+    }
+
+    /** A read that started before another sync finished may hold an older commit, so it must not apply after it. */
+    @Test
+    void shouldRefuseAnOlderReadWhenAnotherSyncFinishedMeanwhile() throws IOException {
+        folder("explain-why", "Explain why the change is needed.");
+        var older = folders.readAll(workspaceId());
+        sync();
+        AuditedRequestCheck.acceptBulk(PracticeRepositoryController.class, "sync", 1);
+        var reads = new TreeMap<String, PracticeFiles.Read>();
+        older.folders().forEach((name, folder) -> reads.put(name, files.read(name, folder)));
+
+        assertThatThrownBy(() -> syncs.apply(context(), older, reads))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        refused -> assertThat(refused.getStatusCode().value()).isEqualTo(409));
+        assertThat(versionCount("explain-why")).isEqualTo(1);
     }
 
     @Test
@@ -234,6 +314,15 @@ class PracticeRepositorySyncIntegrationTest extends BaseIntegrationTest {
         return Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT count(*) FROM config_audit_event e JOIN practice p ON e.entity_id = CAST(p.id AS text)"
                         + " WHERE e.workspace_id = ? AND e.entity_type = 'PRACTICE_DEFINITION' AND p.slug = ?",
+                Integer.class,
+                workspaceId(),
+                slug));
+    }
+
+    private int versionCount(String slug) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM practice_version v JOIN practice p ON p.id = v.practice_id"
+                        + " WHERE p.workspace_id = ? AND p.slug = ?",
                 Integer.class,
                 workspaceId(),
                 slug));

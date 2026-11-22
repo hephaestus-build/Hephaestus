@@ -1,13 +1,16 @@
 package de.tum.cit.aet.hephaestus.practices.repository;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeDrafts;
 import de.tum.cit.aet.hephaestus.practices.PracticeFiles;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeService;
+import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.ReviewedBy;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
@@ -40,8 +43,10 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Applies a sync of the practice repository, once its folders were read and checked outside a transaction (ADR 0118).
- * It runs under the workspace lock, as set, unset and a move do, and only under the setting that the folders were read
- * under. A broken folder or directory never removes, retires or edits a practice, and a second sync of the same commit
+ * It runs under the workspace lock, as set, unset and a move do, only under the setting that the folders were read
+ * under, and only when no other sync finished meanwhile. A broken folder changes nothing, and neither does a directory
+ * that cannot be read. Only a slug with no folder in a readable directory retires its practice: a folder whose name
+ * changed, even only in case, is a new folder, and its old practice is retired. A second sync of the same commit
  * changes nothing.
  */
 @Service
@@ -54,6 +59,8 @@ class PracticeRepositorySync {
     private final PracticeDrafts drafts;
     private final PracticeGroupRepository groups;
     private final PracticeVersionService versions;
+    private final PracticeVersionRepository versionRows;
+    private final PracticeDefinitionValidator validator;
     private final WorkspaceQueries workspaces;
     private final JsonMapper mapper;
     private final Clock clock;
@@ -62,16 +69,22 @@ class PracticeRepositorySync {
      * Applies the folders of {@code tree} and stores the report.
      *
      * @param reads the check of each folder of {@code tree}, by folder name
-     * @throws ResponseStatusException 409 when the setting changed while the folders were read
+     * @throws ResponseStatusException 409 when the setting changed, or another sync finished, while the folders were
+     *     read
      */
     @Transactional
     public PracticeRepositorySyncDTO apply(
             WorkspaceContext ctx, PracticeRepositoryFolders.Tree tree, Map<String, PracticeFiles.Read> reads) {
         if (workspaces.findByIdForUpdate(ctx.id()).isEmpty())
             throw new EntityNotFoundException("Workspace", ctx.slug());
-        if (!tree.readUnder().isCurrent(settings.findById(ctx.id()).orElse(null)))
+        var setting = settings.findById(ctx.id()).orElse(null);
+        if (!tree.readUnder().isCurrent(setting))
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "The practice repository changed while its folders were read. Try again.");
+        // The other sync may have read a newer commit: this older read must not roll its changes back.
+        if (!Objects.equals(Objects.requireNonNull(setting).getSyncedAt(), tree.lastSyncedAt()))
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Another sync finished while the folders were read. Sync again.");
         var results = new ArrayList<PracticeSyncResultDTO>();
         if (tree.problems().isEmpty()) {
             Map<String, Practice> existing = drafts.withDrafts(() -> rows.findByWorkspaceId(ctx.id())).stream()
@@ -84,8 +97,7 @@ class PracticeRepositorySync {
                         || practice.getState() != PracticeState.ACTIVE
                         || reads.containsKey(slug)
                         || tree.unreadable().containsKey(slug)) continue;
-                retire(ctx, practice, tree.commit());
-                results.add(result(slug, PracticeSyncStatus.RETIRED));
+                results.add(retire(ctx, practice, tree.commit()));
             }
             results.sort(Comparator.comparing(PracticeSyncResultDTO::slug));
         }
@@ -106,31 +118,47 @@ class PracticeRepositorySync {
             return result(slug, PracticeSyncStatus.EDITED_IN_HEPHAESTUS);
         var problem = problem(ctx, document, practice);
         if (problem != null) return invalid(slug, List.of(problem));
-        if (practice == null) {
-            practices.createFromRepository(ctx, slug, document, commit);
-            return result(slug, PracticeSyncStatus.CREATED);
-        }
-        if (practice.getState() == PracticeState.DRAFT) {
-            practices.takeOverDraft(ctx, practice, document, commit);
-            return result(slug, PracticeSyncStatus.TAKEN_OVER);
-        }
+        if (practice == null)
+            return changed(
+                    ctx, slug, PracticeSyncStatus.CREATED, practices.createFromRepository(ctx, slug, document, commit));
+        if (practice.getState() == PracticeState.DRAFT)
+            return changed(
+                    ctx, slug, PracticeSyncStatus.TAKEN_OVER, practices.takeOverDraft(ctx, practice, document, commit));
         // The definition compares as moveToRepository compares it, so an equal folder adds no version.
         var group = practice.getGroup();
         if (practice.getCurrentVersion().getDefinition().equals(mapper.valueToTree(document.definition()))
                 && Objects.equals(group == null ? null : group.getSlug(), document.groupSlug()))
             return result(slug, PracticeSyncStatus.UNCHANGED);
-        practices.moveToRepository(ctx, slug, document, commit);
-        return result(slug, PracticeSyncStatus.UPDATED);
+        var before = practice.getCurrentVersion().getId();
+        var updated = practices.moveToRepository(ctx, slug, document, commit);
+        // A change of the group alone adds no version, so no definition was merged.
+        if (Objects.equals(before, updated.getCurrentVersion().getId()))
+            return result(slug, PracticeSyncStatus.UPDATED);
+        return changed(ctx, slug, PracticeSyncStatus.UPDATED, updated);
+    }
+
+    /**
+     * A sync that made a new current version reports whether any trial of the practice ran its review digest (ADR 0118
+     * decision 5): a merged definition that nobody tried goes live as it is.
+     */
+    private PracticeSyncResultDTO changed(
+            WorkspaceContext ctx, String slug, PracticeSyncStatus status, Practice practice) {
+        var untried = !versionRows.existsTrialWithDigest(
+                ctx.id(), practice.getId(), practice.getCurrentVersion().getReviewDigest());
+        return new PracticeSyncResultDTO(slug, status, List.of(), untried);
     }
 
     /**
      * The folder of a practice edited in the repository is gone: the practice gets a version that nobody reviews, read
      * at the commit that lacks the folder. Its history and observations stay, which a delete would lose. As Reviewed by
      * Nobody in the editor, the reads, script, scan and limits stay unused, so a folder that comes back restores them.
+     * A current version that no longer passes validation, such as one on an older source contract, cannot get such a
+     * version. The practice then stays as it is, and the other folders still apply.
      */
-    private void retire(WorkspaceContext ctx, Practice practice, String commit) {
+    private PracticeSyncResultDTO retire(WorkspaceContext ctx, Practice practice, String commit) {
+        var slug = practice.getSlug();
         var current = versions.definitionOf(practice.getCurrentVersion());
-        if (current.reviewedBy().by() == ReviewedByKind.NOBODY) return;
+        if (current.reviewedBy().by() == ReviewedByKind.NOBODY) return result(slug, PracticeSyncStatus.RETIRED);
         var retired = new PracticeDefinition(
                 current.name(),
                 current.reviewOn(),
@@ -143,12 +171,29 @@ class PracticeRepositorySync {
                 current.scan(),
                 current.lineNotes(),
                 current.guidance());
+        // Checked here, outside the transactional write: a refusal inside it would roll back the whole sync.
+        try {
+            validator.validate(practice.getKind(), retired);
+        } catch (InvalidInputException refused) {
+            return new PracticeSyncResultDTO(
+                    slug,
+                    PracticeSyncStatus.RETIRE_REFUSED,
+                    List.of(new PracticeFileProblemDTO(
+                            PracticeFiles.PRACTICE,
+                            null,
+                            null,
+                            PracticeFileProblemDTO.DEFINITION_INVALID,
+                            "The folder is gone, but the current version cannot be retired: " + refused.getMessage()
+                                    + " Restore the folder, or choose Edit in Hephaestus.")),
+                    false);
+        }
         var group = practice.getGroup();
         practices.moveToRepository(
                 ctx,
-                practice.getSlug(),
+                slug,
                 new CatalogPracticeDocument(practice.getKind(), group == null ? null : group.getSlug(), retired),
                 commit);
+        return result(slug, PracticeSyncStatus.RETIRED);
     }
 
     /** What keeps a valid folder from changing the workspace: a kind that the practice does not review, or a group. */
@@ -175,10 +220,10 @@ class PracticeRepositorySync {
     }
 
     private static PracticeSyncResultDTO result(String slug, PracticeSyncStatus status) {
-        return new PracticeSyncResultDTO(slug, status, List.of());
+        return new PracticeSyncResultDTO(slug, status, List.of(), false);
     }
 
     private static PracticeSyncResultDTO invalid(String slug, List<PracticeFileProblemDTO> problems) {
-        return new PracticeSyncResultDTO(slug, PracticeSyncStatus.INVALID, List.copyOf(problems));
+        return new PracticeSyncResultDTO(slug, PracticeSyncStatus.INVALID, List.copyOf(problems), false);
     }
 }

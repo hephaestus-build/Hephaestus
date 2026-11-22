@@ -184,8 +184,8 @@ Not enforced. Each other rule gets its check in the pull request that ships it, 
 
 Decisions 2–5 are enforced for Sync now:
 
-- `PracticeRepositorySyncTest` fails when an invalid or unreadable folder changes a practice, when a removed folder does not add Reviewed by Nobody, when a folder changes a practice edited in Hephaestus, when a second sync of the same commit writes, or when a sync applies under a setting that changed while it read.
-- `PracticeRepositorySyncIntegrationTest` fails when a new or taken-over practice is not edited in the repository with feedback mode Off and the commit on its version, or when a restored folder does not add a version.
+- `PracticeRepositorySyncTest` fails when an invalid or unreadable folder changes a practice, when a removed folder does not add Reviewed by Nobody, when a folder changes a practice edited in Hephaestus, when a second sync of the same commit writes, when a version that cannot be retired stops the other folders, or when a sync applies under a setting that changed or after another sync that finished while it read.
+- `PracticeRepositorySyncIntegrationTest` fails when a new or taken-over practice is not edited in the repository with feedback mode Off and the commit on its version, when a restored folder does not add a version, when a tried review digest is reported as untried, or when a version on an older source contract stops the sync.
 
 Decisions 8 and 9 are enforced:
 
@@ -211,9 +211,12 @@ The pull request that ships trials changes two bullets.
 
 The pull request that ships Sync now settles these points of decisions 2–5.
 
-- **Sync now needs no recent sign-in.** It applies only the default branch of the repository that an admin set with a recent sign-in. A push applies the same without anyone.
-- **The sync report is stored with the practice repository.** It holds the commit, the time and a status for each folder: created, updated, unchanged, taken over, edited in Hephaestus, invalid (with each problem) or retired. A change of the repository or the directory clears it.
-- **A missing directory changes nothing.** The report says that the default branch has no such directory. Only a folder that is gone from a directory that exists retires its practice. A wrong directory is more probable than the removal of every practice.
+- **Sync now needs no recent sign-in.** It applies only the default branch of the repository that an admin set with a recent sign-in. A later change adds a sync on push, which runs without anyone.
+- **The sync report is stored with the practice repository.** It holds the commit, the time and a status for each folder: created, updated, unchanged, taken over, edited in Hephaestus, invalid (with each problem), retired, or retire refused. A change of the repository or the directory clears it.
+- **Decision 5's flag is `untried` on each created, taken-over or updated entry.** It is true when the sync made a new current version and no trial of the practice ran its review digest.
+- **A practice whose current version fails the checks of a save is not retired.** An example is a version on an older source contract. Its Nobody version would fail the same checks, and the failed write would stop every later sync. The report says retire refused, and the other folders apply.
+- **A sync applies only if no other sync finished while it read.** An older read could otherwise undo the changes of a newer commit. It answers 409, and the admin syncs again.
+- **A missing directory changes nothing.** The report says that the default branch has no such directory. Only a folder that is gone from a directory that exists retires its practice. A wrong directory is more probable than the removal of every practice. Git keeps no empty directory, so a repository keeps another file there to retire its last practice.
 - **A folder with a group that the workspace does not have is invalid.** It changes nothing, as Move to repository refuses it. A warning would let the repository and the workspace disagree about the group.
 - **A taken-over draft practice gets a new version with the commit,** also when the definition is equal. The review digest stays the same, so its trials still match.
 

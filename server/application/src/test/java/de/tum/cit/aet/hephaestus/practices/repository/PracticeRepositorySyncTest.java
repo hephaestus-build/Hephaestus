@@ -7,20 +7,24 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeDrafts;
 import de.tum.cit.aet.hephaestus.practices.PracticeFiles;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeService;
+import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.ReviewedBy;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
@@ -80,6 +84,8 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
     private final PracticeDrafts drafts = mock(PracticeDrafts.class);
     private final PracticeGroupRepository groups = mock(PracticeGroupRepository.class);
     private final PracticeVersionService versions = mock(PracticeVersionService.class);
+    private final PracticeVersionRepository versionRows = mock(PracticeVersionRepository.class);
+    private final PracticeDefinitionValidator validator = mock(PracticeDefinitionValidator.class);
     private final List<Practice> existing = new ArrayList<>();
     private final PracticeRepositorySync sync;
 
@@ -95,6 +101,8 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
                 drafts,
                 groups,
                 versions,
+                versionRows,
+                validator,
                 WorkspacePortFixtures.queries(workspaces),
                 MAPPER,
                 Clock.fixed(NOW, ZoneOffset.UTC));
@@ -113,10 +121,14 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
 
     @Test
     void shouldCreateAPracticeFromAFolderWhoseSlugTheWorkspaceLacks() {
+        when(practices.createFromRepository(CONTEXT, "explain", document(DEFINITION), COMMIT))
+                .thenReturn(detached("explain", DEFINITION, PracticeEditedIn.REPOSITORY));
+
         var report = apply(Map.of("explain", valid(DEFINITION)));
 
         verify(practices).createFromRepository(CONTEXT, "explain", document(DEFINITION), COMMIT);
-        assertThat(report.practices()).containsExactly(result("explain", PracticeSyncStatus.CREATED));
+        // No trial ran the new version's review digest.
+        assertThat(report.practices()).containsExactly(untried("explain", PracticeSyncStatus.CREATED));
     }
 
     @Test
@@ -124,20 +136,29 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
         var draft = practice("explain", DEFINITION, PracticeEditedIn.HEPHAESTUS);
         ReflectionTestUtils.setField(draft, "state", PracticeState.DRAFT);
 
+        when(practices.takeOverDraft(CONTEXT, draft, document(DEFINITION), COMMIT))
+                .thenReturn(draft);
+        when(versionRows.existsTrialWithDigest(
+                        7L, draft.getId(), draft.getCurrentVersion().getReviewDigest()))
+                .thenReturn(true);
+
         var report = apply(Map.of("explain", valid(DEFINITION)));
 
         verify(practices).takeOverDraft(CONTEXT, draft, document(DEFINITION), COMMIT);
+        // A trial of the draft ran this review digest.
         assertThat(report.practices()).containsExactly(result("explain", PracticeSyncStatus.TAKEN_OVER));
     }
 
     @Test
     void shouldUpdateAPracticeEditedInTheRepositoryWhenItsFolderChanged() {
         practice("explain", DEFINITION, PracticeEditedIn.REPOSITORY);
+        when(practices.moveToRepository(CONTEXT, "explain", document(CHANGED), COMMIT))
+                .thenReturn(detached("explain", CHANGED, PracticeEditedIn.REPOSITORY));
 
         var report = apply(Map.of("explain", valid(CHANGED)));
 
         verify(practices).moveToRepository(CONTEXT, "explain", document(CHANGED), COMMIT);
-        assertThat(report.practices()).containsExactly(result("explain", PracticeSyncStatus.UPDATED));
+        assertThat(report.practices()).containsExactly(untried("explain", PracticeSyncStatus.UPDATED));
     }
 
     /** The state after a sync is the input of the next one: a second sync of the same commit writes nothing. */
@@ -182,8 +203,8 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
         verifyNoInteractions(practices);
         assertThat(report.practices())
                 .containsExactly(
-                        new PracticeSyncResultDTO("explain", PracticeSyncStatus.INVALID, List.of(problem)),
-                        new PracticeSyncResultDTO("linked", PracticeSyncStatus.INVALID, List.of(link)));
+                        new PracticeSyncResultDTO("explain", PracticeSyncStatus.INVALID, List.of(problem), false),
+                        new PracticeSyncResultDTO("linked", PracticeSyncStatus.INVALID, List.of(link), false));
     }
 
     @Test
@@ -220,6 +241,33 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
         assertThat(report.practices()).containsExactly(result("gone", PracticeSyncStatus.RETIRED));
     }
 
+    /**
+     * A current version on an older source contract fails the checks of a save, and so would its Nobody version. The
+     * write would roll back the whole sync, and every later one: the practice stays, and the other folders apply.
+     */
+    @Test
+    void shouldLeaveAPracticeWhoseVersionCannotBeRetiredAndApplyTheOtherFolders() {
+        practice("gone", DEFINITION, PracticeEditedIn.REPOSITORY);
+        when(practices.createFromRepository(CONTEXT, "explain", document(DEFINITION), COMMIT))
+                .thenReturn(detached("explain", DEFINITION, PracticeEditedIn.REPOSITORY));
+        doThrow(new InvalidInputException("Choose the current source contract for a new definition."))
+                .when(validator)
+                .validate(KIND, retired(DEFINITION));
+
+        var report = apply(Map.of("explain", valid(DEFINITION)));
+
+        verify(practices).createFromRepository(CONTEXT, "explain", document(DEFINITION), COMMIT);
+        verify(practices, never()).moveToRepository(any(), eq("gone"), any(), anyString());
+        assertThat(report.practices())
+                .extracting(PracticeSyncResultDTO::status)
+                .containsExactly(PracticeSyncStatus.CREATED, PracticeSyncStatus.RETIRE_REFUSED);
+        assertThat(report.practices().get(1).problems())
+                .singleElement()
+                .satisfies(problem -> assertThat(problem.message())
+                        .contains("current source contract")
+                        .contains("Restore the folder"));
+    }
+
     /** A missing directory is more often a wrong setting than the removal of every practice. */
     @Test
     void shouldChangeNothingWhenTheDirectoryCannotBeRead() {
@@ -231,7 +279,7 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
                 PracticeFileProblemDTO.DIRECTORY_MISSING,
                 "The default branch has no directory.");
         var tree = new PracticeRepositoryFolders.Tree(
-                COMMIT, new TreeMap<>(), new TreeMap<>(), List.of(missing), readAt(SET_AT));
+                COMMIT, new TreeMap<>(), new TreeMap<>(), List.of(missing), readAt(SET_AT), null);
 
         var report = sync.apply(CONTEXT, tree, Map.of());
 
@@ -243,6 +291,9 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
 
     @Test
     void shouldStoreTheReportWithTheCommitAndTheTime() {
+        when(practices.createFromRepository(CONTEXT, "explain", document(DEFINITION), COMMIT))
+                .thenReturn(detached("explain", DEFINITION, PracticeEditedIn.REPOSITORY));
+
         var report = apply(Map.of("explain", valid(DEFINITION)));
 
         assertThat(report.commit()).isEqualTo(COMMIT);
@@ -269,6 +320,19 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
         verify(settings, never()).recordSync(anyLong(), anyString(), any(), anyString());
     }
 
+    /** Sync B read commit C1, sync A read C2 and finished first: B must not roll A's changes back. */
+    @Test
+    void shouldRefuseWhenAnotherSyncFinishedWhileTheFoldersWereRead() {
+        practice("gone", DEFINITION, PracticeEditedIn.REPOSITORY);
+        ReflectionTestUtils.setField(current(SET_AT), "syncedAt", NOW.minusSeconds(1));
+
+        assertThatThrownBy(() -> apply(Map.of("explain", valid(DEFINITION))))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Another sync finished");
+        verifyNoInteractions(practices);
+        verify(settings, never()).recordSync(anyLong(), anyString(), any(), anyString());
+    }
+
     private PracticeRepositorySyncDTO apply(Map<String, PracticeFiles.Read> reads) {
         var folders = new TreeMap<String, Map<String, String>>();
         reads.keySet().forEach(slug -> folders.put(slug, Map.of(PracticeFiles.PRACTICE, "---\n---\n")));
@@ -278,22 +342,30 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
     private static PracticeRepositoryFolders.Tree tree(
             Map<String, Map<String, String>> folders, Map<String, List<PracticeFileProblemDTO>> unreadable) {
         return new PracticeRepositoryFolders.Tree(
-                COMMIT, new TreeMap<>(folders), new TreeMap<>(unreadable), List.of(), readAt(SET_AT));
+                COMMIT, new TreeMap<>(folders), new TreeMap<>(unreadable), List.of(), readAt(SET_AT), null);
     }
 
     private static PracticeRepositoryFolders.ReadUnder readAt(Instant settingUpdatedAt) {
         return new PracticeRepositoryFolders.ReadUnder(42, DIRECTORY, 0, settingUpdatedAt);
     }
 
-    private void current(Instant updatedAt) {
+    private PracticeRepositorySetting current(Instant updatedAt) {
         var setting = new PracticeRepositorySetting();
         setting.setRepositoryItemId(42);
         setting.setDirectory(DIRECTORY);
         ReflectionTestUtils.setField(setting, "updatedAt", updatedAt);
         when(settings.findById(7L)).thenReturn(Optional.of(setting));
+        return setting;
     }
 
     private Practice practice(String slug, PracticeDefinition definition, PracticeEditedIn editedIn) {
+        var practice = detached(slug, definition, editedIn);
+        existing.add(practice);
+        return practice;
+    }
+
+    /** A practice that the workspace does not hold before the sync, as a write returns it. */
+    private Practice detached(String slug, PracticeDefinition definition, PracticeEditedIn editedIn) {
         var practice = new Practice();
         practice.setId(ids.incrementAndGet());
         practice.setSlug(slug);
@@ -301,7 +373,6 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
         practice.setEditedIn(editedIn);
         practice.setCurrentVersion(TestEntities.practiceVersion(
                 ids.incrementAndGet(), 1, MAPPER.valueToTree(definition), "v6:" + "a".repeat(64)));
-        existing.add(practice);
         return practice;
     }
 
@@ -329,6 +400,10 @@ class PracticeRepositorySyncTest extends BaseUnitTest {
     }
 
     private static PracticeSyncResultDTO result(String slug, PracticeSyncStatus status) {
-        return new PracticeSyncResultDTO(slug, status, List.of());
+        return new PracticeSyncResultDTO(slug, status, List.of(), false);
+    }
+
+    private static PracticeSyncResultDTO untried(String slug, PracticeSyncStatus status) {
+        return new PracticeSyncResultDTO(slug, status, List.of(), true);
     }
 }
