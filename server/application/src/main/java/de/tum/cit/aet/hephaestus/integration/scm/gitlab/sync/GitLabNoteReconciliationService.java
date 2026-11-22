@@ -100,14 +100,15 @@ public class GitLabNoteReconciliationService {
     public Outcome reconcileRepository(long workspaceId, Repository repository, @Nullable SyncExecutionHandle handle) {
         return admission
                 .capture(workspaceId, repository)
-                .map(read -> reconcileRepository(workspaceId, repository, handle, read))
+                .map(read ->
+                        reconcileRepository(workspaceId, repository, new GitLabSyncReports.Cancellation(handle), read))
                 .orElseGet(() -> new Outcome(0, false, 0));
     }
 
     public Outcome reconcileRepository(
             long workspaceId,
             Repository repository,
-            @Nullable SyncExecutionHandle handle,
+            GitLabSyncReports.Cancellation cancellation,
             GitLabProjectAdmission.ProjectRead read) {
         if (!admission.current(read)) return new Outcome(0, false, 0);
         if (!workspaceLinks.mayWriteRepository(workspaceId, repository)) return new Outcome(0, true, 0);
@@ -117,15 +118,20 @@ public class GitLabNoteReconciliationService {
         // Note deletion need not update its parent; inspect all stored live parents.
         // Keyset pagination tolerates parents inserted during the traversal.
         long after = 0;
-        while (!cancelled(handle)) {
+        while (true) {
+            // A cancel at a page boundary leaves parents unread, so the pass is not complete.
+            if (cancellation.stopsHere()) {
+                skipped = true;
+                break;
+            }
             List<Issue> parents = issues.findLiveNoteParents(repository.getId(), after, PageRequest.of(0, 100));
             if (parents.isEmpty()) break;
             for (Issue parent : parents) {
-                if (cancelled(handle)) {
+                if (cancellation.stopsHere()) {
                     reportUnverified(workspaceId, repository, unverified);
                     return new Outcome(removed, true, unverified);
                 }
-                Outcome outcome = reconcileParent(workspaceId, repository, parent, handle, read);
+                Outcome outcome = reconcileParent(workspaceId, repository, parent, cancellation, read);
                 removed += outcome.removed();
                 skipped |= outcome.skipped();
                 unverified += outcome.unverified();
@@ -154,7 +160,8 @@ public class GitLabNoteReconciliationService {
             long workspaceId, Repository repository, Issue parent, @Nullable SyncExecutionHandle handle) {
         return admission
                 .capture(workspaceId, repository)
-                .map(read -> reconcileParent(workspaceId, repository, parent, handle, read))
+                .map(read -> reconcileParent(
+                        workspaceId, repository, parent, new GitLabSyncReports.Cancellation(handle), read))
                 .orElseGet(() -> new Outcome(0, false, 0));
     }
 
@@ -162,7 +169,7 @@ public class GitLabNoteReconciliationService {
             long workspaceId,
             Repository repository,
             Issue parent,
-            @Nullable SyncExecutionHandle handle,
+            GitLabSyncReports.Cancellation cancellation,
             GitLabProjectAdmission.ProjectRead read) {
         if (parent.getRepository() == null
                 || !parent.getRepository().getId().equals(repository.getId())
@@ -182,9 +189,9 @@ public class GitLabNoteReconciliationService {
                     repository.getNameWithOwner(),
                     parent.getNumber(),
                     parent instanceof PullRequest,
-                    handle);
+                    cancellation);
             if (!admission.current(read)) return new Outcome(0, false, 0);
-            if (cancelled(handle)) return new Outcome(0, true, 0);
+            if (cancellation.stopsHere()) return new Outcome(0, true, 0);
             if (upstream == null) return new Outcome(0, true, 1);
             List<Long> staleComments = localComments.stream()
                     .filter(c -> !upstream.contains(c.getNativeId()))
@@ -211,12 +218,12 @@ public class GitLabNoteReconciliationService {
                     parent.getNumber(),
                     parent instanceof PullRequest,
                     missingNativeIds,
-                    handle)) {
-                boolean unverified = admission.current(read) && !cancelled(handle);
+                    cancellation)) {
+                boolean unverified = admission.current(read) && !cancellation.stopsHere();
                 return new Outcome(0, admission.current(read), unverified ? 1 : 0);
             }
             Integer removed = transactions.execute(status -> {
-                if (cancelled(handle)
+                if (cancellation.stopsHere()
                         || !admission.hold(read)
                         || !workspaceLinks.mayWriteRepository(workspaceId, repository)) return 0;
                 int count = 0;
@@ -262,7 +269,12 @@ public class GitLabNoteReconciliationService {
     }
 
     private @Nullable Set<Long> listNotes(
-            long workspaceId, String projectPath, int iid, boolean mergeRequest, @Nullable SyncExecutionHandle handle) {
+            long workspaceId,
+            String projectPath,
+            int iid,
+            boolean mergeRequest,
+            GitLabSyncReports.Cancellation cancellation) {
+        var handle = cancellation.handle();
         Set<Long> ids = new HashSet<>();
         Long total = null;
         String token = tokens.getAccessToken(workspaceId);
@@ -271,7 +283,7 @@ public class GitLabNoteReconciliationService {
                 + (mergeRequest ? "merge_requests" : "issues")
                 + "/{iid}/notes";
         for (int page = 1; page <= GitLabSyncConstants.MAX_PAGINATION_PAGES; page++) {
-            if (cancelled(handle) || Thread.currentThread().isInterrupted()) return null;
+            if (cancellation.stopsHere() || Thread.currentThread().isInterrupted()) return null;
             var response = client.get()
                     .uri(url + "?per_page=100&page={page}&order_by=created_at&sort=asc", projectPath, iid, page)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -319,7 +331,8 @@ public class GitLabNoteReconciliationService {
             int iid,
             boolean mergeRequest,
             List<Long> nativeIds,
-            @Nullable SyncExecutionHandle handle) {
+            GitLabSyncReports.Cancellation cancellation) {
+        var handle = cancellation.handle();
         String token = tokens.getAccessToken(workspaceId);
         String url = tokens.resolveServerUrl(workspaceId)
                 + "/api/v4/projects/{project}/"
@@ -328,7 +341,7 @@ public class GitLabNoteReconciliationService {
         for (Long nativeId : nativeIds) {
             if (nativeId == null
                     || nativeId <= 0
-                    || cancelled(handle)
+                    || cancellation.stopsHere()
                     || Thread.currentThread().isInterrupted()) return false;
             Integer status = client.get()
                     .uri(url, projectPath, iid, nativeId)
@@ -350,9 +363,5 @@ public class GitLabNoteReconciliationService {
                                 null));
         }
         return true;
-    }
-
-    private static boolean cancelled(@Nullable SyncExecutionHandle handle) {
-        return handle != null && handle.isCancellationRequested();
     }
 }

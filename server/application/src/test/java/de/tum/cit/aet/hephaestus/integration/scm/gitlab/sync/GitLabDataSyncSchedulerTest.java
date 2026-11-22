@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
@@ -32,6 +33,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.RecentWindow;
@@ -195,8 +198,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         logger.addAppender(appender);
         try {
             assertThatThrownBy(() -> scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasCause(failure);
+                    // The job records the exception's own message, so the cause reaches it unwrapped.
+                    .isSameAs(failure);
             assertThat(appender.list).noneMatch(event -> event.getThrowableProxy() != null);
         } finally {
             logger.detachAppender(appender);
@@ -310,7 +313,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
         scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 
-        verify(syncJobHandle).reportWarnings();
+        verifyWarning(SyncPhase.SWEEP, "Deletion sweep did not complete.");
     }
 
     @Test
@@ -324,6 +327,54 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 
         verify(deletionSweepService, never()).sweepScope(any(), any());
+        // The checkpoint before the post-repository phases consumed the cancel; the later ones skip without a
+        // second report.
+        verify(syncJobHandle).reportCancelled();
+    }
+
+    /** The member projection consumed the cancel, so the sweep after it is skipped and the cancel reported once. */
+    @Test
+    void shouldReportOneCancelWhenTheProjectionConsumesItBeforeTheSweep() {
+        var teamSync = mock(GitLabTeamSyncService.class);
+        var projection = mock(GitLabSelectedMembershipProjection.class);
+        teamSyncService = teamSync;
+        membershipProjection = projection;
+        lenient()
+                .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
+                .thenReturn(List.of());
+        var cancelled = new AtomicBoolean();
+        lenient().when(syncJobHandle.isCancellationRequested()).thenAnswer(invocation -> cancelled.get());
+        when(teamSync.syncTeamsForGroup(eq(WORKSPACE_ID), any())).thenAnswer(invocation -> {
+            cancelled.set(true);
+            return new GitLabTeamSyncService.Result(0, true);
+        });
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
+
+        verify(projection, never()).project(anyLong());
+        verify(deletionSweepService, never()).sweepScope(any(), any());
+        verify(syncJobHandle).reportCancelled();
+    }
+
+    /** A cancel that arrives after the last checkpoint stops nothing: the finished work is not reported cancelled. */
+    @Test
+    void shouldNotReportCancelledWhenTheCancelArrivesAfterTheLastCheckpoint() {
+        var projection = mock(GitLabSelectedMembershipProjection.class);
+        membershipProjection = projection;
+        lenient()
+                .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
+                .thenReturn(List.of());
+        var cancelled = new AtomicBoolean();
+        lenient().when(syncJobHandle.isCancellationRequested()).thenAnswer(invocation -> cancelled.get());
+        when(projection.project(WORKSPACE_ID)).thenAnswer(invocation -> {
+            cancelled.set(true);
+            return GitLabSelectedMembershipProjection.Outcome.APPLIED;
+        });
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(projection).project(WORKSPACE_ID);
+        verify(syncJobHandle, never()).reportCancelled();
     }
 
     @Test
@@ -343,7 +394,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         InOrder order = inOrder(teamSync, projection);
         order.verify(teamSync).syncTeamsForGroup(eq(WORKSPACE_ID), any());
         order.verify(projection).project(WORKSPACE_ID);
-        verify(syncJobHandle).reportWarnings();
+        verifyWarning(SyncPhase.ORGANIZATION, "Member projection did not complete.");
     }
 
     @Test
@@ -394,7 +445,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 
         verifyNoInteractions(issueSync, subIssueSync, deletionSweepService);
-        verify(syncJobHandle).reportWarnings();
+        verifyWarning(SyncPhase.CONNECTION, "Sync eligibility check did not complete.");
     }
 
     @Test
@@ -733,5 +784,13 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     private static ConnectionQueries.ConnectionSnapshot snapshotFixture(Connection connection) {
         return new ConnectionQueries.ConnectionSnapshot(
                 connection.getId(), connection.getVersion(), connection.getConfig());
+    }
+
+    /** The job's warning names the phase and what did not complete, so its detail says where the run fell short. */
+    private void verifyWarning(SyncPhase phase, String step) {
+        verify(syncJobHandle)
+                .reportWarnings(argThat((SyncProgress detail) ->
+                        detail.phase() == phase && detail.currentStep().equals(step)));
+        verify(syncJobHandle, never()).reportWarnings();
     }
 }

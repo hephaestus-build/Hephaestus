@@ -716,6 +716,8 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
 
             verifyNothingTombstoned();
             verify(client, never()).documentName(anyString());
+            // The check skipped the sweep, so the job ends as cancelled.
+            verify(handle).reportCancelled();
         }
 
         @Test
@@ -738,6 +740,8 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
             verify(requestSpec, times(1)).execute();
             verifyNothingTombstoned();
             assertThat(outcome.total()).isZero();
+            // The listing stopped on the cancel; the entity loop after it skips its work without reporting it again.
+            verify(handle).reportCancelled();
         }
 
         @Test
@@ -755,6 +759,8 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
 
             assertThat(outcome.total()).isZero();
             verifyNothingTombstoned();
+            // One cancel skips both projects and is reported once.
+            verify(handle).reportCancelled();
         }
     }
 

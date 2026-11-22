@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -45,21 +46,11 @@ class GitLabIntegrationSyncRunnerTest extends BaseUnitTest {
         runner = new GitLabIntegrationSyncRunner(scopeSync, backfillService);
     }
 
+    /** A cancel that arrived after the scope sync's last checkpoint stopped nothing, so the runner does not report it. */
     @Test
-    void reconcile_reportsCancelledWhenAborted() {
+    void reconcile_leavesTheCancelToTheScopeSyncsCheckpoints() {
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITLAB, WORKSPACE_ID, "gitlab.com:1");
-        when(handle.isCancellationRequested()).thenReturn(true);
-
-        runner.reconcile(ref, handle, SyncJobType.RECONCILIATION);
-
-        verify(scopeSync).syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
-        verify(handle).reportCancelled();
-    }
-
-    @Test
-    void reconcile_completedWithoutCancellation_doesNotReportCancelled() {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.GITLAB, WORKSPACE_ID, null);
-        when(handle.isCancellationRequested()).thenReturn(false);
+        lenient().when(handle.isCancellationRequested()).thenReturn(true);
 
         runner.reconcile(ref, handle, SyncJobType.RECONCILIATION);
 

@@ -172,15 +172,23 @@ public class GitLabRepositorySync {
         try {
             SyncResult result = milestoneSync.syncMilestonesForGroup(session.scopeId(), session.accountLogin(), repos);
             log.info("GitLab group milestone sync: scopeId={}, written={}", session.scopeId(), result.count());
+            GitLabSyncReports.warn(
+                    handle, result.status(), SyncPhase.ISSUES, "Group milestone sync", session.accountLogin());
         } catch (Exception e) {
             log.error("Failed GitLab group milestone sync: scopeId={}", session.scopeId(), e);
-            reportWarning(handle);
+            GitLabSyncReports.warn(
+                    handle,
+                    SyncResult.Status.ABORTED_ERROR,
+                    SyncPhase.ISSUES,
+                    "Group milestone sync",
+                    session.accountLogin());
         }
     }
 
     List<Repository> syncRepositories(
             SyncSession session,
             @Nullable SyncExecutionHandle handle,
+            GitLabSyncReports.Cancellation cancellation,
             Map<Long, String> resourceErrors,
             Map<Long, GitLabProjectAdmission.ProjectRead> reads) {
         // Re-key any monitor whose name_with_owner went stale after an upstream rename/transfer BEFORE
@@ -218,7 +226,7 @@ public class GitLabRepositorySync {
         for (Repository repo : repos) {
             // Cooperative cancel checkpoint between repositories (matches the manual runner): a cancelled
             // job stops before the next repo rather than mid-repository.
-            if (handle != null && handle.isCancellationRequested()) {
+            if (cancellation.stopsHere()) {
                 log.info(
                         "GitLab scheduled sync cancelled between repositories: scopeId={}, reposProcessed={}, reposRemaining={}",
                         session.scopeId(),
@@ -253,7 +261,12 @@ public class GitLabRepositorySync {
                     read, () -> syncTargetProvider.deferUnavailableRepository(session.scopeId(), rtmId));
             if (deferred.isEmpty()) continue;
             if (deferred.get()) {
-                reportWarning(handle);
+                GitLabSyncReports.warn(
+                        handle,
+                        SyncResult.Status.ABORTED_ERROR,
+                        SyncPhase.REPOSITORIES,
+                        "Repository sync",
+                        repo.getNameWithOwner());
                 continue;
             }
 
@@ -269,7 +282,12 @@ public class GitLabRepositorySync {
                     Thread.currentThread().interrupt();
                     log.info("Rate limit wait interrupted, stopping repo sync: scopeId={}", session.scopeId());
                     if (!admission.current(read)) break;
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_RATE_LIMIT,
+                            SyncPhase.REPOSITORIES,
+                            "Repository sync",
+                            repo.getNameWithOwner());
                     break;
                 }
             }
@@ -287,7 +305,12 @@ public class GitLabRepositorySync {
                 if (!admission.current(read)) continue;
                 if (metadata.isEmpty()) {
                     syncTargetProvider.recordRepositoryUnavailable(session.scopeId(), rtmId);
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_ERROR,
+                            SyncPhase.REPOSITORIES,
+                            "Repository metadata sync",
+                            repo.getNameWithOwner());
                     continue;
                 }
                 Repository beforeRefresh = repo;
@@ -300,7 +323,12 @@ public class GitLabRepositorySync {
                 if (refreshed.isEmpty()) {
                     syncTargetProvider.retryUnavailableRepository(session.scopeId(), rtmId);
                     resourceErrors.put(rtmId, "Repository metadata sync failed");
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_ERROR,
+                            SyncPhase.REPOSITORIES,
+                            "Repository metadata sync",
+                            repo.getNameWithOwner());
                     continue;
                 }
                 repo = refreshed.get();
@@ -315,14 +343,24 @@ public class GitLabRepositorySync {
             } catch (RepositoryNotFoundOnGitProviderException | WebClientResponseException.NotFound e) {
                 if (!admission.current(read)) continue;
                 syncTargetProvider.recordRepositoryUnavailable(session.scopeId(), rtmId);
-                reportWarning(handle);
+                GitLabSyncReports.warn(
+                        handle,
+                        SyncResult.Status.ABORTED_ERROR,
+                        SyncPhase.REPOSITORIES,
+                        "Repository metadata sync",
+                        repo.getNameWithOwner());
                 continue;
             } catch (Exception e) {
                 if (!admission.current(read)) continue;
                 // A refused credential, rate limit, partial response or transport failure is not absence.
                 syncTargetProvider.retryUnavailableRepository(session.scopeId(), rtmId);
                 resourceErrors.put(rtmId, "Repository metadata sync failed");
-                reportWarning(handle);
+                GitLabSyncReports.warn(
+                        handle,
+                        SyncResult.Status.ABORTED_ERROR,
+                        SyncPhase.REPOSITORIES,
+                        "Repository metadata sync",
+                        repo.getNameWithOwner());
                 continue;
             }
 
@@ -340,7 +378,8 @@ public class GitLabRepositorySync {
                         if (error == null) {
                             error = "Label sync: " + r.status();
                         }
-                        reportWarning(handle);
+                        GitLabSyncReports.warn(
+                                handle, r.status(), SyncPhase.REPOSITORIES, "Label sync", repo.getNameWithOwner());
                     }
                     if (rtmId != null && r.isCompleted()) {
                         admission.runWrite(
@@ -353,7 +392,12 @@ public class GitLabRepositorySync {
                         error = "Label sync failed (" + e.getClass().getSimpleName() + ")";
                     }
                     log.warn("Failed label sync: scopeId={}, repo={}", session.scopeId(), repo.getNameWithOwner(), e);
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_ERROR,
+                            SyncPhase.REPOSITORIES,
+                            "Label sync",
+                            repo.getNameWithOwner());
                 }
             }
 
@@ -367,7 +411,8 @@ public class GitLabRepositorySync {
                         if (error == null) {
                             error = "Milestone sync: " + r.status();
                         }
-                        reportWarning(handle);
+                        GitLabSyncReports.warn(
+                                handle, r.status(), SyncPhase.ISSUES, "Milestone sync", repo.getNameWithOwner());
                     }
                     if (rtmId != null && r.isCompleted()) {
                         admission.runWrite(
@@ -385,7 +430,12 @@ public class GitLabRepositorySync {
                             session.scopeId(),
                             repo.getNameWithOwner(),
                             e);
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_ERROR,
+                            SyncPhase.ISSUES,
+                            "Milestone sync",
+                            repo.getNameWithOwner());
                 }
             }
 
@@ -426,7 +476,8 @@ public class GitLabRepositorySync {
                             .orElse(null);
                     issuesDone = issueMark != null;
                     if (r.status() != SyncResult.Status.COMPLETED) {
-                        reportWarning(handle);
+                        GitLabSyncReports.warn(
+                                handle, r.status(), SyncPhase.ISSUES, "Issue sync", repo.getNameWithOwner());
                     }
                 } catch (Exception e) {
                     if (!admission.current(read)) continue;
@@ -434,7 +485,12 @@ public class GitLabRepositorySync {
                         error = "Issue sync failed (" + e.getClass().getSimpleName() + ")";
                     }
                     log.warn("Failed issue sync: scopeId={}, repo={}", session.scopeId(), repo.getNameWithOwner(), e);
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_ERROR,
+                            SyncPhase.ISSUES,
+                            "Issue sync",
+                            repo.getNameWithOwner());
                 }
             }
 
@@ -462,7 +518,12 @@ public class GitLabRepositorySync {
                             .orElse(null);
                     mrsDone = mrMark != null;
                     if (r.status() != SyncResult.Status.COMPLETED) {
-                        reportWarning(handle);
+                        GitLabSyncReports.warn(
+                                handle,
+                                r.status(),
+                                SyncPhase.PULL_REQUESTS,
+                                "Merge request sync",
+                                repo.getNameWithOwner());
                     }
                 } catch (Exception e) {
                     if (!admission.current(read)) continue;
@@ -470,7 +531,12 @@ public class GitLabRepositorySync {
                         error = "Merge request sync failed (" + e.getClass().getSimpleName() + ")";
                     }
                     log.warn("Failed MR sync: scopeId={}, repo={}", session.scopeId(), repo.getNameWithOwner(), e);
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_ERROR,
+                            SyncPhase.PULL_REQUESTS,
+                            "Merge request sync",
+                            repo.getNameWithOwner());
                 }
             }
 
@@ -484,7 +550,12 @@ public class GitLabRepositorySync {
                         if (error == null) {
                             error = "Collaborator sync: " + r.status();
                         }
-                        reportWarning(handle);
+                        GitLabSyncReports.warn(
+                                handle,
+                                r.status(),
+                                SyncPhase.REPOSITORIES,
+                                "Collaborator sync",
+                                repo.getNameWithOwner());
                     }
                     if (rtmId != null && r.isCompleted()) {
                         admission.runWrite(
@@ -502,7 +573,12 @@ public class GitLabRepositorySync {
                             session.scopeId(),
                             repo.getNameWithOwner(),
                             e);
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_ERROR,
+                            SyncPhase.REPOSITORIES,
+                            "Collaborator sync",
+                            repo.getNameWithOwner());
                 }
             }
 
@@ -517,7 +593,8 @@ public class GitLabRepositorySync {
                         if (error == null) {
                             error = "Commit sync: " + r.status();
                         }
-                        reportWarning(handle);
+                        GitLabSyncReports.warn(
+                                handle, r.status(), SyncPhase.REPOSITORIES, "Commit backfill", repo.getNameWithOwner());
                     }
                 } catch (Exception e) {
                     if (!admission.current(read)) continue;
@@ -529,7 +606,12 @@ public class GitLabRepositorySync {
                             session.scopeId(),
                             repo.getNameWithOwner(),
                             e);
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_ERROR,
+                            SyncPhase.REPOSITORIES,
+                            "Commit backfill",
+                            repo.getNameWithOwner());
                 }
             } else if (commitSync != null) {
                 try {
@@ -540,7 +622,8 @@ public class GitLabRepositorySync {
                         if (error == null) {
                             error = "Commit sync: " + r.status();
                         }
-                        reportWarning(handle);
+                        GitLabSyncReports.warn(
+                                handle, r.status(), SyncPhase.REPOSITORIES, "Commit sync", repo.getNameWithOwner());
                     }
                 } catch (Exception e) {
                     if (!admission.current(read)) continue;
@@ -548,7 +631,12 @@ public class GitLabRepositorySync {
                         error = "Commit sync failed (" + e.getClass().getSimpleName() + ")";
                     }
                     log.warn("Failed commit sync: scopeId={}, repo={}", session.scopeId(), repo.getNameWithOwner(), e);
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_ERROR,
+                            SyncPhase.REPOSITORIES,
+                            "Commit sync",
+                            repo.getNameWithOwner());
                 }
             }
 
@@ -593,7 +681,7 @@ public class GitLabRepositorySync {
         // a commit whose SHA appears on an MR in a sibling repo can still be linked (the target MR
         // repo may not have synced its MRs when this repo's commits were fetched).
         if (commitMrLinker != null
-                && (handle == null || !handle.isCancellationRequested())
+                && !cancellation.stopsHere()
                 && syncTargetProvider.isScopeActiveForSync(session.scopeId())) {
             for (Repository repo : availableRepos) {
                 var read = reads.get(repo.getId());
@@ -627,7 +715,12 @@ public class GitLabRepositorySync {
                             session.scopeId(),
                             repo.getNameWithOwner(),
                             e);
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_ERROR,
+                            SyncPhase.REPOSITORIES,
+                            "Commit linking",
+                            repo.getNameWithOwner());
                 }
             }
         }
@@ -645,7 +738,12 @@ public class GitLabRepositorySync {
                         session.scopeId(),
                         repo.getId(),
                         e);
-                reportWarning(handle);
+                GitLabSyncReports.warn(
+                        handle,
+                        SyncResult.Status.ABORTED_ERROR,
+                        SyncPhase.REPOSITORIES,
+                        "Activity repair",
+                        repo.getNameWithOwner());
             }
         }
 
@@ -694,7 +792,8 @@ public class GitLabRepositorySync {
                         if (syncTargetId != null) {
                             resourceErrors.putIfAbsent(syncTargetId, "Sub-issue sync: " + r.status());
                         }
-                        reportWarning(handle);
+                        GitLabSyncReports.warn(
+                                handle, r.status(), SyncPhase.ISSUES, "Sub-issue sync", repo.getNameWithOwner());
                     }
                 } catch (Exception e) {
                     if (!admission.current(read)) continue;
@@ -708,7 +807,12 @@ public class GitLabRepositorySync {
                             session.scopeId(),
                             repo.getNameWithOwner(),
                             e);
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_ERROR,
+                            SyncPhase.ISSUES,
+                            "Sub-issue sync",
+                            repo.getNameWithOwner());
                 }
             }
             if (issueDependencySync != null) {
@@ -720,7 +824,8 @@ public class GitLabRepositorySync {
                         if (syncTargetId != null) {
                             resourceErrors.putIfAbsent(syncTargetId, "Dependency sync: " + r.status());
                         }
-                        reportWarning(handle);
+                        GitLabSyncReports.warn(
+                                handle, r.status(), SyncPhase.ISSUES, "Issue dependency sync", repo.getNameWithOwner());
                     }
                 } catch (Exception e) {
                     if (!admission.current(read)) continue;
@@ -734,7 +839,12 @@ public class GitLabRepositorySync {
                             session.scopeId(),
                             repo.getNameWithOwner(),
                             e);
-                    reportWarning(handle);
+                    GitLabSyncReports.warn(
+                            handle,
+                            SyncResult.Status.ABORTED_ERROR,
+                            SyncPhase.ISSUES,
+                            "Issue dependency sync",
+                            repo.getNameWithOwner());
                 }
             }
         }
@@ -751,11 +861,5 @@ public class GitLabRepositorySync {
     /** The instance the scope's active connection is on; the same group path can exist on another one. */
     private @Nullable Long getGitLabProviderId(Long scopeId) {
         return actorSelector.connectedProviderId(scopeId).orElse(null);
-    }
-
-    private static void reportWarning(@Nullable SyncExecutionHandle handle) {
-        if (handle != null) {
-            handle.reportWarnings();
-        }
     }
 }
