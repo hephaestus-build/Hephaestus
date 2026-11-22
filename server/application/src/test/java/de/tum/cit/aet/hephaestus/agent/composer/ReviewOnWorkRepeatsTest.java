@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.composer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.NoteThreadState;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -85,7 +86,8 @@ class ReviewOnWorkRepeatsTest {
                 15,
                 WORK_URL + "#discussion_r1",
                 EARLIER,
-                Set.of(new ReviewOnWork.Cite("handles-errors", DROPPED)));
+                Set.of(new ReviewOnWork.Cite("handles-errors", DROPPED)),
+                false);
         assertThat(earlier).containsExactly(note);
         assertThat(read.errors()).isEmpty();
         assertThat(ReviewOnWork.repeats(Objects.requireNonNull(read.review()), earlier, RESULTS))
@@ -95,8 +97,8 @@ class ReviewOnWorkRepeatsTest {
     }
 
     /**
-     * The capture leaves Hephaestus's own notes and threads out, so whether a person resolved an earlier note's thread
-     * is unknown: the receipt says the note raised the problem, never that it still raises it.
+     * The mirror of the provider holds no thread for the earlier note, so whether a person resolved it is unknown: the
+     * receipt says the note raised the problem, never that it still raises it.
      */
     @Test
     void shouldSayTheEarlierNoteRaisedTheProblemWhenItsThreadStateIsUnknown() {
@@ -116,10 +118,56 @@ class ReviewOnWorkRepeatsTest {
                         .path("link")
                         .asString())
                 .isEqualTo(WORK_URL + "#discussion_r1");
+        assertThat(receipt.path("repeats")
+                        .get(0)
+                        .path("earlierNote")
+                        .path("thread")
+                        .asString())
+                .isEqualTo("UNKNOWN");
         assertThat(receipt.path("next").asString())
                 .contains("an earlier note on this work raised")
-                .contains("whether a person resolved its thread is not known")
+                .contains("whether a person resolved that note's thread is not known")
+                .doesNotContain("was open")
                 .doesNotContain("still raises");
+    }
+
+    @Test
+    void shouldSayTheEarlierNotesThreadWasOpenWhenTheMirrorHeldItOpen() {
+        var history = history();
+        copy(entry(history, false), "POSTED", false, cite("handles-errors", DROPPED), "OPEN");
+        var draft = draft();
+        note(draft, "p1", 0, FIRST);
+        var read = ReviewOnWork.read(draft, RESULTS, true, Map.of());
+
+        var receipt = MAPPER.readTree(CompositionSessions.checkedReceipt(
+                "draft-1",
+                ReviewOnWork.repeats(Objects.requireNonNull(read.review()), earlierNotes(history), RESULTS)));
+
+        assertThat(receipt.path("repeats")
+                        .get(0)
+                        .path("earlierNote")
+                        .path("thread")
+                        .asString())
+                .isEqualTo("OPEN");
+        assertThat(receipt.path("next").asString())
+                .contains("that note's thread was open in Hephaestus's mirror of the provider when this was read")
+                .doesNotContain("not known")
+                .doesNotContain("still raises");
+    }
+
+    @Test
+    void shouldNotCountAnEarlierNoteWhoseThreadTheMirrorHoldsAsResolved() {
+        var history = history();
+        copy(entry(history, false), "POSTED", false, cite("handles-errors", DROPPED), "RESOLVED");
+        var draft = draft();
+        note(draft, "p1", 0, FIRST);
+
+        var earlier = earlierNotes(history);
+        var read = ReviewOnWork.read(draft, RESULTS, true, Map.of());
+
+        assertThat(earlier).isEmpty();
+        assertThat(ReviewOnWork.repeats(Objects.requireNonNull(read.review()), earlier, RESULTS))
+                .isEmpty();
     }
 
     /**
@@ -143,7 +191,8 @@ class ReviewOnWorkRepeatsTest {
                                 15,
                                 15,
                                 WORK_URL + "#discussion_r9",
-                                EARLIER + " " + "x".repeat(200)))));
+                                EARLIER + " " + "x".repeat(200),
+                                NoteThreadState.UNKNOWN))));
 
         var shown = MAPPER.readTree(CompositionSessions.readbackText(MAPPER, status));
 
@@ -155,10 +204,34 @@ class ReviewOnWorkRepeatsTest {
         assertThat(repeat.path("otherNote").path("quote").asString())
                 .startsWith(EARLIER)
                 .endsWith("…");
+        assertThat(repeat.path("otherNote").path("thread").asString()).isEqualTo("UNKNOWN");
         assertThat(shown.path("repeatsNext").asString())
                 .contains("another note on this work raised")
+                .contains("whether a person resolved that note's thread is not known")
                 .contains("edit_own")
                 .doesNotContain("still raises");
+    }
+
+    @Test
+    void shouldSayInTheReadbackThatTheOtherNotesThreadWasOpenWhenTheMirrorHeldItOpen() {
+        var status = new FeedbackRepairStatus(
+                UUID.randomUUID(),
+                FeedbackRepairStatus.State.READBACK,
+                0,
+                List.of(),
+                List.of(new FeedbackRepairStatus.Repeat(
+                        UUID.randomUUID(),
+                        List.of(UUID.randomUUID()),
+                        new FeedbackRepairStatus.OtherNote(
+                                "src/App.java", 15, 15, WORK_URL + "#discussion_r9", EARLIER, NoteThreadState.OPEN))));
+
+        var shown = MAPPER.readTree(CompositionSessions.readbackText(MAPPER, status));
+
+        assertThat(shown.path("repeats").get(0).path("otherNote").path("thread").asString())
+                .isEqualTo("OPEN");
+        assertThat(shown.path("repeatsNext").asString())
+                .contains("that note's thread was open in Hephaestus's mirror of the provider")
+                .doesNotContain("not known");
     }
 
     @Test
@@ -280,6 +353,11 @@ class ReviewOnWorkRepeatsTest {
     }
 
     private static void copy(ObjectNode entry, String state, boolean closedAsFixed, ObjectNode cite) {
+        copy(entry, state, closedAsFixed, cite, "UNKNOWN");
+    }
+
+    private static void copy(
+            ObjectNode entry, String state, boolean closedAsFixed, ObjectNode cite, String threadState) {
         var copy = ((ArrayNode) entry.path("copies")).addObject();
         copy.put("kind", "LINE_NOTE");
         copy.put("body", EARLIER);
@@ -289,6 +367,7 @@ class ReviewOnWorkRepeatsTest {
         copy.put("externalUrl", WORK_URL + "#discussion_r1");
         copy.put("state", state);
         copy.put("closedAsFixed", closedAsFixed);
+        copy.put("threadState", threadState);
         copy.putArray("cites").add(cite);
     }
 

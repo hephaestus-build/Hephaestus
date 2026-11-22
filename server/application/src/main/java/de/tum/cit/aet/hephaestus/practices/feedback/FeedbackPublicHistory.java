@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.core.spi.MirroredThreadStateQuery;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
@@ -17,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
+import de.tum.cit.aet.hephaestus.practices.spi.NoteThreadState;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemIdentityQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import java.time.Instant;
@@ -49,12 +51,35 @@ public class FeedbackPublicHistory {
     private final PracticeRepository practices;
     private final FeedbackCopyRepository copies;
     private final ProblemIdentityQuery problemIdentities;
+    private final MirroredThreadStateQuery mirroredThreads;
 
     public record AuthorizedSupport(UUID resultId, String practiceSlug, HistoryCustody custody) {}
 
     /** The identity of each of {@code problemIds} that has one, read in one query for a page of the history. */
     public Map<UUID, String> identities(long workspaceId, Collection<UUID> problemIds) {
         return problemIds.isEmpty() ? Map.of() : problemIdentities.identities(workspaceId, problemIds);
+    }
+
+    /**
+     * The mirrored state of each thread that {@code threadRefs} names on {@code itemIds}, read in one query for a page of
+     * the history. A thread that the mirror does not hold is absent: its note's state is {@link NoteThreadState#UNKNOWN}.
+     */
+    public Map<String, NoteThreadState> threadStates(
+            long workspaceId, Collection<Long> itemIds, Collection<String> threadRefs) {
+        if (itemIds.isEmpty() || threadRefs.isEmpty()) return Map.of();
+        var states = new HashMap<String, NoteThreadState>();
+        mirroredThreads
+                .resolved(workspaceId, itemIds, threadRefs)
+                .forEach(
+                        (ref, resolved) -> states.put(ref, resolved ? NoteThreadState.RESOLVED : NoteThreadState.OPEN));
+        return states;
+    }
+
+    /** The state of a note's thread among {@code states}; null for a copy that is not a line note or file note. */
+    static @Nullable NoteThreadState threadState(FeedbackCopy copy, Map<String, NoteThreadState> states) {
+        if (!NoteCitations.note(copy)) return null;
+        var ref = copy.getThreadRef();
+        return ref == null ? NoteThreadState.UNKNOWN : states.getOrDefault(ref, NoteThreadState.UNKNOWN);
     }
 
     /**
@@ -95,14 +120,19 @@ public class FeedbackPublicHistory {
 
     /**
      * What a delivered piece on the work rests on: its results, those that the reader may use, and the identity of each
-     * problem that its basis names, read once for a page of the history.
+     * problem that its basis names. Identities and the mirrored state of each note's thread are read once for a page of
+     * the history.
      */
     public record PublicSupport(
-            List<Result> results, List<AuthorizedSupport> authorized, Map<UUID, String> identities) {
+            List<Result> results,
+            List<AuthorizedSupport> authorized,
+            Map<UUID, String> identities,
+            Map<String, NoteThreadState> threadStates) {
         public PublicSupport {
             results = List.copyOf(results);
             authorized = List.copyOf(authorized);
             identities = Map.copyOf(identities);
+            threadStates = Map.copyOf(threadStates);
         }
     }
 
@@ -163,6 +193,7 @@ public class FeedbackPublicHistory {
                                 Objects.requireNonNull(copy.getPostedAt()),
                                 copy.getState(),
                                 closed.contains(copy.getId()),
+                                threadState(copy, support.threadStates()),
                                 cites.getOrDefault(copy.getId(), List.of())))
                         .toList());
         return mapper.valueToTree(projection);
@@ -266,6 +297,8 @@ public class FeedbackPublicHistory {
             FeedbackCopyState state,
             // Hephaestus resolved this note's thread as fixed, and the provider never reopens it.
             boolean closedAsFixed,
+            // The note's thread as the mirror of the provider last recorded it; null for a summary.
+            @Nullable NoteThreadState threadState,
             // The problems that this note cites, each with an identity, by practice. A later review on the work finds
             // a repeat of a note that Hephaestus did not close by them.
             List<NoteCitations.Cite> cites) {}

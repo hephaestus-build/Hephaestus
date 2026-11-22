@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.feedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
+import java.util.Collection;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.Query;
@@ -38,4 +39,22 @@ public interface ScmFeedbackThreadStateRepository extends Repository<PullRequest
         WHERE i.kind='scm.pull_request' AND t.node_id IS NOT NULL
         """, nativeQuery = true)
     List<ThreadRow> find(@Param("threadId") long threadId, @Param("actorUserId") @Nullable Long actorUserId);
+
+    interface StateRow {
+        String getThreadRef();
+
+        boolean isResolved();
+    }
+
+    /** The mirrored threads named by {@code threadRefs} on the workspace's pull and merge request items. */
+    @Query(value = """
+        SELECT t.node_id AS threadRef, t.state = 'RESOLVED' AS resolved FROM item i
+        JOIN pull_request_review_thread t ON t.pull_request_id = i.source_id
+        WHERE i.workspace_id = :workspaceId AND i.id IN (:itemIds) AND i.kind = 'scm.pull_request'
+          AND t.node_id IN (:threadRefs) AND t.state IS NOT NULL
+        """, nativeQuery = true)
+    List<StateRow> states(
+            @Param("workspaceId") long workspaceId,
+            @Param("itemIds") Collection<Long> itemIds,
+            @Param("threadRefs") Collection<String> threadRefs);
 }

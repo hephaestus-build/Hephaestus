@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.NoteThreadState;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -38,7 +39,7 @@ import tools.jackson.databind.ObjectMapper;
  * edit is checked against that same history, so the cutoff stays at the first revision, and a note that an earlier
  * readback listed is listed again. The other note is the newest revision of its provider
  * comment, posted, of a piece that is not withdrawn and not marked incorrect, does not rest on an incorrect result, and
- * Hephaestus did not close it as fixed. Its words are shown only as the public history shows them. Pairs inside one
+ * Hephaestus did not close it as fixed. The mirror of the provider does not hold its thread as resolved. Its words are shown only as the public history shows them. Pairs inside one
  * composition are left out: the check listed them.
  */
 @Component
@@ -71,7 +72,18 @@ class FeedbackReadbackRepeats {
                 .toList();
         if (own.isEmpty()) return List.of();
         var pieces = feedback.findDeliveredOnWorkOfOtherReviews(workspaceId, itemId, row.getReviewId());
-        var others = standingNotes(workspaceId, pieces, prepared);
+        var standingElsewhere = standingNotes(workspaceId, pieces, prepared);
+        var threads = publicHistory.threadStates(
+                workspaceId,
+                List.of(itemId),
+                standingElsewhere.stream()
+                        .map(FeedbackCopy::getThreadRef)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList());
+        var others = standingElsewhere.stream()
+                .filter(other -> FeedbackPublicHistory.threadState(other, threads) != NoteThreadState.RESOLVED)
+                .toList();
         if (others.isEmpty()) return List.of();
         var reviewOf = new HashMap<UUID, UUID>();
         pieces.forEach(piece -> reviewOf.put(piece.id(), piece.reviewId()));
@@ -136,7 +148,8 @@ class FeedbackReadbackRepeats {
                             other.getExternalUrl(),
                             textAllowed(basisOf.getOrDefault(other.getFeedbackId(), Set.of()), authorized)
                                     ? other.getBody()
-                                    : null))));
+                                    : null,
+                            Objects.requireNonNull(FeedbackPublicHistory.threadState(other, threads))))));
         }
         return repeats;
     }

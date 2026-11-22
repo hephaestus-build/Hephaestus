@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.core.spi.MirroredThreadStateQuery;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
@@ -39,6 +40,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
+import de.tum.cit.aet.hephaestus.practices.spi.NoteThreadState;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackHistory;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
@@ -69,6 +71,9 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
 
     @Autowired
     private ConversationTurnClaims claims;
+
+    @MockitoBean
+    MirroredThreadStateQuery mirroredThreads;
 
     @Autowired
     FeedbackHistoryQueryService history;
@@ -794,6 +799,77 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 .isEqualTo(mapper.createArrayNode());
     }
 
+    /**
+     * The history reads the mirrored state of every note thread of a page in one read; the mirror's own query is
+     * {@code ScmMirroredThreadStateQueryIntegrationTest}'s.
+     */
+    @Test
+    void shouldGiveEachNoteTheStateOfItsThreadAsTheMirrorOfTheProviderHoldsIt() {
+        var row = piece(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, AT);
+        var proof = result();
+        basis.saveAndFlush(FeedbackBasis.builder()
+                .id(FeedbackIds.basis(row.getId(), proof.getId(), null))
+                .workspaceId(workspace.getId())
+                .feedbackId(row.getId())
+                .resultId(proof.getId())
+                .developerId(developerId)
+                .ordinal(0)
+                .build());
+        authorize(proof);
+        summary(row, FeedbackCopyState.POSTED);
+        var threads = new ArrayList<String>();
+        for (int position = 1; position <= 3; position++) {
+            var copyId = FeedbackIds.copy(row.getId(), FeedbackCopyKind.LINE_NOTE, position);
+            threads.add("PRRT_" + copyId);
+            copies.saveAndFlush(FeedbackCopy.builder()
+                    .id(copyId)
+                    .workspaceId(workspace.getId())
+                    .feedbackId(row.getId())
+                    .kind(FeedbackCopyKind.LINE_NOTE)
+                    .position(position)
+                    .state(FeedbackCopyState.POSTED)
+                    .body("Cover the failure case here.")
+                    .path("src/A.java")
+                    .startLine(position)
+                    .endLine(position)
+                    .side(CitationSide.NEW)
+                    .writeKey(copyId.toString())
+                    .writeMarker(FeedbackIds.writeMarker(copyId))
+                    .writeStartedAt(AT)
+                    .postedAt(AT)
+                    .externalRef("note-" + position)
+                    .threadRef(threads.getLast())
+                    .createdAt(AT)
+                    .build());
+        }
+        // A person resolved the first thread, the second is open, and the mirror holds no thread for the third.
+        when(mirroredThreads.resolved(
+                        eq(workspace.getId()),
+                        eq(List.of(itemId)),
+                        argThat(refs -> refs.containsAll(threads) && refs.size() == threads.size())))
+                .thenReturn(Map.of(threads.get(0), true, threads.get(1), false));
+
+        var publicHistory = Objects.requireNonNull(history.forItem(workspace.getId(), itemId, developerId, 1)
+                .getFirst()
+                .publicHistory());
+
+        var threadStates = new HashMap<String, JsonNode>();
+        publicHistory
+                .path("copies")
+                .forEach(copy -> threadStates.put(copy.path("externalRef").asString(""), copy.path("threadState")));
+        assertThat(Objects.requireNonNull(threadStates.get("note-1")).asString())
+                .isEqualTo("RESOLVED");
+        assertThat(Objects.requireNonNull(threadStates.get("note-2")).asString())
+                .isEqualTo("OPEN");
+        assertThat(Objects.requireNonNull(threadStates.get("note-3")).asString())
+                .isEqualTo("UNKNOWN");
+        assertThat(Objects.requireNonNull(
+                                threadStates.get("copy-" + FeedbackIds.copy(row.getId(), FeedbackCopyKind.SUMMARY, 0)))
+                        .isNull())
+                .as("a summary has no thread")
+                .isTrue();
+    }
+
     @Test
     void shouldFlagInTheReadbackANoteWhoseProblemANoteOfAnotherReviewOnTheWorkCites() {
         // Another review's note reached the work after this piece was prepared, at AT: it raced this review.
@@ -846,7 +922,12 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                     mine.getId(),
                     List.of(problem),
                     new FeedbackRepairStatus.OtherNote(
-                            "src/A.java", 1, 1, "https://github.com/acme/app/pull/7#discussion_r1", other.getBody()));
+                            "src/A.java",
+                            1,
+                            1,
+                            "https://github.com/acme/app/pull/7#discussion_r1",
+                            other.getBody(),
+                            NoteThreadState.UNKNOWN));
         }
     }
 

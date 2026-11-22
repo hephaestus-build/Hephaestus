@@ -650,6 +650,7 @@ final class CompositionEvalCases {
                         .put("postedAt", said.path("deliveredAt").asString())
                         .put("state", "POSTED")
                         .put("closedAsFixed", false)
+                        .put("threadState", "OPEN")
                         .putArray("cites");
             }
         }
