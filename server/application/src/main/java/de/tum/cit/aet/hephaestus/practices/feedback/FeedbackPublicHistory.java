@@ -285,7 +285,7 @@ public class FeedbackPublicHistory {
             // Hephaestus resolved this note's thread as fixed, and the provider never reopens it.
             boolean closedAsFixed,
             // The problems that this note cites, each with an identity, by practice. A later review on the work finds
-            // a repeat of an open note by them.
+            // a repeat of a note that Hephaestus did not close by them.
             List<PublicCite> cites) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)

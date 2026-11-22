@@ -496,11 +496,11 @@ The composer's view of lineage stays decided, not shipped.
   The summary has none, because it can point to its notes.
 - **Repeats in the draft.** A line note that cites a problem that an earlier line note of the draft cites is a repeat.
   The summary never counts here.
-- **Repeats across reviews.** An entry of the draft can repeat an earlier note on the work that still stands.
+- **Repeats across reviews.** An entry of the draft can repeat an earlier note on the work that Hephaestus did not close.
   The summary counts too.
   The entry repeats the note when both cite a problem with the same practice and identity.
-  An earlier note stands while it is posted and not retracted, and its piece is not withdrawn.
-  A note that Hephaestus closed as fixed does not stand.
+  Such a note is posted and not retracted, and its piece is not withdrawn.
+  Hephaestus did not close it as fixed.
   The composer does not know whether a person resolved the note's thread.
   The capture leaves Hephaestus's own notes and threads out, and the history read has no provider thread state.
   So the receipt says that the earlier note raised the problem, not that it still raises it.
