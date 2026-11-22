@@ -19,20 +19,30 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.http.HttpMethod;
+import org.springframework.web.reactive.function.client.ClientRequest;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-/** One GitLab: GraphQL reads and summaries, and REST discussion threads that both of them see. */
+/**
+ * One GitLab: GraphQL reads and summaries, REST discussion threads that both of them see, the bot's account, and the
+ * merge request's diff versions. A discussion's first note is resolvable, and only a PUT of its discussion changes it.
+ */
 public final class ScriptedGitLabNotes {
+
+    /** The server that {@link ScriptedGitLabTransport} routes to this GitLab. */
+    public static final String SERVER = "https://gitlab.scripted.test";
 
     private static final String BOT = "gid://gitlab/User/1";
     private static final Pattern DISCUSSIONS = Pattern.compile(".*/merge_requests/(\\d+)/discussions(?:/(d\\d+))?");
+    private static final Pattern VERSIONS = Pattern.compile(".*/merge_requests/\\d+/versions(?:/(\\d+))?");
 
     private final ScriptedCommentThreads threads = new ScriptedCommentThreads("gid://gitlab/Note/");
     private final SummaryWriter channel;
@@ -72,6 +82,9 @@ public final class ScriptedGitLabNotes {
     }
 
     private final Map<String, Map<String, Object>> positions = new ConcurrentHashMap<>();
+    private final Set<String> resolved = ConcurrentHashMap.newKeySet();
+    private final List<String> threadWrites = new CopyOnWriteArrayList<>();
+    private final List<Map<String, Object>> versions = new CopyOnWriteArrayList<>();
     private final GitLabGraphQlClientProvider provider;
     private final ScriptedGitLabRest rest = new ScriptedGitLabRest(this::discuss);
 
@@ -106,6 +119,32 @@ public final class ScriptedGitLabNotes {
         return threads;
     }
 
+    /** Whether the discussion that {@code noteId} starts is resolved. */
+    public boolean resolved(String noteId) {
+        return resolved.contains(noteId);
+    }
+
+    /** Every thread state written, as {@code <discussion> resolved=<state>}, in order. */
+    public List<String> threadWrites() {
+        return List.copyOf(threadWrites);
+    }
+
+    /** Adds a diff version of the merge request: its commits and the GitLab diff of each file. */
+    public void diffVersion(String base, String start, String head, String path, String diff) {
+        var version = new LinkedHashMap<String, Object>();
+        version.put("id", versions.size() + 1);
+        version.put("state", "collected");
+        version.put("base_commit_sha", base);
+        version.put("head_commit_sha", head);
+        version.put("start_commit_sha", start);
+        version.put("diffs", List.of(Map.of("old_path", path, "new_path", path, "renamed_file", false, "diff", diff)));
+        versions.add(version);
+    }
+
+    Mono<ClientResponse> exchange(ClientRequest request) {
+        return rest.exchange(request);
+    }
+
     public static String issue(int iid) {
         return "gid://gitlab/Issue/" + iid;
     }
@@ -124,6 +163,12 @@ public final class ScriptedGitLabNotes {
         var pending = Pattern.compile(".*/merge_requests/(\\d+)/(draft_notes(?:/bulk_publish)?|notes)")
                 .matcher(call.path());
         if (pending.matches()) return drafts(call, Integer.parseInt(pending.group(1)), pending.group(2));
+        if (call.path().endsWith("/api/v4/user"))
+            return ScriptedGitLabRest.respond(200, Map.of("id", number(BOT), "username", "hephaestus-bot"));
+        var version = VERSIONS.matcher(call.path());
+        if (version.matches())
+            return ScriptedGitLabRest.respond(
+                    200, version.group(1) == null ? versions : versions.get(Integer.parseInt(version.group(1)) - 1));
         var path = DISCUSSIONS.matcher(call.path());
         if (!path.matches()) return Mono.error(new IllegalStateException("Unscripted GitLab REST call " + call.path()));
         String thread = mergeRequest(Integer.parseInt(path.group(1)));
@@ -134,6 +179,17 @@ public final class ScriptedGitLabNotes {
             return ScriptedGitLabRest.respond(404, Map.of("message", "404 Not found"));
         }
         Map<String, Object> request = call.json();
+        if (HttpMethod.PUT.equals(call.method())) {
+            for (var note : threads.on(thread))
+                if (("d" + number(note.id())).equals(path.group(2))) {
+                    boolean resolve = Boolean.TRUE.equals(request.get("resolved"));
+                    if (resolve) resolved.add(note.id());
+                    else resolved.remove(note.id());
+                    threadWrites.add(path.group(2) + " resolved=" + resolve);
+                    return ScriptedGitLabRest.respond(200, discussion(note.id(), note.body()));
+                }
+            return ScriptedGitLabRest.respond(404, Map.of("message", "404 Not found"));
+        }
         Object position = request.get("position");
         if (position != null && rejectPositions)
             return ScriptedGitLabRest.respond(
@@ -212,6 +268,8 @@ public final class ScriptedGitLabNotes {
         note.put("author", Map.of("id", number(BOT)));
         note.put("position", positions.get(id));
         note.put("resolvable", true);
+        note.put("resolved", resolved.contains(id));
+        note.put("resolved_by", resolved.contains(id) ? Map.of("id", number(BOT)) : null);
         return Map.of("id", "d" + number(id), "individual_note", false, "notes", List.of(note));
     }
 

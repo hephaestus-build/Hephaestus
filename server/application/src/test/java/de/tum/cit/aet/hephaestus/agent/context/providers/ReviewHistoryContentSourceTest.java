@@ -182,6 +182,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                         Currentness.CURRENT,
                         false,
                         List.of(),
+                        List.of(),
                         List.of()))
                 : null;
         return new FeedbackHistoryEntry(

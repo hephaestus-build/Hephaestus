@@ -38,9 +38,12 @@ public record PublicFeedbackSnapshot(
             boolean bodyUnavailable,
             Currentness currentness,
             boolean withdrawn,
+            // The practices whose every note of this piece Hephaestus closed as fixed where it never reopens.
+            List<String> closedPractices,
             List<Basis> basedOn,
             List<Copy> copies) {
         public Entry {
+            closedPractices = List.copyOf(closedPractices);
             basedOn = List.copyOf(basedOn);
             copies = List.copyOf(copies);
             if (destination != FeedbackDestination.ON_WORK)
@@ -64,7 +67,9 @@ public record PublicFeedbackSnapshot(
             @Nullable String externalRef,
             @Nullable String externalUrl,
             Instant postedAt,
-            FeedbackCopyState state) {
+            FeedbackCopyState state,
+            // Hephaestus closed this note's thread as fixed, and the provider never reopens it.
+            boolean closedAsFixed) {
         public Copy {
             if (state != FeedbackCopyState.POSTED && state != FeedbackCopyState.RETRACTED)
                 throw new IllegalArgumentException("Public history requires a confirmed or retracted copy");

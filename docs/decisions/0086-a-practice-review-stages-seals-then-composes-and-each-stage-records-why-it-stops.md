@@ -376,11 +376,15 @@ Repeats by identity and the composer's view of lineage stay decided, not shipped
   So no newer lineage commits in between, and two decisions for one thread never race.
   The server reopens only where the provider can tell its own reopen from a person's: on GitHub, not on GitLab.
 - **A note closed as fixed.** On GitLab, a thread that the server resolved stays resolved, so its note no longer stands as advice.
-  Once the resolve is confirmed, the history that the next review on the work reads marks that note `closedAsFixed`.
+  The resolve may have reached the provider.
+  From then on, the history that the next review on the work reads marks that note `closedAsFixed`.
+  A thread that a person changed is theirs, so its note is not marked.
   It names the practices whose every note in the piece is closed, and that its summary does not carry.
   The piece is then no witness for `ALREADY_SAID` or `NO_MATERIAL_CHANGE` on those practices, and its other notes still stand.
   So a problem that came back is raised again in a new note.
   The closed note does not hold it back.
+  Its summary can repeat the words of the earlier summary.
+  If that earlier piece has a note closed as fixed, preparation does not withhold it as `REPEATS_DELIVERED_NOTE`.
   On GitHub the server reopens the thread instead, so the piece keeps standing as advice.
 - **A person's state wins.** A person's resolve, reopen or reply hands the thread to people for good.
   - An event is Hephaestus's own only when its actor is the account that writes the open change.
