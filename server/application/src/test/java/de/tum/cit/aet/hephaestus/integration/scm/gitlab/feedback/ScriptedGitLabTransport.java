@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import java.net.URI;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -40,11 +41,14 @@ public class ScriptedGitLabTransport {
                             .filter((request, next) -> HOST.equals(request.url().getHost())
                                     ? gitlab.getObject().exchange(request)
                                     : next.exchange(request));
-                // Every GraphQL client the provider builds for a scope names that scope's server last.
-                if (bean instanceof GitLabGraphQlClientProvider provider)
+                // Every GraphQL client the provider builds for a scope names that scope's server last. A test that
+                // replaces the provider with its own mock keeps it.
+                if (bean instanceof GitLabGraphQlClientProvider provider
+                        && !Mockito.mockingDetails(provider).isMock())
                     return mock(
                             GitLabGraphQlClientProvider.class,
                             withSettings()
+                                    .stubOnly()
                                     .spiedInstance(provider)
                                     .defaultAnswer(call -> call.getMethod()
                                                             .getName()

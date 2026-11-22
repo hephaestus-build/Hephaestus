@@ -228,24 +228,24 @@ class GitLabReturningProblemContractIntegrationTest extends BaseIntegrationTest 
         ActionTestSupport.runLane(executor, jdbc, lane);
         assertThat(gitlab.resolved(t1)).isTrue();
         String discussion = thread.substring(thread.lastIndexOf('/') + 1);
-        assertThat(gitlab.threadWrites()).containsExactly(discussion + " resolved=true");
+        assertThat(gitlab.threadWrites(work.iid())).containsExactly(discussion + " resolved=true");
 
         // Review 3: the problem is back. GitLab never reopens T1, so the same summary and a new note say it again.
         try (var review = claimed(work, "3".repeat(40), 10, QUOTE)) {
             var admitted = admitStaged(review, notMet(review));
             ActionTestSupport.drain(executor, jdbc);
-            assertThat(gitlab.threadWrites()).containsExactly(discussion + " resolved=true");
+            assertThat(gitlab.threadWrites(work.iid())).containsExactly(discussion + " resolved=true");
             // The resolved note no longer stands as advice, so its summary words do not hold the new note back.
             assertThat(copies.findClosedAsFixed(work.workspaceId(), List.of(note.getId())))
                     .containsExactly(note.getId());
-            // The composer reads it so: T1 is closed as fixed. Review 1's summary rests on the same practice, so
-            // the piece still stands as that practice's advice and closes none of its practices.
+            // The composer reads it so: T1 is closed as fixed, and as it was review 1's only note on the practice, the
+            // piece no longer stands as that practice's advice, although its summary rests on the practice too.
             var history = admission.publicFeedbackHistory(review.identity()).history();
             assertThat(history.feedback())
                     .filteredOn(entry -> entry.id().equals(first))
                     .singleElement()
                     .satisfies(entry -> {
-                        assertThat(entry.closedPractices()).isEmpty();
+                        assertThat(entry.closedPractices()).containsExactly(work.practiceSlug());
                         assertThat(entry.copies())
                                 .filteredOn(copy -> copy.id().equals(note.getId()))
                                 .singleElement()
@@ -278,7 +278,7 @@ class GitLabReturningProblemContractIntegrationTest extends BaseIntegrationTest 
         // T1 is untouched: still resolved, with its words, and no write ever asked GitLab to reopen it.
         assertThat(gitlab.resolved(t1)).isTrue();
         assertThat(body(mergeRequest, t1)).isEqualTo(t1Body);
-        assertThat(gitlab.threadWrites()).containsExactly(discussion + " resolved=true");
+        assertThat(gitlab.threadWrites(work.iid())).containsExactly(discussion + " resolved=true");
     }
 
     private String body(String mergeRequest, String noteId) {
@@ -478,7 +478,7 @@ class GitLabReturningProblemContractIntegrationTest extends BaseIntegrationTest 
                         600)
                 .toJson(mapper));
         jobs.saveAndFlush(job);
-        gitlab.diffVersion(BASE, START, head, PATH, hunk(line));
+        gitlab.diffVersion(work.iid(), BASE, START, head, PATH, hunk(line));
         return new Claimed(
                 new ResultAdmissionService.AdmissionIdentity(job.getId(), work.workspaceId(), 0, job.getRunId()),
                 pending.review().getId(),

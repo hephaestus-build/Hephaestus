@@ -22,6 +22,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.graphql.client.ClientGraphQlResponse;
@@ -42,7 +43,7 @@ public final class ScriptedGitLabNotes {
 
     private static final String BOT = "gid://gitlab/User/1";
     private static final Pattern DISCUSSIONS = Pattern.compile(".*/merge_requests/(\\d+)/discussions(?:/(d\\d+))?");
-    private static final Pattern VERSIONS = Pattern.compile(".*/merge_requests/\\d+/versions(?:/(\\d+))?");
+    private static final Pattern VERSIONS = Pattern.compile(".*/merge_requests/(\\d+)/versions(?:/(\\d+))?");
 
     private final ScriptedCommentThreads threads = new ScriptedCommentThreads("gid://gitlab/Note/");
     private final SummaryWriter channel;
@@ -83,8 +84,10 @@ public final class ScriptedGitLabNotes {
 
     private final Map<String, Map<String, Object>> positions = new ConcurrentHashMap<>();
     private final Set<String> resolved = ConcurrentHashMap.newKeySet();
-    private final List<String> threadWrites = new CopyOnWriteArrayList<>();
-    private final List<Map<String, Object>> versions = new CopyOnWriteArrayList<>();
+    // One fake serves every test of a cached context, so what a test reads back is kept per merge request.
+    private final Map<Integer, List<String>> threadWrites = new ConcurrentHashMap<>();
+    private final Map<Integer, List<Map<String, Object>>> versions = new ConcurrentHashMap<>();
+    private final AtomicInteger versionIds = new AtomicInteger();
     private final GitLabGraphQlClientProvider provider;
     private final ScriptedGitLabRest rest = new ScriptedGitLabRest(this::discuss);
 
@@ -124,21 +127,21 @@ public final class ScriptedGitLabNotes {
         return resolved.contains(noteId);
     }
 
-    /** Every thread state written, as {@code <discussion> resolved=<state>}, in order. */
-    public List<String> threadWrites() {
-        return List.copyOf(threadWrites);
+    /** Every thread state written on merge request {@code iid}, as {@code <discussion> resolved=<state>}, in order. */
+    public List<String> threadWrites(int iid) {
+        return List.copyOf(threadWrites.getOrDefault(iid, List.of()));
     }
 
-    /** Adds a diff version of the merge request: its commits and the GitLab diff of each file. */
-    public void diffVersion(String base, String start, String head, String path, String diff) {
+    /** Adds a diff version of merge request {@code iid}: its commits and the GitLab diff of each file. */
+    public void diffVersion(int iid, String base, String start, String head, String path, String diff) {
         var version = new LinkedHashMap<String, Object>();
-        version.put("id", versions.size() + 1);
+        version.put("id", versionIds.incrementAndGet());
         version.put("state", "collected");
         version.put("base_commit_sha", base);
         version.put("head_commit_sha", head);
         version.put("start_commit_sha", start);
         version.put("diffs", List.of(Map.of("old_path", path, "new_path", path, "renamed_file", false, "diff", diff)));
-        versions.add(version);
+        versions.computeIfAbsent(iid, ignored -> new CopyOnWriteArrayList<>()).add(version);
     }
 
     Mono<ClientResponse> exchange(ClientRequest request) {
@@ -166,9 +169,14 @@ public final class ScriptedGitLabNotes {
         if (call.path().endsWith("/api/v4/user"))
             return ScriptedGitLabRest.respond(200, Map.of("id", number(BOT), "username", "hephaestus-bot"));
         var version = VERSIONS.matcher(call.path());
-        if (version.matches())
-            return ScriptedGitLabRest.respond(
-                    200, version.group(1) == null ? versions : versions.get(Integer.parseInt(version.group(1)) - 1));
+        if (version.matches()) {
+            var listed = versions.getOrDefault(Integer.parseInt(version.group(1)), List.of());
+            if (version.group(2) == null) return ScriptedGitLabRest.respond(200, listed);
+            for (var detail : listed)
+                if (String.valueOf(detail.get("id")).equals(version.group(2)))
+                    return ScriptedGitLabRest.respond(200, detail);
+            return ScriptedGitLabRest.respond(404, Map.of("message", "404 Not found"));
+        }
         var path = DISCUSSIONS.matcher(call.path());
         if (!path.matches()) return Mono.error(new IllegalStateException("Unscripted GitLab REST call " + call.path()));
         String thread = mergeRequest(Integer.parseInt(path.group(1)));
@@ -185,7 +193,9 @@ public final class ScriptedGitLabNotes {
                     boolean resolve = Boolean.TRUE.equals(request.get("resolved"));
                     if (resolve) resolved.add(note.id());
                     else resolved.remove(note.id());
-                    threadWrites.add(path.group(2) + " resolved=" + resolve);
+                    threadWrites
+                            .computeIfAbsent(Integer.parseInt(path.group(1)), ignored -> new CopyOnWriteArrayList<>())
+                            .add(path.group(2) + " resolved=" + resolve);
                     return ScriptedGitLabRest.respond(200, discussion(note.id(), note.body()));
                 }
             return ScriptedGitLabRest.respond(404, Map.of("message", "404 Not found"));
