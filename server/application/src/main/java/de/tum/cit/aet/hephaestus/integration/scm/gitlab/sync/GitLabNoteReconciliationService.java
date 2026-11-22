@@ -118,7 +118,12 @@ public class GitLabNoteReconciliationService {
         // Note deletion need not update its parent; inspect all stored live parents.
         // Keyset pagination tolerates parents inserted during the traversal.
         long after = 0;
-        while (!cancellation.stopsHere()) {
+        while (true) {
+            // A cancel at a page boundary leaves parents unread, so the pass is not complete.
+            if (cancellation.stopsHere()) {
+                skipped = true;
+                break;
+            }
             List<Issue> parents = issues.findLiveNoteParents(repository.getId(), after, PageRequest.of(0, 100));
             if (parents.isEmpty()) break;
             for (Issue parent : parents) {

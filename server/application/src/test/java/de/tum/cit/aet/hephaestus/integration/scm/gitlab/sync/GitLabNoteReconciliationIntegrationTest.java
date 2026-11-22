@@ -2,9 +2,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -189,6 +191,30 @@ class GitLabNoteReconciliationIntegrationTest extends AbstractWorkspaceIntegrati
         assertThat(result.removed()).isEqualTo(1);
         assertThat(comments.findById(note.getId())).isPresent();
         assertThat(comments.findById(other.getId())).isEmpty();
+    }
+
+    /**
+     * A cancel at a page boundary leaves parents unread: the pass is not complete, nothing is deleted, and the cancel
+     * that stopped it is reported once.
+     */
+    @Test
+    void shouldReportAnIncompletePassAndOneCancelWhenCancelledAtAPageBoundary() {
+        var note = comment(issue, 5250);
+        AtomicInteger calls = new AtomicInteger();
+        var service = service(request -> {
+            calls.incrementAndGet();
+            return Mono.just(page("[]", 0, 1, ""));
+        });
+        var handle = mock(SyncExecutionHandle.class);
+        when(handle.isCancellationRequested()).thenReturn(true);
+
+        var result = service.reconcileRepository(workspaceId, repository, handle);
+
+        assertThat(result.skipped()).isTrue();
+        assertThat(result.removed()).isZero();
+        assertThat(calls).hasValue(0);
+        assertThat(comments.findById(note.getId())).isPresent();
+        verify(handle).reportCancelled();
     }
 
     @Test
