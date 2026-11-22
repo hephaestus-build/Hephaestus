@@ -34,7 +34,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabAdmissionTestFixtures;
@@ -45,6 +44,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -52,7 +52,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
-import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * The cooldown contract behind {@code GitLabIntegrationSyncRunner}'s single-pass backfill: a
@@ -79,12 +78,6 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
     private WorkspaceActorSelector actorSelector;
 
     @Mock
-    private ObjectProvider<GitLabSyncServiceHolder> syncServiceHolderProvider;
-
-    @Mock
-    private GitLabSyncServiceHolder syncServiceHolder;
-
-    @Mock
     private GitLabIssueSyncService issueSyncService;
 
     @Mock
@@ -107,27 +100,8 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        service = new GitLabHistoricalBackfillService(
-                syncTargetProvider,
-                repositoryRepository,
-                actorSelector,
-                syncServiceHolderProvider,
-                new SyncSchedulerProperties(
-                        true,
-                        7,
-                        "0 0 3 * * *",
-                        15,
-                        new BackfillProperties(true, 50, 100, 60),
-                        new FilterProperties(Set.of(), Set.of())),
-                ledger,
-                pullRequests,
-                issues,
-                projectAdmission);
-
-        lenient().when(syncServiceHolderProvider.getIfAvailable()).thenReturn(syncServiceHolder);
-        lenient().when(syncServiceHolder.getIssueSyncService()).thenReturn(issueSyncService);
         // Merge-request backfill is out of scope here; issues alone exercise the cooldown.
-        lenient().when(syncServiceHolder.getMergeRequestSyncService()).thenReturn(null);
+        service = service(null);
 
         Repository repository = new Repository();
         repository.setId(42L);
@@ -144,6 +118,26 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
         lenient()
                 .when(syncTargetProvider.getSyncSession(SCOPE_ID, IntegrationKind.GITLAB))
                 .thenReturn(Optional.of(session()));
+    }
+
+    private GitLabHistoricalBackfillService service(@Nullable GitLabMergeRequestSyncService mrSync) {
+        return new GitLabHistoricalBackfillService(
+                syncTargetProvider,
+                repositoryRepository,
+                actorSelector,
+                issueSyncService,
+                mrSync,
+                new SyncSchedulerProperties(
+                        true,
+                        7,
+                        "0 0 3 * * *",
+                        15,
+                        new BackfillProperties(true, 50, 100, 60),
+                        new FilterProperties(Set.of(), Set.of())),
+                ledger,
+                pullRequests,
+                issues,
+                projectAdmission);
     }
 
     @Test
@@ -263,7 +257,7 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
                         null,
                         targets,
                         new SyncContext(SCOPE_ID, "acme", "Acme", null))));
-        when(syncServiceHolder.getMergeRequestSyncService()).thenReturn(mergeRequests);
+        service = service(mergeRequests);
     }
 
     private static SyncTarget completedTarget(long id) {

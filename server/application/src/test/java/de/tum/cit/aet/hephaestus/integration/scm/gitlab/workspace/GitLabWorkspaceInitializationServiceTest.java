@@ -38,8 +38,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitMergeRequestLinker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuetype.GitLabIssueTypeSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupMemberSyncService;
@@ -63,6 +63,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -104,9 +105,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
     private SyncTargetProvider syncTargetProvider;
 
     @Mock
-    private ObjectProvider<GitLabSyncServiceHolder> gitLabSyncServiceHolderProvider;
-
-    @Mock
     private ObjectProvider<GitLabWebhookService> gitLabWebhookServiceProvider;
 
     @Mock
@@ -120,9 +118,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
     @Mock
     private AsyncTaskExecutor monitoringExecutor;
-
-    @Mock
-    private GitLabSyncServiceHolder gitLabSyncServiceHolder;
 
     @Mock
     private GitLabGroupSyncService gitLabGroupSyncService;
@@ -140,13 +135,22 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
     @Mock
     private GitLabRepositoryMonitors repositoryMonitors;
 
-    private GitLabWorkspaceInitializationService initService;
+    // The sync services a test sets; every other one is null. Group project discovery is set by default.
+    private @Nullable GitLabGroupSyncService groupSyncService;
+    private @Nullable GitLabGroupMemberSyncService groupMemberSyncService;
+    private @Nullable GitLabIssueTypeSyncService issueTypeSyncService;
+    private @Nullable GitLabIssueSyncService issueSyncService;
+    private @Nullable GitLabMergeRequestSyncService mergeRequestSyncService;
+    private @Nullable GitLabTeamSyncService teamSyncService;
+    private @Nullable GitLabCommitMergeRequestLinker commitMergeRequestLinker;
+
+    private SyncSchedulerProperties syncProps;
     private Workspace workspace;
 
     @BeforeEach
     void setUp() {
         lenient().when(actorSelector.connectedProviderId(anyLong())).thenReturn(Optional.of(CONNECTED_PROVIDER_ID));
-        SyncSchedulerProperties syncProps = new SyncSchedulerProperties(
+        syncProps = new SyncSchedulerProperties(
                 true,
                 7,
                 "0 0 3 * * *",
@@ -157,30 +161,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         lenient().when(dataSyncTriggerProvider.getObject()).thenReturn(dataSyncTrigger);
         lenient().when(syncTargetProvider.isScopeActiveForSync(anyLong())).thenReturn(true);
 
-        initService = new GitLabWorkspaceInitializationService(
-                workspaceLookup,
-                organizationRepository,
-                monitors,
-                repositoryRepository,
-                syncProps,
-                syncTargetProvider,
-                gitLabSyncServiceHolderProvider,
-                gitLabWebhookServiceProvider,
-                rateLimitTrackerProvider,
-                dataSyncTriggerProvider,
-                connectionService,
-                new GitLabWorkspaceLinkService(
-                        workspaces,
-                        workspaceLookup,
-                        providerAccounts,
-                        organizationRepository,
-                        actorSelector,
-                        mock(SourceProviderNamespaces.class),
-                        monitors),
-                repositoryMonitors,
-                actorSelector,
-                monitoringExecutor,
-                projectAdmission);
+        groupSyncService = gitLabGroupSyncService;
 
         workspace = new Workspace();
         workspace.setAccountLogin("my-group/subgroup");
@@ -197,6 +178,45 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         lenient()
                 .when(connectionService.findActiveBearerToken(anyLong(), eq(IntegrationKind.GITLAB)))
                 .thenReturn(Optional.of(new BearerToken("glpat-test-token", null)));
+    }
+
+    private GitLabWorkspaceInitializationService initService() {
+        return new GitLabWorkspaceInitializationService(
+                workspaceLookup,
+                monitors,
+                repositoryRepository,
+                syncProps,
+                syncTargetProvider,
+                groupSyncService,
+                groupMemberSyncService,
+                null,
+                null,
+                issueSyncService,
+                mergeRequestSyncService,
+                teamSyncService,
+                null,
+                issueTypeSyncService,
+                null,
+                null,
+                commitMergeRequestLinker,
+                null,
+                null,
+                null,
+                gitLabWebhookServiceProvider,
+                rateLimitTrackerProvider,
+                dataSyncTriggerProvider,
+                connectionService,
+                new GitLabWorkspaceLinkService(
+                        workspaces,
+                        workspaceLookup,
+                        providerAccounts,
+                        organizationRepository,
+                        actorSelector,
+                        mock(SourceProviderNamespaces.class),
+                        monitors),
+                repositoryMonitors,
+                monitoringExecutor,
+                projectAdmission);
     }
 
     /** Configures the executor mock to run submitted tasks synchronously. */
@@ -225,9 +245,9 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         void shouldSkipWhenTheWorkspaceHasNoGitLabConnection() {
             when(connectionService.findActiveGitLabConfig(anyLong())).thenReturn(Optional.empty());
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.completed(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.completed(0));
 
-            verifyNoInteractions(gitLabSyncServiceHolderProvider, gitLabWebhookServiceProvider);
+            verifyNoInteractions(gitLabGroupSyncService, gitLabWebhookServiceProvider);
         }
 
         @Test
@@ -235,9 +255,9 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(connectionService.findActiveBearerToken(anyLong(), eq(IntegrationKind.GITLAB)))
                     .thenReturn(Optional.empty());
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
 
-            verifyNoInteractions(gitLabSyncServiceHolderProvider);
+            verifyNoInteractions(gitLabGroupSyncService);
         }
 
         @Test
@@ -245,25 +265,23 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(connectionService.findActiveBearerToken(anyLong(), eq(IntegrationKind.GITLAB)))
                     .thenReturn(Optional.of(new BearerToken("   ", null)));
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
 
-            verifyNoInteractions(gitLabSyncServiceHolderProvider);
+            verifyNoInteractions(gitLabGroupSyncService);
         }
 
         @Test
         void shouldSkipEmptyAccountLogin() {
             workspace.setAccountLogin("");
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
 
-            verifyNoInteractions(gitLabSyncServiceHolderProvider);
+            verifyNoInteractions(gitLabGroupSyncService);
         }
     }
 
     /** Stubs the group project discovery to return {@code result}. */
     private void stubDiscovery(GitLabSyncResult result) {
-        when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-        when(gitLabSyncServiceHolder.getGroupSyncService()).thenReturn(gitLabGroupSyncService);
         when(gitLabGroupSyncService.syncGroupProjects(eq(1L), eq("my-group/subgroup"), any()))
                 .thenReturn(result);
     }
@@ -285,7 +303,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(gitLabWebhookService.registerWebhook(workspace)).thenReturn(WebhookSetupResult.success(99L, 42L));
             stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.completedWithWarnings(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.completedWithWarnings(0));
 
             verify(gitLabWebhookService).registerWebhook(workspace);
         }
@@ -295,7 +313,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(gitLabWebhookService.registerWebhook(workspace)).thenThrow(new RuntimeException("webhook failed"));
             stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
         }
 
         @Test
@@ -303,7 +321,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(gitLabWebhookService.registerWebhook(workspace)).thenReturn(WebhookSetupResult.success(99L, 42L));
             stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.completed(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.completed(0));
 
             verify(gitLabWebhookService).registerWebhook(workspace);
         }
@@ -323,7 +341,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                 case ABORTED_ERROR -> SyncResult.abortedError(1);
                 case COMPLETED -> SyncResult.completed(1);
             };
-            assertThat(initService.initialize(workspace)).isEqualTo(expected);
+            assertThat(initService().initialize(workspace)).isEqualTo(expected);
 
             verify(repositoryMonitors).monitorAll(workspace, List.of(found));
             verify(gitLabWebhookService, never()).registerWebhook(any());
@@ -335,7 +353,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(refused.getAttentionProblem()).thenReturn(Problem.CREDENTIAL_REVOKED);
             when(connectionService.findActive(1L, IntegrationKind.GITLAB)).thenReturn(Optional.of(refused));
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
 
             verify(gitLabWebhookService).rotateTokenIfNeeded(workspace);
             verifyNoInteractions(gitLabGroupSyncService);
@@ -344,12 +362,10 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
         @Test
         void shouldKeepWebhookClosedWhenDiscoveryFails() {
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getGroupSyncService()).thenReturn(gitLabGroupSyncService);
             when(gitLabGroupSyncService.syncGroupProjects(anyLong(), any(), any()))
                     .thenThrow(new RuntimeException("GraphQL timeout"));
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
 
             verify(gitLabWebhookService, never()).registerWebhook(any());
         }
@@ -360,7 +376,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(gitLabWebhookService.registerWebhook(workspace))
                     .thenReturn(WebhookSetupResult.failed(WebhookSetupResult.Reason.PERMISSION_DENIED, 403));
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
         }
 
         @ParameterizedTest
@@ -375,7 +391,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             appender.start();
             logger.addAppender(appender);
             try {
-                assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+                assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
                 assertThat(appender.list)
                         .anySatisfy(event -> assertThat(event.getFormattedMessage())
                                 .contains("Webhook setup: workspaceId=1, registered=false, reason=" + reason));
@@ -390,7 +406,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
             when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(false);
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.completed(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.completed(0));
             verify(gitLabWebhookService, never()).registerWebhook(any());
         }
     }
@@ -410,7 +426,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(workspaceLookup.find(1L)).thenReturn(Optional.of(workspace));
             stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
 
-            initService.initializeIfWebhookMissing(1L);
+            initService().initializeIfWebhookMissing(1L);
 
             verify(gitLabWebhookService).registerWebhook(workspace);
         }
@@ -422,8 +438,8 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                     .thenReturn(Optional.of(
                             new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null)));
 
-            assertThat(initService.initializeIfWebhookMissing(1L)).isFalse();
-            verifyNoInteractions(gitLabSyncServiceHolderProvider);
+            assertThat(initService().initializeIfWebhookMissing(1L)).isFalse();
+            verifyNoInteractions(gitLabGroupSyncService);
         }
 
         @Test
@@ -432,7 +448,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(workspaceLookup.find(1L)).thenReturn(Optional.of(workspace));
             stubDiscovery(GitLabSyncResult.aborted(GitLabSyncResult.Status.ABORTED_RATE_LIMIT, List.of(), 1, 0));
 
-            assertThat(initService.initializeIfWebhookMissing(1L)).isTrue();
+            assertThat(initService().initializeIfWebhookMissing(1L)).isTrue();
             verify(gitLabWebhookService, never()).registerWebhook(any());
         }
 
@@ -444,8 +460,8 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                             new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, null, Set.of(), null)
                                     .withWebhooksRefusedAt(Instant.parse("2026-11-15T12:00:00Z"))));
 
-            assertThat(initService.initializeIfWebhookMissing(1L)).isFalse();
-            verifyNoInteractions(gitLabSyncServiceHolderProvider);
+            assertThat(initService().initializeIfWebhookMissing(1L)).isFalse();
+            verifyNoInteractions(gitLabGroupSyncService);
             verify(gitLabWebhookService, never()).registerWebhook(any());
         }
 
@@ -459,17 +475,17 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(workspaceLookup.find(1L)).thenReturn(Optional.of(workspace));
             when(gitLabWebhookService.registerWebhook(workspace)).thenReturn(WebhookSetupResult.projectHooks(42L));
 
-            assertThat(initService.initializeIfWebhookMissing(1L)).isFalse();
+            assertThat(initService().initializeIfWebhookMissing(1L)).isFalse();
             verify(gitLabWebhookService).registerWebhook(workspace);
-            verifyNoInteractions(gitLabSyncServiceHolderProvider);
+            verifyNoInteractions(gitLabGroupSyncService);
         }
 
         @Test
         void shouldSkipWhenWebhookRegistrationIsDisabled() {
             when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(false);
 
-            assertThat(initService.initializeIfWebhookMissing(1L)).isFalse();
-            verifyNoInteractions(gitLabSyncServiceHolderProvider);
+            assertThat(initService().initializeIfWebhookMissing(1L)).isFalse();
+            verifyNoInteractions(gitLabGroupSyncService);
         }
     }
 
@@ -484,8 +500,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(gitLabWebhookServiceProvider.getIfAvailable()).thenReturn(gitLabWebhookService);
             when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(true);
             when(gitLabWebhookService.registerWebhook(workspace)).thenReturn(WebhookSetupResult.success(99L, 42L));
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getGroupSyncService()).thenReturn(gitLabGroupSyncService);
             when(gitLabGroupSyncService.syncGroupProjects(eq(1L), eq("my-group/subgroup"), any()))
                     .thenReturn(syncResult);
 
@@ -496,7 +510,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                     .thenReturn(Optional.of(organization));
             when(workspaceLookup.find(1L)).thenReturn(Optional.of(workspace));
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.completed(2));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.completed(2));
 
             assertThat(workspace.getOrganizationId()).isEqualTo(organization.getId());
 
@@ -508,12 +522,10 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             GitLabSyncResult emptyResult = GitLabSyncResult.completed(Collections.emptyList(), 1, 0, 0);
 
             when(gitLabWebhookServiceProvider.getIfAvailable()).thenReturn(null);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getGroupSyncService()).thenReturn(gitLabGroupSyncService);
             when(gitLabGroupSyncService.syncGroupProjects(eq(1L), eq("my-group/subgroup"), any()))
                     .thenReturn(emptyResult);
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.completed(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.completed(0));
 
             verify(repositoryMonitors, never()).monitorAll(any(), any());
             verify(organizationRepository, never()).findByLoginIgnoreCaseAndProviderId(any(), any());
@@ -522,9 +534,9 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         @Test
         void shouldSkipDiscoveryWhenSyncServiceUnavailable() {
             when(gitLabWebhookServiceProvider.getIfAvailable()).thenReturn(null);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(null);
+            groupSyncService = null;
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
 
             verify(repositoryMonitors, never()).monitorAll(any(), any());
         }
@@ -532,12 +544,10 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         @Test
         void shouldCompleteInitializationWhenProjectDiscoveryFails() {
             when(gitLabWebhookServiceProvider.getIfAvailable()).thenReturn(null);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getGroupSyncService()).thenReturn(gitLabGroupSyncService);
             when(gitLabGroupSyncService.syncGroupProjects(anyLong(), any(), any()))
                     .thenThrow(new RuntimeException("GraphQL timeout"));
 
-            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+            assertThat(initService().initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
 
             verify(repositoryMonitors, never()).monitorAll(any(), any());
         }
@@ -549,7 +559,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(repositoryMonitors.monitorAll(workspace, repos))
                     .thenThrow(new IllegalStateException("Monitor persistence failed"));
 
-            assertThatThrownBy(() -> initService.initialize(workspace))
+            assertThatThrownBy(() -> initService().initialize(workspace))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessage("Monitor persistence failed");
         }
@@ -564,12 +574,10 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             List<Repository> repos = List.of(createRepo("my-group/project-a"));
             GitLabSyncResult syncResult = GitLabSyncResult.completed(repos, 1, 0, 0);
             when(gitLabWebhookServiceProvider.getIfAvailable()).thenReturn(null);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getGroupSyncService()).thenReturn(gitLabGroupSyncService);
             when(gitLabGroupSyncService.syncGroupProjects(eq(1L), eq("my-group/subgroup"), any()))
                     .thenReturn(syncResult);
 
-            initService.initialize(workspace);
+            initService().initialize(workspace);
 
             verify(organizationRepository, never()).findByLoginIgnoreCaseAndProviderId(any(), any());
         }
@@ -580,7 +588,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
         @Test
         void shouldSubmitToExecutor() {
-            initService.initializeAsync(1L);
+            initService().initializeAsync(1L);
 
             verify(monitoringExecutor).execute(any(Runnable.class));
         }
@@ -590,7 +598,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             executeSubmittedTasksSynchronously();
             when(workspaceLookup.find(1L)).thenReturn(Optional.of(workspace));
 
-            initService.initializeAsync(1L);
+            initService().initializeAsync(1L);
 
             verify(dataSyncTrigger).syncAllRepositories(1L);
         }
@@ -600,7 +608,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             executeSubmittedTasksSynchronously();
             when(workspaceLookup.find(99L)).thenReturn(Optional.empty());
 
-            initService.initializeAsync(99L);
+            initService().initializeAsync(99L);
 
             verifyNoInteractions(dataSyncTrigger);
         }
@@ -615,7 +623,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             existingOrg.setId(5L);
             workspace.setOrganizationId(existingOrg.getId());
 
-            initService.linkWorkspaceToOrganization(workspace);
+            initService().linkWorkspaceToOrganization(workspace);
 
             verify(organizationRepository, never()).findByLoginIgnoreCaseAndProviderId(any(), any());
         }
@@ -624,7 +632,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         void shouldSkipWhenBlankLogin() {
             workspace.setAccountLogin("");
 
-            initService.linkWorkspaceToOrganization(workspace);
+            initService().linkWorkspaceToOrganization(workspace);
 
             verify(organizationRepository, never()).findByLoginIgnoreCaseAndProviderId(any(), any());
         }
@@ -638,7 +646,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                     .thenReturn(Optional.of(organization));
             when(workspaceLookup.find(1L)).thenReturn(Optional.of(workspace));
 
-            initService.linkWorkspaceToOrganization(workspace);
+            initService().linkWorkspaceToOrganization(workspace);
 
             verify(workspaces).linkOrganization(1L, 10L);
 
@@ -651,7 +659,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(organizationRepository.findByLoginIgnoreCaseAndProviderId("my-group/subgroup", CONNECTED_PROVIDER_ID))
                     .thenReturn(Optional.empty());
 
-            initService.linkWorkspaceToOrganization(workspace);
+            initService().linkWorkspaceToOrganization(workspace);
 
             verify(workspaces, never()).linkOrganization(anyLong(), anyLong());
         }
@@ -664,7 +672,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                     .thenReturn(Optional.of(organization));
             when(workspaceLookup.find(1L)).thenReturn(Optional.empty());
 
-            initService.linkWorkspaceToOrganization(workspace);
+            initService().linkWorkspaceToOrganization(workspace);
 
             verify(workspaces, never()).linkOrganization(anyLong(), anyLong());
         }
@@ -675,22 +683,28 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
         @Test
         void shouldNotCallTheProviderWhenInitializationLeftTheScopeUnableToSync() {
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
+            var memberSync = mock(GitLabGroupMemberSyncService.class);
+            var teams = mock(GitLabTeamSyncService.class);
+            var issueTypes = mock(GitLabIssueTypeSyncService.class);
+            groupMemberSyncService = memberSync;
+            teamSyncService = teams;
+            issueTypeSyncService = issueTypes;
             when(syncTargetProvider.isScopeActiveForSync(1L)).thenReturn(false);
 
-            assertThat(initService.syncFullData(workspace)).isEqualTo(SyncResult.abortedError(0));
+            assertThat(initService().syncFullData(workspace)).isEqualTo(SyncResult.abortedError(0));
 
-            verify(gitLabSyncServiceHolder, never()).getGroupMemberSyncService();
-            verify(gitLabSyncServiceHolder, never()).getTeamSyncService();
-            verify(gitLabSyncServiceHolder, never()).getIssueTypeSyncService();
+            verifyNoInteractions(memberSync, teams, issueTypes);
             verify(repositoryRepository, never()).findAllByWorkspaceMonitors(anyLong());
         }
 
         @Test
         void shouldStopBeforeTheNextRepositoryWhenTheCredentialIsRefusedDuringTheRun() {
             var issueSync = mock(GitLabIssueSyncService.class);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getIssueSyncService()).thenReturn(issueSync);
+            var linker = mock(GitLabCommitMergeRequestLinker.class);
+            var teams = mock(GitLabTeamSyncService.class);
+            issueSyncService = issueSync;
+            commitMergeRequestLinker = linker;
+            teamSyncService = teams;
             Repository first = createRepo("my-group/subgroup/project-a");
             Repository second = createRepo("my-group/subgroup/project-b");
             var firstMonitor = new RepositoryToMonitor();
@@ -711,18 +725,16 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                 return new RecentSyncResult(SyncResult.abortedError(0), null);
             });
 
-            assertThat(initService.syncFullData(workspace).status()).isEqualTo(SyncResult.Status.ABORTED_ERROR);
+            assertThat(initService().syncFullData(workspace).status()).isEqualTo(SyncResult.Status.ABORTED_ERROR);
 
             verify(issueSync, never()).syncIssues(eq(1L), eq(second), any(), any(), any());
-            verify(gitLabSyncServiceHolder, never()).getCommitMergeRequestLinker();
-            verify(gitLabSyncServiceHolder, never()).getTeamSyncService();
+            verifyNoInteractions(linker, teams);
         }
 
         @Test
         void shouldNotAdvanceRepositoryCooldownAfterAuthorityIsWithdrawnAtTheIssueWatermark() {
             var issueSync = mock(GitLabIssueSyncService.class);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getIssueSyncService()).thenReturn(issueSync);
+            issueSyncService = issueSync;
             Repository stopped = new Repository();
             stopped.setId(10L);
             stopped.setNameWithOwner("my-group/subgroup/project-a");
@@ -750,7 +762,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                     .when(syncTargetProvider)
                     .updateSyncTimestamp(eq(77L), eq(SyncType.ISSUES), any());
 
-            assertThat(initService.syncFullData(workspace)).isEqualTo(SyncResult.completed(2));
+            assertThat(initService().syncFullData(workspace)).isEqualTo(SyncResult.completed(2));
 
             verify(repositoryRepository).updateLastSyncAt(eq(20L), any());
             verify(syncTargetProvider).updateSyncTimestamp(eq(78L), eq(SyncType.FULL_REPOSITORY), any());
@@ -761,8 +773,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         @Test
         void shouldHoldTheWatermarkWhenIssuesStopAtThePageCapAndReadTheRestInTheNextRun() {
             var issueSync = mock(GitLabIssueSyncService.class);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getIssueSyncService()).thenReturn(issueSync);
+            issueSyncService = issueSync;
             Repository large = new Repository();
             large.setId(10L);
             large.setNameWithOwner("my-group/subgroup/large-project");
@@ -776,7 +787,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(issueSync.syncIssues(eq(1L), eq(large), any(), isNull(), any()))
                     .thenReturn(new RecentSyncResult(SyncResult.abortedError(25_000), "cursor-at-cap"));
 
-            initService.syncFullData(workspace);
+            initService().syncFullData(workspace);
 
             // The first run stopped at the page cap: nothing it did not read may fall behind the watermark.
             verify(repositoryRepository, never()).updateLastSyncAt(eq(10L), any());
@@ -794,7 +805,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(issueSync.syncIssues(eq(1L), eq(large), any(), eq("cursor-at-cap"), any()))
                     .thenReturn(new RecentSyncResult(SyncResult.completed(5_000), null));
 
-            initService.syncFullData(workspace);
+            initService().syncFullData(workspace);
 
             // The next run read the rest; the watermark moves to where the window started, not to now.
             verify(issueSync).syncIssues(eq(1L), eq(large), any(), eq("cursor-at-cap"), any());
@@ -807,9 +818,8 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         void shouldReadEachKindFromItsOwnWatermarkWhenTheKindsFinishInDifferentRuns() {
             var issueSync = mock(GitLabIssueSyncService.class);
             var mrSync = mock(GitLabMergeRequestSyncService.class);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getIssueSyncService()).thenReturn(issueSync);
-            when(gitLabSyncServiceHolder.getMergeRequestSyncService()).thenReturn(mrSync);
+            issueSyncService = issueSync;
+            mergeRequestSyncService = mrSync;
             Instant projectWatermark = Instant.parse("2026-11-01T00:00:00Z");
             Repository large = new Repository();
             large.setId(10L);
@@ -827,7 +837,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(mrSync.syncMergeRequests(eq(1L), eq(large), any(), isNull(), any()))
                     .thenReturn(new RecentSyncResult(SyncResult.abortedError(10_000), "mr-cursor"));
 
-            initService.syncFullData(workspace);
+            initService().syncFullData(workspace);
 
             // Issues finished, merge requests did not: the project's watermark holds, the issues' moves.
             var issuesRead = ArgumentCaptor.forClass(Instant.class);
@@ -845,7 +855,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(mrSync.syncMergeRequests(eq(1L), eq(large), any(), eq("mr-cursor"), any()))
                     .thenReturn(new RecentSyncResult(SyncResult.completed(2_000), null));
 
-            initService.syncFullData(workspace);
+            initService().syncFullData(workspace);
 
             // Each kind reads from its own watermark, so the issues do not read the project's backlog again.
             OffsetDateTime issuesAfter = issuesRead.getValue().minusSeconds(300).atOffset(ZoneOffset.UTC);
@@ -857,15 +867,14 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldSyncTheRosterOfTheGroupOnTheConnectedInstanceWhenAnotherHasTheSamePath() {
+        void shouldSyncTheRosterOfTheConnectedOrganization() {
             Organization onConnectedInstance = new Organization();
             GitLabGroupMemberSyncService memberSync = mock(GitLabGroupMemberSyncService.class);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getGroupMemberSyncService()).thenReturn(memberSync);
-            when(organizationRepository.findByLoginIgnoreCaseAndProviderId("my-group/subgroup", CONNECTED_PROVIDER_ID))
+            groupMemberSyncService = memberSync;
+            when(memberSync.connectedOrganization(1L, "my-group/subgroup"))
                     .thenReturn(Optional.of(onConnectedInstance));
 
-            initService.syncFullData(workspace, () -> false);
+            initService().syncFullData(workspace, () -> false);
 
             verify(memberSync).syncGroupMemberships(1L, "my-group/subgroup", onConnectedInstance);
         }
@@ -875,14 +884,12 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         void shouldReportNativeRosterOutcomeWhenMembershipSyncReturns(int members) {
             Organization organization = new Organization();
             var memberSync = mock(GitLabGroupMemberSyncService.class);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getGroupMemberSyncService()).thenReturn(memberSync);
-            when(organizationRepository.findByLoginIgnoreCaseAndProviderId("my-group/subgroup", CONNECTED_PROVIDER_ID))
-                    .thenReturn(Optional.of(organization));
+            groupMemberSyncService = memberSync;
+            when(memberSync.connectedOrganization(1L, "my-group/subgroup")).thenReturn(Optional.of(organization));
             when(memberSync.syncGroupMemberships(1L, "my-group/subgroup", organization))
                     .thenReturn(members);
 
-            assertThat(initService.syncFullData(workspace))
+            assertThat(initService().syncFullData(workspace))
                     .isEqualTo(members < 0 ? SyncResult.abortedError(0) : SyncResult.completed(members));
         }
 
@@ -890,12 +897,11 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         @ValueSource(booleans = {false, true})
         void shouldRetainTeamCountAndReportCompletenessWhenTeamListingReturns(boolean complete) {
             var teams = mock(GitLabTeamSyncService.class);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getTeamSyncService()).thenReturn(teams);
+            teamSyncService = teams;
             when(teams.syncTeamsForGroup(1L, "my-group/subgroup"))
                     .thenReturn(new GitLabTeamSyncService.Result(2, complete));
 
-            assertThat(initService.syncFullData(workspace))
+            assertThat(initService().syncFullData(workspace))
                     .isEqualTo(complete ? SyncResult.completed(2) : SyncResult.abortedError(2));
         }
 
@@ -903,29 +909,27 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         void shouldKeepSuccessfulSiblingCountWhenAnIssueTypeExceptionIsCaught() {
             var issueTypes = mock(GitLabIssueTypeSyncService.class);
             var teams = mock(GitLabTeamSyncService.class);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getIssueTypeSyncService()).thenReturn(issueTypes);
-            when(gitLabSyncServiceHolder.getTeamSyncService()).thenReturn(teams);
+            issueTypeSyncService = issueTypes;
+            teamSyncService = teams;
             when(issueTypes.syncIssueTypesForGroup(1L, "my-group/subgroup"))
                     .thenThrow(new IllegalStateException("Issue types unavailable"));
             when(teams.syncTeamsForGroup(1L, "my-group/subgroup"))
                     .thenReturn(new GitLabTeamSyncService.Result(2, true));
 
-            assertThat(initService.syncFullData(workspace)).isEqualTo(SyncResult.abortedError(2));
+            assertThat(initService().syncFullData(workspace)).isEqualTo(SyncResult.abortedError(2));
         }
 
         @Test
         void shouldKeepCleanZeroWhenIssueTypesAndTeamsReportNoItems() {
             var issueTypes = mock(GitLabIssueTypeSyncService.class);
             var teams = mock(GitLabTeamSyncService.class);
-            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-            when(gitLabSyncServiceHolder.getIssueTypeSyncService()).thenReturn(issueTypes);
-            when(gitLabSyncServiceHolder.getTeamSyncService()).thenReturn(teams);
+            issueTypeSyncService = issueTypes;
+            teamSyncService = teams;
             when(issueTypes.syncIssueTypesForGroup(1L, "my-group/subgroup")).thenReturn(0);
             when(teams.syncTeamsForGroup(1L, "my-group/subgroup"))
                     .thenReturn(new GitLabTeamSyncService.Result(0, true));
 
-            assertThat(initService.syncFullData(workspace)).isEqualTo(SyncResult.completed(0));
+            assertThat(initService().syncFullData(workspace)).isEqualTo(SyncResult.completed(0));
         }
     }
 }

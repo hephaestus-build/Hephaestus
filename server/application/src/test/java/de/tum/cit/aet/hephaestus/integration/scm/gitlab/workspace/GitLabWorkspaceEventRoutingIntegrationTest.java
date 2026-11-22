@@ -14,12 +14,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
@@ -38,11 +38,14 @@ import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventClaimers
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventNotifications;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.StoredEventHandling;
+import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup.RepositoryIdentity;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRequest;
@@ -72,7 +75,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMemb
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
@@ -88,8 +91,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeR
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadinessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDataSyncScheduler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDeletionSweepService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabRepositorySync;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabConnectionWebhookController;
@@ -112,6 +116,7 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActivationService;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
@@ -120,6 +125,8 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
@@ -148,6 +155,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -210,8 +218,12 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         return executor;
     }
 
+    // Discovery and issue types are the only GitLab sync services that the scope sync and full data sync use here.
     @MockitoBean
-    private GitLabSyncServiceHolder gitLabSyncServices;
+    private GitLabGroupSyncService groupSync;
+
+    @MockitoBean
+    private GitLabIssueTypeSyncService issueTypeSync;
 
     @MockitoBean
     private GitLabWebhookClient gitLabWebhookClient;
@@ -242,9 +254,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private WorkspaceActivationService workspaceActivationService;
-
-    @Autowired
-    private GitLabDataSyncScheduler gitlabDataSyncScheduler;
 
     @Autowired
     private SyncJobService syncJobService;
@@ -318,8 +327,11 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private GitLabRepositoryMonitors repositoryMonitors;
 
-    @Autowired
+    @MockitoSpyBean
     private GitLabWorkspaceInitializationService initializationService;
+
+    @Autowired
+    private ApplicationContext beans;
 
     @Autowired
     private GitLabProjectAdmission admission;
@@ -375,8 +387,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private final String deliveryPrefix = UUID.randomUUID().toString();
     private @Nullable GitLabConnectionWebhookController ingress;
 
-    private final GitLabGroupSyncService groupSync = mock(GitLabGroupSyncService.class);
-    private final GitLabIssueTypeSyncService issueTypeSync = mock(GitLabIssueTypeSyncService.class);
     private final CountDownLatch syncBlocked = new CountDownLatch(1);
     private final CountDownLatch releaseSync = new CountDownLatch(1);
 
@@ -389,8 +399,11 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         claimers = StoredEventHandling.runningClaimers(eventConsumer, eventNotifications);
         doReturn(GROUP_ID).when(preflightService).resolveAccountId(anyString(), any(), anyString());
 
-        when(gitLabSyncServices.getGroupSyncService()).thenReturn(groupSync);
-        when(gitLabSyncServices.getIssueTypeSyncService()).thenReturn(issueTypeSync);
+        GitLabWorkspaceInitializationService fullDataSync = initializationWithoutRepositoryServices();
+        doAnswer(invocation -> fullDataSync.syncFullData(
+                        invocation.getArgument(0), invocation.getArgument(1), invocation.getArgument(2)))
+                .when(initializationService)
+                .syncFullData(any(), any(), any());
         when(groupSync.syncGroupProjects(anyLong(), eq(GROUP), eq(SERVER_URL)))
                 .thenAnswer(invocation -> GitLabSyncResult.completed(List.of(discoveredRepository()), 1, 0, 0));
         doAnswer(invocation -> repositoryRepository
@@ -2101,11 +2114,82 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                         SyncJobType.RECONCILIATION,
                         SyncJobTrigger.MANUAL,
                         null),
-                handle -> gitlabDataSyncScheduler.syncWorkspaceNow(target.getId(), handle, SyncJobType.RECONCILIATION));
+                handle -> scopeSyncWithoutRepositoryServices()
+                        .syncWorkspaceNow(target.getId(), handle, SyncJobType.RECONCILIATION));
         return syncJobRepository
                 .findFirstByConnection_IdAndStatusInOrderByFinishedAtDesc(connectionId, SyncJobStatus.TERMINAL)
                 .orElseThrow()
                 .getStatus();
+    }
+
+    /** The full data sync with discovery and issue types, and no other GitLab sync service. */
+    private GitLabWorkspaceInitializationService initializationWithoutRepositoryServices() {
+        return new GitLabWorkspaceInitializationService(
+                beans.getBean(WorkspaceLookup.class),
+                beans.getBean(WorkspaceRepositoryMonitors.class),
+                repositoryRepository,
+                beans.getBean(SyncSchedulerProperties.class),
+                beans.getBean(SyncTargetProvider.class),
+                groupSync,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                issueTypeSync,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                beans.getBeanProvider(GitLabWebhookService.class),
+                beans.getBeanProvider(GitLabRateLimitTracker.class),
+                beans.getBeanProvider(GitLabWorkspaceDataSyncTrigger.class),
+                connectionService,
+                beans.getBean(GitLabWorkspaceLinkService.class),
+                repositoryMonitors,
+                Objects.requireNonNull(monitoringExecutor),
+                admission);
+    }
+
+    /** The scope sync with discovery and issue types, and no other GitLab sync service. */
+    private GitLabScopeSync scopeSyncWithoutRepositoryServices() {
+        SyncTargetProvider syncTargets = beans.getBean(SyncTargetProvider.class);
+        WorkspaceActorSelector actorSelector = beans.getBean(WorkspaceActorSelector.class);
+        GitLabRepositorySync repositorySync = new GitLabRepositorySync(
+                syncTargets,
+                repositoryRepository,
+                beans.getBean(GitLabRateLimitTracker.class),
+                actorSelector,
+                projectSyncService,
+                beans.getBean(ActivityLedgerRepair.class),
+                admission,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+        return new GitLabScopeSync(
+                syncTargets,
+                beans.getBean(SyncContextProvider.class),
+                deletionSweepService,
+                initializationService,
+                repositoryMonitors,
+                beans.getBean(WorkspaceLookup.class),
+                repositorySync,
+                groupSync,
+                null,
+                issueTypeSync,
+                null,
+                null);
     }
 
     private @Nullable Long webhookId(Workspace target) {

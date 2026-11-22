@@ -14,7 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobHandle;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDataSyncScheduler;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill.GitLabHistoricalBackfillService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Set;
@@ -30,7 +30,7 @@ class GitLabIntegrationSyncRunnerTest extends BaseUnitTest {
     private static final long WORKSPACE_ID = 42L;
 
     @Mock
-    private GitLabDataSyncScheduler dataSyncScheduler;
+    private GitLabScopeSync scopeSync;
 
     @Mock
     private GitLabHistoricalBackfillService backfillService;
@@ -42,7 +42,7 @@ class GitLabIntegrationSyncRunnerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        runner = new GitLabIntegrationSyncRunner(dataSyncScheduler, backfillService);
+        runner = new GitLabIntegrationSyncRunner(scopeSync, backfillService);
     }
 
     @Test
@@ -52,7 +52,7 @@ class GitLabIntegrationSyncRunnerTest extends BaseUnitTest {
 
         runner.reconcile(ref, handle, SyncJobType.RECONCILIATION);
 
-        verify(dataSyncScheduler).syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
+        verify(scopeSync).syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
         verify(handle).reportCancelled();
     }
 
@@ -63,7 +63,7 @@ class GitLabIntegrationSyncRunnerTest extends BaseUnitTest {
 
         runner.reconcile(ref, handle, SyncJobType.RECONCILIATION);
 
-        verify(dataSyncScheduler).syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
+        verify(scopeSync).syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
         verify(handle, never()).reportCancelled();
     }
 

@@ -142,7 +142,8 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
                     "integration.scm.gitlab.workspace.GitLabConnectionStateListener.onActivated",
                     new Repair(
                             RepairKind.POLL,
-                            "GitLabDataSyncScheduler.syncDataCron invokes initializeIfWebhookMissing before synchronizing repositories.",
+                            "GitLabDataSyncScheduler.syncDataCron runs each scope's GitLabScopeSync, which invokes"
+                                    + " initializeIfWebhookMissing before synchronizing repositories.",
                             "integration.scm.gitlab.sync.GitLabDataSyncScheduler.syncDataCron",
                             true)),
             Map.entry(

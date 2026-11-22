@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
@@ -35,7 +34,6 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -66,7 +64,8 @@ public class GitLabHistoricalBackfillService {
     private final SyncTargetProvider syncTargetProvider;
     private final RepositoryRepository repositoryRepository;
     private final WorkspaceActorSelector actorSelector;
-    private final ObjectProvider<GitLabSyncServiceHolder> syncServiceHolderProvider;
+    private final @Nullable GitLabIssueSyncService issueSync;
+    private final @Nullable GitLabMergeRequestSyncService mrSync;
     private final SyncSchedulerProperties syncSchedulerProperties;
 
     // Per-repository cooldown tracking for error backoff
@@ -76,7 +75,8 @@ public class GitLabHistoricalBackfillService {
             SyncTargetProvider syncTargetProvider,
             RepositoryRepository repositoryRepository,
             WorkspaceActorSelector actorSelector,
-            ObjectProvider<GitLabSyncServiceHolder> syncServiceHolderProvider,
+            @Nullable GitLabIssueSyncService issueSync,
+            @Nullable GitLabMergeRequestSyncService mrSync,
             SyncSchedulerProperties syncSchedulerProperties,
             ActivityLedgerRepair activityLedgerRepair,
             PullRequestRepository pullRequests,
@@ -85,7 +85,8 @@ public class GitLabHistoricalBackfillService {
         this.syncTargetProvider = syncTargetProvider;
         this.repositoryRepository = repositoryRepository;
         this.actorSelector = actorSelector;
-        this.syncServiceHolderProvider = syncServiceHolderProvider;
+        this.issueSync = issueSync;
+        this.mrSync = mrSync;
         this.syncSchedulerProperties = syncSchedulerProperties;
         this.activityLedgerRepair = activityLedgerRepair;
         this.pullRequests = pullRequests;
@@ -126,10 +127,8 @@ public class GitLabHistoricalBackfillService {
                 if (read == null) continue;
                 admission.runWrite(read, () -> activityLedgerRepair.reconcileRepository(workspaceId, repo.getId()));
                 if (!target.isPullRequestBackfillComplete()) continue;
-                var services = syncServiceHolderProvider.getIfAvailable();
-                var mergeRequests = services != null ? services.getMergeRequestSyncService() : null;
-                if (mergeRequests == null) continue;
-                int total = mergeRequests.countMergeRequests(workspaceId, target.repositoryNameWithOwner());
+                if (mrSync == null) continue;
+                int total = mrSync.countMergeRequests(workspaceId, target.repositoryNameWithOwner());
                 long stored = pullRequests.countStoredByRepositoryId(repo.getId());
                 boolean incompleteCoverage = pullRequests.existsUnfinishedDiscussionRead(repo.getId())
                         || issues.existsUnknownCommentCount(workspaceId, repo.getId());
@@ -168,11 +167,6 @@ public class GitLabHistoricalBackfillService {
      * @return number of repositories that made progress this pass
      */
     public int runBackfillPass(@Nullable Long scopeFilter, @Nullable SyncExecutionHandle handle) {
-        GitLabSyncServiceHolder services = syncServiceHolderProvider.getIfAvailable();
-        if (services == null) return 0;
-
-        GitLabIssueSyncService issueSync = services.getIssueSyncService();
-        GitLabMergeRequestSyncService mrSync = services.getMergeRequestSyncService();
         if (issueSync == null && mrSync == null) return 0;
 
         List<SyncSession> sessions = scopeFilter == null

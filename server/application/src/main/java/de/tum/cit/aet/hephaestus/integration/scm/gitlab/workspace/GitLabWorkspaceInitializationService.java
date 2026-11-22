@@ -16,17 +16,28 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.RecentW
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
 import de.tum.cit.aet.hephaestus.integration.core.sync.RecentWindows;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitBackfillService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitMergeRequestLinker;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWatermarks;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuedependency.GitLabIssueDependencySyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuetype.GitLabIssueTypeSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.label.GitLabLabelSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.milestone.GitLabMilestoneSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupMemberSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSelectedMembershipProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncResult;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.collaborator.GitLabCollaboratorSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.subissue.GitLabSubIssueSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
@@ -82,7 +93,6 @@ public class GitLabWorkspaceInitializationService {
 
     // Core repositories
     private final WorkspaceLookup workspaceLookup;
-    private final OrganizationRepository organizationRepository;
     private final WorkspaceRepositoryMonitors monitors;
     private final RepositoryRepository repositoryRepository;
 
@@ -90,8 +100,24 @@ public class GitLabWorkspaceInitializationService {
     private final SyncSchedulerProperties syncSchedulerProperties;
     private final SyncTargetProvider syncTargetProvider;
 
+    // Optional GitLab sync services gated by @ConditionalOnProperty: each one is null while GitLab is disabled
+    private final @Nullable GitLabGroupSyncService groupSyncService;
+    private final @Nullable GitLabGroupMemberSyncService groupMemberSyncService;
+    private final @Nullable GitLabLabelSyncService labelSyncService;
+    private final @Nullable GitLabMilestoneSyncService milestoneSyncService;
+    private final @Nullable GitLabIssueSyncService issueSyncService;
+    private final @Nullable GitLabMergeRequestSyncService mergeRequestSyncService;
+    private final @Nullable GitLabTeamSyncService teamSyncService;
+    private final @Nullable GitLabCollaboratorSyncService collaboratorSyncService;
+    private final @Nullable GitLabIssueTypeSyncService issueTypeSyncService;
+    private final @Nullable GitLabCommitSyncService commitSyncService;
+    private final @Nullable GitLabCommitBackfillService commitBackfillService;
+    private final @Nullable GitLabCommitMergeRequestLinker commitMergeRequestLinker;
+    private final @Nullable GitLabSubIssueSyncService subIssueSyncService;
+    private final @Nullable GitLabIssueDependencySyncService issueDependencySyncService;
+    private final @Nullable GitLabSelectedMembershipProjection selectedMembershipProjection;
+
     // Lazy-loaded: optional GitLab beans gated by @ConditionalOnProperty
-    private final ObjectProvider<GitLabSyncServiceHolder> gitLabSyncServiceHolderProvider;
     private final ObjectProvider<GitLabWebhookService> gitLabWebhookServiceProvider;
     private final ObjectProvider<GitLabRateLimitTracker> rateLimitTrackerProvider;
     private final ObjectProvider<GitLabWorkspaceDataSyncTrigger> dataSyncTriggerProvider;
@@ -100,7 +126,6 @@ public class GitLabWorkspaceInitializationService {
     private final ConnectionService connectionService;
     private final GitLabRepositoryMonitors repositoryMonitors;
     private final GitLabWorkspaceLinkService workspaceLinkService;
-    private final WorkspaceActorSelector actorSelector;
     private final GitLabProjectAdmission admission;
 
     // Infrastructure
@@ -108,35 +133,59 @@ public class GitLabWorkspaceInitializationService {
 
     public GitLabWorkspaceInitializationService(
             WorkspaceLookup workspaceLookup,
-            OrganizationRepository organizationRepository,
             WorkspaceRepositoryMonitors monitors,
             RepositoryRepository repositoryRepository,
             SyncSchedulerProperties syncSchedulerProperties,
             SyncTargetProvider syncTargetProvider,
-            ObjectProvider<GitLabSyncServiceHolder> gitLabSyncServiceHolderProvider,
+            @Nullable GitLabGroupSyncService groupSyncService,
+            @Nullable GitLabGroupMemberSyncService groupMemberSyncService,
+            @Nullable GitLabLabelSyncService labelSyncService,
+            @Nullable GitLabMilestoneSyncService milestoneSyncService,
+            @Nullable GitLabIssueSyncService issueSyncService,
+            @Nullable GitLabMergeRequestSyncService mergeRequestSyncService,
+            @Nullable GitLabTeamSyncService teamSyncService,
+            @Nullable GitLabCollaboratorSyncService collaboratorSyncService,
+            @Nullable GitLabIssueTypeSyncService issueTypeSyncService,
+            @Nullable GitLabCommitSyncService commitSyncService,
+            @Nullable GitLabCommitBackfillService commitBackfillService,
+            @Nullable GitLabCommitMergeRequestLinker commitMergeRequestLinker,
+            @Nullable GitLabSubIssueSyncService subIssueSyncService,
+            @Nullable GitLabIssueDependencySyncService issueDependencySyncService,
+            @Nullable GitLabSelectedMembershipProjection selectedMembershipProjection,
             ObjectProvider<GitLabWebhookService> gitLabWebhookServiceProvider,
             ObjectProvider<GitLabRateLimitTracker> rateLimitTrackerProvider,
             ObjectProvider<GitLabWorkspaceDataSyncTrigger> dataSyncTriggerProvider,
             ConnectionService connectionService,
             GitLabWorkspaceLinkService workspaceLinkService,
             GitLabRepositoryMonitors repositoryMonitors,
-            WorkspaceActorSelector actorSelector,
             @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor,
             GitLabProjectAdmission admission) {
         this.workspaceLookup = workspaceLookup;
-        this.organizationRepository = organizationRepository;
         this.monitors = monitors;
         this.repositoryRepository = repositoryRepository;
         this.syncSchedulerProperties = syncSchedulerProperties;
         this.syncTargetProvider = syncTargetProvider;
-        this.gitLabSyncServiceHolderProvider = gitLabSyncServiceHolderProvider;
+        this.groupSyncService = groupSyncService;
+        this.groupMemberSyncService = groupMemberSyncService;
+        this.labelSyncService = labelSyncService;
+        this.milestoneSyncService = milestoneSyncService;
+        this.issueSyncService = issueSyncService;
+        this.mergeRequestSyncService = mergeRequestSyncService;
+        this.teamSyncService = teamSyncService;
+        this.collaboratorSyncService = collaboratorSyncService;
+        this.issueTypeSyncService = issueTypeSyncService;
+        this.commitSyncService = commitSyncService;
+        this.commitBackfillService = commitBackfillService;
+        this.commitMergeRequestLinker = commitMergeRequestLinker;
+        this.subIssueSyncService = subIssueSyncService;
+        this.issueDependencySyncService = issueDependencySyncService;
+        this.selectedMembershipProjection = selectedMembershipProjection;
         this.gitLabWebhookServiceProvider = gitLabWebhookServiceProvider;
         this.rateLimitTrackerProvider = rateLimitTrackerProvider;
         this.dataSyncTriggerProvider = dataSyncTriggerProvider;
         this.connectionService = connectionService;
         this.workspaceLinkService = workspaceLinkService;
         this.repositoryMonitors = repositoryMonitors;
-        this.actorSelector = actorSelector;
         this.admission = admission;
         this.monitoringExecutor = monitoringExecutor;
     }
@@ -384,10 +433,7 @@ public class GitLabWorkspaceInitializationService {
      * @return the discovery result, or {@code null} when discovery could not run or failed
      */
     private @Nullable GitLabSyncResult discoverGroupProjects(Workspace workspace) {
-        var gitLabServices = gitLabSyncServiceHolderProvider.getIfAvailable();
-        var syncService = gitLabServices != null ? gitLabServices.getGroupSyncService() : null;
-
-        if (syncService == null) {
+        if (groupSyncService == null) {
             log.warn(
                     "Skipped GitLab project discovery: reason=syncServiceUnavailable, workspaceId={}",
                     workspace.getId());
@@ -403,7 +449,7 @@ public class GitLabWorkspaceInitializationService {
                     .map(ConnectionConfig.GitLabConfig::serverUrl)
                     .orElse(null);
             GitLabSyncResult result =
-                    syncService.syncGroupProjects(workspace.getId(), workspace.getAccountLogin(), serverUrl);
+                    groupSyncService.syncGroupProjects(workspace.getId(), workspace.getAccountLogin(), serverUrl);
             log.info(
                     "GitLab project discovery: workspaceId={}, status={}, synced={}, failed={}, pages={}",
                     workspace.getId(),
@@ -453,8 +499,7 @@ public class GitLabWorkspaceInitializationService {
 
     public SyncResult syncFullData(
             Workspace workspace, BooleanSupplier cancelled, @Nullable SyncExecutionHandle handle) {
-        var gitLabServices = gitLabSyncServiceHolderProvider.getIfAvailable();
-        if (gitLabServices == null) {
+        if (syncServicesUnavailable()) {
             log.debug(
                     "Skipped GitLab full data sync: reason=syncServicesUnavailable, workspaceId={}", workspace.getId());
             return SyncResult.completed(0);
@@ -473,17 +518,14 @@ public class GitLabWorkspaceInitializationService {
         }
 
         SyncResult result = SyncResult.completed(0);
-        var memberSyncService = gitLabServices.getGroupMemberSyncService();
-        if (memberSyncService != null) {
-            var organization = actorSelector
-                    .connectedProviderId(workspace.getId())
-                    .flatMap(providerId ->
-                            organizationRepository.findByLoginIgnoreCaseAndProviderId(accountLogin, providerId))
+        if (groupMemberSyncService != null) {
+            var organization = groupMemberSyncService
+                    .connectedOrganization(workspace.getId(), accountLogin)
                     .orElse(null);
             if (organization != null) {
                 try {
                     int membersSynced =
-                            memberSyncService.syncGroupMemberships(workspace.getId(), accountLogin, organization);
+                            groupMemberSyncService.syncGroupMemberships(workspace.getId(), accountLogin, organization);
                     SyncResult membershipResult =
                             membersSynced < 0 ? SyncResult.abortedError(0) : SyncResult.completed(membersSynced);
                     reportIncomplete(
@@ -507,7 +549,6 @@ public class GitLabWorkspaceInitializationService {
         }
 
         // Sync issue types (org-level, lightweight)
-        var issueTypeSyncService = gitLabServices.getIssueTypeSyncService();
         if (issueTypeSyncService != null) {
             try {
                 int issueTypes = issueTypeSyncService.syncIssueTypesForGroup(workspace.getId(), accountLogin);
@@ -534,7 +575,6 @@ public class GitLabWorkspaceInitializationService {
             // issue sync so milestone references on issues can be resolved by iid. Without this the
             // milestone table stays empty on a fresh sync because project.milestones(includeAncestors)
             // does not reliably surface group milestones in every GitLab deployment.
-            var milestoneSyncService = gitLabServices.getMilestoneSyncService();
             if (milestoneSyncService != null) {
                 try {
                     SyncResult groupMilestoneResult =
@@ -559,9 +599,7 @@ public class GitLabWorkspaceInitializationService {
             // all repos have finished syncing.
             List<Repository> commitLinkTargets = new ArrayList<>();
             result = SyncResult.merge(
-                    result,
-                    syncGitLabRepositories(
-                            workspace, gitLabServices, repos, commitLinkTargets, cancelled, reads, handle));
+                    result, syncGitLabRepositories(workspace, repos, commitLinkTargets, cancelled, reads, handle));
             if (!syncTargetProvider.isScopeActiveForSync(workspace.getId())) {
                 log.info("Stopped GitLab full data sync: reason=scopeNotEligible, workspaceId={}", workspace.getId());
                 return SyncResult.merge(result, SyncResult.abortedError(0));
@@ -569,13 +607,12 @@ public class GitLabWorkspaceInitializationService {
 
             // Second pass: link commits to MRs now that every repo has populated its commits
             // and every MR-targeted repo has populated its MRs.
-            var commitMrLinker = gitLabServices.getCommitMergeRequestLinker();
-            if (commitMrLinker != null) {
+            if (commitMergeRequestLinker != null) {
                 for (Repository repo : commitLinkTargets) {
                     var read = reads.get(repo.getId());
                     if (read == null || !admission.current(read)) continue;
                     try {
-                        commitMrLinker.linkCommits(workspace.getId(), repo, null, read);
+                        commitMergeRequestLinker.linkCommits(workspace.getId(), repo, null, read);
                     } catch (Exception e) {
                         if (!admission.current(read)) continue;
                         log.warn(
@@ -594,11 +631,10 @@ public class GitLabWorkspaceInitializationService {
                 }
             }
 
-            result = SyncResult.merge(result, syncGitLabPostRepo(workspace, gitLabServices, repos, reads, handle));
+            result = SyncResult.merge(result, syncGitLabPostRepo(workspace, repos, reads, handle));
         }
 
         // Teams (subgroups)
-        var teamSyncService = gitLabServices.getTeamSyncService();
         if (teamSyncService != null) {
             try {
                 var teams = teamSyncService.syncTeamsForGroup(workspace.getId(), accountLogin);
@@ -625,11 +661,11 @@ public class GitLabWorkspaceInitializationService {
         }
 
         // A workspace that selected its projects takes its members from what they grant
-        var membershipProjection = gitLabServices.getSelectedMembershipProjection();
-        if (membershipProjection != null && !cancelled.getAsBoolean()) {
+        if (selectedMembershipProjection != null && !cancelled.getAsBoolean()) {
             SyncResult projectionResult;
             try {
-                GitLabSelectedMembershipProjection.Outcome outcome = membershipProjection.project(workspace.getId());
+                GitLabSelectedMembershipProjection.Outcome outcome =
+                        selectedMembershipProjection.project(workspace.getId());
                 // Nothing changed; the next sync reads again.
                 boolean incomplete = outcome == GitLabSelectedMembershipProjection.Outcome.UNKNOWN
                         || outcome == GitLabSelectedMembershipProjection.Outcome.STALE;
@@ -666,22 +702,13 @@ public class GitLabWorkspaceInitializationService {
      */
     private SyncResult syncGitLabRepositories(
             Workspace workspace,
-            GitLabSyncServiceHolder gitLabServices,
             List<Repository> repos,
             List<Repository> commitLinkTargets,
             BooleanSupplier cancelled,
             Map<Long, GitLabProjectAdmission.ProjectRead> reads,
             @Nullable SyncExecutionHandle handle) {
-        var labelSyncService = gitLabServices.getLabelSyncService();
-        var milestoneSyncService = gitLabServices.getMilestoneSyncService();
-        var issueSyncService = gitLabServices.getIssueSyncService();
-        var mrSyncService = gitLabServices.getMergeRequestSyncService();
-        var collaboratorSyncService = gitLabServices.getCollaboratorSyncService();
-        var commitSyncService = gitLabServices.getCommitSyncService();
-        var commitBackfillService = gitLabServices.getCommitBackfillService();
-
         // Map nameWithOwner → sync target id so each phase can stamp its per-repo watermark
-        // via the SPI. Mirrors GitLabDataSyncScheduler.syncRepositories — without this the
+        // via the SPI. Mirrors GitLabRepositorySync.syncRepositories — without this the
         // initial sync left every watermark column NULL until the first cron run.
         Map<String, Long> syncTargetIdsByNameWithOwner = monitors.monitors(workspace.getId()).stream()
                 .collect(Collectors.toMap(
@@ -878,9 +905,9 @@ public class GitLabWorkspaceInitializationService {
                     result = SyncResult.merge(result, SyncResult.abortedError(0));
                 }
             }
-            if (mrSyncService != null) {
+            if (mergeRequestSyncService != null) {
                 try {
-                    RecentSyncResult mrPass = mrSyncService.syncMergeRequests(
+                    RecentSyncResult mrPass = mergeRequestSyncService.syncMergeRequests(
                             workspace.getId(), repo, mrsAfter, RecentWindows.resumeCursor(mrWindow), read);
                     SyncResult r = mrPass.result();
                     if (!admission.current(read)) continue;
@@ -994,7 +1021,7 @@ public class GitLabWorkspaceInitializationService {
             // appear on MRs in sibling repos be linked once every repo has synced its MRs.
             commitLinkTargets.add(repo);
 
-            boolean allDone = (issueSyncService == null || issuesDone) && (mrSyncService == null || mrsDone);
+            boolean allDone = (issueSyncService == null || issuesDone) && (mergeRequestSyncService == null || mrsDone);
             if (allDone) {
                 Instant completedAt = GitLabWatermarks.earliest(passStart, issueMark, mrMark);
                 admission.runWrite(read, () -> {
@@ -1023,22 +1050,19 @@ public class GitLabWorkspaceInitializationService {
      */
     private SyncResult syncGitLabPostRepo(
             Workspace workspace,
-            GitLabSyncServiceHolder gitLabServices,
             List<Repository> repos,
             Map<Long, GitLabProjectAdmission.ProjectRead> reads,
             @Nullable SyncExecutionHandle handle) {
-        var subIssueSync = gitLabServices.getSubIssueSyncService();
-        var depSync = gitLabServices.getIssueDependencySyncService();
-        if (subIssueSync == null && depSync == null) return SyncResult.completed(0);
+        if (subIssueSyncService == null && issueDependencySyncService == null) return SyncResult.completed(0);
 
         int totalSubIssues = 0, totalDeps = 0;
         SyncResult result = SyncResult.completed(0);
         for (Repository repo : repos) {
             var read = reads.get(repo.getId());
             if (read == null || !admission.current(read)) continue;
-            if (subIssueSync != null) {
+            if (subIssueSyncService != null) {
                 try {
-                    SyncResult r = subIssueSync.syncSubIssuesForRepository(workspace.getId(), repo, read);
+                    SyncResult r = subIssueSyncService.syncSubIssuesForRepository(workspace.getId(), repo, read);
                     if (!admission.current(read)) continue;
                     totalSubIssues += r.count();
                     reportIncomplete(handle, r, SyncPhase.ISSUES, "Sub-issue sync", repo.getNameWithOwner());
@@ -1059,9 +1083,10 @@ public class GitLabWorkspaceInitializationService {
                     result = SyncResult.merge(result, SyncResult.abortedError(0));
                 }
             }
-            if (depSync != null) {
+            if (issueDependencySyncService != null) {
                 try {
-                    SyncResult r = depSync.syncDependenciesForRepository(workspace.getId(), repo, read);
+                    SyncResult r =
+                            issueDependencySyncService.syncDependenciesForRepository(workspace.getId(), repo, read);
                     if (!admission.current(read)) continue;
                     totalDeps += r.count();
                     reportIncomplete(handle, r, SyncPhase.ISSUES, "Issue dependency sync", repo.getNameWithOwner());
@@ -1091,6 +1116,25 @@ public class GitLabWorkspaceInitializationService {
                     totalDeps);
         }
         return result;
+    }
+
+    /** The GitLab sync services exist only while the GitLab integration is enabled, and then all of them exist. */
+    private boolean syncServicesUnavailable() {
+        return groupSyncService == null
+                && groupMemberSyncService == null
+                && labelSyncService == null
+                && milestoneSyncService == null
+                && issueSyncService == null
+                && mergeRequestSyncService == null
+                && teamSyncService == null
+                && collaboratorSyncService == null
+                && issueTypeSyncService == null
+                && commitSyncService == null
+                && commitBackfillService == null
+                && commitMergeRequestLinker == null
+                && subIssueSyncService == null
+                && issueDependencySyncService == null
+                && selectedMembershipProjection == null;
     }
 
     private static void reportIncomplete(

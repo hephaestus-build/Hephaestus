@@ -5,7 +5,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationSyncRunner;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDataSyncScheduler;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill.GitLabHistoricalBackfillService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,17 +17,16 @@ import org.springframework.stereotype.Component;
  * {@code SyncJobService.run}.
  */
 @Component
-@ConditionalOnBean(GitLabDataSyncScheduler.class)
+@ConditionalOnBean(GitLabScopeSync.class)
 public class GitLabIntegrationSyncRunner implements IntegrationSyncRunner {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabIntegrationSyncRunner.class);
 
-    private final GitLabDataSyncScheduler dataSyncScheduler;
+    private final GitLabScopeSync scopeSync;
     private final GitLabHistoricalBackfillService backfillService;
 
-    public GitLabIntegrationSyncRunner(
-            GitLabDataSyncScheduler dataSyncScheduler, GitLabHistoricalBackfillService backfillService) {
-        this.dataSyncScheduler = dataSyncScheduler;
+    public GitLabIntegrationSyncRunner(GitLabScopeSync scopeSync, GitLabHistoricalBackfillService backfillService) {
+        this.scopeSync = scopeSync;
         this.backfillService = backfillService;
     }
 
@@ -47,7 +46,7 @@ public class GitLabIntegrationSyncRunner implements IntegrationSyncRunner {
      */
     @Override
     public void reconcile(IntegrationRef ref, SyncExecutionHandle handle, SyncJobType type) {
-        dataSyncScheduler.syncWorkspaceNow(ref.workspaceId(), handle, type);
+        scopeSync.syncWorkspaceNow(ref.workspaceId(), handle, type);
         if (handle.isCancellationRequested()) {
             handle.reportCancelled();
         }

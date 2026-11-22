@@ -47,12 +47,9 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitMergeRequestLinker;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.label.GitLabLabelSyncService;
@@ -78,6 +75,7 @@ import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -85,7 +83,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -106,16 +103,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     private SyncContextProvider syncContextProvider;
 
     @Mock
-    private OrganizationRepository organizationRepository;
-
-    @Mock
     private RepositoryRepository repositoryRepository;
-
-    @Mock
-    private ObjectProvider<GitLabSyncServiceHolder> syncServiceHolderProvider;
-
-    @Mock
-    private ObjectProvider<GitLabRateLimitTracker> rateLimitTrackerProvider;
 
     @Mock
     private ConnectionQueries connectionQueries;
@@ -133,6 +121,16 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     private SyncJobHandle syncJobHandle;
 
     private final GitLabProjectSyncService projectSyncService = mock(GitLabProjectSyncService.class);
+
+    // The sync services a test sets; every other one is null, so its phase no-ops and the run reaches the sweep.
+    private @Nullable GitLabGroupSyncService groupSyncService;
+    private @Nullable GitLabLabelSyncService labelSyncService;
+    private @Nullable GitLabIssueSyncService issueSyncService;
+    private @Nullable GitLabCommitMergeRequestLinker mergeRequestLinker;
+    private @Nullable GitLabSubIssueSyncService subIssueSyncService;
+    private @Nullable GitLabTeamSyncService teamSyncService;
+    private @Nullable GitLabSelectedMembershipProjection membershipProjection;
+
     private GitLabDataSyncScheduler scheduler;
     private SyncSession session;
 
@@ -153,28 +151,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         Executor synchronousExecutor = Runnable::run;
 
         scheduler = new GitLabDataSyncScheduler(
-                syncTargetProvider,
-                syncContextProvider,
-                organizationRepository,
-                repositoryRepository,
-                syncServiceHolderProvider,
-                rateLimitTrackerProvider,
-                syncProps,
-                synchronousExecutor,
-                connectionQueries,
-                syncJobService,
-                deletionSweepService,
-                initializationService,
-                mock(GitLabRepositoryMonitors.class),
-                mock(WorkspaceLookup.class),
-                mock(WorkspaceActorSelector.class),
-                projectSyncService,
-                mock(ActivityLedgerRepair.class),
-                projectAdmission);
+                syncTargetProvider, syncProps, synchronousExecutor, connectionQueries, syncJobService, scopeSync());
 
-        // syncScope's first real step: no GitLabSyncServiceHolder available -> it logs and returns
-        // immediately. This isolates the job-recording wrapper from the sync pipeline itself.
-        lenient().when(syncServiceHolderProvider.getIfAvailable()).thenReturn(null);
         lenient().when(syncTargetProvider.isScopeActiveForSync(anyLong())).thenReturn(true);
 
         session = new SyncSession(
@@ -209,13 +187,14 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     @Test
     void shouldLeaveTrackedFailureLoggingToTheJobBoundary() {
         var failure = new IllegalStateException("synthetic sync failure");
-        when(syncServiceHolderProvider.getIfAvailable()).thenThrow(failure);
-        Logger logger = (Logger) LoggerFactory.getLogger(GitLabDataSyncScheduler.class);
+        when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID)).thenThrow(failure);
+        // The package logger hears both beans, so a log-and-rethrow in GitLabRepositorySync fails this test too.
+        Logger logger = (Logger) LoggerFactory.getLogger(GitLabScopeSync.class.getPackageName());
         var appender = new ListAppender<ILoggingEvent>();
         appender.start();
         logger.addAppender(appender);
         try {
-            assertThatThrownBy(() -> scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL))
+            assertThatThrownBy(() -> scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL))
                     .isInstanceOf(IllegalStateException.class)
                     .hasCause(failure);
             assertThat(appender.list).noneMatch(event -> event.getThrowableProxy() != null);
@@ -255,10 +234,12 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 })
                 .when(syncJobService)
                 .run(any(), any());
+        when(deletionSweepService.sweepScope(WORKSPACE_ID, syncJobHandle))
+                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, false, 0));
 
         scheduler.syncDataCron();
 
-        verify(syncServiceHolderProvider).getIfAvailable();
+        verify(deletionSweepService).sweepScope(WORKSPACE_ID, syncJobHandle);
         verify(syncContextProvider).setContext(any());
         verify(syncContextProvider).clearContext();
     }
@@ -267,11 +248,13 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     void shouldRunUnrecordedWhenNoActiveConnection() {
         when(connectionQueries.findActive(eq(WORKSPACE_ID), eq(IntegrationKind.GITLAB)))
                 .thenReturn(Optional.empty());
+        when(deletionSweepService.sweepScope(eq(WORKSPACE_ID), isNull()))
+                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, false, 0));
 
         scheduler.syncDataCron();
 
         verify(syncJobService, never()).run(any(), any());
-        verify(syncServiceHolderProvider).getIfAvailable();
+        verify(deletionSweepService).sweepScope(eq(WORKSPACE_ID), isNull());
     }
 
     @Test
@@ -285,21 +268,20 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
         assertThatCode(() -> scheduler.syncDataCron()).doesNotThrowAnyException();
 
-        verify(syncServiceHolderProvider, never()).getIfAvailable();
+        verify(syncContextProvider, never()).setContext(any());
     }
 
     @Test
     void shouldRunDeletionSweepLastOnReconciliation() {
-        // With the service holder present, syncScope runs to completion and ends with the sweep. A
+        // With every sync service absent, the scope sync runs to completion and ends with the sweep. A
         // RECONCILIATION job must invoke it — this is the whole point of the type on GitLab.
-        when(syncServiceHolderProvider.getIfAvailable()).thenReturn(mockHolder());
         lenient()
                 .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
                 .thenReturn(List.of());
         when(deletionSweepService.sweepScope(eq(WORKSPACE_ID), any()))
                 .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, false, 0));
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 
         verify(deletionSweepService).sweepScope(eq(WORKSPACE_ID), eq(syncJobHandle));
     }
@@ -309,26 +291,24 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         // INITIAL populates a fresh mirror; there is nothing stale in it and every not-yet-fetched row
         // would look deleted. It must skip the sweep entirely — otherwise a manual INITIAL on a mature
         // connection would mass-tombstone.
-        when(syncServiceHolderProvider.getIfAvailable()).thenReturn(mockHolder());
         lenient()
                 .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
                 .thenReturn(List.of());
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
         verify(deletionSweepService, never()).sweepScope(any(), any());
     }
 
     @Test
     void shouldReportWarningsWhenSweepCouldNotVerifyEveryProject() {
-        when(syncServiceHolderProvider.getIfAvailable()).thenReturn(mockHolder());
         lenient()
                 .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
                 .thenReturn(List.of());
         when(deletionSweepService.sweepScope(eq(WORKSPACE_ID), any()))
                 .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, true, 0));
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 
         verify(syncJobHandle).reportWarnings();
     }
@@ -336,32 +316,29 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     @Test
     void shouldNotRunDeletionSweepWhenCancelledDuringRepositoryPhase() {
         // A cancel observed during the repo phase skips the remaining phases, the sweep included.
-        when(syncServiceHolderProvider.getIfAvailable()).thenReturn(mockHolder());
         lenient()
                 .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
                 .thenReturn(List.of());
         when(syncJobHandle.isCancellationRequested()).thenReturn(true);
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 
         verify(deletionSweepService, never()).sweepScope(any(), any());
     }
 
     @Test
     void shouldProjectSelectedMembersAfterTheTeamsAndWarnWhenNothingChanged() {
-        var holder = mockHolder();
         var teamSync = mock(GitLabTeamSyncService.class);
         var projection = mock(GitLabSelectedMembershipProjection.class);
-        when(holder.getTeamSyncService()).thenReturn(teamSync);
-        when(holder.getSelectedMembershipProjection()).thenReturn(projection);
-        when(syncServiceHolderProvider.getIfAvailable()).thenReturn(holder);
+        teamSyncService = teamSync;
+        membershipProjection = projection;
         lenient()
                 .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
                 .thenReturn(List.of());
         when(teamSync.syncTeamsForGroup(eq(WORKSPACE_ID), any())).thenReturn(new GitLabTeamSyncService.Result(0, true));
         when(projection.project(WORKSPACE_ID)).thenReturn(GitLabSelectedMembershipProjection.Outcome.STALE);
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
         InOrder order = inOrder(teamSync, projection);
         order.verify(teamSync).syncTeamsForGroup(eq(WORKSPACE_ID), any());
@@ -371,28 +348,24 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void shouldNotProjectSelectedMembersWhenCancelledDuringRepositoryPhase() {
-        var holder = mockHolder();
         var projection = mock(GitLabSelectedMembershipProjection.class);
-        lenient().when(holder.getSelectedMembershipProjection()).thenReturn(projection);
-        when(syncServiceHolderProvider.getIfAvailable()).thenReturn(holder);
+        membershipProjection = projection;
         lenient()
                 .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
                 .thenReturn(List.of());
         when(syncJobHandle.isCancellationRequested()).thenReturn(true);
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 
         verify(projection, never()).project(anyLong());
     }
 
     @Test
     void shouldNotProjectSelectedMembersWhenCancelledDuringTeamPhase() {
-        var holder = mockHolder();
         var teamSync = mock(GitLabTeamSyncService.class);
         var projection = mock(GitLabSelectedMembershipProjection.class);
-        when(holder.getTeamSyncService()).thenReturn(teamSync);
-        lenient().when(holder.getSelectedMembershipProjection()).thenReturn(projection);
-        when(syncServiceHolderProvider.getIfAvailable()).thenReturn(holder);
+        teamSyncService = teamSync;
+        membershipProjection = projection;
         lenient()
                 .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
                 .thenReturn(List.of());
@@ -403,23 +376,22 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
             return new GitLabTeamSyncService.Result(0, true);
         });
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
         verify(projection, never()).project(anyLong());
     }
 
     @Test
     void shouldCallNoProjectServiceOnceTheProviderRefusedTheCredential() {
-        var holder = mockHolder();
         var issueSync = mock(GitLabIssueSyncService.class);
         var subIssueSync = mock(GitLabSubIssueSyncService.class);
-        lenient().when(holder.getIssueSyncService()).thenReturn(issueSync);
-        lenient().when(holder.getSubIssueSyncService()).thenReturn(subIssueSync);
-        prepareProject(holder);
+        issueSyncService = issueSync;
+        subIssueSyncService = subIssueSync;
+        prepareProject();
         // The first refused call of this run closed the gate before the repository phase.
         when(syncTargetProvider.isScopeActiveForSync(WORKSPACE_ID)).thenReturn(false);
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 
         verifyNoInteractions(issueSync, subIssueSync, deletionSweepService);
         verify(syncJobHandle).reportWarnings();
@@ -427,14 +399,13 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void shouldHoldTheWatermarkWhenIssuesStopAtThePageCapAndReadTheRestInTheNextRun() {
-        var holder = mockHolder();
         var issueSync = mock(GitLabIssueSyncService.class);
-        when(holder.getIssueSyncService()).thenReturn(issueSync);
-        Repository project = prepareProject(holder);
+        issueSyncService = issueSync;
+        Repository project = prepareProject();
         when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), isNull(), any()))
                 .thenReturn(new RecentSyncResult(SyncResult.abortedError(30_000), "cursor-at-cap"));
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
         verify(repositoryRepository, never()).updateLastSyncAt(eq(99L), any());
         var opened = ArgumentCaptor.forClass(RecentWindow.class);
@@ -450,7 +421,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), eq("cursor-at-cap"), any()))
                 .thenReturn(new RecentSyncResult(SyncResult.completed(4_000), null));
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
         verify(syncTargetProvider).updateRecentWindow(77L, SyncCursorKind.ISSUE, null);
         verify(repositoryRepository).updateLastSyncAt(99L, windowStart);
@@ -458,62 +429,58 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void shouldRecordIncompleteProjectSyncAndClearAfterRecovery() {
-        var holder = mockHolder();
         var issueSync = mock(GitLabIssueSyncService.class);
-        when(holder.getIssueSyncService()).thenReturn(issueSync);
-        Repository project = prepareProject(holder);
+        issueSyncService = issueSync;
+        Repository project = prepareProject();
         when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), any(), any()))
                 .thenReturn(
                         new RecentSyncResult(SyncResult.abortedError(1), null),
                         new RecentSyncResult(SyncResult.completed(2), null));
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Issue sync: ABORTED_ERROR");
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, null);
     }
 
     @Test
     void shouldNotClearAnIssueErrorWhenTheLaterSubIssuePhaseSucceeds() {
-        var holder = mockHolder();
         var issueSync = mock(GitLabIssueSyncService.class);
         var subIssueSync = mock(GitLabSubIssueSyncService.class);
-        when(holder.getIssueSyncService()).thenReturn(issueSync);
-        when(holder.getSubIssueSyncService()).thenReturn(subIssueSync);
-        Repository project = prepareProject(holder);
+        issueSyncService = issueSync;
+        subIssueSyncService = subIssueSync;
+        Repository project = prepareProject();
         when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), any(), any()))
                 .thenReturn(new RecentSyncResult(SyncResult.abortedError(1), null));
         when(subIssueSync.syncSubIssuesForRepository(eq(WORKSPACE_ID), eq(project), any()))
                 .thenReturn(SyncResult.completed(1));
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
         verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Issue sync: ABORTED_ERROR");
     }
 
     @Test
     void shouldClearAProjectErrorAfterTheFailedPostPhaseRecovers() {
-        var holder = mockHolder();
         var subIssueSync = mock(GitLabSubIssueSyncService.class);
-        when(holder.getSubIssueSyncService()).thenReturn(subIssueSync);
-        Repository project = prepareProject(holder);
+        subIssueSyncService = subIssueSync;
+        Repository project = prepareProject();
         when(subIssueSync.syncSubIssuesForRepository(eq(WORKSPACE_ID), eq(project), any()))
                 .thenReturn(SyncResult.abortedError(0), SyncResult.completed(1));
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Sub-issue sync: ABORTED_ERROR");
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, null);
     }
 
     @Test
     void shouldNotAdvanceRepositoryCooldownAfterAuthorityIsWithdrawnAtTheIssueWatermark() {
-        var holder = mockHolder();
         var issueSync = mock(GitLabIssueSyncService.class);
-        when(holder.getIssueSyncService()).thenReturn(issueSync);
-        Repository stopped = prepareProject(holder);
+        issueSyncService = issueSync;
+        Repository stopped = prepareProject();
         var originalRead = GitLabAdmissionTestFixtures.permit(projectAdmission, WORKSPACE_ID, stopped, 77L);
         Repository sibling = new Repository();
         sibling.setId(100L);
@@ -545,7 +512,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 .when(syncTargetProvider)
                 .updateSyncTimestamp(eq(77L), eq(SyncType.ISSUES), any());
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
         verify(repositoryRepository).updateLastSyncAt(eq(100L), any());
         verify(syncTargetProvider).updateSyncTimestamp(eq(78L), eq(SyncType.FULL_REPOSITORY), any());
@@ -556,9 +523,9 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void shouldNotMarkAProjectFreshWhenNoSyncServiceRuns() {
-        prepareProject(mockHolder());
+        prepareProject();
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
         verify(repositoryRepository, never()).updateLastSyncAt(eq(99L), any());
         verify(syncTargetProvider, never()).updateSyncError(eq(77L), eq(SyncPass.RECENT), isNull());
@@ -566,14 +533,13 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void shouldNotAdvanceLabelWatermarkWhenProjectLabelSyncAborts() {
-        var holder = mockHolder();
         var labelSync = mock(GitLabLabelSyncService.class);
-        when(holder.getLabelSyncService()).thenReturn(labelSync);
-        Repository project = prepareProject(holder);
+        labelSyncService = labelSync;
+        Repository project = prepareProject();
         when(labelSync.syncLabelsForRepository(eq(WORKSPACE_ID), eq(project), any()))
                 .thenReturn(SyncResult.abortedError(0));
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
         verify(syncTargetProvider).updateSyncError(77L, SyncPass.RECENT, "Label sync: ABORTED_ERROR");
         verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.LABELS), any());
@@ -581,15 +547,14 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void shouldPreserveWorkAndMonitorWhenProjectIsNoLongerAccessible() {
-        var holder = mockHolder();
-        prepareProject(holder);
+        prepareProject();
         var groupSync = mock(GitLabGroupSyncService.class);
-        when(holder.getGroupSyncService()).thenReturn(groupSync);
+        groupSyncService = groupSync;
         when(groupSync.syncGroupProjects(WORKSPACE_ID, "my-group", "https://gitlab.com"))
                 .thenReturn(GitLabSyncResult.completed(List.of(), 1, 0, 0));
         when(projectSyncService.fetchProjectById(WORKSPACE_ID, PROJECT_NATIVE_ID))
                 .thenReturn(Optional.empty());
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).recordRepositoryUnavailable(WORKSPACE_ID, 77L);
         verify(repositoryRepository, never()).delete(any());
         verify(syncTargetProvider, never()).removeSyncTarget(any());
@@ -598,10 +563,10 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void shouldStopPublicationWhenMetadataFetchReportsAccessLoss() {
-        prepareProject(mockHolder());
+        prepareProject();
         when(projectSyncService.fetchProjectById(WORKSPACE_ID, PROJECT_NATIVE_ID))
                 .thenThrow(new RepositoryNotFoundOnGitProviderException("course/project"));
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).recordRepositoryUnavailable(WORKSPACE_ID, 77L);
         verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.FULL_REPOSITORY), any());
         verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.REPOSITORY_VISIBILITY), any());
@@ -609,16 +574,15 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void shouldSkipAllProjectRequestsAfterMetadataFailure() {
-        var holder = mockHolder();
-        prepareProject(holder);
+        prepareProject();
         var linker = mock(GitLabCommitMergeRequestLinker.class);
         var subIssues = mock(GitLabSubIssueSyncService.class);
-        when(holder.getCommitMergeRequestLinker()).thenReturn(linker);
-        when(holder.getSubIssueSyncService()).thenReturn(subIssues);
+        mergeRequestLinker = linker;
+        subIssueSyncService = subIssues;
         when(projectSyncService.fetchProjectById(WORKSPACE_ID, PROJECT_NATIVE_ID))
                 .thenReturn(Optional.empty());
 
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
         verify(linker, never()).linkCommits(any(), any(), any(), any());
         verify(subIssues, never()).syncSubIssuesForRepository(any(), any(), any());
@@ -627,26 +591,24 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void shouldSkipMetadataAndCommitFetchWhenRecheckIsNotDue() {
-        var holder = mockHolder();
-        prepareProject(holder);
+        prepareProject();
         when(syncTargetProvider.deferUnavailableRepository(WORKSPACE_ID, 77L)).thenReturn(true);
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(projectSyncService, never()).fetchProjectById(anyLong(), anyLong());
         verify(syncTargetProvider, never()).clearRepositoryUnavailable(any(), any());
     }
 
     @Test
     void shouldRecoverWhenProjectReappears() {
-        var holder = mockHolder();
-        var project = prepareProject(holder);
+        var project = prepareProject();
         var linker = mock(GitLabCommitMergeRequestLinker.class);
         var subIssues = mock(GitLabSubIssueSyncService.class);
-        when(holder.getCommitMergeRequestLinker()).thenReturn(linker);
-        when(holder.getSubIssueSyncService()).thenReturn(subIssues);
+        mergeRequestLinker = linker;
+        subIssueSyncService = subIssues;
         when(linker.linkCommits(eq(WORKSPACE_ID), eq(project), eq(null), any())).thenReturn(SyncResult.completed(1));
         when(subIssues.syncSubIssuesForRepository(eq(WORKSPACE_ID), eq(project), any()))
                 .thenReturn(SyncResult.completed(1));
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).clearRepositoryUnavailable(WORKSPACE_ID, 77L);
         verify(syncTargetProvider).updateSyncTimestamp(eq(77L), eq(SyncType.REPOSITORY_VISIBILITY), any());
         verify(linker).linkCommits(eq(WORKSPACE_ID), eq(project), eq(null), any());
@@ -655,15 +617,14 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void shouldNotStartRepositoryBackoffForTransientMetadataFailures() {
-        var holder = mockHolder();
-        prepareProject(holder);
+        prepareProject();
         when(projectSyncService.fetchProjectById(WORKSPACE_ID, PROJECT_NATIVE_ID))
                 .thenThrow(WebClientResponseException.create(
                         503, "Service Unavailable", HttpHeaders.EMPTY, new byte[0], null))
                 .thenThrow(WebClientResponseException.create(
                         429, "Too Many Requests", HttpHeaders.EMPTY, new byte[0], null));
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider, never()).recordRepositoryUnavailable(any(), any());
         verify(syncTargetProvider, times(2)).retryUnavailableRepository(WORKSPACE_ID, 77L);
         verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.REPOSITORY_VISIBILITY), any());
@@ -671,8 +632,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void shouldResolveRenamedProjectByStableId() {
-        var holder = mockHolder();
-        var project = prepareProject(holder);
+        var project = prepareProject();
         project.setNativeId(123L);
         var metadata = mock(GitLabProjectResponse.class);
         when(projectSyncService.fetchProjectById(WORKSPACE_ID, 123L)).thenReturn(Optional.of(metadata));
@@ -680,15 +640,14 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
             project.setNameWithOwner("course/renamed");
             return Optional.of(project);
         });
-        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).reconcileSyncTargetIdentity(77L, 123L, "course/renamed");
         verify(syncTargetProvider).clearRepositoryUnavailable(WORKSPACE_ID, 77L);
         verify(syncTargetProvider).updateSyncTimestamp(eq(77L), eq(SyncType.REPOSITORY_VISIBILITY), any());
         verify(repositoryRepository, never()).delete(any());
     }
 
-    private Repository prepareProject(GitLabSyncServiceHolder holder) {
-        when(syncServiceHolderProvider.getIfAvailable()).thenReturn(holder);
+    private Repository prepareProject() {
         Repository project = new Repository();
         project.setId(99L);
         project.setNativeId(PROJECT_NATIVE_ID);
@@ -724,9 +683,39 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         return project;
     }
 
-    /** A holder whose every sub-service is null, so all sync phases no-op and the run reaches the sweep. */
-    private static GitLabSyncServiceHolder mockHolder() {
-        return mock(GitLabSyncServiceHolder.class);
+    /** A scope sync over the sync services this test set; the rate-limit tracker is absent. */
+    private GitLabScopeSync scopeSync() {
+        var repositorySync = new GitLabRepositorySync(
+                syncTargetProvider,
+                repositoryRepository,
+                null,
+                mock(WorkspaceActorSelector.class),
+                projectSyncService,
+                mock(ActivityLedgerRepair.class),
+                projectAdmission,
+                labelSyncService,
+                null,
+                issueSyncService,
+                null,
+                null,
+                null,
+                null,
+                mergeRequestLinker,
+                subIssueSyncService,
+                null);
+        return new GitLabScopeSync(
+                syncTargetProvider,
+                syncContextProvider,
+                deletionSweepService,
+                initializationService,
+                mock(GitLabRepositoryMonitors.class),
+                mock(WorkspaceLookup.class),
+                repositorySync,
+                groupSyncService,
+                null,
+                null,
+                teamSyncService,
+                membershipProjection);
     }
 
     private SyncJob existingActiveJob(Connection connection) {

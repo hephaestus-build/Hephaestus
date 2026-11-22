@@ -2,9 +2,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -29,11 +31,9 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobStatus;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.core.sync.api.SyncStatusService;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.label.GitLabLabelSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.milestone.GitLabMilestoneSyncService;
@@ -48,7 +48,6 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.time.Instant;
@@ -57,12 +56,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.core.task.SyncTaskExecutor;
@@ -75,9 +74,6 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
 
     @Autowired
     private GitLabProjectAdmission projectAdmission;
-
-    @Autowired
-    private OrganizationRepository organizationRepository;
 
     @Autowired
     private RepositoryRepository repositoryRepository;
@@ -112,13 +108,16 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
     @Autowired
     private GitLabRepositoryMonitors repositoryMonitors;
 
-    @Autowired
-    private WorkspaceActorSelector actorSelector;
-
     private final GitLabGroupSyncService groups = mock(GitLabGroupSyncService.class);
     private final GitLabIssueSyncService issues = mock(GitLabIssueSyncService.class);
     private final GitLabMergeRequestSyncService mergeRequests = mock(GitLabMergeRequestSyncService.class);
     private final GitLabTeamSyncService teams = mock(GitLabTeamSyncService.class);
+    // The sync services a test adds; each one it leaves null skips its phase.
+    private @Nullable GitLabGroupSyncService groupSync;
+    private @Nullable GitLabLabelSyncService labelSync;
+    private @Nullable GitLabMilestoneSyncService milestoneSync;
+    private @Nullable GitLabCollaboratorSyncService collaboratorSync;
+    private @Nullable GitLabSubIssueSyncService subIssueSync;
     private final List<Long> processedRepositories = new ArrayList<>();
     private Workspace workspace;
     private Connection connection;
@@ -170,11 +169,7 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 .thenReturn(new GitLabTeamSyncService.Result(0, true));
         when(groups.syncGroupProjects(workspace.getId(), workspace.getAccountLogin(), gitLabConfig.serverUrl()))
                 .thenReturn(GitLabSyncResult.completed(List.of(first, second), 1, 0, 0));
-        GitLabSyncServiceHolder services = new GitLabSyncServiceHolder(
-                null, null, null, null, issues, mergeRequests, teams, null, null, null, null, null, null, null, null);
-        StaticListableBeanFactory beans = new StaticListableBeanFactory();
-        beans.addBean("services", services);
-        trigger = triggerWith(beans.getBeanProvider(GitLabSyncServiceHolder.class));
+        trigger = triggerWith(syncTargetProvider, mock(ConnectionService.class), 15);
     }
 
     @Test
@@ -232,15 +227,14 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
 
     @Test
     void shouldKeepRealFailureWhenCancellationWasRequestedButNoCheckpointStoppedWork() {
-        StaticListableBeanFactory beans = new StaticListableBeanFactory();
-        ObjectProvider<GitLabSyncServiceHolder> services = beans.getBeanProvider(GitLabSyncServiceHolder.class);
-        ObjectProvider<GitLabSyncServiceHolder> failingServices = mock();
-        when(failingServices.getIfAvailable()).thenAnswer(invocation -> {
-            requestCancellation();
-            throw new IllegalStateException("Provider services unavailable");
-        });
-        assertThat(services.getIfAvailable()).isNull();
-        trigger = triggerWith(failingServices);
+        SyncTargetProvider failingTargets = mock(SyncTargetProvider.class, delegatesTo(syncTargetProvider));
+        doAnswer(invocation -> {
+                    requestCancellation();
+                    throw new IllegalStateException("Sync eligibility check failed");
+                })
+                .when(failingTargets)
+                .isScopeActiveForSync(workspace.getId());
+        trigger = triggerWith(failingTargets, mock(ConnectionService.class), 15);
 
         trigger.syncAllRepositories(workspace.getId());
 
@@ -250,7 +244,7 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
         SyncJob job = lastJob();
         assertThat(job.isCancelRequested()).isTrue();
         assertThat(job.getStatus()).isEqualTo(SyncJobStatus.FAILED);
-        assertThat(job.getErrorSummary()).contains("Provider services unavailable");
+        assertThat(job.getErrorSummary()).contains("Sync eligibility check failed");
         assertThat(statusService
                         .getStatus(workspace.getId(), connection.getId())
                         .lastSuccessfulSyncAt())
@@ -267,25 +261,8 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
             when(groups.syncGroupProjects(workspace.getId(), workspace.getAccountLogin(), gitLabConfig.serverUrl()))
                     .thenThrow(new IllegalStateException("Project discovery unavailable"));
         }
-        trigger = triggerWith(
-                providerFor(new GitLabSyncServiceHolder(
-                        groups,
-                        null,
-                        null,
-                        null,
-                        issues,
-                        mergeRequests,
-                        teams,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null)),
-                activeDiscoveryConfig(),
-                0);
+        groupSync = groups;
+        trigger = triggerWith(syncTargetProvider, activeDiscoveryConfig(), 0);
 
         trigger.syncAllRepositories(workspace.getId());
 
@@ -303,25 +280,8 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
 
     @Test
     void shouldKeepCleanSuccessWhenDiscoveryCompletesWithTheProviderInbox() {
-        trigger = triggerWith(
-                providerFor(new GitLabSyncServiceHolder(
-                        groups,
-                        null,
-                        null,
-                        null,
-                        issues,
-                        mergeRequests,
-                        teams,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null)),
-                activeDiscoveryConfig(),
-                0);
+        groupSync = groups;
+        trigger = triggerWith(syncTargetProvider, activeDiscoveryConfig(), 0);
 
         trigger.syncAllRepositories(workspace.getId());
 
@@ -377,25 +337,11 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                                 ? SyncResult.abortedError(1)
                                 : SyncResult.completed(1),
                         SyncResult.completed(1));
-        trigger = triggerWith(
-                providerFor(new GitLabSyncServiceHolder(
-                        groups,
-                        null,
-                        labels,
-                        milestones,
-                        issues,
-                        mergeRequests,
-                        teams,
-                        collaborators,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null)),
-                activeDiscoveryConfig(),
-                0);
+        groupSync = groups;
+        labelSync = labels;
+        milestoneSync = milestones;
+        collaboratorSync = collaborators;
+        trigger = triggerWith(syncTargetProvider, activeDiscoveryConfig(), 0);
 
         trigger.syncAllRepositories(workspace.getId());
         SyncJob incomplete = lastJob();
@@ -436,25 +382,9 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 .thenReturn(SyncResult.completed(0));
         when(subIssues.syncSubIssuesForRepository(eq(workspace.getId()), eq(first), any()))
                 .thenReturn(SyncResult.abortedError(1));
-        trigger = triggerWith(
-                providerFor(new GitLabSyncServiceHolder(
-                        groups,
-                        null,
-                        null,
-                        null,
-                        issues,
-                        mergeRequests,
-                        teams,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        subIssues,
-                        null,
-                        null)),
-                activeDiscoveryConfig(),
-                0);
+        groupSync = groups;
+        subIssueSync = subIssues;
+        trigger = triggerWith(syncTargetProvider, activeDiscoveryConfig(), 0);
 
         trigger.syncAllRepositories(workspace.getId());
 
@@ -474,25 +404,8 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                     requestCancellation();
                     return new RecentSyncResult(SyncResult.completed(1), null);
                 });
-        trigger = triggerWith(
-                providerFor(new GitLabSyncServiceHolder(
-                        groups,
-                        null,
-                        null,
-                        null,
-                        issues,
-                        mergeRequests,
-                        teams,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null)),
-                activeDiscoveryConfig(),
-                0);
+        groupSync = groups;
+        trigger = triggerWith(syncTargetProvider, activeDiscoveryConfig(), 0);
 
         trigger.syncAllRepositories(workspace.getId());
 
@@ -506,12 +419,6 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                         .getStatus(workspace.getId(), connection.getId())
                         .lastSuccessfulSyncAt())
                 .isEqualTo(priorSuccessfulAt);
-    }
-
-    private ObjectProvider<GitLabSyncServiceHolder> providerFor(GitLabSyncServiceHolder services) {
-        StaticListableBeanFactory beans = new StaticListableBeanFactory();
-        beans.addBean("services", services);
-        return beans.getBeanProvider(GitLabSyncServiceHolder.class);
     }
 
     private ConnectionService activeDiscoveryConfig() {
@@ -537,17 +444,15 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
         };
     }
 
-    private GitLabWorkspaceDataSyncTrigger triggerWith(ObjectProvider<GitLabSyncServiceHolder> services) {
-        // Discovery is outside this controlled-loop proof; syncFullData and its persisted lookup run unchanged.
-        return triggerWith(services, mock(ConnectionService.class), 15);
-    }
-
+    /**
+     * The lifecycle trigger over issues, merge requests, teams and the sync services this test set. A {@code mock}
+     * discovery configuration keeps discovery outside this controlled-loop proof; syncFullData runs unchanged.
+     */
     private GitLabWorkspaceDataSyncTrigger triggerWith(
-            ObjectProvider<GitLabSyncServiceHolder> services, ConnectionService discoveryConfig, int cooldownMinutes) {
+            SyncTargetProvider targets, ConnectionService discoveryConfig, int cooldownMinutes) {
         StaticListableBeanFactory absent = new StaticListableBeanFactory();
         GitLabWorkspaceInitializationService initialization = new GitLabWorkspaceInitializationService(
                 workspaceLookup,
-                organizationRepository,
                 monitorPort,
                 repositoryRepository,
                 new SyncSchedulerProperties(
@@ -557,15 +462,28 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                         cooldownMinutes,
                         new SyncSchedulerProperties.BackfillProperties(false, 50, 100, 60),
                         new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of())),
-                syncTargetProvider,
-                services,
+                targets,
+                groupSync,
+                null,
+                labelSync,
+                milestoneSync,
+                issues,
+                mergeRequests,
+                teams,
+                collaboratorSync,
+                null,
+                null,
+                null,
+                null,
+                subIssueSync,
+                null,
+                null,
                 absent.getBeanProvider(GitLabWebhookService.class),
                 absent.getBeanProvider(GitLabRateLimitTracker.class),
                 absent.getBeanProvider(GitLabWorkspaceDataSyncTrigger.class),
                 discoveryConfig,
                 workspaceLinkService,
                 repositoryMonitors,
-                actorSelector,
                 new ConcurrentTaskExecutor(new SyncTaskExecutor()),
                 projectAdmission);
         return new GitLabWorkspaceDataSyncTrigger(initialization, workspaceLookup, connectionQueries, jobService);
