@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
+import java.net.URI;
 import java.util.Map;
 
 /**
@@ -7,7 +8,7 @@ import java.util.Map;
  * variable is the JUnit gate for {@link LiveLlmTest}. Endpoint, key, and model must all be
  * supplied explicitly so the repository never carries environment-specific defaults.
  *
- * @param baseUrl   OpenAI-compatible base URL; Pi SDK appends {@code /v1/chat/completions}
+ * @param baseUrl   OpenAI-compatible base URL; every chat request goes to {@link #chatCompletions()}
  * @param apiKey    bearer token sent as {@code Authorization: Bearer <key>}
  * @param model     model id passed to the runner (forwarded as {@code defaultModel})
  */
@@ -34,6 +35,16 @@ public record LiveLlmCredentials(String baseUrl, String apiKey, String model) {
                     + "HEPHAESTUS_LIVE_LLM_API_KEY, and HEPHAESTUS_LIVE_LLM_MODEL");
         }
         return new LiveLlmCredentials(baseUrl, apiKey, model);
+    }
+
+    /**
+     * The one chat endpoint of the base URL. A base that ends with the API version takes {@code /chat/completions},
+     * and any other base takes {@code /v1/chat/completions}. No caller probes a second path, so every request the
+     * endpoint sees is a counted call.
+     */
+    public URI chatCompletions() {
+        String base = baseUrl.replaceAll("/+$", "");
+        return URI.create(base.endsWith("/v1") ? base + "/chat/completions" : base + "/v1/chat/completions");
     }
 
     /** Env vars the Pi SDK reads natively for {@code openai-completions} provider routing. */
