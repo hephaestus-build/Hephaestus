@@ -90,7 +90,7 @@ class CodeQualityTest extends HephaestusArchitectureTest {
         void controllersAreThin() {
             ArchRule rule = classes()
                     .that()
-                    .areAnnotatedWith(RestController.class)
+                    .areMetaAnnotatedWith(RestController.class)
                     .should(haveAtMostConstructorParameters(MAX_CONTROLLER_DEPENDENCIES))
                     .because("Controllers should delegate to services, not orchestrate many dependencies");
 

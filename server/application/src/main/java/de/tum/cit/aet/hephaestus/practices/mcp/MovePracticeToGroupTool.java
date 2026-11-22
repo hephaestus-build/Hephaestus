@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.core.mcp.McpToolFor;
 import de.tum.cit.aet.hephaestus.core.mcp.McpTools;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.CatalogOriginPresenter;
-import de.tum.cit.aet.hephaestus.practices.PracticeCatalogController;
+import de.tum.cit.aet.hephaestus.practices.PracticeGroupPlacementController;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
 import de.tum.cit.aet.hephaestus.practices.dto.BindPracticeGroupRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
@@ -21,9 +21,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProp
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
-/** {@code move_practice_to_group}: the group a practice belongs to, as {@code PracticeCatalogController.bind} sets it. */
+/**
+ * {@code move_practice_to_group}: the group a practice belongs to, as {@code PracticeGroupPlacementController.bind}
+ * sets it.
+ */
 @Component
-@McpToolFor(controller = PracticeCatalogController.class, method = "bind")
+@McpToolFor(controller = PracticeGroupPlacementController.class, method = "bind")
 @ConditionalOnServerRole
 @ConditionalOnBooleanProperty("hephaestus.mcp.enabled")
 class MovePracticeToGroupTool implements McpTool {

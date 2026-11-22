@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.core.mcp.McpToolFor;
 import de.tum.cit.aet.hephaestus.core.mcp.McpTools;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.CatalogOriginPresenter;
-import de.tum.cit.aet.hephaestus.practices.PracticeCatalogController;
+import de.tum.cit.aet.hephaestus.practices.PracticeFeedbackModeController;
 import de.tum.cit.aet.hephaestus.practices.PracticeService;
 import de.tum.cit.aet.hephaestus.practices.dto.SetFeedbackModeRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
@@ -21,9 +21,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProp
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
-/** {@code set_practice_feedback_mode}: a practice's own feedback mode, as {@code PracticeCatalogController.mode} sets it. */
+/**
+ * {@code set_practice_feedback_mode}: a practice's own feedback mode, as {@code PracticeFeedbackModeController.mode} sets
+ * it.
+ */
 @Component
-@McpToolFor(controller = PracticeCatalogController.class, method = "mode")
+@McpToolFor(controller = PracticeFeedbackModeController.class, method = "mode")
 @ConditionalOnServerRole
 @ConditionalOnBooleanProperty("hephaestus.mcp.enabled")
 class SetPracticeFeedbackModeTool implements McpTool {
