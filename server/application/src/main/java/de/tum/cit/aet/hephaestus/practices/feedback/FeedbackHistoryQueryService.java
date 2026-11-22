@@ -17,7 +17,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackHistory;
-import de.tum.cit.aet.hephaestus.practices.spi.ProblemIdentityQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import jakarta.persistence.criteria.Predicate;
@@ -57,7 +56,6 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
     private final ResultHistoryQuery history;
     private final FeedbackQueryRepository queries;
     private final FeedbackPublicHistory publicHistoryReader;
-    private final ProblemIdentityQuery problemIdentities;
     private final AccountMembershipQuery memberships;
     private final FeedbackPublicationContext publication;
     private final FeedbackSupersession replacements;
@@ -281,7 +279,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                 results.findByWorkspaceIdAndIdIn(workspaceId, chunk)
                         .forEach(result -> supportById.put(result.getId(), result));
             // The basis of a piece on the work is the support of its copies, so it names every problem a note cites.
-            identities.putAll(problemIdentities.identities(
+            identities.putAll(publicHistoryReader.identities(
                     workspaceId,
                     rows.stream()
                             .filter(row -> row.getDestination() == FeedbackDestination.ON_WORK)
@@ -406,7 +404,11 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                             && row.getDeliveredAt() != null
                             && !confirmed.isEmpty()
                     ? publicHistoryReader.render(
-                            row, support, authorized, confirmed, withdrawn, textAllowed, identities)
+                            row,
+                            new FeedbackPublicHistory.PublicSupport(support, authorized, identities),
+                            confirmed,
+                            withdrawn,
+                            textAllowed)
                     : null;
             var visible = new FeedbackHistoryEntry(
                     row.getId(),

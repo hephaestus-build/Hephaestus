@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
+import de.tum.cit.aet.hephaestus.practices.spi.ProblemIdentityQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import java.time.Instant;
 import java.util.Collection;
@@ -49,8 +50,14 @@ public class FeedbackPublicHistory {
     private final ResultSourceAuthorization sourceAuthorization;
     private final PracticeRepository practices;
     private final FeedbackCopyRepository copies;
+    private final ProblemIdentityQuery problemIdentities;
 
     public record AuthorizedSupport(UUID resultId, String practiceSlug, HistoryCustody custody) {}
+
+    /** The identity of each of {@code problemIds} that has one, read in one query for a page of the history. */
+    public Map<UUID, String> identities(long workspaceId, Collection<UUID> problemIds) {
+        return problemIds.isEmpty() ? Map.of() : problemIdentities.identities(workspaceId, problemIds);
+    }
 
     /**
      * The results of the workspace whose custody and source {@code purpose} may use, each with its practice's slug and
@@ -89,19 +96,23 @@ public class FeedbackPublicHistory {
     }
 
     /**
-     * One delivered piece on the work as the public history shows it. {@code identities} holds the identity of each
-     * problem that the piece's basis names, read once for the whole history.
+     * What a delivered piece on the work rests on: its results, those that the reader may use, and the identity of each
+     * problem that its basis names, read once for a page of the history.
      */
+    public record PublicSupport(
+            List<Result> results, List<AuthorizedSupport> authorized, Map<UUID, String> identities) {
+        public PublicSupport {
+            results = List.copyOf(results);
+            authorized = List.copyOf(authorized);
+            identities = Map.copyOf(identities);
+        }
+    }
+
+    /** One delivered piece on the work as the public history shows it. */
     public JsonNode render(
-            Feedback row,
-            List<Result> support,
-            List<AuthorizedSupport> authorized,
-            List<FeedbackCopy> confirmed,
-            boolean withdrawn,
-            boolean textAllowed,
-            Map<UUID, String> identities) {
-        Currentness freshness = currentness(row.getWorkspaceId(), support);
-        var byId = authorized.stream().collect(Collectors.toMap(AuthorizedSupport::resultId, entry -> entry));
+            Feedback row, PublicSupport support, List<FeedbackCopy> confirmed, boolean withdrawn, boolean textAllowed) {
+        Currentness freshness = currentness(row.getWorkspaceId(), support.results());
+        var byId = support.authorized().stream().collect(Collectors.toMap(AuthorizedSupport::resultId, entry -> entry));
         var review = reviews.findByIdAndWorkspaceId(row.getReviewId(), row.getWorkspaceId())
                 .orElseThrow();
         var closed = confirmed.isEmpty()
@@ -110,7 +121,7 @@ public class FeedbackPublicHistory {
                         row.getWorkspaceId(),
                         confirmed.stream().map(FeedbackCopy::getId).toList()));
         var trace = trace(row, review);
-        var cites = cites(trace, confirmed, byId, identities);
+        var cites = cites(trace, confirmed, byId, support.identities());
         @Nullable
         String summary =
                 !textAllowed || confirmed.stream().noneMatch(copy -> copy.getKind() == FeedbackCopyKind.SUMMARY)
@@ -129,7 +140,7 @@ public class FeedbackPublicHistory {
                 freshness,
                 withdrawn,
                 closedPractices(trace, confirmed, closed, byId),
-                support.stream()
+                support.results().stream()
                         .map(result -> new PublicBasis(
                                 result.getId(),
                                 Objects.requireNonNull(byId.get(result.getId())).practiceSlug(),
