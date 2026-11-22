@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenServic
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabScopeSync;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.status.GitLabConnectionSyncStateProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService;
+import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -62,8 +63,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -72,7 +71,6 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
-@RecordApplicationEvents
 class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private ConnectionRepository repository;
@@ -101,8 +99,10 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Autowired
     private GitLabConnectionSyncStateProvider syncState;
 
+    // The credential health filter publishes a change on the reactor thread that answers the call, before the call
+    // returns (testing.mdx § Flaky tests).
     @Autowired
-    private ApplicationEvents events;
+    private RecordingScmEventListener recorder;
 
     @Autowired
     private SyncTargetProvider syncTargets;
@@ -686,7 +686,7 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     private List<IntegrationAttentionChangedEvent> changes(Connection connection) {
-        return events.stream(IntegrationAttentionChangedEvent.class)
+        return recorder.ofType(IntegrationAttentionChangedEvent.class).stream()
                 .filter(event -> event.connectionId() == connection.getId())
                 .toList();
     }

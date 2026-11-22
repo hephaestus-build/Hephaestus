@@ -353,6 +353,15 @@ When the elapsed time is the behavior under test, suppress the rule on that line
 In main code, PMD refuses an empty catch block that has no comment.
 In any Java file, it refuses a `TODO`, `FIXME`, `HACK` or `XXX` comment.
 
+`@RecordApplicationEvents` gives each test a recorder through an inheritable thread-local.
+The test's thread and the threads that it starts during the test record into it.
+A pooled thread that started earlier, such as a reactor worker, keeps the recorder of an earlier test, and its events are lost.
+Whether a pool reuses a thread decides whether the event is lost.
+So a count over such an event flakes, and a check that such an event is absent passes without proof.
+
+For an event that a pooled thread can publish, read the shared `RecordingScmEventListener`, and add a listener to it for a new event type.
+Wait for the event only when it can be published after the call returns.
+
 A local test server does not own its port.
 Another process on the host can send a request as soon as the port opens.
 Check the method, path or credential that the test sends.
