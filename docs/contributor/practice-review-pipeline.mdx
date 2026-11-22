@@ -793,10 +793,20 @@ Two problems are the same when they have the same practice and the same [problem
 A problem without an identity never matches.
 The history read gives each earlier note the practice and identity of the problems that it cites (`cites`).
 Such a note is posted and not retracted, its piece is not withdrawn, and Hephaestus did not close it as fixed.
-A person may have resolved its thread: the composer does not know.
+The mirror of the provider also does not hold its thread as resolved.
+
+The history read gives each note its thread state (`threadState`), found by the copy's thread ref.
+`OPEN` and `RESOLVED` come from a mirrored thread. `UNKNOWN` means that the mirror holds no thread for the note.
 
 Such a repeat names the earlier note's path, lines and link, with its opening words.
-The receipt says that the earlier note raised the problem, because the composer does not see whether a person resolved its thread.
+The receipt says that the earlier note raised the problem, never that it still raises it.
+For an `OPEN` thread, it says that the thread was open as Hephaestus last saw it when the work was read.
+For an `UNKNOWN` thread, it says that nobody knows whether a person resolved the thread.
+
+The mirror can be late.
+On GitHub, only the resolve and unresolve events change a thread's state, and a sync does not repair it.
+A GitHub thread that no event or sync named has no node id in the mirror, so its state is `UNKNOWN`.
+On GitLab, a merge request update or the scheduled sync reads the discussions, so the resolve of one thread can arrive late.
 The composer drops the entry, or keeps it only when it says what the earlier note does not.
 The composer has no tool that replies in an earlier thread.
 
@@ -818,6 +828,7 @@ Each is a note of this piece that the provider found and that is not resolved.
 A note of another review on the work cites its problem, and it was posted after this piece first was prepared.
 The check could not see that note, and preparation refuses a history that changed after the check.
 The other note also may not rest on a result marked incorrect, and its piece may not be marked incorrect.
+The mirror may not hold its thread as resolved, and the item says its thread state as the check's receipt does.
 
 Pairs inside the piece are not listed again.
 The composer can correct the note with `edit_own` so that it points to the other note, or keep it.

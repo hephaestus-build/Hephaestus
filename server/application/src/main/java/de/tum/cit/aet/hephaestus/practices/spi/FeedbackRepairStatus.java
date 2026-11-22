@@ -38,12 +38,19 @@ public record FeedbackRepairStatus(
 
     /**
      * Where the other note sits, its link, and its words; no words when the read may not copy them. It raised the
-     * problem; whether a person resolved its thread is not known here.
+     * problem. {@code thread} is its thread as the mirror of the provider last recorded it: OPEN, or UNKNOWN when the
+     * mirror holds no thread for it. A note whose thread the mirror holds as resolved is no other note.
      */
     public record OtherNote(
             @Nullable String path,
             @Nullable Integer startLine,
             @Nullable Integer endLine,
             @Nullable String link,
-            @Nullable String body) {}
+            @Nullable String body,
+            NoteThreadState thread) {
+        public OtherNote {
+            if (thread == NoteThreadState.RESOLVED)
+                throw new IllegalArgumentException("A note whose thread is resolved is no repeat");
+        }
+    }
 }

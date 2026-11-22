@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
+import de.tum.cit.aet.hephaestus.practices.spi.NoteThreadState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import java.time.Instant;
 import java.util.List;
@@ -70,6 +71,8 @@ public record PublicFeedbackSnapshot(
             FeedbackCopyState state,
             // Hephaestus closed this note's thread as fixed, and the provider never reopens it.
             boolean closedAsFixed,
+            // The note's thread as the mirror of the provider last recorded it; null for a summary.
+            @Nullable NoteThreadState threadState,
             // The problems this note cites, each with an identity, by practice; a summary cites none.
             List<Cite> cites) {
         public Copy {

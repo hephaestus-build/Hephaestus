@@ -45,6 +45,7 @@
 						"postedAt": "2026-10-19T12:00:00Z",
 						"state": "POSTED",
 						"closedAsFixed": false,
+						"threadState": "OPEN",
 						"cites": []
 					}
 				]

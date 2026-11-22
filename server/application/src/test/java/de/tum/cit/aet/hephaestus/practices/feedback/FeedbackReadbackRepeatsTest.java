@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
+import de.tum.cit.aet.hephaestus.practices.spi.NoteThreadState;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -159,6 +160,29 @@ class FeedbackReadbackRepeatsTest {
     }
 
     @Test
+    void shouldNotFlagANoteWhenTheMirrorHoldsTheOtherNotesThreadAsResolved() {
+        var scenario = new Scenario();
+        var mine = scenario.mine(1, THIS_PROBLEM);
+        var other = scenario.other(OTHER_PIECE, 1, FeedbackCopyState.POSTED, LATER);
+        scenario.stub("handles-errors", COMPLETE);
+        mirror(other, NoteThreadState.RESOLVED);
+
+        assertThat(flag(scenario.piece(), List.of(found(mine)))).isEmpty();
+    }
+
+    @Test
+    void shouldSayTheOtherNotesThreadWasOpenWhenTheMirrorHoldsItOpen() {
+        var scenario = new Scenario();
+        var mine = scenario.mine(1, THIS_PROBLEM);
+        var other = scenario.other(OTHER_PIECE, 1, FeedbackCopyState.POSTED, LATER);
+        scenario.stub("handles-errors", COMPLETE);
+        mirror(other, NoteThreadState.OPEN);
+
+        assertThat(flag(scenario.piece(), List.of(found(mine))))
+                .containsExactly(repeat(mine, other, OTHER_BODY, NoteThreadState.OPEN));
+    }
+
+    @Test
     void shouldNotFlagANoteWhenTheOtherPieceIsWithdrawn() {
         var scenario = new Scenario();
         var mine = scenario.mine(1, THIS_PROBLEM);
@@ -249,11 +273,26 @@ class FeedbackReadbackRepeatsTest {
     }
 
     private static FeedbackRepairStatus.Repeat repeat(FeedbackCopy mine, FeedbackCopy other, @Nullable String words) {
+        return repeat(mine, other, words, NoteThreadState.UNKNOWN);
+    }
+
+    private static FeedbackRepairStatus.Repeat repeat(
+            FeedbackCopy mine, FeedbackCopy other, @Nullable String words, NoteThreadState thread) {
         return new FeedbackRepairStatus.Repeat(
                 mine.getId(),
                 List.of(THIS_PROBLEM),
                 new FeedbackRepairStatus.OtherNote(
-                        other.getPath(), other.getStartLine(), other.getEndLine(), other.getExternalUrl(), words));
+                        other.getPath(),
+                        other.getStartLine(),
+                        other.getEndLine(),
+                        other.getExternalUrl(),
+                        words,
+                        thread));
+    }
+
+    private void mirror(FeedbackCopy note, NoteThreadState state) {
+        when(history.threadStates(WORKSPACE, List.of(ITEM), List.of(Objects.requireNonNull(note.getThreadRef()))))
+                .thenReturn(Map.of(Objects.requireNonNull(note.getThreadRef()), state));
     }
 
     /** This piece and the pieces of another review on the same work, newest first, with their composition support. */
@@ -312,6 +351,7 @@ class FeedbackReadbackRepeatsTest {
                     .endLine(10 + position)
                     .externalRef((own ? "mine-" : "other-") + position)
                     .externalUrl("https://github.com/acme/app/pull/7#discussion_r" + (own ? 0 : position))
+                    .threadRef((own ? "PRRT_mine" : "PRRT_other") + position)
                     .postedAt(postedAt)
                     .createdAt(postedAt)
                     .build();

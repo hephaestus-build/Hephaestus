@@ -4,6 +4,7 @@ import static de.tum.cit.aet.hephaestus.agent.composer.Js.isRecord;
 import static de.tum.cit.aet.hephaestus.agent.composer.Js.listOf;
 import static de.tum.cit.aet.hephaestus.agent.composer.Js.string;
 
+import de.tum.cit.aet.hephaestus.practices.spi.NoteThreadState;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -220,8 +221,9 @@ final class ReviewOnWork {
 
     /**
      * A note of an earlier review on this work that may still stand: its piece is not withdrawn, the note is posted, not
-     * retracted, and Hephaestus did not close it as fixed. Whether a person resolved its thread is unknown here: the
-     * capture leaves Hephaestus's own notes and threads out, so the composer never sees their provider state.
+     * retracted, Hephaestus did not close it as fixed, and the mirror of the provider does not hold its thread as
+     * resolved. {@code threadOpen} says that the mirror held its thread open when the history was read; otherwise the
+     * mirror holds no thread for it, and whether a person resolved its thread is not known.
      */
     record EarlierNote(
             @Nullable String path,
@@ -229,7 +231,8 @@ final class ReviewOnWork {
             @Nullable Integer endLine,
             @Nullable String link,
             @Nullable String body,
-            Set<Cite> cites) {
+            Set<Cite> cites,
+            boolean threadOpen) {
         EarlierNote {
             cites = Set.copyOf(cites);
         }
@@ -255,7 +258,8 @@ final class ReviewOnWork {
                 if (!isRecord(copy)
                         || !("LINE_NOTE".equals(kind) || "FILE_NOTE".equals(kind))
                         || !"POSTED".equals(string(copy.path("state")))
-                        || isTrue(copy.path("closedAsFixed"))) continue;
+                        || isTrue(copy.path("closedAsFixed"))
+                        || "RESOLVED".equals(string(copy.path("threadState")))) continue;
                 var cites = new LinkedHashSet<Cite>();
                 for (JsonNode cite : listOf(copy.path("cites"))) {
                     String practice = string(cite.path("practiceSlug"));
@@ -271,7 +275,8 @@ final class ReviewOnWork {
                         line(copy.path("endLine")),
                         string(copy.path("externalUrl")),
                         body == null || Js.blank(body) ? null : body,
-                        cites));
+                        cites,
+                        "OPEN".equals(string(copy.path("threadState")))));
             }
         }
         return notes;
@@ -459,8 +464,8 @@ final class ReviewOnWork {
                     + " is refused for correction, never truncated. "
                     + "A checked draft lists its repeats: line notes that cite a problem that another note already cites. "
                     + "A repeat does not refuse the draft; merge the notes, drop one, or keep both when each says something the other does not. "
-                    + "It also lists each text that cites a problem that a note of an earlier review on this work raised, with that note, when Hephaestus did not close that note as fixed; "
-                    + "whether a person resolved its thread is not known. Drop the text, or keep it only when it says what the earlier note does not. "
+                    + "It also lists each text that cites a problem that a note of an earlier review on this work raised, with that note, when Hephaestus did not close that note as fixed "
+                    + "and its thread is not known to be resolved. Drop the text, or keep it only when it says what the earlier note does not. "
                     + "Input example with one useful line note: {\"decisions\":[{\"resultId\":\"<admitted NOT_MET resultId>\",\"disposition\":\"RAISE\"}],\"inline\":[{\"basedOn\":[\"<its problemId>\"],\"body\":\"Explain the local concern and its remedy.\",\"anchor\":{\"problemId\":\"<same problemId>\",\"citationIndex\":0}}],\"summary\":null}. "
                     + "For a quiet review, use summary:null, inline:[] and a supported withholding decision for each result. Unused inline and witnessIds lists may be null or omitted.";
 
@@ -937,6 +942,19 @@ final class ReviewOnWork {
             });
         });
         return repeats;
+    }
+
+    /**
+     * What the mirror of the provider said about the other notes' threads: open when the work was read, or not known.
+     * A resolved thread never gets here.
+     */
+    static List<String> threadStates(List<NoteThreadState> states) {
+        var said = new ArrayList<String>();
+        if (states.contains(NoteThreadState.OPEN))
+            said.add("With thread OPEN, that note's thread was open as Hephaestus last saw it when the work was read.");
+        if (states.contains(NoteThreadState.UNKNOWN))
+            said.add("With thread UNKNOWN, whether a person resolved that note's thread is not known here.");
+        return said;
     }
 
     /** The practice and identity of the problem a reference names; null for a result, or a problem without identity. */

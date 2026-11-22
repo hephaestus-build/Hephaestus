@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackEditBudgetSpentException;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.NoteThreadState;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
 import java.time.Duration;
 import java.time.Instant;
@@ -687,7 +688,8 @@ public class CompositionSessions {
 
     /**
      * The delivery facts as the composer reads them. A repeat shows the other note's opening words, not its whole
-     * text, and says that the other note raised the problem: whether a person resolved its thread is not known here.
+     * text, and says that the other note raised the problem. Its thread is OPEN when the mirror of the provider held it
+     * unresolved at the readback, and UNKNOWN when the mirror holds no thread for it.
      */
     static String readbackText(ObjectMapper mapper, FeedbackRepairStatus status) {
         ObjectNode shown = mapper.valueToTree(status);
@@ -701,10 +703,15 @@ public class CompositionSessions {
             other.remove("body");
             if (body != null && !Js.blank(body)) other.put("quote", ReviewOnWork.quote(body));
         }
-        return shown.put(
-                        "repeatsNext",
-                        "Each repeat is a note of yours that cites a problem that another note on this work raised (otherNote). Whether a person resolved that note's thread is not known here. To point to it, check a correction with editOf that changes only your note's words, then edit_own; or keep your note.")
-                .toString();
+        var next = new ArrayList<String>();
+        next.add(
+                "Each repeat is a note of yours that cites a problem that another note on this work raised (otherNote).");
+        next.addAll(ReviewOnWork.threadStates(status.repeats().stream()
+                .map(repeat -> repeat.otherNote().thread())
+                .toList()));
+        next.add(
+                "To point to it, check a correction with editOf that changes only your note's words, then edit_own; or keep your note.");
+        return shown.put("repeatsNext", String.join(" ", next)).toString();
     }
 
     static String checkedReceipt(String id, List<ReviewOnWork.Repeat> repeats) {
@@ -721,7 +728,8 @@ public class CompositionSessions {
                             .put("path", note.path())
                             .put("startLine", note.startLine())
                             .put("endLine", note.endLine())
-                            .put("link", note.link());
+                            .put("link", note.link())
+                            .put("thread", (note.threadOpen() ? NoteThreadState.OPEN : NoteThreadState.UNKNOWN).name());
                 if (repeat.quote() != null) row.put("quote", repeat.quote());
             }
         }
@@ -729,9 +737,17 @@ public class CompositionSessions {
         if (repeats.stream().anyMatch(repeat -> repeat.alreadyCitedBy() != null))
             next.add(
                     "A repeat with alreadyCitedBy cites a problem that another note of this draft already cites: merge the notes, drop one, or keep both when each says something the other does not.");
-        if (repeats.stream().anyMatch(repeat -> repeat.earlierNote() != null))
+        var earlier = repeats.stream()
+                .map(ReviewOnWork.Repeat::earlierNote)
+                .filter(Objects::nonNull)
+                .map(note -> note.threadOpen() ? NoteThreadState.OPEN : NoteThreadState.UNKNOWN)
+                .toList();
+        if (!earlier.isEmpty()) {
             next.add(
-                    "A repeat with earlierNote cites a problem that an earlier note on this work raised. Hephaestus did not close that note as fixed; whether a person resolved its thread is not known here. Drop the entry, or keep it only when it says what the earlier note does not.");
+                    "A repeat with earlierNote cites a problem that an earlier note on this work raised. Hephaestus did not close that note as fixed.");
+            next.addAll(ReviewOnWork.threadStates(earlier));
+            next.add("Drop the entry, or keep it only when it says what the earlier note does not.");
+        }
         next.add(
                 repeats.isEmpty()
                         ? "Correct the draft and check again, or publish_package with this draftId."

@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
+import de.tum.cit.aet.hephaestus.practices.spi.NoteThreadState;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackHistory;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
@@ -244,8 +245,8 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
 
     /**
      * What the facts of a page of rows read, read once for the page: their basis, support, the support's decisions,
-     * copies, withdrawals, incorrectness, responses and threads. Each row's facts are then decided from it, as one
-     * row's facts were decided alone.
+     * copies with the mirrored state of their provider threads, withdrawals, incorrectness, responses and conversation
+     * threads. Each row's facts are then decided from it, as one row's facts were decided alone.
      */
     private final class Page {
         private final long viewerAccountId;
@@ -260,6 +261,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
         private final Map<UUID, FeedbackResponse> responsesOf = new HashMap<>();
         private final Map<UUID, UUID> threads = new HashMap<>();
         private final Map<UUID, String> identities = new HashMap<>();
+        private final Map<String, NoteThreadState> threadStates = new HashMap<>();
 
         Page(long workspaceId, List<Feedback> rows, long viewerAccountId, SourceUsePurpose purpose) {
             this.viewerAccountId = viewerAccountId;
@@ -307,6 +309,23 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
             copies.findByWorkspaceIdAndFeedbackIdInOrderByPositionAsc(workspaceId, ids)
                     .forEach(copy -> copiesOf.computeIfAbsent(copy.getFeedbackId(), ignored -> new ArrayList<>())
                             .add(copy));
+            var onWork = rows.stream()
+                    .filter(row -> row.getDestination() == FeedbackDestination.ON_WORK && row.getItemId() != null)
+                    .toList();
+            threadStates.putAll(publicHistoryReader.threadStates(
+                    workspaceId,
+                    onWork.stream()
+                            .map(Feedback::getItemId)
+                            .filter(Objects::nonNull)
+                            .distinct()
+                            .toList(),
+                    onWork.stream()
+                            .flatMap(row -> copiesOf.getOrDefault(row.getId(), List.of()).stream())
+                            .filter(NoteCitations::note)
+                            .map(FeedbackCopy::getThreadRef)
+                            .filter(Objects::nonNull)
+                            .distinct()
+                            .toList()));
             withdrawn.addAll(visibility.withdrawnAt(workspaceId, ids).keySet());
             incorrect.addAll(basis.incorrectFeedbackIds(workspaceId, ids));
             incorrectCopies.addAll(copies.incorrectCopyIdsOf(workspaceId, ids));
@@ -405,7 +424,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                             && !confirmed.isEmpty()
                     ? publicHistoryReader.render(
                             row,
-                            new FeedbackPublicHistory.PublicSupport(support, authorized, identities),
+                            new FeedbackPublicHistory.PublicSupport(support, authorized, identities, threadStates),
                             confirmed,
                             withdrawn,
                             textAllowed)

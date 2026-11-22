@@ -500,12 +500,23 @@ The composer's view of lineage stays decided, not shipped.
   The summary counts too.
   The entry repeats the note when both cite a problem with the same practice and identity.
   Such a note is posted and not retracted, and its piece is not withdrawn.
-  Hephaestus did not close it as fixed.
-  The composer does not know whether a person resolved the note's thread.
-  The capture leaves Hephaestus's own notes and threads out, and the history read has no provider thread state.
-  So the receipt says that the earlier note raised the problem, not that it still raises it.
+  Hephaestus did not close it as fixed, and the mirror does not hold its thread as resolved.
+  The receipt says that the earlier note raised the problem, not that it still raises it.
   A problem without an identity never matches.
   A key is not unique across practices, so the practice must match too.
+- **The thread state comes from the mirror.** Each line note or file note of the history read has `threadState`.
+  It is the note's thread as the mirror last recorded it, found by the copy's thread ref.
+  `OPEN` and `RESOLVED` come from a mirrored thread. `UNKNOWN` means that the mirror holds no thread for the note.
+  The capture still leaves Hephaestus's own threads out, so the history read is the only source of this state.
+  Both repeat checks leave out a note whose thread is `RESOLVED`, also when Hephaestus resolved it.
+  For an `OPEN` thread, the receipt says that the thread was open when Hephaestus last saw it.
+  For an `UNKNOWN` thread, the receipt says that nobody knows whether a person resolved the thread.
+  On GitHub, only the resolve and unresolve events change the state.
+  GitHub redelivers a failed event for up to 71 hours, and a sync does not repair the state.
+  A GitHub thread that no event or sync named has no node id in the mirror, so its state is `UNKNOWN`.
+  On GitLab, a read of the merge request's discussions changes the state.
+  A merge request update and the scheduled sync start this read, so the resolve of one thread can arrive late.
+  The prompt notes do not show the state to the model.
 - **Advice, not a refusal.** The receipt lists each repeat with the entry and its problems.
   A repeat in the draft names the earlier note of the draft.
   A repeat across reviews names the earlier note's path, lines and link.
@@ -524,6 +535,7 @@ The composer's view of lineage stays decided, not shipped.
   So an edit of that note does not make it new.
   The other note is the newest revision of its provider comment.
   It is posted and not retracted, its piece is not withdrawn, and it is not closed as fixed.
+  The mirror does not hold its thread as resolved.
   Neither the note nor its piece is marked incorrect.
   Its words follow the public history's rule for words.
   Pairs inside the piece are not listed again.
@@ -540,4 +552,6 @@ Enforced by:
 - `FeedbackHistoryQueryIntegrationTest#shouldFlagInTheReadbackANoteWhoseProblemANoteOfAnotherReviewOnTheWorkCites`
 - `ResultAdmissionIntegrationTest#shouldWriteTheIdentityOfEachProblemThatTheSealWrites`
 - `FeedbackHistoryQueryIntegrationTest#shouldGiveEachNoteThePracticeAndIdentityOfTheProblemsItCites`
+- `FeedbackHistoryQueryIntegrationTest#shouldGiveEachNoteTheStateOfItsThreadAsTheMirrorOfTheProviderHoldsIt`
+- `ScmMirroredThreadStateQueryIntegrationTest`
 - `ProblemIdentityMigrationTest`
