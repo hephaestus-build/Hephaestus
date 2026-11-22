@@ -75,21 +75,11 @@ final class LiveChatTransport implements ModelSession.Transport {
     @Override
     public ModelSession.Answer call(byte[] body) {
         requests++;
-        return send(chatCompletions(creds.baseUrl()), body);
+        return send(creds.chatCompletions(), body);
     }
 
-    /**
-     * The one chat endpoint of a base URL. A base that ends with the API version takes {@code /chat/completions}, and
-     * any other base takes {@code /v1/chat/completions}. The transport never probes a second path, so every request
-     * the endpoint sees is a counted call.
-     */
-    static String chatCompletions(String baseUrl) {
-        String base = baseUrl.replaceAll("/+$", "");
-        return base.endsWith("/v1") ? base + "/chat/completions" : base + "/v1/chat/completions";
-    }
-
-    private ModelSession.Answer send(String url, byte[] body) {
-        var request = HttpRequest.newBuilder(URI.create(url))
+    private ModelSession.Answer send(URI url, byte[] body) {
+        var request = HttpRequest.newBuilder(url)
                 .timeout(Duration.ofMinutes(10))
                 .header("authorization", "Bearer " + creds.apiKey())
                 .header("content-type", "application/json")

@@ -84,7 +84,7 @@ class ProxyStandInLifecycleTest {
                         URI.create(harness.proxy.baseUrl()).getPort())) {
             socket.setSoTimeout(3_000);
             socket.getOutputStream()
-                    .write(("POST /v1/chat/completions HTTP/1.1\r\n"
+                    .write(("POST /chat/completions HTTP/1.1\r\n"
                                     + "Host: localhost\r\nContent-Length: 2\r\nExpect: 100-continue\r\n\r\n")
                             .getBytes(StandardCharsets.US_ASCII));
             socket.getOutputStream().flush();
@@ -299,6 +299,25 @@ class ProxyStandInLifecycleTest {
     }
 
     @Test
+    void shouldStartAPracticeHereAndRefuseAnUnknownRouteWithoutSpendingAModelRequest() throws Exception {
+        try (Harness harness = new Harness(Reply.FINITE_JSON, "1")) {
+            var start = harness.post("/start-practice", "{\"practiceSlug\":\"handles-errors\"}")
+                    .get(3, TimeUnit.SECONDS);
+            assertThat(start.statusCode()).isEqualTo(200);
+            assertThat(new String(harness.readBody(start), StandardCharsets.UTF_8))
+                    .isEqualTo("{\"practiceSlug\":\"handles-errors\",\"current\":true}");
+
+            var unknown = harness.post("/next-gateway-route", "{}").get(3, TimeUnit.SECONDS);
+            assertThat(unknown.statusCode()).isEqualTo(404);
+            assertThat(new String(harness.readBody(unknown), StandardCharsets.UTF_8))
+                    .contains("/next-gateway-route");
+
+            assertThat(harness.receipts()).isZero();
+            harness.proxy.assertRequestLimitNotSpent();
+        }
+    }
+
+    @Test
     void shouldFailTheMeasurementWhenARequestIsRefusedAfterValidAnswers() throws Exception {
         try (Harness harness = new Harness(Reply.FINITE_JSON, "1")) {
             // Result admission is answered here and spends no model request.
@@ -388,16 +407,20 @@ class ProxyStandInLifecycleTest {
 
         CompletableFuture<HttpResponse<InputStream>> request() {
             return client.sendAsync(
-                    HttpRequest.newBuilder(URI.create(proxy.baseUrl() + "/v1/chat/completions"))
+                    HttpRequest.newBuilder(URI.create(proxy.baseUrl() + "/chat/completions"))
                             .POST(HttpRequest.BodyPublishers.ofString("{}"))
                             .build(),
                     HttpResponse.BodyHandlers.ofInputStream());
         }
 
         CompletableFuture<HttpResponse<InputStream>> admitResults() {
+            return post("/admit-results", ADMISSION);
+        }
+
+        CompletableFuture<HttpResponse<InputStream>> post(String path, String body) {
             return client.sendAsync(
-                    HttpRequest.newBuilder(URI.create(proxy.baseUrl() + "/admit-results"))
-                            .POST(HttpRequest.BodyPublishers.ofString(ADMISSION))
+                    HttpRequest.newBuilder(URI.create(proxy.baseUrl() + path))
+                            .POST(HttpRequest.BodyPublishers.ofString(body))
                             .build(),
                     HttpResponse.BodyHandlers.ofInputStream());
         }

@@ -11,6 +11,8 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedProblemDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateProgressDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.ProjectedCitationDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
@@ -31,7 +33,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -329,6 +330,9 @@ class PracticeRunnerLiveLlmTest {
             requestLimit = requestLimit(System.getProperty(REQUEST_LIMIT_PROPERTY));
             client = HttpClient.newHttpClient();
             server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+            server.createContext(
+                    "/start-practice",
+                    exchange -> respond(exchange, start(MAPPER.readTree(exchange.getRequestBody()))));
             server.createContext("/stage-result", exchange -> {
                 byte[] sent = exchange.getRequestBody().readAllBytes();
                 ObjectNode receipt;
@@ -344,7 +348,9 @@ class PracticeRunnerLiveLlmTest {
                 }
                 respond(exchange, answer);
             });
-            server.createContext("/", exchange -> forward(exchange, creds));
+            // LiveRunnerWorkspace.request sets the runner's protocol: chat completions.
+            server.createContext("/chat/completions", exchange -> forward(exchange, creds));
+            server.createContext("/", ProxyStandIn::refuseUnknownRoute);
             executor = Executors.newVirtualThreadPerTaskExecutor();
             server.setExecutor(executor);
             server.start();
@@ -375,6 +381,19 @@ class PracticeRunnerLiveLlmTest {
                             "model requests refused after the request limit of %s was spent (%d sent)",
                             requestLimit.isPresent() ? String.valueOf(requestLimit.getAsInt()) : "none", sent)
                     .isZero();
+        }
+
+        /** A gateway route that the runner calls and this stand-in does not serve fails by name, not upstream. */
+        private static void refuseUnknownRoute(HttpExchange exchange) throws IOException {
+            try (exchange) {
+                exchange.getRequestBody().readAllBytes();
+                String route = exchange.getRequestURI().getPath();
+                byte[] body = MAPPER.writeValueAsBytes(
+                        MAPPER.createObjectNode().put("error", "The live stand-in serves no route " + route));
+                exchange.getResponseHeaders().set("content-type", "application/json");
+                exchange.sendResponseHeaders(404, body.length);
+                exchange.getResponseBody().write(body);
+            }
         }
 
         private static void respond(HttpExchange exchange, ObjectNode answer) throws IOException {
@@ -413,6 +432,12 @@ class PracticeRunnerLiveLlmTest {
                 practice.path("nonResults").forEach(nonResults::add);
             }
             return request;
+        }
+
+        /** Every practice starts current: the fixture's sources never move and no other review takes it over. */
+        private static ObjectNode start(JsonNode request) {
+            var start = MAPPER.treeToValue(request, PracticeStartRequestDTO.class);
+            return MAPPER.valueToTree(new PracticeStartResponseDTO(start.practiceSlug(), true));
         }
 
         /**
@@ -534,8 +559,7 @@ class PracticeRunnerLiveLlmTest {
                     }
                     return;
                 }
-                HttpRequest request = HttpRequest.newBuilder(URI.create(
-                                creds.baseUrl() + exchange.getRequestURI().getPath()))
+                HttpRequest request = HttpRequest.newBuilder(creds.chatCompletions())
                         .header("authorization", "Bearer " + creds.apiKey())
                         .header("content-type", "application/json")
                         .method(exchange.getRequestMethod(), HttpRequest.BodyPublishers.ofByteArray(body))
