@@ -62,7 +62,7 @@ A rule that main does not satisfy yet says "1.0 target" and names its pull reque
 11. **Every server can verify every attempt.** Capture records each checkout's key (repository, commit and tree) and the folder's other files in PostgreSQL while the attempt runs. A server without the folder rebuilds it from its own mirror and checks the tree and the checkout digest. A rebuild that fails or differs is the capture failure `CHECKOUT_UNVERIFIED`, never a citation refusal.
     Enforced by: `EvidenceAcrossServersIntegrationTest`, since [#4094](https://github.com/hephaestus-build/Hephaestus/pull/4094).
 12. **Erasure follows every copied person.** A person erasure removes each attempt folder, composition input and transcript that copied that person ([personal data map](../admin/dsms/personal-data-map.mdx)).
-    Since [#4094](https://github.com/hephaestus-build/Hephaestus/pull/4094), erasure marks copies `ERASED` in PostgreSQL, so it waits for no server. Each server then removes erased folders within 2 minutes.
+    Since [#4094](https://github.com/hephaestus-build/Hephaestus/pull/4094), erasure marks copies `ERASED` in PostgreSQL, so it waits for no server. Each server then removes an erased folder at a reconcile pass, once the folder's lease is released. A removal that fails stays for a later pass, and the stalled-reconcile alert reports a folder that stays.
     Enforced by: `EvidenceFolderAccountErasureIntegrationTest#erasesEveryAttemptInTwoWorkspacesAtOnceAndRemovesTheFoldersOnceTheRuntimeReleasesThem`, `#anErasureCompletesWithoutTheServerThatWroteTheCopyWhichRemovesItsFolderInItsNextPass`, `EvidenceReceiptRetentionIntegrationTest`.
 
 The [pipeline](../contributor/practice-review-pipeline.mdx#admit-results) owns the details of capture and admission.
@@ -120,4 +120,5 @@ Decision 9 named a one-hour grace for an unadmitted folder.
 Two test references in decisions 9 and 12 named tests that were renamed or that did not test the new period. They now name the current tests.
 
 Decisions 11 and 12 named [#4094](https://github.com/hephaestus-build/Hephaestus/pull/4094) as a 1.0 target. It merged, so they now say what is enforced.
+Decision 12 also said that each server removes erased folders within 2 minutes. A held lease or a failed removal keeps a folder until a later pass, so it now says that.
 No other decision changes.
