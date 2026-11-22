@@ -85,7 +85,7 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
     void setUp() {
         channel = new GitLabLineNoteWriter(
                 gitLabProvider,
-                () -> rest.builder(),
+                new GitLabNotesApi(gitLabProvider, () -> rest.builder(), tokenService, egressGuard),
                 tokenService,
                 egressGuard,
                 ScmFeedbackFixtures.resolver(),

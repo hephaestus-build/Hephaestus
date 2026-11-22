@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlInterc
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScmCommentReplySink;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadResolutionWriter;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.notification.email.EmailAdapter;
 import java.util.function.Consumer;
@@ -34,6 +35,10 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 class OutboundEgressArchitectureTest extends HephaestusArchitectureTest {
 
+    /** Package-private, so named here by its fully qualified name. */
+    private static final String GITLAB_NOTES_API =
+            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabNotesApi";
+
     @Test
     void shouldDeclareEveryScmWriterAsGateway() {
         ArchRule rule = classes()
@@ -43,6 +48,8 @@ class OutboundEgressArchitectureTest extends HephaestusArchitectureTest {
                 .areAssignableTo(LineNoteWriter.class)
                 .or()
                 .areAssignableTo(ScmCommentReplySink.class)
+                .or()
+                .areAssignableTo(ThreadResolutionWriter.class)
                 .and()
                 .areNotInterfaces()
                 .should()
@@ -61,6 +68,9 @@ class OutboundEgressArchitectureTest extends HephaestusArchitectureTest {
                 .areNotInterfaces()
                 .should()
                 .callMethod(OutboundEgressGuard.class, "requireDeliveryAllowed", String.class)
+                // The same fail-closed decision, for a gateway that defers a write instead of throwing.
+                .orShould()
+                .callMethod(OutboundEgressGuard.class, "deliveryAllowed", String.class)
                 .because("a declared gateway without the shared fail-closed guard can bypass Silent Mode");
 
         rule.check(classes);
@@ -78,10 +88,16 @@ class OutboundEgressArchitectureTest extends HephaestusArchitectureTest {
                 .orShould()
                 .beAssignableTo(ScmCommentReplySink.class)
                 .orShould()
+                .beAssignableTo(ThreadResolutionWriter.class)
+                // The REST exchange that GitLab's line note and thread resolution writers share; it holds every write.
+                .orShould()
+                .haveFullyQualifiedName(GITLAB_NOTES_API)
+                .orShould()
                 .haveFullyQualifiedName(SlackMessageService.class.getName())
                 .orShould()
                 .haveFullyQualifiedName(EmailAdapter.class.getName())
-                .because("gateway status is limited to the reviewed SPI, Slack and email client surfaces");
+                .because(
+                        "gateway status is limited to the reviewed SPI, GitLab notes, Slack and email client surfaces");
 
         rule.check(classes);
     }

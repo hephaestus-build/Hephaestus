@@ -2,12 +2,14 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
+import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppressedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
@@ -47,22 +49,17 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
     @Mock
     private OutboundEgressGuard egressGuard;
 
-    @Mock
-    private GitLabDiffVersionReader diffVersions;
-
     private final ScriptedGitLabRest rest = new ScriptedGitLabRest();
-    private GitLabLineNoteWriter writer;
+    private GitLabThreadResolutionWriter writer;
 
     @BeforeEach
     void setUp() {
-        writer = new GitLabLineNoteWriter(
+        writer = new GitLabThreadResolutionWriter(
+                new GitLabNotesApi(gitLabProvider, () -> rest.builder(), tokenService, egressGuard),
                 gitLabProvider,
-                () -> rest.builder(),
                 tokenService,
                 egressGuard,
-                ScmFeedbackFixtures.resolver(),
-                diffVersions,
-                ScmFeedbackFixtures.formatter());
+                ScmFeedbackFixtures.resolver());
         lenient().when(tokenService.resolveServerUrl(1L)).thenReturn("https://gitlab.example.com");
         lenient().when(tokenService.getAccessToken(1L)).thenReturn("glpat-test");
         lenient().when(egressGuard.deliveryAllowed(anyString())).thenReturn(true);
@@ -89,6 +86,20 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
         assertThat(writer.resolveThread(TARGET, copy(), false, "1").outcome()).isEqualTo(ThreadChange.Outcome.DONE);
         assertThat(rest.calls().getLast().json()).containsEntry("resolved", false);
         verify(egressGuard).deliveryAllowed("gitlab.reopen-feedback-thread");
+    }
+
+    /** Silent Mode engages after the writer's own check: the shared REST exchange refuses the write before it is sent. */
+    @Test
+    void shouldDeferAndSendNothingWhenSilentModeEngagesBeforeTheWrite() {
+        rest.answer(200, discussion(false, BOT));
+        doThrow(new OutboundEgressSuppressedException("scm.rest.gitlab.put"))
+                .when(egressGuard)
+                .requireDeliveryAllowed("scm.rest.gitlab.put");
+
+        var change = writer.resolveThread(TARGET, copy(), true, "1");
+
+        assertThat(change.outcome()).isEqualTo(ThreadChange.Outcome.DEFERRED);
+        assertThat(rest.calls()).extracting(ScriptedGitLabRest.Call::method).containsOnly(HttpMethod.GET);
     }
 
     @Test

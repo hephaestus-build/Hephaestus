@@ -46,16 +46,11 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
     private final List<String> mutations = new ArrayList<>();
     private @Nullable Map<String, Object> thread;
     private boolean confirms = true;
-    private GitHubLineNoteWriter writer;
+    private GitHubThreadResolutionWriter writer;
 
     @BeforeEach
     void setUp() {
-        writer = new GitHubLineNoteWriter(
-                provider,
-                mock(GitHubPrNodeIdResolver.class),
-                guard,
-                ScmFeedbackFixtures.resolver(),
-                ScmFeedbackFixtures.formatter());
+        writer = new GitHubThreadResolutionWriter(provider, guard, ScmFeedbackFixtures.resolver());
         var client = mock(HttpGraphQlClient.class);
         lenient().when(provider.forScope(1L)).thenReturn(client);
         lenient().when(client.document(anyString())).thenAnswer(call -> {
