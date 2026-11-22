@@ -16,15 +16,26 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 /**
  * Reads GitLab's notes, discussions and diff positions, builds note paths, and builds the receipts of an edited or
- * unsupported note, for {@link GitLabLineNoteWriter}, without a provider call.
+ * unsupported note, for {@link GitLabLineNoteWriter} and {@link GitLabThreadResolutionWriter}, without a provider call.
  */
 final class GitLabDiscussionNotes {
+
+    static final String DISCUSSION_GID = "gid://gitlab/Discussion/";
+
+    static final Pattern SEGMENT = Pattern.compile("[0-9A-Za-z]{1,128}");
+
+    // The note models a feedback copy can have been recorded as, each with its REST id.
+    static final Pattern NOTE_REF = Pattern.compile("gid://gitlab/(Note|DiscussionNote|DiffNote)/([1-9][0-9]{0,17})");
+
+    // A generic 404 proves absence only when the merge request is still readable.
+    static final Pattern NOTE_ABSENT = Pattern.compile("\\{\\s*\"message\"\\s*:\\s*\"404 Not found\"\\s*}");
 
     private GitLabDiscussionNotes() {}
 
@@ -37,7 +48,7 @@ final class GitLabDiscussionNotes {
                             && actual.properties().stream()
                                     .allMatch(entry -> entry.getValue().isNull()
                                             || entry.getKey().equals("position_type")));
-        var wanted = GitLabLineNoteWriter.MAPPER.valueToTree(expected);
+        var wanted = GitLabNotesApi.MAPPER.valueToTree(expected);
         return wanted.properties().stream().allMatch(entry -> entry.getValue().equals(actual.path(entry.getKey())));
     }
 

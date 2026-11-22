@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.repository.Repository;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -57,13 +58,13 @@ class CodeQualityTest extends HephaestusArchitectureTest {
     class GodClassTests {
 
         /*
-         * Orchestrator services that coordinate many sub-services may legitimately exceed the
-         * threshold; each exemption below carries its own justification.
+         * Orchestrators that coordinate many sub-services may legitimately exceed the threshold, when their
+         * collaborators do not group into a real responsibility; each exemption below carries its own justification.
          */
         @Test
-        void servicesHaveLimitedConstructorParams() {
+        void beansHaveLimitedConstructorParams() {
             Set<String> orchestratorExceptions = Set.of(
-                    "GitHubDataSyncService", // Coordinates 15 entity-specific sync services
+                    "GitHubDataSyncService", // Coordinates the entity-specific sync services
                     "GitHubHistoricalBackfillService", // Coordinates multiple sync services for historical data
                     // backfill
                     "GitHubPullRequestSyncService", // Coordinates review, review comment, and project item sub-sync
@@ -72,13 +73,22 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     // Full provider-lifecycle orchestrators with broad ConnectionService usage —
                     // splitting them further scatters related logic without reducing coupling.
                     "GitLabWorkspaceInitializationService",
-                    "WorkspaceRepositoryMonitorService");
+                    "WorkspaceRepositoryMonitorService",
+                    // One ordered refusal chain: the first refusal wins. The chain needs about 17 separate facts.
+                    // Grouping the approval and currentness reads into beans of their own would still leave it over.
+                    "FeedbackGate",
+                    // One operation: it reads each allowlisted section of the export bundle from that section's own
+                    // source.
+                    "ExportBundleAssembler",
+                    // The GitLab twin of GitHubDataSyncService: each repository sync step needs its own service.
+                    "GitLabRepositorySync");
 
             ArchRule rule = classes()
                     .that()
-                    .haveSimpleNameEndingWith("Service")
+                    .areMetaAnnotatedWith(Component.class)
+                    // A Spring Data repository interface declares one query per method and holds no logic.
                     .and()
-                    .areAnnotatedWith(Service.class)
+                    .areNotInterfaces()
                     .should(haveAtMostConstructorParameters(MAX_SERVICE_DEPENDENCIES, orchestratorExceptions))
                     .because("God classes with many dependencies violate SRP and are hard to test");
 
@@ -99,14 +109,26 @@ class CodeQualityTest extends HephaestusArchitectureTest {
 
         /* Business methods exclude getters, setters, equals, hashCode, toString, and constructors. */
         @Test
-        void servicesHaveLimitedBusinessMethods() {
+        void beansHaveLimitedBusinessMethods() {
+            Set<String> singleJobExceptions = Set.of(
+                    // One handler for each SCM event that is an activity fact, each writing that fact the same way.
+                    "ActivityEventListener",
+                    // The one lease model of agent work: every transition a caller makes on agent_run goes through it
+                    // (docs/contributor/agent-runs.mdx). Only the reaper writes runs on its own, for expired leases and
+                    // overdue runs.
+                    "AgentRuns",
+                    // Its public methods are the composite SyncTargetProvider and RepositoryScopeProvider SPIs that the
+                    // GitHub and GitLab adapters inject.
+                    "WorkspaceSyncTargetProvider");
+
             ArchRule rule = classes()
                     .that()
-                    .haveSimpleNameEndingWith("Service")
+                    .areMetaAnnotatedWith(Component.class)
+                    // A Spring Data repository interface declares one query per method and holds no logic.
                     .and()
-                    .areAnnotatedWith(Service.class)
-                    .should(haveAtMostBusinessMethods(MAX_SERVICE_METHODS))
-                    .because("Services with many methods violate SRP and should be split into focused services");
+                    .areNotInterfaces()
+                    .should(haveAtMostBusinessMethods(MAX_SERVICE_METHODS, singleJobExceptions))
+                    .because("Beans with many methods violate SRP and should be split into focused beans");
 
             rule.check(classes);
         }

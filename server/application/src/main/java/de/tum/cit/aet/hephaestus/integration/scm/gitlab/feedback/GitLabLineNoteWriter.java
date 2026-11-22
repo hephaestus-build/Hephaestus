@@ -20,8 +20,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadChange;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadResolutionWriter;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
@@ -30,7 +28,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResol
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrCoordinates;
 import java.net.URI;
 import java.util.ArrayList;
@@ -48,24 +45,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.graphql.client.ClientGraphQlResponse;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 // Stages a package as private draft notes, then one bulk publication with the summary is the only notifying write.
 @Component
 @ConditionalOnServerRole
 @OutboundEgressGateway
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
-public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWriter {
+public class GitLabLineNoteWriter implements LineNoteWriter {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabLineNoteWriter.class);
-
-    static final JsonMapper MAPPER = new JsonMapper();
 
     private static final int DISCUSSIONS_PAGE_SIZE = 100;
 
@@ -76,19 +67,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
     // Names the placement of a range copy, so readback never mistakes it for an end-line copy written before ranges.
     static final String RANGE_PLACEMENT = "<!-- hephaestus-gitlab-placement=line-range -->";
 
-    private static final String DISCUSSION_GID = "gid://gitlab/Discussion/";
-
-    private static final Pattern SEGMENT = Pattern.compile("[0-9A-Za-z]{1,128}");
-
-    // The note models a feedback copy can have been recorded as, each with its REST id.
-    private static final Pattern NOTE_REF =
-            Pattern.compile("gid://gitlab/(Note|DiscussionNote|DiffNote)/([1-9][0-9]{0,17})");
-
-    // A generic 404 proves absence only when the merge request is still readable.
-    private static final Pattern NOTE_ABSENT = Pattern.compile("\\{\\s*\"message\"\\s*:\\s*\"404 Not found\"\\s*}");
-
     private final GitLabGraphQlClientProvider gitLabProvider;
-    private final WebClient rest;
+    private final GitLabNotesApi http;
     private final GitLabTokenService tokenService;
     private final GitLabDiffVersionReader diffVersions;
     private final OutboundEgressGuard egressGuard;
@@ -97,14 +77,14 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
 
     public GitLabLineNoteWriter(
             GitLabGraphQlClientProvider gitLabProvider,
-            GitLabWebClients rest,
+            GitLabNotesApi http,
             GitLabTokenService tokenService,
             OutboundEgressGuard egressGuard,
             ScmFeedbackTargetResolver targets,
             GitLabDiffVersionReader diffVersions,
             ScmFeedbackFormatter formatter) {
         this.gitLabProvider = gitLabProvider;
-        this.rest = rest.builder().build();
+        this.http = http;
         this.tokenService = tokenService;
         this.egressGuard = egressGuard;
         this.targets = targets;
@@ -168,10 +148,10 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
                 if (pending.contains(entry.getKey())) continue;
                 if (gitLabProvider.isRateLimitCritical(workspace) || !fence.beforeCreate(List.of(), List.of()))
                     return publication.notSent();
-                var created = exchange(
+                var created = http.exchange(
                         workspace,
                         HttpMethod.POST,
-                        authorized(workspace, URI.create(api + "/draft_notes")),
+                        http.authorized(workspace, URI.create(api + "/draft_notes")),
                         entry.getValue());
                 if (created.status() < 200 || created.status() >= 300) return publication.notSent();
             }
@@ -183,10 +163,10 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
             var fields = summary == null
                     ? Map.<String, Object>of()
                     : Map.<String, Object>of("note", footer.summary(summary));
-            var submitted = exchange(
+            var submitted = http.exchange(
                     workspace,
                     HttpMethod.POST,
-                    authorized(workspace, URI.create(api + "/draft_notes/bulk_publish")),
+                    http.authorized(workspace, URI.create(api + "/draft_notes/bulk_publish")),
                     fields);
             if (submitted.status() < 200 || submitted.status() >= 300) return publication.attempted();
             var posted = findPosted(target, publication);
@@ -225,10 +205,10 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
     private List<JsonNode> pages(long workspace, String endpoint) {
         var result = new ArrayList<JsonNode>();
         for (int page = 1; page <= MAX_DISCUSSION_PAGES; page++) {
-            var response = exchange(
+            var response = http.exchange(
                     workspace,
                     HttpMethod.GET,
-                    authorized(workspace, URI.create(endpoint + "?per_page=100&page=" + page)),
+                    http.authorized(workspace, URI.create(endpoint + "?per_page=100&page=" + page)),
                     null);
             var rows = response.json();
             if (response.status() != 200 || rows == null || !rows.isArray())
@@ -286,49 +266,6 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
         } catch (RuntimeException unknown) {
             return null;
         }
-    }
-
-    private record Answer(int status, @Nullable JsonNode json, String text) {}
-
-    // A status is an answer; only transport failures and timeouts leave the outcome unknown to the caller.
-    private Answer exchange(long scopeId, HttpMethod method, Request target, @Nullable Map<String, Object> body) {
-        var request = rest.method(method)
-                .uri(target.uri())
-                .header(HttpHeaders.AUTHORIZATION, target.authorization())
-                .attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId);
-        WebClient.RequestHeadersSpec<?> spec = body == null
-                ? request
-                : request.contentType(MediaType.APPLICATION_JSON).bodyValue(body);
-        Answer answer = spec.exchangeToMono(response -> {
-                    gitLabProvider.updateRateLimit(scopeId, response.headers().asHttpHeaders());
-                    int status = response.statusCode().value();
-                    // A 204 such as bulk_publish's carries no body, so only a non-empty success body is JSON.
-                    boolean success = response.statusCode().is2xxSuccessful();
-                    return response.bodyToMono(String.class)
-                            .defaultIfEmpty("")
-                            .map(text -> new Answer(
-                                    status, success && !text.isBlank() ? MAPPER.readTree(text) : null, text));
-                })
-                .block(GRAPHQL_TIMEOUT);
-        if (answer == null) throw new IllegalStateException("GitLab answered without a response");
-        return answer;
-    }
-
-    private record Request(URI uri, String authorization) {}
-
-    // The address and credential are local facts; resolving them is never part of a provider request.
-    private Request request(long scopeId, MrCoordinates mr, @Nullable String discussion) {
-        return authorized(scopeId, discussions(scopeId, mr, discussion));
-    }
-
-    private Request authorized(long scopeId, URI uri) {
-        return new Request(uri, "Bearer " + tokenService.getAccessToken(scopeId));
-    }
-
-    private URI discussions(long scopeId, MrCoordinates mr, @Nullable String discussion) {
-        return URI.create(GitLabDiffVersionReader.mergeRequestApi(tokenService.resolveServerUrl(scopeId), mr)
-                + "/discussions"
-                + (discussion == null ? "" : "/" + discussion));
     }
 
     // Partial discussions, missing identity, or incomplete pagination cannot prove a copy absent.
@@ -461,13 +398,13 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
     // Only GitLab's record of both ends verifies a placed range; a range it does not hold proves nothing delivered.
     private Copy confirmRange(long scopeId, MrCoordinates mr, LineNote item, Copy copy) {
         String discussion = copy.discussionId();
-        String segment = discussion != null && discussion.startsWith(DISCUSSION_GID)
-                ? discussion.substring(DISCUSSION_GID.length())
+        String segment = discussion != null && discussion.startsWith(GitLabDiscussionNotes.DISCUSSION_GID)
+                ? discussion.substring(GitLabDiscussionNotes.DISCUSSION_GID.length())
                 : "";
-        if (!SEGMENT.matcher(segment).matches())
+        if (!GitLabDiscussionNotes.SEGMENT.matcher(segment).matches())
             throw new FeedbackDeliveryException("A GitLab range thread has no readable identity");
         long noteId = GitLabSyncConstants.extractNumericId(copy.noteId());
-        Answer answer = exchange(scopeId, HttpMethod.GET, request(scopeId, mr, segment), null);
+        GitLabNotesApi.Answer answer = http.exchange(scopeId, HttpMethod.GET, http.request(scopeId, mr, segment), null);
         JsonNode thread = answer.json();
         if (answer.status() != 200 || thread == null || !thread.path("notes").isArray())
             throw new FeedbackDeliveryException("A GitLab range thread was not read");
@@ -595,7 +532,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
                         CopyUpdateReceipt.transientFailure(copy.copyId(), "Copy has no recorded provider reference"));
                 continue;
             }
-            var ref = NOTE_REF.matcher(externalRef);
+            var ref = GitLabDiscussionNotes.NOTE_REF.matcher(externalRef);
             if (!ref.matches()) {
                 outcomes.add(GitLabDiscussionNotes.unsupported(copy, "Existing copy has no GitLab note identity"));
                 continue;
@@ -606,27 +543,30 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
             }
             String type = ref.group(1);
             long noteId = Long.parseLong(ref.group(2));
-            Request note;
-            Request user;
-            Request parent;
+            GitLabNotesApi.Request note;
+            GitLabNotesApi.Request user;
+            GitLabNotesApi.Request parent;
             try {
                 MrCoordinates mr = GitLabMrResolver.parseSubjectExternalId(subject);
                 String server = tokenService.resolveServerUrl(workspaceId);
-                note = authorized(
+                note = http.authorized(
                         workspaceId,
                         URI.create(GitLabDiffVersionReader.mergeRequestApi(server, mr) + "/notes/" + noteId));
-                user = authorized(workspaceId, URI.create(server.replaceAll("/+$", "") + "/api/v4/user"));
-                parent = authorized(workspaceId, URI.create(GitLabDiffVersionReader.mergeRequestApi(server, mr)));
+                user = http.authorized(workspaceId, URI.create(server.replaceAll("/+$", "") + "/api/v4/user"));
+                parent = http.authorized(workspaceId, URI.create(GitLabDiffVersionReader.mergeRequestApi(server, mr)));
             } catch (RuntimeException unavailable) {
                 outcomes.add(CopyUpdateReceipt.transientFailure(
                         copy.copyId(), "The correction request could not be prepared"));
                 continue;
             }
             try {
-                if (author == null) author = currentUser(workspaceId, user);
-                Answer read = exchange(workspaceId, HttpMethod.GET, note, null);
-                if (read.status() == 404 && NOTE_ABSENT.matcher(read.text()).matches()) {
-                    Answer mergeRequest = exchange(workspaceId, HttpMethod.GET, parent, null);
+                if (author == null) author = http.currentUser(workspaceId, user);
+                GitLabNotesApi.Answer read = http.exchange(workspaceId, HttpMethod.GET, note, null);
+                if (read.status() == 404
+                        && GitLabDiscussionNotes.NOTE_ABSENT
+                                .matcher(read.text())
+                                .matches()) {
+                    GitLabNotesApi.Answer mergeRequest = http.exchange(workspaceId, HttpMethod.GET, parent, null);
                     JsonNode readable = mergeRequest.status() == 200 ? mergeRequest.json() : null;
                     var mr = GitLabMrResolver.parseSubjectExternalId(subject);
                     boolean confirmed = readable != null
@@ -663,9 +603,11 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
                     continue;
                 }
                 egressGuard.requireDeliveryAllowed("gitlab.correct-feedback-copy");
-                Answer written;
+                GitLabNotesApi.Answer written;
                 try {
-                    written = exchange(workspaceId, HttpMethod.PUT, note, Map.of("body", rewritten));
+                    written = http.exchange(workspaceId, HttpMethod.PUT, note, Map.of("body", rewritten));
+                } catch (OutboundEgressSuppressedException silenced) {
+                    throw silenced;
                 } catch (RuntimeException unknown) {
                     log.warn(
                             "GitLab copy correction outcome unknown: workspaceId={}, note={}",
@@ -692,159 +634,5 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
             }
         }
         return List.copyOf(outcomes);
-    }
-
-    @Override
-    public @Nullable String actor(FeedbackTarget target) {
-        long workspaceId = target.item().workspaceId();
-        try {
-            String server = tokenService.resolveServerUrl(workspaceId);
-            return Long.toString(currentUser(
-                    workspaceId, authorized(workspaceId, URI.create(server.replaceAll("/+$", "") + "/api/v4/user"))));
-        } catch (RuntimeException unavailable) {
-            return null;
-        }
-    }
-
-    // GitLab reports a reopened discussion without the account that reopened it, so Hephaestus's own reopen would
-    // read as a person's. A problem that comes back reaches the developer through a new note instead.
-    @Override
-    public boolean reopensThreads() {
-        return false;
-    }
-
-    // A discussion is resolved when its resolvable notes are; the owned note starts it, so its flag is the thread's.
-    @Override
-    public ThreadChange resolveThread(FeedbackTarget target, CopyReceipt copy, boolean resolved, String actor) {
-        String subject = targets.subject(target, kind());
-        long workspaceId = target.item().workspaceId();
-        String externalRef = copy.externalRef();
-        String thread = copy.threadRef();
-        var ref = externalRef == null ? null : NOTE_REF.matcher(externalRef);
-        String segment =
-                thread != null && thread.startsWith(DISCUSSION_GID) ? thread.substring(DISCUSSION_GID.length()) : "";
-        if (ref == null || !ref.matches() || !SEGMENT.matcher(segment).matches())
-            return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.NOT_OWNED, "Copy has no GitLab thread identity");
-        if (gitLabProvider.isRateLimitCritical(workspaceId))
-            return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.DEFERRED, "The GitLab rate limit is critical");
-        String type = ref.group(1);
-        long noteId = Long.parseLong(ref.group(2));
-        try {
-            MrCoordinates mr = GitLabMrResolver.parseSubjectExternalId(subject);
-            String server = tokenService.resolveServerUrl(workspaceId);
-            // The account that wrote the note is the account that resolves it: the actor recorded before this write.
-            long author = Long.parseLong(actor);
-            Answer read = exchange(workspaceId, HttpMethod.GET, request(workspaceId, mr, segment), null);
-            if (read.status() == 404 && NOTE_ABSENT.matcher(read.text()).matches()) {
-                Answer parent = exchange(
-                        workspaceId,
-                        HttpMethod.GET,
-                        authorized(workspaceId, URI.create(GitLabDiffVersionReader.mergeRequestApi(server, mr))),
-                        null);
-                JsonNode readable = parent.status() == 200 ? parent.json() : null;
-                return readable != null
-                                && readable.path("iid").isIntegralNumber()
-                                && readable.path("iid").longValue() == mr.iid()
-                        ? ThreadChange.of(
-                                copy.copyId(), ThreadChange.Outcome.GONE, "The provider thread no longer exists")
-                        : ThreadChange.of(
-                                copy.copyId(), ThreadChange.Outcome.TRANSIENT, "The merge request could not be read");
-            }
-            // A failed read says nothing about the thread: it is read again, never taken for a thread that is not ours.
-            JsonNode found = read.status() == 200 ? read.json() : null;
-            if (found == null)
-                return ThreadChange.of(
-                        copy.copyId(), ThreadChange.Outcome.TRANSIENT, "The discussion could not be read");
-            Boolean current = threadState(found, noteId, type, author);
-            if (current == null)
-                return ThreadChange.of(
-                        copy.copyId(),
-                        ThreadChange.Outcome.NOT_OWNED,
-                        "The thread no longer starts with the owned note");
-            if (resolvedByOther(found, author))
-                return ThreadChange.of(
-                        copy.copyId(), ThreadChange.Outcome.TAKEN, "Another account resolved the thread");
-            if (current == resolved) return ThreadChange.done(copy.copyId());
-            if (resolved && repliedByOther(found, author))
-                return ThreadChange.of(
-                        copy.copyId(), ThreadChange.Outcome.REPLIED, "A person replied after the owned note");
-            if (!egressGuard.deliveryAllowed(
-                    resolved ? "gitlab.resolve-feedback-thread" : "gitlab.reopen-feedback-thread"))
-                return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.DEFERRED, "Silent Mode holds the change");
-            Answer written;
-            try {
-                written = exchange(
-                        workspaceId, HttpMethod.PUT, request(workspaceId, mr, segment), Map.of("resolved", resolved));
-            } catch (RuntimeException unknown) {
-                return ThreadChange.of(
-                        copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider thread change outcome is unknown");
-            }
-            JsonNode answer = written.status() == 200 ? written.json() : null;
-            Boolean stored = answer == null ? null : threadState(answer, noteId, type, author);
-            return Objects.equals(stored, resolved)
-                    ? ThreadChange.done(copy.copyId())
-                    : ThreadChange.of(
-                            copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider did not confirm the thread state");
-        } catch (OutboundEgressSuppressedException silenced) {
-            // Silent Mode engaged between the check and the write: nothing was written.
-            return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.DEFERRED, "Silent Mode holds the change");
-        } catch (RuntimeException e) {
-            return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider thread change failed");
-        }
-    }
-
-    /**
-     * Whether the discussion that starts with the owned note is resolved: every resolvable note is. GitLab resolves
-     * notes one by one, so a resolved first note does not resolve the discussion. Null when the discussion does not
-     * start with the owned note.
-     */
-    private static @Nullable Boolean threadState(JsonNode discussion, long noteId, String type, long author) {
-        if (!discussion.path("notes").isArray() || discussion.path("notes").isEmpty()) return null;
-        JsonNode first = discussion.path("notes").get(0);
-        if (!GitLabDiscussionNotes.ownNote(first, noteId, type, author)
-                || !first.path("resolvable").booleanValue()) return null;
-        boolean resolved = true;
-        for (JsonNode note : discussion.path("notes")) {
-            if (!note.path("resolvable").booleanValue()) continue;
-            if (!note.path("resolved").isBoolean()) return null;
-            resolved &= note.path("resolved").booleanValue();
-        }
-        return resolved;
-    }
-
-    /** Whether another account resolved any note of the discussion: a person's state, which Hephaestus keeps. */
-    private static boolean resolvedByOther(JsonNode discussion, long author) {
-        for (JsonNode note : discussion.path("notes")) {
-            if (!note.path("resolvable").booleanValue()
-                    || !note.path("resolved").booleanValue()) continue;
-            JsonNode resolver = note.path("resolved_by");
-            if (!resolver.path("id").isIntegralNumber() || resolver.path("id").longValue() != author) return true;
-        }
-        return false;
-    }
-
-    // A person's reply anywhere after the owned note keeps the discussion open, also when a later note is the
-    // account's own. A system note, such as "resolved all threads", is no reply.
-    private static boolean repliedByOther(JsonNode discussion, long author) {
-        var notes = discussion.path("notes");
-        for (int index = 1; index < notes.size(); index++) {
-            JsonNode note = notes.get(index);
-            if (note.path("system").booleanValue()) continue;
-            if (!note.path("author").path("id").isIntegralNumber()
-                    || note.path("author").path("id").longValue() != author) return true;
-        }
-        return false;
-    }
-
-    // The token's own account is the only author whose copy a correction may edit.
-    private long currentUser(long scopeId, Request user) {
-        Answer answer = exchange(scopeId, HttpMethod.GET, user, null);
-        JsonNode json = answer.json();
-        if (answer.status() != 200
-                || json == null
-                || !json.path("id").isIntegralNumber()
-                || json.path("id").longValue() <= 0)
-            throw new FeedbackDeliveryException("The GitLab account could not be read");
-        return json.path("id").longValue();
     }
 }

@@ -107,18 +107,20 @@ public final class HephaestusConditions {
     }
 
     /**
-     * Condition that checks if a class has at most the specified number of
-     * declared business methods (excluding getters/setters/equals/hashCode/toString).
-     *
-     * <p>Classes with many methods often have multiple responsibilities.
+     * Condition that checks if a class has at most the specified number of declared business methods, except for the
+     * named classes, each of which must carry its own justification at the call site.
      *
      * @param maxMethods maximum allowed business methods
+     * @param exceptions simple class names that are exempt
      * @return condition that validates method count
      */
-    public static ArchCondition<JavaClass> haveAtMostBusinessMethods(int maxMethods) {
+    public static ArchCondition<JavaClass> haveAtMostBusinessMethods(int maxMethods, Set<String> exceptions) {
         return new ArchCondition<>("have at most " + maxMethods + " business methods") {
             @Override
             public void check(JavaClass javaClass, ConditionEvents events) {
+                if (exceptions.contains(javaClass.getSimpleName())) {
+                    return;
+                }
                 long methodCount = javaClass.getMethods().stream()
                         .filter(m -> m.getOwner().equals(javaClass))
                         .filter(m -> !m.getName().startsWith("$"))

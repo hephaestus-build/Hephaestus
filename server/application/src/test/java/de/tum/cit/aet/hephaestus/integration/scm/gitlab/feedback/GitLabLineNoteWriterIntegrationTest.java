@@ -79,7 +79,7 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
                 }));
         var writer = new GitLabLineNoteWriter(
                 gitlab.provider(),
-                () -> gitlab.rest(),
+                new GitLabNotesApi(gitlab.provider(), () -> gitlab.rest(), tokens, guard),
                 tokens,
                 guard,
                 targets,
