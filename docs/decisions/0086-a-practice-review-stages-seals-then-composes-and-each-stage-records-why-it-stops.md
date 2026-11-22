@@ -382,6 +382,9 @@ Repeats by identity and the composer's view of lineage stay decided, not shipped
   It names the practices whose every note in the piece is closed.
   The summary does not keep such a practice standing, because it rests on the same results as the notes.
   A practice that only the summary carries stays standing.
+  A result can name a second problem that only the summary mentions.
+  When the practice closes, that problem can be raised again.
+  This repeats feedback rather than hiding it.
   The piece is then no witness for `ALREADY_SAID` or `NO_MATERIAL_CHANGE` on those practices, and its other notes still stand.
   So a problem that came back is raised again in a new note.
   The closed note does not hold it back.

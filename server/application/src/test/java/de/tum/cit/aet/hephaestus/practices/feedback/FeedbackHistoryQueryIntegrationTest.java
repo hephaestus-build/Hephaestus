@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
@@ -27,6 +28,7 @@ import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
@@ -57,6 +59,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTest {
@@ -611,6 +614,95 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
         assertThat(publicHistory.path("copies").size()).isEqualTo(1);
         assertThat(publicHistory.path("copies").get(0).path("externalRef").asString())
                 .isEqualTo("confirmed-note");
+    }
+
+    @Test
+    void shouldCloseAPracticeInThePublicHistoryOnlyWhenEveryNoteOnItIsClosedAsFixed() {
+        var row = piece(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, AT);
+        var closed = result();
+        var summarized = result();
+        var mixed = result();
+        var proofs = List.of(closed, summarized, mixed);
+        for (int ordinal = 0; ordinal < proofs.size(); ordinal++) {
+            var proof = proofs.get(ordinal);
+            basis.saveAndFlush(FeedbackBasis.builder()
+                    .id(FeedbackIds.basis(row.getId(), proof.getId(), null))
+                    .workspaceId(workspace.getId())
+                    .feedbackId(row.getId())
+                    .resultId(proof.getId())
+                    .developerId(developerId)
+                    .ordinal(ordinal)
+                    .build());
+            authorize(proof);
+        }
+        summary(row, FeedbackCopyState.POSTED);
+        // The summary rests on all three practices; the notes on one each, and the mixed practice has two notes.
+        var support = new ArrayList<FeedbackCompositionTrace.CopySupport>();
+        support.add(new FeedbackCompositionTrace.CopySupport(
+                FeedbackCopyKind.SUMMARY,
+                0,
+                proofs.stream()
+                        .map(proof -> new FeedbackCompositionTrace.Support(proof.getId(), null))
+                        .toList()));
+        var notes = List.of(closed, mixed, mixed);
+        for (int index = 0; index < notes.size(); index++) {
+            int position = index + 1;
+            var copyId = FeedbackIds.copy(row.getId(), FeedbackCopyKind.LINE_NOTE, position);
+            String thread = "gid://gitlab/Discussion/" + copyId;
+            copies.saveAndFlush(FeedbackCopy.builder()
+                    .id(copyId)
+                    .workspaceId(workspace.getId())
+                    .feedbackId(row.getId())
+                    .kind(FeedbackCopyKind.LINE_NOTE)
+                    .position(position)
+                    .state(FeedbackCopyState.POSTED)
+                    .body("Cover the failure case here.")
+                    .path("src/A.java")
+                    .startLine(position)
+                    .endLine(position)
+                    .side(CitationSide.NEW)
+                    .writeKey(copyId.toString())
+                    .writeMarker(FeedbackIds.writeMarker(copyId))
+                    .writeStartedAt(AT)
+                    .postedAt(AT)
+                    .externalRef("note-" + position)
+                    .threadRef(thread)
+                    .createdAt(AT)
+                    .build());
+            support.add(new FeedbackCompositionTrace.CopySupport(
+                    FeedbackCopyKind.LINE_NOTE,
+                    position,
+                    List.of(new FeedbackCompositionTrace.Support(
+                            notes.get(index).getId(), null))));
+            // Hephaestus resolved the first two notes' threads on GitLab, where it never reopens one.
+            if (position < 3) jdbc.update("""
+                        INSERT INTO feedback_thread_resolution (id, workspace_id, item_id, thread_ref, copy_id,
+                          generation, resolved, resolve_written, reopens, provider, state, changed_at)
+                        VALUES (?, ?, ?, ?, ?, 1, true, true, false, 'GITLAB', 'DONE', now())
+                        """, UUID.randomUUID(), workspace.getId(), itemId, thread, copyId);
+        }
+        jdbc.update(
+                """
+                UPDATE review SET checks = jsonb_set(COALESCE(checks, '{}'::jsonb), '{feedbackComposition}',
+                  COALESCE(checks->'feedbackComposition', '{}'::jsonb) || jsonb_build_object(?::text, ?::jsonb))
+                WHERE id = ?
+                """,
+                row.getId().toString(),
+                mapper.writeValueAsString(new FeedbackCompositionTrace(support, List.of(), null, null)),
+                reviewId);
+
+        var publicHistory = Objects.requireNonNull(history.forItem(workspace.getId(), itemId, developerId, 1)
+                .getFirst()
+                .publicHistory());
+
+        // Only the practice whose every note is closed: not the one that only the summary carries, nor the mixed one.
+        assertThat(publicHistory.path("closedPractices").valueStream().map(JsonNode::asString))
+                .containsExactly(slug(closed));
+    }
+
+    private String slug(Result proof) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT slug FROM practice WHERE id = ?", String.class, proof.getPracticeId()));
     }
 
     @Test
