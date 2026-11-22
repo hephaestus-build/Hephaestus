@@ -28,13 +28,13 @@ The HTTP surface that an admin uses today, all of it on `@WorkspaceScopedControl
 
 | Area | Controller | Operations | Role | Audit |
 |---|---|---|---|---|
-| Workspace practices | `PracticeCatalogController` (`/practices`) | list, get, create, update (`expectedVersionId`), delete (409 with review history), versions, feedback mode, group, reset (`catalog-customization`), script needs | admin | `CONFIG_AUDIT` `PRACTICE_DEFINITION`, `PRACTICE_USAGE` |
+| Workspace practices | `PracticeCatalogController`, `PracticeFeedbackModeController`, `PracticeGroupPlacementController` (`/practices`) | list, get, create, update (`expectedVersionId`), delete (409 with review history), versions, feedback mode, group, reset (`catalog-customization`), script needs | admin | `CONFIG_AUDIT` `PRACTICE_DEFINITION`, `PRACTICE_USAGE` |
 | Practice groups | `PracticeGroupController` (`/practice-groups`) | CRUD, feedback mode, reorder, reset | admin | `PRACTICE_GROUP` |
 | Catalog adoption | `CatalogAdoptionController` (`/practice-catalog/adoption`) | list, preview, adopt practice, adopt group | admin | `PRACTICE_DEFINITION` |
 | Catalog updates | `PracticeReleaseController` (`/practices/releases`) | list, get, accept, decline | admin | `PRACTICE_DEFINITION` |
 | Review settings | `PracticeReviewSettingsController` (`/practices/review-settings`) | get, scope preview, update (`If-Match`): review scope, delivery `ACTIVE`/`PAUSED`, default feedback mode, cooldown, deliver to merged | admin | `PRACTICE_REVIEW_SETTINGS` |
 | Items | `ItemController` (`/practices/items`) | list (the review scope editor reads repositories here) | admin | none |
-| Reviews | `ReviewRequestController`, `ReviewSummaryController` | request (member), list, get, queue, cancel | admin, request: member | request and cancel: `@AuditExempt`, the review row records the requester |
+| Reviews | `ReviewRequestController`, `ReviewSummaryController`, `ReviewOverviewController` | request (member), list, get, queue, cancel | admin, request: member | request and cancel: `@AuditExempt`, the review row records the requester |
 | Members | `MembershipController` (`/members`) | list, assign role, hide, remove | admin for writes | `WORKSPACE_ROLE` |
 | Catalog include/exclude | `CatalogAdminController` (`/admin/practice-catalog`) | status, override, reset | instance admin | `CATALOG_PRACTICE` |
 
@@ -160,8 +160,8 @@ Every tool runs under the workspace of its endpoint and maps to one existing ser
 | `update_practice` | `PracticeCatalogController.update` | admin | `update_practice` with the earlier definition, or `reset_practice` |
 | `reset_practice` | `PracticeCatalogController.reset` | admin | `update_practice` with the local definition, and `move_practice_to_group` with the group, which `get_practice` returned before |
 | `remove_practice` | `PracticeCatalogController.delete` | admin | `adopt_catalog_practice` or `create_practice` |
-| `set_practice_feedback_mode` | `PracticeCatalogController.mode` | admin | the same tool with the earlier value; `null` inherits |
-| `move_practice_to_group` | `PracticeCatalogController.bind` | admin | the same tool with the earlier group |
+| `set_practice_feedback_mode` | `PracticeFeedbackModeController.mode` | admin | the same tool with the earlier value; `null` inherits |
+| `move_practice_to_group` | `PracticeGroupPlacementController.bind` | admin | the same tool with the earlier group |
 | `set_review_scope` | `PracticeReviewSettingsController.update` | admin | the same tool with the scope that `get_review_settings` returned |
 | `set_default_feedback_mode` | the same | admin | the same tool with the earlier `defaultFeedbackModeOverride`, which is null when the workspace inherits |
 | `set_feedback_delivery` | the same, `deliveryStatus` | admin | `PAUSED` and `ACTIVE` reverse each other |
@@ -354,3 +354,11 @@ Thus, the proof moves there.
 - an account in passkey recovery can approve.
 
 `PasskeyAssurancePolicyTest` fails when a grant's proof satisfies the instance-admin requirement, a pending recovery, or a token without a session. `PasskeyLifecycleIntegrationTest` fails when a passkey verification does not name its credential in the session, when a refresh drops it, when a passkey removal keeps it, or when a change to the account's passkey setup leaves a passkey-backed MCP grant working.
+
+## Update — 2026-11-22: practice and review handlers in more controllers
+
+Some workspace practice and review handlers moved into controllers of their own, so that each controller has one job and at most five dependencies (`CodeQualityTest.controllersAreThin`).
+`PracticeFeedbackModeController` holds the feedback mode, and `PracticeGroupPlacementController` holds the group.
+`ReviewOverviewController` holds the review queue.
+The paths, operations, roles and audits do not change, and neither does any tool.
+The tables above name the new controllers.
