@@ -452,7 +452,7 @@ final class ReviewOnWork {
                     + "Use summary:null when it adds nothing; without useful line notes, put the complete guidance in the summary. "
                     + "Together the texts speak about every raised result, itself or through "
                     + "its problems, and no withheld one. Each body is published whole as written, with provider safety formatting and a fixed disclosure; nothing is "
-                    + "assembled from fragments. An accepted call is final and ends the composition. A missing or contradicted decision, "
+                    + "assembled from fragments. A missing or contradicted decision, "
                     + "invalid support, eligibility or location, or a witness that cannot stand as the advice refuses the whole "
                     + "review, with every reason, so it can be corrected and sent again. "
                     + "Aim for at most " + SUMMARY_TARGET + " characters and " + SUMMARY_POINTS
