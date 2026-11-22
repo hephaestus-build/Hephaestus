@@ -39,7 +39,7 @@ import org.jspecify.annotations.Nullable;
 @Getter
 @Builder
 @NoArgsConstructor
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class FeedbackCopy {
 
     @Id
@@ -64,7 +64,8 @@ public class FeedbackCopy {
 
     /**
      * The signed provenance record of a note's own {@link #body}, made when the feedback was prepared. A summary posts
-     * its feedback's body, so it carries {@link Feedback#getProvenance()} instead.
+     * its feedback's body, so it carries {@link Feedback#getProvenance()} instead. Only {@link FeedbackLedgerRecorder}
+     * sets it, as for {@link Feedback#getProvenance()}.
      */
     @Column(name = "provenance", nullable = true, columnDefinition = "TEXT")
     @Setter(AccessLevel.PACKAGE)

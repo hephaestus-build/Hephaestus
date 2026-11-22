@@ -50,7 +50,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 @Getter
 @Builder
 @NoArgsConstructor
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class Feedback {
 
     @Id
@@ -84,7 +84,11 @@ public class Feedback {
     @Column(name = "body", nullable = true, columnDefinition = "TEXT")
     private @Nullable String body;
 
-    /** The signed provenance record of {@link #body}, a compact JWS made when the feedback was prepared. */
+    /**
+     * The signed provenance record of {@link #body}, a compact JWS made when the feedback was prepared. Only
+     * {@link FeedbackLedgerRecorder} sets it. {@code FeedbackLedgerOwnershipTest} refuses a call to the setter or to the
+     * builder's {@code provenance} method from any other class.
+     */
     @Column(name = "provenance", nullable = true, columnDefinition = "TEXT")
     @Setter(AccessLevel.PACKAGE)
     private @Nullable String provenance;
