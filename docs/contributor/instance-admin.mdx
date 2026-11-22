@@ -77,6 +77,7 @@ It also applies to every change of where a workspace's practices are edited.
 Such a change sets or unsets the practice repository, or moves a practice to it or back.
 Otherwise a stale session could point the workspace at a repository that its holder can merge into.
 The criteria and scripts of reviews would then come from that repository.
+Sync now asks for no recent sign-in. It applies only the default branch of the repository that such a change chose.
 
 The completed OAuth login stamps the standard `auth_time` claim once.
 Every rotation copies it unchanged.

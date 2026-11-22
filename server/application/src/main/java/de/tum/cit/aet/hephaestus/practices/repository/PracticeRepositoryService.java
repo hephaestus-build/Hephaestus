@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeFiles;
 import de.tum.cit.aet.hephaestus.practices.PracticeFolderInvalidException;
 import de.tum.cit.aet.hephaestus.practices.PracticeService;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeRepositoryDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeRepositorySyncDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.SetPracticeRepositoryRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -19,6 +20,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -40,6 +42,7 @@ public class PracticeRepositoryService {
     private final PracticeFiles files;
     private final PracticeService practices;
     private final PracticeRepositoryMove move;
+    private final PracticeRepositorySync sync;
     private final WorkspaceQueries workspaces;
     private final ConfigAuditPort audit;
 
@@ -53,7 +56,7 @@ public class PracticeRepositoryService {
 
     /**
      * Sets the practice repository. Choosing another repository or directory moves every practice edited in the old one
-     * back to Hephaestus first, since the new one may not hold their folders.
+     * back to Hephaestus first, since the new one may not hold their folders, and forgets the report of the last sync.
      */
     @Transactional
     public PracticeRepositoryDTO set(WorkspaceContext ctx, SetPracticeRepositoryRequestDTO request) {
@@ -67,7 +70,10 @@ public class PracticeRepositoryService {
         if (existing != null) {
             var before = PracticeRepositorySnapshot.of(existing);
             if (existing.getRepositoryItemId() != repositoryItemId
-                    || !existing.getDirectory().equals(directory)) practices.moveAllToHephaestus(ctx);
+                    || !existing.getDirectory().equals(directory)) {
+                practices.moveAllToHephaestus(ctx);
+                existing.forgetSync();
+            }
             existing.setRepositoryItemId(repositoryItemId);
             existing.setDirectory(directory);
             settings.save(existing);
@@ -121,6 +127,21 @@ public class PracticeRepositoryService {
         move.apply(ctx, slug, document, folder);
     }
 
+    /**
+     * Sync now: reads every practice folder at the head of the default branch, checks each one, and applies them as
+     * {@link PracticeRepositorySync} describes. Like a move, it reads with no transaction, because the checkout fetches
+     * from the provider.
+     *
+     * @throws ResponseStatusException 409 when the workspace has no practice repository, it cannot be read now, or the
+     *     setting changed while the folders were read
+     */
+    public PracticeRepositorySyncDTO sync(WorkspaceContext ctx) {
+        var tree = folders.readAll(ctx.id());
+        var reads = new TreeMap<String, PracticeFiles.Read>();
+        tree.folders().forEach((slug, folder) -> reads.put(slug, files.read(slug, folder)));
+        return sync.apply(ctx, tree, reads);
+    }
+
     /** Edit in Hephaestus: reverses {@link #moveToRepository}. The practice keeps its current version. */
     public void moveToHephaestus(WorkspaceContext ctx, String slug) {
         practices.moveToHephaestus(ctx, slug);
@@ -134,10 +155,16 @@ public class PracticeRepositoryService {
 
     private PracticeRepositoryDTO view(long workspaceId, PracticeRepositorySetting setting) {
         var repository = monitored.repositories(workspaceId).get(setting.getRepositoryItemId());
+        var commit = setting.getSyncCommit();
+        var syncedAt = setting.getSyncedAt();
+        var report = setting.getSyncReport();
         return new PracticeRepositoryDTO(
                 String.valueOf(setting.getRepositoryItemId()),
                 repository == null ? null : repository.nameWithOwner(),
                 repository == null ? null : repository.defaultBranch(),
-                setting.getDirectory());
+                setting.getDirectory(),
+                commit == null || syncedAt == null || report == null
+                        ? null
+                        : new PracticeRepositorySyncDTO(commit, syncedAt, report.practices(), report.problems()));
     }
 }

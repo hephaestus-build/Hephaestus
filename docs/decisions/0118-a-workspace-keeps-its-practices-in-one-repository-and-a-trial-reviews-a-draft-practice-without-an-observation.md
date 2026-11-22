@@ -179,9 +179,13 @@ However, standing still counts observations of practices in feedback mode Off.
 Not enforced. Each other rule gets its check in the pull request that ships it, and this section then names the test:
 
 - decision 1: the round trip over the bundled catalog;
-- decisions 2–5: a sync test that keeps the version on an invalid folder and adds Reviewed by Nobody on a removed one;
 - decision 6: a standing test that skips an observation sealed in Off;
 - decision 7: `DraftPracticeFilterArchTest` fails on a native read of practices that names no state, and `PracticeDraftControllerIntegrationTest` fails when selection or the practice catalog sees a draft, or when a tried version becomes current or enters the history.
+
+Decisions 2–5 are enforced for Sync now:
+
+- `PracticeRepositorySyncTest` fails when an invalid or unreadable folder changes a practice, when a removed folder does not add Reviewed by Nobody, when a folder changes a practice edited in Hephaestus, when a second sync of the same commit writes, when a version that cannot be retired stops the other folders, or when a sync applies under a setting that changed or after another sync that finished while it read.
+- `PracticeRepositorySyncIntegrationTest` fails when a new or taken-over practice is not edited in the repository with feedback mode Off and the commit on its version, when a restored folder does not add a version, when a tried review digest is reported as untried, when a version on an older source contract stops the sync, or when a practice moved to the repository while the folders were read is retired.
 
 Decisions 8 and 9 are enforced:
 
@@ -202,6 +206,30 @@ The pull request that ships trials changes two bullets.
   The report is what cites someone's work.
   The trial's row stays, as every review's row does, and job retention removes its jobs and runs.
 - A practice script sees a trial as origin `REQUEST`, so a script never behaves differently on trial.
+
+## Update — 2026-11-22: Sync now, its report and its tools
+
+The pull request that ships Sync now settles these points of decisions 2–5.
+
+- **Sync now needs no recent sign-in.** It applies only the default branch of the repository that an admin set with a recent sign-in. A later change adds a sync on push, which runs without anyone.
+- **The sync report is stored with the practice repository.** It holds the commit, the time and a status for each folder: created, updated, unchanged, taken over, edited in Hephaestus, invalid (with each problem), retired, or retire refused. A change of the repository or the directory clears it.
+- **A practice that changed while the folders were read is left alone.** The read records when it began. A practice created, moved to the repository or given a version after that time is reported as `CHANGED_DURING_SYNC`, and the sync neither changes nor retires it, so an older read never stops reviewing a practice that an admin just moved. The next sync decides from a fresh read.
+- **Decision 5's flag is `untried` on each created, taken-over or updated entry.** It is true when the sync made a new current version and no trial of the practice ran its review digest to the end. A trial that is still running, failed or was withheld does not count.
+- **A practice whose current version fails the checks of a save is not retired.** An example is a version on an older source contract. Its Nobody version would fail the same checks, and the failed write would stop every later sync. The report says retire refused, and the other folders apply.
+- **A sync applies only if no other sync finished while it read.** An older read could otherwise undo the changes of a newer commit. It answers 409, and the admin syncs again.
+- **A missing directory changes nothing.** The report says that the default branch has no such directory. Only a folder that is gone from a directory that exists retires its practice. A wrong directory is more probable than the removal of every practice. Git keeps no empty directory, so a repository keeps another file there to retire its last practice.
+- **A folder with a group that the workspace does not have is invalid.** It changes nothing, as Move to repository refuses it. A warning would let the repository and the workspace disagree about the group.
+- **A taken-over draft practice gets a new version with the commit,** also when the definition is equal. The review digest stays the same, so its trials still match.
+
+The tools follow [ADR 0110](0110-a-workspace-admins-mcp-client-configures-practices-through-the-workspace-mcp-endpoint.md) decision 15:
+
+| Tool | Maps to | Role | Reverse |
+|---|---|---|---|
+| `get_practice_repository` | `PracticeRepositoryController.get` | admin, `practices:read` | read |
+| `sync_practice_repository` | `PracticeRepositoryController.sync` | admin, `practices:write` | revert the change on the default branch, and sync again. A removed folder retires its practice |
+
+The report holds workspace configuration and operational facts only: slugs, file names, problem codes and messages, and the commit id.
+Anyone who can merge into the default branch wrote the folder names, so the tool descriptions mark them as configuration text to treat as data.
 
 ## Revisit trigger
 

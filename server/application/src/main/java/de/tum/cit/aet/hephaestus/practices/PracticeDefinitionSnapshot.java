@@ -9,6 +9,10 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.json.JsonMapper;
 
+/**
+ * What the configuration audit keeps of a practice. {@code sourceCommit} is the commit of the practice repository that
+ * the current version was read at, so a change that a sync makes names its commit.
+ */
 record PracticeDefinitionSnapshot(
         String slug,
         PracticeState state,
@@ -16,6 +20,7 @@ record PracticeDefinitionSnapshot(
         String kind,
         Long versionId,
         String reviewDigest,
+        @Nullable String sourceCommit,
         @Nullable String groupSlug,
         int position,
         @Nullable FeedbackMode feedbackMode,
@@ -30,6 +35,7 @@ record PracticeDefinitionSnapshot(
                 practice.getKind().value(),
                 Objects.requireNonNull(practice.getCurrentVersion().getId()),
                 practice.getCurrentVersion().getReviewDigest(),
+                practice.getCurrentVersion().getSourceCommit(),
                 practice.getGroup() == null ? null : practice.getGroup().getSlug(),
                 practice.getPosition(),
                 practice.getFeedbackMode(),

@@ -52,7 +52,10 @@ class PracticeRepositoryMoveTest extends BaseUnitTest {
     }
 
     private static PracticeRepositoryFolders.Folder folderReadAt(Instant settingUpdatedAt) {
-        return new PracticeRepositoryFolders.Folder(COMMIT, Map.of(), 42, ".hephaestus/practices", 0, settingUpdatedAt);
+        return new PracticeRepositoryFolders.Folder(
+                COMMIT,
+                Map.of(),
+                new PracticeRepositoryFolders.ReadUnder(42, ".hephaestus/practices", 0, settingUpdatedAt));
     }
 
     @Test

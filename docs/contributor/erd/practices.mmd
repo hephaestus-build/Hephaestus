@@ -356,6 +356,9 @@ erDiagram
         BIGINT repository_item_id "NOT NULL"
         BIGINT revision "NOT NULL"
         TIMESTAMPTZ updated_at "NOT NULL"
+        VARCHAR(64) sync_commit
+        JSONB sync_report
+        TIMESTAMPTZ synced_at
     }
 
     Account["Account · Core"]

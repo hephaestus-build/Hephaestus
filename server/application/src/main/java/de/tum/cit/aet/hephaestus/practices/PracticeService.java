@@ -86,7 +86,8 @@ public class PracticeService {
                 null,
                 SecurityUtils.getCurrentAccountId().orElseThrow(),
                 null,
-                PracticeState.ACTIVE);
+                PracticeState.ACTIVE,
+                null);
     }
 
     @Transactional
@@ -112,7 +113,8 @@ public class PracticeService {
                 mode,
                 SecurityUtils.getCurrentAccountId().orElse(null),
                 document,
-                PracticeState.ACTIVE);
+                PracticeState.ACTIVE,
+                null);
         return created;
     }
 
@@ -126,7 +128,8 @@ public class PracticeService {
             @Nullable FeedbackMode mode,
             @Nullable Long creator,
             @Nullable CatalogPracticeDocument catalogDocument,
-            PracticeState state) {
+            PracticeState state,
+            @Nullable String sourceCommit) {
         lock(ctx);
         // A draft practice holds its slug too.
         if (drafts.withDrafts(() -> practices.existsByWorkspaceIdAndSlug(ctx.id(), slug)))
@@ -138,8 +141,10 @@ public class PracticeService {
         int order = position == null ? practices.findMaxPosition(ctx.id(), groupId) + 1 : position;
         if (order < 0) throw new InvalidInputException("Use a nonnegative position.");
         Practice practice = versions.create(new PracticeVersionService.NewPractice(
-                ctx.id(), slug, kind, definition, groupId, order, creator, state));
+                ctx.id(), slug, kind, definition, groupId, order, creator, state, sourceCommit));
         practice.setFeedbackMode(mode);
+        // A practice read from a commit of the practice repository is edited there.
+        if (sourceCommit != null) practice.setEditedIn(PracticeEditedIn.REPOSITORY);
         if (catalogDocument != null) {
             practice.setCatalogSlug(slug);
             practice.setCatalogBase(catalogDocument);
@@ -238,7 +243,8 @@ public class PracticeService {
                 null,
                 SecurityUtils.getCurrentAccountId().orElse(null),
                 null,
-                PracticeState.DRAFT);
+                PracticeState.DRAFT,
+                null);
     }
 
     /** A draft practice takes the folder as its next, current version. Call it in a session that sees drafts. */
@@ -297,7 +303,8 @@ public class PracticeService {
      * Moves a practice to the practice repository (ADR 0118): from now on its folder on the default branch is its
      * source. When the folder's definition differs from the current version, it becomes the next version, with the
      * commit it was read at. History, observations, the feedback mode and the position stay. The caller has read a
-     * valid folder, so the next sync of the repository finds the practice there.
+     * valid folder, so the next sync of the repository finds the practice there. A sync applies a later folder of a
+     * practice edited in the repository the same way.
      */
     @Transactional
     public Practice moveToRepository(
@@ -322,7 +329,7 @@ public class PracticeService {
                                 PracticeFiles.PRACTICE,
                                 null,
                                 null,
-                                "UNKNOWN_GROUP",
+                                PracticeFileProblemDTO.UNKNOWN_GROUP,
                                 "This workspace has no group " + groupSlug + ". Create it, or remove it from the"
                                         + " folder."))));
         if (!Objects.equals(
@@ -362,6 +369,57 @@ public class PracticeService {
             practices.save(practice);
             record(ctx, practice, before);
         }
+    }
+
+    /**
+     * Sync of the practice repository: a valid folder whose slug the workspace lacks becomes a practice edited there,
+     * with the folder as version 1. It starts in feedback mode Off, so nobody sees its observations until an admin
+     * chooses a mode (ADR 0118 decision 5). The caller has checked that the folder's group exists.
+     */
+    @Transactional
+    public Practice createFromRepository(
+            WorkspaceContext ctx, String slug, CatalogPracticeDocument document, String commit) {
+        return create(
+                ctx,
+                slug,
+                document.kind(),
+                document.definition(),
+                document.groupSlug(),
+                null,
+                FeedbackMode.OFF,
+                SecurityUtils.getCurrentAccountId().orElse(null),
+                null,
+                PracticeState.ACTIVE,
+                commit);
+    }
+
+    /**
+     * Sync of the practice repository: the folder of a draft practice reached the default branch, so the repository
+     * takes the draft over. The folder becomes the next version, with the commit, even when it equals the draft's
+     * current one: a tried version keeps its review digest, so its trials still match. The practice is put in use with
+     * feedback mode Off and is edited in the repository from now on. A draft has no observation, so nothing is lost.
+     */
+    @Transactional
+    public Practice takeOverDraft(
+            WorkspaceContext ctx, Practice draft, CatalogPracticeDocument document, String commit) {
+        lock(ctx);
+        return drafts.withDrafts(() -> {
+            var before = PracticeDefinitionSnapshot.of(draft, mapper);
+            versions.append(
+                    draft,
+                    document.definition(),
+                    SecurityUtils.getCurrentAccountId().orElse(null),
+                    commit);
+            var group = group(ctx, document.groupSlug());
+            draft.setGroup(group);
+            draft.activate();
+            draft.setFeedbackMode(FeedbackMode.OFF);
+            draft.setEditedIn(PracticeEditedIn.REPOSITORY);
+            draft.setPosition(practices.findMaxPosition(ctx.id(), group == null ? null : group.getId()) + 1);
+            practices.save(draft);
+            record(ctx, draft, before);
+            return draft;
+        });
     }
 
     private Practice draft(WorkspaceContext ctx, String slug) {

@@ -8526,6 +8526,10 @@ export const PracticeFileProblemSchema = {
 				"FILE_INVALID",
 				"FIGURE_UNUSED",
 				"DEFINITION_INVALID",
+				"UNKNOWN_GROUP",
+				"KIND_CHANGED",
+				"DIRECTORY_MISSING",
+				"TOO_MANY_FOLDERS",
 			],
 		},
 		column: {
@@ -9223,6 +9227,11 @@ export const PracticeRepositorySchema = {
 		directory: {
 			type: "string",
 		},
+		lastSync: {
+			$ref: "#/components/schemas/PracticeRepositorySync",
+			description:
+				"the report of the last sync; null until a sync of this repository and directory ran",
+		},
 		nameWithOwner: {
 			type: "string",
 			description: "the repository's provider path; null when it is no longer monitored",
@@ -9232,6 +9241,39 @@ export const PracticeRepositorySchema = {
 		},
 	},
 	required: ["directory", "repositoryItemId"],
+} as const;
+
+export const PracticeRepositorySyncSchema = {
+	type: "object",
+	description:
+		"The report of a sync of the practice repository from its default branch (ADR 0118).",
+	properties: {
+		commit: {
+			type: "string",
+			description: "the commit at the head of the default branch that the sync read",
+		},
+		practices: {
+			type: "array",
+			description:
+				"each folder, and each practice edited in the repository whose folder is gone, by slug",
+			items: {
+				$ref: "#/components/schemas/PracticeSyncResult",
+			},
+		},
+		problems: {
+			type: "array",
+			description:
+				"why the directory of the practice folders could not be read. The sync then changed nothing.",
+			items: {
+				$ref: "#/components/schemas/PracticeFileProblem",
+			},
+		},
+		syncedAt: {
+			type: "string",
+			format: "date-time",
+		},
+	},
+	required: ["commit", "practices", "problems", "syncedAt"],
 } as const;
 
 export const PracticeReviewFieldSchema = {
@@ -9601,6 +9643,51 @@ export const PracticeStandingResultSchema = {
 export const PracticeStateSchema = {
 	type: "string",
 	enum: ["ACTIVE", "DRAFT"],
+} as const;
+
+export const PracticeSyncResultSchema = {
+	type: "object",
+	description:
+		"What a sync of the practice repository did with one folder, or with a practice whose folder is gone.",
+	properties: {
+		problems: {
+			type: "array",
+			description:
+				"why the folder is not valid, or why its practice cannot be retired; empty for every other status",
+			items: {
+				$ref: "#/components/schemas/PracticeFileProblem",
+			},
+		},
+		slug: {
+			type: "string",
+			description: "the folder's name, which is the practice's slug",
+		},
+		status: {
+			$ref: "#/components/schemas/PracticeSyncStatus",
+		},
+		untried: {
+			type: "boolean",
+			description:
+				"whether the sync made a new current version whose review digest no trial of the practice ran to the\n     end. Only a created, taken-over or updated practice can be untried.",
+		},
+	},
+	required: ["problems", "slug", "status", "untried"],
+} as const;
+
+export const PracticeSyncStatusSchema = {
+	type: "string",
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: [
+		"CREATED",
+		"UPDATED",
+		"UNCHANGED",
+		"TAKEN_OVER",
+		"EDITED_IN_HEPHAESTUS",
+		"INVALID",
+		"RETIRED",
+		"RETIRE_REFUSED",
+		"CHANGED_DURING_SYNC",
+	],
 } as const;
 
 export const PracticeTraceEntrySchema = {

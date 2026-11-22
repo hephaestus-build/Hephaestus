@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795311280222-1" author="hephaestus">
+        <comment>The commit of the practice repository that the last sync read (ADR 0118).</comment>
+        <addColumn tableName="workspace_practice_repository">
+            <column name="sync_commit" type="VARCHAR(64)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795311280222-2" author="hephaestus">
+        <comment>The report of the last sync: the status of each practice folder, and the problems of the directory.</comment>
+        <addColumn tableName="workspace_practice_repository">
+            <column name="sync_report" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795311280222-3" author="hephaestus">
+        <comment>When the last sync ran.</comment>
+        <addColumn tableName="workspace_practice_repository">
+            <column name="synced_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795311280222-4" author="hephaestus">
+        <comment>The sync report is a JSON object, and a sync stores its commit, its time and its report together. The columns are new, so every row passes both checks.</comment>
+        <sql>ALTER TABLE workspace_practice_repository ADD CONSTRAINT ck_workspace_practice_repository_sync_report_shape CHECK (sync_report IS NULL OR jsonb_typeof(sync_report) = 'object'), ADD CONSTRAINT ck_workspace_practice_repository_sync CHECK ((sync_commit IS NULL) = (synced_at IS NULL) AND (synced_at IS NULL) = (sync_report IS NULL));</sql>
+        <rollback>
+            <sql>ALTER TABLE workspace_practice_repository DROP CONSTRAINT ck_workspace_practice_repository_sync_report_shape, DROP CONSTRAINT ck_workspace_practice_repository_sync;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

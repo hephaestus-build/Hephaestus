@@ -62,6 +62,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("core.auth.webauthn.TestInstanceAssuranceIntegrationTest", "test-instance-assurance"),
             assignment("integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest", "slack-signed"),
             assignment("integration.core.sync.api.SyncControllerIntegrationTest", "sync-controller-focused"),
+            assignment("practices.repository.PracticeRepositorySyncIntegrationTest", "practice-repository-checkout"),
             assignment("integration.outline.OutlineFrameworkRegistrationIntegrationTest", "outline-enabled"),
             assignment(
                     "integration.outline.collection.OutlineCollectionAdminControllerIntegrationTest",
@@ -287,7 +288,11 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry("slack-signed", "enabled signed Slack HTTP wiring"),
             Map.entry("startup", "production main-method startup instrumentation"),
             Map.entry("agent-off-e2e", "E2E profile precedence with agent jobs off and no Kubernetes Pod metadata"),
-            Map.entry("sync-controller-focused", "controlled sync provider and runner behavior"));
+            Map.entry("sync-controller-focused", "controlled sync provider and runner behavior"),
+            Map.entry(
+                    "practice-repository-checkout",
+                    "a fixture checkout and monitored repository, so Sync now reads a practice repository through the"
+                            + " controller"));
 
     private static final Set<String> SPRING_BOOT_TESTS = names(
             "StartupBudgetIntegrationTest",
@@ -384,6 +389,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             TestPropertySource.class);
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
+            "practices.repository.PracticeRepositorySyncIntegrationTest",
             "integration.scm.github.installation.adoption.GitHubInstallationAdoptionIntegrationTest",
             "observability.ScrapeContractIntegrationTest",
             "productfeedback.ProductFeedbackCleanupIntegrationTest",

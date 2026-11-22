@@ -2,10 +2,12 @@ package de.tum.cit.aet.hephaestus.practices.repository;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.dto.ChangePracticeEditedInRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeRepositoryDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeRepositorySyncDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.SetPracticeRepositoryRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
@@ -23,14 +25,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
  * The workspace's practice repository, and where each practice is edited: workspace admins only (ADR 0118). Each change
- * needs a recent sign-in. A stale session could otherwise point the workspace at a repository its holder can merge
- * into and move practices there, so that the criteria and scripts of reviews come from that repository.
+ * of the setting or of where a practice is edited needs a recent sign-in. A stale session could otherwise point the
+ * workspace at a repository its holder can merge into and move practices there, so that the criteria and scripts of
+ * reviews come from that repository.
  */
 @ConditionalOnServerRole
 @WorkspaceScopedController
@@ -91,6 +95,30 @@ public class PracticeRepositoryController {
     public ResponseEntity<Void> unset(WorkspaceContext ctx) {
         repositories.unset(ctx);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/sync")
+    @RecentSignInExempt(
+            reason = "applies only the default branch of the repository that an admin chose with a recent sign-in")
+    @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "PRACTICE_DEFINITION")
+    @ApiResponse(responseCode = "200", description = "The report of the sync")
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "No practice repository, it cannot be read now, or the setting changed while its folders were read",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @Operation(
+            operationId = "syncPracticeRepository",
+            summary = "Sync practices from the practice repository",
+            description = "Reads every practice folder at the head of the default branch and applies it. A new"
+                    + " practice starts with feedback mode Off. A practice edited in Hephaestus does not change. An"
+                    + " invalid folder changes nothing. A practice edited in the repository whose folder is gone is"
+                    + " reviewed by nobody. A second sync of the same commit changes nothing.")
+    public PracticeRepositorySyncDTO sync(WorkspaceContext ctx) {
+        return repositories.sync(ctx);
     }
 
     @PutMapping("/practices/{practiceSlug}/edited-in")

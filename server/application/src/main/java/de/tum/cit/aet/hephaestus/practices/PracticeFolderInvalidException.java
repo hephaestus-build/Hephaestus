@@ -10,13 +10,21 @@ import org.springframework.web.ErrorResponseException;
 public final class PracticeFolderInvalidException extends ErrorResponseException {
     private static final long serialVersionUID = 1L;
 
+    private final transient List<PracticeFileProblemDTO> problems;
+
     public PracticeFolderInvalidException(List<PracticeFileProblemDTO> problems) {
         super(HttpStatus.UNPROCESSABLE_CONTENT, problem(problems), null);
+        this.problems = List.copyOf(problems);
     }
 
     /** As {@link #PracticeFolderInvalidException(List)}, for a problem that a lower-level failure caused. */
     public PracticeFolderInvalidException(List<PracticeFileProblemDTO> problems, Throwable cause) {
         super(HttpStatus.UNPROCESSABLE_CONTENT, problem(problems), cause);
+        this.problems = List.copyOf(problems);
+    }
+
+    public List<PracticeFileProblemDTO> problems() {
+        return problems;
     }
 
     private static ProblemDetail problem(List<PracticeFileProblemDTO> problems) {

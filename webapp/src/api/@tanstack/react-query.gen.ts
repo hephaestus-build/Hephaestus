@@ -923,6 +923,7 @@ export { startScanMutation } from "./react-query/startScan.gen.js";
 export { submitConversationTurnMutation } from "./react-query/submitConversationTurn.gen.js";
 export { submitInstanceProductFeedbackMutation } from "./react-query/submitInstanceProductFeedback.gen.js";
 export { submitWorkspaceProductFeedbackMutation } from "./react-query/submitWorkspaceProductFeedback.gen.js";
+export { syncPracticeRepositoryMutation } from "./react-query/syncPracticeRepository.gen.js";
 export { triggerSyncJobMutation } from "./react-query/triggerSyncJob.gen.js";
 export { unlinkIdentityMutation } from "./react-query/unlinkIdentity.gen.js";
 export { unsetPracticeRepositoryMutation } from "./react-query/unsetPracticeRepository.gen.js";
