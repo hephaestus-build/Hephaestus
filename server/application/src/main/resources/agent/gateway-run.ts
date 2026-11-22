@@ -9,6 +9,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { FileEntry } from "@earendil-works/pi-coding-agent";
 
 import { present, recordProgramFailure } from "./gateway-capabilities.ts";
+import { redactCredentials } from "./pi-agent-sandbox.ts";
 import { parseProxyClaim } from "./pi-provider.ts";
 
 // The server follows SIGTERM with SIGKILL after its stop timeout; the child gets this much of it and
@@ -543,7 +544,10 @@ async function readBounded(file: string, limit: number): Promise<Buffer | "overs
 	}
 }
 
-/** Every literal occurrence of the attempt credential replaced, byte for byte elsewhere. */
+/**
+ * Every literal occurrence of the attempt credential replaced, byte for byte elsewhere, then every other
+ * credential-shaped string (`redactCredentials`).
+ */
 function redact(bytes: Buffer, secret: Buffer): { bytes: Buffer; redacted: boolean } {
 	const parts: Buffer[] = [];
 	let from = 0;
@@ -551,11 +555,32 @@ function redact(bytes: Buffer, secret: Buffer): { bytes: Buffer; redacted: boole
 		parts.push(bytes.subarray(from, at), REDACTED);
 		from = at + secret.length;
 	}
-	if (from === 0) {
-		return { bytes, redacted: false };
+	const literal = from === 0 ? bytes : Buffer.concat([...parts, bytes.subarray(from)]);
+	const text = literal.toString("utf8");
+	const guarded = redactCredentials(text);
+	if (guarded !== text) {
+		return { bytes: Buffer.from(guarded, "utf8"), redacted: true };
 	}
-	parts.push(bytes.subarray(from));
-	return { bytes: Buffer.concat(parts), redacted: true };
+	return { bytes: literal, redacted: from !== 0 };
+}
+
+/** Redacts the result's files, which the server stores, as `redact` redacts a session's. */
+export async function redactOutput(directory: string, secret: string): Promise<void> {
+	const secretBytes = Buffer.from(secret, "utf8");
+	for await (const entry of await opendir(directory, { recursive: true })) {
+		if (!entry.isFile()) {
+			continue;
+		}
+		const file = path.join(entry.parentPath, entry.name);
+		const read = await readBounded(file, RESULT_BYTES);
+		if (read === "oversize") {
+			continue;
+		}
+		const guarded = redact(read, secretBytes);
+		if (guarded.redacted) {
+			await writeFile(file, guarded.bytes);
+		}
+	}
 }
 
 /** A process stopped mid-write leaves a torn last line; only whole native entries are kept. */
@@ -697,6 +722,7 @@ async function main() {
 	const exitCode = await exited(child);
 	clearTimeout(deadlineTimer);
 	await collectTraces("/workspace/.sessions", "/workspace/out", token);
+	await redactOutput("/workspace/out", token);
 	const directory = await mkdtemp(path.join(tmpdir(), "gateway-output-"));
 	try {
 		const archive = path.join(directory, "result.tar");

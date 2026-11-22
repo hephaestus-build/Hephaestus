@@ -40,7 +40,9 @@ import {
 import { GatewayUnavailableError } from "./gateway-connection.ts";
 import {
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
+	redactCredentials,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
+	TOOL_SPAWN_HOOK,
 } from "./pi-agent-sandbox.ts";
 import { assessmentCacheExtension } from "./pi-assessment-cache.ts";
 import { CHANGE_ROOT, pinnedCheckout, readChange, safeRepositoryPath } from "./pi-change.ts";
@@ -938,7 +940,7 @@ async function runReview(): Promise<void> {
 							"content-type": "application/json",
 							...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
 						},
-						body,
+						body: redactCredentials(body),
 					}),
 				gatewayPatience(),
 			);
@@ -2712,7 +2714,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const registeredTools = new Set<string>();
 		const toolOf = (name: string) => (registeredTools.has(name) ? name : "other");
 		async function openSession(tools: string[], customTools: SessionOptions["customTools"]) {
-			const bash = createBashToolDefinition(CWD, { exposeSessionEnvironment: false });
+			const bash = createBashToolDefinition(CWD, {
+				exposeSessionEnvironment: false,
+				spawnHook: TOOL_SPAWN_HOOK,
+			});
 			// All tools run in this sandbox. Admission verifies the coverage against the server-held capture.
 			const evidenceTools = [
 				...(tools.includes("grep") ? [defineTool(createGrepToolDefinition(CWD))] : []),
@@ -3164,7 +3169,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						"content-type": "application/json",
 						...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
 					},
-					body,
+					body: redactCredentials(body),
 				}),
 			gatewayPatience(),
 		);

@@ -376,7 +376,12 @@ A run reconstructs its Pi session from the conversation ledger.
 The model loop and its tools run in the same container.
 The SandboxTemplate and its NetworkPolicy provide the isolation boundary.
 The server keeps provider credentials and resolves each model call through the gateway.
-A command in the sandbox can read the sandbox credential, so the server checks the subject, workspace, run and epoch on every proposal.
+A command that a tool starts gets only the tool environment: the shell's basics and the Git hardening (`toolEnvironment` in `pi-agent-sandbox.ts`).
+The file tools open only the workspace (`outsideWorkspace`).
+What leaves the sandbox to be stored carries no credential-shaped string (`redactCredentials`).
+
+Code in the sandbox can still read the sandbox credential ([the sandbox token](../admin/sandboxes#the-sandbox-token)).
+So the server checks the subject, workspace, run and epoch on every proposal.
 A sandbox cannot use another subject's run.
 
 ### Turn assignment

@@ -21,7 +21,6 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -37,11 +36,6 @@ class PracticeCriteriaCaseStagingIntegrationTest {
         var mapper = JsonMapper.builder().build();
         Path workspace = root.resolve(scenario.path("id").asString());
         Files.createDirectories(workspace);
-        for (String sidecar : List.of("pi-change.js", "pi-task-paths.js")) {
-            try (var input = new ClassPathResource("agent/" + sidecar).getInputStream()) {
-                Files.copy(input, workspace.resolve(sidecar));
-            }
-        }
         var definitions = PracticeCriteriaCaseFixtures.stage(workspace, scenario);
         LiveRunnerWorkspace.stageFixtureInputs(
                 workspace,
@@ -242,11 +236,6 @@ class PracticeCriteriaCaseStagingIntegrationTest {
         var mapper = JsonMapper.builder().build();
         Path workspace = root.resolve("non-exhaustive-source-policy");
         Files.createDirectories(workspace);
-        for (String sidecar : List.of("pi-change.js", "pi-task-paths.js")) {
-            try (var input = new ClassPathResource("agent/" + sidecar).getInputStream()) {
-                Files.copy(input, workspace.resolve(sidecar));
-            }
-        }
         var scenario = mapper.valueToTree(Map.of(
                 "id",
                 "non-exhaustive-source-policy",

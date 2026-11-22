@@ -10,7 +10,7 @@ import path from "node:path";
 import test, { type TestContext } from "node:test";
 // oxlint-disable-next-line no-restricted-imports -- mocks the module's setTimeout, so the test needs the module object
 import timers from "node:timers/promises";
-import { collectTraces, upload } from "../../../main/resources/agent/gateway-run.ts";
+import { collectTraces, redactOutput, upload } from "../../../main/resources/agent/gateway-run.ts";
 
 function traceManifest(text: string) {
 	const value: unknown = JSON.parse(text);
@@ -134,6 +134,31 @@ async function collected(context: TestContext) {
 	await writeFile(path.join(out, "result.json"), "{}");
 	return { sessions, out };
 }
+
+void test("the result's files and its sessions carry neither the attempt credential nor another signed token", async (context) => {
+	const { sessions, out } = await collected(context);
+	const found = "eyJhbGciOiJFUzI1NiJ9.eyJzYW5kYm94X2lkIjoiZm91bmQifQ.c2lnbmF0dXJlLXNlbnRpbmVs";
+	await writeFile(
+		path.join(out, "result.json"),
+		JSON.stringify({ summary: `a tool printed ${CREDENTIAL} and ${found}` }),
+	);
+	await writeFile(
+		path.join(sessions, "2026-10-09_s1.jsonl"),
+		nativeSession().replaceAll(CREDENTIAL, found),
+	);
+
+	await collectTraces(sessions, out, CREDENTIAL);
+	await redactOutput(out, CREDENTIAL);
+
+	const result = await readFile(path.join(out, "result.json"), "utf8");
+	assert.ok(!result.includes(CREDENTIAL), "the result carries the attempt credential");
+	assert.ok(!result.includes(found), "the result carries a signed token");
+	assert.deepEqual(JSON.parse(result), {
+		summary: "a tool printed [attempt-credential] and [credential]",
+	});
+	const session = await readFile(path.join(out, "traces", "0001.jsonl"), "utf8");
+	assert.ok(!session.includes(found), "a session carries a signed token");
+});
 
 void test("copies whole native sessions without the attempt credential and summarizes them without session prose", async (context) => {
 	const { sessions, out } = await collected(context);

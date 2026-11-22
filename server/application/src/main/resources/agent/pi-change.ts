@@ -4,6 +4,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { toolEnvironment } from "./pi-agent-sandbox.ts";
+
 export const CHANGE_ROOT = "work/change";
 
 /** The change the server pinned, from `<contextRoot>/change.json`; null when none was captured. */
@@ -160,7 +162,7 @@ function git(
 		["-C", repository, "--no-pager", "-c", "core.quotePath=false", ...args],
 		{
 			maxBuffer,
-			env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" },
+			env: { ...toolEnvironment(process.env), GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" },
 		},
 	);
 	if (child.error) {

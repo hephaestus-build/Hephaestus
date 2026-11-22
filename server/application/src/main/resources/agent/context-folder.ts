@@ -8,6 +8,7 @@ import { chmod, link, lstat, mkdir, readdir, rm, writeFile } from "node:fs/promi
 import path from "node:path";
 
 import type { SandboxLoadAnswer, SandboxRefusal } from "./conversation-host-protocol.ts";
+import { toolEnvironment } from "./pi-agent-sandbox.ts";
 
 /** An archive that the server streams: its bytes, its size and its SHA-256. */
 export interface Archive {
@@ -239,6 +240,7 @@ async function run(
 ): Promise<number | null> {
 	const child = spawn(file, args, {
 		cwd,
+		env: toolEnvironment(process.env),
 		stdio: ["ignore", onOutput === undefined ? "ignore" : "pipe", "ignore"],
 		signal,
 		timeout: timeoutMs,

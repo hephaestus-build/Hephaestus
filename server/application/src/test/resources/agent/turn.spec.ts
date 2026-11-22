@@ -51,6 +51,7 @@ import {
 	toolRuns,
 } from "./turn-worker.ts";
 
+import { assertToolEnvironment } from "./tool-environment-check.ts";
 import { assertRecoveredTurn, CUT_ANSWER, WHOLE_ANSWER } from "./turn-stream-cut.ts";
 
 // The faux provider ships in pi-ai, which the root package reaches only through pi-coding-agent.
@@ -816,6 +817,62 @@ void test("bash runs in the turn's folder, and a timeout above 60 seconds runs a
 	assert.ok(delays.includes(60_000), "the command's timeout is 60 seconds");
 	assert.ok(!delays.includes(600_000), "not the 600 seconds asked");
 	assert.ok(delays.includes(200), "a shorter timeout is kept");
+});
+
+void test("a turn's bash command gets only the tool environment, even where its process holds a stray secret", async (t) => {
+	const secrets = {
+		HEPHAESTUS_SANDBOX_TOKEN: "sandbox-token-sentinel",
+		LLM_PROXY_TOKEN: "proxy-token-sentinel",
+		SOME_SERVICE_API_KEY: "api-key-sentinel",
+	};
+	for (const [name, value] of Object.entries(secrets)) {
+		const before = process.env[name];
+		process.env[name] = value;
+		t.after(() => {
+			if (before === undefined) {
+				Reflect.deleteProperty(process.env, name);
+			} else {
+				process.env[name] = before;
+			}
+		});
+	}
+	const worker = fakeWorker(contextOf([], "what can you see?"));
+
+	const end = await runTurn(
+		worker,
+		fauxModels([
+			() =>
+				faux.fauxAssistantMessage([faux.fauxToolCall("bash", { command: "env" })], {
+					stopReason: "toolUse",
+				}),
+			() => faux.fauxAssistantMessage("Nothing secret."),
+		]),
+	);
+
+	assert.equal(end.outcome, "DONE");
+	const [run] = toolRuns(worker.appended);
+	assert.equal(run?.isError, false);
+	assertToolEnvironment(run.text, Object.values(secrets));
+});
+
+void test("a turn's read opens only the context folder", async () => {
+	const worker = fakeWorker(contextOf([], "what can you see?"));
+
+	const end = await runTurn(
+		worker,
+		fauxModels([
+			() =>
+				faux.fauxAssistantMessage([faux.fauxToolCall("read", { path: "/proc/self/environ" })], {
+					stopReason: "toolUse",
+				}),
+			() => faux.fauxAssistantMessage("Nothing there."),
+		]),
+	);
+
+	assert.equal(end.outcome, "DONE");
+	const [read] = toolRuns(worker.appended);
+	assert.equal(read?.isError, true);
+	assert.ok(read.text.includes("is outside"), "read refuses a path outside the context folder");
 });
 
 void test("a folder whose archive is invalid fails each tool with the refusal's text", async () => {

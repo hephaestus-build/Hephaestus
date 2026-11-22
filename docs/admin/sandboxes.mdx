@@ -156,8 +156,23 @@ A template's Pod has one container, the agent image, and these settings:
 - The resources of `sandbox.templates.<kind>.resources`.
 
 The driver, the model sessions, commands, Git, and practice programs share the one container.
-A command can read the sandbox token. The server checks the subject, current run epoch, lease, and turn state on every write.
 The sandbox can reach only the gateway. It has no provider credential and no Kubernetes API credential.
+
+### The sandbox token
+
+The driver holds the sandbox token in its environment.
+A command that a tool starts gets only an allowed set of variables, so it does not inherit the token.
+The file tools open only the sandbox's workspace.
+Before the sandbox sends text to be stored or published, it replaces each credential-shaped string.
+
+Code inside a sandbox can still read that sandbox's token.
+The token limits what such code can do with it:
+
+- The gateway takes it only from an address in the cluster network.
+- It works only for the routes of the runs that its sandbox holds.
+- It stops working when its sandbox ends.
+
+The server checks the subject, current run epoch, lease, and turn state on every write.
 
 ### The agent image on the sandbox nodes
 

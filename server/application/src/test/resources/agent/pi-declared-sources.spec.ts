@@ -203,3 +203,26 @@ void test("the guard blocks a read the session makes directly and one that codem
 		undefined,
 	);
 });
+
+void test("the guard keeps every file tool inside the workspace, whatever practice runs", () => {
+	let handler: ((event: ToolCallEvent) => ToolCallEventResult | undefined) | undefined;
+	declaredSourcesExtension(
+		sources([DIFF, CORE, COMMENTS]),
+		CWD,
+	)({
+		on: (_event, registered) => {
+			handler = registered;
+		},
+	});
+	assert.ok(handler);
+	for (const [toolName, path] of [
+		["read", "/proc/self/environ"],
+		["read", "../../proc/1/environ"],
+		["grep", "/proc"],
+		["find", "/etc"],
+		["ls", "/"],
+	] as const) {
+		const result = handler({ type: "tool_call", toolCallId: toolName, toolName, input: { path } });
+		assert.equal(result?.block, true, `${toolName} ${path}`);
+	}
+});
