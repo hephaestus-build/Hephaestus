@@ -781,6 +781,13 @@ Each destination has `check_package` and `publish_package`.
 `check_package` checks the complete proposed package and returns its draft ID.
 It creates no feedback, copies or send request.
 
+For the review on the work, the receipt also lists repeats.
+A repeat is a line note that cites a problem that an earlier line note of the draft cites.
+A repeat is found by the problem, not by the words, and it does not refuse the draft.
+The composer merges the notes, drops one, or keeps both.
+A summary may point to its notes, so it never counts.
+A private destination has one piece for each practice, so two of its pieces never cite the same problem.
+
 `publish_package` takes only that ID, checks the same package again and returns its durable acceptance receipt.
 The server publishes the package that its own check of this attempt stored under that ID, never a package that the loop sends.
 A refused publication keeps its reason in the trace, and the withholding of the review records that reason.

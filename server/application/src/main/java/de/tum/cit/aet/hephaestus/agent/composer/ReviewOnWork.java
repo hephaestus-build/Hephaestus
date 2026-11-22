@@ -6,6 +6,7 @@ import static de.tum.cit.aet.hephaestus.agent.composer.Js.string;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -381,6 +382,8 @@ final class ReviewOnWork {
                     + "No headings, internal labels or citation coordinates in the published text; refer to evidence in natural words or a short exact quote. "
                     + "A summary over " + SUMMARY_LIMIT + " characters or a note over " + INLINE_LIMIT
                     + " is refused for correction, never truncated. "
+                    + "A checked draft lists its repeats: line notes that cite a problem that another note already cites. "
+                    + "A repeat does not refuse the draft; merge the notes, drop one, or keep both when each says something the other does not. "
                     + "Input example with one useful line note: {\"decisions\":[{\"resultId\":\"<admitted NOT_MET resultId>\",\"disposition\":\"RAISE\"}],\"inline\":[{\"basedOn\":[\"<its problemId>\"],\"body\":\"Explain the local concern and its remedy.\",\"anchor\":{\"problemId\":\"<same problemId>\",\"citationIndex\":0}}],\"summary\":null}. "
                     + "For a quiet review, use summary:null, inline:[] and a supported withholding decision for each result. Unused inline and witnessIds lists may be null or omitted.";
 
@@ -787,6 +790,48 @@ final class ReviewOnWork {
 
     /** The stored review, or every reason it was refused. */
     record Read(@Nullable ComposedReview review, List<String> errors) {}
+
+    /** A line note that cites a problem that an earlier note already cites, with that note's opening words. */
+    record Repeat(String entry, List<String> problemIds, String earlier, String quote) {
+        Repeat {
+            problemIds = List.copyOf(problemIds);
+        }
+    }
+
+    /**
+     * The line notes of {@code review} that cite a problem that an earlier line note of it cites. A summary may point to
+     * its notes, so it never counts. A repeat is found by the problem, not by the words, and it is advice: the composer
+     * merges the notes, drops one, or keeps both.
+     */
+    static List<Repeat> repeats(ComposedReview review) {
+        var first = new HashMap<String, Integer>();
+        var repeats = new ArrayList<Repeat>();
+        for (int index = 0; index < review.inline().size(); index++) {
+            var earlier = new LinkedHashMap<Integer, List<String>>();
+            for (var ref : review.inline().get(index).basedOn()) {
+                String problem = ref.problemId();
+                if (problem == null) continue;
+                Integer seen = first.putIfAbsent(problem, index);
+                if (seen != null && seen != index)
+                    earlier.computeIfAbsent(seen, key -> new ArrayList<>()).add(problem);
+            }
+            for (var match : earlier.entrySet())
+                repeats.add(new Repeat(
+                        "inline #" + (index + 1),
+                        match.getValue(),
+                        "inline #" + (match.getKey() + 1),
+                        quote(review.inline().get(match.getKey()).body())));
+        }
+        return repeats;
+    }
+
+    /** The opening words of a text, on one line. */
+    static String quote(String body) {
+        String line = body.strip().replaceAll("\\s+", " ");
+        return line.length() <= QUOTE ? line : line.substring(0, QUOTE - 1).stripTrailing() + "…";
+    }
+
+    private static final int QUOTE = 120;
 
     /** A transport envelope carries no result fields of its own. Unwrap once; never discard sibling fields. */
     static JsonNode unwrapArguments(JsonNode value) {

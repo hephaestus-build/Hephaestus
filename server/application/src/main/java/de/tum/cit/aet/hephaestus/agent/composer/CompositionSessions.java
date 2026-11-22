@@ -506,7 +506,7 @@ public class CompositionSessions {
             admission.checkPackage(identity, proposal);
             String id = proposal.draftId(job.getReviewId());
             return new Answered(
-                    ToolResult.text(checkedReceipt(id)),
+                    ToolResult.text(checkedReceipt(id, ReviewOnWork.repeats(review))),
                     new CompositionToolTrace.Decision(destination, id, mapper.valueToTree(proposal), false, null));
         } catch (PublicationContextRefusedException refused) {
             return refusedPublication(job, refused.reason(), "The review was not stored.");
@@ -585,7 +585,7 @@ public class CompositionSessions {
             admission.checkPackage(identity, proposal);
             String id = proposal.draftId(job.getReviewId());
             return new Answered(
-                    ToolResult.text(checkedReceipt(id)),
+                    ToolResult.text(checkedReceipt(id, List.of())),
                     new CompositionToolTrace.Decision(destination, id, mapper.valueToTree(proposal), false, null));
         } catch (FeedbackTextRefusedException refused) {
             return Answered.text(destination, "Package check refused; nothing was accepted: " + textRefusal(refused));
@@ -683,11 +683,21 @@ public class CompositionSessions {
                 schema);
     }
 
-    private static String checkedReceipt(String id) {
-        return JSON.objectNode()
-                .put("draftId", id)
-                .put("checked", true)
-                .put("next", "Correct the draft and check again, or publish_package with this draftId.")
+    private static String checkedReceipt(String id, List<ReviewOnWork.Repeat> repeats) {
+        var receipt = JSON.objectNode().put("draftId", id).put("checked", true);
+        if (!repeats.isEmpty()) {
+            var listed = receipt.putArray("repeats");
+            for (var repeat : repeats) {
+                var row = listed.addObject().put("entry", repeat.entry());
+                repeat.problemIds().forEach(row.putArray("problemIds")::add);
+                row.put("alreadyCitedBy", repeat.earlier()).put("quote", repeat.quote());
+            }
+        }
+        return receipt.put(
+                        "next",
+                        repeats.isEmpty()
+                                ? "Correct the draft and check again, or publish_package with this draftId."
+                                : "Each repeat cites a problem that another note already cites. Merge the notes, drop one, or keep both when each says something the other does not; then check again, or publish_package with this draftId.")
                 .toString();
     }
 
