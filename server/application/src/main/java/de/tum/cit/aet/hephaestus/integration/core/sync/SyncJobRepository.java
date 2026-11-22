@@ -35,6 +35,10 @@ public interface SyncJobRepository extends JpaRepository<SyncJob, Long> {
     Optional<SyncJob> findFirstByConnection_IdAndStatusInOrderByFinishedAtDesc(
             long connectionId, Collection<SyncJobStatus> statuses);
 
+    /** Most recent finished job of one of {@code types}. */
+    Optional<SyncJob> findFirstByConnection_IdAndTypeInAndStatusInOrderByFinishedAtDesc(
+            long connectionId, Collection<SyncJobType> types, Collection<SyncJobStatus> statuses);
+
     /**
      * Zombie sweep across every workspace: {@code PENDING}/{@code RUNNING} jobs whose lease
      * (heartbeat, falling back to creation time before the first heartbeat lands) is stale.

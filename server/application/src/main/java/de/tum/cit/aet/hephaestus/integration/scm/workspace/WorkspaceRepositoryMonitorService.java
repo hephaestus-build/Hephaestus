@@ -571,7 +571,7 @@ public class WorkspaceRepositoryMonitorService {
                 .filter(kind -> kind == IntegrationKind.GITLAB)
                 .isPresent();
         boolean repositoryAllowed = gitLab
-                ? workspaceScopeFilter.isRepositoryAllowed(monitor)
+                ? workspaceScopeFilter.isRepositoryAllowed(workspace, monitor.getNameWithOwner())
                 : workspaceScopeFilter.isGitHubRepositoryAllowed(monitor);
         if (deferSync) {
             log.debug(

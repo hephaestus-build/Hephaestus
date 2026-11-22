@@ -50,15 +50,19 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitMergeRequestLinker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuetype.GitLabIssueTypeSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.label.GitLabLabelSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupMemberSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSelectedMembershipProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncResult;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.subissue.GitLabSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
@@ -72,6 +76,8 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -82,6 +88,9 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -129,6 +138,9 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     private @Nullable GitLabGroupSyncService groupSyncService;
     private @Nullable GitLabLabelSyncService labelSyncService;
     private @Nullable GitLabIssueSyncService issueSyncService;
+    private @Nullable GitLabMergeRequestSyncService mergeRequestSyncService;
+    private @Nullable GitLabGroupMemberSyncService groupMemberSyncService;
+    private @Nullable GitLabIssueTypeSyncService issueTypeSyncService;
     private @Nullable GitLabCommitMergeRequestLinker mergeRequestLinker;
     private @Nullable GitLabSubIssueSyncService subIssueSyncService;
     private @Nullable GitLabTeamSyncService teamSyncService;
@@ -666,6 +678,123 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         verify(subIssues).syncSubIssuesForRepository(eq(WORKSPACE_ID), eq(project), any());
     }
 
+    /** An INITIAL sync links every merge request, so a commit stored after its merge request was read still links. */
+    @Test
+    void shouldLinkEveryMergeRequestOnAnInitialSyncOfAnAlreadySyncedProject() {
+        var project = prepareProject();
+        project.setLastSyncAt(Instant.parse("2026-11-01T10:00:00Z"));
+        var linker = mock(GitLabCommitMergeRequestLinker.class);
+        mergeRequestLinker = linker;
+        when(linker.linkCommits(eq(WORKSPACE_ID), eq(project), isNull(), any())).thenReturn(SyncResult.completed(1));
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(linker).linkCommits(eq(WORKSPACE_ID), eq(project), isNull(), any());
+    }
+
+    @Test
+    void shouldLinkOnlyMergeRequestsUpdatedSinceTheWatermarkOnAReconciliation() {
+        var project = prepareProject();
+        project.setLastSyncAt(Instant.parse("2026-11-01T10:00:00Z"));
+        var linker = mock(GitLabCommitMergeRequestLinker.class);
+        mergeRequestLinker = linker;
+        OffsetDateTime cutoff = OffsetDateTime.parse("2026-11-01T09:55:00Z");
+        when(linker.linkCommits(eq(WORKSPACE_ID), eq(project), eq(cutoff), any()))
+                .thenReturn(SyncResult.completed(1));
+        when(deletionSweepService.sweepScope(eq(WORKSPACE_ID), any()))
+                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, false, 0));
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
+
+        verify(linker).linkCommits(eq(WORKSPACE_ID), eq(project), eq(cutoff), any());
+    }
+
+    /** The link pass reads the watermark, so a failed link pass leaves it for the next run to read again. */
+    @ParameterizedTest
+    @EnumSource(
+            value = SyncResult.Status.class,
+            names = {"COMPLETED"},
+            mode = EnumSource.Mode.EXCLUDE)
+    void shouldHoldTheWatermarkWhenTheLinkPassDoesNotComplete(SyncResult.Status linkStatus) {
+        var project = prepareProject();
+        var issueSync = mock(GitLabIssueSyncService.class);
+        issueSyncService = issueSync;
+        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.completed(1), null));
+        var linker = mock(GitLabCommitMergeRequestLinker.class);
+        mergeRequestLinker = linker;
+        when(linker.linkCommits(eq(WORKSPACE_ID), eq(project), any(), any())).thenReturn(new SyncResult(linkStatus, 0));
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(repositoryRepository, never()).updateLastSyncAt(eq(99L), any());
+        verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.FULL_REPOSITORY), any());
+        verify(syncJobHandle)
+                .reportWarnings(argThat((SyncProgress detail) -> detail.phase() == SyncPhase.REPOSITORIES
+                        && detail.currentStep().startsWith("Commit linking")));
+    }
+
+    @Test
+    void shouldHoldTheWatermarkWhenTheLinkPassThrows() {
+        var project = prepareProject();
+        var issueSync = mock(GitLabIssueSyncService.class);
+        issueSyncService = issueSync;
+        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.completed(1), null));
+        var linker = mock(GitLabCommitMergeRequestLinker.class);
+        mergeRequestLinker = linker;
+        when(linker.linkCommits(eq(WORKSPACE_ID), eq(project), any(), any()))
+                .thenThrow(new IllegalStateException("GraphQL timeout"));
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(repositoryRepository, never()).updateLastSyncAt(eq(99L), any());
+        verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.FULL_REPOSITORY), any());
+    }
+
+    /** A cancel before the link pass skips it, so every repository read in this run keeps its watermark. */
+    @Test
+    void shouldHoldTheWatermarkWhenACancelSkipsTheLinkPass() {
+        var project = prepareProject();
+        var issueSync = mock(GitLabIssueSyncService.class);
+        issueSyncService = issueSync;
+        var cancelled = new AtomicBoolean();
+        lenient().when(syncJobHandle.isCancellationRequested()).thenAnswer(invocation -> cancelled.get());
+        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    cancelled.set(true);
+                    return new RecentSyncResult(SyncResult.completed(1), null);
+                });
+        var linker = mock(GitLabCommitMergeRequestLinker.class);
+        mergeRequestLinker = linker;
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(linker, never()).linkCommits(any(), any(), any(), any());
+        verify(repositoryRepository, never()).updateLastSyncAt(eq(99L), any());
+        verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.FULL_REPOSITORY), any());
+        verify(syncJobHandle).reportCancelled();
+    }
+
+    @Test
+    void shouldAdvanceTheWatermarkOnlyAfterTheLinkPassCompletes() {
+        var project = prepareProject();
+        var issueSync = mock(GitLabIssueSyncService.class);
+        issueSyncService = issueSync;
+        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.completed(1), null));
+        var linker = mock(GitLabCommitMergeRequestLinker.class);
+        mergeRequestLinker = linker;
+        when(linker.linkCommits(eq(WORKSPACE_ID), eq(project), any(), any())).thenReturn(SyncResult.completed(1));
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        var order = inOrder(linker, repositoryRepository, syncTargetProvider);
+        order.verify(linker).linkCommits(eq(WORKSPACE_ID), eq(project), any(), any());
+        order.verify(repositoryRepository).updateLastSyncAt(eq(99L), any());
+        order.verify(syncTargetProvider).updateSyncTimestamp(eq(77L), eq(SyncType.FULL_REPOSITORY), any());
+    }
+
     @Test
     void shouldNotStartRepositoryBackoffForTransientMetadataFailures() {
         prepareProject();
@@ -696,6 +825,95 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         verify(syncTargetProvider).clearRepositoryUnavailable(WORKSPACE_ID, 77L);
         verify(syncTargetProvider).updateSyncTimestamp(eq(77L), eq(SyncType.REPOSITORY_VISIBILITY), any());
         verify(repositoryRepository, never()).delete(any());
+    }
+
+    /** Issues and merge requests each resume from their own watermark; the project's waits for both. */
+    @Test
+    void shouldReadEachKindFromItsOwnWatermarkWhenTheKindsFinishInDifferentRuns() {
+        var issueSync = mock(GitLabIssueSyncService.class);
+        var mrSync = mock(GitLabMergeRequestSyncService.class);
+        issueSyncService = issueSync;
+        mergeRequestSyncService = mrSync;
+        Instant projectWatermark = Instant.parse("2026-11-01T00:00:00Z");
+        Repository project = prepareProject();
+        project.setLastSyncAt(projectWatermark);
+        when(issueSync.syncIssues(eq(WORKSPACE_ID), eq(project), any(), any(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.completed(10), null));
+        when(mrSync.syncMergeRequests(eq(WORKSPACE_ID), eq(project), any(), isNull(), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.abortedError(10_000), "mr-cursor"));
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        // Issues finished, merge requests did not: the project's watermark holds, the issues' moves.
+        var issuesRead = ArgumentCaptor.forClass(Instant.class);
+        verify(syncTargetProvider).updateSyncTimestamp(eq(77L), eq(SyncType.ISSUES), issuesRead.capture());
+        var mrWindow = ArgumentCaptor.forClass(RecentWindow.class);
+        verify(syncTargetProvider).updateRecentWindow(eq(77L), eq(SyncCursorKind.PULL_REQUEST), mrWindow.capture());
+        verify(repositoryRepository, never()).updateLastSyncAt(eq(99L), any());
+
+        when(syncTargetProvider.findSyncTargetById(77L))
+                .thenReturn(Optional.of(SyncTargetTestBuilder.syncTarget()
+                        .id(77L)
+                        .lastIssuesSyncedAt(issuesRead.getValue())
+                        .pullRequestRecentWindow(mrWindow.getValue())
+                        .build()));
+        when(mrSync.syncMergeRequests(eq(WORKSPACE_ID), eq(project), any(), eq("mr-cursor"), any()))
+                .thenReturn(new RecentSyncResult(SyncResult.completed(2_000), null));
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        // Each kind reads from its own watermark, so the issues do not read the project's backlog again.
+        OffsetDateTime issuesAfter = issuesRead.getValue().minusSeconds(300).atOffset(ZoneOffset.UTC);
+        OffsetDateTime mrsAfter = projectWatermark.minusSeconds(300).atOffset(ZoneOffset.UTC);
+        verify(issueSync).syncIssues(eq(WORKSPACE_ID), eq(project), eq(issuesAfter), isNull(), any());
+        verify(mrSync).syncMergeRequests(eq(WORKSPACE_ID), eq(project), eq(mrsAfter), eq("mr-cursor"), any());
+        verify(repositoryRepository).updateLastSyncAt(99L, mrWindow.getValue().startedAt());
+    }
+
+    @Test
+    void shouldSyncTheRosterOfTheConnectedOrganization() {
+        var onConnectedInstance = new Organization();
+        var memberSync = mock(GitLabGroupMemberSyncService.class);
+        groupMemberSyncService = memberSync;
+        when(memberSync.connectedOrganization(WORKSPACE_ID, "my-group")).thenReturn(Optional.of(onConnectedInstance));
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(memberSync).syncGroupMemberships(WORKSPACE_ID, "my-group", onConnectedInstance);
+    }
+
+    /** A roster sync that could not finish ({@code -1}) warns; any count of members is a clean outcome. */
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 0, 2})
+    void shouldWarnOnlyWhenTheRosterSyncCouldNotFinish(int members) {
+        var organization = new Organization();
+        var memberSync = mock(GitLabGroupMemberSyncService.class);
+        groupMemberSyncService = memberSync;
+        when(memberSync.connectedOrganization(WORKSPACE_ID, "my-group")).thenReturn(Optional.of(organization));
+        when(memberSync.syncGroupMemberships(WORKSPACE_ID, "my-group", organization))
+                .thenReturn(members);
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        if (members < 0) verifyWarning(SyncPhase.ORGANIZATION, "Group membership sync did not complete.");
+        else verify(syncJobHandle, never()).reportWarnings(any(SyncProgress.class));
+    }
+
+    /** An issue type failure warns, and the team phase after it still runs. */
+    @Test
+    void shouldWarnOnAnIssueTypeFailureAndStillSyncTheTeams() {
+        var issueTypes = mock(GitLabIssueTypeSyncService.class);
+        var teams = mock(GitLabTeamSyncService.class);
+        issueTypeSyncService = issueTypes;
+        teamSyncService = teams;
+        when(issueTypes.syncIssueTypesForGroup(WORKSPACE_ID, "my-group"))
+                .thenThrow(new IllegalStateException("Issue types unavailable"));
+        when(teams.syncTeamsForGroup(WORKSPACE_ID, "my-group")).thenReturn(new GitLabTeamSyncService.Result(2, true));
+
+        scopeSync().syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(teams).syncTeamsForGroup(WORKSPACE_ID, "my-group");
+        verifyWarning(SyncPhase.ISSUES, "Issue type sync did not complete.");
     }
 
     private Repository prepareProject() {
@@ -747,7 +965,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 labelSyncService,
                 null,
                 issueSyncService,
-                null,
+                mergeRequestSyncService,
                 null,
                 null,
                 null,
@@ -763,8 +981,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 mock(WorkspaceLookup.class),
                 repositorySync,
                 groupSyncService,
-                null,
-                null,
+                groupMemberSyncService,
+                issueTypeSyncService,
                 teamSyncService,
                 membershipProjection);
     }

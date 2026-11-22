@@ -42,7 +42,7 @@ public class GitLabIntegrationSyncRunner implements IntegrationSyncRunner {
      * deletion sweep ({@code GitLabDeletionSweepService}). A {@code RECONCILIATION} run set-differences
      * the full upstream issue/merge-request IID set against the local mirror and tombstones what
      * upstream no longer has (fail-closed); an {@code INITIAL} run does not, because a mirror still
-     * being populated has nothing stale in it. This is the only difference between the two on GitLab.
+     * being populated has nothing stale in it. {@link GitLabScopeSync#syncWorkspaceNow} lists every difference.
      */
     @Override
     public void reconcile(IntegrationRef ref, SyncExecutionHandle handle, SyncJobType type) {

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSes
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
 import de.tum.cit.aet.hephaestus.integration.core.sync.RecentWindows;
+import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -37,8 +38,11 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -190,7 +194,8 @@ public class GitLabRepositorySync {
             @Nullable SyncExecutionHandle handle,
             GitLabSyncReports.Cancellation cancellation,
             Map<Long, String> resourceErrors,
-            Map<Long, GitLabProjectAdmission.ProjectRead> reads) {
+            Map<Long, GitLabProjectAdmission.ProjectRead> reads,
+            SyncJobType type) {
         // Re-key any monitor whose name_with_owner went stale after an upstream rename/transfer BEFORE
         // the name-keyed join below, so a renamed project re-enters the sync set and its provider inbox filter is
         // rebuilt in the same cycle instead of silently dropping out. The domain Repository row was
@@ -214,6 +219,8 @@ public class GitLabRepositorySync {
 
         List<Repository> availableRepos = new ArrayList<>();
         Map<Long, Long> availableTargetIds = new HashMap<>();
+        // Each completed repository's watermark write, held until the link pass that reads the watermark has finished.
+        Map<Long, Runnable> heldWatermarks = new LinkedHashMap<>();
         int totalLabels = 0,
                 totalMilestones = 0,
                 totalIssues = 0,
@@ -652,10 +659,12 @@ public class GitLabRepositorySync {
                     attempted && error == null && (issueSync == null || issuesDone) && (mrSync == null || mrsDone);
             if (allDone) {
                 Instant completedAt = GitLabWatermarks.earliest(passStart, issueMark, mrMark);
-                admission.runWrite(read, () -> {
-                    repositoryRepository.updateLastSyncAt(read.repositoryId(), completedAt);
-                    syncTargetProvider.updateSyncTimestamp(rtmId, SyncType.FULL_REPOSITORY, completedAt);
-                });
+                heldWatermarks.put(
+                        repo.getId(),
+                        () -> admission.runWrite(read, () -> {
+                            repositoryRepository.updateLastSyncAt(read.repositoryId(), completedAt);
+                            syncTargetProvider.updateSyncTimestamp(rtmId, SyncType.FULL_REPOSITORY, completedAt);
+                        }));
             }
             if (rtmId != null && attempted) {
                 resourceErrors.put(rtmId, error);
@@ -680,20 +689,34 @@ public class GitLabRepositorySync {
         // Second pass: link commits to MRs. Must run after every repo has finished syncing so
         // a commit whose SHA appears on an MR in a sibling repo can still be linked (the target MR
         // repo may not have synced its MRs when this repo's commits were fetched).
+        Set<Long> unlinked = new HashSet<>();
+        boolean linkPassDone = commitMrLinker == null;
         if (commitMrLinker != null
                 && !cancellation.stopsHere()
                 && syncTargetProvider.isScopeActiveForSync(session.scopeId())) {
+            linkPassDone = true;
             for (Repository repo : availableRepos) {
                 var read = reads.get(repo.getId());
                 if (read == null || !admission.current(read)) continue;
+                // An INITIAL sync links every merge request. A commit stored after its merge request was last read
+                // gets its link only from this full sweep. Other runs read merge requests updated since the watermark.
                 OffsetDateTime repoUpdatedAfter = null;
-                if (repo.getLastSyncAt() != null) {
+                if (type != SyncJobType.INITIAL && repo.getLastSyncAt() != null) {
                     Instant buffered = repo.getLastSyncAt().minus(Duration.ofMinutes(5));
                     repoUpdatedAfter = buffered.atOffset(ZoneOffset.UTC);
                 }
                 try {
                     SyncResult result = commitMrLinker.linkCommits(session.scopeId(), repo, repoUpdatedAfter, read);
                     if (!admission.current(read)) continue;
+                    if (result.status() != SyncResult.Status.COMPLETED) {
+                        unlinked.add(repo.getId());
+                        GitLabSyncReports.warn(
+                                handle,
+                                result.status(),
+                                SyncPhase.REPOSITORIES,
+                                "Commit linking",
+                                repo.getNameWithOwner());
+                    }
                     Long targetId = availableTargetIds.get(repo.getId());
                     if (targetId != null) {
                         resourceErrors.putIfAbsent(
@@ -704,6 +727,7 @@ public class GitLabRepositorySync {
                     }
                 } catch (Exception e) {
                     if (!admission.current(read)) continue;
+                    unlinked.add(repo.getId());
                     Long targetId = availableTargetIds.get(repo.getId());
                     if (targetId != null) {
                         resourceErrors.putIfAbsent(
@@ -723,6 +747,13 @@ public class GitLabRepositorySync {
                             repo.getNameWithOwner());
                 }
             }
+        }
+
+        // A skipped or failed link pass holds the watermark, so the next run reads the same merge requests again.
+        if (linkPassDone) {
+            heldWatermarks.forEach((repositoryId, write) -> {
+                if (!unlinked.contains(repositoryId)) write.run();
+            });
         }
 
         for (Repository repo : availableRepos) {

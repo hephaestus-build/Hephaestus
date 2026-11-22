@@ -6,11 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
@@ -886,6 +888,20 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             assertThat(registered.getLast().url()).isEqualTo(url);
             assertThat(storedHooks()).containsOnlyKeys(7L, 9L);
             verify(webhookClient, times(1)).listGroupWebhooks(1L, 42L);
+        }
+
+        /** Each sync registers again; hooks that exist and match cost no provider call. */
+        @Test
+        void shouldCallNoProviderWhenEveryMonitoredProjectAlreadyHasItsHook() {
+            monitor(7L, 8L);
+            webhookService.registerWebhook(workspace);
+            clearInvocations(webhookClient);
+
+            WebhookSetupResult result = webhookService.registerWebhook(workspace);
+
+            assertThat(result.registered()).isTrue();
+            assertThat(storedHooks()).containsExactlyInAnyOrderEntriesOf(Map.of(7L, 100L, 8L, 101L));
+            verifyNoInteractions(webhookClient);
         }
 
         @Test

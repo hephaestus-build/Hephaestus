@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -16,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
+import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -67,7 +69,7 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
                 mock(ApplicationEventPublisher.class),
                 new SimpleMeterRegistry());
         lenient()
-                .when(workspaceScopeFilter.isRepositoryAllowed(any(RepositoryToMonitor.class)))
+                .when(workspaceScopeFilter.isRepositoryAllowed(any(Workspace.class), anyString()))
                 .thenReturn(true);
         lenient()
                 .when(workspaceScopeFilter.isGitHubRepositoryAllowed(any(RepositoryToMonitor.class)))
@@ -182,6 +184,43 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
 
         assertThat(provider.getSyncTargetsForScope(7L)).isEmpty();
         assertThat(provider.findSyncTargetById(70L)).isEmpty();
+    }
+
+    /** The organization filter names the workspace's nested group, so its projects are judged by that group. */
+    @Test
+    void shouldKeepTheProjectsOfAnAllowedNestedGitLabGroup() {
+        var filter = new WorkspaceScopeFilter(
+                new SyncSchedulerProperties(
+                        true,
+                        7,
+                        "0 0 3 * * *",
+                        15,
+                        null,
+                        new SyncSchedulerProperties.FilterProperties(Set.of("acme/platform"), Set.of())),
+                List.of());
+        provider = new WorkspaceSyncTargetProvider(
+                workspaceRepository,
+                repositoryToMonitorRepository,
+                filter,
+                connectionService,
+                mock(ReviewScopeRepositoryRepository.class),
+                mock(ApplicationEventPublisher.class),
+                new SimpleMeterRegistry());
+        Workspace nested = workspace(9);
+        nested.setAccountLogin("acme/platform");
+        RepositoryToMonitor monitor =
+                nested.getRepositoriesToMonitor().iterator().next();
+        monitor.setNameWithOwner("acme/platform/api");
+        when(workspaceRepository.findById(9L)).thenReturn(Optional.of(nested));
+        when(repositoryToMonitorRepository.findByWorkspaceId(9L)).thenReturn(List.of(monitor));
+        when(connectionService.findActiveProviderKind(9)).thenReturn(Optional.of(IntegrationKind.GITLAB));
+        when(connectionService.findActiveGitLabConfig(9)).thenReturn(Optional.of(GITLAB_CONFIG));
+        when(connectionService.findActiveBearerToken(9, IntegrationKind.GITLAB))
+                .thenReturn(Optional.of(new BearerToken("glpat-nine", null)));
+
+        assertThat(provider.getSyncTargetsForScope(9L))
+                .extracting(SyncTarget::repositoryNameWithOwner)
+                .containsExactly("acme/platform/api");
     }
 
     @Test
