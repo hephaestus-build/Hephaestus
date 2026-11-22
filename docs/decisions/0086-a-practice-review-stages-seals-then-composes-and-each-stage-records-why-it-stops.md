@@ -511,8 +511,10 @@ The composer's view of lineage stays decided, not shipped.
   Both repeat checks leave out a note whose thread is `RESOLVED`, also when Hephaestus resolved it.
   For an `OPEN` thread, the receipt says that the thread was open when Hephaestus last saw it.
   For an `UNKNOWN` thread, the receipt says that nobody knows whether a person resolved the thread.
-  On GitHub, only the resolve and unresolve events change the state.
-  GitHub redelivers a failed event for up to 71 hours, and a sync does not repair the state.
+  On GitHub, the resolve and unresolve events change the state.
+  A sync sets the state only for a thread that it creates.
+  Hephaestus asks GitHub to redeliver a failed event for up to 71 hours.
+  A sync does not repair a missed event.
   A GitHub thread that no event or sync named has no node id in the mirror, so its state is `UNKNOWN`.
   On GitLab, a read of the merge request's discussions changes the state.
   A merge request update and the scheduled sync start this read, so the resolve of one thread can arrive late.

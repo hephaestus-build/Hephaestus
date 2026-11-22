@@ -150,7 +150,7 @@ class ReviewOnWorkRepeatsTest {
                         .asString())
                 .isEqualTo("OPEN");
         assertThat(receipt.path("next").asString())
-                .contains("that note's thread was open as Hephaestus last saw it when the work was read")
+                .contains("that note's thread was open in Hephaestus's mirror of the provider when this was read")
                 .doesNotContain("not known")
                 .doesNotContain("still raises");
     }
@@ -230,7 +230,7 @@ class ReviewOnWorkRepeatsTest {
         assertThat(shown.path("repeats").get(0).path("otherNote").path("thread").asString())
                 .isEqualTo("OPEN");
         assertThat(shown.path("repeatsNext").asString())
-                .contains("that note's thread was open as Hephaestus last saw it")
+                .contains("that note's thread was open in Hephaestus's mirror of the provider")
                 .doesNotContain("not known");
     }
 

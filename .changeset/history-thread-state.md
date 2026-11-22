@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-The review on a pull or merge request no longer offers to drop a note because an earlier note raised the same problem when someone has resolved that earlier note's thread.
+When someone resolves a thread that Hephaestus started on a pull or merge request, a later review no longer treats a new note on the same problem as a repeat of that thread.

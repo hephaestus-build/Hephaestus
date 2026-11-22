@@ -800,13 +800,15 @@ The history read gives each note its thread state (`threadState`), found by the 
 
 Such a repeat names the earlier note's path, lines and link, with its opening words.
 The receipt says that the earlier note raised the problem, never that it still raises it.
-For an `OPEN` thread, it says that the thread was open as Hephaestus last saw it when the work was read.
+For an `OPEN` thread, it says that the thread was open in Hephaestus's mirror of the provider when the history was read.
 For an `UNKNOWN` thread, it says that nobody knows whether a person resolved the thread.
 
 The mirror can be late.
-On GitHub, only the resolve and unresolve events change a thread's state, and a sync does not repair it.
+On GitHub, the resolve and unresolve events change a thread's state.
+A sync sets the state only of a thread that it creates, so it does not repair a missed event.
 A GitHub thread that no event or sync named has no node id in the mirror, so its state is `UNKNOWN`.
 On GitLab, a merge request update or the scheduled sync reads the discussions, so the resolve of one thread can arrive late.
+
 The composer drops the entry, or keeps it only when it says what the earlier note does not.
 The composer has no tool that replies in an earlier thread.
 

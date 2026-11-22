@@ -951,7 +951,8 @@ final class ReviewOnWork {
     static List<String> threadStates(List<NoteThreadState> states) {
         var said = new ArrayList<String>();
         if (states.contains(NoteThreadState.OPEN))
-            said.add("With thread OPEN, that note's thread was open as Hephaestus last saw it when the work was read.");
+            said.add(
+                    "With thread OPEN, that note's thread was open in Hephaestus's mirror of the provider when this was read.");
         if (states.contains(NoteThreadState.UNKNOWN))
             said.add("With thread UNKNOWN, whether a person resolved that note's thread is not known here.");
         return said;

@@ -51,7 +51,7 @@ public interface ScmFeedbackThreadStateRepository extends Repository<PullRequest
         SELECT t.node_id AS threadRef, t.state = 'RESOLVED' AS resolved FROM item i
         JOIN pull_request_review_thread t ON t.pull_request_id = i.source_id
         WHERE i.workspace_id = :workspaceId AND i.id IN (:itemIds) AND i.kind = 'scm.pull_request'
-          AND t.node_id IN (:threadRefs)
+          AND t.node_id IN (:threadRefs) AND t.state IS NOT NULL
         """, nativeQuery = true)
     List<StateRow> states(
             @Param("workspaceId") long workspaceId,
