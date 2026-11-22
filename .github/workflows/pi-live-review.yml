@@ -81,7 +81,7 @@ jobs:
           set -euo pipefail
           commit=$(git rev-parse HEAD)
           echo "Commit: \`$commit\`" >> "$GITHUB_STEP_SUMMARY"
-          if node scripts/resolve-release-images.ts "$commit" release-images.tsv; then
+          if node scripts/resolve-release-images.ts --subject agent "$commit" release-images.tsv; then
             reference=$(awk -F '\t' '$1 == "agent" { print $2 "@" $3 }' release-images.tsv)
           fi
           if [ -n "${reference:-}" ]; then

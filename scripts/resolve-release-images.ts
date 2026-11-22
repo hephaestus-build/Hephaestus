@@ -10,6 +10,7 @@
  */
 import { appendFile, writeFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
+import { parseArgs } from "node:util";
 
 import { isSet } from "./lib/env.ts";
 import type { Subject } from "./lib/image-scan.ts";
@@ -88,6 +89,25 @@ export async function resolveReleaseImages(
 }
 
 /**
+ * The subjects a caller names, in inventory order, or every subject when it names none. A release resolves the
+ * whole inventory. A job that needs one image resolves only that one, so a missing unrelated image neither fails
+ * nor delays it. An unknown name fails, because it would otherwise resolve nothing.
+ */
+export function selectSubjects(
+	subjects: readonly Subject[],
+	names: readonly string[],
+): readonly Subject[] {
+	if (names.length === 0) {
+		return subjects;
+	}
+	const unknown = names.filter((name) => !subjects.some((subject) => subject.image === name));
+	if (unknown.length > 0) {
+		throw new Error(`not a release image: ${unknown.join(", ")}`);
+	}
+	return subjects.filter((subject) => names.includes(subject.image));
+}
+
+/**
  * The hand-off between the resolver and `generate-release-evidence.ts`: image, repository and index
  * digest, one image per line. Repository travels with the digest so the generator never re-derives a
  * namespace the resolver already decided.
@@ -117,9 +137,15 @@ export function digestOutputs(images: readonly ResolvedImage[]): string {
 }
 
 if (import.meta.main) {
-	const [sourceTag = "", outputPath = ""] = process.argv.slice(2);
-	if (sourceTag === "" || outputPath === "") {
-		throw new Error("usage: resolve-release-images <source-tag> <output.tsv>");
+	const { positionals, values } = parseArgs({
+		allowPositionals: true,
+		options: { subject: { type: "string", multiple: true } },
+	});
+	const [sourceTag = "", outputPath = ""] = positionals;
+	if (sourceTag === "" || outputPath === "" || positionals.length > 2) {
+		throw new Error(
+			"usage: resolve-release-images [--subject <image>]... <source-tag> <output.tsv>",
+		);
 	}
 	const namespace = process.env.IMAGE_REGISTRY ?? "ghcr.io/hephaestus-build";
 	const subjects = planSubjects(
@@ -127,7 +153,7 @@ if (import.meta.main) {
 		namespace,
 		sourceTag,
 	);
-	const images = await resolveReleaseImages(subjects);
+	const images = await resolveReleaseImages(selectSubjects(subjects, values.subject ?? []));
 	await writeFile(outputPath, formatResolvedImages(images));
 	process.stdout.write(formatResolvedImages(images));
 	const githubOutput = process.env.GITHUB_OUTPUT;
