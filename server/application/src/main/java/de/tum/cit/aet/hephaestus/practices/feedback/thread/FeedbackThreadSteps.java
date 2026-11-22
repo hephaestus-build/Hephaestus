@@ -76,7 +76,8 @@ class FeedbackThreadSteps {
         var owner = feedback.findByIdAndWorkspaceId(copy.getFeedbackId(), workspaceId)
                 .orElse(null);
         if (owner == null) return stopped(row, ask, FeedbackThreadStopReason.GONE);
-        if (!permitted(workspaceId, owner, copy)) return stopped(row, ask, FeedbackThreadStopReason.NOT_PERMITTED);
+        if (!permitted(workspaceId, owner, standing(workspaceId, owner, copy)))
+            return stopped(row, ask, FeedbackThreadStopReason.NOT_PERMITTED);
         return new Plan(
                 owner,
                 new CopyReceipt(
@@ -114,9 +115,14 @@ class FeedbackThreadSteps {
                 : feedback.findByIdAndWorkspaceId(copy.getFeedbackId(), workspaceId)
                         .orElse(null);
         var refusal = copy == null || owner == null ? FeedbackThreadStopReason.GONE : refusal(row, copy);
-        // The permission of the evidence can change while the provider is asked who the account is.
-        if (refusal == null && !permitted(workspaceId, Objects.requireNonNull(owner), Objects.requireNonNull(copy)))
-            refusal = FeedbackThreadStopReason.NOT_PERMITTED;
+        // The permission of the evidence, and for a resolve its proof, can change while the provider is asked who the
+        // account is, or while a deferred attempt waits.
+        if (refusal == null) {
+            var standing = standing(workspaceId, Objects.requireNonNull(owner), Objects.requireNonNull(copy));
+            if (row.isResolved() && standing.verdict() != FeedbackThreadEvidence.Verdict.GONE)
+                refusal = FeedbackThreadStopReason.WITHDRAWN;
+            else if (!permitted(workspaceId, owner, standing)) refusal = FeedbackThreadStopReason.NOT_PERMITTED;
+        }
         if (refusal == null && !privacy.holdForAccountWrite(developer))
             refusal = FeedbackThreadStopReason.PERSON_SUPPRESSED;
         if (refusal != null) {
@@ -187,13 +193,15 @@ class FeedbackThreadSteps {
      * Whether the evidence of the change still permits feedback delivery: the results the note rests on, and the
      * results whose lineage decided that its problems are gone or back.
      */
-    private boolean permitted(long workspaceId, Feedback owner, FeedbackCopy copy) {
-        var cited = evidence.cited(
-                workspaceId, owner.getReviewId(), owner.getId(), copy.getKind().name(), copy.getPosition());
+    private FeedbackThreadEvidence.Standing standing(long workspaceId, Feedback owner, FeedbackCopy copy) {
+        return evidence.standing(
+                workspaceId, evidence.cited(workspaceId, owner.getReviewId(), owner.getId(), copy.getPosition()));
+    }
+
+    private boolean permitted(long workspaceId, Feedback owner, FeedbackThreadEvidence.Standing standing) {
         var support = new HashMap<UUID, Result>();
         results.findBasisOfFeedback(workspaceId, owner.getId()).forEach(result -> support.put(result.getId(), result));
-        results.findByWorkspaceIdAndIdIn(
-                        workspaceId, evidence.standing(workspaceId, cited).deciding())
+        results.findByWorkspaceIdAndIdIn(workspaceId, standing.deciding())
                 .forEach(result -> support.put(result.getId(), result));
         return !support.isEmpty()
                 && authorization

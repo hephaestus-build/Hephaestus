@@ -44,7 +44,7 @@ class FeedbackThreadEvidence {
      * The problems that the note of one copy cites, from the composition support its revision was prepared with. Empty
      * when the support is missing or rests on a result without a problem: such a note never resolves.
      */
-    List<UUID> cited(long workspaceId, UUID reviewId, UUID feedbackId, String kind, int position) {
+    List<UUID> cited(long workspaceId, UUID reviewId, UUID feedbackId, int position) {
         var node = reviews.findByIdAndWorkspaceId(reviewId, workspaceId)
                 .map(review -> review.getChecks().path("feedbackComposition").path(feedbackId.toString()))
                 .orElse(null);
@@ -59,7 +59,9 @@ class FeedbackThreadEvidence {
         }
         var problems = new ArrayList<UUID>();
         for (var copy : trace.copies()) {
-            if (!copy.kind().name().equals(kind) || copy.position() != position) continue;
+            // Positions are unique within a piece. A note the provider placed as a file note keeps its line note
+            // support.
+            if (copy.position() != position) continue;
             for (var support : copy.basedOn()) {
                 if (support.problemId() == null) return List.of();
                 problems.add(support.problemId());

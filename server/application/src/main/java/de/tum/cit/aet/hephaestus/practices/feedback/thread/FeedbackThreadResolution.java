@@ -81,8 +81,9 @@ public class FeedbackThreadResolution {
     private @Nullable Boolean reopens;
 
     /**
-     * Whether a resolve of Hephaestus may be in effect on the provider: one began, and no reopen of it has been
-     * confirmed since. Kept across asks, so a later ask never forgets a resolve that reached the provider.
+     * Whether a resolve of Hephaestus may be in effect on the provider: a write of one may have started, and no reopen
+     * of it has been confirmed since. Kept across asks, so a later ask never forgets a resolve that reached the
+     * provider.
      */
     @Column(name = "resolve_written", nullable = false)
     private boolean resolveWritten;
@@ -125,7 +126,23 @@ public class FeedbackThreadResolution {
     }
 
     /**
-     * Withdraws a waiting resolve that has not begun to write, when its proof no longer holds. A resolve that may be in
+     * Withdraws a waiting resolve, begun or not, where Hephaestus may not reopen: the problem came back, so the resolve
+     * must not land. A write of it may already be in effect, so {@code resolveWritten} stays. True when the waiting
+     * action must go.
+     */
+    boolean withdrawPending(Instant at) {
+        if (state != FeedbackThreadResolutionState.PENDING || !resolved) return false;
+        generation++;
+        stopReason = FeedbackThreadStopReason.WITHDRAWN;
+        changedAt = at;
+        moveTo(FeedbackThreadResolutionState.STOPPED);
+        return true;
+    }
+
+    /**
+     * Withdraws a waiting resolve that has not begun to write, when its proof no longer holds. A resolve whose write may
+     * have begun in an earlier ask keeps its action: the thread is then already resolved, and the action reads that
+     * back without writing. A resolve that may be in
      * effect stays: unknown standing never reopens a thread. True when the waiting action must go.
      */
     boolean withdrawUnstarted(Instant at) {

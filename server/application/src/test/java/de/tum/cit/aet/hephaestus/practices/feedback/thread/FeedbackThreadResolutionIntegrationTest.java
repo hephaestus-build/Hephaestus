@@ -478,6 +478,33 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         assertThat(provider.changes).isEmpty();
     }
 
+    @Test
+    void shouldNotLandADeferredGitLabResolveAfterTheProblemComesBack() {
+        target = new FeedbackTarget(
+                target.item(),
+                new IntegrationRef(IntegrationKind.GITLAB, scenario.workspace().getId(), "https://gitlab.example.com"),
+                target.version());
+        provider.kind = IntegrationKind.GITLAB;
+        var first = sealed("h1", 30, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+        String thread = note(first, problems(first));
+        sealed("h2", 20, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);
+        provider.deferred.add(thread);
+        assertThat(run(resolution(thread))).containsInstanceOf(ActionResult.Defer.class);
+
+        // The problem is back while the resolve waits: on GitLab, Hephaestus cannot reopen, so the resolve must go.
+        sealed("h3", 10, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+
+        var withdrawn = resolution(thread);
+        assertThat(withdrawn.getState()).isEqualTo(FeedbackThreadResolutionState.STOPPED);
+        assertThat(withdrawn.getStopReason()).isEqualTo(FeedbackThreadStopReason.WITHDRAWN);
+        // The waiting action is cancelled, or, as one whose write may have started, it finds its ask superseded.
+        assertThat(run(withdrawn))
+                .satisfiesAnyOf(
+                        result -> assertThat(result).isEmpty(),
+                        result -> assertThat(result).containsInstanceOf(ActionResult.Cancelled.class));
+        assertThat(provider.changes).isEmpty();
+    }
+
     private UUID sealed(
             String version,
             int minutesAgo,
@@ -666,6 +693,9 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
         /** Threads where a person replied after the owned note. */
         final Set<String> replied = new HashSet<>();
 
+        /** Threads whose next change Silent Mode holds back once. */
+        final Set<String> deferred = new HashSet<>();
+
         /** Threads that a person resolved, with no event that told Hephaestus. */
         final Set<String> taken = new HashSet<>();
 
@@ -690,6 +720,8 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
             during = null;
             if (hook != null) hook.run();
             String thread = Objects.requireNonNull(copy.threadRef());
+            if (deferred.remove(thread))
+                return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.DEFERRED, "Silent Mode holds the change");
             if (taken.contains(thread))
                 return ThreadChange.of(copy.copyId(), ThreadChange.Outcome.TAKEN, "A person resolved it");
             if (resolved && replied.contains(thread))

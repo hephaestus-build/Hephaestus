@@ -22,15 +22,13 @@ public interface FeedbackThreadResolutionRepository extends JpaRepository<Feedba
 
         UUID getReviewId();
 
-        String getKind();
-
         int getPosition();
     }
 
     /** The developer's threads on the item, each with the copy of the newest revision that owns it. */
     @Query(value = """
         SELECT DISTINCT ON (c.thread_ref) c.id AS copyId, c.thread_ref AS threadRef, c.feedback_id AS feedbackId,
-          f.review_id AS reviewId, c.kind AS kind, c.position AS position
+          f.review_id AS reviewId, c.position AS position
         FROM feedback_copy c JOIN feedback f ON f.id = c.feedback_id AND f.workspace_id = c.workspace_id
         WHERE c.workspace_id = :workspaceId AND f.item_id = :itemId AND f.developer_id = :developerId
           AND f.destination = 'ON_WORK' AND c.state = 'POSTED' AND c.thread_ref IS NOT NULL

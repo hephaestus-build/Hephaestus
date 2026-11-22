@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.thread;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import java.time.Clock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,11 +23,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class FeedbackThreadOwnership {
     private final FeedbackThreadResolutionRepository resolutions;
     private final FeedbackThreadMeters meters;
+    private final ItemIndexService itemLocks;
     private final Clock clock;
 
     /** True when the change is Hephaestus's own. Otherwise Hephaestus stops changing the thread for good. */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean own(long workspaceId, long itemId, String threadRef, boolean resolved, @Nullable String actor) {
+        // The item first, as the decision and the seal lock it, so the two never wait on each other in reverse.
+        itemLocks.lock(workspaceId, itemId);
         var row = resolutions.lockThread(workspaceId, itemId, threadRef).orElse(null);
         if (row == null) return false;
         if (row.owns(resolved, actor)) return true;

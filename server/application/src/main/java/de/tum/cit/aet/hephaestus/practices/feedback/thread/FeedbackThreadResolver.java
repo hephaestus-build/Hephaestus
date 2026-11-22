@@ -72,8 +72,7 @@ class FeedbackThreadResolver {
         itemLocks.lock(workspaceId, itemId);
         for (var thread : resolutions.findOwnedThreads(workspaceId, itemId, developerId)) {
             if (resolutions.humanControlled(workspaceId, itemId, thread.getThreadRef())) continue;
-            var cited = evidence.cited(
-                    workspaceId, thread.getReviewId(), thread.getFeedbackId(), thread.getKind(), thread.getPosition());
+            var cited = evidence.cited(workspaceId, thread.getReviewId(), thread.getFeedbackId(), thread.getPosition());
             var verdict = evidence.standing(workspaceId, cited).verdict();
             if (verdict == FeedbackThreadEvidence.Verdict.GONE) ask(workspaceId, itemId, developerId, thread, true);
             else if (verdict == FeedbackThreadEvidence.Verdict.PRESENT
@@ -107,7 +106,11 @@ class FeedbackThreadResolver {
             int asked = row.getGeneration();
             // A reopen that would write where the provider cannot tell it from a person's is never asked: the thread
             // stays resolved, and a problem that came back reaches the developer through a new note.
-            if (!resolve && row.isResolveWritten() && !Boolean.TRUE.equals(row.getReopens())) return;
+            if (!resolve && row.isResolveWritten() && !Boolean.TRUE.equals(row.getReopens())) {
+                // A resolve that still waits, also one that began and was deferred, must not land now.
+                if (row.withdrawPending(now)) actions.cancelPending(workspaceId, LANE + row.getId());
+                return;
+            }
             if (!row.ask(resolve, thread.getCopyId(), now)) {
                 // A withdrawn resolve that never started leaves nothing to undo: its waiting action goes too.
                 if (row.getGeneration() != asked) actions.cancelPending(workspaceId, LANE + row.getId());

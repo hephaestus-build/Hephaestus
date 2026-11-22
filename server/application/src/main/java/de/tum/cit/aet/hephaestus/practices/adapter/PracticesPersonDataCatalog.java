@@ -27,6 +27,7 @@ import tools.jackson.databind.ObjectMapper;
     "practice_version",
     "feedback_response",
     "feedback_thread_resolution",
+    "feedback_thread_resolution_actor",
     "feedback_copy",
     "feedback_basis",
     "feedback_decision",
@@ -159,20 +160,30 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "id,workspace_id",
                                 "",
                                 -220),
-                        // A thread resolution goes with the developer's copy. Its actor is the connection's provider
-                        // account: with a personal token, a person, whose rows go too.
+                        // A thread resolution goes with the developer's copy.
                         new JdbcPersonDataStore(
                                 jdbc,
                                 mapper,
                                 "feedback_thread_resolution",
                                 "feedback_thread_resolution",
-                                "t.copy_id IN(SELECT id FROM feedback_copy WHERE feedback_id IN(" + FEEDBACK_IDS
-                                        + ")) OR t.actor IN(SELECT provider_user_key FROM identity WHERE"
-                                        + " account_id=:account)",
+                                "t.copy_id IN(SELECT id FROM feedback_copy WHERE feedback_id IN(" + FEEDBACK_IDS + "))",
                                 "id,workspace_id,item_id,thread_ref,copy_id,resolved,state,generation,actor,provider,reopens,resolve_written,stop_reason,changed_at",
                                 "id,workspace_id",
                                 "",
                                 -215),
+                        // Its actor is the connection's provider account: with a personal token, a person. Only the
+                        // account id goes, so Hephaestus still knows its resolution of the thread of another developer.
+                        new JdbcPersonDataStore(
+                                jdbc,
+                                mapper,
+                                "feedback_thread_resolution_actor",
+                                "feedback_thread_resolution",
+                                "t.actor IN(SELECT i.provider_user_key FROM identity i JOIN identity_provider p"
+                                        + " ON p.id=i.provider_id WHERE i.account_id=:account AND p.type=t.provider)",
+                                "id,workspace_id,item_id,thread_ref,actor,provider",
+                                "id,workspace_id",
+                                "actor=NULL",
+                                -216),
                         new ExternalFeedbackPersonDataStore(
                                 custody,
                                 jdbc,

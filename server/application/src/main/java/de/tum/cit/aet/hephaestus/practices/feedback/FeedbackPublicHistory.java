@@ -187,7 +187,8 @@ public class FeedbackPublicHistory {
         var closing = new HashSet<String>();
         for (var copy : confirmed) {
             var practices = trace.copies().stream()
-                    .filter(support -> support.kind() == copy.getKind() && support.position() == copy.getPosition())
+                    // Positions are unique within a piece; a note placed as a file note keeps its line note support.
+                    .filter(support -> support.position() == copy.getPosition())
                     .flatMap(support -> support.basedOn().stream())
                     .map(basis -> byId.get(basis.resultId()))
                     .filter(Objects::nonNull)
