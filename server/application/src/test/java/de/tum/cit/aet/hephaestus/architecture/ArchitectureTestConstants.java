@@ -9,7 +9,7 @@ package de.tum.cit.aet.hephaestus.architecture;
  * <p><b>Thresholds are based on industry best practices (2025):</b>
  * <ul>
  *   <li>Class methods: 25 max (SRP indicator)</li>
- *   <li>Constructor parameters: 12 max for services, 5 max for controllers</li>
+ *   <li>Constructor parameters: 12 max for every Spring bean, 5 max for controllers</li>
  *   <li>Interface methods: 8 max (ISP compliance)</li>
  * </ul>
  */
@@ -30,15 +30,15 @@ public final class ArchitectureTestConstants {
     // COMPLEXITY THRESHOLDS (Single Responsibility Principle)
 
     /**
-     * Maximum business methods per service class.
+     * Maximum business methods per Spring bean.
      *
      * <p>Excludes getters, setters, equals, hashCode, toString, and constructors.
-     * Classes exceeding this should be split into focused services.
+     * Classes exceeding this should be split into focused beans.
      */
     public static final int MAX_SERVICE_METHODS = 25;
 
     /**
-     * Maximum constructor parameters for service classes.
+     * Maximum constructor parameters for every Spring bean.
      *
      * <p>High dependency count indicates the class is doing too much.
      * Consider extracting responsibilities into new services.
