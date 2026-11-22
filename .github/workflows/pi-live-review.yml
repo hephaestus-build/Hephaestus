@@ -1,0 +1,128 @@
+name: CI / Pi live review
+
+# One practice review by the agent image's Pi runner against the CI model connection:
+# docs/contributor/ci-cd.mdx § CI model connection. It runs PracticeRunnerLiveLlmTest's single-file case, so a Pi
+# or runner change gets a live answer before it merges. A person starts every run, on a branch or tag of this
+# repository that contains this workflow: the run checks out the commit it was dispatched on, so no pull request
+# ref and no fork commit ever runs with the model key. The run reuses the agent image that CI published for that
+# commit and builds one only when it resolves none.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  # Its own group, one per ref, keeps it out of the composers' `ci-model-endpoint` group: GitHub keeps one waiting
+  # job per group, so a shared group would let this job silently replace a waiting evaluation replicate. A newer
+  # run of the same ref replaces only its own waiting predecessor, which then shows as cancelled. When it overlaps
+  # an evaluation, the endpoint's limits and the runner's retries absorb the second client.
+  review:
+    name: Pi live review
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: pi-live-review-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      # Each expression is only whether a setting is set; no value reaches the step.
+      - name: Check the model connection
+        id: check
+        env:
+          BASE_URL_SET: ${{ secrets.CI_LLM_BASE_URL != '' }}
+          KEY_SET: ${{ secrets.CI_LLM_API_KEY != '' }}
+          MODEL_SET: ${{ vars.CI_LLM_MODEL != '' }}
+        run: |
+          if [ "$BASE_URL_SET" = true ] && [ "$KEY_SET" = true ] && [ "$MODEL_SET" = true ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          missing=()
+          [ "$BASE_URL_SET" = true ] || missing+=("CI_LLM_BASE_URL")
+          [ "$KEY_SET" = true ] || missing+=("CI_LLM_API_KEY")
+          [ "$MODEL_SET" = true ] || missing+=("CI_LLM_MODEL")
+          echo "::notice title=Pi live review::The CI model connection is not configured, so nothing was reviewed. Missing: ${missing[*]}."
+          {
+            echo "## Pi live review"
+            echo
+            echo "The CI model connection is not configured, so nothing was reviewed. Missing: ${missing[*]}."
+            echo "docs/contributor/ci-cd.mdx § CI model connection lists the settings."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - if: steps.check.outputs.configured == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - if: steps.check.outputs.configured == 'true'
+        uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+
+      - name: Check that the model endpoint answers
+        if: steps.check.outputs.configured == 'true'
+        env:
+          HEPHAESTUS_LIVE_LLM_BASE_URL: ${{ secrets.CI_LLM_BASE_URL }}
+          HEPHAESTUS_LIVE_LLM_API_KEY: ${{ secrets.CI_LLM_API_KEY }}
+        run: node scripts/feedback-eval/endpoint-probe.ts --title "Pi live review"
+
+      - if: steps.check.outputs.configured == 'true'
+        uses: ./.github/actions/setup-caches
+
+      # CI publishes the agent image under its commit for every main build and every ready pull request that
+      # changes the agent runtime. When none resolves, the image is built here from the same Dockerfile.
+      - name: Resolve the agent image of the commit
+        id: image
+        if: steps.check.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          commit=$(git rev-parse HEAD)
+          echo "Commit: \`$commit\`" >> "$GITHUB_STEP_SUMMARY"
+          if node scripts/resolve-release-images.ts "$commit" release-images.tsv; then
+            reference=$(awk -F '\t' '$1 == "agent" { print $2 "@" $3 }' release-images.tsv)
+          fi
+          if [ -n "${reference:-}" ]; then
+            docker pull --quiet "$reference"
+            echo "Agent image: CI's, \`$reference\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            reference="hephaestus/agent:pi-live-$commit"
+            docker build --quiet -t "$reference" \
+              --build-context agent-runtime=server/application/src/main/resources/agent \
+              -f docker/agents/pi/Dockerfile docker/agents
+            echo "Agent image: built here; no CI-published image resolved for this commit" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "reference=$reference" >> "$GITHUB_OUTPUT"
+
+      - name: Review the fixture with the CI model
+        if: steps.check.outputs.configured == 'true'
+        env:
+          HEPHAESTUS_LIVE_LLM_BASE_URL: ${{ secrets.CI_LLM_BASE_URL }}
+          HEPHAESTUS_LIVE_LLM_MODEL: ${{ vars.CI_LLM_MODEL }}
+          HEPHAESTUS_LIVE_LLM_API_KEY: ${{ secrets.CI_LLM_API_KEY }}
+          HEPHAESTUS_LIVE_AGENT_IMAGE: ${{ steps.image.outputs.reference }}
+        working-directory: server
+        run: ./gradlew :application:liveTest --tests '*PracticeRunnerLiveLlmTest.flagsHardcodedSecret_inOneFileDiff' --console=plain
+
+      # The test report and the runner's log: a failure is read from these. Neither holds a secret: the runner
+      # holds only the stand-in's token, and the stand-in logs no request content.
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        if: ${{ !cancelled() && steps.check.outputs.configured == 'true' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
+      - name: Keep the test report
+        if: ${{ !cancelled() && steps.check.outputs.configured == 'true' }}
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
+        with:
+          name: pi-live-review
+          path: server/application/build/test-results/liveTest
+          retention-days: 14
+          if-no-files-found: warn
+          required: "false"

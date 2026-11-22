@@ -390,6 +390,10 @@ and are excluded from every other tier. From `server/`, explicitly opt in with:
 
 Use `--tests ClassName` to select a suite. An unmatched filter fails.
 
+Without model credentials, ask a maintainer to dispatch `pi-live-review.yml` on a branch of this repository.
+It runs one review of
+`PracticeRunnerLiveLlmTest` against the [CI model connection](./ci-cd.mdx#ci-model-connection).
+
 To send only some catalogue criteria cases to the model, name their `id` values from
 `src/test/resources/practices/criteria-cases.json`:
 
