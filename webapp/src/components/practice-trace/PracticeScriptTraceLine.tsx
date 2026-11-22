@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRightIcon, ScanSearchIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { PracticeScriptRun } from "@/api/types.gen";
+import type { PracticeEditedIn, PracticeScriptRun } from "@/api/types.gen";
 import { reviewLevel } from "@/components/admin/practice-reviews/review-levels";
 import { InlineLink } from "@/components/common/InlineLink";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
@@ -17,6 +17,8 @@ export interface PracticeScriptTraceLineProps {
 	workspaceSlug: string;
 	practiceSlug: string;
 	practiceName: string;
+	/** Where the practice is edited now, which decides where its script's fix link leads. */
+	editedIn: PracticeEditedIn;
 	reviewId: string;
 	run: PracticeScriptRun;
 	/**
@@ -33,6 +35,7 @@ export function PracticeScriptTraceLine({
 	workspaceSlug,
 	practiceSlug,
 	practiceName,
+	editedIn,
 	reviewId,
 	run,
 	reviewLink,
@@ -55,6 +58,7 @@ export function PracticeScriptTraceLine({
 						workspaceSlug={workspaceSlug}
 						practiceSlug={practiceSlug}
 						practiceName={practiceName}
+						editedIn={editedIn}
 						fix={fix}
 					/>
 				)}

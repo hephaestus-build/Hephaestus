@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { PracticeEditedIn } from "@/api/types.gen";
+
 import {
 	type DetailStackEntry,
 	detailStackSchema,
@@ -52,6 +54,19 @@ export function practiceFormLevel(practiceSlug?: string): DetailStackEntry<Pract
 	return practiceSlug === undefined
 		? { kind: "practice-new", id: NEW_PRACTICE_ID }
 		: { kind: "practice-edit", id: practiceSlug };
+}
+
+/**
+ * Where a link to a practice in Practice setup lands. A practice edited in the practice repository has
+ * no editor there: its read-only level says so and offers Edit in Hephaestus.
+ */
+export function practiceSetupLevelFor(
+	practiceSlug: string,
+	editedIn: PracticeEditedIn,
+): DetailStackEntry<PracticeSetupLevelKind> {
+	return editedIn === "REPOSITORY"
+		? practiceSetupLevel(practiceSlug)
+		: practiceFormLevel(practiceSlug);
 }
 
 export const practiceSetupSearchSchema = practiceSearchSchema.extend(

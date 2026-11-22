@@ -27,6 +27,7 @@ const meta = {
 		workspaceSlug: "demo",
 		practiceSlug: thinControllers.practiceSlug,
 		practiceName: thinControllers.practiceName,
+		editedIn: "HEPHAESTUS",
 		rangeLabel: "Last 30 days",
 		counts: { status: "ready", counts: thinControllers, stale: false },
 	},
@@ -48,6 +49,29 @@ export const Default: Story = {
 		await expect(figureOf(canvas, "Marked incorrect")).toHaveTextContent("1 of 33");
 		await expect(figureOf(canvas, "Feedback delivered")).toHaveTextContent("7 of 12");
 		await expect(canvas.getByRole("link", { name: "Edit in Practice setup" })).toBeVisible();
+	},
+};
+
+/**
+ * A practice edited in the practice repository has no editor in Practice setup, so the link opens its
+ * read-only level, which says why and offers Edit in Hephaestus.
+ */
+export const EditedInRepository: Story = {
+	args: { editedIn: "REPOSITORY" },
+	play: async ({ canvas }) => {
+		const link = canvas.getByRole("link", { name: "Open in Practice setup" });
+		// The practice's read-only level, not its editor level (`practice-edit`).
+		await expect(link.getAttribute("href")).not.toContain("practice-edit");
+		await expect(canvas.queryByRole("link", { name: "Edit in Practice setup" })).toBeNull();
+	},
+};
+
+/** While the practice list loads, the link opens the practice's level rather than an editor it may not have. */
+export const EditedInUnknown: Story = {
+	args: { editedIn: undefined },
+	play: async ({ canvas }) => {
+		const link = canvas.getByRole("link", { name: "Open in Practice setup" });
+		await expect(link.getAttribute("href")).not.toContain("practice-edit");
 	},
 };
 
