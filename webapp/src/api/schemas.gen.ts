@@ -9668,7 +9668,7 @@ export const PracticeSyncResultSchema = {
 		untried: {
 			type: "boolean",
 			description:
-				"whether the sync made a new current version whose review digest no trial of the practice ran. Only a\n     created, taken-over or updated practice can be untried.",
+				"whether the sync made a new current version whose review digest no trial of the practice ran to the\n     end. Only a created, taken-over or updated practice can be untried.",
 		},
 	},
 	required: ["problems", "slug", "status", "untried"],

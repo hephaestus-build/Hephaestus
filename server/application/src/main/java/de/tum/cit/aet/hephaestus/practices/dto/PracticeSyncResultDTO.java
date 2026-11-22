@@ -8,8 +8,8 @@ import java.util.List;
  *
  * @param slug the folder's name, which is the practice's slug
  * @param problems why the folder is not valid, or why its practice cannot be retired; empty for every other status
- * @param untried whether the sync made a new current version whose review digest no trial of the practice ran. Only a
- *     created, taken-over or updated practice can be untried.
+ * @param untried whether the sync made a new current version whose review digest no trial of the practice ran to the
+ *     end. Only a created, taken-over or updated practice can be untried.
  */
 public record PracticeSyncResultDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String slug,

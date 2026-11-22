@@ -119,6 +119,11 @@ class PracticeRepositorySyncIntegrationTest extends BaseIntegrationTest {
                 null,
                 "item-version-" + UUID.randomUUID(),
                 ReviewOrigin.TRIAL);
+        // A trial counts only once the practice ran to the end in it.
+        jdbc.update(
+                "UPDATE review_practice SET status = 'DONE' WHERE workspace_id = ? AND practice_id = ?",
+                workspaceId(),
+                draft.getId());
         folder("draft-practice", "Say what the change does.");
         write("broken/practice.md", "no front matter\n");
         long scenarioVersion = currentVersionId(scenario.practice().getSlug());

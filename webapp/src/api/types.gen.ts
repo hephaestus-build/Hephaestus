@@ -4820,8 +4820,8 @@ export type PracticeSyncResult = {
 	slug: string;
 	status: PracticeSyncStatus;
 	/**
-	 * whether the sync made a new current version whose review digest no trial of the practice ran. Only a
-	 * created, taken-over or updated practice can be untried.
+	 * whether the sync made a new current version whose review digest no trial of the practice ran to the
+	 * end. Only a created, taken-over or updated practice can be untried.
 	 */
 	untried: boolean;
 };
