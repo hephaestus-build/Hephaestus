@@ -198,12 +198,81 @@ final class ReviewOnWork {
                 putDefined(note, "endLine", copy.path("endLine"));
                 putDefined(note, "side", copy.path("side"));
                 note.put("body", copy.path("body").asString());
+                if (copy.path("externalUrl").isString()) note.set("externalUrl", copy.path("externalUrl"));
                 // The composer sees which note Hephaestus closed as fixed: it no longer stands as advice.
                 if (isTrue(copy.path("closedAsFixed"))) note.put("closedAsFixed", true);
+                // The problems a note cites, by practice and identity: an admitted problem with the same practice and
+                // identity is the problem this note raised.
+                if (copy.path("cites").isArray() && !copy.path("cites").isEmpty())
+                    note.set("cites", copy.path("cites"));
                 notes.add(note);
             }
         }
         return notes;
+    }
+
+    /** One problem a note cites: its practice and the identity a comparison matches it by. */
+    record Cite(String practiceSlug, String identity) {}
+
+    /**
+     * A note of an earlier review on this work that still raises the problems it cites: its piece is not withdrawn, the
+     * note is posted, not retracted, and Hephaestus did not close it as fixed.
+     */
+    record EarlierNote(
+            @Nullable String path,
+            @Nullable Integer startLine,
+            @Nullable Integer endLine,
+            @Nullable String link,
+            @Nullable String body,
+            Set<Cite> cites) {
+        EarlierNote {
+            cites = Set.copyOf(cites);
+        }
+    }
+
+    /**
+     * The notes of earlier reviews on this work that still raise a problem with an identity, from a public history read
+     * as {@link #publicHistory} returns it. Only a cited problem with an identity can match, so a note without one is
+     * left out.
+     */
+    static List<EarlierNote> openNotes(JsonNode history, @Nullable String thisWork) {
+        if (thisWork == null || !isRecord(history)) return List.of();
+        var notes = new ArrayList<EarlierNote>();
+        for (JsonNode entry : listOf(history.path("feedback"))) {
+            if (!isRecord(entry)
+                    || !"ON_WORK".equals(string(entry.path("destination")))
+                    || isTrue(entry.path("withdrawn"))) continue;
+            JsonNode item = isRecord(entry.path("item")) ? entry.path("item") : JSON.objectNode();
+            if (!thisWork.equals(workIdentity(item.path("kind"), item.path("url")))) continue;
+            for (JsonNode copy : listOf(entry.path("copies"))) {
+                String kind = string(copy.path("kind"));
+                if (!isRecord(copy)
+                        || !("LINE_NOTE".equals(kind) || "FILE_NOTE".equals(kind))
+                        || !"POSTED".equals(string(copy.path("state")))
+                        || isTrue(copy.path("closedAsFixed"))) continue;
+                var cites = new LinkedHashSet<Cite>();
+                for (JsonNode cite : listOf(copy.path("cites"))) {
+                    String practice = string(cite.path("practiceSlug"));
+                    String identity = string(cite.path("identity"));
+                    if (practice != null && identity != null && !Js.blank(identity))
+                        cites.add(new Cite(Js.trim(practice), identity));
+                }
+                if (cites.isEmpty()) continue;
+                String body = string(copy.path("body"));
+                notes.add(new EarlierNote(
+                        string(copy.path("path")),
+                        line(copy.path("startLine")),
+                        line(copy.path("endLine")),
+                        string(copy.path("externalUrl")),
+                        body == null || Js.blank(body) ? null : body,
+                        cites));
+            }
+        }
+        return notes;
+    }
+
+    private static @Nullable Integer line(JsonNode value) {
+        return value.isInt() ? value.asInt() : null;
     }
 
     /** {@code JSON.stringify} drops a property whose value is undefined. */
@@ -384,6 +453,8 @@ final class ReviewOnWork {
                     + " is refused for correction, never truncated. "
                     + "A checked draft lists its repeats: line notes that cite a problem that another note already cites. "
                     + "A repeat does not refuse the draft; merge the notes, drop one, or keep both when each says something the other does not. "
+                    + "It also lists each text that cites a problem that an open note of an earlier review on this work still raises, with that note: "
+                    + "drop the text, or keep it only when it says what the earlier note does not. "
                     + "Input example with one useful line note: {\"decisions\":[{\"resultId\":\"<admitted NOT_MET resultId>\",\"disposition\":\"RAISE\"}],\"inline\":[{\"basedOn\":[\"<its problemId>\"],\"body\":\"Explain the local concern and its remedy.\",\"anchor\":{\"problemId\":\"<same problemId>\",\"citationIndex\":0}}],\"summary\":null}. "
                     + "For a quiet review, use summary:null, inline:[] and a supported withholding decision for each result. Unused inline and witnessIds lists may be null or omitted.";
 
@@ -791,19 +862,34 @@ final class ReviewOnWork {
     /** The stored review, or every reason it was refused. */
     record Read(@Nullable ComposedReview review, List<String> errors) {}
 
-    /** A line note that cites a problem that an earlier note already cites, with that note's opening words. */
-    record Repeat(String entry, List<String> problemIds, String earlier, String quote) {
+    /**
+     * An entry that cites a problem that another note already cites, with that note's opening words: an earlier line
+     * note of the draft ({@code alreadyCitedBy}), or an open note of an earlier review on this work
+     * ({@code earlierNote}). Exactly one of the two is set. An earlier note whose words the read could not copy has no
+     * quote.
+     */
+    record Repeat(
+            String entry,
+            List<String> problemIds,
+            @Nullable String alreadyCitedBy,
+            @Nullable EarlierNote earlierNote,
+            @Nullable String quote) {
         Repeat {
             problemIds = List.copyOf(problemIds);
+            if ((alreadyCitedBy == null) == (earlierNote == null))
+                throw new IllegalArgumentException("A repeat names either a note of the draft or an earlier note");
         }
     }
 
     /**
-     * The line notes of {@code review} that cite a problem that an earlier line note of it cites. A summary may point to
-     * its notes, so it never counts. A repeat is found by the problem, not by the words, and it is advice: the composer
-     * merges the notes, drops one, or keeps both.
+     * The repeats of {@code review}, found by the problem, not by the words. A line note repeats an earlier line note of
+     * the draft that cites one of its problems; a summary may point to its notes, so it never counts there. Each entry,
+     * the summary included, repeats an open note of an earlier review on this work that cites a problem of the same
+     * practice with the same identity; a problem without an identity never matches. A repeat is advice: the composer
+     * decides what to keep.
      */
-    static List<Repeat> repeats(ComposedReview review) {
+    static List<Repeat> repeats(
+            ComposedReview review, List<EarlierNote> earlierNotes, Map<String, Evidence.Result> results) {
         var first = new HashMap<String, Integer>();
         var repeats = new ArrayList<Repeat>();
         for (int index = 0; index < review.inline().size(); index++) {
@@ -820,9 +906,42 @@ final class ReviewOnWork {
                         "inline #" + (index + 1),
                         match.getValue(),
                         "inline #" + (match.getKey() + 1),
+                        null,
                         quote(review.inline().get(match.getKey()).body())));
         }
+        if (earlierNotes.isEmpty()) return repeats;
+        var entries = new LinkedHashMap<String, List<Evidence.Ref>>();
+        if (review.summary() != null) entries.put("summary", review.summary().basedOn());
+        for (int index = 0; index < review.inline().size(); index++)
+            entries.put("inline #" + (index + 1), review.inline().get(index).basedOn());
+        entries.forEach((entry, basedOn) -> {
+            var byNote = new LinkedHashMap<Integer, List<String>>();
+            for (var ref : basedOn) {
+                var cite = cite(ref, results);
+                if (cite == null) continue;
+                for (int note = 0; note < earlierNotes.size(); note++)
+                    if (earlierNotes.get(note).cites().contains(cite))
+                        byNote.computeIfAbsent(note, key -> new ArrayList<>())
+                                .add(Objects.requireNonNull(ref.problemId()));
+            }
+            byNote.forEach((note, problemIds) -> {
+                var earlier = earlierNotes.get(note);
+                repeats.add(new Repeat(
+                        entry, problemIds, null, earlier, earlier.body() == null ? null : quote(earlier.body())));
+            });
+        });
         return repeats;
+    }
+
+    /** The practice and identity of the problem a reference names; null for a result, or a problem without identity. */
+    private static @Nullable Cite cite(Evidence.Ref ref, Map<String, Evidence.Result> results) {
+        var result = results.get(ref.resultId());
+        if (ref.problemId() == null || result == null) return null;
+        return result.problems().stream()
+                .filter(problem -> problem.problemId().equals(ref.problemId()) && problem.identity() != null)
+                .findFirst()
+                .map(problem -> new Cite(result.practiceSlug(), Objects.requireNonNull(problem.identity())))
+                .orElse(null);
     }
 
     /** The opening words of a text, on one line. */
@@ -1174,8 +1293,9 @@ final class ReviewOnWork {
 
     /**
      * A raise over still-current advice on its practice must say what is new since that advice. The server cannot tell
-     * whether the advice made this result's point, because a delivered piece rests on its own review's results and
-     * no problem identity links them to this review's; so it asks once, by practice, and the composer decides.
+     * whether the advice made this result's point: a problem identity links a problem only to the earlier notes that
+     * cite it ({@link #repeats}), and a piece's summary can make any point. So it asks once, by practice, and the
+     * composer decides.
      */
     private static List<String> raiseProblems(
             String practiceSlug, @Nullable String newSince, Map<String, Witness> witnesses) {

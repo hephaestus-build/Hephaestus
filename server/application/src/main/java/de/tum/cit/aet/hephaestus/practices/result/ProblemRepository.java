@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import tools.jackson.databind.JsonNode;
@@ -30,4 +31,25 @@ public interface ProblemRepository extends JpaRepository<Problem, UUID> {
     record Citations(UUID resultId, JsonNode citations) {}
 
     List<Problem> findByWorkspaceIdAndIdIn(long workspaceId, Collection<UUID> ids);
+
+    /** The identity of each of the problems that has one. */
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.practices.result.ProblemRepository$Identity(p.id, p.identity)
+        FROM Problem p WHERE p.workspaceId = :workspaceId AND p.id IN :ids AND p.identity IS NOT NULL
+        """)
+    List<Identity> findIdentities(@Param("workspaceId") long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    record Identity(UUID id, String identity) {}
+
+    /**
+     * Records the identity of a problem sealed before problems recorded their identity, once a comparison computed it.
+     * A problem that has an identity keeps it.
+     */
+    @Modifying
+    @Query(value = """
+        UPDATE problem SET identity = :identity
+        WHERE workspace_id = :workspaceId AND id = :id AND identity IS NULL
+        """, nativeQuery = true)
+    int recordIdentity(
+            @Param("workspaceId") long workspaceId, @Param("id") UUID id, @Param("identity") String identity);
 }

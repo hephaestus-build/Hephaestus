@@ -700,6 +700,100 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 .containsExactly(slug(closed));
     }
 
+    @Test
+    void shouldGiveEachNoteThePracticeAndIdentityOfTheProblemsItCites() {
+        var row = piece(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, AT);
+        var identified = negativeResult();
+        var unidentified = negativeResult();
+        var proofs = List.of(identified, unidentified);
+        for (int ordinal = 0; ordinal < proofs.size(); ordinal++) {
+            var proof = proofs.get(ordinal);
+            basis.saveAndFlush(FeedbackBasis.builder()
+                    .id(FeedbackIds.basis(row.getId(), proof.getId(), null))
+                    .workspaceId(workspace.getId())
+                    .feedbackId(row.getId())
+                    .resultId(proof.getId())
+                    .developerId(developerId)
+                    .ordinal(ordinal)
+                    .build());
+            authorize(proof);
+        }
+        jdbc.update(
+                "UPDATE problem SET identity = 'key:missing-test' WHERE workspace_id = ? AND result_id = ?",
+                workspace.getId(),
+                identified.getId());
+        summary(row, FeedbackCopyState.POSTED);
+        var support = new ArrayList<FeedbackCompositionTrace.CopySupport>();
+        support.add(new FeedbackCompositionTrace.CopySupport(
+                FeedbackCopyKind.SUMMARY,
+                0,
+                List.of(new FeedbackCompositionTrace.Support(identified.getId(), problemOf(identified)))));
+        // The first note cites a problem with an identity; the second one cites a problem without one.
+        for (int position = 1; position <= proofs.size(); position++) {
+            var proof = proofs.get(position - 1);
+            var copyId = FeedbackIds.copy(row.getId(), FeedbackCopyKind.LINE_NOTE, position);
+            copies.saveAndFlush(FeedbackCopy.builder()
+                    .id(copyId)
+                    .workspaceId(workspace.getId())
+                    .feedbackId(row.getId())
+                    .kind(FeedbackCopyKind.LINE_NOTE)
+                    .position(position)
+                    .state(FeedbackCopyState.POSTED)
+                    .body("Cover the failure case here.")
+                    .path("src/A.java")
+                    .startLine(position)
+                    .endLine(position)
+                    .side(CitationSide.NEW)
+                    .writeKey(copyId.toString())
+                    .writeMarker(FeedbackIds.writeMarker(copyId))
+                    .writeStartedAt(AT)
+                    .postedAt(AT)
+                    .externalRef("note-" + position)
+                    .createdAt(AT)
+                    .build());
+            support.add(new FeedbackCompositionTrace.CopySupport(
+                    FeedbackCopyKind.LINE_NOTE,
+                    position,
+                    List.of(new FeedbackCompositionTrace.Support(proof.getId(), problemOf(proof)))));
+        }
+        jdbc.update(
+                """
+                UPDATE review SET checks = jsonb_set(COALESCE(checks, '{}'::jsonb), '{feedbackComposition}',
+                  COALESCE(checks->'feedbackComposition', '{}'::jsonb) || jsonb_build_object(?::text, ?::jsonb))
+                WHERE id = ?
+                """,
+                row.getId().toString(),
+                mapper.writeValueAsString(new FeedbackCompositionTrace(support, List.of(), null, null)),
+                reviewId);
+
+        var publicHistory = Objects.requireNonNull(history.forItem(workspace.getId(), itemId, developerId, 1)
+                .getFirst()
+                .publicHistory());
+
+        var cites = new HashMap<String, JsonNode>();
+        publicHistory
+                .path("copies")
+                .forEach(copy -> cites.put(
+                        copy.path("kind").asString() + copy.path("externalRef").asString(""), copy.path("cites")));
+        assertThat(cites.get("LINE_NOTEnote-1"))
+                .isEqualTo(mapper.createArrayNode()
+                        .add(mapper.createObjectNode()
+                                .put("practiceSlug", slug(identified))
+                                .put("identity", "key:missing-test")));
+        assertThat(cites.get("LINE_NOTEnote-2")).isEqualTo(mapper.createArrayNode());
+        assertThat(cites.get("SUMMARY" + "copy-" + FeedbackIds.copy(row.getId(), FeedbackCopyKind.SUMMARY, 0)))
+                .as("a summary may point to its notes, so it cites nothing")
+                .isEqualTo(mapper.createArrayNode());
+    }
+
+    private UUID problemOf(Result proof) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT id FROM problem WHERE workspace_id = ? AND result_id = ?",
+                UUID.class,
+                workspace.getId(),
+                proof.getId()));
+    }
+
     private String slug(Result proof) {
         return Objects.requireNonNull(
                 jdbc.queryForObject("SELECT slug FROM practice WHERE id = ?", String.class, proof.getPracticeId()));

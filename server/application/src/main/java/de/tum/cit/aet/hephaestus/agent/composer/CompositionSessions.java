@@ -506,7 +506,8 @@ public class CompositionSessions {
             admission.checkPackage(identity, proposal);
             String id = proposal.draftId(job.getReviewId());
             return new Answered(
-                    ToolResult.text(checkedReceipt(id, ReviewOnWork.repeats(review))),
+                    ToolResult.text(
+                            checkedReceipt(id, ReviewOnWork.repeats(review, turn.earlierNotes(), turn.restable()))),
                     new CompositionToolTrace.Decision(destination, id, mapper.valueToTree(proposal), false, null));
         } catch (PublicationContextRefusedException refused) {
             return refusedPublication(job, refused.reason(), "The review was not stored.");
@@ -690,15 +691,29 @@ public class CompositionSessions {
             for (var repeat : repeats) {
                 var row = listed.addObject().put("entry", repeat.entry());
                 repeat.problemIds().forEach(row.putArray("problemIds")::add);
-                row.put("alreadyCitedBy", repeat.earlier()).put("quote", repeat.quote());
+                if (repeat.alreadyCitedBy() != null) row.put("alreadyCitedBy", repeat.alreadyCitedBy());
+                var note = repeat.earlierNote();
+                if (note != null)
+                    row.putObject("earlierNote")
+                            .put("path", note.path())
+                            .put("startLine", note.startLine())
+                            .put("endLine", note.endLine())
+                            .put("link", note.link());
+                if (repeat.quote() != null) row.put("quote", repeat.quote());
             }
         }
-        return receipt.put(
-                        "next",
-                        repeats.isEmpty()
-                                ? "Correct the draft and check again, or publish_package with this draftId."
-                                : "Each repeat cites a problem that another note already cites. Merge the notes, drop one, or keep both when each says something the other does not; then check again, or publish_package with this draftId.")
-                .toString();
+        var next = new ArrayList<String>();
+        if (repeats.stream().anyMatch(repeat -> repeat.alreadyCitedBy() != null))
+            next.add(
+                    "A repeat with alreadyCitedBy cites a problem that another note of this draft already cites: merge the notes, drop one, or keep both when each says something the other does not.");
+        if (repeats.stream().anyMatch(repeat -> repeat.earlierNote() != null))
+            next.add(
+                    "A repeat with earlierNote cites a problem that the earlier note still raises on this work: drop the entry, or keep it only when it says what the earlier note does not.");
+        next.add(
+                repeats.isEmpty()
+                        ? "Correct the draft and check again, or publish_package with this draftId."
+                        : "Then check again, or publish_package with this draftId.");
+        return receipt.put("next", String.join(" ", next)).toString();
     }
 
     private static String publicationReceipt(String id, PreparedPackage receipt) {

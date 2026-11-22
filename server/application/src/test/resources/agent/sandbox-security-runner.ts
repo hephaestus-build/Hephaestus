@@ -177,7 +177,7 @@ const server = createServer((request, response) => {
 				admitted += 1;
 				response.writeHead(200, { "content-type": "application/json" }).end(
 					JSON.stringify({
-						contractVersion: 4,
+						contractVersion: 5,
 						admissionDigest: "a".repeat(64),
 						admitted: [],
 						withheld: [],

@@ -220,6 +220,26 @@ void test("permits dropping an object in the pending contractions of the latest 
 	]);
 });
 
+void test("permits dropping a table or column that a new changelog adds", () => {
+	const xml = changelog(
+		changeSet(
+			"1",
+			`<createTable tableName="problem_lineage"><column name="id" type="UUID"/></createTable>`,
+		),
+		changeSet(
+			"2",
+			`<addColumn tableName="problem"><column name="identity" type="TEXT"/></addColumn>`,
+		),
+		changeSet("3", `<dropColumn tableName="problem_lineage" columnName="id"/>`),
+		changeSet("4", `<dropColumn tableName="problem" columnName="identity"/>`),
+		changeSet("5", `<dropTable tableName="problem_lineage"/>`),
+		changeSet("6", `<dropColumn tableName="problem" columnName="key"/>`),
+	);
+	assert.deepEqual(check(xml), [
+		"new.xml change set 6: dropColumn problem.key, which the previous release still uses. Drop only an object in the pending contractions of the latest release.",
+	]);
+});
+
 void test("reads the pending contractions from the first table after their heading", () => {
 	const objects = pendingContractions(
 		[

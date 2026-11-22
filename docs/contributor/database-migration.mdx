@@ -273,6 +273,7 @@ It rejects these change sets and files:
 
 Except for the foreign-key delete rule, these rules do not apply to a table that a new changelog creates.
 The constraint rules also do not apply to new columns without a default value, because the previous release leaves them NULL.
+A new changelog can also drop a column that a new changelog adds, because the previous release does not know it.
 The guard reads each change set alone, not the order of change sets.
 
 Liquibase 5.0.x has no `addCheckConstraint` change type. Review a raw `CHECK` constraint.

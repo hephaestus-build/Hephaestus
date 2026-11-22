@@ -79,4 +79,13 @@ public class Problem {
 
     @Column(name = "next_step", columnDefinition = "TEXT")
     private @Nullable String nextStep;
+
+    /**
+     * The problem's identity in a comparison: {@code key:} and its key, or a hash of the source and quote of its
+     * witness citation ({@code ProblemComparison}). A key is not unique across practices or items, so a reader matches
+     * it within one practice and item. The seal writes it. A problem sealed before the column has none until a lineage
+     * comparison names it; a problem without a key and without a witness has none.
+     */
+    @Column(name = "identity", columnDefinition = "TEXT")
+    private @Nullable String identity;
 }

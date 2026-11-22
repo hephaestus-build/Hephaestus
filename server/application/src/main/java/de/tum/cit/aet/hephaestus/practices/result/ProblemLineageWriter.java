@@ -18,8 +18,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
@@ -31,8 +33,8 @@ import org.springframework.stereotype.Component;
  * first citation, and No longer present needs a judged result of a changed version, unmarked and with
  * trusted coverage. An item review adds one condition, because its problems can cite any path and the model chooses
  * their keys: every text that the previous problem quoted must be gone from the newer capture. A renamed key or a
- * problem the model left out is then never mistaken for a repair. Rows written publish {@link ProblemLineageRecorded}, so
- * the threads of the item's feedback follow them after the commit.
+ * problem the model left out is then never mistaken for a repair. A row reads its identity from its problem. Rows
+ * written publish {@link ProblemLineageRecorded}, so the threads of the item's feedback follow them after the commit.
  */
 @Component
 @ConditionalOnServerRole
@@ -43,6 +45,7 @@ class ProblemLineageWriter {
     private final ProblemComparison comparison;
     private final ScanEvidencePolicy evidence;
     private final ProblemLineageRepository lineage;
+    private final ProblemRepository problems;
     private final ApplicationEventPublisher events;
 
     void record(
@@ -81,10 +84,9 @@ class ProblemLineageWriter {
                                             entry.getValue().candidate()))
                             ? ProblemBaselineState.UNCHANGED
                             : ProblemBaselineState.UPDATED;
-            recorded.add(
-                    row(result, prior, entry.getValue().id(), match == null ? null : match.id(), state, entry.getKey())
-                            .recordedAt(at)
-                            .build());
+            recorded.add(row(result, prior, entry.getValue().id(), match == null ? null : match.id(), state)
+                    .recordedAt(at)
+                    .build());
         }
         boolean unmarked = evidence.unmarked(review, rows).containsAll(List.of(result.getId(), prior.getId()));
         if (ProblemComparison.provesAbsence(before.candidate(), written, true, true, !unmarked, true))
@@ -94,13 +96,34 @@ class ProblemLineageWriter {
                 if (!cited.isEmpty()
                         && cited.stream()
                                 .allMatch(citation -> captured.presence(citation) == CapturedTextProbe.Presence.GONE))
-                    recorded.add(
-                            row(result, prior, null, entry.getValue().id(), ProblemBaselineState.ABSENT, entry.getKey())
-                                    .recordedAt(at)
-                                    .build());
+                    recorded.add(row(result, prior, null, entry.getValue().id(), ProblemBaselineState.ABSENT)
+                            .recordedAt(at)
+                            .build());
             }
+        if (recorded.isEmpty()) return;
         lineage.saveAll(recorded);
-        if (!recorded.isEmpty()) events.publishEvent(new ProblemLineageRecorded(ws, result.getId()));
+        recordPriorIdentities(ws, previousKeys);
+        events.publishEvent(new ProblemLineageRecorded(ws, result.getId()));
+    }
+
+    /**
+     * A row's problem holds the identity that the row matched by. A previous problem sealed before problems recorded
+     * their identity has none, so it gets the identity that this comparison computed for it.
+     */
+    private void recordPriorIdentities(long ws, Map<String, AdmittedProblemSnapshot> previousKeys) {
+        var stored =
+                problems
+                        .findIdentities(
+                                ws,
+                                previousKeys.values().stream()
+                                        .map(AdmittedProblemSnapshot::id)
+                                        .toList())
+                        .stream()
+                        .map(ProblemRepository.Identity::id)
+                        .collect(Collectors.toSet());
+        previousKeys.forEach((identity, problem) -> {
+            if (!stored.contains(problem.id())) problems.recordIdentity(ws, problem.id(), identity);
+        });
     }
 
     /** The written problems with their row ids, in the candidate's order. */
@@ -122,8 +145,7 @@ class ProblemLineageWriter {
             Result prior,
             @Nullable UUID problem,
             @Nullable UUID priorProblem,
-            ProblemBaselineState state,
-            String identity) {
+            ProblemBaselineState state) {
         return ProblemLineage.builder()
                 .id(UUID.randomUUID())
                 .workspaceId(result.getWorkspaceId())
@@ -131,7 +153,6 @@ class ProblemLineageWriter {
                 .priorResultId(Objects.requireNonNull(prior.getId()))
                 .problemId(problem)
                 .priorProblemId(priorProblem)
-                .comparison(state)
-                .identity(identity);
+                .comparison(state);
     }
 }

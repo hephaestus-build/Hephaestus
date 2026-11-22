@@ -104,7 +104,11 @@ No longer present needs a judged result of a changed version with trusted covera
 It also needs every text that the previous problem quoted to be gone from the newer review's capture.
 The [problem states](./practice-feedback-language.mdx#problems-and-severity) define the four states.
 
-Each row keeps the problem's identity, so a reader can tell that a problem came back in a later comparison.
+Each problem holds its identity (`problem.identity`), so a reader can tell that a problem came back in a later comparison.
+A row reads the identity from its problem: the newer problem, or the previous one when it is no longer present.
+The seal writes the identity of each problem.
+A problem sealed before this column gets its identity when a lineage row names it.
+A problem without a key and without a witness citation has no identity.
 
 `feedback_thread_resolution` holds Hephaestus's own resolve or reopen of one thread on the work.
 It has one row for each workspace, item and thread.

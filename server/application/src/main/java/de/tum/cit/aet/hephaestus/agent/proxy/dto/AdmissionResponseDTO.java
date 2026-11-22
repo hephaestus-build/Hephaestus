@@ -20,7 +20,7 @@ public record AdmissionResponseDTO(
         boolean publicReviewed,
         PrivateProgressDTO privateProgress) {
     /** The admission answer's own contract; the request and practice script contracts version separately. */
-    public static final int CONTRACT_VERSION = 4;
+    public static final int CONTRACT_VERSION = 5;
 
     public AdmissionResponseDTO {
         admitted = List.copyOf(admitted);

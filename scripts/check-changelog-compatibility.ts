@@ -115,7 +115,12 @@ function additions(sets: readonly ChangeSet[]): Additions {
 	return { tables, columns, defaults };
 }
 
-function contractionProblems(changes: Element, contractions: ReadonlySet<string>): string[] {
+/** A drop of an object that a new changelog adds: the previous release does not know it, so it never uses it. */
+function contractionProblems(
+	changes: Element,
+	contractions: ReadonlySet<string>,
+	added: Additions,
+): string[] {
 	const dropped = [
 		...elements(changes, "dropTable").map(
 			(table) => ["dropTable", attribute(table, "tableName")] as const,
@@ -129,8 +134,10 @@ function contractionProblems(changes: Element, contractions: ReadonlySet<string>
 				.map((column) => ["dropColumn", `${attribute(drop, "tableName")}.${column}`] as const),
 		),
 	];
+	const unknown = (object: string): boolean =>
+		added.tables.has(object.split(".")[0] ?? object) || added.columns.has(object);
 	return dropped
-		.filter(([, object]) => !contractions.has(object))
+		.filter(([, object]) => !contractions.has(object) && !unknown(object))
 		.map(
 			([change, object]) =>
 				`${change} ${object}, which the previous release still uses. Drop only an object in the pending contractions of the latest release.`,
@@ -352,7 +359,7 @@ export function violations({ changelogs, contractions }: CompatibilityInput): st
 		...unreadable,
 		...sets.flatMap(({ file, id, changes }) =>
 			[
-				...contractionProblems(changes, contractions),
+				...contractionProblems(changes, contractions, added),
 				...renameProblems(changes),
 				...notNullProblems(changes, added),
 				...constraintProblems(changes, added),

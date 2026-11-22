@@ -1,5 +1,5 @@
 {
-	"contractVersion": 4,
+	"contractVersion": 5,
 	"reviewId": "10000000-0000-4000-8000-000000000001",
 	"jobId": "20000000-0000-4000-8000-000000000001",
 	"attempt": 0,
@@ -36,7 +36,8 @@
 					"citations": [],
 					"basis": null,
 					"nextStep": "Record the failure.",
-					"publicEligible": true
+					"publicEligible": true,
+					"identity": "scheme-1:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 				}
 			],
 			"summaryOnly": true,

@@ -418,7 +418,7 @@ function admissionAnswer(route: string, bytes: Buffer): unknown {
 	const digest = createHash("sha256").update(bytes).digest("hex");
 	if (route === "admit-results") {
 		// Admission is the server's; the stand-in admits nothing and withholds nothing.
-		return { contractVersion: 4, admissionDigest: digest, admitted: [], withheld: [] };
+		return { contractVersion: 5, admissionDigest: digest, admitted: [], withheld: [] };
 	}
 	const request = asRecord(parseJson(bytes.toString("utf8")), `${route} request`);
 	if (route === "start-practice") {

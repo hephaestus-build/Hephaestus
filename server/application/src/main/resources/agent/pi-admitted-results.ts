@@ -29,7 +29,7 @@ export const admittedResultSchema = z
 	});
 
 export const admissionResponseSchema = z.looseObject({
-	contractVersion: z.literal(4),
+	contractVersion: z.literal(5),
 	admissionDigest: z.string().regex(/^[0-9a-f]{64}$/u),
 	admitted: z.array(admittedResultSchema),
 	withheld: z.array(z.object({ practiceSlug: z.string(), reason: z.string() })),

@@ -561,7 +561,7 @@ if (scenario !== undefined && scenario !== "") {
 		assert.ok(typeof init?.body === "string");
 		capture("admission", { body: parseJson(init.body) });
 		return Response.json({
-			contractVersion: 4,
+			contractVersion: 5,
 			admissionDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			admitted: [],
 			withheld: [],

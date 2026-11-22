@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795329974538-1" author="hephaestus">
+        <addColumn tableName="problem">
+            <column name="identity" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795329974538-3" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="A problem has two different identities in problem_lineage. The identity cannot move to the problem. Report this database state as a defect.">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM (
+                SELECT workspace_id, id FROM (
+                  SELECT workspace_id, problem_id AS id, identity FROM problem_lineage WHERE problem_id IS NOT NULL
+                  UNION
+                  SELECT workspace_id, prior_problem_id, identity FROM problem_lineage WHERE prior_problem_id IS NOT NULL) named
+                GROUP BY workspace_id, id HAVING COUNT(DISTINCT identity) &gt; 1) conflicting</sqlCheck>
+        </preConditions>
+        <comment>The problem now holds its identity, which lineage rows held until now. A lineage row holds the identity of its problem: the newer problem, or the previous one when it is no longer present. Unchanged and Updated rows match both problems by that identity, so both get it. A problem that no row names and that has a key gets "key:" and its key. A problem without a key that no row names keeps no identity, because its identity is a hash of the server's serialization that SQL cannot reproduce exactly.</comment>
+        <sql>UPDATE problem p SET identity = named.identity
+            FROM (
+              SELECT workspace_id, problem_id AS id, identity FROM problem_lineage WHERE problem_id IS NOT NULL
+              UNION
+              SELECT workspace_id, prior_problem_id, identity FROM problem_lineage WHERE prior_problem_id IS NOT NULL) named
+            WHERE p.workspace_id = named.workspace_id AND p.id = named.id AND p.identity IS NULL;
+        UPDATE problem SET identity = 'key:' || key WHERE identity IS NULL AND key IS NOT NULL;</sql>
+        <rollback>
+            <sql>UPDATE problem SET identity = NULL WHERE identity IS NOT NULL;</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795329974538-2" author="hephaestus">
+        <comment>A lineage row reads its identity from its problem, so the copy on the row goes. The rollback copies it back from the problem. A row whose problem has no identity cannot exist: the seal writes the identity, and lineage records it on a previous problem sealed without one.</comment>
+        <dropIndex indexName="idx_problem_lineage_identity" tableName="problem_lineage"/>
+        <dropColumn columnName="identity" tableName="problem_lineage"/>
+        <rollback>
+            <sql>ALTER TABLE problem_lineage ADD COLUMN identity TEXT;
+        UPDATE problem_lineage l SET identity = p.identity
+            FROM problem p
+            WHERE p.workspace_id = l.workspace_id AND p.id = COALESCE(l.problem_id, l.prior_problem_id);
+        ALTER TABLE problem_lineage ALTER COLUMN identity SET NOT NULL;
+        CREATE INDEX idx_problem_lineage_identity ON problem_lineage (workspace_id, identity);</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

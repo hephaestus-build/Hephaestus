@@ -372,7 +372,7 @@ if (scenario !== undefined && scenario !== "") {
 			record("draft-closed:Measurement is closed; result and notes unchanged");
 		}
 		return Response.json({
-			contractVersion: 4,
+			contractVersion: 5,
 			admissionDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			admitted: admitted(),
 			withheld: [],

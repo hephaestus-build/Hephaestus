@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.composer;
 
+import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.node.ObjectNode;
@@ -11,4 +12,9 @@ record ReviewCompositionTurn(
         Map<String, Evidence.Result> restable,
         boolean lineNotes,
         Map<String, ReviewOnWork.Witness> witnesses,
-        @Nullable String publicationContext) {}
+        List<ReviewOnWork.EarlierNote> earlierNotes,
+        @Nullable String publicationContext) {
+    ReviewCompositionTurn {
+        earlierNotes = List.copyOf(earlierNotes);
+    }
+}

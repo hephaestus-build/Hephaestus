@@ -16,7 +16,7 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
     interface ProblemStanding {
         UUID getProblemId();
 
-        /** The comparison of the newest lineage row with the problem's identity. */
+        /** The comparison of the newest lineage row whose problem has the cited problem's identity. */
         String getComparison();
 
         /** The result that wrote that row. */
@@ -32,15 +32,15 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
     }
 
     /**
-     * Where each of {@code problemIds} stands now. A problem takes its identity from a lineage row that names it. The
-     * newest row with that identity, in the same practice, item and developer, says where it stands. Only rows of
-     * results that a comparison may use count: an item review that is no trial, a result that was not outranked, and
-     * one that no person marked incorrect. A problem that no row names, or whose own result a person marked incorrect,
-     * has no standing.
+     * Where each of {@code problemIds} stands now. The newest lineage row whose problem has the cited problem's
+     * identity, in the same practice, item and developer, says where it stands. A row's problem is its newer problem,
+     * or the previous one when it is no longer present. Only rows of results that a comparison may use count: an item
+     * review that is no trial, a result that was not outranked, and one that no person marked incorrect. A problem
+     * without an identity, one that no row names, or one whose own result a person marked incorrect has no standing.
      */
     @Query(value = """
-        WITH cited AS (
-          SELECT p.id AS problem_id, p.result_id, r.practice_id, r.item_id, r.developer_id,
+        WITH named AS (
+          SELECT p.id AS problem_id, p.result_id, p.identity, r.practice_id, r.item_id, r.developer_id,
             r.practice_version_id AS cited_version, r.recorded_at AS cited_recorded, v.ordered_at AS cited_ordered,
             m.method->>'modelDigest' AS cited_digest, m.method->>'epoch' AS cited_epoch
           FROM problem p
@@ -48,15 +48,13 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
           JOIN review v ON v.id = r.review_id AND v.workspace_id = r.workspace_id
           JOIN review_practice m ON m.review_id = r.review_id AND m.practice_id = r.practice_id
             AND m.workspace_id = r.workspace_id
-          WHERE p.workspace_id = :workspaceId AND p.id IN (:problemIds)
+          WHERE p.workspace_id = :workspaceId AND p.id IN (:problemIds) AND p.identity IS NOT NULL
             AND NOT EXISTS (SELECT 1 FROM result_mark k WHERE k.result_id = r.id AND k.workspace_id = r.workspace_id
-              AND k.kind = 'INCORRECT' AND k.removed_at IS NULL)),
-        named AS (
-          SELECT c.*, l.identity FROM cited c JOIN problem_lineage l ON l.workspace_id = :workspaceId
-            AND l.result_id = c.result_id AND l.problem_id = c.problem_id
-          UNION
-          SELECT c.*, l.identity FROM cited c JOIN problem_lineage l ON l.workspace_id = :workspaceId
-            AND l.prior_result_id = c.result_id AND l.prior_problem_id = c.problem_id),
+              AND k.kind = 'INCORRECT' AND k.removed_at IS NULL)
+            AND (EXISTS (SELECT 1 FROM problem_lineage l WHERE l.workspace_id = p.workspace_id
+                AND l.result_id = p.result_id AND l.problem_id = p.id)
+              OR EXISTS (SELECT 1 FROM problem_lineage l WHERE l.workspace_id = p.workspace_id
+                AND l.prior_result_id = p.result_id AND l.prior_problem_id = p.id))),
         usable AS (
           SELECT r.id, r.practice_id, r.item_id, r.developer_id, r.practice_version_id, r.recorded_at, v.ordered_at,
             COALESCE(r.ended_at <= r.recorded_at, false) AS ended_at_once,
@@ -67,16 +65,18 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
             AND m.workspace_id = r.workspace_id
           WHERE r.workspace_id = :workspaceId AND v.kind = 'ITEM' AND v.origin <> 'TRIAL'
             AND r.end_reason IS DISTINCT FROM 'OUTRANKED'
-            AND r.item_id IN (SELECT item_id FROM cited)
+            AND r.item_id IN (SELECT item_id FROM named)
             AND NOT EXISTS (SELECT 1 FROM result_mark k WHERE k.result_id = r.id AND k.workspace_id = r.workspace_id
               AND k.kind = 'INCORRECT' AND k.removed_at IS NULL)),
         newest AS (
           SELECT DISTINCT ON (n.problem_id) n.problem_id, n.practice_id, n.item_id, n.developer_id, n.cited_version,
             n.cited_digest, n.cited_epoch, n.cited_ordered, n.cited_recorded, l.comparison, u.id AS result_id
           FROM named n
-          JOIN problem_lineage l ON l.workspace_id = :workspaceId AND l.identity = n.identity
-          JOIN usable u ON u.id = l.result_id AND u.practice_id = n.practice_id AND u.item_id = n.item_id
+          JOIN usable u ON u.practice_id = n.practice_id AND u.item_id = n.item_id
             AND u.developer_id IS NOT DISTINCT FROM n.developer_id
+          JOIN problem_lineage l ON l.workspace_id = :workspaceId AND l.result_id = u.id
+          JOIN problem lp ON lp.workspace_id = l.workspace_id AND lp.id = COALESCE(l.problem_id, l.prior_problem_id)
+            AND lp.identity = n.identity
           ORDER BY n.problem_id, u.ordered_at DESC, u.recorded_at DESC, l.id DESC)
         SELECT w.problem_id AS problemId, w.comparison AS comparison, w.result_id AS resultId,
           EXISTS (SELECT 1 FROM usable later WHERE later.practice_id = w.practice_id AND later.item_id = w.item_id
@@ -92,17 +92,21 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
             @Param("workspaceId") long workspaceId, @Param("problemIds") Collection<UUID> problemIds);
 
     /**
-     * Whether {@code resultId} proved one of {@code problemIds} No longer present: it wrote an {@code ABSENT} row with
-     * that problem's identity, in the same practice, item and developer.
+     * Whether {@code resultId} proved one of {@code problemIds} No longer present: it wrote an {@code ABSENT} row whose
+     * problem has that problem's identity, in the same practice, item and developer. Like {@link #findStanding}, it
+     * counts only a cited problem that a lineage row names.
      */
     @Query(value = """
         SELECT EXISTS (
           SELECT 1 FROM problem_lineage l
           JOIN result proving ON proving.id = l.result_id AND proving.workspace_id = l.workspace_id
-          JOIN problem_lineage named ON named.workspace_id = l.workspace_id AND named.identity = l.identity
-          JOIN problem p ON p.workspace_id = named.workspace_id AND p.id IN (:problemIds)
-            AND ((named.problem_id = p.id AND named.result_id = p.result_id)
-              OR (named.prior_problem_id = p.id AND named.prior_result_id = p.result_id))
+          JOIN problem gone ON gone.workspace_id = l.workspace_id AND gone.id = l.prior_problem_id
+          JOIN problem p ON p.workspace_id = gone.workspace_id AND p.id IN (:problemIds)
+            AND p.identity = gone.identity
+            AND (EXISTS (SELECT 1 FROM problem_lineage named WHERE named.workspace_id = p.workspace_id
+                AND named.result_id = p.result_id AND named.problem_id = p.id)
+              OR EXISTS (SELECT 1 FROM problem_lineage named WHERE named.workspace_id = p.workspace_id
+                AND named.prior_result_id = p.result_id AND named.prior_problem_id = p.id))
           JOIN result cited ON cited.id = p.result_id AND cited.workspace_id = p.workspace_id
           WHERE l.workspace_id = :workspaceId AND l.result_id = :resultId AND l.comparison = 'ABSENT'
             AND proving.practice_id = cited.practice_id AND proving.item_id = cited.item_id
