@@ -104,8 +104,19 @@ public class FeedbackRepairService implements FeedbackRepair {
         UUID feedbackId = status.feedbackId();
         if (feedbackId == null || status.state() != FeedbackRepairStatus.State.READBACK) return status;
         var row = feedback.findByIdAndWorkspaceId(feedbackId, workspaceId).orElseThrow();
+        // A quiet edit is checked against the history its session read before the first publication, so the cutoff is
+        // the first revision's preparation: the review's earliest piece on the work.
+        var prepared = feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(workspaceId, reviewId).stream()
+                .filter(piece -> piece.getDestination() == FeedbackDestination.ON_WORK)
+                .findFirst()
+                .orElse(row)
+                .getCreatedAt();
         return new FeedbackRepairStatus(
-                feedbackId, status.state(), status.edits(), status.copies(), repeats.of(row, status.copies()));
+                feedbackId,
+                status.state(),
+                status.edits(),
+                status.copies(),
+                repeats.of(row, status.copies(), prepared));
     }
 
     private FeedbackRepairStatus readStatus(long workspaceId, UUID reviewId) {

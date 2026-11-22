@@ -32,9 +32,11 @@ import tools.jackson.databind.ObjectMapper;
  * The repeats that the readback of a piece on the work flags: each of its notes, found and not resolved on the
  * provider, that cites a problem with the same practice and identity as a note of another review on the same work.
  *
- * <p>The other note reached the work after this piece was prepared ({@code feedback.created_at}, the preparation
- * receipt's time). The check read the history before that, and preparation refuses a history that changed since, so an
- * older note was in the check's history and the composer chose. The other note is the newest revision of its provider
+ * <p>The other note's provider comment was first posted after this composition's first revision was prepared
+ * ({@code feedback.created_at}, the preparation receipt's time). The check read the history before that, and preparation
+ * refuses a history that changed since, so an older note was in the check's history and the composer chose. A quiet
+ * edit is checked against that same history, so the cutoff stays at the first revision, and a note that an earlier
+ * readback listed is listed again. The other note is the newest revision of its provider
  * comment, posted, of a piece that is not withdrawn and not marked incorrect, does not rest on an incorrect result, and
  * Hephaestus did not close it as fixed. Its words are shown only as the public history shows them. Pairs inside one
  * composition are left out: the check listed them.
@@ -52,7 +54,11 @@ class FeedbackReadbackRepeats {
     private final FeedbackPublicHistory publicHistory;
     private final ObjectMapper mapper;
 
-    List<FeedbackRepairStatus.Repeat> of(Feedback row, List<CopyReadback> readback) {
+    /**
+     * The repeats of {@code row}'s notes, against notes first posted after {@code prepared}: the preparation of this
+     * composition's first revision.
+     */
+    List<FeedbackRepairStatus.Repeat> of(Feedback row, List<CopyReadback> readback, Instant prepared) {
         long workspaceId = row.getWorkspaceId();
         Long itemId = row.getItemId();
         var standing = readback.stream()
@@ -65,7 +71,7 @@ class FeedbackReadbackRepeats {
                 .toList();
         if (own.isEmpty()) return List.of();
         var pieces = feedback.findDeliveredOnWorkOfOtherReviews(workspaceId, itemId, row.getReviewId());
-        var others = standingNotes(workspaceId, pieces, row.getCreatedAt());
+        var others = standingNotes(workspaceId, pieces, prepared);
         if (others.isEmpty()) return List.of();
         var reviewOf = new HashMap<UUID, UUID>();
         pieces.forEach(piece -> reviewOf.put(piece.id(), piece.reviewId()));

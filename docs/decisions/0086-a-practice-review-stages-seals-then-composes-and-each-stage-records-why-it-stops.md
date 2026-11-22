@@ -517,8 +517,11 @@ The composer's view of lineage stays decided, not shipped.
   So the readback after a send lists such a repeat.
   It is a found, unresolved note of this piece.
   A note of another review on the work cites its problem, with the same practice and identity.
-  The other note was posted after this piece was prepared (`feedback.created_at`).
+  The other note was posted after this piece's first revision was prepared (`feedback.created_at`).
   An older note was in the check's history, because preparation refuses a history that changed after the check.
+  A quiet edit is checked against that history too, so its readback keeps the first revision's cutoff.
+  A note counts from the first post of its provider comment.
+  So an edit of that note does not make it new.
   The other note is the newest revision of its provider comment.
   It is posted and not retracted, its piece is not withdrawn, and it is not closed as fixed.
   Neither the note nor its piece is marked incorrect.

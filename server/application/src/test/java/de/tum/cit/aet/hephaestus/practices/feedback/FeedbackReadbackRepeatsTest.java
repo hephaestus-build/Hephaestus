@@ -76,7 +76,7 @@ class FeedbackReadbackRepeatsTest {
         var other = scenario.other(OTHER_PIECE, 1, FeedbackCopyState.POSTED, LATER);
         scenario.stub("handles-errors", COMPLETE);
 
-        assertThat(repeats.of(scenario.piece(), List.of(found(first), found(second))))
+        assertThat(flag(scenario.piece(), List.of(found(first), found(second))))
                 .containsExactly(repeat(first, other, OTHER_BODY), repeat(second, other, OTHER_BODY));
     }
 
@@ -87,7 +87,29 @@ class FeedbackReadbackRepeatsTest {
         scenario.other(OTHER_PIECE, 1, FeedbackCopyState.POSTED, PREPARED.minusSeconds(60));
         scenario.stub("handles-errors", COMPLETE);
 
-        assertThat(repeats.of(scenario.piece(), List.of(found(mine)))).isEmpty();
+        assertThat(flag(scenario.piece(), List.of(found(mine)))).isEmpty();
+    }
+
+    @Test
+    void shouldFlagAtAQuietEditANoteThatWasPostedBetweenTheFirstPublicationAndTheEdit() {
+        var scenario = new Scenario();
+        var mine = scenario.mine(1, THIS_PROBLEM);
+        var other = scenario.other(OTHER_PIECE, 1, FeedbackCopyState.POSTED, LATER);
+        scenario.stub("handles-errors", COMPLETE);
+        var edit = Feedback.builder()
+                .id(THIS_PIECE)
+                .workspaceId(WORKSPACE)
+                .reviewId(THIS_REVIEW)
+                .itemId(ITEM)
+                .developerId(3)
+                .destination(FeedbackDestination.ON_WORK)
+                .state(FeedbackState.DELIVERED)
+                .createdAt(LATER.plusSeconds(120))
+                .deliveredAt(LATER.plusSeconds(120))
+                .build();
+
+        // The edit's own preparation is later than the other note; the first revision's is earlier.
+        assertThat(repeats.of(edit, List.of(found(mine)), PREPARED)).containsExactly(repeat(mine, other, OTHER_BODY));
     }
 
     @Test
@@ -99,8 +121,7 @@ class FeedbackReadbackRepeatsTest {
         scenario.other(OTHER_PIECE, 1, FeedbackCopyState.POSTED, LATER, UNRELATED_PROBLEM);
         scenario.stub("handles-errors", COMPLETE);
 
-        assertThat(repeats.of(scenario.piece(), List.of(found(first), found(second))))
-                .isEmpty();
+        assertThat(flag(scenario.piece(), List.of(found(first), found(second)))).isEmpty();
     }
 
     @Test
@@ -112,7 +133,7 @@ class FeedbackReadbackRepeatsTest {
         scenario.other(OTHER_PIECE, 1, FeedbackCopyState.POSTED, LATER);
         scenario.stub("handles-errors", COMPLETE);
 
-        assertThat(repeats.of(scenario.piece(), List.of(found(mine)))).isEmpty();
+        assertThat(flag(scenario.piece(), List.of(found(mine)))).isEmpty();
     }
 
     @Test
@@ -123,7 +144,7 @@ class FeedbackReadbackRepeatsTest {
         scenario.other(OTHER_PIECE, 1, FeedbackCopyState.POSTED, LATER);
         scenario.stub("handles-errors", COMPLETE);
 
-        assertThat(repeats.of(scenario.piece(), List.of(found(mine)))).containsExactly(repeat(mine, newer, OTHER_BODY));
+        assertThat(flag(scenario.piece(), List.of(found(mine)))).containsExactly(repeat(mine, newer, OTHER_BODY));
     }
 
     @Test
@@ -134,7 +155,7 @@ class FeedbackReadbackRepeatsTest {
         scenario.stub("handles-errors", COMPLETE);
         when(copies.findClosedAsFixed(eq(WORKSPACE), anyCollection())).thenReturn(List.of(other.getId()));
 
-        assertThat(repeats.of(scenario.piece(), List.of(found(mine)))).isEmpty();
+        assertThat(flag(scenario.piece(), List.of(found(mine)))).isEmpty();
     }
 
     @Test
@@ -145,7 +166,7 @@ class FeedbackReadbackRepeatsTest {
         scenario.stub("handles-errors", COMPLETE);
         when(visibility.withdrawnAt(eq(WORKSPACE), anyCollection())).thenReturn(Map.of(OTHER_PIECE, LATER));
 
-        assertThat(repeats.of(scenario.piece(), List.of(found(mine)))).isEmpty();
+        assertThat(flag(scenario.piece(), List.of(found(mine)))).isEmpty();
     }
 
     @Test
@@ -156,7 +177,7 @@ class FeedbackReadbackRepeatsTest {
         scenario.stub("handles-errors", COMPLETE);
         when(basis.incorrectFeedbackIds(eq(WORKSPACE), anyCollection())).thenReturn(List.of(OTHER_PIECE));
 
-        assertThat(repeats.of(scenario.piece(), List.of(found(mine)))).isEmpty();
+        assertThat(flag(scenario.piece(), List.of(found(mine)))).isEmpty();
     }
 
     @Test
@@ -167,7 +188,7 @@ class FeedbackReadbackRepeatsTest {
         scenario.stub("handles-errors", COMPLETE);
         when(copies.incorrectCopyIdsOf(eq(WORKSPACE), anyCollection())).thenReturn(Set.of(other.getId()));
 
-        assertThat(repeats.of(scenario.piece(), List.of(found(mine)))).isEmpty();
+        assertThat(flag(scenario.piece(), List.of(found(mine)))).isEmpty();
     }
 
     @Test
@@ -177,7 +198,7 @@ class FeedbackReadbackRepeatsTest {
         scenario.other(OTHER_PIECE, 1, FeedbackCopyState.POSTED, LATER);
         scenario.stub("handles-errors", COMPLETE);
 
-        assertThat(repeats.of(
+        assertThat(flag(
                         scenario.piece(),
                         List.of(new CopyReadback(
                                 mine.getId(), CopyReadback.Status.FOUND, "b", "b", null, true, false))))
@@ -191,7 +212,7 @@ class FeedbackReadbackRepeatsTest {
         scenario.other(OTHER_PIECE, 1, FeedbackCopyState.POSTED, LATER);
         scenario.stub("names-things", COMPLETE);
 
-        assertThat(repeats.of(scenario.piece(), List.of(found(mine)))).isEmpty();
+        assertThat(flag(scenario.piece(), List.of(found(mine)))).isEmpty();
     }
 
     @Test
@@ -201,7 +222,7 @@ class FeedbackReadbackRepeatsTest {
         var other = scenario.other(OTHER_PIECE, 1, FeedbackCopyState.POSTED, LATER);
         scenario.stub("handles-errors", new HistoryCustody(false, false, List.of(), List.of(), List.of()));
 
-        assertThat(repeats.of(scenario.piece(), List.of(found(mine)))).containsExactly(repeat(mine, other, null));
+        assertThat(flag(scenario.piece(), List.of(found(mine)))).containsExactly(repeat(mine, other, null));
     }
 
     @Test
@@ -215,7 +236,12 @@ class FeedbackReadbackRepeatsTest {
                         new FeedbackBasisRepository.ReadRow(OTHER_PIECE, OTHER_RESULT, OTHER_PROBLEM, 0),
                         new FeedbackBasisRepository.ReadRow(OTHER_PIECE, UUID.randomUUID(), null, 1)));
 
-        assertThat(repeats.of(scenario.piece(), List.of(found(mine)))).containsExactly(repeat(mine, other, null));
+        assertThat(flag(scenario.piece(), List.of(found(mine)))).containsExactly(repeat(mine, other, null));
+    }
+
+    /** The repeats this piece's readback flags, cut off at its preparation. */
+    private List<FeedbackRepairStatus.Repeat> flag(Feedback piece, List<CopyReadback> readback) {
+        return repeats.of(piece, readback, PREPARED);
     }
 
     private static CopyReadback found(FeedbackCopy copy) {
