@@ -12,7 +12,13 @@ import {
 	scopesFor,
 	type Scope,
 } from "./check-affected.ts";
-import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
+import {
+	type ChangelogSnapshot,
+	MASTER_CHANGELOG,
+	snapshot,
+	violations,
+} from "./check-changelog-immutability.ts";
+import { CHANGELOG_DIRECTORY, NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { repositoryCli } from "./lib/process.ts";
 import { PUSH_CHECK_ENV, pushStaticTasks } from "./lib/push-gates.ts";
@@ -278,6 +284,23 @@ function run(program: string, args: string[]): number {
 	return result.status ?? 1;
 }
 
+/**
+ * What the changelog guard in ci-security-scan.yml would refuse: a change to a released change set, or a new raw
+ * SQL or custom change set without a rollback. A push that touches no changelog reads nothing.
+ */
+export function changelogProblems(
+	paths: readonly string[],
+	base: string,
+	read: (revision: string) => ChangelogSnapshot = snapshot,
+): string[] {
+	if (
+		!paths.some((file) => file.startsWith(`${CHANGELOG_DIRECTORY}/`) || file === MASTER_CHANGELOG)
+	) {
+		return [];
+	}
+	return violations(read(base), read("HEAD"));
+}
+
 /** The base revision, and whether a failed check lets the next one run. */
 export function parsePushArguments(args: readonly string[]): { base: string; keepGoing: boolean } {
 	const keepGoing = args.includes("--keep-going");
@@ -435,9 +458,10 @@ async function main(): Promise<void> {
 	const { base, keepGoing } = parsePushArguments(process.argv.slice(2));
 	const failures = pushFailures(keepGoing);
 	let paths: string[] | undefined;
+	let shared: string | undefined;
 	let since = "";
 	try {
-		const shared = mergeBase(base);
+		shared = mergeBase(base);
 		paths = changedPaths(base);
 		since = ` since ${shared.slice(0, 10)}, the merge base with ${base}`;
 	} catch {
@@ -462,6 +486,20 @@ async function main(): Promise<void> {
 		if (problem !== undefined) {
 			console.error(problem);
 			failures.record("migration order", 1);
+		}
+	}
+	// Milliseconds, and otherwise CI's. Against the merge base, not the tip of the base, so that a branch behind
+	// main is not blamed for main's newer migrations.
+	if (paths !== undefined && shared !== undefined) {
+		const problems = changelogProblems(paths, shared);
+		if (problems.length > 0) {
+			console.error(
+				[
+					...problems,
+					`These compare against the merge base with ${base}; if it is stale, fetch it. A manual \`vp run check:push --base <branch>\` checks against the branch that you merge into.`,
+				].join("\n"),
+			);
+			failures.record("changelog immutability", 1);
 		}
 	}
 	// Also milliseconds, and otherwise CI's: a change to shipped code needs a changeset even when the

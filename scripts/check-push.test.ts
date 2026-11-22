@@ -8,7 +8,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
+import type { ChangelogSnapshot } from "./check-changelog-immutability.ts";
 import {
+	changelogProblems,
 	focusedTests,
 	frontendCommands,
 	parsePushArguments,
@@ -299,11 +301,13 @@ const repository = path.resolve(import.meta.dirname, "..");
 
 async function installCli(directory: string): Promise<void> {
 	await mkdir(path.join(directory, "node_modules/vite-plus"), { recursive: true });
-	await symlink(
-		path.join(repository, "node_modules/yaml"),
-		path.join(directory, "node_modules/yaml"),
-		process.platform === "win32" ? "junction" : "dir",
-	);
+	for (const dependency of ["yaml", "fast-xml-parser", "fast-xml-validator"]) {
+		await symlink(
+			path.join(repository, "node_modules", dependency),
+			path.join(directory, "node_modules", dependency),
+			process.platform === "win32" ? "junction" : "dir",
+		);
+	}
 	await writeFile(
 		path.join(directory, "node_modules/vite-plus/package.json"),
 		JSON.stringify({ type: "module", exports: { "./bin": "./cli.mjs" } }),
@@ -324,9 +328,11 @@ async function fixture() {
 	for (const file of [
 		"check-push.ts",
 		"check-affected.ts",
+		"check-changelog-immutability.ts",
 		"enable-hooks.ts",
 		"reorder-migrations.ts",
 		"lib/changelog.ts",
+		"lib/changelog-xml.ts",
 		"lib/env.ts",
 		"lib/git-environment.ts",
 		"lib/json.ts",
@@ -395,6 +401,69 @@ void test("a migration that sorts before the base's newest blocks the push befor
 		assert.match(result.stderr, /20261102000000-mine\.xml/u);
 		assert.match(result.stderr, /vp run db:reorder/u);
 		await assert.rejects(readFile(f.calls, "utf8"), { code: "ENOENT" });
+	} finally {
+		await rm(f.directory, { recursive: true, force: true });
+	}
+});
+
+void test("a raw SQL change set without a rollback blocks the push before any check runs", async () => {
+	const f = await fixture();
+	try {
+		const db = path.join(f.directory, "server/application/src/main/resources/db");
+		await mkdir(path.join(db, "changelog/next"), { recursive: true });
+		await writeFile(
+			path.join(db, "master.xml"),
+			'<databaseChangeLog><includeAll path="./changelog/next" relativeToChangelogFile="true" errorIfMissingOrEmpty="false" endsWithFilter=".xml" maxDepth="1"/></databaseChangeLog>\n',
+		);
+		f.git("add", ".");
+		f.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "main");
+		f.git("tag", "main");
+		await writeFile(
+			path.join(db, "changelog/next/20261122000000-index.xml"),
+			'<databaseChangeLog><changeSet id="1794700000000-1" author="hephaestus"><sql>CREATE INDEX i ON t (c);</sql></changeSet></databaseChangeLog>\n',
+		);
+		f.git("add", ".");
+		f.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "mine");
+		const result = f.run(f.directory, "main");
+		assert.equal(result.status, 1, result.stdout + result.stderr);
+		assert.match(result.stderr, /20261122000000-index\.xml.*without a rollback/su);
+		await assert.rejects(readFile(f.calls, "utf8"), { code: "ENOENT" });
+	} finally {
+		await rm(f.directory, { recursive: true, force: true });
+	}
+});
+
+void test("a branch behind main is judged against the merge base, not blamed for main's newer migrations", async () => {
+	const f = await fixture();
+	try {
+		const db = path.join(f.directory, "server/application/src/main/resources/db");
+		await mkdir(path.join(db, "changelog/next"), { recursive: true });
+		await writeFile(
+			path.join(db, "master.xml"),
+			'<databaseChangeLog><includeAll path="./changelog/next" relativeToChangelogFile="true" errorIfMissingOrEmpty="false" endsWithFilter=".xml" maxDepth="1"/></databaseChangeLog>\n',
+		);
+		f.git("add", ".");
+		f.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "fork point");
+		f.git("checkout", "--quiet", "-b", "mainline");
+		await writeFile(
+			path.join(db, "changelog/next/20261121000000-theirs.xml"),
+			'<databaseChangeLog><changeSet id="1794600000000-1" author="hephaestus"><sql>UPDATE t SET c = 1;</sql></changeSet></databaseChangeLog>\n',
+		);
+		f.git("add", ".");
+		f.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "main's migration");
+		f.git("checkout", "--quiet", "-");
+		// Leaving main's commit removed the directory, which held only its migration.
+		await mkdir(path.join(db, "changelog/next"), { recursive: true });
+		await writeFile(
+			path.join(db, "changelog/next/20261122000000-mine.xml"),
+			'<databaseChangeLog><changeSet id="1794700000000-1" author="hephaestus"><sql>CREATE INDEX i ON t (c);</sql><rollback>DROP INDEX i;</rollback></changeSet></databaseChangeLog>\n',
+		);
+		f.git("add", ".");
+		f.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "mine");
+		const result = f.run(f.directory, "mainline");
+		// The guard let the push through to the next rule, which wants a changeset, and named nothing of main's.
+		assert.doesNotMatch(result.stderr, /theirs|Released migration/u);
+		assert.match(result.stderr, /carries no changeset/u);
 	} finally {
 		await rm(f.directory, { recursive: true, force: true });
 	}
@@ -735,4 +804,46 @@ void test("the hook stops at the first failed check; --keep-going runs them all,
 	const passing = pushFailures(true, exitStub);
 	passing.record("gate:prose", 0);
 	assert.doesNotThrow(() => passing.finish());
+});
+
+const changelog = (content: string) => `<databaseChangeLog>${content}</databaseChangeLog>`;
+
+void test("a push that touches a changelog runs the changelog guard of CI, and any other push reads nothing", () => {
+	const directory = "server/application/src/main/resources/db/changelog/";
+	const master = "server/application/src/main/resources/db/master.xml";
+	const masterXml = changelog(
+		'<includeAll path="./changelog/next" relativeToChangelogFile="true" errorIfMissingOrEmpty="false" endsWithFilter=".xml" maxDepth="1"/>',
+	);
+	const added = `${directory}next/20261122000000-index.xml`;
+	const snapshots: Record<string, ChangelogSnapshot> = {
+		base: { blobs: new Map([[master, "master"]]), master: masterXml, read: () => changelog("") },
+		HEAD: {
+			blobs: new Map([
+				[master, "master"],
+				[added, "added"],
+			]),
+			master: masterXml,
+			// Raw SQL, and no rollback: Liquibase derives none.
+			read: () =>
+				changelog(
+					'<changeSet id="1794700000000-1" author="hephaestus"><sql>CREATE INDEX i ON t (c);</sql></changeSet>',
+				),
+		},
+	};
+	const reads: string[] = [];
+	const read = (revision: string) => {
+		reads.push(revision);
+		const found = snapshots[revision];
+		assert.ok(found !== undefined, revision);
+		return found;
+	};
+	assert.match(changelogProblems([added], "base", read).join("\n"), /without a rollback/u);
+	assert.deepEqual(reads, ["base", "HEAD"]);
+	assert.notDeepEqual(changelogProblems([master], "base", read), []);
+	reads.length = 0;
+	assert.deepEqual(
+		changelogProblems(["server/application/src/main/java/A.java", "docs/a.mdx"], "base", read),
+		[],
+	);
+	assert.deepEqual(reads, []);
 });

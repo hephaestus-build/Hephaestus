@@ -145,6 +145,8 @@ The hook does not write source files.
 `git push --no-verify` skips the hook.
 A change under `db/changelog/next/` first checks that the branch's migrations sort after `origin/main` as last fetched and after the merge queue's.
 If the hook cannot read the queue, it says so and checks against `origin/main` only.
+A change under `db/changelog/` or to `db/master.xml` also runs the [changelog immutability guard](./database-migration#ci-validation) against the merge base.
+It refuses a changed released change set and a new raw SQL or custom change set without a rollback.
 
 The hook stops at the first failed check.
 To see every failure in one run, run `vp run check:push --keep-going` before you push.

@@ -317,6 +317,7 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
 2. **Changelog immutability** — Security workflow, job *Dependencies, secrets and policy*, step
    *Changelog immutability guard*. A git diff from the event's base commit checks released history and new migration order.
    Pull requests and merge groups both run it.
+   The pre-push hook runs it too, for a push that changes a changelog.
    A pull request run does not repeat when its base advances.
    Thus, the merge group judges migrations that reached `main` after that run.
    A merge group's base is the commit where it leaves `main`.
