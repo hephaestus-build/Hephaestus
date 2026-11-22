@@ -139,6 +139,27 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldNotResolveAThreadWhereAPersonRepliedBeforeALaterCommentOfTheAccount() {
+        var replied = new HashMap<>(thread(false, NOTE, true));
+        replied.put("comments", comments(NOTE, true, List.of(false, true)));
+        thread = replied;
+
+        assertThat(writer.resolveThread(TARGET, copy(), true, BOT).outcome()).isEqualTo(ThreadChange.Outcome.REPLIED);
+        assertThat(mutations).isEmpty();
+    }
+
+    @Test
+    void shouldNotResolveAThreadLongerThanOneRead() {
+        var longer = new HashMap<>(thread(false, NOTE, true));
+        longer.put(
+                "comments", Map.of("totalCount", 101, "nodes", List.of(Map.of("id", NOTE, "viewerDidAuthor", true))));
+        thread = longer;
+
+        assertThat(writer.resolveThread(TARGET, copy(), true, BOT).outcome()).isEqualTo(ThreadChange.Outcome.REPLIED);
+        assertThat(mutations).isEmpty();
+    }
+
+    @Test
     void shouldReportARemovedThreadGone() {
         thread = null;
 
@@ -189,10 +210,17 @@ class GitHubThreadResolutionTest extends BaseUnitTest {
                 "isResolved",
                 resolved,
                 "comments",
-                Map.of("nodes", List.of(Map.of("id", firstNote, "viewerDidAuthor", ownFirst))),
-                "latest",
-                Map.of("nodes", List.of(Map.of("viewerDidAuthor", ownLatest)))));
+                comments(firstNote, ownFirst, ownLatest ? List.of() : List.of(false))));
         return thread;
+    }
+
+    /** The owned note, then later comments, each by the token account or not. */
+    private static Map<String, Object> comments(String firstNote, boolean ownFirst, List<Boolean> later) {
+        var nodes = new ArrayList<Map<String, Object>>();
+        nodes.add(Map.of("id", firstNote, "viewerDidAuthor", ownFirst));
+        for (int index = 0; index < later.size(); index++)
+            nodes.add(Map.of("id", "PRRC_later_" + index, "viewerDidAuthor", later.get(index)));
+        return Map.of("totalCount", nodes.size(), "nodes", nodes);
     }
 
     private ClientGraphQlResponse answer(String document) {

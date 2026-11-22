@@ -142,11 +142,23 @@ final class ReviewOnWork {
     /**
      * Two cutoffs, two questions: advice the work could have answered, and words said here before composition.
      *
-     * @param practices the practices whose NOT_MET results the statement rests on; empty for a statement of a person
+     * @param practices the practices whose NOT_MET results the statement rests on and still advises on; empty for a
+     *     statement of a person
+     * @param closedPractices the practices whose notes of the statement Hephaestus closed as fixed: it no longer stands
+     *     as their advice, so a problem of theirs that came back is raised again
      */
-    record Witness(boolean eligibleForPriorAdvice, boolean eligibleForAlreadySaid, Set<String> practices) {
+    record Witness(
+            boolean eligibleForPriorAdvice,
+            boolean eligibleForAlreadySaid,
+            Set<String> practices,
+            Set<String> closedPractices) {
         Witness {
             practices = Set.copyOf(practices);
+            closedPractices = Set.copyOf(closedPractices);
+        }
+
+        Witness(boolean eligibleForPriorAdvice, boolean eligibleForAlreadySaid, Set<String> practices) {
+            this(eligibleForPriorAdvice, eligibleForAlreadySaid, practices, Set.of());
         }
     }
 
@@ -185,6 +197,8 @@ final class ReviewOnWork {
                 putDefined(note, "endLine", copy.path("endLine"));
                 putDefined(note, "side", copy.path("side"));
                 note.put("body", copy.path("body").asString());
+                // The composer sees which note Hephaestus closed as fixed: it no longer stands as advice.
+                if (isTrue(copy.path("closedAsFixed"))) note.put("closedAsFixed", true);
                 notes.add(note);
             }
         }
@@ -243,9 +257,8 @@ final class ReviewOnWork {
                     && ((body.isString() && !Js.blank(body.asString())) || !notes.isEmpty())
                     && ("CURRENT".equals(currentness) || "STALE".equals(currentness))
                     && !isTrue(entry.path("withdrawn"))
-                    // Hephaestus closed a note of it as fixed: it no longer stands as advice, so a problem that came
-                    // back is raised again, not withheld behind it.
-                    && !isTrue(entry.path("closedAsFixed"));
+                    // A piece whose every practice Hephaestus closed as fixed advises on nothing that still stands.
+                    && !closedEverywhere(entry);
             var own = JSON.objectNode();
             own.put("witnessId", witnessId);
             putDefined(own, "id", id);
@@ -256,7 +269,7 @@ final class ReviewOnWork {
             if (!notes.isEmpty()) own.set("notes", notes);
             putDefined(own, "recordedClaimCurrentness", entry.path("recordedClaimCurrentness"));
             putDefined(own, "withdrawn", entry.path("withdrawn"));
-            putDefined(own, "closedAsFixed", entry.path("closedAsFixed"));
+            putDefined(own, "closedPractices", entry.path("closedPractices"));
             if ("COPY_AUTHORITY_UNAVAILABLE".equals(string(entry.path("wordsUnavailable"))))
                 own.put("wordsUnavailable", "COPY_AUTHORITY_UNAVAILABLE");
             own.put(
@@ -300,17 +313,35 @@ final class ReviewOnWork {
         return shown + omitted;
     }
 
+    private static Witness witness(JsonNode statement) {
+        var closed = strings(statement.path("closedPractices"));
+        var practices = new TreeSet<>(practices(statement.path("basedOn")));
+        practices.removeAll(closed);
+        return new Witness(
+                isTrue(statement.path("eligibleForPriorAdvice")),
+                isTrue(statement.path("eligibleForAlreadySaid")),
+                practices,
+                closed);
+    }
+
+    /** Whether Hephaestus closed as fixed every practice that a delivered piece rests on. */
+    private static boolean closedEverywhere(JsonNode entry) {
+        var closed = strings(entry.path("closedPractices"));
+        var practices = practices(entry.path("basedOn"));
+        return !closed.isEmpty() && closed.containsAll(practices);
+    }
+
+    private static Set<String> strings(JsonNode values) {
+        var strings = new TreeSet<String>();
+        for (JsonNode value : listOf(values)) if (value.isString()) strings.add(Js.trim(value.asString()));
+        return strings;
+    }
+
     static Map<String, Witness> priorAdviceWitnesses(List<ObjectNode> own, JsonNode capturedStatements) {
         var witnesses = new LinkedHashMap<String, Witness>();
         for (var statement : own) {
             String witnessId = string(statement.path("witnessId"));
-            if (witnessId != null)
-                witnesses.put(
-                        witnessId,
-                        new Witness(
-                                isTrue(statement.path("eligibleForPriorAdvice")),
-                                isTrue(statement.path("eligibleForAlreadySaid")),
-                                practices(statement.path("basedOn"))));
+            if (witnessId != null) witnesses.put(witnessId, witness(statement));
         }
         for (JsonNode statement : listOf(capturedStatements)) {
             boolean eligible = isTrue(statement.path("eligibleForPriorAdvice"));
@@ -908,7 +939,11 @@ final class ReviewOnWork {
                 if (result != null && result.notMet())
                     problems.addAll(raiseProblems(result.practiceSlug(), decision.newSince(), witnesses));
             } else {
-                problems.addAll(witnessProblems(decision.disposition(), decision.witnessIds(), witnesses));
+                problems.addAll(witnessProblems(
+                        decision.disposition(),
+                        decision.witnessIds(),
+                        witnesses,
+                        result != null ? result.practiceSlug() : null));
                 if (decision.newSince() != null)
                     problems.add("newSince goes only with RAISE: a withheld result says nothing new");
             }
@@ -1122,7 +1157,7 @@ final class ReviewOnWork {
 
     /** ALREADY_SAID needs a recorded communication; NO_MATERIAL_CHANGE also needs advice available at capture. */
     private static List<String> witnessProblems(
-            String reason, List<String> witnessIds, Map<String, Witness> witnesses) {
+            String reason, List<String> witnessIds, Map<String, Witness> witnesses, @Nullable String practiceSlug) {
         var problems = new ArrayList<String>();
         var unknown =
                 witnessIds.stream().filter(id -> !witnesses.containsKey(id)).toList();
@@ -1141,6 +1176,15 @@ final class ReviewOnWork {
             problems.add("witnessIds names " + String.join(", ", ineligible)
                     + ", which is shown as context but cannot stand as advice for " + reason + " (" + flag
                     + " is false)");
+        var closed = witnessIds.stream()
+                .filter(id -> practiceSlug != null
+                        && !ineligible.contains(id)
+                        && witnesses.containsKey(id)
+                        && witnesses.get(id).closedPractices().contains(practiceSlug))
+                .toList();
+        if (!closed.isEmpty())
+            problems.add("witnessIds names " + String.join(", ", closed) + ", whose note on " + practiceSlug
+                    + " Hephaestus closed as fixed; the problem came back, so raise it");
         if (PRIOR_ADVICE_REASONS.contains(reason) && witnessIds.isEmpty())
             problems.add(reason
                     + " names in witnessIds where this work already received the advice: the witnessId of a statement marked "

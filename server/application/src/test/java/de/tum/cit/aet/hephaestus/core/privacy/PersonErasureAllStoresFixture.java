@@ -477,6 +477,61 @@ final class PersonErasureAllStoresFixture {
                 account,
                 "ordinal",
                 1);
+        // A thread resolution goes with the person's copy on the work.
+        UUID copyId = jdbc
+                .query(
+                        "SELECT id FROM feedback_copy WHERE feedback_id=? AND workspace_id=? ORDER BY position LIMIT 1",
+                        (rows, index) -> Objects.requireNonNull(rows.getObject(1, UUID.class)),
+                        person.feedback(),
+                        workspace)
+                .stream()
+                .findFirst()
+                .orElse(null);
+        if (copyId == null) {
+            copyId = UUID.randomUUID();
+            row(
+                    "feedback_copy",
+                    "id",
+                    copyId,
+                    "workspace_id",
+                    workspace,
+                    "feedback_id",
+                    person.feedback(),
+                    "kind",
+                    "LINE_NOTE",
+                    "position",
+                    9,
+                    "state",
+                    "PLANNED",
+                    "body",
+                    CANARY,
+                    "created_at",
+                    Timestamp.from(Instant.now()));
+        }
+        row(
+                "feedback_thread_resolution",
+                "workspace_id",
+                workspace,
+                "item_id",
+                Objects.requireNonNull(jdbc.queryForObject(
+                        "SELECT item_id FROM result WHERE id=? AND workspace_id=?",
+                        Long.class,
+                        person.result(),
+                        workspace)),
+                "thread_ref",
+                "thread-" + copyId,
+                "copy_id",
+                copyId,
+                "resolved",
+                true,
+                "state",
+                "DONE",
+                "generation",
+                1,
+                "resolve_written",
+                false,
+                "changed_at",
+                Timestamp.from(Instant.now()));
         row(
                 "feedback_decision",
                 "workspace_id",

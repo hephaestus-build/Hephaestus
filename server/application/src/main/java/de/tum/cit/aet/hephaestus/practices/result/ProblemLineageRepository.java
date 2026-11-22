@@ -23,9 +23,10 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
         UUID getResultId();
 
         /**
-         * Whether a newer result of the same practice, item and developer compared with nothing: it was measured with
-         * another practice version or model method, or it ended as it was written. A problem it found has no row, so
-         * the newest row proves nothing about now.
+         * Whether a result of the same practice, item and developer that is newer than the cited problem's own result
+         * was measured another way than that result: with another practice version or model method, or it ended as it
+         * was written. Lineage compares only within one measurement, so the chain from the cited problem breaks there,
+         * and no row proves anything about now.
          */
         boolean getUnchained();
     }
@@ -39,8 +40,14 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
      */
     @Query(value = """
         WITH cited AS (
-          SELECT p.id AS problem_id, p.result_id, r.practice_id, r.item_id, r.developer_id
-          FROM problem p JOIN result r ON r.id = p.result_id AND r.workspace_id = p.workspace_id
+          SELECT p.id AS problem_id, p.result_id, r.practice_id, r.item_id, r.developer_id,
+            r.practice_version_id AS cited_version, r.recorded_at AS cited_recorded, v.ordered_at AS cited_ordered,
+            m.method->>'modelDigest' AS cited_digest, m.method->>'epoch' AS cited_epoch
+          FROM problem p
+          JOIN result r ON r.id = p.result_id AND r.workspace_id = p.workspace_id
+          JOIN review v ON v.id = r.review_id AND v.workspace_id = r.workspace_id
+          JOIN review_practice m ON m.review_id = r.review_id AND m.practice_id = r.practice_id
+            AND m.workspace_id = r.workspace_id
           WHERE p.workspace_id = :workspaceId AND p.id IN (:problemIds)
             AND NOT EXISTS (SELECT 1 FROM result_mark k WHERE k.result_id = r.id AND k.workspace_id = r.workspace_id
               AND k.kind = 'INCORRECT' AND k.removed_at IS NULL)),
@@ -64,18 +71,20 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
             AND NOT EXISTS (SELECT 1 FROM result_mark k WHERE k.result_id = r.id AND k.workspace_id = r.workspace_id
               AND k.kind = 'INCORRECT' AND k.removed_at IS NULL)),
         newest AS (
-          SELECT DISTINCT ON (n.problem_id) n.problem_id, l.comparison, u.*
+          SELECT DISTINCT ON (n.problem_id) n.problem_id, n.practice_id, n.item_id, n.developer_id, n.cited_version,
+            n.cited_digest, n.cited_epoch, n.cited_ordered, n.cited_recorded, l.comparison, u.id AS result_id
           FROM named n
           JOIN problem_lineage l ON l.workspace_id = :workspaceId AND l.identity = n.identity
           JOIN usable u ON u.id = l.result_id AND u.practice_id = n.practice_id AND u.item_id = n.item_id
             AND u.developer_id IS NOT DISTINCT FROM n.developer_id
           ORDER BY n.problem_id, u.ordered_at DESC, u.recorded_at DESC, l.id DESC)
-        SELECT w.problem_id AS problemId, w.comparison AS comparison, w.id AS resultId,
+        SELECT w.problem_id AS problemId, w.comparison AS comparison, w.result_id AS resultId,
           EXISTS (SELECT 1 FROM usable later WHERE later.practice_id = w.practice_id AND later.item_id = w.item_id
             AND later.developer_id IS NOT DISTINCT FROM w.developer_id
-            AND (later.ordered_at > w.ordered_at OR (later.ordered_at = w.ordered_at AND later.recorded_at > w.recorded_at))
-            AND (later.practice_version_id IS DISTINCT FROM w.practice_version_id
-              OR later.digest IS DISTINCT FROM w.digest OR later.epoch IS DISTINCT FROM w.epoch
+            AND (later.ordered_at > w.cited_ordered
+              OR (later.ordered_at = w.cited_ordered AND later.recorded_at > w.cited_recorded))
+            AND (later.practice_version_id IS DISTINCT FROM w.cited_version
+              OR later.digest IS DISTINCT FROM w.cited_digest OR later.epoch IS DISTINCT FROM w.cited_epoch
               OR later.ended_at_once)) AS unchained
         FROM newest w
         """, nativeQuery = true)

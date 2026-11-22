@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemLineageRecorded;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkChanged;
@@ -36,6 +37,7 @@ class FeedbackThreadResolver {
     private final FeedbackThreadResolutionRepository resolutions;
     private final ResultRepository results;
     private final FeedbackThreadEvidence evidence;
+    private final ItemIndexService itemLocks;
     private final AgentActions actions;
     private final ObjectMapper mapper;
     private final Clock clock;
@@ -65,6 +67,9 @@ class FeedbackThreadResolver {
         if (result == null || result.getDeveloperId() == null) return;
         long developerId = result.getDeveloperId();
         long itemId = result.getItemId();
+        // The item lock is the seal's: standing is read and acted on while no newer lineage of the item can commit, and
+        // while no other decision for the item runs, also for a thread that has no row yet.
+        itemLocks.lock(workspaceId, itemId);
         for (var thread : resolutions.findOwnedThreads(workspaceId, itemId, developerId)) {
             if (resolutions.humanControlled(workspaceId, itemId, thread.getThreadRef())) continue;
             var cited = evidence.cited(
@@ -75,6 +80,7 @@ class FeedbackThreadResolver {
                     || (withdrawnProof != null
                             && evidence.proved(workspaceId, withdrawnProof, thread.getFeedbackId(), cited)))
                 ask(workspaceId, itemId, developerId, thread, false);
+            else withdrawUnstarted(workspaceId, itemId, thread);
         }
     }
 
@@ -101,7 +107,7 @@ class FeedbackThreadResolver {
             int asked = row.getGeneration();
             // A reopen that would write where the provider cannot tell it from a person's is never asked: the thread
             // stays resolved, and a problem that came back reaches the developer through a new note.
-            if (!resolve && row.getActor() != null && !Boolean.TRUE.equals(row.getReopens())) return;
+            if (!resolve && row.isResolveWritten() && !Boolean.TRUE.equals(row.getReopens())) return;
             if (!row.ask(resolve, thread.getCopyId(), now)) {
                 // A withdrawn resolve that never started leaves nothing to undo: its waiting action goes too.
                 if (row.getGeneration() != asked) actions.cancelPending(workspaceId, LANE + row.getId());
@@ -120,5 +126,15 @@ class FeedbackThreadResolver {
                 MAX_ATTEMPTS,
                 null,
                 null));
+    }
+
+    /** Standing that is no longer proven withdraws a resolve that has not begun to write; a written one stays. */
+    private void withdrawUnstarted(
+            long workspaceId, long itemId, FeedbackThreadResolutionRepository.OwnedThread thread) {
+        var row = resolutions
+                .lockThread(workspaceId, itemId, thread.getThreadRef())
+                .orElse(null);
+        if (row != null && row.withdrawUnstarted(clock.instant()))
+            actions.cancelPending(workspaceId, LANE + row.getId());
     }
 }

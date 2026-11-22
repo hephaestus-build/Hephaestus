@@ -2408,6 +2408,38 @@ tests:
               summary: Hephaestus could not resolve a thread on the work
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: a thread change that fails before the first scrape fires
+    interval: 1m
+    input_series:
+      - series: 'practice_feedback_thread_changes_total{job="hephaestus",instance="server:9090",direction="reopen",outcome="failed"}'
+        values: "_ _ _ 1x30"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusFeedbackThreadChangeFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              direction: reopen
+            exp_annotations:
+              summary: Hephaestus could not reopen a thread on the work
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: an actor mismatch before the first scrape fires
+    interval: 1m
+    input_series:
+      - series: 'practice_feedback_thread_actor_mismatch_total{job="hephaestus",instance="server:9090",provider="gitlab"}'
+        values: "_ _ _ 1x30"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusFeedbackThreadActorMismatch
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              provider: gitlab
+            exp_annotations:
+              summary: A thread event that resembled Hephaestus's own write named another account on gitlab
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: a thread event that resembles an own write but names another account fires
     interval: 1m
     input_series:

@@ -750,22 +750,22 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
                         : ThreadChange.of(
                                 copy.copyId(), ThreadChange.Outcome.TRANSIENT, "The merge request could not be read");
             }
+            // A failed read says nothing about the thread: it is read again, never taken for a thread that is not ours.
             JsonNode found = read.status() == 200 ? read.json() : null;
+            if (found == null)
+                return ThreadChange.of(
+                        copy.copyId(), ThreadChange.Outcome.TRANSIENT, "The discussion could not be read");
             Boolean current = threadState(found, noteId, type, author);
             if (current == null)
                 return ThreadChange.of(
                         copy.copyId(),
                         ThreadChange.Outcome.NOT_OWNED,
                         "The thread no longer starts with the owned note");
-            JsonNode resolver =
-                    Objects.requireNonNull(found).path("notes").get(0).path("resolved_by");
-            if (current
-                    && !(resolver.path("id").isIntegralNumber()
-                            && resolver.path("id").longValue() == author))
+            if (resolvedByOther(found, author))
                 return ThreadChange.of(
                         copy.copyId(), ThreadChange.Outcome.TAKEN, "Another account resolved the thread");
             if (current == resolved) return ThreadChange.done(copy.copyId());
-            if (resolved && !endsWithOwn(found, author))
+            if (resolved && repliedByOther(found, author))
                 return ThreadChange.of(
                         copy.copyId(), ThreadChange.Outcome.REPLIED, "A person replied after the owned note");
             if (!egressGuard.deliveryAllowed(
@@ -779,7 +779,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
                 return ThreadChange.of(
                         copy.copyId(), ThreadChange.Outcome.TRANSIENT, "Provider thread change outcome is unknown");
             }
-            Boolean stored = written.status() == 200 ? threadState(written.json(), noteId, type, author) : null;
+            JsonNode answer = written.status() == 200 ? written.json() : null;
+            Boolean stored = answer == null ? null : threadState(answer, noteId, type, author);
             return Objects.equals(stored, resolved)
                     ? ThreadChange.done(copy.copyId())
                     : ThreadChange.of(
@@ -792,25 +793,47 @@ public class GitLabLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
         }
     }
 
-    /** Whether the discussion that starts with the owned note is resolved; null when it does not start with it. */
-    private static @Nullable Boolean threadState(@Nullable JsonNode discussion, long noteId, String type, long author) {
-        if (discussion == null
-                || !discussion.path("notes").isArray()
-                || discussion.path("notes").isEmpty()) return null;
+    /**
+     * Whether the discussion that starts with the owned note is resolved: every resolvable note is. GitLab resolves
+     * notes one by one, so a resolved first note does not resolve the discussion. Null when the discussion does not
+     * start with the owned note.
+     */
+    private static @Nullable Boolean threadState(JsonNode discussion, long noteId, String type, long author) {
+        if (!discussion.path("notes").isArray() || discussion.path("notes").isEmpty()) return null;
         JsonNode first = discussion.path("notes").get(0);
         if (!GitLabDiscussionNotes.ownNote(first, noteId, type, author)
-                || !first.path("resolvable").booleanValue()
-                || !first.path("resolved").isBoolean()) return null;
-        return first.path("resolved").booleanValue();
+                || !first.path("resolvable").booleanValue()) return null;
+        boolean resolved = true;
+        for (JsonNode note : discussion.path("notes")) {
+            if (!note.path("resolvable").booleanValue()) continue;
+            if (!note.path("resolved").isBoolean()) return null;
+            resolved &= note.path("resolved").booleanValue();
+        }
+        return resolved;
     }
 
-    // A system note, such as "resolved all threads", is no reply.
-    private static boolean endsWithOwn(JsonNode discussion, long author) {
-        JsonNode last = null;
-        for (JsonNode note : discussion.path("notes")) if (!note.path("system").booleanValue()) last = note;
-        return last != null
-                && last.path("author").path("id").isIntegralNumber()
-                && last.path("author").path("id").longValue() == author;
+    /** Whether another account resolved any note of the discussion: a person's state, which Hephaestus keeps. */
+    private static boolean resolvedByOther(JsonNode discussion, long author) {
+        for (JsonNode note : discussion.path("notes")) {
+            if (!note.path("resolvable").booleanValue()
+                    || !note.path("resolved").booleanValue()) continue;
+            JsonNode resolver = note.path("resolved_by");
+            if (!resolver.path("id").isIntegralNumber() || resolver.path("id").longValue() != author) return true;
+        }
+        return false;
+    }
+
+    // A person's reply anywhere after the owned note keeps the discussion open, also when a later note is the
+    // account's own. A system note, such as "resolved all threads", is no reply.
+    private static boolean repliedByOther(JsonNode discussion, long author) {
+        var notes = discussion.path("notes");
+        for (int index = 1; index < notes.size(); index++) {
+            JsonNode note = notes.get(index);
+            if (note.path("system").booleanValue()) continue;
+            if (!note.path("author").path("id").isIntegralNumber()
+                    || note.path("author").path("id").longValue() != author) return true;
+        }
+        return false;
     }
 
     // The token's own account is the only author whose copy a correction may edit.

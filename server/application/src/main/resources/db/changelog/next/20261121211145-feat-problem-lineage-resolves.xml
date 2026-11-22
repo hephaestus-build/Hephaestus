@@ -43,6 +43,9 @@
             </column>
             <column name="provider" type="VARCHAR(16)"/>
             <column name="reopens" type="BOOLEAN"/>
+            <column name="resolve_written" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
             <column name="resolved" type="BOOLEAN">
                 <constraints nullable="false"/>
             </column>
@@ -66,9 +69,9 @@
         <sql>ALTER TABLE feedback_thread_resolution
             ADD CONSTRAINT ck_feedback_thread_resolution_state CHECK (state IN ('DONE', 'PENDING', 'STOPPED')),
             ADD CONSTRAINT ck_feedback_thread_resolution_provider CHECK (provider IN ('GITHUB', 'GITLAB', 'OUTLINE', 'SLACK')),
-            ADD CONSTRAINT ck_feedback_thread_resolution_written CHECK ((actor IS NULL) = (provider IS NULL)
-                AND (actor IS NULL) = (reopens IS NULL)),
-            ADD CONSTRAINT ck_feedback_thread_resolution_stop_reason CHECK (stop_reason IN ('FAILED', 'GONE', 'HUMAN_CONTROLLED', 'NOT_PERMITTED', 'PERSON_SUPPRESSED', 'REPLIED', 'UNSUPPORTED', 'WITHDRAWN')),
+            ADD CONSTRAINT ck_feedback_thread_resolution_written CHECK ((provider IS NULL) = (reopens IS NULL)
+                AND (actor IS NULL OR provider IS NOT NULL) AND (NOT resolve_written OR provider IS NOT NULL)),
+            ADD CONSTRAINT ck_feedback_thread_resolution_stop_reason CHECK (stop_reason IN ('FAILED', 'GONE', 'HUMAN_CONTROLLED', 'NOT_PERMITTED', 'PERSON_SUPPRESSED', 'REPLIED', 'UNAVAILABLE', 'UNSUPPORTED', 'WITHDRAWN')),
             ADD CONSTRAINT ck_feedback_thread_resolution_stopped CHECK ((state = 'STOPPED') = (stop_reason IS NOT NULL)),
             ADD CONSTRAINT ck_feedback_thread_resolution_generation CHECK (generation &gt; 0),
             ADD CONSTRAINT sfk_feedback_thread_resolution_copy FOREIGN KEY (copy_id, workspace_id)
@@ -78,7 +81,10 @@
         ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_kind,
             ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK','RETRACT_FEEDBACK','RESOLVE_FEEDBACK_THREAD','SLACK_POST','SLACK_NOTICE','SLACK_JOIN','SLACK_CONSENT','PUBLISH_REPORT','CLEANUP_ISSUE','TRANSFER_ISSUE','DRAFT_REPORT'));</sql>
         <rollback>
-            <sql>ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_kind,
+            <sql>-- A thread action of this release has no adapter and no resolution row in the earlier release, and the earlier
+        -- check refuses its kind, so it goes before the check is restored.
+        DELETE FROM agent_action WHERE kind = 'RESOLVE_FEEDBACK_THREAD';
+        ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_kind,
             ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK','RETRACT_FEEDBACK','SLACK_POST','SLACK_NOTICE','SLACK_JOIN','SLACK_CONSENT','PUBLISH_REPORT','CLEANUP_ISSUE','TRANSFER_ISSUE','DRAFT_REPORT'));
         DROP INDEX IF EXISTS idx_problem_lineage_identity;
         DROP INDEX IF EXISTS idx_feedback_thread_resolution_copy;

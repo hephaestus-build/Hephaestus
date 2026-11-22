@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -91,7 +92,9 @@ class FeedbackThreadSteps {
 
     /**
      * Records the writing account and the write fence together, just before the provider call. It checks again what
-     * can change while the provider is asked who the account is. Null lets the write go ahead.
+     * can change while the provider is asked who the account is: the owning copy, a person's control, withdrawal, an
+     * incorrect mark, the delivery permission of the evidence and the developer's data hold. Null lets the write go
+     * ahead.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public @Nullable ActionResult begin(
@@ -103,8 +106,17 @@ class FeedbackThreadSteps {
         var row = resolutions.lockById(ask.resolutionId(), workspaceId).orElse(null);
         if (row == null || !row.current(ask.generation()))
             return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
-        var copy = copies.findById(row.getCopyId()).orElse(null);
-        var refusal = copy == null ? FeedbackThreadStopReason.GONE : refusal(row, copy);
+        var copy = copies.findById(row.getCopyId())
+                .filter(found -> found.getWorkspaceId() == workspaceId)
+                .orElse(null);
+        var owner = copy == null
+                ? null
+                : feedback.findByIdAndWorkspaceId(copy.getFeedbackId(), workspaceId)
+                        .orElse(null);
+        var refusal = copy == null || owner == null ? FeedbackThreadStopReason.GONE : refusal(row, copy);
+        // The permission of the evidence can change while the provider is asked who the account is.
+        if (refusal == null && !permitted(workspaceId, Objects.requireNonNull(owner), Objects.requireNonNull(copy)))
+            refusal = FeedbackThreadStopReason.NOT_PERMITTED;
         if (refusal == null && !privacy.holdForAccountWrite(developer))
             refusal = FeedbackThreadStopReason.PERSON_SUPPRESSED;
         if (refusal != null) {

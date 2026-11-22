@@ -14,6 +14,8 @@ public enum FeedbackThreadStopReason {
     WITHDRAWN,
     /** The workspace does not permit feedback delivery from the evidence the change rests on. */
     NOT_PERMITTED,
+    /** The work could not be read: its access, connection or consent ended. A later decision can try again. */
+    UNAVAILABLE,
     /** The developer's data is held for an account request. */
     PERSON_SUPPRESSED,
     /** The provider did not confirm the change within the action's attempts. */

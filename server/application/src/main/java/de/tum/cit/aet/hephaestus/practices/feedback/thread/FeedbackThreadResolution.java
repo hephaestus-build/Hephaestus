@@ -68,17 +68,24 @@ public class FeedbackThreadResolution {
     @Column(name = "actor", columnDefinition = "TEXT")
     private @Nullable String actor;
 
-    /** The provider of the thread, recorded with the writing account. */
+    /** The provider of the thread, recorded with the first writing account; the thread never changes provider. */
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", length = 16)
     private @Nullable IntegrationKind provider;
 
     /**
-     * Whether the provider lets Hephaestus reopen the thread, recorded with the writing account. GitLab does not: it
-     * cannot tell Hephaestus's own reopen from a person's.
+     * Whether the provider lets Hephaestus reopen the thread, recorded with the first writing account. GitLab does not:
+     * it cannot tell Hephaestus's own reopen from a person's.
      */
     @Column(name = "reopens")
     private @Nullable Boolean reopens;
+
+    /**
+     * Whether a resolve of Hephaestus may be in effect on the provider: one began, and no reopen of it has been
+     * confirmed since. Kept across asks, so a later ask never forgets a resolve that reached the provider.
+     */
+    @Column(name = "resolve_written", nullable = false)
+    private boolean resolveWritten;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "stop_reason", length = 32)
@@ -89,30 +96,45 @@ public class FeedbackThreadResolution {
 
     /**
      * Asks for the thread resolved or open, with the cited problems of {@code copy}. True when an action must carry the
-     * ask out. A reopen when no resolve of Hephaestus can have reached the provider only cancels that resolve.
+     * ask out. A reopen when no resolve of Hephaestus can be in effect on the provider only cancels that resolve. The
+     * same state asked again while its action waits moves the ask to the newest owning copy, which the waiting action
+     * reads before it writes.
      */
     boolean ask(boolean resolve, UUID copy, Instant at) {
         if (state == FeedbackThreadResolutionState.STOPPED
                 && Objects.requireNonNull(stopReason).isFinal()) return false;
-        if (resolve == resolved && state != FeedbackThreadResolutionState.STOPPED) return false;
-        boolean undo = !resolve && resolved && actor == null;
-        // The same state asked again keeps the writer: a write of the earlier ask may have landed.
+        if (resolve == resolved && state != FeedbackThreadResolutionState.STOPPED) {
+            if (state == FeedbackThreadResolutionState.PENDING) copyId = copy;
+            return false;
+        }
+        boolean undo = !resolve && resolved && !resolveWritten;
         boolean flips = resolve != resolved;
         copyId = copy;
         resolved = resolve;
         generation++;
         stopReason = null;
         changedAt = at;
+        // The account of a write of the other state answers no ask of this one.
+        if (flips) actor = null;
         if (undo) {
             moveTo(FeedbackThreadResolutionState.DONE);
             return false;
         }
-        if (flips) {
-            actor = null;
-            provider = null;
-            reopens = null;
-        }
         moveTo(FeedbackThreadResolutionState.PENDING);
+        return true;
+    }
+
+    /**
+     * Withdraws a waiting resolve that has not begun to write, when its proof no longer holds. A resolve that may be in
+     * effect stays: unknown standing never reopens a thread. True when the waiting action must go.
+     */
+    boolean withdrawUnstarted(Instant at) {
+        if (state != FeedbackThreadResolutionState.PENDING || !resolved || actor != null || resolveWritten)
+            return false;
+        resolved = false;
+        generation++;
+        changedAt = at;
+        moveTo(FeedbackThreadResolutionState.DONE);
         return true;
     }
 
@@ -122,12 +144,15 @@ public class FeedbackThreadResolution {
         provider = writer.provider();
         reopens = writer.reopens();
         actor = writer.actor();
+        if (resolved) resolveWritten = true;
         changedAt = at;
         return true;
     }
 
     void done(int asked, Instant at) {
         if (!current(asked)) return;
+        // A confirmed reopen leaves no resolve of Hephaestus in effect.
+        if (!resolved) resolveWritten = false;
         changedAt = at;
         moveTo(FeedbackThreadResolutionState.DONE);
     }

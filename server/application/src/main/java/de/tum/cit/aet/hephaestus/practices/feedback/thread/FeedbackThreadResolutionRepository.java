@@ -68,8 +68,8 @@ public interface FeedbackThreadResolutionRepository extends JpaRepository<Feedba
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
         INSERT INTO feedback_thread_resolution(id, workspace_id, item_id, thread_ref, copy_id, resolved, state,
-          generation, changed_at)
-        VALUES (:id, :workspaceId, :itemId, :threadRef, :copyId, true, 'PENDING', 1, :at)
+          generation, resolve_written, changed_at)
+        VALUES (:id, :workspaceId, :itemId, :threadRef, :copyId, true, 'PENDING', 1, false, :at)
         ON CONFLICT ON CONSTRAINT uk_feedback_thread_resolution_thread DO NOTHING
         """, nativeQuery = true)
     int insertFirstResolve(

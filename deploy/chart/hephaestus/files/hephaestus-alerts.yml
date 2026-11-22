@@ -891,11 +891,16 @@ groups:
         annotations:
           summary: Readback could not tell whether feedback reached the work on {{ $labels.provider }}
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      # A thread that Hephaestus asked to resolve or reopen, where no attempt confirmed the change. The thread keeps its
-      # state, so nothing is wrong on the work, but the provider refused or did not answer every attempt.
+      # A thread that Hephaestus asked to resolve or reopen, where no attempt confirmed the change. The provider's state
+      # is unknown: a write can apply and lose its answer, so read the thread on the provider. A series that first
+      # appears above zero counts too.
       - alert: HephaestusFeedbackThreadChangeFailing
         expr: >-
-          sum by (direction) (increase(practice_feedback_thread_changes_total{job="hephaestus",outcome="failed"}[1d])) > 0
+          sum by (direction) (
+            increase(practice_feedback_thread_changes_total{job="hephaestus",outcome="failed"}[1d]) > 0
+            or (practice_feedback_thread_changes_total{job="hephaestus",outcome="failed"} > 0
+              unless practice_feedback_thread_changes_total{job="hephaestus",outcome="failed"} offset 1d)
+          ) > 0
         labels:
           severity: warning
         annotations:
@@ -907,7 +912,11 @@ groups:
       # counts once too, so a single count needs a look, not an incident.
       - alert: HephaestusFeedbackThreadActorMismatch
         expr: >-
-          sum by (provider) (increase(practice_feedback_thread_actor_mismatch_total{job="hephaestus"}[1d])) > 0
+          sum by (provider) (
+            increase(practice_feedback_thread_actor_mismatch_total{job="hephaestus"}[1d]) > 0
+            or (practice_feedback_thread_actor_mismatch_total{job="hephaestus"} > 0
+              unless practice_feedback_thread_actor_mismatch_total{job="hephaestus"} offset 1d)
+          ) > 0
         labels:
           severity: warning
         annotations:

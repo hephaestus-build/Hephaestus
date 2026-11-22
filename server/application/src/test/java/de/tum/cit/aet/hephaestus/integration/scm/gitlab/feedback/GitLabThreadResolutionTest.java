@@ -136,6 +136,49 @@ class GitLabThreadResolutionTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReadAgainWhenTheDiscussionReadFails() {
+        rest.answer(503, Map.of("message", "Service unavailable"));
+
+        assertThat(writer.resolveThread(TARGET, copy(), true, "1").outcome()).isEqualTo(ThreadChange.Outcome.TRANSIENT);
+        assertThat(rest.calls()).extracting(ScriptedGitLabRest.Call::method).containsOnly(HttpMethod.GET);
+    }
+
+    @Test
+    void shouldResolveADiscussionWhoseFirstNoteAloneIsResolved() {
+        rest.answer(200, withNote(discussion(true, BOT), 5303064, BOT, false));
+        rest.answer(200, withNote(discussion(true, BOT), 5303064, BOT, true));
+
+        assertThat(writer.resolveThread(TARGET, copy(), true, "1").outcome()).isEqualTo(ThreadChange.Outcome.DONE);
+        assertThat(rest.calls().getLast().method()).isEqualTo(HttpMethod.PUT);
+    }
+
+    @Test
+    void shouldNotResolveADiscussionWhereAPersonRepliedBeforeALaterNoteOfTheAccount() {
+        rest.answer(200, withNote(replied(false), 5303065, BOT, false));
+
+        assertThat(writer.resolveThread(TARGET, copy(), true, "1").outcome()).isEqualTo(ThreadChange.Outcome.REPLIED);
+        assertThat(rest.calls()).extracting(ScriptedGitLabRest.Call::method).containsOnly(HttpMethod.GET);
+    }
+
+    /** The discussion with one more resolvable note by {@code author}, resolved or not. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> withNote(
+            Map<String, Object> discussion, long id, long author, boolean resolved) {
+        Map<String, Object> note = new LinkedHashMap<>();
+        note.put("id", id);
+        note.put("type", "DiffNote");
+        note.put("body", "A later note.");
+        note.put("system", false);
+        note.put("author", Map.of("id", author, "username", "bot"));
+        note.put("resolvable", true);
+        note.put("resolved", resolved);
+        if (resolved) note.put("resolved_by", Map.of("id", author, "username", "bot"));
+        var notes = new ArrayList<>((List<Map<String, Object>>) discussion.get("notes"));
+        notes.add(note);
+        return Map.of("id", DISCUSSION, "individual_note", false, "notes", notes);
+    }
+
+    @Test
     void shouldReportARemovedDiscussionGoneOnlyWhenItsMergeRequestIsReadable() {
         rest.answer(404, "{\"message\":\"404 Not found\"}");
         rest.answer(200, Map.of("iid", 42));

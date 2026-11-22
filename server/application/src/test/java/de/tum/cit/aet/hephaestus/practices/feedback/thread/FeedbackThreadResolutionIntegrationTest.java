@@ -76,6 +76,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -437,6 +438,44 @@ class FeedbackThreadResolutionIntegrationTest extends AbstractResultAdmissionInt
                 .containsExactly(copyOf(thread));
         assertThat(copies.findClosedAsFixed(scenario.workspace().getId(), List.of(copyOf(thread))))
                 .containsExactly(copyOf(thread));
+    }
+
+    @Test
+    void shouldStillReopenAThreadWhoseResolveReachedTheProviderAfterTheAsksFlippedTwice() {
+        var first = sealed("f1", 50, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+        String thread = note(first, problems(first));
+        sealed("f2", 40, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);
+        assertThat(run(resolution(thread))).containsInstanceOf(ActionResult.Done.class);
+
+        // Back, gone, back again, before any of these asks ran: the resolve that reached the provider still stands.
+        sealed("f3", 30, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+        sealed("f4", 20, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);
+        sealed("f5", 10, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+
+        var reopening = resolution(thread);
+        assertThat(reopening.isResolved()).isFalse();
+        assertThat(reopening.getState()).isEqualTo(FeedbackThreadResolutionState.PENDING);
+        assertThat(run(reopening)).containsInstanceOf(ActionResult.Done.class);
+        assertThat(provider.threads).containsEntry(thread, false);
+    }
+
+    @Test
+    void shouldNotWriteWhenDeliveryPermissionEndsWhileTheAccountIsAsked() {
+        var first = sealed("e1", 30, ResultOutcome.NOT_MET, c -> c, CapturedTextProbe.NONE);
+        String thread = note(first, problems(first));
+        sealed("e2", 20, ResultOutcome.MET, c -> withProblems(c, List.of()), cited -> CapturedTextProbe.Presence.GONE);
+        // The plan finds the evidence permitted; the check just before the write no longer does.
+        var checks = new AtomicInteger();
+        when(evidence.permitsAll(anyLong(), anyCollection(), any()))
+                .thenAnswer(call -> checks.getAndIncrement() == 0
+                        ? call.<Collection<ResultFacts>>getArgument(1).stream()
+                                .map(facts -> facts.id())
+                                .collect(Collectors.toSet())
+                        : Set.of());
+
+        assertThat(run(resolution(thread))).containsInstanceOf(ActionResult.Cancelled.class);
+        assertThat(resolution(thread).getStopReason()).isEqualTo(FeedbackThreadStopReason.NOT_PERMITTED);
+        assertThat(provider.changes).isEmpty();
     }
 
     private UUID sealed(

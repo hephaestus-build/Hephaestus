@@ -849,7 +849,8 @@ On GitHub it reopens when one of them comes back. On GitLab it stays resolved, a
 
 One `RESOLVE_FEEDBACK_THREAD` action changes one thread, on GitHub and GitLab.
 The action records the writing account before it writes, so the thread event of its own write is not read as a person's.
-A person's resolve, reopen or reply, or an event without an actor, ends Hephaestus's changes to that thread.
+A person's resolve or reopen, or an event without an actor, ends Hephaestus's changes to that thread.
+A person's reply after the note keeps Hephaestus from resolving the thread. A reply does not stop a reopen.
 [ADR 0086](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) § Update — 2026-11-21: problem lineage resolves and reopens threads owns the rules.
 
 ### Decisions and withholdings

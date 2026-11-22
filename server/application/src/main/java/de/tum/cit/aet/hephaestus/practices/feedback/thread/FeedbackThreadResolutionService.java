@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ThreadResolutionWriter;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
@@ -38,7 +39,13 @@ public class FeedbackThreadResolutionService {
         try {
             target = targets.resolveExisting(plan.feedback());
         } catch (FeedbackTargetResolver.TargetUnavailable unavailable) {
-            steps.stop(workspaceId, ask, FeedbackThreadStopReason.GONE);
+            // Removed work ends the thread; work that cannot be read now may be readable again for a later decision.
+            steps.stop(
+                    workspaceId,
+                    ask,
+                    unavailable.reason() == FeedbackStopReason.ITEM_GONE
+                            ? FeedbackThreadStopReason.GONE
+                            : FeedbackThreadStopReason.UNAVAILABLE);
             return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
         }
         var matching = writers.stream()

@@ -330,13 +330,17 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
             @Param("feedbackId") UUID feedbackId,
             @Param("externalRef") String externalRef);
 
-    /** Of {@code copyIds}, the copies whose thread Hephaestus resolved itself and has not handed to people. */
+    /**
+     * Of {@code copyIds}, the copies whose thread a resolve of Hephaestus may hold resolved, while people have not taken
+     * it over. A reopen that waits leaves that resolve in effect until the reopen is confirmed.
+     */
     @Query(value = """
         SELECT c.id FROM feedback_copy c
         JOIN feedback f ON f.id = c.feedback_id AND f.workspace_id = c.workspace_id
         JOIN feedback_thread_resolution t ON t.workspace_id = c.workspace_id AND t.item_id = f.item_id
           AND t.thread_ref = c.thread_ref
-        WHERE c.workspace_id = :workspaceId AND c.id IN (:copyIds) AND t.resolved AND t.state <> 'STOPPED'
+        WHERE c.workspace_id = :workspaceId AND c.id IN (:copyIds) AND t.resolve_written
+          AND t.stop_reason IS DISTINCT FROM 'HUMAN_CONTROLLED'
         """, nativeQuery = true)
     List<UUID> findResolvedByHephaestus(
             @Param("workspaceId") long workspaceId, @Param("copyIds") Collection<UUID> copyIds);
@@ -351,7 +355,7 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
         JOIN feedback_thread_resolution t ON t.workspace_id = c.workspace_id AND t.item_id = f.item_id
           AND t.thread_ref = c.thread_ref
         WHERE c.workspace_id = :workspaceId AND c.id IN (:copyIds) AND t.resolved AND t.state = 'DONE'
-          AND t.reopens = false
+          AND t.resolve_written AND t.reopens = false
         """, nativeQuery = true)
     List<UUID> findClosedAsFixed(@Param("workspaceId") long workspaceId, @Param("copyIds") Collection<UUID> copyIds);
 }

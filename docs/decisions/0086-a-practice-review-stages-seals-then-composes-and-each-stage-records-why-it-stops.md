@@ -352,8 +352,10 @@ Repeats by identity and the composer's view of lineage stay decided, not shipped
   Take the newest lineage row with the problem's identity, in the same practice, item and developer.
   The problem is No longer present now when that row is No longer present.
   Only rows of usable results count: an item review that is no trial, not outranked, and not marked incorrect.
-  A newer usable result that a different practice version or model method measured compared with nothing.
-  Then the newest row proves nothing about now, and the problem has no standing.
+  A usable result can be newer than the cited problem's own result and measured another way.
+  It has another practice version or model method, or it ended as it was written.
+  Lineage compares only within one measurement, so the chain from the cited problem breaks there.
+  Then the problem has no standing.
   So a note that cites two problems resolves only after both are gone, in one review or in two.
   A lineage row records the problem's identity for this reason.
   The migration derives it for rows of a problem with a key: `key:` and the key.
@@ -362,16 +364,21 @@ Repeats by identity and the composer's view of lineage stay decided, not shipped
 - **Reopen.** When one cited problem is present again, the server reopens the thread.
   A later review finds the problem as New, Unchanged or Updated.
   A problem without standing does not reopen a thread: no proof is no claim.
+  It withdraws a resolve that has not begun to write.
   The one exception is a person's incorrect mark on a result whose lineage proved a cited problem gone.
   The mark takes back the proof, so that resolved thread reopens when its problems lost their standing.
   A mark on a result that the note itself rests on reopens nothing.
   The note is retracted, and its thread stops.
   The server reopens only a thread that its own resolve may have reached.
+  The row keeps that fact across asks, until a reopen is confirmed.
   A resolve that never started is withdrawn instead.
+  The decision holds the item's lock, the lock of the seal, while it reads standing and asks.
+  So no newer lineage commits in between, and two decisions for one thread never race.
   The server reopens only where the provider can tell its own reopen from a person's: on GitHub, not on GitLab.
 - **A note closed as fixed.** On GitLab, a thread that the server resolved stays resolved, so its note no longer stands as advice.
-  Once the resolve is confirmed, the history that the next review on the work reads marks that piece `closedAsFixed`.
-  It is then no witness for `ALREADY_SAID` or `NO_MATERIAL_CHANGE`.
+  Once the resolve is confirmed, the history that the next review on the work reads marks that note `closedAsFixed`.
+  It names the practices whose every note in the piece is closed, and that its summary does not carry.
+  The piece is then no witness for `ALREADY_SAID` or `NO_MATERIAL_CHANGE` on those practices, and its other notes still stand.
   So a problem that came back is raised again in a new note.
   The closed note does not hold it back.
   On GitHub the server reopens the thread instead, so the piece keeps standing as advice.
@@ -393,12 +400,15 @@ Repeats by identity and the composer's view of lineage stay decided, not shipped
     A person who resolves while Hephaestus's write is in flight counts once too.
     `HephaestusFeedbackThreadActorMismatch` alerts on any count.
   - The server never resolves a thread with a reply from a person newer than its note.
+    It reads every comment after the note. A later comment of the account does not hide an earlier reply.
+    A thread longer than one read counts as replied.
     A person can still reply between the server's read and its write. That window is inherent.
   - The writer reads who resolved a thread.
     A thread that another account resolved is a person's, even when no event told the server.
     The server hands it over, and it never reopens it.
   - A readback of a thread that the server resolved itself does not mark its feedback human-controlled.
 - **Permission.** Before it writes, the server checks that the evidence of the note still permits practice feedback delivery.
+  It checks again just before the write, after it asked the provider who the account is.
   It also checks that the feedback is not withdrawn and that the developer's data is not held.
 - **Delivery.** One outbox action changes one thread.
   The provider's thread state is its readback.
@@ -414,6 +424,8 @@ Integrations:
   The pull request review thread webhook now records its sender as the event's actor.
   The activity of a reopened thread now names that sender, not the pull request's author.
 - **GitLab: resolve only, no reopen.** The server resolves the discussion through its `resolved` flag, as the token's user.
+  GitLab resolves notes one by one, so a discussion counts as resolved only when every resolvable note is.
+  A failed read of the discussion is read again, never taken for a thread that is not the server's.
   A synced resolve names the discussion's resolver.
   A synced reopen names no actor, so GitLab cannot tell the server's own reopen from a person's.
   A reopen of its own would hand the thread to people and mark its own feedback human-controlled.

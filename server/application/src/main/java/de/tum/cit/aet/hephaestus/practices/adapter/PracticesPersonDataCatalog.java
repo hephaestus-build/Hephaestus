@@ -26,6 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 @PersonDataStores({
     "practice_version",
     "feedback_response",
+    "feedback_thread_resolution",
     "feedback_copy",
     "feedback_basis",
     "feedback_decision",
@@ -158,6 +159,20 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "id,workspace_id",
                                 "",
                                 -220),
+                        // A thread resolution goes with the developer's copy. Its actor is the connection's provider
+                        // account: with a personal token, a person, whose rows go too.
+                        new JdbcPersonDataStore(
+                                jdbc,
+                                mapper,
+                                "feedback_thread_resolution",
+                                "feedback_thread_resolution",
+                                "t.copy_id IN(SELECT id FROM feedback_copy WHERE feedback_id IN(" + FEEDBACK_IDS
+                                        + ")) OR t.actor IN(SELECT provider_user_key FROM identity WHERE"
+                                        + " account_id=:account)",
+                                "id,workspace_id,item_id,thread_ref,copy_id,resolved,state,generation,actor,provider,reopens,resolve_written,stop_reason,changed_at",
+                                "id,workspace_id",
+                                "",
+                                -215),
                         new ExternalFeedbackPersonDataStore(
                                 custody,
                                 jdbc,
@@ -230,7 +245,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "problem_lineage",
                                 "problem_lineage",
                                 "t.result_id IN(" + RESULT_IDS + ") OR t.prior_result_id IN(" + RESULT_IDS + ")",
-                                "id,workspace_id,result_id,prior_result_id,problem_id,prior_problem_id,comparison,recorded_at",
+                                "id,workspace_id,result_id,prior_result_id,problem_id,prior_problem_id,comparison,identity,recorded_at",
                                 "id,workspace_id",
                                 "",
                                 -160),

@@ -589,7 +589,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
             var read = gitHubProvider
                     .forScope(workspaceId)
                     .document(
-                            "query ReadFeedbackThread($id:ID!){node(id:$id){__typename ... on PullRequestReviewThread{id isResolved resolvedBy{databaseId} comments(first:1){nodes{id viewerDidAuthor}} latest:comments(last:1){nodes{viewerDidAuthor}}}}}")
+                            "query ReadFeedbackThread($id:ID!){node(id:$id){__typename ... on PullRequestReviewThread{id isResolved resolvedBy{databaseId} comments(first:100){totalCount nodes{id viewerDidAuthor}}}}}")
                     .variable("id", thread)
                     .execute()
                     .block(GRAPHQL_TIMEOUT);
@@ -615,7 +615,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
                 return ThreadChange.of(
                         copy.copyId(), ThreadChange.Outcome.TAKEN, "Another account resolved the thread");
             if (current == resolved) return ThreadChange.done(copy.copyId());
-            if (resolved && !endsWithOwn(found))
+            if (resolved && repliedByOther(found))
                 return ThreadChange.of(
                         copy.copyId(), ThreadChange.Outcome.REPLIED, "A person replied after the owned note");
             if (!egressGuard.deliveryAllowed(
@@ -648,12 +648,19 @@ public class GitHubLineNoteWriter implements LineNoteWriter, ThreadResolutionWri
         }
     }
 
-    private static boolean endsWithOwn(Map<?, ?> thread) {
-        return thread.get("latest") instanceof Map<?, ?> latest
-                && latest.get("nodes") instanceof List<?> nodes
-                && nodes.size() == 1
-                && nodes.getFirst() instanceof Map<?, ?> last
-                && Boolean.TRUE.equals(last.get("viewerDidAuthor"));
+    /**
+     * Whether a comment after the owned note is not the token account's: a person replied, also when a later comment is
+     * the account's own. A thread longer than one read counts as replied, because the read cannot prove otherwise.
+     */
+    private static boolean repliedByOther(Map<?, ?> thread) {
+        if (!(thread.get("comments") instanceof Map<?, ?> comments)
+                || !(comments.get("nodes") instanceof List<?> nodes)
+                || !(comments.get("totalCount") instanceof Number total)
+                || total.intValue() != nodes.size()) return true;
+        for (int index = 1; index < nodes.size(); index++)
+            if (!(nodes.get(index) instanceof Map<?, ?> comment)
+                    || !Boolean.TRUE.equals(comment.get("viewerDidAuthor"))) return true;
+        return false;
     }
 
     private static boolean startsWithOwn(Map<?, ?> thread, String note) {

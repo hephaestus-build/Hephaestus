@@ -112,6 +112,29 @@ class ReviewOnWorkPriorAdviceTest {
                 .contains("feedback:" + PRIOR);
     }
 
+    @Test
+    void shouldKeepAPieceStandingAsAdviceOnThePracticesWhoseNotesStayOpen() {
+        var history = history(true);
+        var entry = (ObjectNode) history.path("feedback").get(0);
+        entry.withArray("basedOn")
+                .addObject()
+                .put("practiceSlug", "describes-changes")
+                .put("outcome", "NOT_MET");
+        var witnesses = ReviewOnWork.priorAdviceWitnesses(
+                ReviewOnWork.priorPublicFeedback(history, WORK, CAPTURED, CAPTURED)
+                        .feedback(),
+                MAPPER.createArrayNode());
+
+        var witness = witnesses.get("feedback:" + PRIOR);
+        assertThat(witness).isNotNull();
+        assertThat(witness.eligibleForAlreadySaid()).isTrue();
+        assertThat(witness.practices()).containsExactly("describes-changes");
+        assertThat(witness.closedPractices()).containsExactly("handles-errors");
+        // The returning problem is raised without being asked back, and cannot hide behind the closed note.
+        assertThat(ReviewOnWork.read(raise(null), RESULTS, false, witnesses).errors())
+                .isEmpty();
+    }
+
     private static final String PRIOR = "0b6c8c38-55a4-4d55-9d0a-2a2f6c1f6e01";
     private static final String KIND = "scm.pull_request";
     private static final String URL = "https://gitlab.example.com/group/project/-/merge_requests/42";
@@ -128,13 +151,13 @@ class ReviewOnWorkPriorAdviceTest {
                 .put("body", SUMMARY)
                 .put("recordedClaimCurrentness", "CURRENT")
                 .put("withdrawn", false)
-                .put("closedAsFixed", closed)
                 .put("deliveredAt", "2026-11-20T12:00:00Z");
         entry.putObject("item").put("kind", KIND).put("url", URL);
         entry.putArray("basedOn")
                 .addObject()
                 .put("practiceSlug", "handles-errors")
                 .put("outcome", "NOT_MET");
+        if (closed) entry.putArray("closedPractices").add("handles-errors");
         return history;
     }
 

@@ -83,9 +83,11 @@ On GitLab, Hephaestus only resolves threads and never reopens them.
 GitLab does not say who reopened a thread, so a reopen by Hephaestus would look like yours.
 Instead, a problem that comes back gets a new note.
 
-Your own actions on a thread always win.
+Your own actions on a thread win.
 If you or anyone else resolves or reopens a thread, Hephaestus leaves that thread alone from then on.
 If someone replies after the note, Hephaestus does not resolve the thread.
+One exception: when your workspace connects with the personal access token of a person, Hephaestus acts as that person.
+A change that this person makes can then look like Hephaestus's own, so Hephaestus may change that thread again.
 
 Mentions, issue references, and links in feedback appear as code.
 Thus, a comment notifies no one and runs no GitLab quick action.

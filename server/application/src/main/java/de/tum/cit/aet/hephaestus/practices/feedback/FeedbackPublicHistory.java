@@ -10,7 +10,9 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
+import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
@@ -20,9 +22,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -92,6 +96,13 @@ public class FeedbackPublicHistory {
             boolean textAllowed) {
         Currentness freshness = currentness(row.getWorkspaceId(), support);
         var byId = authorized.stream().collect(Collectors.toMap(AuthorizedSupport::resultId, entry -> entry));
+        var review = reviews.findByIdAndWorkspaceId(row.getReviewId(), row.getWorkspaceId())
+                .orElseThrow();
+        var closed = confirmed.isEmpty()
+                ? Set.<UUID>of()
+                : Set.copyOf(copies.findClosedAsFixed(
+                        row.getWorkspaceId(),
+                        confirmed.stream().map(FeedbackCopy::getId).toList()));
         @Nullable
         String summary =
                 !textAllowed || confirmed.stream().noneMatch(copy -> copy.getKind() == FeedbackCopyKind.SUMMARY)
@@ -102,22 +113,14 @@ public class FeedbackPublicHistory {
                 row.getDestination(),
                 row.getState(),
                 Objects.requireNonNull(row.getDeliveredAt()),
-                reviews.findByIdAndWorkspaceId(row.getReviewId(), row.getWorkspaceId())
-                        .orElseThrow()
-                        .getItemVersion(),
+                review.getItemVersion(),
                 summary,
                 confirmed.stream().anyMatch(copy -> copy.getKind() == FeedbackCopyKind.SUMMARY)
                         ? row.getBody() == null
                         : row.getBody() != null,
                 freshness,
                 withdrawn,
-                !confirmed.isEmpty()
-                        && !copies.findClosedAsFixed(
-                                        row.getWorkspaceId(),
-                                        confirmed.stream()
-                                                .map(FeedbackCopy::getId)
-                                                .toList())
-                                .isEmpty(),
+                closedPractices(row, review, confirmed, closed, byId),
                 support.stream()
                         .map(result -> new PublicBasis(
                                 result.getId(),
@@ -141,7 +144,8 @@ public class FeedbackPublicHistory {
                                 copy.getExternalRef(),
                                 copy.getExternalUrl(),
                                 Objects.requireNonNull(copy.getPostedAt()),
-                                copy.getState()))
+                                copy.getState(),
+                                closed.contains(copy.getId())))
                         .toList());
         return mapper.valueToTree(projection);
     }
@@ -159,6 +163,42 @@ public class FeedbackPublicHistory {
                 : currentness.contains(Currentness.STALE) ? Currentness.STALE : Currentness.CURRENT;
     }
 
+    /**
+     * The practices that this piece no longer advises on: each of its notes that rests on the practice is closed as
+     * fixed, and its summary does not rest on it. A note rests on the results that its composition support names.
+     */
+    private List<String> closedPractices(
+            Feedback row,
+            Review review,
+            List<FeedbackCopy> confirmed,
+            Set<UUID> closed,
+            Map<UUID, AuthorizedSupport> byId) {
+        if (closed.isEmpty()) return List.of();
+        var node =
+                review.getChecks().path("feedbackComposition").path(row.getId().toString());
+        if (!node.isObject()) return List.of();
+        FeedbackCompositionTrace trace;
+        try {
+            trace = mapper.treeToValue(node, FeedbackCompositionTrace.class);
+        } catch (RuntimeException unreadable) {
+            return List.of();
+        }
+        var open = new HashSet<String>();
+        var closing = new HashSet<String>();
+        for (var copy : confirmed) {
+            var practices = trace.copies().stream()
+                    .filter(support -> support.kind() == copy.getKind() && support.position() == copy.getPosition())
+                    .flatMap(support -> support.basedOn().stream())
+                    .map(basis -> byId.get(basis.resultId()))
+                    .filter(Objects::nonNull)
+                    .map(AuthorizedSupport::practiceSlug)
+                    .toList();
+            (closed.contains(copy.getId()) ? closing : open).addAll(practices);
+        }
+        closing.removeAll(open);
+        return closing.stream().sorted().toList();
+    }
+
     @JsonInclude(JsonInclude.Include.ALWAYS)
     private record PublicEntry(
             UUID id,
@@ -170,9 +210,9 @@ public class FeedbackPublicHistory {
             boolean bodyUnavailable,
             Currentness currentness,
             boolean withdrawn,
-            // A note of this piece started a thread that Hephaestus resolved as fixed and never reopens: on GitLab. On
-            // GitHub, a reopen brings the advice back, so the piece keeps standing as advice there.
-            boolean closedAsFixed,
+            // The practices whose every note of this piece Hephaestus resolved as fixed and never reopens (GitLab), and
+            // that the summary does not carry. The piece no longer stands as their advice; its other notes still do.
+            List<String> closedPractices,
             List<PublicBasis> basedOn,
             List<PublicCopy> copies) {}
 
@@ -192,5 +232,7 @@ public class FeedbackPublicHistory {
             @Nullable String externalRef,
             @Nullable String externalUrl,
             Instant postedAt,
-            FeedbackCopyState state) {}
+            FeedbackCopyState state,
+            // Hephaestus resolved this note's thread as fixed, and the provider never reopens it.
+            boolean closedAsFixed) {}
 }
