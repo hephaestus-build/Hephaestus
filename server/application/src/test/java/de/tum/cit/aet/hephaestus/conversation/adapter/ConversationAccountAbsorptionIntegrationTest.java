@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
@@ -37,8 +38,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.node.JsonNodeFactory;
 
@@ -47,7 +46,6 @@ import tools.jackson.databind.node.JsonNodeFactory;
  * conversation in a workspace, the absorbed one merges into the claiming one ({@link ConversationAccountAbsorptionContributor}).
  */
 @Transactional
-@RecordApplicationEvents
 class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
@@ -60,7 +58,7 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     private ConversationTurnClaims claims;
 
     @Autowired
-    private ApplicationEvents events;
+    private SharedEventRecorder events;
 
     @Autowired
     private ConversationAccountAbsorptionContributor contributor;
@@ -275,7 +273,8 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                                 null,
                                 null)))
                 .isInstanceOf(ConversationLeaseLostException.class);
-        assertThat(events.stream(ConversationLedgerEvents.AttemptTakenBack.class))
+        assertThat(events.stream(ConversationLedgerEvents.AttemptTakenBack.class)
+                        .filter(taken -> taken.turnId().equals(slackTurn)))
                 .as("the absorbed attempt is billed and its feedback claims settled after the merge commits")
                 .singleElement()
                 .satisfies(taken -> {

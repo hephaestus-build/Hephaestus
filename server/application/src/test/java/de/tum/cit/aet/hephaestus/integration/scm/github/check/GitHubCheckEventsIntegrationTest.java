@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.check.dto.GitHubStatusEv
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestSyncService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -41,13 +42,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-@RecordApplicationEvents
 class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private IdentityProviderLookup providerLookup;
@@ -95,7 +93,7 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
     private TransactionTemplate transactionTemplate;
 
     @Autowired
-    private ApplicationEvents events;
+    private SharedEventRecorder events;
 
     @Autowired
     private GitHubProperties gitHubProperties;
@@ -235,9 +233,9 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
                 .isNotNull()
                 .satisfies(runs -> assertThat(runs.runs()).containsExactly(build, docs));
         assertThat(stored.getHeadCheckState()).isNull();
-        assertThat(events.stream(ScmDomainEvent.PullRequestChecksCompleted.class))
-                .singleElement()
-                .satisfies(completed -> assertThat(completed.pullRequest().id()).isEqualTo(onHead.getId()));
+        assertThat(events.stream(ScmDomainEvent.PullRequestChecksCompleted.class)
+                        .filter(completed -> completed.pullRequest().id().equals(onHead.getId())))
+                .hasSize(1);
     }
 
     @Test
@@ -303,9 +301,9 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
         assertThat(pullRequestRepository.findById(onHead.getId()).orElseThrow().getHeadCheckRuns())
                 .isNotNull()
                 .satisfies(runs -> assertThat(runs.finished()).isTrue());
-        assertThat(events.stream(ScmDomainEvent.PullRequestChecksCompleted.class))
-                .singleElement()
-                .satisfies(completed -> assertThat(completed.pullRequest().id()).isEqualTo(onHead.getId()));
+        assertThat(events.stream(ScmDomainEvent.PullRequestChecksCompleted.class)
+                        .filter(completed -> completed.pullRequest().id().equals(onHead.getId())))
+                .hasSize(1);
     }
 
     private PullRequest persistPullRequest(int number, String headSha) {

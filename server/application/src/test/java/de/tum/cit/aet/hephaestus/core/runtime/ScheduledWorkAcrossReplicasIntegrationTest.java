@@ -9,7 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateNonceSto
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubWebhookRedelivery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.SharedTestDoubles;
 import de.tum.cit.aet.hephaestus.testconfig.StubInstallationRepositoryEnumerator;
 import de.tum.cit.aet.hephaestus.testconfig.TestAsyncConfiguration;
@@ -74,7 +74,7 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
                 Application.class,
                 TestSecurityConfig.class,
                 TestAsyncConfiguration.class,
-                RecordingScmEventListener.class,
+                SharedEventRecorder.class,
                 StubInstallationRepositoryEnumerator.class,
                 SharedTestDoubles.class,
                 AgentHandlerTestDoubles.class);

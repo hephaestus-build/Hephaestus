@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSync
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -57,8 +58,6 @@ import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -66,7 +65,6 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import reactor.core.publisher.Mono;
 
 /** Real scope enumeration and persisted writes with GitHub stood in for at its transport boundary. */
-@RecordApplicationEvents
 class GitHubSubIssueScopeIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private IdentityProviderLookup providerLookup;
@@ -75,7 +73,7 @@ class GitHubSubIssueScopeIntegrationTest extends BaseIntegrationTest {
     private ApplicationEventPublisher publisher;
 
     @Autowired
-    private ApplicationEvents publications;
+    private SharedEventRecorder publications;
 
     @Autowired
     private ItemIndexService itemIndex;

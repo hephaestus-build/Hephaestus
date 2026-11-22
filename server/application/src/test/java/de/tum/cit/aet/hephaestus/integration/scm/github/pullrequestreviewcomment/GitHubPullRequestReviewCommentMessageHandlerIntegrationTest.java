@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.dto.GitHubPullRequestReviewCommentEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -28,16 +29,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-@RecordApplicationEvents
 class GitHubPullRequestReviewCommentMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
-    private ApplicationEvents publications;
+    private SharedEventRecorder publications;
 
     @Autowired
     private GitHubPullRequestReviewCommentMessageHandler handler;
@@ -235,7 +233,9 @@ class GitHubPullRequestReviewCommentMessageHandlerIntegrationTest extends BaseIn
                         deleteEvent.comment().id(), gitProviderId()))
                 .isEmpty();
         // The redelivered delete finds no comment and announces nothing.
-        assertThat(publications.stream(ScmDomainEvent.ReviewCommentDeleted.class))
+        assertThat(publications.stream(ScmDomainEvent.ReviewCommentDeleted.class)
+                        .filter(deleted ->
+                                deleted.commentId().equals(deleteEvent.comment().id())))
                 .hasSize(1);
     }
 

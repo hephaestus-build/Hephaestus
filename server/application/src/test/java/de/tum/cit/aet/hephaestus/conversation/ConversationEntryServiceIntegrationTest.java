@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -28,14 +29,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
-@RecordApplicationEvents
 class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
@@ -69,7 +67,7 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
     private SlackWorkspaceContentEraser slackContent;
 
     @Autowired
-    private ApplicationEvents events;
+    private SharedEventRecorder events;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -318,7 +316,9 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
                         Long.class, main.getId(), thread.getId()))
                 .isEqualTo(70_002);
         // Only messages change what an open conversation shows, a hundred to a notification.
-        assertThat(events.stream(ConversationLedgerEvents.EntryChanged.class))
+        assertThat(events.stream(ConversationLedgerEvents.EntryChanged.class)
+                        .filter(change -> change.conversationId().equals(main.getId())
+                                || change.conversationId().equals(thread.getId())))
                 .extracting(
                         change -> change.conversationId(),
                         change -> change.entryIds().size())

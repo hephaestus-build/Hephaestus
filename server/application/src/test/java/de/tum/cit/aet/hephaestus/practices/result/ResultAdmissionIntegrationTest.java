@@ -89,6 +89,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.practices.spi.WithheldItem;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import java.time.Duration;
 import java.time.Instant;
@@ -112,7 +113,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -122,7 +122,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 
 class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationTest {
     @Autowired
-    ApplicationEvents applicationEvents;
+    SharedEventRecorder applicationEvents;
 
     @Autowired
     JsonMapper json;
@@ -611,7 +611,10 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         pending.review().getOrderedAt()));
         assertThat(reviews.findById(pending.review().getId()).orElseThrow().getStatus())
                 .isEqualTo(ReviewStatus.COMPLETE);
-        assertThat(applicationEvents.stream(ReviewCompleted.class)).isEmpty();
+        assertThat(applicationEvents.stream(ReviewCompleted.class)
+                        .filter(completed ->
+                                completed.reviewId().equals(pending.review().getId())))
+                .isEmpty();
         assertThat(jdbc.sql("""
                         SELECT (SELECT COUNT(*) FROM feedback f WHERE f.workspace_id=:ws AND f.review_id=:review)
                           + (SELECT COUNT(*) FROM feedback_copy c JOIN feedback f
@@ -1552,7 +1555,10 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         .orElseThrow()
                         .getStatus())
                 .isEqualTo(status);
-        assertThat(applicationEvents.stream(ReviewCompleted.class).toList())
+        assertThat(applicationEvents.stream(ReviewCompleted.class)
+                        .filter(completed ->
+                                completed.reviewId().equals(pending.review().getId()))
+                        .toList())
                 .containsExactlyElementsOf(
                         status == ReviewStatus.COMPLETE || status == ReviewStatus.PARTIAL
                                 ? List.of(new ReviewCompleted(
@@ -1574,7 +1580,10 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         ReviewStopReason.EXECUTION_INCOMPLETE,
                         Instant.now(),
                         pending.review().getOrderedAt()));
-        assertThat(applicationEvents.stream(ReviewCompleted.class)).isEmpty();
+        assertThat(applicationEvents.stream(ReviewCompleted.class)
+                        .filter(completed ->
+                                completed.reviewId().equals(pending.review().getId())))
+                .isEmpty();
     }
 
     /**

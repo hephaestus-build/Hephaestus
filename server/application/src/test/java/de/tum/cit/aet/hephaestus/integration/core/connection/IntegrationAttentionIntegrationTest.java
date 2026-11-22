@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionLifecycleEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import java.time.Instant;
@@ -13,11 +14,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@RecordApplicationEvents
 class IntegrationAttentionIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private IntegrationAttentionService attention;
@@ -29,7 +27,7 @@ class IntegrationAttentionIntegrationTest extends AbstractWorkspaceIntegrationTe
     private ApplicationEventPublisher publisher;
 
     @Autowired
-    private ApplicationEvents events;
+    private SharedEventRecorder events;
 
     @Autowired
     private TransactionTemplate transactions;

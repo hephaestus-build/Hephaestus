@@ -106,7 +106,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab.GitLabReposito
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
-import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -316,7 +316,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private PullRequestRepository pullRequestRepository;
 
     @Autowired
-    private RecordingScmEventListener scmEvents;
+    private SharedEventRecorder scmEvents;
 
     @Autowired
     private TransactionTemplate transactionTemplate;

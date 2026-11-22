@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -22,13 +23,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
-@RecordApplicationEvents
 class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
@@ -68,7 +66,7 @@ class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegratio
     private ApplicationEventPublisher events;
 
     @Autowired
-    private ApplicationEvents published;
+    private SharedEventRecorder published;
 
     private Workspace workspace;
     private Conversation main;

@@ -359,8 +359,17 @@ A pooled thread that started earlier, such as a reactor worker, keeps the record
 Whether a pool reuses a thread decides whether the event is lost.
 So a count over such an event flakes, and a check that such an event is absent passes without proof.
 
-For an event that a pooled thread can publish, read the shared `RecordingScmEventListener`, and add a listener to it for a new event type.
-Wait for the event only when it can be published after the call returns.
+A test's source cannot show which threads are pooled.
+So tests record events only through the shared `SharedEventRecorder`.
+It records every event from any thread, and `BaseIntegrationTest` clears it before each test.
+An earlier test's work can still publish an event after the clear.
+Filter recorded events by an id that the test owns before you count them or check that one is absent.
+Wait for an event only when it can be published after the call returns.
+
+`SharedEventRecorderConventionTest` refuses `@RecordApplicationEvents` in a test.
+It also refuses a listener bean in a test, because the bean forks a Spring context.
+A listener that must throw or block goes on the `ApplicationEventMulticaster` during the test.
+Remove it in a `finally` block.
 
 A local test server does not own its port.
 Another process on the host can send a request as soon as the port opens.
