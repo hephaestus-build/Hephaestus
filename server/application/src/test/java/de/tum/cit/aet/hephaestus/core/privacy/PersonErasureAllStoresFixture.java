@@ -498,13 +498,11 @@ final class PersonErasureAllStoresFixture {
                     "feedback_id",
                     person.feedback(),
                     "kind",
-                    "LINE_NOTE",
+                    "SUMMARY",
                     "position",
-                    9,
+                    0,
                     "state",
                     "PLANNED",
-                    "body",
-                    CANARY,
                     "created_at",
                     Timestamp.from(Instant.now()));
         }
