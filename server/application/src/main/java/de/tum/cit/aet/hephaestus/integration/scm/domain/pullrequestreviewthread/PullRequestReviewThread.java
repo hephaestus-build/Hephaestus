@@ -135,6 +135,18 @@ public class PullRequestReviewThread extends BaseGitServiceEntity {
         }
     }
 
+    /**
+     * Records the provider's node id on a row stored without one, as the GitHub review-comment webhook stores it. A
+     * stored node id is kept.
+     *
+     * @return false when {@code id} differs from the stored node id
+     */
+    public boolean completeNodeId(@Nullable String id) {
+        if (id == null || id.isBlank()) return true;
+        if (nodeId == null) nodeId = id;
+        return nodeId.equals(id);
+    }
+
     public enum State {
         RESOLVED,
         UNRESOLVED,

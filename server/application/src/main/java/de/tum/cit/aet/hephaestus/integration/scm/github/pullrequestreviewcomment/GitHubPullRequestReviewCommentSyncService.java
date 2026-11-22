@@ -216,11 +216,10 @@ public class GitHubPullRequestReviewCommentSyncService {
             }
         }
 
-        // Set the root comment on the thread if not already set
-        if (rootComment != null && thread.getRootComment() == null) {
-            thread.setRootComment(rootComment);
-            threadRepository.save(thread);
-        }
+        // The root comment goes into its column alone: this read holds no thread lock, so saving the loaded row back
+        // could overwrite a resolve or a node id written meanwhile.
+        if (rootComment != null && thread.getRootComment() == null)
+            threadRepository.completeRootComment(Objects.requireNonNull(thread.getId()), rootComment);
 
         return new ThreadSync(synced, read);
     }
@@ -408,6 +407,7 @@ public class GitHubPullRequestReviewCommentSyncService {
                 pullRequest.requireRepository().getProvider().getId());
         return threadRepository
                 .findByNativeIdAndProviderId(threadId, providerId)
+                .map(thread -> completeNodeId(thread, threadDto.nodeId()))
                 .orElseGet(() -> {
                     PullRequestReviewThread thread = new PullRequestReviewThread();
                     thread.setNativeId(threadId);
@@ -454,6 +454,19 @@ public class GitHubPullRequestReviewCommentSyncService {
 
                     return threadRepository.save(thread);
                 });
+    }
+
+    /**
+     * Completes the node id of a thread that the review-comment webhook stored without one. Only the identity, in one
+     * column: the resolve and unresolve events own a stored thread's resolution and order it, and this read holds no
+     * lock, so the loaded row is never saved back.
+     */
+    private PullRequestReviewThread completeNodeId(PullRequestReviewThread thread, @Nullable String nodeId) {
+        if (nodeId == null || nodeId.equals(thread.getNodeId())) return thread;
+        if (thread.getNodeId() != null)
+            log.warn("Kept stored thread node id: reason=readNamesAnother, threadId={}", thread.getId());
+        else threadRepository.completeNodeId(Objects.requireNonNull(thread.getId()), nodeId);
+        return thread;
     }
 
     /**
@@ -536,11 +549,10 @@ public class GitHubPullRequestReviewCommentSyncService {
             }
         }
 
-        // Set the root comment on the thread if not already set
-        if (rootComment != null && thread.getRootComment() == null) {
-            thread.setRootComment(rootComment);
-            threadRepository.save(thread);
-        }
+        // The root comment goes into its column alone: this read holds no thread lock, so saving the loaded row back
+        // could overwrite a resolve or a node id written meanwhile.
+        if (rootComment != null && thread.getRootComment() == null)
+            threadRepository.completeRootComment(Objects.requireNonNull(thread.getId()), rootComment);
 
         return new ThreadSync(synced, read);
     }
@@ -565,6 +577,7 @@ public class GitHubPullRequestReviewCommentSyncService {
                 pullRequest.requireRepository().getProvider().getId());
         return threadRepository
                 .findByNativeIdAndProviderId(threadId, providerId)
+                .map(thread -> completeNodeId(thread, graphQlThread.getId()))
                 .orElseGet(() -> {
                     PullRequestReviewThread thread = new PullRequestReviewThread();
                     thread.setNativeId(threadId);

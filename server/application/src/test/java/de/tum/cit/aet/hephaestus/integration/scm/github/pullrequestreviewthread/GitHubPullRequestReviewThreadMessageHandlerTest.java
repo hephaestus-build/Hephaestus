@@ -92,7 +92,7 @@ class GitHubPullRequestReviewThreadMessageHandlerTest extends BaseUnitTest {
         handle(event, ProcessingContext.forWebhook(1L, new Repository(), "unresolved"));
 
         verify(userProcessor, never()).ensureExists(any(), any());
-        verify(threadProcessor).unresolve(any(), any(), argThat(context -> context.actorUserId() == null));
+        verify(threadProcessor).unresolve(any(), any(), any(), argThat(context -> context.actorUserId() == null));
     }
 
     @Test
@@ -107,7 +107,11 @@ class GitHubPullRequestReviewThreadMessageHandlerTest extends BaseUnitTest {
         handle(event, ProcessingContext.forWebhook(1L, provider, "unresolved"));
 
         verify(threadProcessor)
-                .unresolve(any(), any(), argThat(context -> Long.valueOf(99L).equals(context.actorUserId())));
+                .unresolve(
+                        any(),
+                        any(),
+                        any(),
+                        argThat(context -> Long.valueOf(99L).equals(context.actorUserId())));
     }
 
     private static GitHubPullRequestReviewThreadEventDTO unresolved() throws Exception {

@@ -37,6 +37,7 @@ public class GitHubPullRequestReviewThreadProcessor {
     }
 
     /**
+     * @param nodeId the thread's GraphQL node id as the event names it
      * @param resolvedAt when the event says the thread was resolved — the only source of that moment
      *     on GitHub, whose GraphQL thread carries none
      * @param eventAt the event's own date, which orders it against the thread's other resolve and unresolve events
@@ -44,6 +45,7 @@ public class GitHubPullRequestReviewThreadProcessor {
     @Transactional
     public boolean resolve(
             Long threadId,
+            @Nullable String nodeId,
             @Nullable User resolvedBy,
             Instant resolvedAt,
             @Nullable Instant eventAt,
@@ -53,7 +55,7 @@ public class GitHubPullRequestReviewThreadProcessor {
             return false;
         }
 
-        return lockAndFind(threadId, context)
+        return lockAndFind(threadId, nodeId, context)
                 .map(thread -> {
                     if (isOlderThanStoredChange(eventAt, thread, "resolve")) {
                         return true;
@@ -87,15 +89,19 @@ public class GitHubPullRequestReviewThreadProcessor {
                 });
     }
 
-    /** @param eventAt the event's own date, which orders it against the thread's other resolve and unresolve events */
+    /**
+     * @param nodeId the thread's GraphQL node id as the event names it
+     * @param eventAt the event's own date, which orders it against the thread's other resolve and unresolve events
+     */
     @Transactional
-    public boolean unresolve(Long threadId, @Nullable Instant eventAt, @NonNull ProcessingContext context) {
+    public boolean unresolve(
+            Long threadId, @Nullable String nodeId, @Nullable Instant eventAt, @NonNull ProcessingContext context) {
         if (threadId == null) {
             log.debug("Skipped thread unresolve: reason=nullThreadId");
             return false;
         }
 
-        return lockAndFind(threadId, context)
+        return lockAndFind(threadId, nodeId, context)
                 .map(thread -> {
                     if (isOlderThanStoredChange(eventAt, thread, "unresolve")) {
                         return true;
@@ -122,11 +128,23 @@ public class GitHubPullRequestReviewThreadProcessor {
                 });
     }
 
-    /** The row lock makes the compare with the stored resolution change and the write after it one step. */
-    private Optional<PullRequestReviewThread> lockAndFind(Long threadId, ProcessingContext context) {
+    /**
+     * The row lock makes the compare with the stored resolution change and the write after it one step. A thread that
+     * the review-comment webhook created has no node id, and the feedback copies name their thread by it, so the
+     * event's node id completes it before any change is announced.
+     */
+    private Optional<PullRequestReviewThread> lockAndFind(
+            Long threadId, @Nullable String nodeId, ProcessingContext context) {
         long providerId = Objects.requireNonNull(context.providerId());
         threadRepository.lockByNativeIdAndProviderId(threadId, providerId);
-        return threadRepository.findByNativeIdAndProviderId(threadId, providerId);
+        Optional<PullRequestReviewThread> found = threadRepository.findByNativeIdAndProviderId(threadId, providerId);
+        found.ifPresent(thread -> recordNodeId(thread, nodeId));
+        return found;
+    }
+
+    private static void recordNodeId(PullRequestReviewThread thread, @Nullable String nodeId) {
+        if (!thread.completeNodeId(nodeId))
+            log.warn("Kept stored thread node id: reason=eventNamesAnother, threadId={}", thread.getId());
     }
 
     /**
