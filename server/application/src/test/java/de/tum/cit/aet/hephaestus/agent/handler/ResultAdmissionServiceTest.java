@@ -60,6 +60,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedReviewQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackProgress;
+import de.tum.cit.aet.hephaestus.practices.spi.ProblemIdentityQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
@@ -144,7 +145,11 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                 proof,
                 assignments,
                 new AdmittedResultProjectionService(
-                        assignments, publicEligibility, mock(PinnedInlineAnchorQuery.class), mapper),
+                        assignments,
+                        publicEligibility,
+                        mock(PinnedInlineAnchorQuery.class),
+                        mock(ProblemIdentityQuery.class),
+                        mapper),
                 receipts,
                 history,
                 mapper,

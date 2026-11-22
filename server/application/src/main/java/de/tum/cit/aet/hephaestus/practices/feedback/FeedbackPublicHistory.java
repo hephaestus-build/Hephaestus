@@ -18,11 +18,13 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
+import de.tum.cit.aet.hephaestus.practices.spi.ProblemIdentityQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -48,8 +50,14 @@ public class FeedbackPublicHistory {
     private final ResultSourceAuthorization sourceAuthorization;
     private final PracticeRepository practices;
     private final FeedbackCopyRepository copies;
+    private final ProblemIdentityQuery problemIdentities;
 
     public record AuthorizedSupport(UUID resultId, String practiceSlug, HistoryCustody custody) {}
+
+    /** The identity of each of {@code problemIds} that has one, read in one query for a page of the history. */
+    public Map<UUID, String> identities(long workspaceId, Collection<UUID> problemIds) {
+        return problemIds.isEmpty() ? Map.of() : problemIdentities.identities(workspaceId, problemIds);
+    }
 
     /**
      * The results of the workspace whose custody and source {@code purpose} may use, each with its practice's slug and
@@ -87,15 +95,24 @@ public class FeedbackPublicHistory {
         return authorized;
     }
 
+    /**
+     * What a delivered piece on the work rests on: its results, those that the reader may use, and the identity of each
+     * problem that its basis names, read once for a page of the history.
+     */
+    public record PublicSupport(
+            List<Result> results, List<AuthorizedSupport> authorized, Map<UUID, String> identities) {
+        public PublicSupport {
+            results = List.copyOf(results);
+            authorized = List.copyOf(authorized);
+            identities = Map.copyOf(identities);
+        }
+    }
+
+    /** One delivered piece on the work as the public history shows it. */
     public JsonNode render(
-            Feedback row,
-            List<Result> support,
-            List<AuthorizedSupport> authorized,
-            List<FeedbackCopy> confirmed,
-            boolean withdrawn,
-            boolean textAllowed) {
-        Currentness freshness = currentness(row.getWorkspaceId(), support);
-        var byId = authorized.stream().collect(Collectors.toMap(AuthorizedSupport::resultId, entry -> entry));
+            Feedback row, PublicSupport support, List<FeedbackCopy> confirmed, boolean withdrawn, boolean textAllowed) {
+        Currentness freshness = currentness(row.getWorkspaceId(), support.results());
+        var byId = support.authorized().stream().collect(Collectors.toMap(AuthorizedSupport::resultId, entry -> entry));
         var review = reviews.findByIdAndWorkspaceId(row.getReviewId(), row.getWorkspaceId())
                 .orElseThrow();
         var closed = confirmed.isEmpty()
@@ -103,6 +120,8 @@ public class FeedbackPublicHistory {
                 : Set.copyOf(copies.findClosedAsFixed(
                         row.getWorkspaceId(),
                         confirmed.stream().map(FeedbackCopy::getId).toList()));
+        var trace = trace(row, review);
+        var cites = cites(trace, confirmed, byId, support.identities());
         @Nullable
         String summary =
                 !textAllowed || confirmed.stream().noneMatch(copy -> copy.getKind() == FeedbackCopyKind.SUMMARY)
@@ -120,8 +139,8 @@ public class FeedbackPublicHistory {
                         : row.getBody() != null,
                 freshness,
                 withdrawn,
-                closedPractices(row, review, confirmed, closed, byId),
-                support.stream()
+                closedPractices(trace, confirmed, closed, byId),
+                support.results().stream()
                         .map(result -> new PublicBasis(
                                 result.getId(),
                                 Objects.requireNonNull(byId.get(result.getId())).practiceSlug(),
@@ -145,7 +164,8 @@ public class FeedbackPublicHistory {
                                 copy.getExternalUrl(),
                                 Objects.requireNonNull(copy.getPostedAt()),
                                 copy.getState(),
-                                closed.contains(copy.getId())))
+                                closed.contains(copy.getId()),
+                                cites.getOrDefault(copy.getId(), List.of())))
                         .toList());
         return mapper.valueToTree(projection);
     }
@@ -169,29 +189,16 @@ public class FeedbackPublicHistory {
      * its composition support names.
      */
     private List<String> closedPractices(
-            Feedback row,
-            Review review,
+            @Nullable FeedbackCompositionTrace trace,
             List<FeedbackCopy> confirmed,
             Set<UUID> closed,
             Map<UUID, AuthorizedSupport> byId) {
-        if (closed.isEmpty()) return List.of();
-        var node =
-                review.getChecks().path("feedbackComposition").path(row.getId().toString());
-        if (!node.isObject()) return List.of();
-        FeedbackCompositionTrace trace;
-        try {
-            trace = mapper.treeToValue(node, FeedbackCompositionTrace.class);
-        } catch (RuntimeException unreadable) {
-            return List.of();
-        }
+        if (closed.isEmpty() || trace == null) return List.of();
         var open = new HashSet<String>();
         var closing = new HashSet<String>();
         for (var copy : confirmed) {
             if (copy.getKind() == FeedbackCopyKind.SUMMARY) continue;
-            var practices = trace.copies().stream()
-                    // Positions are unique within a piece; a note placed as a file note keeps its line note support.
-                    .filter(support -> support.position() == copy.getPosition())
-                    .flatMap(support -> support.basedOn().stream())
+            var practices = support(trace, copy).stream()
                     .map(basis -> byId.get(basis.resultId()))
                     .filter(Objects::nonNull)
                     .map(AuthorizedSupport::practiceSlug)
@@ -200,6 +207,55 @@ public class FeedbackPublicHistory {
         }
         closing.removeAll(open);
         return closing.stream().sorted().toList();
+    }
+
+    /**
+     * The problems that each note cites, by practice and identity: the problems that its composition support names,
+     * each with the practice of its result. A problem without an identity, or of a result that the read did not
+     * authorize, is left out. A summary cites nothing here, because it may point to its notes.
+     */
+    private static Map<UUID, List<PublicCite>> cites(
+            @Nullable FeedbackCompositionTrace trace,
+            List<FeedbackCopy> confirmed,
+            Map<UUID, AuthorizedSupport> byId,
+            Map<UUID, String> identities) {
+        if (trace == null || identities.isEmpty()) return Map.of();
+        var notes = confirmed.stream()
+                .filter(copy ->
+                        copy.getKind() == FeedbackCopyKind.LINE_NOTE || copy.getKind() == FeedbackCopyKind.FILE_NOTE)
+                .toList();
+        var cites = new HashMap<UUID, List<PublicCite>>();
+        for (var copy : notes) {
+            var cited = new LinkedHashSet<PublicCite>();
+            for (var basis : support(trace, copy)) {
+                var practice = byId.get(basis.resultId());
+                var identity = basis.problemId() == null ? null : identities.get(basis.problemId());
+                if (practice != null && identity != null) cited.add(new PublicCite(practice.practiceSlug(), identity));
+            }
+            cites.put(copy.getId(), List.copyOf(cited));
+        }
+        return cites;
+    }
+
+    /** The composition trace of the piece, or null when its review recorded none that reads. */
+    private @Nullable FeedbackCompositionTrace trace(Feedback row, Review review) {
+        var node =
+                review.getChecks().path("feedbackComposition").path(row.getId().toString());
+        if (!node.isObject()) return null;
+        try {
+            return mapper.treeToValue(node, FeedbackCompositionTrace.class);
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
+    }
+
+    /** What the copy rests on, as its composition support names it. */
+    private static List<FeedbackCompositionTrace.Support> support(FeedbackCompositionTrace trace, FeedbackCopy copy) {
+        return trace.copies().stream()
+                // Positions are unique within a piece; a note placed as a file note keeps its line note support.
+                .filter(support -> support.position() == copy.getPosition())
+                .flatMap(support -> support.basedOn().stream())
+                .toList();
     }
 
     @JsonInclude(JsonInclude.Include.ALWAYS)
@@ -238,5 +294,11 @@ public class FeedbackPublicHistory {
             Instant postedAt,
             FeedbackCopyState state,
             // Hephaestus resolved this note's thread as fixed, and the provider never reopens it.
-            boolean closedAsFixed) {}
+            boolean closedAsFixed,
+            // The problems that this note cites, each with an identity, by practice. A later review on the work finds
+            // a repeat of a note that Hephaestus did not close by them.
+            List<PublicCite> cites) {}
+
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    private record PublicCite(String practiceSlug, String identity) {}
 }

@@ -83,11 +83,10 @@ final class ComposerTurns {
         var reviewable = ReviewOnWork.publicResults(state.results());
         String readAt = Js.string(read.path("readAt"));
         ObjectNode history = captured.publicReviewHistory(folderIndex, framing);
-        var alreadySaid = ReviewOnWork.priorPublicFeedback(
-                ReviewOnWork.publicHistory(read),
-                thisWork(files, folderIndex),
-                Js.string(history.path("capturedAt")),
-                readAt);
+        var publicHistory = ReviewOnWork.publicHistory(read);
+        String work = thisWork(files, folderIndex);
+        var alreadySaid =
+                ReviewOnWork.priorPublicFeedback(publicHistory, work, Js.string(history.path("capturedAt")), readAt);
         var witnesses = ReviewOnWork.priorAdviceWitnesses(alreadySaid.feedback(), history.path("statements"));
         var eligible = witnesses.entrySet().stream()
                 .filter(entry -> entry.getValue().eligibleForAlreadySaid())
@@ -118,13 +117,14 @@ final class ComposerTurns {
                 notReached,
                 lineNotes,
                 slug -> files.text(ComposerFiles.criteria(slug)).orElse(null)));
-        var restable = Evidence.byId(reviewable);
+        var restable = ReviewOnWork.restable(state.results());
         return new ReviewCompositionTurn(
                 text,
                 ReviewOnWork.toolParameters(restable, lineNotes, eligible),
                 restable,
                 lineNotes,
                 witnesses,
+                ReviewOnWork.earlierNotes(publicHistory, work),
                 Js.string(read.path("publicationContext")));
     }
 

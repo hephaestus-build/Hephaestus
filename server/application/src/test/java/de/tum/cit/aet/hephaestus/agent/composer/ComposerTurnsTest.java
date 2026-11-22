@@ -171,6 +171,21 @@ class ComposerTurnsTest {
         });
     }
 
+    /** A problem's identity is the server's to compare: neither turn shows it, and the review's check still reads it. */
+    @Test
+    void shouldNeverShowTheModelAProblemsIdentity() throws Exception {
+        var scenario = render("pull-request");
+        var admitted = scenario.admitted().get(0).path("problems").get(0);
+        assertThat(admitted.path("identity").asString()).isEqualTo("key:swallowed-io");
+        assertThat(scenario.reviewTurn()).isNotNull().doesNotContain("key:swallowed-io", "\"identity\"");
+        assertThat(scenario.feedbackTurn()).doesNotContain("key:swallowed-io", "\"identity\"");
+        var state = Admission.of(json(scenario("pull-request").resolve("admission.json")), Map.of());
+        assertThat(ReviewOnWork.restable(state.results()).values().stream()
+                        .flatMap(result -> result.problems().stream())
+                        .map(Evidence.Problem::identity))
+                .contains("key:swallowed-io");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"pull-request", "issue", "resumed", "oversized"})
     void shouldOfferTheToolsTheModelIsToldToCall(String name) throws Exception {

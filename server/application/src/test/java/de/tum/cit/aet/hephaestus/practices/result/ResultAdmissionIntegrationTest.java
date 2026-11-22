@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRequestRejected;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
+import de.tum.cit.aet.hephaestus.practices.review.report.ProblemComparison;
 import de.tum.cit.aet.hephaestus.practices.review.report.TrialReport;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
@@ -94,6 +95,7 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -165,6 +167,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
 
     @Autowired
     ProblemLineageRepository lineage;
+
+    @Autowired
+    ProblemComparison comparison;
 
     @Autowired
     ResultRepository results;
@@ -535,6 +540,74 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         store.mark(scenario.workspace().getId(), incorrect, ResultMarkKind.INCORRECT, scenarioAccountId, "Wrong");
         assertThat(lineageOf(sealed("g2", 10, ResultOutcome.NOT_MET, CapturedTextProbe.NONE)))
                 .isEmpty();
+    }
+
+    @Test
+    void shouldWriteTheIdentityOfEachProblemThatTheSealWrites() {
+        var keyless = new ArrayList<ProblemCandidate>();
+        var sealed = sealed(
+                "h1",
+                10,
+                ResultOutcome.NOT_MET,
+                c -> {
+                    var keyed = c.problems().getFirst();
+                    keyless.add(new ProblemCandidate(
+                            1,
+                            null,
+                            keyed.severity(),
+                            "Check the other branch",
+                            keyed.explanation(),
+                            keyed.citations(),
+                            keyed.basis(),
+                            keyed.nextStep()));
+                    return new ResultCandidate(
+                            c.practiceId(),
+                            c.practiceVersionId(),
+                            c.itemId(),
+                            c.itemVersion(),
+                            c.developerId(),
+                            c.outcome(),
+                            c.summary(),
+                            c.explanation(),
+                            c.evidence(),
+                            c.example(),
+                            c.coverage(),
+                            List.of(keyed, keyless.getFirst()));
+                },
+                CapturedTextProbe.NONE);
+
+        // A keyed problem is its key; one without a key is the comparison's hash of its first citation.
+        assertThat(identitiesOf(sealed))
+                .containsExactly(
+                        "key:problem-1",
+                        comparison.identity(
+                                scenario.practice().getId(),
+                                scenario.item().getId(),
+                                keyless.getFirst(),
+                                "src/Main.java",
+                                0));
+    }
+
+    @Test
+    void shouldRecordTheIdentityOfAPreviousProblemSealedWithoutOneWhenLineageNamesIt() {
+        var first = sealed("j1", 20, ResultOutcome.NOT_MET, CapturedTextProbe.NONE);
+        // A problem sealed before problems recorded their identity.
+        jdbcTemplate.update(
+                "UPDATE problem SET identity = NULL WHERE workspace_id = ? AND result_id = ?",
+                scenario.workspace().getId(),
+                first);
+
+        var second = sealed("j2", 10, ResultOutcome.NOT_MET, CapturedTextProbe.NONE);
+
+        assertThat(lineageOf(second)).containsExactlyEntriesOf(Map.of(ProblemBaselineState.UNCHANGED, 1L));
+        assertThat(identitiesOf(first)).containsExactly("key:problem-1");
+    }
+
+    private List<@Nullable String> identitiesOf(UUID result) {
+        return jdbc.sql("SELECT identity FROM problem WHERE workspace_id = ? AND result_id = ? ORDER BY position")
+                .params(scenario.workspace().getId(), result)
+                .query(String.class)
+                .list();
     }
 
     @Test

@@ -259,6 +259,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
         private final Set<UUID> incorrectCopies = new HashSet<>();
         private final Map<UUID, FeedbackResponse> responsesOf = new HashMap<>();
         private final Map<UUID, UUID> threads = new HashMap<>();
+        private final Map<UUID, String> identities = new HashMap<>();
 
         Page(long workspaceId, List<Feedback> rows, long viewerAccountId, SourceUsePurpose purpose) {
             this.viewerAccountId = viewerAccountId;
@@ -277,6 +278,16 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
             for (var chunk : chunks(supportIds))
                 results.findByWorkspaceIdAndIdIn(workspaceId, chunk)
                         .forEach(result -> supportById.put(result.getId(), result));
+            // The basis of a piece on the work is the support of its copies, so it names every problem a note cites.
+            identities.putAll(publicHistoryReader.identities(
+                    workspaceId,
+                    rows.stream()
+                            .filter(row -> row.getDestination() == FeedbackDestination.ON_WORK)
+                            .flatMap(row -> this.edges.getOrDefault(row.getId(), List.of()).stream())
+                            .map(FeedbackBasisRepository.ReadRow::problemId)
+                            .filter(Objects::nonNull)
+                            .distinct()
+                            .toList()));
             // A piece on the work is read by its public support; any other by its developer's own history.
             publicSupport.putAll(publicHistoryReader.authorizeAll(
                     workspaceId,
@@ -392,7 +403,12 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                             && complete
                             && row.getDeliveredAt() != null
                             && !confirmed.isEmpty()
-                    ? publicHistoryReader.render(row, support, authorized, confirmed, withdrawn, textAllowed)
+                    ? publicHistoryReader.render(
+                            row,
+                            new FeedbackPublicHistory.PublicSupport(support, authorized, identities),
+                            confirmed,
+                            withdrawn,
+                            textAllowed)
                     : null;
             var visible = new FeedbackHistoryEntry(
                     row.getId(),

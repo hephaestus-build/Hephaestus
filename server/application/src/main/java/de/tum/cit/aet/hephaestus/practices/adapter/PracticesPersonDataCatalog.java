@@ -256,7 +256,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "problem_lineage",
                                 "problem_lineage",
                                 "t.result_id IN(" + RESULT_IDS + ") OR t.prior_result_id IN(" + RESULT_IDS + ")",
-                                "id,workspace_id,result_id,prior_result_id,problem_id,prior_problem_id,comparison,identity,recorded_at",
+                                "id,workspace_id,result_id,prior_result_id,problem_id,prior_problem_id,comparison,recorded_at",
                                 "id,workspace_id",
                                 "",
                                 -160),
@@ -280,7 +280,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "problem",
                                 "problem",
                                 "t.result_id IN(" + RESULT_IDS + ")",
-                                "id,workspace_id,result_id,position,key,severity,summary,explanation,citations,basis,next_step",
+                                "id,workspace_id,result_id,position,key,severity,summary,explanation,citations,basis,next_step,identity",
                                 "id,workspace_id",
                                 "",
                                 -149) {

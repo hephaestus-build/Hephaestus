@@ -438,7 +438,8 @@ class PracticeRunnerLiveLlmTest {
                             projected(problem.path("citations")),
                             MAPPER.treeToValue(problem.path("basis"), ClaimBasis.class),
                             problem.has("nextStep") ? problem.path("nextStep").asString() : null,
-                            false));
+                            false,
+                            null));
                 }
                 ObjectNode evidence = (ObjectNode) candidate.path("evidence").deepCopy();
                 evidence.set("citations", MAPPER.valueToTree(projected(candidate.path("citations"))));

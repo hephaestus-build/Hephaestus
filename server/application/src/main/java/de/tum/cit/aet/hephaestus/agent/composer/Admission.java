@@ -22,7 +22,7 @@ import tools.jackson.databind.node.ObjectNode;
  * composers read them, with progress kept per private destination.
  *
  * @param results each admitted result with its citations lifted beside its evidence and each problem's id as
- *     {@code problemId}, in the key order the prompts show
+ *     {@code problemId}, in the key order the prompts show; a problem keeps the {@code identity} the server sent
  * @param decided the practices the review's prepared private pieces already decide, per private destination
  * @param deliveries the room those pieces used, per private destination
  * @param practicePageSupport the page support read, or null when it is missing or does not match the results

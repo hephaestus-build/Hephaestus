@@ -36,7 +36,8 @@
 					"citations": [],
 					"basis": null,
 					"nextStep": "Record the failure.",
-					"publicEligible": true
+					"publicEligible": true,
+					"identity": "scheme-1:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 				}
 			],
 			"summaryOnly": true,

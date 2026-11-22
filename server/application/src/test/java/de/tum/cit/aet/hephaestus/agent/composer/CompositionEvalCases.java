@@ -649,7 +649,8 @@ final class CompositionEvalCases {
                         .put("externalUrl", url + "#note-" + copy)
                         .put("postedAt", said.path("deliveredAt").asString())
                         .put("state", "POSTED")
-                        .put("closedAsFixed", false);
+                        .put("closedAsFixed", false)
+                        .putArray("cites");
             }
         }
 

@@ -358,6 +358,7 @@ Repeats by identity and the composer's view of lineage stay decided, not shipped
   Then the problem has no standing.
   So a note that cites two problems resolves only after both are gone, in one review or in two.
   A lineage row records the problem's identity for this reason.
+  From the [update of 2026-11-22](#update--2026-11-22-the-problem-holds-its-identity-and-the-check-finds-repeats) on, the problem holds it, and the row reads it from its problem.
   The migration derives it for rows of a problem with a key: `key:` and the key.
   It drops the rows of a problem without a key, whose identity is a hash that SQL cannot reproduce exactly.
   A key is not unique across practices or items, so the match stays within one practice, item and developer.
@@ -462,3 +463,59 @@ Enforced by:
 - `ReviewOnWorkPriorAdviceTest#shouldRaiseAProblemAgainWhenHephaestusClosedTheNoteThatGaveItsAdviceAsFixed`
 - `GitHubThreadResolutionTest` and `GitLabThreadResolutionTest`
 - `ProblemLineageIdentityMigrationTest`
+
+## Update — 2026-11-22: the problem holds its identity, and the check finds repeats
+
+This update ships repeat detection by problem identity, from decision 19.
+The composer's view of lineage stays decided, not shipped.
+[ADR 0069 § No redundancy](0069-practices-run-when-ready-and-stay-current-by-their-sources.md#no-redundancy) keeps the rule: `check_package` finds repeats by identity, not by a model.
+
+- **The problem holds its identity.** The identity has one home: `problem.identity`.
+  The seal records an identity for every problem that it writes, when the problem has one.
+  An item review's problem takes its key, or else its first citation.
+  A scan's problem takes its key, or else its citation of the scan's own file.
+  A problem without a key and without that citation has no identity.
+  A lineage row reads the identity from its problem.
+  That is the newer problem, or the previous one when it is no longer present.
+  The two values were the same fact, because the comparison computes both with one function.
+  A previous problem sealed before this update can have no identity.
+  It gets its identity when a later lineage row names it.
+- **Migration.** The migration copies the identity of each lineage row to the problem that the row names, on both sides.
+  It stops if a problem would get two different identities.
+  Then it gives each other problem with a key `key:` and its key.
+  A problem without a key that no row names keeps no identity, because SQL cannot reproduce its hash exactly.
+  Then the migration drops `problem_lineage.identity` and its index.
+  The rollback copies the identity back from the problem.
+- **The admission answer carries it.** Each admitted problem has `identity`, or null.
+  The field is additive, so the admission contract stays version 4.
+  A runtime of the previous release ignores it during a rolling upgrade.
+  The composer compares identities, and the prompts do not show them to the model.
+- **The history read carries it.** Each line note or file note of the public history has `cites`.
+  These are the problems that its composition support names, with practice and identity.
+  A problem without an identity is left out.
+  The summary has none, because it can point to its notes.
+- **Repeats in the draft.** A line note that cites a problem that an earlier line note of the draft cites is a repeat.
+  The summary never counts here.
+- **Repeats across reviews.** An entry of the draft can repeat an earlier note on the work that Hephaestus did not close.
+  The summary counts too.
+  The entry repeats the note when both cite a problem with the same practice and identity.
+  Such a note is posted and not retracted, and its piece is not withdrawn.
+  Hephaestus did not close it as fixed.
+  The composer does not know whether a person resolved the note's thread.
+  The capture leaves Hephaestus's own notes and threads out, and the history read has no provider thread state.
+  So the receipt says that the earlier note raised the problem, not that it still raises it.
+  A problem without an identity never matches.
+  A key is not unique across practices, so the practice must match too.
+- **Advice, not a refusal.** The receipt lists each repeat with the entry and its problems.
+  A repeat in the draft names the earlier note of the draft.
+  A repeat across reviews names the earlier note's path, lines and link.
+  Both quote the opening words of the earlier note.
+  The composer merges or drops the entry, or keeps it only when it says what the earlier note does not.
+  The composer has no tool that replies in an earlier thread, so the receipt does not offer a reply.
+
+Enforced by:
+
+- `ReviewOnWorkRepeatsTest`
+- `ResultAdmissionIntegrationTest#shouldWriteTheIdentityOfEachProblemThatTheSealWrites`
+- `FeedbackHistoryQueryIntegrationTest#shouldGiveEachNoteThePracticeAndIdentityOfTheProblemsItCites`
+- `ProblemIdentityMigrationTest`

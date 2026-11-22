@@ -176,6 +176,7 @@ erDiagram
         JSONB citations "NOT NULL"
         JSONB basis
         TEXT next_step
+        TEXT identity
     }
 
     ProblemLineage {
@@ -187,7 +188,6 @@ erDiagram
         UUID result_id FK,UK "NOT NULL"
         VARCHAR(16) comparison "NOT NULL"
         BIGINT workspace_id FK,UK "NOT NULL"
-        TEXT identity "NOT NULL"
     }
 
     ResearchDisclosure {

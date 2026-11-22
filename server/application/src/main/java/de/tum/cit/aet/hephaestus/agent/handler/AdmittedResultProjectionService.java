@@ -11,9 +11,11 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.ProjectedCitationDTO;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
+import de.tum.cit.aet.hephaestus.practices.spi.AdmittedProblemSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceCitation;
 import de.tum.cit.aet.hephaestus.practices.spi.InapplicabilityWarrant;
+import de.tum.cit.aet.hephaestus.practices.spi.ProblemIdentityQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.SearchWarrant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -38,6 +40,7 @@ public class AdmittedResultProjectionService {
     private final ReviewJobAssignments assignments;
     private final PublicReviewEligibility publicEligibility;
     private final PinnedInlineAnchorQuery inlineAnchors;
+    private final ProblemIdentityQuery problemIdentities;
     private final ObjectMapper mapper;
 
     public List<AdmittedResultDTO> results(ReviewJob job, List<AdmittedResultSnapshot> admitted) {
@@ -45,6 +48,12 @@ public class AdmittedResultProjectionService {
                 .collect(Collectors.toMap(a -> a.practice().practiceId(), Function.identity()));
         Set<UUID> eligible = publicEligibility.publicResultIds(job, admitted);
         var placement = inlineAnchors.placement(job);
+        Map<UUID, String> identities = problemIdentities.identities(
+                job.getWorkspaceId(),
+                admitted.stream()
+                        .flatMap(row -> row.problems().stream())
+                        .map(AdmittedProblemSnapshot::id)
+                        .toList());
         return admitted.stream()
                 .map(row -> {
                     var candidate = row.candidate();
@@ -65,7 +74,8 @@ public class AdmittedResultProjectionService {
                                         projected(child.citations(), !summaryOnly ? placement : null),
                                         child.basis(),
                                         child.nextStep(),
-                                        publicEligible);
+                                        publicEligible,
+                                        identities.get(problem.id()));
                             })
                             .toList();
                     JsonNode evidence = mapper.valueToTree(new ProjectedEvidence(

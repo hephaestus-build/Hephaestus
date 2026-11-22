@@ -84,7 +84,7 @@ function changeSets(file: string, xml: string): ChangeSet[] {
 	}));
 }
 
-/** What every new changelog together adds: the previous release knows none of it, so it never writes it. */
+/** What new change sets add: the previous release knows none of it, so it never writes it. */
 interface Additions {
 	readonly tables: ReadonlySet<string>;
 	readonly columns: ReadonlySet<string>;
@@ -115,7 +115,16 @@ function additions(sets: readonly ChangeSet[]): Additions {
 	return { tables, columns, defaults };
 }
 
-function contractionProblems(changes: Element, contractions: ReadonlySet<string>): string[] {
+/**
+ * Each table or column that a change set drops while the previous release still uses it. That release uses an object
+ * unless its pending contractions list it, or an earlier new change set adds it: then the previous release does not
+ * know it. A drop before the add is a drop of the released object, so only what earlier change sets add counts.
+ */
+function contractionProblems(
+	changes: Element,
+	contractions: ReadonlySet<string>,
+	added: Additions,
+): string[] {
 	const dropped = [
 		...elements(changes, "dropTable").map(
 			(table) => ["dropTable", attribute(table, "tableName")] as const,
@@ -129,8 +138,10 @@ function contractionProblems(changes: Element, contractions: ReadonlySet<string>
 				.map((column) => ["dropColumn", `${attribute(drop, "tableName")}.${column}`] as const),
 		),
 	];
+	const unknown = (object: string): boolean =>
+		added.tables.has(object.split(".")[0] ?? object) || added.columns.has(object);
 	return dropped
-		.filter(([, object]) => !contractions.has(object))
+		.filter(([, object]) => !contractions.has(object) && !unknown(object))
 		.map(
 			([change, object]) =>
 				`${change} ${object}, which the previous release still uses. Drop only an object in the pending contractions of the latest release.`,
@@ -338,7 +349,8 @@ const sqlProblems = (changes: Element): string[] => [
 
 /**
  * The change sets in the new changelogs that the previous release cannot run beside. The guard reads each change set
- * alone: it does not model the order of change sets, so a later change set cannot repair an earlier one.
+ * alone, except that a drop is exempt for an object that an earlier new change set adds. A later change set never
+ * repairs an earlier one. Changelogs run in file name order, as Liquibase's includeAll runs them.
  */
 export function violations({ changelogs, contractions }: CompatibilityInput): string[] {
 	const unreadable = [...changelogs.keys()]
@@ -346,13 +358,14 @@ export function violations({ changelogs, contractions }: CompatibilityInput): st
 		.map((file) => `${file}: not an XML changelog, which the guard cannot read`);
 	const sets = [...changelogs]
 		.filter(([file]) => file.endsWith(".xml"))
+		.toSorted(([left], [right]) => Number(left > right) - Number(left < right))
 		.flatMap(([file, xml]) => changeSets(file, xml));
 	const added = additions(sets);
 	return [
 		...unreadable,
-		...sets.flatMap(({ file, id, changes }) =>
+		...sets.flatMap(({ file, id, changes }, index) =>
 			[
-				...contractionProblems(changes, contractions),
+				...contractionProblems(changes, contractions, additions(sets.slice(0, index))),
 				...renameProblems(changes),
 				...notNullProblems(changes, added),
 				...constraintProblems(changes, added),

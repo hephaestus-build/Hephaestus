@@ -19,7 +19,10 @@ public record AdmittedProblemDTO(
         List<ProjectedCitationDTO> citations,
         @Nullable ClaimBasis basis,
         @Nullable String nextStep,
-        boolean publicEligible) {
+        boolean publicEligible,
+        // The identity a comparison matches the problem by; none for a problem sealed before identities were recorded,
+        // and for one without a key and without a witness citation.
+        @Nullable String identity) {
     public AdmittedProblemDTO {
         citations = List.copyOf(citations);
     }

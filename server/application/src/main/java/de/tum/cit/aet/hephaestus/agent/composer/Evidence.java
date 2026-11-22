@@ -31,8 +31,14 @@ final class Evidence {
         }
     }
 
-    /** One problem of an admitted result, with the citations a note can sit on. */
-    record Problem(String problemId, List<JsonNode> citations) {}
+    /**
+     * One problem of an admitted result, with the citations a note can sit on and the identity a comparison matches it
+     * by; none when the server recorded no identity for it.
+     */
+    record Problem(
+            String problemId,
+            List<JsonNode> citations,
+            @Nullable String identity) {}
 
     /** The facts of an admitted result that a composed text is checked against. */
     record Result(
@@ -48,7 +54,8 @@ final class Evidence {
                             text(problem.path("problemId")),
                             listOf(problem.path("citations")).stream()
                                     .filter(JsonNode::isObject)
-                                    .toList()));
+                                    .toList(),
+                            string(problem.path("identity"))));
             return new Result(
                     text(result.path("practiceSlug")),
                     result.path("summaryOnly").isBoolean()

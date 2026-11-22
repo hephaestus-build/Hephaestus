@@ -410,6 +410,8 @@ final class PrivateFeedback {
             var problemCitations = JSON.arrayNode();
             listOf(problem.path("citations")).forEach(citation -> problemCitations.add(coordinatesOf(citation)));
             shown.set("citations", problemCitations);
+            // Only the server compares problem identities.
+            shown.remove("identity");
             problems.add(shown);
         }
         return view;

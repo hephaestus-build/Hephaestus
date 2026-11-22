@@ -69,10 +69,17 @@ public record PublicFeedbackSnapshot(
             Instant postedAt,
             FeedbackCopyState state,
             // Hephaestus closed this note's thread as fixed, and the provider never reopens it.
-            boolean closedAsFixed) {
+            boolean closedAsFixed,
+            // The problems this note cites, each with an identity, by practice; a summary cites none.
+            List<Cite> cites) {
         public Copy {
+            cites = List.copyOf(cites);
             if (state != FeedbackCopyState.POSTED && state != FeedbackCopyState.RETRACTED)
                 throw new IllegalArgumentException("Public history requires a confirmed or retracted copy");
         }
     }
+
+    /** One problem a note cites: its practice and the identity a comparison matches it by. */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record Cite(String practiceSlug, String identity) {}
 }

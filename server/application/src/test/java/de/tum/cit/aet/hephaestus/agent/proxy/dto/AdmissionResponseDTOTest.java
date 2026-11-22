@@ -119,7 +119,8 @@ class AdmissionResponseDTOTest {
                 List.of(),
                 null,
                 "Record the failure.",
-                true);
+                true,
+                "scheme-1:" + "b".repeat(64));
         var result = new AdmittedResultDTO(
                 "handles-errors",
                 "42",

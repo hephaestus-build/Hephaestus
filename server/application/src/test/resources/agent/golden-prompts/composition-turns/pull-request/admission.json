@@ -112,7 +112,8 @@
 						"explanation": "The change adds the catch that drops the failure."
 					},
 					"nextStep": "Record or rethrow the failure.",
-					"publicEligible": true
+					"publicEligible": true,
+					"identity": "key:swallowed-io"
 				}
 			],
 			"summaryOnly": false,
