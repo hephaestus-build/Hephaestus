@@ -6,6 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.item.Item;
+import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.WorkFeedbackThreadChangedEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -60,7 +64,11 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private ItemRepository items;
+
     private IdentityProvider gitProvider;
+    private Workspace workspace;
     private Repository testRepository;
     private PullRequest testPullRequest = new PullRequest();
 
@@ -104,7 +112,7 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
         testRepository = repositoryRepository.save(testRepository);
 
         // Create workspace
-        Workspace workspace = new Workspace();
+        workspace = new Workspace();
         workspace.setWorkspaceSlug("hephaestus-test");
         workspace.setDisplayName("Hephaestus Test");
         workspace.resume();
@@ -112,7 +120,7 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
         workspace.setOrganizationId(org.getId());
         workspace.setAccountLogin("HephaestusTest");
         workspace.setAccountType(AccountType.ORG);
-        workspaceRepository.save(workspace);
+        workspace = workspaceRepository.save(workspace);
     }
 
     private void createTestPullRequest(Long prId, int number) {
@@ -296,14 +304,55 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
         createTestPullRequest(
                 required(event.pullRequest().getDatabaseId()),
                 event.pullRequest().number());
+        // The review-comment webhook stores a thread under its root comment's id, without the thread's node id.
         PullRequestReviewThread thread = new PullRequestReviewThread();
         thread.setNativeId(required(event.thread().getFirstCommentId()));
-        thread.setNodeId(event.thread().nodeId());
         thread.setPullRequest(testPullRequest);
         thread.setState(PullRequestReviewThread.State.UNRESOLVED);
         thread.setPath(event.thread().path());
         thread.setProvider(gitProvider);
         return threadRepository.save(thread);
+    }
+
+    @Test
+    void shouldRecordTheNodeIdAndAnnounceTheChangeWhenAThreadStoredWithoutOneIsResolved() throws Exception {
+        GitHubPullRequestReviewThreadEventDTO event = loadPayload("pull_request_review_thread.resolved");
+        PullRequestReviewThread thread = unresolvedThreadFor(event);
+        Item item = new Item();
+        item.setWorkspaceId(required(workspace.getId()));
+        item.setKind(ScmItemEvents.PULL_REQUEST);
+        item.setSourceId(testPullRequest.getId());
+        item.setCreatedAt(Instant.now());
+        item = items.saveAndFlush(item);
+
+        handler.handleEvent(event);
+
+        assertThat(threadRepository.findById(thread.getId()))
+                .get()
+                .satisfies(stored ->
+                        assertThat(stored.getNodeId()).isEqualTo(event.thread().nodeId()));
+        assertThat(publications.stream(
+                        WorkFeedbackThreadChangedEvent.class, WorkFeedbackThreadChangedEvent::itemId, item.getId()))
+                .singleElement()
+                .satisfies(changed -> {
+                    assertThat(changed.threadRef()).isEqualTo(event.thread().nodeId());
+                    assertThat(changed.resolved()).isTrue();
+                });
+    }
+
+    @Test
+    void shouldKeepTheStoredNodeIdWhenTheEventNamesAnother() throws Exception {
+        GitHubPullRequestReviewThreadEventDTO event = loadPayload("pull_request_review_thread.resolved");
+        PullRequestReviewThread thread = unresolvedThreadFor(event);
+        thread.setNodeId("PRRT_stored");
+        threadRepository.save(thread);
+
+        handler.handleEvent(event);
+
+        assertThat(threadRepository.findById(thread.getId())).get().satisfies(stored -> {
+            assertThat(stored.getNodeId()).isEqualTo("PRRT_stored");
+            assertThat(stored.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
+        });
     }
 
     @Test

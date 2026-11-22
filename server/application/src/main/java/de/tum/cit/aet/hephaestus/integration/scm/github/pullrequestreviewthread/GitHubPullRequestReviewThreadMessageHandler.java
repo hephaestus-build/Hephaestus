@@ -132,6 +132,7 @@ public class GitHubPullRequestReviewThreadMessageHandler
                         : prDto.updatedAt() != null ? prDto.updatedAt() : Instant.now();
                 threadProcessor.resolve(
                         threadId,
+                        threadDto.nodeId(),
                         sender,
                         resolvedAt,
                         ProviderStateVersion.atStoredPrecision(event.updatedAt()),
@@ -150,7 +151,11 @@ public class GitHubPullRequestReviewThreadMessageHandler
                                     : "unknown");
                     return;
                 }
-                threadProcessor.unresolve(threadId, ProviderStateVersion.atStoredPrecision(event.updatedAt()), context);
+                threadProcessor.unresolve(
+                        threadId,
+                        threadDto.nodeId(),
+                        ProviderStateVersion.atStoredPrecision(event.updatedAt()),
+                        context);
             }
             default ->
                 log.debug(

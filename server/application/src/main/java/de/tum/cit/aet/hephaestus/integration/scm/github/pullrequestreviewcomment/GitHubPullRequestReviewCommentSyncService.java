@@ -408,6 +408,7 @@ public class GitHubPullRequestReviewCommentSyncService {
                 pullRequest.requireRepository().getProvider().getId());
         return threadRepository
                 .findByNativeIdAndProviderId(threadId, providerId)
+                .map(thread -> completeNodeId(thread, threadDto.nodeId()))
                 .orElseGet(() -> {
                     PullRequestReviewThread thread = new PullRequestReviewThread();
                     thread.setNativeId(threadId);
@@ -454,6 +455,19 @@ public class GitHubPullRequestReviewCommentSyncService {
 
                     return threadRepository.save(thread);
                 });
+    }
+
+    /**
+     * Completes the node id of a thread that the review-comment webhook stored without one. Only the identity: the
+     * resolve and unresolve events own a stored thread's resolution and order it.
+     */
+    private PullRequestReviewThread completeNodeId(PullRequestReviewThread thread, @Nullable String nodeId) {
+        boolean missing = thread.getNodeId() == null;
+        if (!thread.completeNodeId(nodeId)) {
+            log.warn("Kept stored thread node id: reason=readNamesAnother, threadId={}", thread.getId());
+            return thread;
+        }
+        return missing && thread.getNodeId() != null ? threadRepository.save(thread) : thread;
     }
 
     /**
@@ -565,6 +579,7 @@ public class GitHubPullRequestReviewCommentSyncService {
                 pullRequest.requireRepository().getProvider().getId());
         return threadRepository
                 .findByNativeIdAndProviderId(threadId, providerId)
+                .map(thread -> completeNodeId(thread, graphQlThread.getId()))
                 .orElseGet(() -> {
                     PullRequestReviewThread thread = new PullRequestReviewThread();
                     thread.setNativeId(threadId);
