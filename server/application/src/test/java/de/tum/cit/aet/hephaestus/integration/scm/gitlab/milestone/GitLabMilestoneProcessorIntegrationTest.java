@@ -112,7 +112,7 @@ class GitLabMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getUpdatedAt()).isNotNull();
             assertThat(result.getLastSyncAt()).isNotNull();
 
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneCreated.class, testRepository.getId()))
                     .hasSize(1);
         }
 
@@ -224,7 +224,7 @@ class GitLabMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
                             .atStartOfDay(ZoneOffset.UTC)
                             .toInstant());
 
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneUpdated.class, testRepository.getId()))
                     .hasSize(1);
             assertThat(milestoneRepository.findAllByRepository_Id(testRepository.getId()))
                     .hasSize(1);
@@ -354,7 +354,7 @@ class GitLabMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
             Milestone result = milestoneProcessor.process(null, testRepository, testContext());
 
             assertThat(result).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneCreated.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -412,7 +412,7 @@ class GitLabMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(stored().getTitle()).isEqualTo("Release");
             assertThat(stored().getState()).isEqualTo(Milestone.State.CLOSED);
             assertThat(stored().getClosedAt()).isEqualTo(closedAt);
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneUpdated.class, testRepository.getId()))
                     .isEmpty();
         }
 
@@ -589,7 +589,7 @@ class GitLabMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
             milestoneProcessor.delete(milestone.getId(), testContext());
 
             assertThat(milestoneRepository.findById(milestone.getId())).isEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneDeleted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneDeleted.class, testRepository.getId()))
                     .hasSize(1);
         }
 
@@ -601,7 +601,7 @@ class GitLabMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
         @Test
         void shouldHandleNonExistentMilestone() {
             milestoneProcessor.delete(-999L, testContext());
-            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneDeleted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.MilestoneDeleted.class, testRepository.getId()))
                     .isEmpty();
         }
     }

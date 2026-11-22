@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.conversation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.conversation.adapter.ConversationPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
@@ -316,16 +315,20 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
                         Long.class, main.getId(), thread.getId()))
                 .isEqualTo(70_002);
         // Only messages change what an open conversation shows, a hundred to a notification.
-        assertThat(events.stream(ConversationLedgerEvents.EntryChanged.class)
-                        .filter(change -> change.conversationId().equals(main.getId())
-                                || change.conversationId().equals(thread.getId())))
-                .extracting(
-                        change -> change.conversationId(),
-                        change -> change.entryIds().size())
+        assertThat(events.stream(
+                        ConversationLedgerEvents.EntryChanged.class,
+                        ConversationLedgerEvents.EntryChanged::conversationId,
+                        main.getId()))
+                .extracting(change -> change.entryIds().size())
                 .containsExactlyInAnyOrder(
-                        tuple(main.getId(), ConversationLedgerEvents.EntryChanged.MAX_IDS),
-                        tuple(main.getId(), messages - ConversationLedgerEvents.EntryChanged.MAX_IDS),
-                        tuple(thread.getId(), 1));
+                        ConversationLedgerEvents.EntryChanged.MAX_IDS,
+                        messages - ConversationLedgerEvents.EntryChanged.MAX_IDS);
+        assertThat(events.stream(
+                        ConversationLedgerEvents.EntryChanged.class,
+                        ConversationLedgerEvents.EntryChanged::conversationId,
+                        thread.getId()))
+                .extracting(change -> change.entryIds().size())
+                .containsExactly(1);
     }
 
     @Test

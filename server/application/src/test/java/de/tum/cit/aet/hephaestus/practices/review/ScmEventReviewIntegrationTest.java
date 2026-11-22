@@ -3560,8 +3560,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     private long offers(UUID occasion) {
-        return applicationEvents.stream(ItemEventRecorded.class)
-                .filter(recorded -> recorded.eventId().equals(occasion))
+        return applicationEvents.stream(ItemEventRecorded.class, ItemEventRecorded::eventId, occasion)
                 .count();
     }
 
@@ -4107,11 +4106,11 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 item.workspaceId(),
                 item.itemId());
         var reviewIds = itemReviews(prepared).stream().map(Review::getId).toList();
-        long recorded = applicationEvents.stream(ItemEventRecorded.class)
-                .filter(event -> event.workspaceId() == item.workspaceId() && event.itemId() == item.itemId())
+        long recorded = applicationEvents.stream(ItemEventRecorded.class, ItemEventRecorded::itemId, item.itemId())
+                .filter(event -> event.workspaceId() == item.workspaceId())
                 .count();
-        assertThat(applicationEvents.stream(ItemSourceObserved.class)
-                        .filter(event -> event.workspaceId() == item.workspaceId() && event.itemId() == item.itemId()))
+        assertThat(applicationEvents.stream(ItemSourceObserved.class, ItemSourceObserved::itemId, item.itemId())
+                        .filter(event -> event.workspaceId() == item.workspaceId()))
                 .isEmpty();
 
         assertThat(readiness(
@@ -4135,8 +4134,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         item.itemId()))
                 .containsExactlyInAnyOrderElementsOf(occasions);
         assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactlyInAnyOrderElementsOf(reviewIds);
-        assertThat(applicationEvents.stream(ItemEventRecorded.class)
-                        .filter(event -> event.workspaceId() == item.workspaceId() && event.itemId() == item.itemId())
+        assertThat(applicationEvents.stream(ItemEventRecorded.class, ItemEventRecorded::itemId, item.itemId())
+                        .filter(event -> event.workspaceId() == item.workspaceId())
                         .count())
                 .isEqualTo(recorded);
         assertThat(source.pin(item, null).version()).isEqualTo(prepared.version());
@@ -4147,8 +4146,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         item.workspaceId(), List.of(scenario.account().getId()), Instant.EPOCH, true))
                 .extracting(row -> row.id())
                 .doesNotContain(current.getId());
-        assertThat(applicationEvents.stream(ItemSourceObserved.class)
-                        .filter(event -> event.workspaceId() == item.workspaceId() && event.itemId() == item.itemId()))
+        assertThat(applicationEvents.stream(ItemSourceObserved.class, ItemSourceObserved::itemId, item.itemId())
+                        .filter(event -> event.workspaceId() == item.workspaceId()))
                 .hasSize(1);
     }
 

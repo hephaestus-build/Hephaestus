@@ -362,8 +362,11 @@ So a count over such an event flakes, and a check that such an event is absent p
 A test's source cannot show which threads are pooled.
 So tests record events only through the shared `SharedEventRecorder`.
 It records every event from any thread, and `BaseIntegrationTest` clears it before each test.
+
 An earlier test's work can still publish an event after the clear.
-Filter recorded events by an id that the test owns before you count them or check that one is absent.
+So each read of the recorder names an id that the test owns, such as the database id of a row that it saved.
+Database ids are not reused between tests.
+The recorder has no read without an owned id.
 Wait for an event only when it can be published after the call returns.
 
 `SharedEventRecorderConventionTest` refuses `@RecordApplicationEvents` in a test.

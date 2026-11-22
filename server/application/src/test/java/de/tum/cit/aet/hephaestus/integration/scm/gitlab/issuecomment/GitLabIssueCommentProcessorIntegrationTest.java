@@ -119,7 +119,8 @@ class GitLabIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(OffsetDateTime.parse(CREATED_AT).toInstant());
         assertThat(saved.getUpdatedAt()).isNotEqualTo(saved.getCreatedAt());
 
-        List<ScmDomainEvent.CommentUpdated> updates = eventListener.ofType(ScmDomainEvent.CommentUpdated.class);
+        List<ScmDomainEvent.CommentUpdated> updates =
+                eventListener.inRepository(ScmDomainEvent.CommentUpdated.class, testRepository.getId());
         assertThat(updates).hasSize(1);
         assertThat(updates.get(0).changedFields()).contains("updatedAt");
     }
@@ -135,8 +136,10 @@ class GitLabIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                 buildData("Body", CREATED_AT, UPDATED_AT_LATER), testIssue, providerId, testWorkspace.getId());
 
         assertThat(saved).isNotNull();
-        assertThat(eventListener.ofType(ScmDomainEvent.CommentUpdated.class)).isEmpty();
-        assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class)).isEmpty();
+        assertThat(eventListener.inRepository(ScmDomainEvent.CommentUpdated.class, testRepository.getId()))
+                .isEmpty();
+        assertThat(eventListener.inRepository(ScmDomainEvent.CommentCreated.class, testRepository.getId()))
+                .isEmpty();
     }
 
     @Test
@@ -173,9 +176,11 @@ class GitLabIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(OffsetDateTime.parse(UPDATED_AT_LATER_AGAIN).toInstant());
         assertThat(saved.getCreatedAt())
                 .isEqualTo(OffsetDateTime.parse(CREATED_AT).toInstant());
-        assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class)).hasSize(1);
+        assertThat(eventListener.inRepository(ScmDomainEvent.CommentCreated.class, testRepository.getId()))
+                .hasSize(1);
         // First-seen comment must not produce a spurious CommentUpdated event.
-        assertThat(eventListener.ofType(ScmDomainEvent.CommentUpdated.class)).isEmpty();
+        assertThat(eventListener.inRepository(ScmDomainEvent.CommentUpdated.class, testRepository.getId()))
+                .isEmpty();
     }
 
     @Test

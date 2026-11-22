@@ -41,17 +41,17 @@ class IntegrationAttentionIntegrationTest extends AbstractWorkspaceIntegrationTe
         attention.report(id, workspace, problem, true);
         attention.report(id, workspace, problem, false);
         attention.report(id, workspace, problem, false);
-        var changes = events.stream(IntegrationAttentionChangedEvent.class)
-                .filter(e -> e.connectionId() == id)
-                .toList();
+        var changes =
+                events.of(IntegrationAttentionChangedEvent.class, IntegrationAttentionChangedEvent::connectionId, id);
         assertThat(changes).hasSize(1);
         assertThat(changes.getFirst().recovered()).isFalse();
         assertThat(attention.isCurrent(changes.getFirst())).isTrue();
 
         transactions.executeWithoutResult(tx ->
                 publisher.publishEvent(new ConnectionLifecycleEvent.Activated(id, workspace, IntegrationKind.SLACK)));
-        var recovered = events.stream(IntegrationAttentionChangedEvent.class)
-                .filter(e -> e.connectionId() == id && e.recovered())
+        var recovered = events.stream(
+                        IntegrationAttentionChangedEvent.class, IntegrationAttentionChangedEvent::connectionId, id)
+                .filter(IntegrationAttentionChangedEvent::recovered)
                 .toList();
         assertThat(recovered).hasSize(1);
         assertThat(attention.isCurrent(changes.getFirst())).isFalse();
@@ -86,8 +86,8 @@ class IntegrationAttentionIntegrationTest extends AbstractWorkspaceIntegrationTe
                         .orElseThrow()
                         .getAttentionProblem())
                 .isNull();
-        var change = events.stream(IntegrationAttentionChangedEvent.class)
-                .filter(e -> e.connectionId() == id)
+        var change = events.stream(
+                        IntegrationAttentionChangedEvent.class, IntegrationAttentionChangedEvent::connectionId, id)
                 .findFirst()
                 .orElseThrow();
         assertThat(attention.isCurrent(change)).isFalse();

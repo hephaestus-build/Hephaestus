@@ -211,9 +211,11 @@ class GitLabDetachedSyncIntegrationTest extends BaseIntegrationTest {
                         GitLabReviewReconciler.generateCommentedReviewNativeId(discussionId, 2L), fixture.providerId())
                 .orElseThrow();
         assertThat(Objects.requireNonNull(stored.getPullRequest()).getId()).isEqualTo(fixture.parentId());
-        assertThat(events.ofType(ScmDomainEvent.ReviewSubmitted.class))
-                .anyMatch(event -> event.review().id().equals(stored.getId())
-                        && event.review().pullRequestId().equals(fixture.parentId())
+        assertThat(events.of(
+                        ScmDomainEvent.ReviewSubmitted.class,
+                        event -> event.review().id(),
+                        stored.getId()))
+                .anyMatch(event -> event.review().pullRequestId().equals(fixture.parentId())
                         && Objects.equals(event.context().scopeId(), fixture.workspaceId()));
     }
 
@@ -242,12 +244,10 @@ class GitLabDetachedSyncIntegrationTest extends BaseIntegrationTest {
         assertThat(result).isNotNull();
         assertThat(comments.findByNativeIdAndProviderId(note.id(), fixture.providerId()))
                 .isPresent();
-        assertThat(events.ofType(ScmDomainEvent.CommentCreated.class)).anyMatch(event -> {
-            var repository = event.context().repository();
-            return event.issueId().equals(fixture.parentId())
-                    && repository != null
-                    && repository.id().equals(fixture.repository().getId());
-        });
+        assertThat(events.inRepository(
+                        ScmDomainEvent.CommentCreated.class,
+                        fixture.repository().getId()))
+                .anyMatch(event -> event.issueId().equals(fixture.parentId()));
     }
 
     @Test
@@ -291,8 +291,10 @@ class GitLabDetachedSyncIntegrationTest extends BaseIntegrationTest {
                 .findByNativeIdAndProviderId(fixture.parentId(), fixture.providerId())
                 .orElseThrow();
         assertThat(Objects.requireNonNull(stored.getReview()).getId()).isEqualTo(review.getId());
-        assertThat(events.ofType(ScmDomainEvent.ReviewCommentCreated.class))
-                .anyMatch(event -> event.comment().id().equals(stored.getId())
-                        && event.pullRequestId().equals(fixture.parentId()));
+        assertThat(events.of(
+                        ScmDomainEvent.ReviewCommentCreated.class,
+                        event -> event.comment().id(),
+                        stored.getId()))
+                .anyMatch(event -> event.pullRequestId().equals(fixture.parentId()));
     }
 }

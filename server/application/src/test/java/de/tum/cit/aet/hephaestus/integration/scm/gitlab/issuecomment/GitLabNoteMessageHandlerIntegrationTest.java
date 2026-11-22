@@ -238,7 +238,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 assertThat(comment.getProvider().getType()).isEqualTo(IdentityProviderType.GITLAB);
             });
 
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentCreated.class, savedRepo.getId()))
                     .hasSize(1);
         }
 
@@ -258,7 +258,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 assertThat(comment.getBody()).isEqualTo(FIXTURE_NOTE_UPDATED_BODY);
             });
 
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentUpdated.class, savedRepo.getId()))
                     .hasSize(1);
         }
     }
@@ -281,7 +281,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 assertThat(comment.getIssue().getId()).isEqualTo(savedPr.getId());
             });
 
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentCreated.class, savedRepo.getId()))
                     .hasSize(1);
         }
 
@@ -301,7 +301,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 assertThat(comment.getBody()).isEqualTo(FIXTURE_MR_NOTE_UPDATED_BODY);
             });
 
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentUpdated.class, savedRepo.getId()))
                     .hasSize(1);
         }
     }
@@ -319,7 +319,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(commentRepository.findByNativeIdAndProviderId(
                             nativeId, Objects.requireNonNull(savedProvider.getId())))
                     .isEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.CommentCreated.class, savedRepo.getId()))
                     .isEmpty();
         }
     }
@@ -375,7 +375,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
             assertThat(reviewState(APPROVAL_NATIVE_ID)).isEqualTo(PullRequestReview.State.APPROVED);
             assertThat(reviewStatesOf(FIXTURE_AUTHOR_LOGIN)).doesNotContain(PullRequestReview.State.CHANGES_REQUESTED);
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewSubmitted.class, savedRepo.getId()))
                     .isEmpty();
         }
 
@@ -493,7 +493,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(resolverLogin()).isEqualTo("tutor");
             assertThat(comment().getId()).isEqualTo(commentId);
             assertThat(commentThreadId()).isEqualTo(stored.getId());
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewThreadResolved.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewThreadResolved.class, savedRepo.getId()))
                     .hasSize(1);
 
             sync(false);
@@ -504,7 +504,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(reopened.getResolvedAt()).isNull();
             assertThat(resolverLogin()).isNull();
             assertThat(commentThreadId()).isEqualTo(stored.getId());
-            assertThat(eventListener.ofType(ScmDomainEvent.ReviewThreadUnresolved.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.ReviewThreadUnresolved.class, savedRepo.getId()))
                     .hasSize(1);
         }
 

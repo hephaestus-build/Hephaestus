@@ -160,8 +160,7 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
                         14170707L,
                         Objects.requireNonNull(repository.getProvider().getId()))
                 .orElseThrow();
-        assertThat(events.ofType(ScmDomainEvent.TeamCreated.class))
-                .filteredOn(event -> event.teamId().equals(team.getId()))
+        assertThat(events.of(ScmDomainEvent.TeamCreated.class, ScmDomainEvent.TeamCreated::teamId, team.getId()))
                 .singleElement()
                 .satisfies(event -> assertThat(event.context().scopeId()).isEqualTo(target.getId()));
     }
@@ -188,8 +187,10 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
 
         assertThat(commits.findByShaAndRepositoryId("5e25fac12d5c56488a01b1e4375828fe7d30d64e", repository.getId()))
                 .isPresent();
-        assertThat(events.ofType(ScmDomainEvent.CommitCreated.class))
-                .filteredOn(event -> event.commit().repositoryId().equals(repository.getId()))
+        assertThat(events.of(
+                        ScmDomainEvent.CommitCreated.class,
+                        event -> event.commit().repositoryId(),
+                        repository.getId()))
                 .singleElement()
                 .satisfies(event -> assertThat(event.context().scopeId()).isEqualTo(target.getId()));
     }
@@ -208,8 +209,10 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo("DONE");
 
         var issue = issues.findByRepositoryIdAndNumber(repository.getId(), 20).orElseThrow();
-        assertThat(events.ofType(ScmDomainEvent.IssueCreated.class))
-                .filteredOn(event -> event.issue().id().equals(issue.getId()))
+        assertThat(events.of(
+                        ScmDomainEvent.IssueCreated.class,
+                        event -> event.issue().id(),
+                        issue.getId()))
                 .singleElement()
                 .satisfies(event -> assertThat(event.context().scopeId()).isNull());
     }
@@ -253,8 +256,10 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo("DONE");
 
         var issue = issues.findByRepositoryIdAndNumber(related.getId(), 21).orElseThrow();
-        assertThat(events.ofType(ScmDomainEvent.IssueCreated.class))
-                .filteredOn(event -> event.issue().id().equals(issue.getId()))
+        assertThat(events.of(
+                        ScmDomainEvent.IssueCreated.class,
+                        event -> event.issue().id(),
+                        issue.getId()))
                 .singleElement()
                 .satisfies(event ->
                         assertThat(event.context().scopeId()).isEqualTo(monitoredHere ? target.getId() : null));
@@ -297,8 +302,10 @@ class GitHubDispatchScopeIntegrationTest extends BaseIntegrationTest {
 
     private void assertIssueAndScope(Workspace workspace) {
         var issue = issues.findByRepositoryIdAndNumber(repository.getId(), 20).orElseThrow();
-        assertThat(events.ofType(ScmDomainEvent.IssueCreated.class))
-                .filteredOn(event -> event.issue().id().equals(issue.getId()))
+        assertThat(events.of(
+                        ScmDomainEvent.IssueCreated.class,
+                        event -> event.issue().id(),
+                        issue.getId()))
                 .singleElement()
                 .satisfies(event -> assertThat(event.context().scopeId()).isEqualTo(workspace.getId()));
     }

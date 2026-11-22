@@ -273,8 +273,10 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                                 null,
                                 null)))
                 .isInstanceOf(ConversationLeaseLostException.class);
-        assertThat(events.stream(ConversationLedgerEvents.AttemptTakenBack.class)
-                        .filter(taken -> taken.turnId().equals(slackTurn)))
+        assertThat(events.stream(
+                        ConversationLedgerEvents.AttemptTakenBack.class,
+                        ConversationLedgerEvents.AttemptTakenBack::turnId,
+                        slackTurn))
                 .as("the absorbed attempt is billed and its feedback claims settled after the merge commits")
                 .singleElement()
                 .satisfies(taken -> {

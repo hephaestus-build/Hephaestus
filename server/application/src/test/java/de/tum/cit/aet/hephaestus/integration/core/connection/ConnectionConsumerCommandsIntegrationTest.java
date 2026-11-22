@@ -177,7 +177,8 @@ class ConnectionConsumerCommandsIntegrationTest extends BaseIntegrationTest {
         assertThat(providers.findId(IdentityProviderType.GITLAB, spelling)).contains(id);
         assertThat(providers.findById(id))
                 .contains(new IdentityProviderLookup.Provider(id, IdentityProviderType.GITLAB, spelling));
-        assertThat(events.stream(PersonProviderInstanceRegistered.class).filter(event -> event.providerId() == id))
+        assertThat(events.stream(
+                        PersonProviderInstanceRegistered.class, PersonProviderInstanceRegistered::providerId, id))
                 .isEmpty();
     }
 

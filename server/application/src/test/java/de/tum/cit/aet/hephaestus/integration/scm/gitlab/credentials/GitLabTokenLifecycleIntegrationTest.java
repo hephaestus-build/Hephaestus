@@ -686,8 +686,9 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     private List<IntegrationAttentionChangedEvent> changes(Connection connection) {
-        return recorder.ofType(IntegrationAttentionChangedEvent.class).stream()
-                .filter(event -> event.connectionId() == connection.getId())
-                .toList();
+        return recorder.of(
+                IntegrationAttentionChangedEvent.class,
+                IntegrationAttentionChangedEvent::connectionId,
+                connection.getId());
     }
 }

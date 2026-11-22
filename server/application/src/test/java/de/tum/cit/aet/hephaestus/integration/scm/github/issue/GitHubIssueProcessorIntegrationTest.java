@@ -231,7 +231,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(200);
         eventListener.clear();
         processor.process(createBasicIssueDto(9_804L, 65, now.plusSeconds(3), 200), createContext());
-        assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).isEmpty();
+        assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId()))
+                .isEmpty();
     }
 
     @ParameterizedTest
@@ -246,7 +247,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
         assertNotNull(created);
         assertThat(issueRepository.findById(created.getId()))
                 .hasValueSatisfying(issue -> assertThat(issue.getTitle()).isEqualTo(dto.title()));
-        assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).hasSize(1);
+        assertThat(eventListener.inRepository(ScmDomainEvent.IssueCreated.class, testRepository.getId()))
+                .hasSize(1);
     }
 
     @ParameterizedTest
@@ -271,7 +273,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
         assertThat(actual.getTitle()).isEqualTo("Newer title");
         assertThat(actual.getBody()).isEqualTo("Newer body");
         assertThat(actual.getUpdatedAt()).isEqualTo(replayVersion.plusSeconds(secondsNewer));
-        assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).isEmpty();
+        assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId()))
+                .isEmpty();
     }
 
     @ParameterizedTest
@@ -338,10 +341,14 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(issueRepository.findByRepositoryIdAndNumber(testRepository.getId(), 41))
                     .isEmpty();
             assertThat(userRepository.findAll()).noneMatch(user -> FIXTURE_AUTHOR_LOGIN.equals(user.getLogin()));
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).isEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).isEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueReopened.class)).isEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueDeleted.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueCreated.class, testRepository.getId()))
+                    .isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueClosed.class, testRepository.getId()))
+                    .isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueReopened.class, testRepository.getId()))
+                    .isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueDeleted.class, testRepository.getId()))
+                    .isEmpty();
         }
 
         @Test
@@ -366,8 +373,10 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                             Long.class,
                             testRepository.getId()))
                     .isEqualTo(9201L);
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).isEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueDeleted.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueCreated.class, testRepository.getId()))
+                    .isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueDeleted.class, testRepository.getId()))
+                    .isEmpty();
         }
 
         @Test
@@ -380,7 +389,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(issueRepository.findByRepositoryIdAndNumber(testRepository.getId(), 42))
                     .hasValueSatisfying(
                             issue -> assertThat(issue.getDeletedAt()).isNull());
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueDeleted.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueDeleted.class, testRepository.getId()))
+                    .isEmpty();
 
             var issue = issueRepository
                     .findByRepositoryIdAndNumber(testRepository.getId(), 42)
@@ -413,7 +423,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                             item.workspaceId(),
                             item.itemId()))
                     .containsExactly(version.value());
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueDeleted.class)).hasSize(1);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueDeleted.class, testRepository.getId()))
+                    .hasSize(1);
         }
     }
 
@@ -529,7 +540,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             Issue result = processor.process(dto, createContext());
 
             assertThat(result).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueCreated.class, testRepository.getId()))
+                    .isEmpty();
         }
     }
 
@@ -553,7 +565,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(issueRepository.findByRepositoryIdAndNumber(testRepository.getId(), 20))
                     .isPresent();
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueCreated.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -867,7 +879,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getTitle()).isEqualTo("New Title");
             assertThat(result.getBody()).isEqualTo("New body");
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -925,10 +937,11 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             processor.process(dto, createContext());
 
             // Note: Event is still published but with empty changedFields
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).allSatisfy(event -> {
-                // changedFields should be empty
-                assertThat(event.changedFields()).isEmpty();
-            });
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId()))
+                    .allSatisfy(event -> {
+                        // changedFields should be empty
+                        assertThat(event.changedFields()).isEmpty();
+                    });
         }
 
         @Test
@@ -966,7 +979,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             assertNotNull(result);
 
             assertThat(result.getAssignees()).isNotEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId()))
                     .first()
                     .satisfies(event -> assertThat(event.changedFields()).contains("relationships"));
         }
@@ -991,7 +1004,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             Issue result = processor.process(issueDto(issueId, 22, "Issue", true, 3, null), createContext());
             assertNotNull(result);
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId()))
                     .first()
                     .satisfies(event ->
                             assertThat(event.changedFields()).containsExactlyInAnyOrder("locked", "commentsCount"));
@@ -1092,7 +1105,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             assertNotNull(result);
 
             assertThat(result.getMilestone()).isNotNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId()))
                     .first()
                     .satisfies(event -> assertThat(event.changedFields()).contains("milestone"));
         }
@@ -1155,7 +1168,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             assertNotNull(result);
 
             assertThat(result.getMilestone()).isNull();
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId()))
                     .first()
                     .satisfies(event -> assertThat(event.changedFields()).contains("milestone"));
         }
@@ -1211,10 +1224,12 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
             assertThat(result.getState()).isEqualTo(Issue.State.CLOSED);
             assertThat(result.getStateReason()).isEqualTo(Issue.StateReason.COMPLETED);
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).isEmpty();
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).hasSize(createdEvents);
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId()))
+                    .isEmpty();
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueCreated.class, testRepository.getId()))
+                    .hasSize(createdEvents);
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueClosed.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -1269,7 +1284,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
             assertThat(result.getState()).isEqualTo(Issue.State.OPEN);
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId()))
                     .anySatisfy(event -> assertThat(event.changedFields()).contains("state"));
         }
 
@@ -1326,7 +1341,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
             processor.processLabeled(issueDto, labelDto, createContext());
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueLabeled.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueLabeled.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -1370,7 +1385,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
             processor.processUnlabeled(issueDto, labelDto, createContext());
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUnlabeled.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUnlabeled.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -1396,7 +1411,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getIssueType()).isNotNull();
             assertThat(result.getIssueType().getName()).isEqualTo("Task");
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueTyped.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueTyped.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {
@@ -1442,7 +1457,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             Issue result = processor.processTyped(typed, typeDto, createContext());
             assertNotNull(result);
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUpdated.class, testRepository.getId()))
                     .first()
                     .satisfies(event -> assertThat(event.changedFields()).contains("issueType"));
         }
@@ -1479,7 +1494,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
             assertThat(result.getIssueType()).isNull();
 
-            assertThat(eventListener.ofType(ScmDomainEvent.IssueUntyped.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.IssueUntyped.class, testRepository.getId()))
                     .hasSize(1)
                     .first()
                     .satisfies(event -> {

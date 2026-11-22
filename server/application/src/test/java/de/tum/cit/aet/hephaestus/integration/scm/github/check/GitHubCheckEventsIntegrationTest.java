@@ -233,8 +233,10 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
                 .isNotNull()
                 .satisfies(runs -> assertThat(runs.runs()).containsExactly(build, docs));
         assertThat(stored.getHeadCheckState()).isNull();
-        assertThat(events.stream(ScmDomainEvent.PullRequestChecksCompleted.class)
-                        .filter(completed -> completed.pullRequest().id().equals(onHead.getId())))
+        assertThat(events.stream(
+                        ScmDomainEvent.PullRequestChecksCompleted.class,
+                        completed -> completed.pullRequest().id(),
+                        onHead.getId()))
                 .hasSize(1);
     }
 
@@ -301,8 +303,10 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
         assertThat(pullRequestRepository.findById(onHead.getId()).orElseThrow().getHeadCheckRuns())
                 .isNotNull()
                 .satisfies(runs -> assertThat(runs.finished()).isTrue());
-        assertThat(events.stream(ScmDomainEvent.PullRequestChecksCompleted.class)
-                        .filter(completed -> completed.pullRequest().id().equals(onHead.getId())))
+        assertThat(events.stream(
+                        ScmDomainEvent.PullRequestChecksCompleted.class,
+                        completed -> completed.pullRequest().id(),
+                        onHead.getId()))
                 .hasSize(1);
     }
 

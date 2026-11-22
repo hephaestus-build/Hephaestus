@@ -221,7 +221,7 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
             });
 
             // Domain event published
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestCreated.class, testRepository.getId()))
                     .hasSize(1);
         }
 
@@ -242,7 +242,7 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
             assertThat(pr.isMerged()).isFalse(); // closed.json has merged=false
 
             // Verify Closed event was published
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestClosed.class, testRepository.getId()))
                     .hasSize(1);
         }
 
@@ -285,7 +285,7 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
             assertThat(pr.isDraft()).isFalse();
 
             // Verify PullRequestReady event was published
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestReady.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestReady.class, testRepository.getId()))
                     .hasSize(1);
         }
 
@@ -302,7 +302,7 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
             assertThat(pr.isDraft()).isTrue();
 
             // Verify PullRequestDrafted event was published
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestDrafted.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestDrafted.class, testRepository.getId()))
                     .hasSize(1);
         }
     }
@@ -327,7 +327,7 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
             assertNotNull(pr);
 
             // Verify PullRequestSynchronized event was published
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestSynchronized.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestSynchronized.class, testRepository.getId()))
                     .hasSize(1);
         }
     }
@@ -359,7 +359,7 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
                     .isPresent();
 
             // Verify Labeled event was published
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestLabeled.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestLabeled.class, testRepository.getId()))
                     .hasSize(1);
         }
 
@@ -373,7 +373,7 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
 
             handler.handleEvent(unlabeledEvent);
 
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUnlabeled.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestUnlabeled.class, testRepository.getId()))
                     .hasSize(1);
         }
     }
@@ -711,13 +711,13 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
             assertThat(pr.getState()).isEqualTo(PullRequest.State.CLOSED);
 
             // Verify events were published
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestCreated.class, testRepository.getId()))
                     .hasSize(1);
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestLabeled.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestLabeled.class, testRepository.getId()))
                     .hasSize(1);
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestSynchronized.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestSynchronized.class, testRepository.getId()))
                     .hasSize(1);
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestClosed.class, testRepository.getId()))
                     .hasSize(1);
         }
 
@@ -738,9 +738,9 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
             assertThat(pr.isDraft()).isFalse();
 
             // Verify events
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestCreated.class, testRepository.getId()))
                     .hasSize(1);
-            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestReady.class))
+            assertThat(eventListener.inRepository(ScmDomainEvent.PullRequestReady.class, testRepository.getId()))
                     .hasSize(1);
         }
     }
