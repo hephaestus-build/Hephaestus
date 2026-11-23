@@ -76,6 +76,11 @@ jobs:
       queue-server-image: ${{ (github.event_name == 'merge_group' && (steps.filter.outputs.server-image == 'true' || steps.filter.outputs.build-config == 'true' || steps.filter.outputs.kubernetes == 'true')) }}
       kubernetes: ${{ steps.filter.outputs.kubernetes }}
       kubernetes-recovery: ${{ github.event_name == 'pull_request' && steps.filter.outputs.kubernetes-recovery == 'true' }}
+      # Checks that a release runs, selected when a change touches what they guard, so the change
+      # that would break one fails on its own CI: ci-cd.mdx § Release checks on the change.
+      # A push to main runs neither: its merge group did, and the nightly run on main repeats them.
+      chart-upgrade: ${{ github.event_name != 'push' && steps.filter.outputs.chart-upgrade == 'true' }}
+      sandbox-qualification: ${{ github.event_name != 'push' && steps.filter.outputs.sandbox-qualification == 'true' }}
       ci-config: ${{ steps.filter.outputs.ci-config }}
       quality-config: ${{ steps.filter.outputs.quality-config }}
       build-config: ${{ steps.filter.outputs.build-config }}
@@ -89,7 +94,9 @@ jobs:
       version-bump: ${{ steps.version_bump.outputs.changed }}
       version: ${{ steps.version.outputs.version }}
       release-candidate: ${{ steps.release_candidate.outputs.release-candidate }}
-      release-preflight: ${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' }}
+      # A merge group that changes the image build, the SBOM or the evidence scripts generates the
+      # evidence too. Only a merge group builds both platforms, which the evidence needs.
+      release-preflight: ${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' || (github.event_name == 'merge_group' && steps.filter.outputs.release-evidence == 'true') }}
       any-code: ${{ steps.filter.outputs.webapp == 'true' || steps.filter.outputs.extension == 'true' || steps.filter.outputs.server == 'true' || steps.filter.outputs.tooling == 'true' || steps.filter.outputs.agent-images == 'true' || steps.filter.outputs.postgres-image == 'true' }}
       # The platforms every image build in the run publishes. A pull request builds `linux/amd64`
       # alone, so a push to it does not pay for arm64. Every other event builds both, so the merge
@@ -111,7 +118,7 @@ jobs:
       # A release candidate publishes its complete image set under its own commit identity.
       # Ordinary PRs can reuse unchanged images when their base has published artifacts. A merge
       # group aliases nothing, so one that runs the Kubernetes legs builds every image they install.
-      all-images: ${{ steps.alias_base.outputs.commit == '' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event_name == 'merge_group' && steps.filter.outputs.kubernetes == 'true') }}
+      all-images: ${{ steps.alias_base.outputs.commit == '' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event_name == 'merge_group' && (steps.filter.outputs.kubernetes == 'true' || steps.filter.outputs.chart-upgrade == 'true' || steps.filter.outputs.sandbox-qualification == 'true' || steps.filter.outputs.release-evidence == 'true')) }}
       # A push and a dispatch validate a commit whole; a pull request and a merge group are each a
       # diff. A merge group's diff starts where the group leaves main (the `group_base` step), so it
       # covers every pull request the group would merge.
@@ -134,11 +141,11 @@ jobs:
       # A same-repository pull request needs every image at its head tag for the `ci:images` label, the
       # Kubernetes cluster jobs. An unreadable `ci:images` label counts as present,
       # except on a draft.
-      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.images == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.images != 'false' || steps.filter.outputs.kubernetes == 'true'))) }}
+      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.images == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.images != 'false' || steps.filter.outputs.kubernetes == 'true' || steps.filter.outputs.chart-upgrade == 'true' || steps.filter.outputs.sandbox-qualification == 'true'))) }}
       # Whether this run builds images at all: every event except a pull request, unless that pull
       # request is a release candidate or needs head images. The merge group builds every other
       # changed image before it lands. ci-cd.mdx § The `ci:images` label.
-      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.images == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.images != 'false' || steps.filter.outputs.kubernetes == 'true')))) }}
+      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.images == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.images != 'false' || steps.filter.outputs.kubernetes == 'true' || steps.filter.outputs.chart-upgrade == 'true' || steps.filter.outputs.sandbox-qualification == 'true')))) }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
       # the gate refuses to pass the Version PR without one.
       # A re-run after `ci:full` was added repeats a tree whose fast tier already passed, so only a
@@ -677,6 +684,38 @@ jobs:
               - '.github/workflows/kubernetes-nightly.yml'
               - '.github/actions/setup-kubernetes-tools/**'
               - '.github/ci-tools/{helm,k3d,kind,kubeconform,gateway-api}.json'
+            # The upgrade from the latest release's chart to this one (chart-upgrade.yml).
+            chart-upgrade:
+              - 'deploy/chart/**'
+              - 'scripts/chart-upgrade-drill.ts'
+              - 'scripts/lib/chart-*.ts'
+              - 'scripts/kubernetes-cluster.ts'
+              - '.github/workflows/chart-upgrade.yml'
+            # What the release evidence reads: the images as built, their SBOMs, and the scripts that
+            # generate and verify the bundle.
+            release-evidence:
+              - 'docker/**'
+              - 'server/application/project.toml'
+              - '.github/workflows/reusable-docker-build.yml'
+              - '.github/actions/setup-release-security-tools/**'
+              - 'security/syft.yaml'
+              - 'scripts/generate-release-evidence.ts'
+              - 'scripts/verify-release-evidence.ts'
+              - 'scripts/check-release-sbom.ts'
+              - 'scripts/check-release-vulnerabilities.ts'
+              - 'scripts/check-previous-verifier.ts'
+              - 'scripts/lib/syft.ts'
+              - 'scripts/lib/image-scan.ts'
+              - 'scripts/lib/web-app-scan.ts'
+            # What the sandbox qualification judges: the agent runtime, its image, the server's sandbox
+            # and gateway, and the qualification with its corpus.
+            sandbox-qualification:
+              - 'server/application/src/main/resources/agent/**'
+              - 'docker/agents/**'
+              - 'server/application/src/main/java/**/agent/sandbox/**'
+              - 'server/application/src/main/java/**/agent/gateway/**'
+              - 'scripts/sandbox-security*.ts'
+              - 'server/application/src/test/resources/agent/sandbox-security-runner.ts'
             kubernetes-recovery:
               - 'deploy/chart/**'
               - 'docker/postgres/**'
@@ -1341,6 +1380,26 @@ jobs:
       eviction-drill: ${{ github.event_name == 'workflow_dispatch' && inputs.eviction-drill }}
       backup-drill: ${{ needs.detect-changes.outputs.kubernetes-recovery == 'true' }}
 
+  # The latest release's chart, images and scripts upgraded to this run's, when the chart or the drill
+  # changed. The drill resolves every image by the run's commit tag, under which `Docker` built or
+  # aliased it, so an unchanged image needs no digest of this run. A server image that this run was to
+  # build needs its digest: a failed package leaves `Docker` green without it.
+  Chart-upgrade:
+    name: "Chart upgrade"
+    needs: [detect-changes, Docker]
+    if: >-
+      !cancelled() && needs.Docker.result == 'success' &&
+      (needs.Docker.outputs.server-digest != '' || (needs.detect-changes.outputs.server-image != 'true' && needs.detect-changes.outputs.kubernetes != 'true' && needs.detect-changes.outputs.all-images != 'true')) &&
+      needs.detect-changes.outputs.should_skip != 'true' &&
+      needs.detect-changes.outputs.publishable == 'true' &&
+      needs.detect-changes.outputs.chart-upgrade == 'true'
+    uses: ./.github/workflows/chart-upgrade.yml
+    permissions:
+      contents: read
+      packages: read
+    with:
+      commit: ${{ github.event.pull_request.head.sha || github.sha }}
+
   Database-upgrade:
     name: "Seeded upgrade from the last release"
     needs: [detect-changes, Docker]
@@ -1405,10 +1464,12 @@ jobs:
   # Validate the built images before release; signatures and attestations are added at publication.
   # Every release candidate needs evidence for its own tree, including a merge group's aggregate.
   # release-management.mdx owns the evidence contract.
+  # Every run that generates evidence builds every image, so a missing server digest is a failed
+  # package, which fails the run on its own.
   Release-preflight:
     name: "Release evidence preflight"
     needs: [detect-changes, Docker, vulnerability-database]
-    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.Docker.result == 'success' && (needs.detect-changes.outputs.release-preflight == 'true') }}
+    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.Docker.result == 'success' && needs.Docker.outputs.server-digest != '' && (needs.detect-changes.outputs.release-preflight == 'true') }}
     timeout-minutes: 45
     runs-on: ubuntu-latest
     permissions:
@@ -1427,8 +1488,11 @@ jobs:
           install: "none"
 
       # A merge group runs none of the Kubernetes drills, so a break that two merged changes cause
-      # together shows first in the nightly run. No release ships past it.
+      # together shows first in the nightly run. No release ships past it. A merge group that only
+      # changes what the evidence reads does not wait for the nightly run.
       - name: Require a passing nightly Kubernetes run on main
+        id: nightly
+        if: needs.detect-changes.outputs.release-candidate == 'true' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/check-nightly-kubernetes.ts
@@ -1473,15 +1537,101 @@ jobs:
       # releases that hosts run must accept this ref's images, or a reviewed break must name the pair.
       # It skips only the steps that need the signed draft (scripts/previous-verifier-probe.ts).
       - name: Check that earlier releases' verifiers accept this ref
+        id: previous-verifier
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE: v${{ needs.detect-changes.outputs.version }}
         run: node scripts/check-previous-verifier.ts --preflight "$RELEASE" evidence/manifest.json security/release-images.json
 
-      - name: Qualify sandbox boundaries on this ref's image
+      # An exit status cannot say which subject carries which finding.
+      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
+      - name: Check out the upload action of this workflow
+        if: ${{ !cancelled() }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-actions
+          sparse-checkout: .github/actions/upload-artifact-retry
+          persist-credentials: false
+      - name: Upload the evidence bundle
+        if: ${{ !cancelled() }}
+        uses: ./workflow-actions/.github/actions/upload-artifact-retry
+        with:
+          name: release-evidence-preflight
+          path: evidence
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Name the cause of the failure
+        if: failure()
         env:
-          IMAGE: ghcr.io/hephaestus-build/agent@${{ steps.release-evidence.outputs.agent-digest }}
-          APPLICATION_IMAGE: ghcr.io/hephaestus-build/server@${{ steps.release-evidence.outputs.server-digest }}
+          NIGHTLY: ${{ steps.nightly.outcome }}
+          EVIDENCE: ${{ steps.release-evidence.outcome }}
+          PREVIOUS: ${{ steps.previous-verifier.outcome }}
+          CANDIDATE: ${{ needs.detect-changes.outputs.release-candidate }}
+        run: |
+          if [ "$NIGHTLY" = failure ]; then
+            cause="the latest nightly Kubernetes run on main did not pass, and no release ships past it"
+          elif [ "$EVIDENCE" = failure ]; then
+            cause="generating or verifying the release evidence failed: an image, its SBOM, or the evidence scripts no longer agree"
+          elif [ "$PREVIOUS" = failure ]; then
+            cause="the verifier of an earlier release refuses this ref's images"
+          else
+            cause="a step outside the evidence checks failed"
+          fi
+          if [ "$CANDIDATE" = true ]; then
+            scope="This release candidate cannot be released"
+          elif [ "$GITHUB_EVENT_NAME" = merge_group ]; then
+            scope="This change would break the next release, because it touches the image build, the SBOM or the evidence scripts"
+          else
+            scope="This ref would break the next release"
+          fi
+          echo "::error title=Release evidence preflight::$scope: $cause. The step above it has the details. Reproduce with Run workflow > CI/CD > release-preflight on your branch."
+
+  # The sandbox boundaries on this run's agent and server images. A release candidate runs it, and so
+  # does a change to what it judges. A pull request aliases an unchanged image from its base and
+  # publishes no digest of it, so the images are resolved by the run's commit tag. A server image that
+  # this run was to build needs its digest, as for `Chart upgrade`.
+  Sandbox-qualification:
+    name: "Sandbox qualification"
+    needs: [detect-changes, Docker]
+    if: >-
+      !cancelled() && needs.Docker.result == 'success' &&
+      (needs.Docker.outputs.server-digest != '' || (needs.detect-changes.outputs.server-image != 'true' && needs.detect-changes.outputs.kubernetes != 'true' && needs.detect-changes.outputs.all-images != 'true')) &&
+      needs.detect-changes.outputs.should_skip != 'true' &&
+      needs.detect-changes.outputs.publishable == 'true' &&
+      (needs.detect-changes.outputs.sandbox-qualification == 'true' || needs.detect-changes.outputs.release-preflight == 'true')
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+
+      - uses: ./.github/actions/ghcr-login
+        with:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve this run's agent and server images
+        id: images
+        env:
+          COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/resolve-release-images.ts --subject agent --subject server "$COMMIT" "$RUNNER_TEMP/images.tsv"
+
+      - name: Qualify sandbox boundaries on this run's images
+        env:
+          IMAGE: ghcr.io/hephaestus-build/agent@${{ steps.images.outputs.agent-digest }}
+          APPLICATION_IMAGE: ghcr.io/hephaestus-build/server@${{ steps.images.outputs.server-digest }}
         run: |
           set -euo pipefail
           docker pull "$IMAGE"
@@ -1502,27 +1652,8 @@ jobs:
         uses: ./workflow-actions/.github/actions/upload-artifact-retry
         with:
           required: "false"
-          name: sandbox-security-preflight-summary
+          name: sandbox-security-summary
           path: ${{ runner.temp }}/sandbox-security.json
-          if-no-files-found: warn
-          retention-days: 7
-
-      # An exit status cannot say which subject carries which finding.
-      # The checked-out ref can predate upload-artifact-retry, so the action comes from this workflow's commit.
-      - name: Check out the upload action of this workflow
-        if: ${{ !cancelled() }}
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: workflow-actions
-          sparse-checkout: .github/actions/upload-artifact-retry
-          persist-credentials: false
-      - name: Upload the evidence bundle
-        if: ${{ !cancelled() }}
-        uses: ./workflow-actions/.github/actions/upload-artifact-retry
-        with:
-          name: release-evidence-preflight
-          path: evidence
           if-no-files-found: warn
           retention-days: 7
 
@@ -1554,6 +1685,8 @@ jobs:
         Docker,
         Kubernetes,
         Release-preflight,
+        Chart-upgrade,
+        Sandbox-qualification,
         Database-upgrade,
         Server-image,
       ]
@@ -1595,6 +1728,8 @@ jobs:
                   "Docker": "Images",
                   "Kubernetes": "Kubernetes",
                   "Release-preflight": "Release evidence preflight",
+                  "Chart-upgrade": "Chart upgrade",
+                  "Sandbox-qualification": "Sandbox qualification",
                   "Database-upgrade": "Seeded upgrade from the last release",
                   "Server-image": "Server image startup"
                 } as $names | to_entries[] | "| " + $names[.key] + " | " + (.value.result // "Unavailable" | tostring) + " |"' <<< "$NEEDS"
@@ -1655,6 +1790,34 @@ jobs:
             echo "The release candidate requires a successful release evidence preflight; this run's was '${{ needs.Release-preflight.result }}'."
             echo "status=failure" >> $GITHUB_OUTPUT
             exit 1
+          fi
+          # The release qualifies the sandbox on the images it ships, so a run that generates the
+          # evidence qualifies them too.
+          if [[ "${{ needs.detect-changes.outputs.release-preflight == 'true' && needs.Sandbox-qualification.result != 'success' }}" == true ]]; then
+            echo "A run that generates release evidence requires a successful sandbox qualification; it was '${{ needs.Sandbox-qualification.result }}'."
+            echo "status=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          if [[ "$MERGE_GROUP" == true && "${{ needs.detect-changes.outputs.release-preflight == 'true' && needs.Release-preflight.result != 'success' }}" == true ]]; then
+            echo "This merge group changes what the release evidence reads and requires a successful release evidence preflight; it was '${{ needs.Release-preflight.result }}'."
+            echo "status=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # A skipped release check is a missing verdict for a change to what it guards, once this run
+          # published its images. A run that publishes none (a draft, a light layer, a fork, a
+          # duplicate) skips both on purpose.
+          if [[ "${{ needs.Docker.result == 'success' && needs.detect-changes.outputs.publishable == 'true' && needs.detect-changes.outputs.should_skip != 'true' }}" == true ]]; then
+            if [[ "${{ needs.detect-changes.outputs.chart-upgrade == 'true' && needs.Chart-upgrade.result != 'success' }}" == true ]]; then
+              echo "This change touches the chart or its upgrade drill and requires a successful chart upgrade; it was '${{ needs.Chart-upgrade.result }}'."
+              echo "status=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+            if [[ "${{ needs.detect-changes.outputs.sandbox-qualification == 'true' && needs.Sandbox-qualification.result != 'success' }}" == true ]]; then
+              echo "This change touches the agent runtime, the sandbox or its qualification and requires a successful sandbox qualification; it was '${{ needs.Sandbox-qualification.result }}'."
+              echo "status=failure" >> $GITHUB_OUTPUT
+              exit 1
+            fi
           fi
 
           # Unknown or missing results must not produce a passing verdict.
@@ -1919,6 +2082,22 @@ jobs:
   fail-fast-Release-preflight:
     name: Stop the merge group early
     needs: [Release-preflight]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    permissions:
+      actions: write
+    uses: ./.github/workflows/merge-group-cancel.yml
+
+  fail-fast-Chart-upgrade:
+    name: Stop the merge group early
+    needs: [Chart-upgrade]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    permissions:
+      actions: write
+    uses: ./.github/workflows/merge-group-cancel.yml
+
+  fail-fast-Sandbox-qualification:
+    name: Stop the merge group early
+    needs: [Sandbox-qualification]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
     permissions:
       actions: write

@@ -278,6 +278,7 @@ void test("a split suite runs whole when its shared helpers or a workflow change
 		"scripts/ci-contract-images.test.ts",
 		"scripts/ci-contract-kubernetes.test.ts",
 		"scripts/ci-contract-merge-queue.test.ts",
+		"scripts/ci-contract-release-checks.test.ts",
 		"scripts/ci-contract-release.test.ts",
 		"scripts/ci-contract-server.test.ts",
 		"scripts/ci-contract-supply-chain.test.ts",

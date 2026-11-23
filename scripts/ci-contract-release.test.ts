@@ -121,7 +121,7 @@ void describe("ci-contract: release", () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		assert.equal(
 			workflow.getIn(["jobs", "detect-changes", "outputs", "release-preflight"]),
-			`\${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' }}`,
+			`\${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' || (github.event_name == 'merge_group' && steps.filter.outputs.release-evidence == 'true') }}`,
 		);
 		assert.equal(
 			workflow.getIn(["jobs", "Docker", "with", "scan-images"]),
@@ -493,12 +493,16 @@ void describe("ci-contract: release", () => {
 		const cicd = await readFile(".github/workflows/cicd.yml", "utf8");
 		const preflight = job(cicd, "Release-preflight");
 		assert.match(preflight, /id: release-evidence/u);
+		// The sandbox qualification is its own job before the release, on the images the run published,
+		// and every run that generates evidence requires it.
+		const qualification = job(cicd, "Sandbox-qualification");
 		assert.match(
-			preflight,
-			/IMAGE: ghcr\.io\/hephaestus-build\/agent@\$\{\{ steps\.release-evidence\.outputs\.agent-digest \}\}/u,
+			qualification,
+			/IMAGE: ghcr\.io\/hephaestus-build\/agent@\$\{\{ steps\.images\.outputs\.agent-digest \}\}/u,
 		);
-		for (const source of [job(release, "tag-images"), preflight]) {
-			assert.match(source, /node scripts\/resolve-release-images\.ts /u);
+		assert.match(qualification, /needs\.detect-changes\.outputs\.release-preflight == 'true'/u);
+		assertNeeds(cicd, "all-ci-passed", "Sandbox-qualification");
+		for (const source of [job(release, "tag-images"), qualification]) {
 			assert.match(
 				source,
 				/node scripts\/sandbox-security\.ts --image "\$IMAGE" --application-image "\$APPLICATION_IMAGE"/u,
@@ -506,8 +510,11 @@ void describe("ci-contract: release", () => {
 			assert.match(source, /docker pull "\$APPLICATION_IMAGE"/u);
 			assert.match(
 				source,
-				/APPLICATION_IMAGE: ghcr\.io\/hephaestus-build\/server@\$\{\{ steps\.(?:retag|release-evidence)\.outputs\.server-digest \}\}/u,
+				/APPLICATION_IMAGE: ghcr\.io\/hephaestus-build\/server@\$\{\{ steps\.(?:retag|images)\.outputs\.server-digest \}\}/u,
 			);
+		}
+		for (const source of [job(release, "tag-images"), preflight]) {
+			assert.match(source, /node scripts\/resolve-release-images\.ts /u);
 			assert.match(source, /node scripts\/generate-release-evidence\.ts evidence \\/u);
 			assert.match(
 				source,
