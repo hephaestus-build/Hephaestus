@@ -35,7 +35,7 @@ const toastCalls = new Set(["error", "success", "info", "warning", "message", "l
 const sentences = new Intl.Segmenter("en", { granularity: "sentence" });
 
 /** Static text only. Unknown expressions are boundaries, not words that we invent. */
-function literalText(node: ESTree.Node): string[] {
+export function literalText(node: ESTree.Node): string[] {
 	if (node.type === "Literal") {
 		return typeof node.value === "string" ? [node.value] : [];
 	}
@@ -97,7 +97,7 @@ function isMetaElement(node: ESTree.Node): boolean {
 	);
 }
 
-function isTextName(name: string): boolean {
+export function isTextName(name: string): boolean {
 	return textNames.has(name) || textSuffix.test(name);
 }
 

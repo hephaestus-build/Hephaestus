@@ -40,3 +40,22 @@ export const Informative: Story = {
 		await expect(canvas.getByRole("img", { name: "Ask Hephaestus" })).toBeVisible();
 	},
 };
+
+export const WorkStates: Story = {
+	args: { size: 48 },
+	render: ({ size }) => (
+		<div className="flex gap-4">
+			<HephaestusMark size={size} state="rest" label="Rest" />
+			<HephaestusMark size={size} state="working" label="Working" />
+			<HephaestusMark size={size} state="quiet" label="Quiet" />
+		</div>
+	),
+	play: async ({ canvas }) => {
+		const rest = canvas.getByRole("img", { name: "Rest" });
+		const working = canvas.getByRole("img", { name: "Working" });
+		const quiet = canvas.getByRole("img", { name: "Quiet" });
+		await expect(rest).toHaveAttribute("data-state", "rest");
+		await expect(working.querySelector("circle")).toHaveAttribute("r", "1.6");
+		await expect(quiet.querySelector("circle")).toHaveStyle({ visibility: "hidden" });
+	},
+};

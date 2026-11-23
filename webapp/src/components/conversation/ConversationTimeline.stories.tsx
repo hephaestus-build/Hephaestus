@@ -807,6 +807,81 @@ export const SentQuestionAnchorsEveryTime: Story = {
 	},
 };
 
+const FIRST_PARAGRAPH = "Read the **first** [guide](https://example.com/guide).";
+const CODE_BLOCK = "```text\nfirst line\n\nlast line\n```";
+const FINAL_PARAGRAPH = "Final paragraph.";
+const PARAGRAPH_SNAPSHOTS = [
+	"Read the **fi",
+	`${FIRST_PARAGRAPH}\n\n\`\`\`text\nfirst line\n\n`,
+	`${FIRST_PARAGRAPH}\n\n${CODE_BLOCK}\n\nFin`,
+	null,
+	`${FIRST_PARAGRAPH}\n\n${CODE_BLOCK}\n\n${FINAL_PARAGRAPH}`,
+];
+const STORED_PARAGRAPHS = entry({
+	id: "stored-paragraphs",
+	kind: "ANSWER",
+	turnId: RUNNING.id,
+	text: [FIRST_PARAGRAPH, CODE_BLOCK, FINAL_PARAGRAPH].join("\n\n"),
+	createdAt: RUNNING.createdAt,
+});
+
+function ParagraphStream(props: ConversationTimelineProps) {
+	const [step, setStep] = useState(0);
+	const partial = PARAGRAPH_SNAPSHOTS[step];
+	const entries = [...BEFORE_FOLLOW_UP, FOLLOW_UP];
+	const turns =
+		typeof partial === "string"
+			? [
+					{
+						...RUNNING,
+						partial: { activity: "WRITING" as const, stage: "Thinking…", text: partial },
+					},
+				]
+			: [];
+	return (
+		<div className="flex h-full min-w-0 flex-col [max-inline-size:320px]">
+			<Button variant="outline" onClick={() => setStep((current) => current + 1)}>
+				Next
+			</Button>
+			<div className="min-h-0 flex-1">
+				<ConversationTimeline
+					{...props}
+					state={ready({
+						entries: partial === undefined ? [...entries, STORED_PARAGRAPHS] : entries,
+						turns,
+					})}
+				/>
+			</div>
+		</div>
+	);
+}
+
+export const AnnouncesCompletedParagraphs: Story = {
+	render: (args) => <ParagraphStream {...args} />,
+	decorators: SHORT_VIEW,
+	play: async ({ canvas, userEvent }) => {
+		const next = canvas.getByRole("button", { name: "Next" });
+		const region = canvas.getByRole("status", { name: "Answer from Hephaestus" });
+		await expect(region).toBeEmptyDOMElement();
+		await userEvent.tab();
+		await expect(next).toHaveFocus();
+		await userEvent.keyboard("{Enter}");
+		await expect(region).toHaveTextContent("Read the first guide.");
+		await expect(region.children).toHaveLength(1);
+		await userEvent.keyboard("{Enter}");
+		await expect(region).toHaveTextContent("first line last line");
+		await expect(region.children).toHaveLength(1);
+		await userEvent.keyboard("{Enter}");
+		await userEvent.keyboard("{Enter}");
+		await expect(region).not.toHaveTextContent("Read the first guide.");
+		await userEvent.keyboard("{Enter}");
+		await expect(region.children).toHaveLength(1);
+		await expect(region).toHaveTextContent("Final paragraph.");
+		await waitFor(async () => expect(region).toBeEmptyDOMElement(), { timeout: 2000 });
+		await expect(canvas.getByRole("log")).toHaveAttribute("aria-live", "off");
+	},
+};
+
 /** Hephaestus's answer as it streams: three more words at each press of Next. */
 function Streams(props: ConversationTimelineProps) {
 	const [words, setWords] = useState(1);

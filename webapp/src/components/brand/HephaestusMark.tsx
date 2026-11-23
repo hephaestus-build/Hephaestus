@@ -8,6 +8,7 @@ import { hasText } from "@/lib/text";
 export const ASK_HEPHAESTUS_LABEL = "Ask Hephaestus";
 
 interface HephaestusMarkProps {
+	state?: "rest" | "working" | "quiet";
 	size?: number;
 	strokeWidth?: number;
 	pad?: number;
@@ -16,6 +17,7 @@ interface HephaestusMarkProps {
 }
 
 export function HephaestusMark({
+	state = "rest",
 	size = 16,
 	strokeWidth = 2,
 	pad = 2,
@@ -25,6 +27,7 @@ export function HephaestusMark({
 	return (
 		<svg
 			className={cn(styles.icon, className)}
+			data-state={state}
 			style={{ "--mark-size": `${size}px` }}
 			viewBox={`-${pad} -${pad} ${24 + pad * 2} ${24 + pad * 2}`}
 			fill="none"
@@ -45,15 +48,19 @@ export function HephaestusMark({
 				fill="currentColor"
 			/>
 			<line x1="12" y1="7.2" x2="12" y2="3.6" />
-			<circle cx="12" cy="2.8" r="1" fill="currentColor" />
+			<circle
+				className={styles.antenna}
+				cx="12"
+				cy="2.8"
+				r={state === "working" ? 1.6 : 1}
+				fill="currentColor"
+			/>
 			<rect x="4" y="8" width="16" height="12" rx="3" />
 			<path d="M2 14h2" />
 			<path d="M20 14h2" />
 			<path d="M8.6 13.5h0.8" />
 			<path d="M14.6 13.5h0.8" />
-			<path d="M9.7 16.8c1.1 1.1 3.5 1.1 4.6 0" />
-			<path className="opacity-25 dark:opacity-20" d="M6.8 15.2h0.6" />
-			<path className="opacity-25 dark:opacity-20" d="M16.6 15.2h0.6" />
+			<path d="M9.7 16.8h4.6" />
 		</svg>
 	);
 }

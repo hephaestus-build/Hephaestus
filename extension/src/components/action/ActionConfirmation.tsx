@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { itemKindNoun } from "@/lib/item-kinds";
 import { Button } from "~/components/common/Button";
+import { conversationMessage } from "~/lib/conversation-copy";
 import type { ActionOutcome, ActionPreview } from "~/shared/review-actions";
 
 export type ActionConfirmationState =
@@ -32,17 +33,24 @@ function WorkCard({ preview }: { preview: ActionPreview }) {
 		<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 rounded-lg border border-border bg-card p-3.5 text-sm">
 			<dt className="text-muted-foreground">Work</dt>
 			<dd className="min-w-0 break-words">
-				<span className="font-medium">
+				<bdi className="font-medium">
 					{item.container == null ? "" : `${item.container} `}
 					{item.label}
-				</span>
+				</bdi>
 				{item.title == null ? null : (
-					<span className="block text-muted-foreground">{item.title}</span>
+					<span className="block text-muted-foreground" dir="auto">
+						{item.title}
+					</span>
 				)}
 			</dd>
 			<dt className="text-muted-foreground">Workspace</dt>
 			<dd className="min-w-0 break-words">
-				{workspace.displayName} <span className="text-muted-foreground">on {instanceHost}</span>
+				<span dir="auto">
+					{conversationMessage("workspaceOnHost", {
+						workspace: workspace.displayName,
+						host: instanceHost,
+					})}
+				</span>
 			</dd>
 		</dl>
 	);

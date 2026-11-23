@@ -116,7 +116,7 @@ function MessageBody({ message, streaming }: { message: ShownMessage; streaming:
 	}
 	return (
 		<Bubble variant="ghost">
-			<BubbleContent className={UNTRUSTED_MARKDOWN_PROSE}>
+			<BubbleContent className={UNTRUSTED_MARKDOWN_PROSE} dir="auto">
 				{streaming ? (
 					<UntrustedMarkdown streaming headingLevel={HEADING_LEVEL}>
 						{message.text}
@@ -137,7 +137,7 @@ function LinkBody({ link, workspaceSlug }: { link: ConversationLink; workspaceSl
 	return (
 		<>
 			<Bubble variant="ghost">
-				<BubbleContent className={UNTRUSTED_MARKDOWN_PROSE}>
+				<BubbleContent className={UNTRUSTED_MARKDOWN_PROSE} dir="auto">
 					<UntrustedMarkdown headingLevel={HEADING_LEVEL}>{link.text}</UntrustedMarkdown>
 				</BubbleContent>
 			</Bubble>
@@ -203,7 +203,9 @@ export function ConversationMessage({
 					<span className="sr-only">{messageSubject(message, developer)}</span>
 				) : (
 					<MessageHeader className="gap-2">
-						<span className="text-sm font-semibold text-foreground">{author.name}</span>
+						<span className="text-sm font-semibold text-foreground">
+							<bdi>{author.name}</bdi>
+						</span>
 						{message.kind === "ANSWER" && <Badge variant="muted">AI</Badge>}
 						<time dateTime={message.createdAt.toISOString()}>{formatTime(message.createdAt)}</time>
 						<SurfaceMarker surface={message.surface} />
