@@ -10,6 +10,7 @@
 
 - ADR 0122 (proposed in #4862): the withheld copy on the work.
 - ADR 0134 (proposed in #4863): the order at each boundary.
+- ADR 0142 (proposed in #4868): the agreement floor for unprompted guidance.
 - ADR 0149 (proposed in #4868): delivery experiments.
 
 **Builds on:** ADR 0131 (proposed in #4862, messages from Hephaestus), [ADR 0133](0133-a-check-in-is-an-agreed-contact-with-a-scope.md) (agreed contact), [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) (push)
@@ -75,6 +76,7 @@ Option 6.
 6. **In the app, Hephaestus is present.** A result is available at once on its item card. The start policy of ADR 0120 decides in code whether an event starts a turn.
 7. **An unprompted message needs a reason in code.** Else no message is written.
    - The reasons are a new admitted problem, a material change on an agreed goal, or an awaited result.
+   - A new admitted problem counts only when its practice reaches the agreement floor of ADR 0142 decision 13.
    - A further reason is a withheld copy on the work with a Critical or Major problem. ADR 0122 (proposed in #4862) decision 8 names the withholding reasons.
    - ADR 0122 always records the withholding as a `DELIVERY_WITHHELD` inbox event, except for a silent draw. Only the message is contact, so a pause or a mute stops it.
    - An unprompted message never cites a result that a delivery experiment holds. ADR 0149 (proposed in #4868) decision 8 owns the hold.
@@ -100,7 +102,7 @@ Option 6.
 16. **Silence is never read as dislike.** No rule lowers contact because messages went unanswered. [ADR 0133](0133-a-check-in-is-an-agreed-contact-with-a-scope.md) owns the one question that Hephaestus asks instead.
 17. **The policy runs at dispatch, at the effect commit and again at send.** A pause or a Not now stops a queued contact. A notification inside quiet hours waits. At send, a notification whose message the person already saw is not sent.
     ADR 0134 (proposed in #4863) owns the order at each boundary. It also decides that a contact change is not an authority change.
-18. **Every decision to reach a person is recorded.** Code writes one `decision_point` row at each such decision, before any model runs.
+18. **Every decision to reach a person is recorded as a delivery decision.** Code writes one `decision_point` row at each such decision, before any model runs.
     - A copy on the work: at the seal, in its transaction.
     - An unprompted message: at the start policy, when the inbox item is inserted.
     - An agreed check-in, a requested result and a stepping-back message: recorded too.
@@ -132,7 +134,7 @@ Option 6.
 - Bad: the notice-line fetch is one more request on each push. A failed fetch shows only the fixed text.
 - Bad: the reason check can miss an update that the person would want. "More like this" tunes it only within its three reasons.
 - Bad: Hephaestus ignores device Focus settings it cannot read. A device rule can still hide what the server sends.
-- Bad: one decision record for each decision to contact, kept 400 days.
+- Bad: one delivery decision row for each decision to reach a person, kept 400 days.
 
 ## Confirmation
 
