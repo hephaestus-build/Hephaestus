@@ -146,20 +146,11 @@ jobs:
       # request is a release candidate or needs head images. The merge group builds every other
       # changed image before it lands. ci-cd.mdx § The `ci:images` label.
       images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.images == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.images != 'false' || steps.filter.outputs.kubernetes == 'true' || steps.filter.outputs.chart-upgrade == 'true' || steps.filter.outputs.sandbox-qualification == 'true')))) }}
-      # A skipped duplicate would skip the image builds the release evidence preflight needs, and
-      # the gate refuses to pass the Version PR without one.
-      # A re-run after `ci:full` was added repeats a tree whose fast tier already passed, so only a
-      # run without the opt-in may be skipped as a duplicate.
-      # A pull request marked ready repeats the draft's tree but builds what the draft skipped.
-      # A run with the `ci:images` label repeats a tree whose earlier run may have built no image.
-      # A re-run was asked for, by a person or after a retarget, so it is never a duplicate: its tree's
-      # earlier run may have run only the light tier.
-      duplicate: ${{ github.run_attempt == 1 && steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.images == 'false' && github.event.action != 'ready_for_review' }}
       # A head that only moved `next/` migrations to later names after the last green head of this pull
       # request (scripts/detect-rename-only.ts). It runs Security, which holds the order guard, the server
-      # package and the Generated API replay; every other leg skips as for a duplicate. ci-cd.mdx § Rename-only heads.
+      # package and the Generated API replay; every other leg skips. ci-cd.mdx § Rename-only heads.
       rename-only: ${{ steps.rename_only.outputs.rename-only == 'true' && steps.opt_in.outputs.light == 'false' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.images == 'false' && steps.release_candidate.outputs.release-candidate != 'true' }}
-      should_skip: ${{ (github.run_attempt == 1 && steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.images == 'false' && github.event.action != 'ready_for_review') || (steps.rename_only.outputs.rename-only == 'true' && steps.opt_in.outputs.light == 'false' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.images == 'false' && steps.release_candidate.outputs.release-candidate != 'true') }}
+      should_skip: ${{ steps.rename_only.outputs.rename-only == 'true' && steps.opt_in.outputs.light == 'false' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.images == 'false' && steps.release_candidate.outputs.release-candidate != 'true' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -240,10 +231,6 @@ jobs:
           light=false
           if [ "$base" != "$DEFAULT_BRANCH" ] && [ "$full" != true ] && [ "$RELEASE_CANDIDATE" != true ]; then light=true; fi
           echo "light=$light" >> "$GITHUB_OUTPUT"
-
-      - id: skip_check
-        if: github.event_name == 'pull_request' && steps.release_candidate.outputs.release-candidate != 'true'
-        uses: fkirc/skip-duplicate-actions@b974a9395958c231af965b70070979a577efa578 # v5.3.2
 
       # A queue merge can push the version commit with later commits on top, so the version is read
       # at the tip this push replaced. Without that tip the push is validated as a bump.
@@ -993,8 +980,7 @@ jobs:
     uses: ./.github/workflows/ci-security-scan.yml
     needs: [detect-changes]
     if: |
-      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
-      needs.detect-changes.outputs.duplicate != 'true' && (
+      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (
         needs.detect-changes.outputs.any-code == 'true' ||
         needs.detect-changes.outputs.security-config == 'true' ||
         needs.detect-changes.outputs.release-images == 'true' ||
@@ -1006,7 +992,6 @@ jobs:
       packages: read
     with:
       merge_group_base: ${{ needs.detect-changes.outputs.merge-group-base }}
-      should_skip: ${{ needs.detect-changes.outputs.duplicate }}
 
   # Image policy has one advisory set per attempt. Failed-job reruns retain the producer's
   # artifact ID; rerunning every job creates a new snapshot. Java identification is separate.
@@ -1156,7 +1141,7 @@ jobs:
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.Security.result == 'success' || needs.Security.result == 'skipped') &&
       needs.detect-changes.outputs.light-tier != 'true' &&
-      needs.detect-changes.outputs.duplicate != 'true' && needs.detect-changes.outputs.queue-images-complete != 'true' && (
+      needs.detect-changes.outputs.queue-images-complete != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.head-images == 'true' ||
         needs.detect-changes.outputs.all-images == 'true' ||
@@ -1253,7 +1238,6 @@ jobs:
       checks: write
       packages: read
     with:
-      should_skip: ${{ needs.detect-changes.outputs.duplicate }}
       postgres_base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
       contracts_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.server == 'true' || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
@@ -1806,7 +1790,7 @@ jobs:
 
           # A skipped release check is a missing verdict for a change to what it guards, once this run
           # published its images. A run that publishes none (a draft, a light layer, a fork, a
-          # duplicate) skips both on purpose.
+          # rename-only head) skips both on purpose.
           if [[ "${{ needs.Docker.result == 'success' && needs.detect-changes.outputs.publishable == 'true' && needs.detect-changes.outputs.should_skip != 'true' }}" == true ]]; then
             if [[ "${{ needs.detect-changes.outputs.chart-upgrade == 'true' && needs.Chart-upgrade.result != 'success' }}" == true ]]; then
               echo "This change touches the chart or its upgrade drill and requires a successful chart upgrade; it was '${{ needs.Chart-upgrade.result }}'."

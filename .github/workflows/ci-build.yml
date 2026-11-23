@@ -3,11 +3,6 @@ name: CI / Build
 on:
   workflow_call:
     inputs:
-      should_skip:
-        description: "Whether to skip the workflow"
-        required: false
-        type: string
-        default: "false"
       contracts_changed:
         description: "Whether the API or database contracts or their PostgreSQL image changed"
         required: false
@@ -41,7 +36,7 @@ env:
 jobs:
   server-api:
     name: Generated API
-    if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true'
+    if: inputs.contracts_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -170,7 +165,7 @@ jobs:
 
   server-database:
     name: Database migrations
-    if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true' && (inputs.queue_tier == 'true' || inputs.migrations_changed == 'true')
+    if: inputs.contracts_changed == 'true' && (inputs.queue_tier == 'true' || inputs.migrations_changed == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -243,7 +238,7 @@ jobs:
 
   postgres-drill:
     name: PostgreSQL drills
-    if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true' && (inputs.queue_tier == 'true' || inputs.migrations_changed == 'true')
+    if: inputs.contracts_changed == 'true' && (inputs.queue_tier == 'true' || inputs.migrations_changed == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
