@@ -32,21 +32,9 @@ if (repoNodeVersion !== nodeVersion) {
 		`package.json#devEngines.runtime pins Node ${String(repoNodeVersion)} but the agent image pins ${nodeVersion}.`,
 	);
 }
-const packagePiVersion = devDependencies["@earendil-works/pi-coding-agent"];
-if (packagePiVersion !== piVersion) {
-	problems.push(
-		`package.json pins Pi ${String(packagePiVersion)} but the agent image pins ${piVersion}.`,
-	);
-}
 const imageDependencies = isRecord(imagePackageJson.dependencies)
 	? imagePackageJson.dependencies
 	: {};
-if (imageDependencies["@earendil-works/pi-coding-agent"] !== piVersion) {
-	problems.push(
-		`docker/agents/pi/package.json pins Pi ${String(imageDependencies["@earendil-works/pi-coding-agent"])} but the agent image pins ${piVersion}.`,
-	);
-}
-
 const imageLock = asRecord(
 	parse(readFileSync("docker/agents/pi/pnpm-lock.yaml", "utf8")),
 	"docker/agents/pi/pnpm-lock.yaml",
@@ -54,17 +42,28 @@ const imageLock = asRecord(
 const lockImporters = isRecord(imageLock.importers) ? imageLock.importers : {};
 const lockRoot = isRecord(lockImporters["."]) ? lockImporters["."] : {};
 const lockDependencies = isRecord(lockRoot.dependencies) ? lockRoot.dependencies : {};
-const lockedPi = isRecord(lockDependencies["@earendil-works/pi-coding-agent"])
-	? lockDependencies["@earendil-works/pi-coding-agent"]
-	: {};
-const lockedVersion = String(lockedPi.version);
-if (
-	lockedPi.specifier !== piVersion ||
-	(lockedVersion !== piVersion && !lockedVersion.startsWith(`${piVersion}(`))
-) {
-	problems.push(
-		`docker/agents/pi/pnpm-lock.yaml does not resolve the image's Pi ${piVersion} dependency.`,
-	);
+// The image's Pi version names both SDK packages: the coding agent, and the provider layer that the owned patch changes.
+for (const name of ["@earendil-works/pi-coding-agent", "@earendil-works/pi-ai"]) {
+	if (devDependencies[name] !== piVersion) {
+		problems.push(
+			`package.json pins ${name} ${String(devDependencies[name])} but the agent image pins Pi ${piVersion}.`,
+		);
+	}
+	if (imageDependencies[name] !== piVersion) {
+		problems.push(
+			`docker/agents/pi/package.json pins ${name} ${String(imageDependencies[name])} but the agent image pins Pi ${piVersion}.`,
+		);
+	}
+	const locked = isRecord(lockDependencies[name]) ? lockDependencies[name] : {};
+	const lockedVersion = String(locked.version);
+	if (
+		locked.specifier !== piVersion ||
+		(lockedVersion !== piVersion && !lockedVersion.startsWith(`${piVersion}(`))
+	) {
+		problems.push(
+			`docker/agents/pi/pnpm-lock.yaml does not resolve the image's ${name} ${piVersion} dependency.`,
+		);
+	}
 }
 
 const nodeBase =
