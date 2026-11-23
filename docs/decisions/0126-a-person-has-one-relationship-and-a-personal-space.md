@@ -4,7 +4,7 @@
 **Date:** 2026-11-23
 **Authors:** Felix T.J. Dietrich
 
-**Builds on:** [ADR 0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) (SQL tenancy), [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) (one account), [ADR 0124](0124-hephaestus-gives-practice-feedback-with-a-conversation-and-practices-are-the-unit.md)
+**Builds on:** [ADR 0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) (SQL tenancy), [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) (one account), ADR 0124 (proposed in #4866)
 
 **Relates to:** [ADR 0129](0129-learning-travels-as-the-persons-own-words-to-authorized-workspaces.md) (what travels into the personal space), [ADR 0134](0134-the-authorization-recheck-runs-at-three-boundaries-with-two-authorization-generations.md) (the person's authorization generation)
 

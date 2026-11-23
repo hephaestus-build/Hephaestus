@@ -6,11 +6,11 @@
 
 **Supersedes:** [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md)
 
-**Amends:** [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rules 19 and 21. [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16. [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) decision 3. [ADR 0047](0047-the-practice-profile-has-one-reader.md), its View as user exception. [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), its smallest count.
+**Amends:** [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rules 19 and 21. [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16. [ADR 0047](0047-the-practice-profile-has-one-reader.md), its View as user exception. [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), its smallest count.
 
-**Builds on:** [ADR 0124](0124-hephaestus-gives-practice-feedback-with-a-conversation-and-practices-are-the-unit.md), [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md)
+**Builds on:** ADR 0124 (proposed in #4866), [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md)
 
-**Relates to:** ADR 0141 and ADR 0149 (proposed in #4867), research datasets and delivery experiments
+**Relates to:** ADR 0141 and ADR 0149 (proposed in #4868), research datasets and delivery experiments
 
 ## Context
 
@@ -75,7 +75,7 @@ Option 4.
 12. **Feedback on the work names its developer,** as the work itself does. The admin guide tells the operator that this feedback is public to the employer.
 13. **Research is the one carve-out.** Sequences for each person exist only in research datasets.
     - Each person in a dataset allowed research use of their data.
-    - A dataset is released only to the named research organization, under ADR 0141 (proposed in #4867).
+    - A dataset is released only to the named research organization, under ADR 0141 (proposed in #4868).
     - No staff role and no product surface sees them.
     - Uptake of Hephaestus is a research outcome, not a product goal.
 14. **The author of a study is not its operator.**
@@ -88,7 +88,7 @@ Option 4.
 - [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md) is superseded. Decision 6 keeps its mechanism and raises the threshold. Its open question gets the answer of decision 3: admins see work items only inside a task.
 - [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rule 19 changes. Admins no longer read the observations of the review and delivery pages, except inside a task. Rule 21 goes, because no read-only user view exists.
 - [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16 keeps "Nobody acts as another account". The read-only user views go.
-- [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) decision 3 changes. Only the owner reads the conversation. The instance admin's read through View as user goes.
+- ADR 0131 (proposed in #4862) supersedes ADR 0082. Its decision 5 keeps the conversation for its owner only, without View as user.
 - [ADR 0047](0047-the-practice-profile-has-one-reader.md) loses its View as user exception. The Practice profile has one reader with no exception.
 
 ## Consequences

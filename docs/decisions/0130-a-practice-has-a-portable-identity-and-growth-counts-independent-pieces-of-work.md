@@ -6,7 +6,7 @@
 
 **Amends:** [ADR 0056](0056-one-practice-model-for-items-and-scans.md) (a practice version gains an identity and a comparability class)
 
-**Builds on:** [ADR 0124](0124-hephaestus-gives-practice-feedback-with-a-conversation-and-practices-are-the-unit.md) (practices are the unit), [ADR 0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) (four outcomes), [ADR 0118](0118-a-workspace-keeps-its-practices-in-one-repository-and-a-trial-reviews-a-draft-practice-without-an-observation.md) (a workspace keeps its practices in one repository)
+**Builds on:** ADR 0124 (proposed in #4866, practices are the unit), [ADR 0085](0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md) (four outcomes), [ADR 0118](0118-a-workspace-keeps-its-practices-in-one-repository-and-a-trial-reviews-a-draft-practice-without-an-observation.md) (a workspace keeps its practices in one repository)
 
 **Relates to:** [ADR 0129](0129-learning-travels-as-the-persons-own-words-to-authorized-workspaces.md) (closed fields travel)
 
