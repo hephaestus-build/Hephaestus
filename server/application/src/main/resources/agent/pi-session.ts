@@ -5,6 +5,7 @@
 // theme or extension, it reads no settings file, and the system prompt is the descriptor's alone. Only this file calls
 // `createAgentSession` (pi-session.spec.ts).
 
+import type { Api, Model } from "@earendil-works/pi-ai";
 import {
 	createAgentSession,
 	type CreateAgentSessionResult,
@@ -26,7 +27,7 @@ type SessionOptions = NonNullable<Parameters<typeof createAgentSession>[0]>;
 /** What one session of a run is built from. Its model runtime holds the run's claim, so no other run shares it. */
 export interface RunDescriptor {
 	modelRuntime: ModelRuntime;
-	model: NonNullable<SessionOptions["model"]>;
+	model: Model<Api>;
 	thinkingLevel: SessionOptions["thinkingLevel"];
 	systemPrompt: string;
 	/** The tools the session enables, by name: the built-in tools it keeps and its own tools. */

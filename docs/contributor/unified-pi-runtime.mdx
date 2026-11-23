@@ -470,7 +470,8 @@ Each case drives a session with a scripted model and checks one of these promise
 - The loop retries a transient provider failure. A failure that outlasts the retries ends the run, and the retry events say so.
 - An abort ends the model call and settles the run as aborted.
 
-The cases run on Pi through `openRunSession`.
+The cases run on Pi through `openRunSession` and on a minimal second loop (`runtime-second-loop.ts`).
+The second loop keeps Pi's provider layer and session log, and replaces Pi's agent session.
 For each case, a Pi build that breaks its promise must fail it, and the spec checks that it does.
 A broken build replaces the system prompt, drops a hook's result, moves a hook, reorders or strips events, or disables retry and abort.
 
@@ -479,6 +480,8 @@ These parts are outside the contract:
 - Compaction.
 - The provider hooks. A scripted model builds no provider payload.
 - The session APIs that only the review runner uses, such as steering, queues and compaction control.
+
+An exit from Pi would still have to replace them.
 
 A Pi upgrade passes the contract.
 When a run kind starts to rely on another hook or event, add a case for it.
