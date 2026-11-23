@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -195,6 +196,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
 
     /** Columns whose name matches the person heuristic but that hold no person. */
     private static final Map<String, String> NOT_A_PERSON = Map.of(
+            "git_commit.on_behalf_of_login",
+            "The login of the organization on whose behalf a web commit was made",
             "llm_model.operated_by",
             "Who operates the model: the own organisation or the provider",
             "workspace_llm_model.operated_by",
@@ -287,6 +290,76 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         assertThat(declared)
                 .as("every personal table must have a full contributor, not an operator path")
                 .containsAll(required);
+    }
+
+    /**
+     * A person column of a catalogued table needs an erasure action: its store's catalog package names it, or
+     * {@link #PERSON_COLUMNS_OUTSIDE_THE_CATALOG} states what erases or keeps it. A catalog that selects rows by their owner's
+     * {@code account_id} would otherwise leave a second person's reference, such as a reviewer's, in place.
+     */
+    @Test
+    void everyPersonColumnOfACataloguedTableHasAnErasureAction() throws IOException {
+        assertThat(unenrolledColumns(personColumns(), catalogSources()))
+                .as("person columns that no store's catalog names; erase or redact them there, or state the retention")
+                .isEmpty();
+        assertThat(PERSON_COLUMNS_OUTSIDE_THE_CATALOG.keySet())
+                .as("PERSON_COLUMNS_OUTSIDE_THE_CATALOG entries that are no longer a person column")
+                .isSubsetOf(personColumns());
+    }
+
+    @Test
+    void aNewPersonColumnInACataloguedTableFailsUntilItsCatalogNamesIt() {
+        var catalogs = Map.of("conversation", "UPDATE conversation SET account_id = NULL WHERE account_id = :account");
+        assertThat(unenrolledColumns(Set.of("conversation.account_id", "conversation.reviewer_account_id"), catalogs))
+                .containsExactly("conversation.reviewer_account_id");
+        assertThat(unenrolledColumns(
+                        Set.of("conversation.reviewer_account_id"),
+                        Map.of("conversation", "SET reviewer_account_id = NULL")))
+                .isEmpty();
+    }
+
+    /** Person columns of catalogued tables that something other than their catalog erases, or that erasure keeps. */
+    private static final Map<String, String> PERSON_COLUMNS_OUTSIDE_THE_CATALOG = Map.of(
+            "auth_event.identity_id",
+            "Erasure deletes the identity, and sfk_auth_event_identity sets this column NULL",
+            "product_feedback_filing.publish_requested_by",
+            "A Hephaestus maintainer's GitHub login on another person's report. It goes when that report is erased");
+
+    private static List<String> unenrolledColumns(Set<String> personColumns, Map<String, String> catalogs) {
+        return personColumns.stream()
+                .filter(column -> {
+                    String table = column.substring(0, column.indexOf('.'));
+                    String name = column.substring(column.indexOf('.') + 1);
+                    String catalog = catalogs.get(table);
+                    return catalog != null
+                            && !Pattern.compile("\\b" + name + "\\b")
+                                    .matcher(catalog)
+                                    .find()
+                            && !PERSON_COLUMNS_OUTSIDE_THE_CATALOG.containsKey(column)
+                            && !NOT_A_PERSON.containsKey(column);
+                })
+                .sorted()
+                .toList();
+    }
+
+    /**
+     * The sources of each store's catalog package, by store: the class that declares {@code @PersonDataStores} and the
+     * contributors beside it.
+     */
+    private static Map<String, String> catalogSources() throws IOException {
+        Map<String, String> sources = new HashMap<>();
+        for (Path source : productionSources()) {
+            if (!Files.readString(source).contains("@PersonDataStores")) continue;
+            PersonDataStores declaration = sourceClass(source).getDeclaredAnnotation(PersonDataStores.class);
+            if (declaration == null) continue;
+            var text = new StringBuilder();
+            try (var siblings = Files.list(source.getParent())) {
+                for (Path sibling : siblings.filter(path -> path.toString().endsWith(".java"))
+                        .toList()) text.append(Files.readString(sibling));
+            }
+            for (String store : declaration.value()) sources.merge(store, text.toString(), String::concat);
+        }
+        return sources;
     }
 
     @Test

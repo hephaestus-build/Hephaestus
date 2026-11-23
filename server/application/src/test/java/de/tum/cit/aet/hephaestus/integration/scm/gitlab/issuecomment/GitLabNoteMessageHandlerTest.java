@@ -345,8 +345,6 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
                             IntegrationKind.GITLAB,
                             1L,
                             88L,
-                            " /Hephaestus Review \n",
-                            "ab12cde",
                             1L,
                             90001L,
                             4406174L,

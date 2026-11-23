@@ -81,12 +81,19 @@ The test records each one in `MIXED_SCOPE_TABLES`, with its reason, and requires
 
 ## Foreign keys across modules
 
-A table belongs to the module of its entity.
+A table belongs to the module of its entity or association.
+A table without either gets its owner in `TableOwnershipArchTest.NATIVE_TABLES`.
 A foreign key to another module's table follows a module edge: the referencing module declares the referenced module in its `@ApplicationModule`.
 It references a plain id column with no JPA association, so name it `sfk_<table>_<column>` (`server/AGENTS.md` § Schema changes).
+
 A reference against the edge is a plain id with no foreign key.
 The higher module then writes both rows in one transaction through the lower module's port.
-`ForeignKeyDirectionDatabaseTest` applies the rule to every foreign key that touches a mentoring module ([System design § Mentoring modules](./system-design#mentoring-modules)).
+`ForeignKeyDirectionDatabaseTest` fails on a table without an owner, and on a foreign key against an edge.
+Main's earlier foreign keys against an edge are listed in `legacy-foreign-keys.txt`. A key that touches a mentoring module has no exception ([System design § Mentoring modules](./system-design#mentoring-modules)).
+
+A column that references a person needs an erasure action.
+The catalog of its table's person-data store names it, or `PersonalDataMapArchTest.KEPT_PERSON_COLUMNS` states why erasure keeps it.
+`PersonalDataMapArchTest` finds these columns in the migrated schema. The [personal-data map](../admin/dsms/personal-data-map) owns the stores.
 
 ## Native objects the JPA diff does not cover
 
@@ -371,15 +378,16 @@ A seed is two files:
 - `<name>.seed.sql` writes the legacy rows on the previous release's schema.
 - `<name>.expect.sql` names the expected disposition of each seeded row. It raises an exception when a row does not have it.
 
-The format check (`scripts/cutover-seeds.test.ts`) refuses a seed with no expected disposition, and an expected disposition that cannot raise an exception.
+The format check (`scripts/cutover-seeds.test.ts`) refuses a seed with no expected disposition, and an expected disposition that cannot raise an exception. A comment does not count.
 `readCutoverSeeds` in `scripts/lib/cutover-seeds.ts` reads the seeds and applies the same check.
 
 ### Stored transitions
 
 A change that adds stored states registers each state change that the server makes in `StoredTransitionQualificationTest.TRANSITIONS`.
-A transition arranges a row in its source state, then runs the server's update to its target state.
+A transition arranges a row in its source state, runs the server's update to its target state, and queries whether the arranged row reached it.
 The test runs each one on the migrated schema and checks deferred constraints at once.
 It fails when a check, a trigger or a key refuses a registered transition.
+It also fails when the update changes no row, or when the row misses its target state.
 
 ### Previous release on the new schema
 

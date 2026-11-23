@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.activity;
 
+import de.tum.cit.aet.hephaestus.core.event.ContentFree;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 
@@ -12,4 +13,4 @@ public record ActivityFact(
         @Nullable Long repositoryId,
         ActivityTargetType targetType,
         Long targetId,
-        @Nullable String sourceKey) {}
+        @ContentFree @Nullable String sourceKey) {}

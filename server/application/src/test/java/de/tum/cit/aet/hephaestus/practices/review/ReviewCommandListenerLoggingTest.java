@@ -37,8 +37,7 @@ class ReviewCommandListenerLoggingTest {
         appender.start();
         logger.addAppender(appender);
         try {
-            listener.on(new BotCommandReceivedEvent(
-                    IntegrationKind.GITHUB, 11L, 22L, "/hephaestus review", "someone", 1L, 33L, 44L, null));
+            listener.on(new BotCommandReceivedEvent(IntegrationKind.GITHUB, 11L, 22L, 1L, 33L, 44L, null));
         } finally {
             logger.detachAppender(appender);
             appender.stop();

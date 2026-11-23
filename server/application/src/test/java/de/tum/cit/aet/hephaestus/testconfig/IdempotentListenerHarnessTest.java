@@ -24,7 +24,8 @@ class IdempotentListenerHarnessTest {
     void shouldPassAListenerThatKeepsASetOfDeliveredEvents() {
         Set<UUID> seen = new HashSet<>();
         var harness = new Fixture(seen::add, events -> seen.containsAll(List.of(events.first(), events.second())));
-        assertThatCode(harness::shouldReachTheSameStateWhenOneEventArrivesTwice).doesNotThrowAnyException();
+        assertThatCode(harness::shouldReachTheSameStateWhenEachEventArrivesTwice)
+                .doesNotThrowAnyException();
         assertThatCode(harness::shouldReachTheSameStateWhenTwoEventsArriveInSwappedOrder)
                 .doesNotThrowAnyException();
     }
@@ -34,8 +35,20 @@ class IdempotentListenerHarnessTest {
         Map<UUID, Integer> deliveries = new HashMap<>();
         var harness = new Fixture(
                 event -> deliveries.merge(event, 1, Integer::sum),
-                events -> List.of(deliveries.get(events.first()), deliveries.get(events.second())));
-        assertThatThrownBy(harness::shouldReachTheSameStateWhenOneEventArrivesTwice)
+                events -> List.of(
+                        deliveries.getOrDefault(events.first(), 0), deliveries.getOrDefault(events.second(), 0)));
+        assertThatThrownBy(harness::shouldReachTheSameStateWhenEachEventArrivesTwice)
+                .isInstanceOf(AssertionError.class);
+    }
+
+    @Test
+    void shouldFailAListenerThatCountsTheDeliveriesOfItsSecondEvent() {
+        // Delivering only the first event twice would let this listener pass: its first event shows no count.
+        Map<UUID, Integer> deliveries = new HashMap<>();
+        var harness = new Fixture(
+                event -> deliveries.merge(event, 1, Integer::sum),
+                events -> List.of(deliveries.containsKey(events.first()), deliveries.getOrDefault(events.second(), 0)));
+        assertThatThrownBy(harness::shouldReachTheSameStateWhenEachEventArrivesTwice)
                 .isInstanceOf(AssertionError.class);
     }
 

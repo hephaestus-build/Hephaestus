@@ -3,8 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * The conversion seeds that the release upgrade drill loads into a database of the previous release.
- * `database-migration.mdx` § Conversion seeds owns the format.
+ * The conversion seeds: legacy rows for a database of the previous release, each with the assertion of its expected
+ * disposition after the upgrade. `database-migration.mdx` § Conversion seeds owns the format.
  */
 export const CUTOVER_SEEDS = fileURLToPath(
 	new URL("../../server/application/src/test/resources/db/cutover-seeds/", import.meta.url),
@@ -20,8 +20,9 @@ export interface CutoverSeed {
 
 const SEED = ".seed.sql";
 const EXPECT = ".expect.sql";
-// A PL/pgSQL assertion. A bare SELECT would pass whatever it returns.
+// A PL/pgSQL assertion that can fail. A bare SELECT would pass whatever it returns.
 const DISPOSITION = /\bRAISE\s+EXCEPTION\b/iu;
+const COMMENTS = /--[^\n]*|\/\*[\s\S]*?\*\//gu;
 
 /** Reads every seed of a directory, and refuses a seed that names no expected disposition. */
 export function readCutoverSeeds(directory = CUTOVER_SEEDS): CutoverSeed[] {
@@ -46,7 +47,7 @@ export function readCutoverSeeds(directory = CUTOVER_SEEDS): CutoverSeed[] {
 			continue;
 		}
 		const expect = read(EXPECT);
-		if (!DISPOSITION.test(expect)) {
+		if (!DISPOSITION.test(expect.replaceAll(COMMENTS, ""))) {
 			problems.push(`${name}${EXPECT} raises no exception, so it cannot fail a wrong disposition`);
 			continue;
 		}

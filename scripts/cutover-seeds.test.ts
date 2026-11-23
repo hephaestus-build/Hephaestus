@@ -52,6 +52,18 @@ await test("an expected disposition that cannot fail fails the format check", ()
 	);
 });
 
+await test("an assertion that only a comment names fails the format check", () => {
+	withSeeds(
+		{
+			"d10.seed.sql": "INSERT INTO legacy VALUES (1);",
+			"d10.expect.sql": "-- RAISE EXCEPTION when a row is left\n/* RAISE EXCEPTION */ SELECT 1;",
+		},
+		(directory) => {
+			assert.throws(() => readCutoverSeeds(directory), /raises no exception/u);
+		},
+	);
+});
+
 await test("an expected disposition without its seed fails the format check", () => {
 	withSeeds({ "d10.expect.sql": ASSERTION, "notes.txt": "" }, (directory) => {
 		assert.throws(

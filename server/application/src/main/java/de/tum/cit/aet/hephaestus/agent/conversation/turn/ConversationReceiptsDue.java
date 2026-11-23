@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.conversation.turn;
 
+import de.tum.cit.aet.hephaestus.core.event.ContentFree;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationCopyOutcome;
 import java.time.Instant;
 import java.util.Set;
@@ -26,8 +27,8 @@ public record ConversationReceiptsDue(
         @Nullable Set<UUID> shown,
         Set<UUID> unconfirmed,
         ConversationCopyOutcome otherwise,
-        String unconfirmedReason,
-        String failedReason) {
+        @ContentFree String unconfirmedReason,
+        @ContentFree String failedReason) {
 
     public ConversationReceiptsDue {
         shown = shown == null ? null : Set.copyOf(shown);

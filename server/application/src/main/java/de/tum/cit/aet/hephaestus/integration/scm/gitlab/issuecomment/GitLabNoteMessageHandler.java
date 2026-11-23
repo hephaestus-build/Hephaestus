@@ -284,8 +284,6 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
                 IntegrationKind.GITLAB,
                 scopeId,
                 item.itemId(),
-                attrs.note(),
-                username,
                 providerId,
                 user.id().longValue(),
                 attrs.id(),

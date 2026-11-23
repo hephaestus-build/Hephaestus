@@ -36,8 +36,12 @@ final class MentoringModules {
         return contains(source) || contains(target);
     }
 
-    /** Whether {@code source} may depend on {@code target} by the layer order. Only a mentoring target is constrained. */
+    /**
+     * Whether {@code source} may depend on {@code target} by the layer order. A mentoring target is constrained, and a
+     * mentoring module never depends on the runtime that hosts its runs.
+     */
     static boolean mayDependOn(String source, String target) {
+        if (contains(source) && ABOVE.contains(target)) return false;
         if (!contains(target) || source.equals(target) || ABOVE.contains(source)) return true;
         return contains(source) && LAYERS.indexOf(source) > LAYERS.indexOf(target);
     }

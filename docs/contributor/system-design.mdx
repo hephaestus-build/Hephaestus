@@ -181,31 +181,50 @@ The architecture tests enforce the core, domain and provider boundary.
 They are layers in this order.
 Each one may depend on the modules before it.
 Only `agent` and `notification` sit above all three.
+
 No other module may depend on them, so `practices` never depends on `mentoring`.
+A mentoring module never depends on `agent` or `notification` either.
 
 A domain module owns rows and rules. Its run kinds, gateway routes and tools live in an `agent` package that depends on it.
 
-These tests apply the rules to every edge that touches a mentoring module:
+These tests apply the module rules:
 
 | Rule | Test |
 | --- | --- |
-| A module declares no dependency up the layers. | `ModulithVerificationTest` |
-| A native query reads no table of another module. | `TableOwnershipArchTest` |
-| No class uses an entity of another module, so no JPA association crosses the edge. | `RepositoryOwnershipArchTest` |
-| A foreign key follows a declared module edge. | `ForeignKeyDirectionDatabaseTest` |
-| A mentoring module uses no source-control model and no provider adapter. | `DomainNeutralityArchTest` |
+| A module declares no dependency against the layers. | `ModulithVerificationTest` |
+| SQL in any form reads no table of another module. | `TableOwnershipArchTest` |
+| No class uses an entity of another module, so no JPA association crosses a module. | `RepositoryOwnershipArchTest` |
+| Every table has an owner module, and a foreign key follows a declared module edge. | `ForeignKeyDirectionDatabaseTest` |
+| A mentoring module uses no source-control contract and no provider adapter. | `DomainNeutralityArchTest` |
 | A mentoring module reads the time only from the injected `Clock`. | `SystemClockArchTest` |
-| A listener of a mentoring module has a test that implements `IdempotentListenerIntegrationTest`. | `RegistryEventShapeArchTest` |
 
-The event publication registry stores each event that an `@ApplicationModuleListener` receives.
-Every such event, in every module, carries IDs only.
-A `String` component is an ID only when it has `@Identifier`.
-`RegistryEventShapeArchTest` checks this, and its closed list holds the text components that events had before the rule.
-The harness delivers one event twice and two events in swapped order. The listener must reach the same state in each case.
+An edge that touches a mentoring module has no exception.
+Main's earlier SQL reads, entity uses and foreign keys against an edge are listed one by one under `server/application/src/test/resources/architecture/`.
+A new one fails, and a fixed one must leave its list.
+A table without an entity gets its owner in `TableOwnershipArchTest.NATIVE_TABLES`.
+
+### Events between modules
+
+The event publication registry stores each event that an `@ApplicationModuleListener` receives, in `event_publication`.
+No erasure reaches that table.
+Every stored event, in every module, carries content only by reference.
+Every event that crosses the boundary of a mentoring module does too.
+
+A free-form component, such as a `String` or JSON, needs `@ContentFree`: an ID, a key, a fixed code, a public URL or a configuration snapshot.
+`RegistryEventShapeArchTest` finds each listener through merged annotations and checks these events.
+Main's source-control domain events still carry provider text from `integration.scm` to other modules in memory. The registry does not store them.
+
+Each pair of a mentoring listener and an event that it handles needs a test that implements `IdempotentListenerIntegrationTest`.
+The harness delivers each event twice, and both events in swapped order. The listener must reach the same state in each case.
+
+### Privacy facts
 
 A producer of a privacy fact calls the `PrivacyJournal` port in the transaction of the fact's cause.
-`PrivacyJournalKind` is the one list of kinds. Each kind removes data or ends a grant.
-The server's journal stores no fact yet, so the erasure recovery manifest still lists erasures by hand.
+`PrivacyJournalKind` lists the kinds. Each kind removes data or ends a grant.
+
+A developer's deletion of their own message records `ENTRY_DELETED`.
+The other erasures that the [erasure recovery manifest](../admin/erasure-recovery) lists have no producer yet.
+The server's journal stores no fact yet, so an operator still writes the manifest by hand.
 Tests read the facts that a producer records from `RecordingPrivacyJournal`.
 
 ### Context map

@@ -51,6 +51,13 @@ class ModulithVerificationTest {
                 .isEmpty();
     }
 
+    @Test
+    void shouldRefuseADependencyOfAMentoringModuleOnItsRuntime() {
+        assertThat(layerViolations(
+                        Map.of("relationship", List.of("core", "agent::spi"), "agent", List.of("relationship"))))
+                .containsExactly("relationship -> agent::spi");
+    }
+
     static ApplicationModules applicationModules() {
         return MODULES;
     }

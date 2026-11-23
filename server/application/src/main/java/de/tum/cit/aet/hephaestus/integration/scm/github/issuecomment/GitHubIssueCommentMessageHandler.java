@@ -165,8 +165,6 @@ public class GitHubIssueCommentMessageHandler extends AbstractIntegrationMessage
                 IntegrationKind.GITHUB,
                 scopeId,
                 item.itemId(),
-                comment.body(),
-                author.login(),
                 providerId,
                 author.id(),
                 comment.id(),

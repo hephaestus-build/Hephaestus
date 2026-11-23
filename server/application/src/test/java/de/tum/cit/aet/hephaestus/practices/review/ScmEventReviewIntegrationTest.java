@@ -4388,8 +4388,6 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 IntegrationKind.GITLAB,
                 prepared.item().workspaceId(),
                 prepared.item().itemId(),
-                "/hephaestus review",
-                commenter.getLogin(),
                 providerId(commenter),
                 commenter.getNativeId(),
                 noteId,

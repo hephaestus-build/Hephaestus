@@ -8,8 +8,8 @@ import org.junit.jupiter.api.Test;
 /**
  * The harness for an event listener of a mentoring module. The event publication registry delivers an event at least
  * once and in no fixed order, so a listener must reach the same state when one event arrives twice and when two
- * events arrive in swapped order. A test of listener {@code L} implements this interface, and
- * {@code RegistryEventShapeArchTest} requires one for every listener.
+ * events arrive in swapped order. A test of listener {@code L} for event {@code E} implements this interface,
+ * and {@code RegistryEventShapeArchTest} requires one for every pair of a mentoring listener and an event it handles.
  *
  * <p>{@link #deliver} must run as the registry runs it: through the listener, and committed in its own transaction,
  * for example through a {@code TransactionTemplate}. A test class that is itself {@code @Transactional} would hide a
@@ -32,14 +32,15 @@ public interface IdempotentListenerIntegrationTest<L, E> {
     Object stateAfter(Events<E> events);
 
     @Test
-    default void shouldReachTheSameStateWhenOneEventArrivesTwice() {
+    default void shouldReachTheSameStateWhenEachEventArrivesTwice() {
         var expected = deliveredInOrder();
         var events = newEvents();
         deliver(events.first());
         deliver(events.first());
         deliver(events.second());
+        deliver(events.second());
         assertThat(stateAfter(events))
-                .as("state after the first event arrived twice")
+                .as("state after each event arrived twice")
                 .isEqualTo(expected);
     }
 

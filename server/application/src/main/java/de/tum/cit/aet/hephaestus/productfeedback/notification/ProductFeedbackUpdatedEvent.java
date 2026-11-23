@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.productfeedback.notification;
 
+import de.tum.cit.aet.hephaestus.core.event.ContentFree;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -16,9 +17,9 @@ public record ProductFeedbackUpdatedEvent(
         UUID feedbackId,
         long accountId,
         Kind kind,
-        @Nullable String issueUrl,
+        @ContentFree @Nullable String issueUrl,
         boolean publicIssue,
-        @Nullable String detail,
+        @ContentFree @Nullable String detail,
         Instant at) {
 
     public enum Kind {

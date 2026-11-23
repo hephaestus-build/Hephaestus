@@ -87,8 +87,6 @@ class GitHubReviewCommandTest extends BaseUnitTest {
                         IntegrationKind.GITHUB,
                         WORKSPACE_ID,
                         ITEM_ID,
-                        " /Hephaestus Review \n",
-                        "hephaestususer",
                         PROVIDER_ID,
                         231938035L,
                         3477004001L,
