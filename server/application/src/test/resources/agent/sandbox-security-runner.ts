@@ -257,7 +257,12 @@ assert.equal(staged, 1, "The practice must reach staging");
 assert.equal(admitted, 1, "The review must reach admission");
 assert.deepEqual(failures, []);
 // This replay checks workspace mounts and network isolation.
-const readRefused = /ENOENT/u.test(toolResults.get("cross-read") ?? "");
+// The file tools refuse a path outside /workspace before they open it (pi-agent-sandbox.ts); an unmounted path that
+// reached the file system would fail with ENOENT. The shell check below shows whether the path is mounted.
+const readRefused =
+	/ENOENT|is outside \/workspace\. The file tools open only files in \/workspace\./u.test(
+		toolResults.get("cross-read") ?? "",
+	);
 const shellRefused = containsText(
 	JSON.parse(toolResults.get("cross-shell") ?? "null"),
 	"cross-workspace-unmounted",
