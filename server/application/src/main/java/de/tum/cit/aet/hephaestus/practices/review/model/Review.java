@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review.model;
 
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
@@ -45,6 +46,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@RawObservationAccess
 public class Review {
 
     @Id
@@ -92,6 +94,7 @@ public class Review {
     @Enumerated(EnumType.STRING)
     @Column(name = "stop_reason", length = 48)
     @Setter(AccessLevel.NONE)
+    @RawObservationAccess
     private @Nullable ReviewStopReason stopReason;
 
     @Column(name = "budget_usd", precision = 18, scale = 6)
@@ -119,10 +122,12 @@ public class Review {
     @Column(name = "public_review_at")
     private @Nullable Instant publicReviewAt;
 
+    @RawObservationAccess
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "report", columnDefinition = "jsonb")
     private @Nullable JsonNode report;
 
+    @RawObservationAccess
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "inventory_receipt", columnDefinition = "jsonb")
     private @Nullable JsonNode inventoryReceipt;

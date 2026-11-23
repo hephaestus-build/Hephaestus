@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -29,6 +30,7 @@ import tools.jackson.databind.JsonNode;
  * whose rows the payload copied, so erasing any of them removes the row before another writer reads it.
  */
 @Entity
+@RawObservationAccess
 @Table(
         name = "review_composition_basis",
         uniqueConstraints =
@@ -84,6 +86,7 @@ public class ReviewCompositionBasis {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @RawObservationAccess
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb")
     private JsonNode payload;

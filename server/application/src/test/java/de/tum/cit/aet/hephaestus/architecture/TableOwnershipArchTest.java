@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -193,7 +194,12 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
      * A mentoring module runs SQL only in query annotations, whose values this test reads whole. SQL that a
      * {@code JdbcTemplate} or an entity manager runs could be assembled at run time.
      */
-    private static ArchRule checkedSqlOnly(DescribedPredicate<JavaClass> subjects) {
+    static ArchRule checkedSqlOnly(DescribedPredicate<JavaClass> subjects) {
+        return checkedSqlOnly(subjects, assignableTo(Connection.class).or(assignableTo(Statement.class)));
+    }
+
+    static ArchRule checkedSqlOnly(
+            DescribedPredicate<JavaClass> subjects, DescribedPredicate<JavaClass> directJdbcTypes) {
         return noClasses()
                 .that(subjects)
                 .should()
@@ -206,11 +212,7 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                 .dependOnClassesThat()
                 .areAssignableTo(JdbcClient.class)
                 .orShould()
-                .dependOnClassesThat()
-                .areAssignableTo(Connection.class)
-                .orShould()
-                .dependOnClassesThat()
-                .areAssignableTo(Statement.class)
+                .dependOnClassesThat(directJdbcTypes)
                 .orShould()
                 .dependOnClassesThat()
                 .areAssignableTo(DataSource.class)

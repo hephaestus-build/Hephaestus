@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.UUID;
 import tools.jackson.databind.JsonNode;
 
+@RawObservationAccess
 public interface ResultEvidenceQuery {
     /**
      * Every citation of each loaded result and of its problems: evidence, open questions, example and problems.

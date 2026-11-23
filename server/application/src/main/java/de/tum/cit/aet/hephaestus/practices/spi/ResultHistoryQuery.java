@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+@RawObservationAccess
 public interface ResultHistoryQuery {
     int MAX_LIMIT = 1000;
 

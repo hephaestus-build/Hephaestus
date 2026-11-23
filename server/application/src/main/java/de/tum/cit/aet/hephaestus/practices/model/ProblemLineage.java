@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.model;
 
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemBaselineState;
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -25,6 +26,7 @@ import org.jspecify.annotations.Nullable;
  * holds the identity that the comparison matched by: the newer problem, or the previous one when it is no longer present.
  */
 @Entity
+@RawObservationAccess
 @Immutable
 @Table(
         name = "problem_lineage",

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -15,6 +16,7 @@ import org.hibernate.annotations.Immutable;
 import org.jspecify.annotations.Nullable;
 
 @Entity
+@RawObservationAccess
 @Immutable
 @Table(
         name = "feedback_basis",

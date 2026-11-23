@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -24,6 +25,7 @@ import tools.jackson.databind.JsonNode;
  * identities are cleared when the erasure completes.
  */
 @Entity
+@RawObservationAccess
 @Table(
         name = "person_evidence_copy",
         indexes = @Index(name = "idx_person_evidence_copy_job", columnList = "job_id"),
@@ -57,6 +59,7 @@ public class PersonEvidenceCopy {
         ERASED
     }
 
+    @RawObservationAccess
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb")
     private JsonNode payload;

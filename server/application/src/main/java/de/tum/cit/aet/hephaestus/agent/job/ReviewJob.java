@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -36,6 +37,7 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 @Entity
+@RawObservationAccess
 @Table(
         name = "review_job",
         uniqueConstraints = {
@@ -62,18 +64,22 @@ public class ReviewJob {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int TOKEN_BYTES = 32;
 
+    @RawObservationAccess.Metadata
     @Id
     @EqualsAndHashCode.Include
     @Column(name = "id", nullable = false)
     private UUID id;
 
+    @RawObservationAccess.Metadata
     @Column(name = "review_id", nullable = false)
     private UUID reviewId;
 
+    @RawObservationAccess.Metadata
     @Column(name = "workspace_id", nullable = false)
     private long workspaceId;
 
     /** Changed only by the named transitions below and by the guarded updates of {@link ReviewJobRepository}. */
+    @RawObservationAccess.Metadata
     @Setter(AccessLevel.NONE)
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'QUEUED'")
@@ -83,6 +89,7 @@ public class ReviewJob {
     /**
      * The run that leases this job. A job's run changes only when ended work goes on ({@code resumeFeedbackRepair}).
      */
+    @RawObservationAccess.Metadata
     @Column(name = "run_id", nullable = false)
     private UUID runId;
 
@@ -113,6 +120,7 @@ public class ReviewJob {
      * The job's attempt number, from 0: the attempt that runs or ran last ({@link ReviewRunKind#attempt} of its run's
      * epoch), or, while the job waits, the number its next claim takes.
      */
+    @RawObservationAccess.Metadata
     @Setter(AccessLevel.NONE)
     @Formula("(SELECT " + ReviewRunKind.ATTEMPT_OF_RUN + " FROM agent_run r WHERE r.id = run_id)")
     private int attempt;
@@ -123,6 +131,7 @@ public class ReviewJob {
     private int spentAttempts;
 
     /** When the run is next offered to a claim. */
+    @RawObservationAccess.Metadata
     @Setter(AccessLevel.NONE)
     @Formula("(SELECT r.available_at FROM agent_run r WHERE r.id = run_id)")
     private Instant availableAt;
@@ -132,6 +141,7 @@ public class ReviewJob {
     @Formula("(SELECT r.hold_reason FROM agent_run r WHERE r.id = run_id)")
     private @Nullable String holdReason;
 
+    @RawObservationAccess.Metadata
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'NONE'")
     @Column(name = "processing_status", nullable = false, length = 16)
@@ -143,6 +153,7 @@ public class ReviewJob {
     @Column(name = "trace_id", nullable = false, length = 32)
     private String traceId;
 
+    @RawObservationAccess.Metadata
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "input", nullable = false, columnDefinition = "jsonb")
     private ReviewJobInput input;
@@ -155,11 +166,13 @@ public class ReviewJob {
     @JdbcTypeCode(SqlTypes.JSON)
     @ToString.Exclude
     @Column(name = "capture", columnDefinition = "jsonb")
+    @RawObservationAccess
     private @Nullable JsonNode capture;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @ToString.Exclude
     @Column(name = "output", columnDefinition = "jsonb")
+    @RawObservationAccess
     private @Nullable JsonNode output;
 
     @Column(name = "exit_code")
@@ -167,6 +180,7 @@ public class ReviewJob {
 
     @ToString.Exclude
     @Column(name = "error_message", columnDefinition = "text")
+    @RawObservationAccess
     private @Nullable String errorMessage;
 
     @Enumerated(EnumType.STRING)
@@ -198,12 +212,14 @@ public class ReviewJob {
     @Column(name = "scan_call_until")
     private @Nullable Instant scanCallUntil;
 
+    @RawObservationAccess.Metadata
     @Column(name = "started_at")
     private @Nullable Instant startedAt;
 
     @Column(name = "execution_started_at")
     private @Nullable Instant executionStartedAt;
 
+    @RawObservationAccess.Metadata
     @Column(name = "completed_at")
     private @Nullable Instant completedAt;
 

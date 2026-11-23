@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -22,6 +23,7 @@ import org.hibernate.annotations.ColumnDefault;
  * the job. Written and read with SQL only.
  */
 @Entity
+@RawObservationAccess
 @Table(
         name = "review_attempt_input",
         indexes = @Index(name = "idx_review_attempt_input_job", columnList = "workspace_id,job_id,attempt"),
@@ -59,6 +61,7 @@ public class ReviewAttemptInput {
     @Column(nullable = false, length = 9)
     private String permissions;
 
+    @RawObservationAccess
     @Column(nullable = false)
     private byte[] content;
 
