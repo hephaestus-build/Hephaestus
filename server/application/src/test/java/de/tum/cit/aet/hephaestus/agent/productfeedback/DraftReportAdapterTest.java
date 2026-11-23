@@ -173,6 +173,15 @@ class DraftReportAdapterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRetryWithoutKeepingAnAnswerThatHasNoText() {
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
+                .thenReturn(new ProductFeedbackModelGateway.Draft(null, null));
+
+        assertThat(adapter.execute(attempt)).isInstanceOf(ActionResult.Retry.class);
+        verify(drafts, never()).answered(any(), any(), anyInt(), anyString());
+    }
+
+    @Test
     void shouldCancelWhenTheActionEndedWhileTheCallWaited() {
         when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
                 .thenReturn(failed(ProductFeedbackModelGateway.Failure.ATTEMPT_ENDED));

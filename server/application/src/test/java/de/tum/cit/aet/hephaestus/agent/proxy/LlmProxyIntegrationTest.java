@@ -135,6 +135,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -318,7 +319,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             var capacity = admittingPermits();
             var policy = probePolicy();
             var proxy = proxyService(
-                    WebClient.builder().build(),
+                    guardedClient(),
                     liveBudgetService,
                     capacity,
                     new ConversationCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)),
@@ -477,7 +478,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private LlmModelProbeGateway probeGateway(LlmConnectionHealth health) {
         return new LlmModelProbeGateway(
                 proxyService(
-                        WebClient.builder().build(),
+                        guardedClient(),
                         liveBudgetService,
                         admittingPermits(),
                         new ConversationCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)),
@@ -667,7 +668,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         Instant.now().plusSeconds(600),
                         null);
                 UUID action = Objects.requireNonNull(transactionTemplate.execute(tx -> actions.enqueue(request)));
-                var proxy = proxyService(WebClient.builder().build(), mock(LlmBudgetService.class), admittingPermits());
+                var proxy = proxyService(guardedClient(), mock(LlmBudgetService.class), admittingPermits());
                 var adapter = DraftReportAdapterFixture.adapter(
                         drafts,
                         draftCalls,
@@ -1253,7 +1254,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 meterRegistry,
                 modelResolver);
         var service = proxyService(
-                WebClient.create(),
+                guardedClient(),
                 mock(LlmBudgetService.class),
                 capacity,
                 new ConversationCallProperties(Duration.ofMinutes(5), silence));
@@ -1481,12 +1482,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             upstream.enqueue(json("{\"choices\":[]}"));
             ReviewJob job = reviewJob(upstream.url("/v1").toString());
 
-            assertThat(callChat(proxyService(WebClient.create(), capOf("0.004173"), admittingPermits()), job))
+            assertThat(callChat(proxyService(guardedClient(), capOf("0.004173"), admittingPermits()), job))
                     .isEqualTo(429);
             assertThat(upstream.getRequestCount()).isZero();
             assertThat(calls(job)).isEmpty();
 
-            assertThat(callChat(proxyService(WebClient.create(), capOf("0.004174"), admittingPermits()), job))
+            assertThat(callChat(proxyService(guardedClient(), capOf("0.004174"), admittingPermits()), job))
                     .isEqualTo(200);
             assertThat(upstream.getRequestCount()).isEqualTo(1);
         }
@@ -1570,7 +1571,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         try (MockWebServer upstream = new MockWebServer()) {
             upstream.setDispatcher(alwaysOneDollar());
             upstream.start();
-            var service = proxyService(WebClient.create(), capOf(Integer.toString(capUsd)), admittingPermits());
+            var service = proxyService(guardedClient(), capOf(Integer.toString(capUsd)), admittingPermits());
             List<ReviewJob> jobs = new ArrayList<>();
             for (int attempt = 0; attempt < attempts; attempt++) {
                 jobs.add(reviewJob(upstream.url("/v1").toString()));
@@ -1614,7 +1615,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 return permit;
             });
 
-            assertThat(callChat(proxyService(WebClient.create(), capOf("100"), capacity), job, practiceHeader("3")))
+            assertThat(callChat(proxyService(guardedClient(), capOf("100"), capacity), job, practiceHeader("3")))
                     .isEqualTo(200);
 
             assertThat(Objects.requireNonNull(queued.get()).sessionRank()).isEqualTo(1);
@@ -1632,7 +1633,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             when(capacity.learning()).thenReturn(mock(LlmPoolLearning.class));
             var permit = mock(LlmCallPermits.Permit.class);
             when(permit.revoked()).thenReturn(Mono.never());
-            var service = proxyService(WebClient.create(), capOf("1"), capacity);
+            var service = proxyService(guardedClient(), capOf("1"), capacity);
             when(capacity.acquire(anyLong(), any(), any(), any(), any())).thenAnswer(wait -> {
                 LlmCallPermits.Caller caller = wait.getArgument(2);
                 if (caller.sourceId().equals(waiting.getId())) {
@@ -1891,6 +1892,13 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private LlmProxyService proxyService() {
-        return proxyService(WebClient.create());
+        return proxyService(guardedClient());
+    }
+
+    /** A client as the application builds it, with the model egress guard, so each test also proves the proxy's mark. */
+    private static WebClient guardedClient() {
+        return WebClient.builder()
+                .filter(ExchangeFilterFunction.ofRequestProcessor(ModelEgressGuard::admit))
+                .build();
     }
 }

@@ -164,13 +164,12 @@ public class ProductFeedbackModelGateway {
                 JsonNode content = answer.path("content");
                 if (!content.isArray()) return failed(Failure.PROVIDER);
                 for (JsonNode part : content)
-                    if (part.path("type").asString("").equals("text"))
-                        text.append(part.path("text").asString(""));
+                    if (part.path("type").asString("").equals("text")) text.append(string(part.path("text")));
             }
             case OPENAI_COMPLETIONS -> {
                 JsonNode message = answer.path("choices").path(0).path("message");
                 if (!message.isObject()) return failed(Failure.PROVIDER);
-                text.append(message.path("content").asString(""));
+                text.append(string(message.path("content")));
             }
             case OPENAI_RESPONSES -> {
                 JsonNode output = answer.path("output");
@@ -179,10 +178,15 @@ public class ProductFeedbackModelGateway {
                     if (item.path("type").asString("").equals("message"))
                         for (JsonNode part : item.path("content"))
                             if (part.path("type").asString("").equals("output_text"))
-                                text.append(part.path("text").asString(""));
+                                text.append(string(part.path("text")));
             }
         }
         return new Draft(text.isEmpty() ? null : text.toString(), null);
+    }
+
+    /** A text field's value; a value of another type is no text, which Jackson would otherwise coerce into one. */
+    private static String string(JsonNode node) {
+        return node.isString() ? node.asString() : "";
     }
 
     private static Draft failed(Failure failure) {

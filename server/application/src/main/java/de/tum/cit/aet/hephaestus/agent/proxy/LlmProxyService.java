@@ -873,10 +873,14 @@ class LlmProxyService {
         tap.sending();
         span.event("upstream.request");
         Bounds bounds = exchange.bounds();
-        var request = webClient.method(HttpMethod.POST).uri(exchange.uri()).headers(headers -> {
-            headers.clear();
-            headers.addAll(exchange.headers());
-        });
+        var request = webClient
+                .method(HttpMethod.POST)
+                .uri(exchange.uri())
+                .attribute(ModelEgressGuard.PROXY_CALL, true)
+                .headers(headers -> {
+                    headers.clear();
+                    headers.addAll(exchange.headers());
+                });
         var transport = exchange.transports().begin();
         request = request.httpRequest(client -> {
             HttpClientRequest nativeRequest = client.getNativeRequest();

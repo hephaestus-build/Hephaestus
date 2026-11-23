@@ -766,3 +766,7 @@ The sandbox's input archive has the same bytes on every server: entries in name 
 [PostgreSQL advisory locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS) and [Kubernetes Service session affinity](https://kubernetes.io/docs/reference/networking/virtual-ips/#session-affinity) define these platform mechanisms.
 
 Old active reviews have no checkpoint. Their first upgrade requires the one-time drain in [Upgrade to 1.0](../admin/upgrade-to-1-0.mdx#drain-legacy-reviews-before-removing-gateway-affinity).
+
+## Update — 2026-11-23: the product feedback draft has no model loop in the JVM
+
+`ModelSession` is removed. The product feedback draft stays the outbox action `DRAFT_REPORT`. Its one tool-free call is written and read by the model proxy's draft gateway (`ProductFeedbackModelGateway`), so no server code outside the proxy speaks a model protocol. Every HTTP client that server code builds refuses a model request that the proxy did not send (`ModelEgressGuard`). This replaces the last sentence of the update "the JVM composer is gone" of 2026-11-10.

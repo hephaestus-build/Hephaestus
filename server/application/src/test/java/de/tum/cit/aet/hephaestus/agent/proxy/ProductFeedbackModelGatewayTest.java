@@ -121,6 +121,20 @@ class ProductFeedbackModelGatewayTest extends BaseUnitTest {
                 .isEqualTo(failure);
     }
 
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "OPENAI_COMPLETIONS | {\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":true}}]}",
+                "ANTHROPIC_MESSAGES | {\"content\":[{\"type\":\"text\",\"text\":42}]}",
+                "OPENAI_RESPONSES | {\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":{}}]}]}",
+            })
+    void shouldReadNoTextFromAnAnswerWhoseTextIsNoString(LlmApiProtocol protocol, String answer) {
+        answer(ResponseEntity.ok(answer));
+
+        assertThat(draft(model(protocol, null))).isEqualTo(new ProductFeedbackModelGateway.Draft(null, null));
+    }
+
     @Test
     void shouldReadAnAnthropicRefusalAsRefused() {
         answer(ResponseEntity.ok("{\"stop_reason\":\"refusal\",\"content\":[]}"));

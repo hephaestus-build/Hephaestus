@@ -10,6 +10,7 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import java.util.function.Function;
+import okhttp3.OkHttpClient;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,10 +37,24 @@ class ModelCallBoundaryArchTest extends HephaestusArchitectureTest {
                             && access.getName().equals("apiKey")))
             .because("only the model proxy authenticates a model call");
 
+    /** The model egress guard customizes the Spring client builders; an OkHttp client built here would be outside it. */
+    static final ArchRule NO_OWN_OKHTTP_CLIENT = noClasses()
+            .should()
+            .callConstructor(OkHttpClient.class)
+            .orShould()
+            .callConstructor(OkHttpClient.Builder.class)
+            .because("the model egress guard sees only clients built from the application's Spring builders");
+
     @Test
     @DisplayName("only the model proxy reads a model's provider key")
     void onlyTheProxyCallsAModel() {
         ONLY_THE_PROXY_READS_A_MODEL_KEY.check(classes);
+    }
+
+    @Test
+    @DisplayName("server code builds no OkHttp client of its own")
+    void noServerCodeBuildsAnOkHttpClient() {
+        NO_OWN_OKHTTP_CLIENT.check(classes);
     }
 
     /** Classes that call a model with their own client, past the proxy. */
