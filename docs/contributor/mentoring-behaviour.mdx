@@ -49,7 +49,7 @@ It is code with no model. It runs when a message is committed, and again before 
 | C8 | The same problem on the same version is never sent twice. A new version can be sent. | ADR 0139 |
 | C9 | The instance and the workspace can turn off messages that Hephaestus starts. The person's controls narrow further. Rules narrow, never widen. | ADR 0139 |
 | C10 | Optional background items wait until two minutes after the person's last message. A requested result and an agreed check-in never wait. | ADR 0139 |
-| C11 | Each decision to reach a person, except an answer to their message, writes one decision record. ADR 0149 (proposed in #4868) decides what a delivery experiment may draw. | ADR 0139, ADR 0149 |
+| C11 | Each decision to reach a person, except an answer to their message, writes one delivery decision. ADR 0149 (proposed in #4868) decides what a delivery experiment may draw. | ADR 0139, ADR 0149 |
 
 ### The order of checks
 
@@ -235,7 +235,7 @@ Each hard case has fixed behavior and a scenario test.
 
 | Case | Fixed behavior |
 | --- | --- |
-| Distress | A fixed reply with the support resources that the operator set. No practice feedback in the same reply. Never a referral to the manager. Undecided: whether distress also holds contact, and what ends that hold. |
+| Distress | A fixed reply with the support resources that the operator set. Hephaestus points to human support and is not a crisis service. No practice feedback in the same reply. Never a referral to the manager. 1.0 has no distress hold: the person's own Pause, Only when agreed and mutes stop contact. |
 | A manager asks about a person | The same refusal whether or not data exists |
 | A demand for the answer | "Just tell me" is one choice away. Hephaestus explains, but never writes the person's submission. |
 | Dependence | Help fades. Hephaestus points to people. |
@@ -246,7 +246,7 @@ Each hard case has fixed behavior and a scenario test.
 
 | ID | Never | Decided in |
 | --- | --- | --- |
-| X1 | Shows a score, rank, streak, badge, level or points in practice feedback or in any assessment of a person. Activity keeps the views of [ADR 0093](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md). | ADR 0124 |
+| X1 | Shows a score, rank, streak, badge, level or points, or ranks people anywhere. Activity shows people unordered or as team aggregates. | ADR 0124, ADR 0125 |
 | X2 | Tells anyone about a person, not even whether they use Hephaestus. | ADR 0125 |
 | X3 | Writes text that the person submits as their own work. A course workspace can turn on a runtime check. | ADR 0124 |
 | X4 | Claims a feeling, infers an emotion, or stores one. | ADR 0124 |

@@ -89,7 +89,7 @@ Option 4.
    - Hephaestus comes back at agreed times (ADR 0133). Help fades on evidence (ADR 0130).
    - The person sees and controls what Hephaestus keeps in mind (ADR 0132). Hephaestus refers the person to people for what it cannot do.
 9. **What Hephaestus is not.**
-   - Practice feedback and any assessment of a person show no score, rank, streak, badge or level. Activity keeps the views of [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md).
+   - Nothing shows a score, rank, streak, badge or level, and nothing ranks people. ADR 0125 (proposed in #4863) removes the ranked people table of Activity.
    - It never writes what a person submits as their own work.
    - It claims no feeling, infers no emotion, and sends no message only to bring a person back.
    - It is not a friend, a therapist or a channel to human resources.
@@ -100,7 +100,7 @@ Option 4.
 - The language guide (`docs/contributor/practice-feedback-language.mdx`) changes with this ADR. The row for Hephaestus removes "AI mentor" from its Avoid column. A new row names "AI mentor" as the product category. The row for Mentor stays.
 - "Developer" stays the term in practice feedback. "Person" becomes the term in the API and the schema elsewhere, because a domain other than software has no developers.
 - [ADR 0056](0056-one-practice-model-for-items-and-scans.md) stays. ADR 0130 (proposed in #4863) adds a portable identity to each practice.
-- [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) stays. Its Activity views show provider work, not practice feedback or an assessment of a person.
+- [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rule 4 changes by ADR 0125 (proposed in #4863): Activity ranks no one.
 
 ## Consequences
 

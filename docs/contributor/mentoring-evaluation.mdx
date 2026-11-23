@@ -249,6 +249,7 @@ The design keeps all of it and adds the rules that this table marks as planned.
 | Redaction of other people | The fields of every other person without consent are redacted, and the row stays | Planned |
 | A minimum of 20 participants | Only a dataset of one delivery experiment may go below 20, and only to the research organization named in each subject's consent. ADR 0141 owns the rule. | Planned |
 | Structure only from conversations | Event sequences, outcomes, response types and timings. Never the person's message text. | Planned |
+| A steward approves every release | A research steward approves each release. An instance admin cannot release a dataset alone (ADR 0141). | Planned |
 | The dataset receipt survives a restore | The dataset ID, content hash and recipient go to the privacy journal before release. A release needs a journal bucket. | Planned |
 | Fresh pseudonyms for each export | A random key for each export that is never stored, so no pseudonym repeats across datasets | Exists |
 | Removal after a withdrawal | A withdrawal ends coverage at once, and each released dataset that holds the person owes a removal | Exists, extended |
