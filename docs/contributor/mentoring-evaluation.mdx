@@ -105,7 +105,7 @@ It runs on the controlled clock and the fake providers of the deterministic harn
 | Frozen reactions | A simulated developer supplies only the replies that the records lack. Each reaction is written once, then frozen as a scripted input. |
 | Switches | Turn goals, memory and history off for one run, so a run can show what each one adds. |
 | Output bundle | Records every copy, message, card state and record write. It also records every silence, with its reason. |
-| Run fingerprint | Records the model, the prompt digest and the practice versions, with a recording of the model calls for an exact rerun. |
+| Run fingerprint | The configuration digest of the run (practice versions, modes, destinations, help defaults, model assignment and prompt digest) with the runtime fingerprint. A recording of the model calls is kept apart, for an exact rerun. |
 
 The rubric above grades the output bundle.
 A failed replay scenario becomes a release evaluation case.
@@ -138,7 +138,7 @@ The contact simulation checks contact timing and frequency over weeks of simulat
 
 | Question | Answer |
 | --- | --- |
-| What does it check? | The daily limits, repetition, quiet hours, the question after 3 unanswered check-ins, and the goal follow-up cap |
+| What does it check? | The daily limits, repetition, quiet hours, the question after 3 unanswered messages from one check-in, and the goal follow-up cap |
 | What does it not check? | The quality of answers or feedback. Simulated users are too cooperative, and timings cannot show a wrong answer. |
 | How does it work? | Simulated people have state in code, such as availability and reply habits. They live on a controlled clock across workspaces. |
 | What runs the model? | Local models through the same LLM proxy, at zero model cost by default. A model may only phrase what the script decided. |
@@ -163,6 +163,7 @@ A maintainer runs the release check by hand on the packaged artifact of the cand
 9. Dictation and read-aloud work in English and German on a provider with speech endpoints.
 
 For 1.0, a person who did not design the boundaries runs the red-team pass.
+When the check ships, this list moves to `release-management.mdx`, its one home (ADR 0142).
 
 ## The scenario map
 
@@ -182,14 +183,14 @@ The building work adds each test and its owner to this map.
 | A stressed person, and stop | A fixed reply with support resources. Pause applies at once. | ADR 0139 |
 | A manager asks about a person | The same refusal whether or not data exists | ADR 0125 |
 | Two employers and a personal project | Row-level security, tenancy, and only own words or closed fields travel | ADR 0126, ADR 0127, ADR 0129 |
-| Leaving a job | A leaving window, **Keep and take along**, and the portable download | ADR 0126, ADR 0129 |
+| Leaving a job | A leaving window, **Take along**, and the portable download | ADR 0126, ADR 0129 |
 | A closed client workspace | **Closed** blocks all transfer | ADR 0129 |
 | A notification and a quick reply | Web push with the fetched notice line, and a reply on the web | ADR 0139 |
 | A Slack direct message | That workspace's Slack-visible entries. Personal records only at the **Full** detail level, after the export notice. | ADR 0123 |
 | An admin turns off memory | Workspace policy narrows what the person's records reach | ADR 0132 |
 | Restore from backup | Erasures and revocations are applied again from the journal | ADR 0140 |
 | Erasure of an account | The cascade, and the journal write before the acknowledgement | ADR 0128, ADR 0140 |
-| Migration from the release candidate | A stopped cutover that keeps the visibility of existing content | ADR 0121 |
+| Migration from the release candidate | A stopped cutover that keeps the visibility of existing content | Not decided yet |
 | Prompt injection in repository content | Content has no authority. The composer has nothing private to disclose. | ADR 0121 |
 | Extracting another person's data | Row-level security, 404 for guessed IDs, canary detectors | ADR 0127 |
 
@@ -229,13 +230,13 @@ If a person withdraws between that check and the release, the release records a 
 
 ### Experiment datasets
 
-A delivery experiment adds experiment datasets, with their own rules: the experiment pseudonym, guidance text by consent, blind scoring and re-contact.
+A delivery experiment adds experiment datasets, with their own rules: the experiment pseudonym, guidance text by consent, blind scoring and the follow-up notice.
 ADR 0141 and ADR 0149 (proposed in #4868) own them.
 
 Three consent rules protect the choice:
 
 - Research consent is separate from the AI choice and from workspace membership.
-- Hephaestus never asks for it in a conversation or a notification, and never recruits. The steward's re-contact notice of ADR 0149 is the one permitted follow-up.
+- Hephaestus never asks for it in a conversation or a notification, and never recruits. The steward's follow-up notice of ADR 0149 is the one permitted follow-up.
 - On an employer-run instance, the operator names a research organization only under an ethics approval or a works agreement.
 
 ## Trade-offs and rejected alternatives

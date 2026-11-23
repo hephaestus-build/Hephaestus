@@ -9,7 +9,7 @@ This page gives the rules for contact, notifications, check-ins, goals, help set
 Read it if you build a part that talks to a person, or if you review how the AI mentor behaves.
 Each rule has an ID, such as `C3` or `N2`, so that an issue, a test or a review comment can cite it.
 
-The **Decided in** column names the proposed ADR that owns each rule. A dash marks a rule that no ADR decides yet.
+The **Decided in** column names the proposed ADR that owns each rule.
 [Mentoring framework](./mentoring-framework.mdx) gives the whole design and the reasons.
 
 :::note
@@ -33,7 +33,7 @@ It is code with no model. It runs when a message is committed, and again before 
 
 | ID | Kind | In the app | As a notification | Decided in |
 | --- | --- | --- | --- | --- |
-| C1 | An answer | At once, streamed | One push if the answer is unread 30 seconds after its turn ends and no client is open | [ADR 0116](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0116-a-push-is-one-web-push-message-from-the-instance.md), ADR 0139 |
+| C1 | An answer | At once, streamed | One push if the answer is unread 30 seconds after its turn ends, unless the person is active in that workspace | [ADR 0116](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0116-a-push-is-one-web-push-message-from-the-instance.md), ADR 0139 |
 | C2 | A result that the person asked for | At once | At once, at any hour, outside the daily limit. **Pause** removes only this notification. | ADR 0139 |
 | C3 | An agreed contact: a check-in or a goal follow-up | At its time | At its slot, outside the daily limit. In quiet hours it waits, unless the person set the slot inside them. Under **Pause** the occurrence is skipped. | ADR 0139, ADR 0133 |
 | C4 | An unprompted update | Only if it passes the eligibility check (C5) | Under the daily limit, never in quiet hours | ADR 0139 |
@@ -49,7 +49,7 @@ It is code with no model. It runs when a message is committed, and again before 
 | C8 | The same problem on the same version is never sent twice. A new version can be sent. | ADR 0139 |
 | C9 | The instance and the workspace can turn off messages that Hephaestus starts. The person's controls narrow further. Rules narrow, never widen. | ADR 0139 |
 | C10 | Optional background items wait until two minutes after the person's last message. A requested result and an agreed check-in never wait. | ADR 0139 |
-| C11 | Each decision to contact a person who did not ask writes one decision record. ADR 0149 (proposed in #4868) decides what a delivery experiment may draw. | ADR 0139, ADR 0149 |
+| C11 | Each decision to reach a person, except an answer to their message, writes one decision record. ADR 0149 (proposed in #4868) decides what a delivery experiment may draw. | ADR 0139, ADR 0149 |
 
 ### The order of checks
 
@@ -74,7 +74,7 @@ The notification budget is the set of limits that the initiative level sets. The
 | N4 | No push goes out while the person is active in that workspace. Active means a client in the foreground with a live connection in the last 2 minutes. | ADR 0139 |
 | N5 | The notification text is a notice line from a registry, never model text. The push payload carries IDs only. | ADR 0139, ADR 0116 |
 | N6 | **Hide content in notifications** shows the fixed text of the kind on the lock screen. | ADR 0139 |
-| N7 | A message that the person saw in any client cancels its notification, if the write has not started. | ADR 0116 |
+| N7 | A message that the person saw in any client cancels its notification, if the write has not started. | ADR 0116, ADR 0139 |
 | N8 | No escalation. Hephaestus never sends "if unseen in Slack, then push". | ADR 0139 |
 | N9 | A result asked for in Slack gets one Slack reply and no other notification. | ADR 0131, ADR 0116 |
 | N10 | Notifications are one clear choice at first sign-in, together with the rhythm. | ADR 0133 |
@@ -254,7 +254,7 @@ Each hard case has fixed behavior and a scenario test.
 | X6 | Reads silence as dislike, or pauses a check-in on its own. | ADR 0133, ADR 0139 |
 | X7 | Asks for consent in a conversation or a notification, or recruits for research. The one follow-up notice of ADR 0149, from the steward to the people of one experiment, is not recruiting. | ADR 0149 |
 | X8 | Writes an outcome or a delivery state as free text. A citation token renders it from rows. | ADR 0150 |
-| X9 | Puts personal context in a place that other people read, such as a Slack channel. | ADR 0121, ADR 0123 |
+| X9 | Puts personal context in a place that other people read, such as a Slack channel. The one exception is a Slack direct message at the Full detail level, which the person chooses. | ADR 0121, ADR 0123 |
 | X10 | Calls itself an assistant, an agent, a coach, or "your mentor". It is Hephaestus, an AI mentor. | ADR 0124 |
 | X11 | Tunes its behavior on in-the-moment ratings. **Helpful** and **Not helpful** are never a target. | ADR 0131, ADR 0142 |
 | X12 | Fetches, unfurls or shows as an image a URL that a model wrote. | ADR 0135 |

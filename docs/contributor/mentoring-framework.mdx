@@ -11,12 +11,14 @@ Hephaestus is an AI mentor: it gives each developer practice feedback on their r
 
 Code decides when Hephaestus speaks. It decides whether a result, a check-in or a withheld copy becomes a message, and when a notification may interrupt.
 Code also decides who may read it. A turn reads only what every reader of its output may read, so private context never reaches the work or a channel.
+The one stated exception is the person's own choice. At the **Full** Slack detail level, a Slack answer may use their goals, notes and help settings (ADR 0123).
 
 The model writes the words inside those decisions. It never states a result that the rows do not hold.
+A model also judges work in a review, and it can propose a noted record from the person's own words. Code admits each judgement and each record before anyone reads it, and a model never decides dispatch, routing or readers.
 
 This page explains the design of that AI mentor from end to end.
 Read it first if you review the design or build a part of it.
-[Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx) gives the threads, turns and writes that carry these rules.
+[Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx) (proposed in #4864) gives the threads, turns and writes that carry these rules.
 [Mentoring behavior](./mentoring-behaviour.mdx) and [mentoring evaluation](./mentoring-evaluation.mdx) give the detail of contact, tone and quality.
 
 :::note
@@ -49,7 +51,7 @@ The **copy on the work** is the copy that Hephaestus posts on the pull request o
 | Does a review result interrupt my conversation? | No. A result shows on its item card at once. Your message always goes first. |
 | Can my conversation change the copy on my work? | Only through a command that you confirm on a card, after a preview. The command never carries your reasons. |
 | What if the model is down? | Two hours after the seal, a copy whose write has not started is withheld. Nothing is posted in its place. |
-| Can my manager see this? | No. Hephaestus has no view of one person for admins or managers. The operator of the servers can read what they hold, and Hephaestus says so. |
+| Can my manager see this? | No. Hephaestus has no view of one person for admins or managers. The operator of the servers can read what they hold, and Hephaestus says so. A Slack owner can export direct messages, so Slack answers use your personal records only if you choose the **Full** detail level. |
 
 ### The core loop
 
@@ -199,7 +201,7 @@ These principles come from the research above. The design keeps each one with a 
 | The relationship is the intervention. | No engagement target. Only outcome measures, at instance level. |
 | Goals belong to the person. | Only the person's act writes a goal or lets a record travel. |
 | Evidence before opinion. | Observations, private check outcomes and self-reports are separate records. Admission checks every candidate observation. |
-| Reach out when it helps, and never nag. | Results show at once. Agreed contact has no daily cap in waking hours. |
+| Reach out when it helps, and never nag. | Results show at once. An agreed notification has no daily limit. |
 | Scaffold, then fade. | A help mode for each practice. Help fades after independent pieces of work. |
 | Grow the person's own judgment. | "Give me a hint first" is one choice away. |
 | Hold on evidence, yield on evidence. | Repetition and seniority never move a correct point. A fact moves it at once. |
@@ -240,7 +242,7 @@ This walk shows each decision that Sam makes and each wait.
 | Wednesday | Slack | Sam read the export notice and chose the **Full** Slack detail level. So the answer to a direct message can use Sam's goal and help settings. |
 | Thursday | Item card | Sam selects **Disagree** with a reason on a wrong detail. The acknowledgement comes at once. |
 | Friday | Ask Hephaestus | At 16:00 the weekly reflection names one change in the week's work and asks one question. |
-| Sunday | Our work | Sam sees the goal, the check-ins and the growth mark. Under **What Hephaestus keeps in mind**, Sam forgets one wrong item. |
+| Sunday | Our work | Sam sees the goal, the check-ins and where help stepped back. Under **What Hephaestus keeps in mind**, Sam forgets one wrong item. |
 
 Each card in the week is a real decision of Sam's, and each wait is real work.
 The goal and the help setting are Sam's own words, so they save with **Undo** and need no card.
@@ -280,7 +282,7 @@ Three rules hold in every place:
 
 - **The answer goes where the question was asked.** A requested result goes where it was requested.
 - **Nothing typed in the app goes to Slack.** A card reaches Slack one way, by revision.
-- **Personal context never enters a place that other people read.** A Slack channel is such a place.
+- **Personal context never enters a place that other people read.** A Slack channel is such a place. The one exception is a Slack direct message at the **Full** detail level, after the export notice (ADR 0123).
 
 ## What a person meets
 
@@ -315,7 +317,7 @@ Needs you stays as it is: the review requests and pull requests that wait for th
 | --- | --- |
 | Ready | "Ready · being posted to PR #42" |
 | Awaiting approval | "Waiting for approval" |
-| Delivered | "Posted on PR #42 · View · Remove" |
+| Delivered | "Posted on PR #42 · View · Withdraw" |
 | Unconfirmed | "Not confirmed yet" |
 | Withheld at the deadline | "Not posted: no copy in time" · **Request a new copy** |
 | Withheld or rejected, other reasons | "Not posted on the work", with the reason |
@@ -342,7 +344,7 @@ Hephaestus has four kinds of memory. The person can see and change all four.
 | Help settings | Hephaestus from the person's words, or the person in Settings | The account | They apply in every workspace | Until the person changes or forgets them |
 | Person-authored record | The person: typed, accepted from a card, or kept | Its workspace | Yes, by transfer | Until the person deletes it |
 | Noted record | Hephaestus, from the person's own messages | That workspace only | No | Preferences until deleted. Context 120 days after its last use. |
-| Kept-in-mind item | The conversation summary | That workspace only | No | 400 days, unless the person selects **Keep** |
+| Kept-in-mind item | The conversation summary | That workspace only | No | 400 days. **Keep** turns it into a person-authored record. |
 
 A noted record is never evidence about the person's work, and never about another person.
 **What Hephaestus keeps in mind** shows every item, with **Forget**, **Not right** and **Keep**.
@@ -374,7 +376,7 @@ A card's consequence never changes after it shows. If the facts change, the acce
 
 These rules hold for every person, every workspace and every client.
 Each one is the mechanism of one trust commitment.
-[Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx) gives the mechanics that enforce them.
+[Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx) (proposed in #4864) gives the mechanics that enforce them.
 
 | Rule | What it prevents | How | Trust commitment | Decided in |
 | --- | --- | --- | --- | --- |
@@ -396,8 +398,8 @@ The manual path covers **Forget**, a withdrawal from an experiment and the destr
 
 ### Learning that travels
 
-Learning moves in two steps, each by the person's act. First the person transfers a lesson to their personal space, on a card.
-Then the toggle "Use what travels with me here" lets it shape answers in another workspace.
+Learning moves in two steps. First the person transfers a lesson to their personal space, on a card.
+Then the toggle "Use what travels with me here", on by default and off with one switch, lets it shape answers in another workspace.
 Evidence never moves, and learning arrives without its origin. The source's export policy (Open, Personal only or Closed) and the destination both decide.
 Each record that arrives has **Keep out of this space**.
 
@@ -424,7 +426,7 @@ The feedback mode is Automatic.
 1. **The review seals.** In one transaction the server records the observations and a pending copy for the work. The copy has a deadline two hours later.
 2. **The result is available.** Sam's item card shows both problems at once, with no model.
 3. **The composer writes the copy.** It reads the eligible problems of #412 at the reviewed version. Its guardrails pass.
-4. **The outbox posts the copy.** After GitHub confirms, the card says "Posted on PR #412 · View · Remove".
+4. **The outbox posts the copy.** After GitHub confirms, the card says "Posted on PR #412 · View · Withdraw".
 5. **Sam writes during a background turn.** Sam's message cancels that turn, which had committed nothing.
 6. **One answer takes both inputs.** It answers Sam's question and cites the Minor problem. Sam is active, so no notification goes out.
 
@@ -437,7 +439,7 @@ In 1.0, only the author of an item gets a copy on the work. On a graded workspac
 ADR 0121 (proposed in #4862) owns the guardrails. ADR 0149 (proposed in #4868) decides how graded work and a delivery experiment exclude each other.
 
 The seal sets a deadline 2 hours later. At the deadline, every Automatic copy whose first write has not started is withheld, even a ready one.
-Approve first must stage its copy before the deadline, and then main's approval expiry applies. A merge or a close withholds the copy, and a newer version replaces it.
+Approve first must stage its copy before the deadline, and then main's approval expiry of one day applies. A merge or a close withholds the copy, and a newer version replaces it.
 Nothing is posted in its place, the review stays complete, and the card offers **Request a new copy**.
 
 A missed deadline, a refusal or an expired approval can withhold a copy with a Critical or Major problem. Then the author gets one private message, unless the author paused contact.
@@ -447,7 +449,7 @@ ADR 0122 (proposed in #4862) owns the deadline, and the core page shows its time
 
 Each kind of run declares its untrusted input, its personal records and its external effect. A missing declaration refuses the run.
 The core page has the full table of runs.
-A retry within 72 hours never creates a second object. ADR 0135 (proposed in #4867) owns the retry rules.
+A retry within 72 hours never creates a second object. ADR 0135 (proposed in #4867) owns client retries. ADR 0151 (proposed in #4862) owns writes to other systems, and ADR 0145 (proposed in #4867) owns model retries.
 
 ## Privacy
 
@@ -516,15 +518,15 @@ Hephaestus degrades honestly. A question is never refused for load.
 | Condition | What the person sees | Decided in |
 | --- | --- | --- |
 | All sandbox places are busy | A sandbox place is a slot where one agent run can start. "Queued · answering in about N s". Background work waits first. | ADR 0147 |
-| The answer is unread when its turn ends | If the answer is still unread 30 seconds after its turn ends and no client is open, one push goes out. | [ADR 0116](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0116-a-push-is-one-web-push-message-from-the-instance.md) |
+| The answer is unread when its turn ends | If the answer is still unread 30 seconds after its turn ends, one push goes out, unless the person is active in that workspace. | [ADR 0116](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0116-a-push-is-one-web-push-message-from-the-instance.md) |
 | The model provider is down | A circuit breaker stops background work. Check-ins still get their due entry, with no model. | ADR 0147 |
 | No copy for the work after two hours | The copy is withheld. The card offers **Request a new copy**. | ADR 0122 |
-| Slack is down | "Slack is not reachable. Answers will post when it is back." Nothing else waits. | ADR 0123 |
+| Slack is down | "Slack is not reachable. Answers will post when it is back." Nothing else waits. | ADR 0123 (recovery) |
 | A missed check-in after an outage | It shows once, late: "This was due at 09:00." | ADR 0133 |
 | The budget for paid models is spent | An honest wait. A person never sees money. | ADR 0147 |
 | The database is restored from a backup | Erasures stay erased. Each person sees one notice that names the recovery point. | ADR 0140 |
 
-One place in the turn capacity stays free for a person who waits, so an answer always finds a sandbox.
+One place in the turn capacity stays free for a person who waits. The next free place goes to a person, and a question is never refused for load.
 The deadline of the copy on the work needs no sandbox, so a full queue never delays it.
 
 ## Trade-offs and rejected alternatives
@@ -542,6 +544,6 @@ The deadline of the copy on the work needs no sandbox, so a full queue never del
 
 ## Next steps
 
-- [Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx): threads, turns, the commit rule, the audience rule and the table of runs.
+- [Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx) (proposed in #4864): threads, turns, the commit rule, the audience rule and the table of runs.
 - [Mentoring behavior](./mentoring-behaviour.mdx): contact, check-ins, goals, tone and what Hephaestus never does.
 - [Mentoring evaluation](./mentoring-evaluation.mdx): the evaluation layers, the release check, the scenario map and research datasets.
