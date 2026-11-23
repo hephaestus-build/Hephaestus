@@ -20,6 +20,7 @@ import path from "node:path";
 import { parseAllDocuments } from "yaml";
 
 import { asRecord, isRecord, parseJson } from "./lib/json.ts";
+import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 export const BASELINE_FILE = "security/dependency-baseline.json";
 export const RETIRED_FILE = "security/retired-dependencies.json";
@@ -31,10 +32,18 @@ export const RETIRED_FILE = "security/retired-dependencies.json";
 export function lockfiles(cwd = process.cwd()): string[] {
 	return execFileSync(
 		"git",
-		["ls-files", "--cached", "--others", "--exclude-standard", "--", ":(glob)**/pnpm-lock.yaml"],
-		{ cwd, encoding: "utf8" },
+		[
+			"ls-files",
+			"-z",
+			"--cached",
+			"--others",
+			"--exclude-standard",
+			"--",
+			":(glob)**/pnpm-lock.yaml",
+		],
+		{ cwd, encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES },
 	)
-		.split("\n")
+		.split("\0")
 		.filter(Boolean)
 		.toSorted();
 }

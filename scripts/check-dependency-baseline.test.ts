@@ -233,11 +233,12 @@ await test("every pnpm lockfile in the checkout is found, a new nested one inclu
 	const root = mkdtempSync(path.join(tmpdir(), "dependency-lockfiles-"));
 	try {
 		execFileSync("git", ["init", "--quiet"], { cwd: root });
-		mkdirSync(path.join(root, "tools/new"), { recursive: true });
+		mkdirSync(path.join(root, "tools/café"), { recursive: true });
 		writeFileSync(path.join(root, "pnpm-lock.yaml"), "");
-		writeFileSync(path.join(root, "tools/new/pnpm-lock.yaml"), "");
-		writeFileSync(path.join(root, "tools/new/yarn.lock"), "");
-		assert.deepEqual(lockfiles(root), ["pnpm-lock.yaml", "tools/new/pnpm-lock.yaml"]);
+		writeFileSync(path.join(root, "tools/café/pnpm-lock.yaml"), "");
+		writeFileSync(path.join(root, "tools/café/yarn.lock"), "");
+		// Git quotes a non-ASCII path unless it separates paths with NUL.
+		assert.deepEqual(lockfiles(root), ["pnpm-lock.yaml", "tools/café/pnpm-lock.yaml"]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
