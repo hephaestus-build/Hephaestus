@@ -93,6 +93,7 @@ helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
 
 The migration Job of the new revision and the new Pods start together.
 The new Pods wait up to 10 minutes for the migrated schema, and the previous release serves until they are ready.
+While the migration runs, the previous release claims no queued work, and its running work finishes ([Work during a migration](./runtime-roles#work-during-a-migration)).
 `--wait-for-jobs` fails the upgrade when the migration fails, and `--rollback-on-failure` then returns the Deployments to the previous revision.
 
 The server uses a rolling update: its replacement is ready before the old Pod stops serving.

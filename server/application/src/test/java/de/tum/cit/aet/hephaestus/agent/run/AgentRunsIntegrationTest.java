@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -32,6 +33,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,6 +66,9 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewComposeRunKind composeKind;
+
+    @Autowired
+    private DataSource dataSource;
 
     private long workspace;
     private long other;
@@ -942,6 +947,45 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     private @Nullable Instant deadline(UUID runId) {
         Timestamp at = jdbc.queryForObject("SELECT deadline FROM agent_run WHERE id = ?", Timestamp.class, runId);
         return at == null ? null : at.toInstant();
+    }
+
+    @Test
+    void shouldOfferAndLeaseNoRunWhileAMigrationRunsAndLeaseItOnceTheMigrationEnds() throws Exception {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:barrier");
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThat(claim()).isEmpty();
+            assertThat(claimSubject(workspace, "review:barrier")).isEmpty();
+            Optional<AgentRunLease> capped = transactions.execute(status -> runs.claimCapped(AgentRunKind.REVIEW, 100));
+            assertThat(capped).isEmpty();
+            // Each in its own read-only transaction, as the dispatch and the wait read it.
+            assertThat(runs.due(Set.of(AgentRunKind.REVIEW), 0, 100))
+                    .as("no sandbox starts for the run")
+                    .isEmpty();
+            assertThat(runs.dueOf(Set.of(AgentRunKind.REVIEW), List.of(workspace), List.of("review:barrier")))
+                    .as("no waiting next wakes for the run")
+                    .isEmpty();
+            assertThat(state(run.id())).isEqualTo("QUEUED");
+        }
+
+        assertThat(claimSubject(workspace, "review:barrier"))
+                .map(AgentRunLease::runId)
+                .contains(run.id());
+    }
+
+    @Test
+    void shouldLetARunLeasedBeforeAMigrationRenewAndEndWhileTheMigrationRuns() throws Exception {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:in-flight");
+        AgentRunLease lease = claimSubject(workspace, "review:in-flight").orElseThrow();
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            transactions.executeWithoutResult(status -> {
+                assertThat(runs.renew(lease.fence())).isPresent();
+                assertThat(runs.end(lease.fence(), AgentRunStopReason.COMPLETED))
+                        .isEqualTo(AgentRuns.EndOutcome.ENDED);
+            });
+            assertThat(state(run.id())).isEqualTo("ENDED");
+        }
     }
 
     private Optional<AgentRunLease> claim() {

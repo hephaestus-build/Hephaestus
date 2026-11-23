@@ -125,7 +125,8 @@ class ActionStore {
 
     /**
      * Adds the action already claimed by the caller, for an effect whose answer the caller waits for. Empty when the
-     * key exists: that effect belongs to its first caller.
+     * key exists, because that effect belongs to its first caller, or while a database migration runs ({@link
+     * #exists} tells the two apart).
      */
     @Transactional
     public Optional<Claim> start(ActionRequest request, Duration lease) {
@@ -142,6 +143,12 @@ class ActionStore {
                         request.expiresAt(),
                         lease.toSeconds())
                 .map(ActionStore::claim);
+    }
+
+    /** Whether an action holds this idempotency key. */
+    @Transactional(readOnly = true)
+    public boolean exists(String idempotencyKey) {
+        return actions.findIdByIdempotencyKey(idempotencyKey).isPresent();
     }
 
     /** Takes up to {@code limit} due lane heads under a new lease ({@link AgentActionRepository#claim}). */

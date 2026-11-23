@@ -151,3 +151,30 @@ Each line links the section of ADR 0070 that priced the option.
   - F-14: keep the public operations that no client calls.
   - F-15: run an interrupted Heph turn again without the developer.
   - F-16: a rolling upgrade that skips a 1.x release.
+
+## Update — 2026-11-23: a maintenance barrier refuses new claims while the migration runs
+
+A migration that runs while a run or an action holds a lease can convert a row that the holder still writes.
+Rule 1 stops every role, but nothing in the database refused a role that still ran.
+
+- **The maintenance barrier.** The migration sets the barrier before Liquibase reads its history.
+  It clears the barrier when it ends, also when it fails.
+  The barrier is the advisory lock that each migration holds already.
+  PostgreSQL drops it with the session of the migration, so a killed migration cannot leave it set.
+  Every claim path takes the same lock shared for its transaction, without waiting.
+  While the barrier is set, no claim leases a run, an action or a provider event.
+  No sandbox starts for a due run.
+  A holder still renews, requeues and ends its lease, so the work in flight finishes.
+  Only the migrator passes the barrier.
+  Enforced by: `MaintenanceBarrierArchTest`, which requires the barrier in every query that takes a new lease, and the barrier tests of `AgentRunsIntegrationTest`, `ActionStoreIntegrationTest`, `ProviderEventStoreIntegrationTest` and `AgentNextWaitsIntegrationTest`.
+  The barrier does not stop enqueues, scheduled jobs or the lease reaper. A server of 1.0.0-rc.14 or earlier does not check it at all.
+  Thus, rule 1 still applies.
+- **The lease precondition.** The barrier refuses new leases only. A lease that a stopped role left can still be live when the migration starts.
+  The first change set that converts the rows of a retired run kind opens with a precondition.
+  It halts the migration while any run or action holds a live lease.
+  Its message names the upgrade guide.
+  Not enforced yet. The pull request that adds the first conversion adds it.
+- **A removal and its conversion ship in one pull request.** A run kind that 1.0 retires is converted in the pull request that deletes it.
+  A run of a retired kind that no conversion moves ends with the stop reason `RETIRED_AT_CUTOVER`.
+  Not enforced yet. Review of each removal pull request checks it.
+- **The waiver of the rolling rules ends at 1.0.0** (rule 8). The release carries the *Stop every role* migration entry, through the `release-1-0-0` changeset ([Cut 1.0.0](../contributor/release-management.mdx#cut-100)).

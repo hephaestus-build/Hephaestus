@@ -100,6 +100,29 @@ After 10 minutes, the waiting process stops.
 PostgreSQL releases the lock when the process stops, also when the process is killed.
 The run mode also releases the Liquibase lock that a killed run left, and logs `database.migration.lock_released` with the holder and the time of that lock.
 
+### Work during a migration
+
+While a migration holds its lock, the servers claim no queued work.
+They claim no practice review, conversation turn, outbox action or provider event, and start no sandbox for one.
+A sandbox that asks for its next run gets none.
+A request that must send an outbox action at once, such as a test email, gets `503`. Try it again after the migration.
+
+The rest keeps running:
+
+- Work that started before the migration renews its lease and finishes.
+- The servers still queue new work, and provider events still arrive. They wait until the migration ends.
+- Queued work that waits past its start window still ends. A conversation turn waits at most 3 minutes, so a longer migration ends the waiting turns as not started.
+
+During a long migration, alerts on waiting work can fire, such as `HephaestusInteractiveRunWaiting`, `HephaestusOutboxStalled` and `HephaestusProviderEventsWaiting`.
+
+When the lock ends, the servers claim the waiting work again.
+This is also true when the migration fails or is killed.
+A migration starts only after the claims in progress end. A claim takes milliseconds.
+
+The lock does not stop the queueing of work, scheduled jobs or the lease reaper.
+Servers of 1.0.0-rc.14 and earlier do not check the lock at all.
+Thus, a stopped upgrade still stops every role.
+
 ### Rollouts and rollback
 
 Between the migration and the end of the rollout, both releases use the new schema.
