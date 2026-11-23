@@ -35,9 +35,12 @@ jobs:
           install: "frozen"
       # Main moves faster than its CI, so its tip is rarely validated when a run completes. The
       # script runs from the tip and versions the newest first-parent commit whose push run succeeded.
+      # The job's condition proves that the triggering run is such a run, and GitHub's run list can
+      # still omit it right after it completes.
       - name: Maintain Version PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRIGGER_SHA: ${{ github.event.workflow_run.head_sha }}
         run: node scripts/maintain-version-pr.ts
 
   # A failed maintenance leaves the Version PR stale without any other signal.

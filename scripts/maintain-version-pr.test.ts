@@ -8,6 +8,7 @@ import {
 	newestValidated,
 	pointBranch,
 	skipReason,
+	triggerSha,
 	versionPullRequest,
 } from "./maintain-version-pr.ts";
 
@@ -78,6 +79,19 @@ void test("the base is the newest first-parent commit with a successful push run
 	];
 	assert.equal(newestValidated([tip, merged, older, oldest], new Set([oldest, merged])), merged);
 	assert.equal(newestValidated([tip, merged], new Set(["e".repeat(40)])), undefined);
+});
+
+void test("the run that started maintenance validates its commit before the run list shows it", () => {
+	const [tip, merged, older] = ["d".repeat(40), "c".repeat(40), "b".repeat(40)];
+	// The list still ends at the older success: the triggering run on `merged` has just completed.
+	assert.equal(newestValidated([tip, merged, older], new Set([older]), merged), merged);
+	// A newer success in the list still wins, and a trigger that is no first parent of main counts for nothing.
+	assert.equal(newestValidated([tip, merged, older], new Set([tip]), merged), tip);
+	assert.equal(newestValidated([tip, older], new Set([older]), "e".repeat(40)), older);
+	assert.equal(triggerSha(undefined), undefined);
+	assert.equal(triggerSha(""), undefined);
+	assert.equal(triggerSha(merged), merged);
+	assert.throws(() => triggerSha("main"), /full commit SHA/u);
 });
 
 void test("a body above GitHub's limit keeps its header and points to the changelog", () => {

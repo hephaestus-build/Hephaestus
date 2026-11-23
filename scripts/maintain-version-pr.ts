@@ -32,12 +32,16 @@ export const INSTALL_ENVIRONMENT = {
 	pnpm_config_trust_policy_ignore_after: "43200",
 };
 
-/** The newest first-parent commit of main that a successful push run validated. */
+/**
+ * The newest first-parent commit of main that a successful push run validated. The run that started this maintenance
+ * validated `trigger`, but GitHub's list of successful runs can omit a run that has just completed.
+ */
 export function newestValidated(
 	firstParents: readonly string[],
 	validated: ReadonlySet<string>,
+	trigger?: string,
 ): string | undefined {
-	return firstParents.find((sha) => validated.has(sha));
+	return firstParents.find((sha) => sha === trigger || validated.has(sha));
 }
 
 export interface MaintenanceState {
@@ -99,6 +103,17 @@ export function versionPullRequest(
 }
 
 const gh = async (args: string[], input?: string) => output("gh", ["api", ...args], { input });
+
+/** The head commit of the successful main push run that started this maintenance, as `version-pr.yml` passes it. */
+export function triggerSha(value: string | undefined): string | undefined {
+	if (value === undefined || value === "") {
+		return undefined;
+	}
+	if (!/^[0-9a-f]{40}$/u.test(value)) {
+		throw new Error("TRIGGER_SHA must be a full commit SHA");
+	}
+	return value;
+}
 
 async function validatedShas(repository: string): Promise<Set<string>> {
 	const response = asRecord(
@@ -225,6 +240,7 @@ async function maintain(): Promise<void> {
 	const base = newestValidated(
 		firstParents.split("\n").filter(Boolean),
 		await validatedShas(repository),
+		triggerSha(process.env.TRIGGER_SHA),
 	);
 	if (base === undefined) {
 		throw new Error("No recent main commit has a successful push CI/CD run");

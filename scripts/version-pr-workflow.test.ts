@@ -33,7 +33,7 @@ void test("Version PR maintenance follows trusted successful main CI without can
 	);
 });
 
-void test("the maintainer runs from main's tip and reads nothing else from the event", () => {
+void test("the maintainer runs from main's tip and reads only the trigger's commit from the event", () => {
 	// `scripts/maintain-version-pr.ts` selects the validated commit to version; its tests own that.
 	const [checkout, toolchain, maintain] = steps.items;
 	assert.ok(isMap(checkout) && isMap(toolchain) && isMap(maintain));
@@ -41,10 +41,13 @@ void test("the maintainer runs from main's tip and reads nothing else from the e
 	assert.equal(checkout.getIn(["with", "fetch-depth"]), 0);
 	assert.equal(toolchain.get("uses"), "./.github/actions/setup-toolchain");
 	assert.equal(maintain.get("run"), "node scripts/maintain-version-pr.ts");
+	// The job's guard proves that this run succeeded; the script counts its commit only on main's first parents.
+	const triggerSha = `\${{ github.event.workflow_run.head_sha }}`;
+	assert.equal(maintain.getIn(["env", "TRIGGER_SHA"]), triggerSha);
 	assert.doesNotMatch(
-		JSON.stringify(steps.toJSON()),
+		JSON.stringify(steps.toJSON()).replace(JSON.stringify(triggerSha), '""'),
 		/github\.event\.workflow_run/u,
-		"the selected commit comes from main's history, not from the event",
+		"the selected commit comes from main's history; only the trigger's commit comes from the event",
 	);
 });
 
