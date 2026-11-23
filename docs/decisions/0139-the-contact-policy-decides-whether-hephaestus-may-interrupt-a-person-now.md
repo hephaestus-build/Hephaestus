@@ -6,6 +6,8 @@
 
 **Amends:** [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) rule 6 (what the client shows) and rule 7 (the kinds and quiet hours)
 
+**Relates to:** ADR 0149 (proposed in #4867, delivery experiments and the decision record)
+
 **Builds on:** [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-answers-stream-and-observations-render-as-cards.md) (messages from Hephaestus), [ADR 0133](0133-a-check-in-is-an-agreed-contact-with-a-scope.md) (agreed contact), [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) (push)
 
 ## Context
@@ -61,7 +63,7 @@ Option 6.
    Child work inherits the contact kind of its parent and cannot widen it.
 4. **Feedback on the work is not contact.** It follows the work's own settings. A person's pause never blocks it.
 5. **In the app, Hephaestus is present.** A result is available at once on its item card. The start policy of ADR 0120 decides in code whether an event starts a turn.
-6. **An unprompted message needs a reason in code.** The reasons are a new problem, a material change on an agreed goal, or an awaited result. A copy on the work withheld with a Critical or Major problem also counts (ADR 0122, proposed in #4862). Else no message is written.
+6. **An unprompted message needs a reason in code.** The reasons are a new problem, a material change on an agreed goal, or an awaited result. A further reason is a copy on the work withheld at its deadline with a Critical or Major problem. ADR 0122 (proposed in #4862) decides that case. Else no message is written.
 7. **Gates hold optional background items, never threads.**
    - Idle only holds them until 2 minutes after the person's last message.
    - Active hours hold them to the next working period.
@@ -94,6 +96,18 @@ Option 6.
 19. **The policy runs at dispatch, at the effect commit and again at send.** A pause or a Not now stops a queued contact. A notification inside quiet hours waits.
 20. **A contact change is not an authority change.** Pause, quiet hours, Not now, Less often, mute and stop never bump an authorization generation. They never stop a streaming answer or reset a cache.
 21. **Silent Mode** stops web push too, as it stops email and provider writes.
+22. **Every decision about unprompted contact is recorded.** Code writes one decision record before any model runs.
+    - It records each publish decision for a copy on the work, at the seal.
+    - It records each start of an unprompted message, at the start policy.
+    - The record holds the probability, the draw, the delivery and whether the person saw it.
+    - The person saw it at the first card open, notification open or seen message. No one is ever shown that fact.
+    - Check-in fires, requested results and stepping-back messages are recorded too. An answer to a message writes no record.
+23. **A study draws only on unprompted contact.** ADR 0149 (proposed in #4867) decides delivery experiments.
+    - A draw needs a running experiment, an enrolled person and a decision with no Critical problem.
+    - A Critical problem always speaks. A requested result and a check-in are never drawn.
+    - The draw follows the policy. A decision that the policy keeps silent is recorded and never drawn.
+    - A silent draw is a refusal with the reason `STUDY_SILENCE`. The required item ends with that reason (ADR 0120 decision 12).
+    - A silent draw writes no private message. Rule 6 counts only a copy withheld at its deadline. The item card still shows the result.
 
 ### What this changes in other ADRs
 
@@ -112,6 +126,7 @@ Option 6.
 - Bad: the notice-line fetch is one more request on each push. A failed fetch shows only the fixed text.
 - Bad: the reason check can miss an update that the person would want. "More like this" tunes it only within its three reasons.
 - Bad: Hephaestus ignores device Focus settings it cannot read. A device rule can still hide what the server sends.
+- Bad: in a delivery experiment, a Major problem can stay off the work by a silent draw. The person sees it only on the item card.
 
 ## Confirmation
 
@@ -124,6 +139,8 @@ Not enforced yet. The implementation adds these tests:
 - `ContactChangeNoBumpTest` fails when a pause bumps an authorization generation or stops a streaming answer.
 - `SendRecheckTest` fails when a contact queued before a pause is sent after it.
 - `AppOnlyStarterRouteTest` fails when an app-only starter is routed to Slack.
+- `DecisionRecordTest` fails when an unprompted decision has no record, or a model call starts before it.
+- `NeverDrawnTest` fails when a decision with a Critical problem, a requested result or a check-in gets a draw.
 
 ## Revisit trigger
 

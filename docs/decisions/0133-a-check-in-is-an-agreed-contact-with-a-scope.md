@@ -8,7 +8,7 @@
 
 **Builds on:** [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-answers-stream-and-observations-render-as-cards.md) (the main thread), [ADR 0132](0132-personal-records-are-written-by-the-persons-act-or-noted-from-their-own-words.md) (saves with Undo, goals)
 
-**Relates to:** [ADR 0139](0139-the-contact-policy-decides-whether-hephaestus-may-interrupt-a-person-now.md) (the contact policy decides each fire and its notification)
+**Relates to:** [ADR 0139](0139-the-contact-policy-decides-whether-hephaestus-may-interrupt-a-person-now.md) (the contact policy decides each fire and its notification), ADR 0149 (proposed in #4867, delivery experiments)
 
 ## Context
 
@@ -73,6 +73,13 @@ Option 5.
 17. **The purpose follows its record.** A closed goal ends its check-ins. A record in review sends them to `NEEDS_REVIEW`. Leaving a workspace ends its check-ins.
 18. **A Slack place.** A check-in in a team workspace can take that team's Slack direct message as its place. It uses the Slack route and detail level of ADR 0123 (proposed in #4862). If the binding narrows, the place falls back to the app, with one notice.
 19. **Personal-space records never enter Slack through a check-in.**
+20. **A check-in is never drawn.** A delivery experiment (ADR 0149, proposed in #4867) records each fire, and never draws one.
+21. **A result that a study holds back stays out of check-ins.**
+    - Turns that a `SCHEDULE_DUE` item started never read a held result.
+    - These turns are check-ins, the weekly reflection, the Monday focus and goal follow-ups.
+    - The hold ends at the next occasion of that practice. That is the seal of the person's next piece of work for it.
+    - The hold also ends when the person asks and an answer cites the result, or when the experiment stops.
+    - The item card and the practice page still show the held result.
 
 ### What this changes in other ADRs
 
@@ -89,6 +96,7 @@ Option 5.
 - Bad: a routine that the person ignores keeps firing until they answer the question after 3 messages.
 - Bad: the scheduler and the pre-check library are new code, with their own tests.
 - Bad: the upgrade maps each digest subscription to a schedule and each `DIGEST` run to an inbox item.
+- Bad: in a delivery experiment, a weekly reflection can leave out a result. The person may already have seen it on its card.
 
 ## Confirmation
 
@@ -101,6 +109,8 @@ Not enforced yet. The implementation adds these tests:
 - `OverdueDispositionTest` fails when an occurrence has no disposition 30 minutes after its due time while the model breaker is open.
 - `UnansweredAsksOnceTest` fails when a routine pauses, ends or slows after unanswered messages.
 - `OnlyThePersonCreatesTest` fails when a turn creates a check-in without the person's act.
+- `HeldResultOutOfScheduledTurnTest` fails when a turn that a `SCHEDULE_DUE` item started reads a held result.
+- `CheckInNeverDrawnTest` fails when a check-in fire gets a draw.
 
 ## Revisit trigger
 
