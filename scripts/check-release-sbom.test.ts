@@ -478,7 +478,11 @@ await test("Trivy must retain every emitted npm identity at its image path", () 
 const webAppManifest = (identity: string) =>
 	`/.vite/packages/${encodeURIComponent(identity)}/package.json`;
 const webAppScan = (identities: readonly string[]) => ({
-	files: identities.map((identity) => ({ location: { path: webAppManifest(identity) } })),
+	// `syft dir:` lists the scan root first, with the empty path.
+	files: [
+		{ location: { path: "" } },
+		...identities.map((identity) => ({ location: { path: webAppManifest(identity) } })),
+	],
 	artifacts: identities.map((identity) => ({
 		type: "npm",
 		foundBy: "javascript-package-cataloger",
@@ -500,9 +504,21 @@ await test("the server's web app inventory fails when a package every build bund
 			),
 		/no bundled react-dom/u,
 	);
+	// The scan root alone is no manifest: an inventory of only the root still has lost the bundle.
 	assert.throws(
 		() => assertBundledNpmInventory(webAppScan([]), SERVER_WEB_APP_BUNDLE),
 		/no bundled npm package manifests/u,
+	);
+	const withoutRoot = webAppScan(complete);
+	withoutRoot.files.shift();
+	assert.doesNotThrow(() => assertBundledNpmInventory(withoutRoot, SERVER_WEB_APP_BUNDLE));
+	assert.throws(
+		() =>
+			assertBundledNpmInventory(
+				{ ...webAppScan(complete), files: [{ location: { path: 7 } }] },
+				SERVER_WEB_APP_BUNDLE,
+			),
+		/file path must be a string/u,
 	);
 	// The image's own inventory never satisfies the web app's: it has no file under the web app's root.
 	assert.throws(

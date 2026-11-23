@@ -309,9 +309,14 @@ export const SERVER_WEB_APP_BUNDLE: NpmBundle = {
 
 function bundledNpmManifests(syft: JsonObject, bundle: NpmBundle): string[] {
 	return array(syft.files ?? [], "Syft files")
-		.map((file) =>
-			text(object(object(file, "Syft file").location, "Syft location").path, "file path"),
-		)
+		.flatMap((file) => {
+			const filePath = object(object(file, "Syft file").location, "Syft location").path;
+			// A `dir:` scan lists its root directory with the empty path. It is no file, so no manifest.
+			if (filePath === "") {
+				return [];
+			}
+			return [text(filePath, "file path")];
+		})
 		.filter((file) => file.startsWith(bundle.packages) && file.endsWith("/package.json"));
 }
 
