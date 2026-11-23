@@ -31,6 +31,9 @@ blockExoticSubdeps: true
 # every locked entry needs each package's full registry metadata, more memory than Renovate's
 # hosted job has. The setup-toolchain install in CI still verifies every entry (--no-trust-lockfile).
 trustLockfile: true
+minimumReleaseAgeExclude:
+  # DOMPurify 3.5.0 fixes security issues. Its signed release bundles match the npm files.
+  - dompurify@3.5.0
 # Astro takes `sharp` as an optional dependency. No docs build transforms an image (docs/astro.config.ts),
 # and the libvips binaries that `sharp` brings are LGPL.
 ignoredOptionalDependencies:
@@ -74,23 +77,23 @@ overrides:
   mermaid: 12.2.0
   vitest: "catalog:"
   "@vitest/browser": "catalog:"
-  dompurify: 3.4.18
+  dompurify: 3.5.0
   "js-yaml@>=4.0.0": 4.3.2
   # CVE-2026-116795. markdownlint pins 2.8.6 exactly.
-  "re2js@<2.8.7": 2.8.8
+  "re2js@<2.8.7": 2.10.0
   # CVE-2026-110816 (GHSA-6pq8-jhm2-2vcw) reaches 6.16.0 itself.
-  "qs@>=2.2.5 <6.16.1": 6.16.1
-  "shell-quote@<1.11.0": 1.11.0
-  "undici@>=8.0.0 <8.12.4": 8.12.4
+  "qs@>=2.2.5 <6.16.1": 6.17.1
+  "shell-quote@<1.11.0": 1.12.0
+  "undici@>=8.0.0 <8.13.0": 8.13.0
   "uuid@<11.1.1": 11.1.1
   # CVE-2026-118773 (GHSA-3g3m-2fjr-6pw4). No consumer releases a range that reaches 14.0.2.
   "glob@>=9.0.0 <14.0.2": 14.0.6
   # CVE-2026-118764 (GHSA-g3hv-75wg-m249). ESLint and ts-morph still require ^10.
-  "minimatch@>=10.0.0 <11.0.1": 11.0.5
+  "minimatch@>=10.0.0 <11.0.9": 11.0.9
   # CVE-2026-104844 (GHSA-rj75-hqrm-r3gf). @tailwindcss/typography pins 6.0.10 exactly.
-  "postcss-selector-parser@<6.1.5": 6.1.5
+  "postcss-selector-parser@<6.1.5": 6.1.6
   # CVE-2026-103923 (GHSA-238p-pmpm-9mq7). micromark-extension-math requires ^0.16.
-  "katex@<0.18.2": 0.18.11
+  "katex@<0.18.2": 0.19.1
 patchedDependencies:
   "@earendil-works/pi-ai@1.6.0": docker/agents/pi/patches/@earendil-works__pi-ai@1.6.0.patch
   "@hey-api/openapi-ts@0.99.0": patches/@hey-api__openapi-ts@0.99.0.patch
