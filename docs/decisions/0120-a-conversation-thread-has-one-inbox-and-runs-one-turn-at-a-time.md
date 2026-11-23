@@ -4,13 +4,17 @@
 **Date:** 2026-11-23
 **Authors:** Felix T.J. Dietrich
 
-**Amends:** [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) decisions 1, 7, 11, 13 and 21. [ADR 0079](0079-one-agent-system.md) § Interactive and proactive work.
+**Amends:** [ADR 0079](0079-one-agent-system.md) § Interactive and proactive work.
 
 **Builds on:** [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) (runs, leases and the outbox), [ADR 0079](0079-one-agent-system.md) (one sandbox for each subject)
 
 **Relates to:** [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) (the audience rule and shared threads), [ADR 0122](0122-a-copy-on-the-work-that-misses-its-deadline-is-withheld.md) (the copy deadline and delivery identity), [ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md) (the Slack route)
 
 ## Context
+
+> **Code decides when Hephaestus speaks and who may read it. A model only chooses the words.**
+
+This is the thesis of the conversation core. This ADR gives its first half. Every input to a thread is an inbox item, and code decides whether and when an item starts a turn. [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) gives the second half, the audience rule.
 
 On main, a turn answers one question ([ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md)).
 A digest is a separate `DIGEST` run, and review composition is a separate `REVIEW_COMPOSE` run.
@@ -20,11 +24,6 @@ Hephaestus now also speaks first.
 A review result, a finished task, a due check-in or a reply on the work can each need words.
 These inputs arrive at any time, also while the person types.
 The real constraint is one order of text in each thread, with no lost input and no duplicate output.
-
-An earlier internal design gave messages and these inputs two kinds of turn.
-A message made a running background turn yield, and the server requeued it.
-The requeue raced a queued successor, a quiet interval limited restart churn, and steady chat could postpone background work without a bound.
-That design had 31 concepts on the message and event path.
 
 The reference systems converge on one mailbox for each conversation and one turn at a time.
 Their background inputs never interrupt, and a person's message steers at a tool boundary (Sources).
@@ -97,16 +96,12 @@ Option 6.
 
 ### What this changes in other ADRs
 
-- [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) decision 1 says "no … steer". Steering returns, only at the tool-result boundary and only for compatible input. The rest of decision 1 stays.
-- ADR 0082 decision 7 (Stop) stays. Stop now settles within a deadline, and messages injected into a stopped turn end `STOPPED`.
-- ADR 0082 decision 11 changes. The inbox item's dedupe key takes the role of `request_id`. The limit of 3 follow-ups goes, because one turn takes every waiting compatible message.
-- ADR 0082 decision 13 ("A turn stores its entries once, at its end") becomes the commit rule of decision 10. The commit now also consumes items and inserts effects and tasks.
-- ADR 0082 decision 21 changes. A digest or a nudge is a scheduled inbox item on the main thread, and a background turn writes it. The `DIGEST` run kind goes. Admission of its claims stays.
+- [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-and-its-answers-stream.md) supersedes ADR 0082. Its table lists which decisions of ADR 0082 this ADR changes. These are decisions 1, 7, 11, 13 and 21.
 - [ADR 0079](0079-one-agent-system.md) § Interactive and proactive work says that each turn runs in band `interactive`. A turn now runs in band `interactive` or `background`.
 
 ## Consequences
 
-- Good: one path serves a message, a result, a schedule and a command. The concept count on that path drops from 31 to 23.
+- Good: one path serves a message, a result, a schedule and a command.
 - Good: a correction reaches a running answer within one tool batch.
 - Good: a required item always ends, also when the model provider is down.
 - Good: every commit is all or nothing, so a retry never repeats an effect.

@@ -4,9 +4,7 @@
 **Date:** 2026-11-23
 **Authors:** Felix T.J. Dietrich
 
-**Amends:** [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) decisions 5 and 6, and it answers that ADR's revisit trigger on team channels.
-
-**Builds on:** [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) (one route for each turn), [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) (the audience rule and shared threads), [ADR 0122](0122-a-copy-on-the-work-that-misses-its-deadline-is-withheld.md) (delivery keys and readback)
+**Builds on:** [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) (one route for each turn), [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) (the audience rule and shared threads), [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) (delivery keys and readback)
 
 ## Context
 
@@ -66,7 +64,7 @@ Option 4.
    - Each post has at most one pending update. A card update notifies nobody.
    - Only the 3 newest posts of a card within 14 days update. Older posts stay frozen with their "as of" time.
    - A card action in Slack, such as Mark card done, writes the record in PostgreSQL.
-7. **Slack delivery keys** follow [ADR 0122](0122-a-copy-on-the-work-that-misses-its-deadline-is-withheld.md) decision 10.
+7. **Slack delivery keys** follow [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) decision 1.
    - An answer or a message keys on the direct message and the source keys that it covers, at most 10.
    - The Slack message metadata carries that set. Readback and restore read it.
    - A card update keys on the post and its update generation.
@@ -86,8 +84,7 @@ Option 4.
 
 ### What this changes in other ADRs
 
-- [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) decision 5 stays for answers. A background message can now go to the Slack direct message, by decision 3.
-- ADR 0082 decision 6 stays. Its key is now the covered set of source keys of decision 7, not one question.
+- [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-and-its-answers-stream.md) supersedes ADR 0082. Its table lists how this ADR changes ADR 0082 decisions 5 and 6.
 - ADR 0082's revisit trigger "Team channels need Heph" is answered by decisions 9 to 12.
 
 ## Consequences
