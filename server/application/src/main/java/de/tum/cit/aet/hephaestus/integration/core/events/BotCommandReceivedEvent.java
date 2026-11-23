@@ -16,6 +16,8 @@ import org.jspecify.annotations.Nullable;
  * @param kind           the integration kind of the publishing SCM
  * @param workspaceId    the workspace whose connection received the comment
  * @param itemId         that workspace's canonical item for the commented pull / merge request
+ * @param noteBody       always {@link ReviewCommand#TEXT}, never the comment's words. Only the previous release's
+ *                       listener reads it, during an upgrade that runs both releases
  * @param providerId     the git provider the comment arrived from, the first half of the commenter's stable identity
  * @param authorNativeId the provider's own numeric id for the comment author, the second half. A command from an
  *                       actor the publisher cannot name is not published at all, because a subscriber that spends
@@ -29,6 +31,7 @@ public record BotCommandReceivedEvent(
         IntegrationKind kind,
         long workspaceId,
         long itemId,
+        @ContentFree String noteBody,
         long providerId,
         long authorNativeId,
         long commentId,

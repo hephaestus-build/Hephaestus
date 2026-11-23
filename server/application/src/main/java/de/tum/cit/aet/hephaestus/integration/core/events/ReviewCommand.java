@@ -11,7 +11,8 @@ import org.jspecify.annotations.Nullable;
  */
 @SourceControlContract
 public final class ReviewCommand {
-    private static final String TEXT = "/hephaestus review";
+    /** The command in its canonical form. */
+    public static final String TEXT = "/hephaestus review";
 
     private ReviewCommand() {}
 

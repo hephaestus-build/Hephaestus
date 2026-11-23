@@ -49,7 +49,8 @@ class ReviewCommandListenerTest extends BaseUnitTest {
     }
 
     private static BotCommandReceivedEvent command(@Nullable String address) {
-        return new BotCommandReceivedEvent(IntegrationKind.GITLAB, 11L, 22L, 1L, 33L, 44L, address);
+        return new BotCommandReceivedEvent(
+                IntegrationKind.GITLAB, 11L, 22L, "/hephaestus review", 1L, 33L, 44L, address);
     }
 
     @Test
@@ -90,7 +91,8 @@ class ReviewCommandListenerTest extends BaseUnitTest {
         when(requests.requestByComment(anyLong(), anyLong(), any(), any(), any()))
                 .thenThrow(new AccessForbiddenException("not linked"));
 
-        listening.on(new BotCommandReceivedEvent(IntegrationKind.GITHUB, 11L, 22L, 1L, 33L, 44L, "acme/widgets#7"));
+        listening.on(new BotCommandReceivedEvent(
+                IntegrationKind.GITHUB, 11L, 22L, "/hephaestus review", 1L, 33L, 44L, "acme/widgets#7"));
 
         verify(gitHub)
                 .reply(

@@ -76,6 +76,18 @@ await test("an assertion that only a string literal names fails the format check
 	);
 });
 
+await test("an assertion that only a dollar-quoted string names fails the format check", () => {
+	withSeeds(
+		{
+			"d10.seed.sql": "INSERT INTO legacy VALUES (1);",
+			"d10.expect.sql": "SELECT $$DO RAISE EXCEPTION$$;",
+		},
+		(directory) => {
+			assert.throws(() => readCutoverSeeds(directory), /raises no exception/u);
+		},
+	);
+});
+
 await test("an expected disposition without its seed fails the format check", () => {
 	withSeeds({ "d10.expect.sql": ASSERTION, "notes.txt": "" }, (directory) => {
 		assert.throws(

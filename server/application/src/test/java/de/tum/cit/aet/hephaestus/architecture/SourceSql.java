@@ -11,7 +11,8 @@ import java.util.regex.Pattern;
  */
 final class SourceSql {
     private static final Pattern TEXT_BLOCK = Pattern.compile("\"\"\"(.*?)\"\"\"", Pattern.DOTALL);
-    private static final Pattern STRING = Pattern.compile("\"((?:\\\\.|[^\"\\\\\\n])*)\"");
+    // An unrolled loop: a repeated alternation recurses once per character and overflows on a long literal.
+    private static final Pattern STRING = Pattern.compile("\"([^\"\\\\\\n]*+(?:\\\\.[^\"\\\\\\n]*+)*+)\"");
     private static final Pattern JOINED = Pattern.compile("\"\\s*\\+\\s*\"");
     private static final Pattern SQL_COMMENT = Pattern.compile("--[^\\n]*|/\\*.*?\\*/", Pattern.DOTALL);
 
@@ -24,8 +25,11 @@ final class SourceSql {
         Matcher strings = STRING.matcher(
                 JOINED.matcher(TEXT_BLOCK.matcher(source).replaceAll("")).replaceAll(""));
         while (strings.find()) statements.add(strings.group(1).replace("\\\"", "\""));
-        return statements.stream()
-                .map(sql -> SQL_COMMENT.matcher(sql).replaceAll(" "))
-                .toList();
+        return statements.stream().map(SourceSql::normalized).toList();
+    }
+
+    /** One SQL statement without comments, its white space collapsed, so the same query reads the same everywhere. */
+    static String normalized(String sql) {
+        return SQL_COMMENT.matcher(sql).replaceAll(" ").replaceAll("\\s+", " ").strip();
     }
 }

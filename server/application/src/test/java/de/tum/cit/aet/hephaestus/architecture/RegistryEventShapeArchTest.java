@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaModifier;
 import de.tum.cit.aet.hephaestus.core.event.ContentFree;
 import de.tum.cit.aet.hephaestus.testconfig.IdempotentListenerIntegrationTest;
 import java.lang.annotation.ElementType;
@@ -96,16 +99,7 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
 
     @Test
     void shouldTestEveryMentoringHandlerWithTheIdempotentHarness() {
-        Set<String> tested = new TreeSet<>();
-        for (var test : classesWithTests) {
-            if (inProduction(test) || test.isInterface()) continue;
-            for (Type contract : test.reflect().getGenericInterfaces()) {
-                if (contract instanceof ParameterizedType harness
-                        && harness.getRawType() == IdempotentListenerIntegrationTest.class)
-                    tested.add(harness.getActualTypeArguments()[0].getTypeName() + " <- "
-                            + harness.getActualTypeArguments()[1].getTypeName());
-            }
-        }
+        Set<String> tested = harnessTests(classesWithTests);
         var mentoring = handlers(productionTypes()).stream()
                 .filter(handler -> MentoringModules.holds(handler.listener().getPackageName()))
                 .toList();
@@ -127,6 +121,30 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
     void shouldReportAListenerThatHandlesOneEventTypeTwice() {
         assertThat(handledTwice(handlers(List.of(TwoHandlersOfOneEvent.class, ComposedListener.class))))
                 .containsExactly(TwoHandlersOfOneEvent.class.getName() + " <- " + Typed.class.getName());
+    }
+
+    @Test
+    void shouldCountOnlyAConcreteTestAsAHarnessTest() {
+        assertThat(harnessTests(classesWithTests.that(DescribedPredicate.describe(
+                        "harness fixtures",
+                        type -> type.getName().startsWith(RegistryEventShapeArchTest.class.getName() + "$")))))
+                .containsExactly(ComposedListener.class.getName() + " <- " + Typed.class.getName());
+    }
+
+    /** The listener and event pairs that a concrete test on the idempotent listener harness covers. */
+    private static Set<String> harnessTests(JavaClasses scope) {
+        Set<String> tested = new TreeSet<>();
+        for (var test : scope) {
+            if (inProduction(test) || test.isInterface() || test.getModifiers().contains(JavaModifier.ABSTRACT))
+                continue;
+            for (Type contract : test.reflect().getGenericInterfaces()) {
+                if (contract instanceof ParameterizedType harness
+                        && harness.getRawType() == IdempotentListenerIntegrationTest.class)
+                    tested.add(harness.getActualTypeArguments()[0].getTypeName() + " <- "
+                            + harness.getActualTypeArguments()[1].getTypeName());
+            }
+        }
+        return tested;
     }
 
     /** The pairs of a listener class and an event type that more than one of its methods handles. */
@@ -215,6 +233,26 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
     private @interface ComposedHandler {}
 
     private record Typed(long workspaceId, String words) {}
+
+    @SuppressWarnings("unused") // Read by ArchUnit only.
+    private abstract static class AbstractHarness
+            implements IdempotentListenerIntegrationTest<TwoHandlersOfOneEvent, Typed> {}
+
+    @SuppressWarnings("unused") // Read by ArchUnit only.
+    private static final class ConcreteHarness implements IdempotentListenerIntegrationTest<ComposedListener, Typed> {
+        @Override
+        public Events<Typed> newEvents() {
+            return new Events<>(new Typed(1L, ""), new Typed(2L, ""));
+        }
+
+        @Override
+        public void deliver(Typed event) {}
+
+        @Override
+        public Object stateAfter(Events<Typed> events) {
+            return 0;
+        }
+    }
 
     @SuppressWarnings("unused") // Read by reflection only.
     private static final class TwoHandlersOfOneEvent {

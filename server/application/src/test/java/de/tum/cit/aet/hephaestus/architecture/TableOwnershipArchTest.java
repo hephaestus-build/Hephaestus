@@ -33,6 +33,7 @@ import org.springframework.data.repository.Repository;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
@@ -66,7 +67,14 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
     void shouldReadNoTableOfAnotherModuleInSql() throws IOException {
         var modules = ModulithVerificationTest.applicationModules();
         var owners = tableOwners();
-        var inSource = new ArrayList<String>();
+        // A query annotation built from constants is whole only in the compiled class.
+        Map<String, List<String>> compiled = new TreeMap<>();
+        for (var module : modules) {
+            for (JavaClass type : module.getBasePackage().stream().toList())
+                compiled.computeIfAbsent(type.getName().replaceAll("\\$.*", ""), outer -> new ArrayList<>())
+                        .addAll(annotationSql(type));
+        }
+        var reads = new ArrayList<String>();
         try (var paths = Files.walk(SOURCES)) {
             for (Path source :
                     paths.filter(path -> path.toString().endsWith(".java")).toList()) {
@@ -74,26 +82,18 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                         SOURCES.relativize(source).toString().replace('/', '.').replace(".java", "");
                 var module = modules.getModuleByType(type);
                 if (module.isEmpty()) continue;
-                inSource.addAll(reads(
+                reads.addAll(reads(
                         module.get().getIdentifier().toString(),
                         type,
-                        SourceSql.statements(Files.readString(source)),
+                        sites(SourceSql.statements(Files.readString(source)), compiled.getOrDefault(type, List.of())),
                         owners));
             }
         }
-        // A query annotation built from constants is whole only in the compiled class.
-        var compiled = new ArrayList<String>();
-        for (var module : modules) {
-            for (JavaClass type : module.getBasePackage().stream().toList()) {
-                String outer = type.getName().replaceAll("\\$.*", "");
-                compiled.addAll(reads(module.getIdentifier().toString(), outer, annotationSql(type), owners));
-            }
-        }
-        var reads = counted(inSource, compiled);
-        assertThat(reads.stream().filter(read -> read.contains(" !mentoring")).toList())
+        var counted = counted(reads);
+        assertThat(counted.stream().filter(read -> read.contains(" !mentoring")).toList())
                 .as("Read a mentoring module's table only through its interface, and none of another from one")
                 .isEmpty();
-        LegacyBoundaryBaseline.assertMatches("legacy-native-table-reads", reads);
+        LegacyBoundaryBaseline.assertMatches("legacy-native-table-reads", counted);
     }
 
     @Test
@@ -115,17 +115,26 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                     // Prose that names a table from relationship is no SQL.
                 }
                 """;
-        assertThat(counted(reads("practices", "Fixture", SourceSql.statements(source), owners), List.of()))
+        assertThat(counted(reads("practices", "Fixture", SourceSql.statements(source), owners)))
                 .containsExactly(
                         "practices Fixture reads conversation_entry of conversation x3",
                         "practices Fixture reads relationship of relationship !mentoring x2");
+        var constants = classesWithTests.get(ConstantQueries.class);
+        assertThat(counted(reads("practices", "ConstantQueries", annotationSql(constants), owners)))
+                .containsExactly("practices ConstantQueries reads relationship of relationship !mentoring x1");
     }
 
     @Test
-    void shouldCountEachUseSoThatASecondUseOrARemovedUseChangesTheEntry() {
-        assertThat(counted(List.of("a reads t of m", "a reads t of m", "b reads u of n"), List.of("b reads u of n")))
-                .containsExactly("a reads t of m x2", "b reads u of n x1");
-        assertThat(counted(List.of(), List.of("c reads v of o"))).containsExactly("c reads v of o x1");
+    void shouldCountAnAnnotationOnceAndEveryOtherSiteOnItsOwn() {
+        String annotation = "SELECT * FROM conversation_entry WHERE id = 1";
+        String assembled = "SELECT * FROM conversation_entry WHERE id = 2";
+        String jdbc = "DELETE FROM conversation_entry";
+        var owners = Map.of("conversation_entry", "conversation");
+        assertThat(counted(reads(
+                        "practices", "T", sites(List.of(annotation, jdbc), List.of(annotation, assembled)), owners)))
+                .containsExactly("practices T reads conversation_entry of conversation x3");
+        assertThat(counted(reads("practices", "T", sites(List.of(annotation), List.of(annotation)), owners)))
+                .containsExactly("practices T reads conversation_entry of conversation x1");
     }
 
     @Test
@@ -160,18 +169,32 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                 .dependOnClassesThat()
                 .areAssignableTo(JdbcClient.class)
                 .orShould()
-                .callMethod(EntityManager.class, "createNativeQuery", String.class)
+                .callMethodWhere(DescribedPredicate.describe(
+                        "create a native query",
+                        call -> call.getTargetOwner().isAssignableTo(EntityManager.class)
+                                && call.getName().equals("createNativeQuery")))
                 .because("a query annotation is SQL that the table ownership test can read whole")
                 .allowEmptyShould(true);
     }
 
-    /** Each read and how often it occurs: in the source or in the compiled annotations, whichever sees more. */
-    private static List<String> counted(List<String> inSource, List<String> compiled) {
+    /**
+     * The SQL sites of one class: its source statements and its compiled query annotations, with an annotation that the
+     * source also shows counted once.
+     */
+    private static List<String> sites(List<String> inSource, List<String> compiled) {
+        var sites = new ArrayList<>(inSource);
+        for (String annotation : compiled) {
+            String query = SourceSql.normalized(annotation);
+            sites.remove(query);
+            sites.add(query);
+        }
+        return sites;
+    }
+
+    /** Each read and how often it occurs. */
+    private static List<String> counted(List<String> reads) {
         Map<String, Integer> counts = new TreeMap<>();
-        for (String read : inSource) counts.merge(read, 1, Integer::sum);
-        Map<String, Integer> compiledCounts = new TreeMap<>();
-        for (String read : compiled) compiledCounts.merge(read, 1, Integer::sum);
-        compiledCounts.forEach((read, count) -> counts.merge(read, count, Math::max));
+        for (String read : reads) counts.merge(read, 1, Integer::sum);
         return counts.entrySet().stream()
                 .map(entry -> entry.getKey() + " x" + entry.getValue())
                 .toList();
@@ -183,22 +206,52 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
             if (method.isAnnotatedWith(NativeQuery.class)) {
                 NativeQuery query = method.getAnnotationOfType(NativeQuery.class);
                 sql.add(query.value());
-                sql.add(query.countQuery());
+                if (!query.countQuery().isEmpty()) sql.add(query.countQuery());
             }
             if (method.isAnnotatedWith(Query.class)
                     && method.getAnnotationOfType(Query.class).nativeQuery()) {
                 Query query = method.getAnnotationOfType(Query.class);
                 sql.add(query.value());
-                sql.add(query.countQuery());
+                if (!query.countQuery().isEmpty()) sql.add(query.countQuery());
             }
         }
-        return sql;
+        return sql.stream().map(SourceSql::normalized).toList();
     }
 
     @SuppressWarnings({"unused", "UnusedNestedClass", "UnusedMethod"}) // Read by ArchUnit only.
     private interface QueriesThroughARepository extends Repository<Object, Long> {
         @Query(value = "SELECT 1", nativeQuery = true)
         int one();
+    }
+
+    private static final String TABLE = "relationship";
+
+    @SuppressWarnings({"unused", "UnusedNestedClass", "UnusedMethod"}) // Read by ArchUnit only.
+    private interface ConstantQueries extends Repository<Object, Long> {
+        @Query(value = "SELECT * FROM /* rows */ " + TABLE, nativeQuery = true)
+        List<Long> rows();
+    }
+
+    @SuppressWarnings("unused") // Read by ArchUnit only.
+    private static final class RunsNamedSql {
+        int one(NamedParameterJdbcTemplate jdbc) {
+            Integer one = jdbc.queryForObject("SELECT 1", Map.of(), Integer.class);
+            return one == null ? 0 : one;
+        }
+    }
+
+    @SuppressWarnings("unused") // Read by ArchUnit only.
+    private static final class RunsClientSql {
+        Object one(JdbcClient jdbc) {
+            return jdbc.sql("SELECT 1").query().singleValue();
+        }
+    }
+
+    @SuppressWarnings("unused") // Read by ArchUnit only.
+    private static final class RunsTypedNativeQuery {
+        Object one(EntityManager entities) {
+            return entities.createNativeQuery("SELECT 1", Long.class).getSingleResult();
+        }
     }
 
     @SuppressWarnings("unused") // Read by ArchUnit only.

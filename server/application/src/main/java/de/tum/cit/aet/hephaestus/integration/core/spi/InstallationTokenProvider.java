@@ -6,6 +6,7 @@ import org.jspecify.annotations.Nullable;
  * Provides a scope's (workspace's) access to its source-control provider. Provider-specific token work (GitHub App
  * tokens, GitLab validation) stays in the token services that consume this SPI.
  */
+@SourceControlContract
 public interface InstallationTokenProvider {
 
     /** The scope's connection settings, from one read of its active GitHub or GitLab connection. Reads no credential. */

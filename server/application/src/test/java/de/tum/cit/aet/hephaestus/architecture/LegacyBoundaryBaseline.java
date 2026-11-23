@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -28,12 +29,12 @@ final class LegacyBoundaryBaseline {
         added.removeAll(listed);
         var fixed = new TreeSet<>(listed);
         fixed.removeAll(actual);
-        assertThat(added)
-                .as("New module-boundary violations. Go through the owner's interface instead (%s)", name)
-                .isEmpty();
-        assertThat(fixed)
-                .as("Fixed violations that %s.txt still lists. Remove these lines", name)
-                .isEmpty();
+        assertThat(Map.of("new", added, "fixed", fixed))
+                .as(
+                        "Module-boundary violations against %s.txt. Go through the owner's interface instead of adding one,"
+                                + " and remove or lower the line of one you fixed",
+                        name)
+                .isEqualTo(Map.of("new", Set.of(), "fixed", Set.of()));
     }
 
     private static Set<String> listed(String name) {

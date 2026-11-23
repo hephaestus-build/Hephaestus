@@ -6,28 +6,31 @@ import static org.mockito.Mockito.mock;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.SecurityRetentionDeletionProof;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.util.ReflectionUtils;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -207,6 +210,14 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
 
     /** Columns whose name matches the person heuristic but that hold no person. */
     private static final Map<String, String> NOT_A_PERSON = Map.of(
+            "git_commit.authored_by_committer",
+            "Whether the author also committed the commit: a flag",
+            "git_commit.signature_was_signed_by_github",
+            "Whether GitHub signed the commit: a flag",
+            "item_event.found_by",
+            "How the event was found: a fixed code",
+            "organization.login",
+            "The login of a provider organization",
             "git_commit.on_behalf_of_login",
             "The login of the organization on whose behalf a web commit was made",
             "llm_model.operated_by",
@@ -305,8 +316,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
 
     /**
      * A person column of a catalogued table needs an erasure action that reaches it. A store that selects the person's
-     * rows through the column deletes them, or its redaction clears the column, or an UPDATE or DELETE statement in the
-     * catalog's package names the table and the column. Otherwise {@link #PERSON_COLUMNS_OUTSIDE_THE_CATALOG} states
+     * rows through the column deletes them, or its redaction assigns the column. In the catalog's package, an UPDATE of
+     * the table that assigns the column counts, and so does a DELETE from the table whose WHERE names it. Otherwise {@link #PERSON_COLUMNS_OUTSIDE_THE_CATALOG} states
      * what erases or keeps it. A mention in a comment or an export projection is no action: a catalog that selects rows
      * by their owner's {@code account_id} would leave a second person's reference, such as a reviewer's, in place.
      */
@@ -315,10 +326,17 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         var catalogs = catalogSources();
         var erasures = new ArrayList<Erasure>();
         for (var store : registry.stores())
-            if (store instanceof JdbcPersonDataStore jdbcStore) erasures.add(erasure(jdbcStore));
+            jdbcStore(store, 3).map(PersonalDataMapArchTest::erasure).ifPresent(erasures::add);
         for (String source : catalogs.values()) erasures.addAll(statementErasures(source));
-        assertThat(unerasedColumns(personColumns(), catalogs.keySet(), erasures))
-                .as("person columns that no erasure action reaches: erase or redact them in the catalog, or state why")
+        var unerased = unerasedColumns(personColumns(), catalogs.keySet(), erasures);
+        assertThat(unerased)
+                .as(
+                        "person columns that no erasure action reaches: erase or redact them in the catalog, or state why."
+                                + " Erasures of their tables: %s",
+                        erasures.stream()
+                                .filter(erasure ->
+                                        unerased.stream().anyMatch(column -> column.startsWith(erasure.table() + ".")))
+                                .toList())
                 .isEmpty();
         assertThat(PERSON_COLUMNS_OUTSIDE_THE_CATALOG.keySet())
                 .as("PERSON_COLUMNS_OUTSIDE_THE_CATALOG entries that are no longer a person column")
@@ -351,39 +369,99 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
 
         mentioned.addAll(
                 statementErasures(
+                        "String touch = \"UPDATE conversation SET last_activity_at = now() WHERE reviewer_account_id = :reviewer\";"));
+        assertThat(unerasedColumns(columns, Set.of("conversation"), mentioned))
+                .as("an update that only selects by the column leaves the reference in place")
+                .containsExactly("conversation.reviewer_account_id");
+
+        var cleared = new ArrayList<Erasure>(mentioned);
+        cleared.addAll(
+                statementErasures(
                         "String erase = \"UPDATE conversation SET reviewer_account_id = NULL WHERE reviewer_account_id = :account\";"));
-        assertThat(unerasedColumns(columns, Set.of("conversation"), mentioned)).isEmpty();
+        assertThat(unerasedColumns(columns, Set.of("conversation"), cleared)).isEmpty();
+        var deleted = new ArrayList<Erasure>(mentioned);
+        deleted.addAll(statementErasures(
+                "String delete = \"DELETE FROM conversation WHERE reviewer_account_id = :account\";"));
+        assertThat(unerasedColumns(columns, Set.of("conversation"), deleted)).isEmpty();
     }
 
     /** Person columns of catalogued tables that something other than their catalog erases, or that erasure keeps. */
     private static final Map<String, String> PERSON_COLUMNS_OUTSIDE_THE_CATALOG = Map.of(
+            "account.primary_email",
+            "AccountPurger clears it on the account row, which erasure keeps as a tombstone",
+            "commit_contributor.email",
+            "The email of the contributor that user_id names. The row goes when that user is erased",
+            "product_feedback_filing.mention_login",
+            "The reporter's own login. The row goes when the reporter's report is erased",
+            "repository.name_with_owner",
+            "A repository's owner and name: the namespace of its source, kept as SOURCE_NAMESPACE keeps it",
             "auth_event.identity_id",
             "Erasure deletes the identity, and sfk_auth_event_identity sets this column NULL",
             "product_feedback_filing.publish_requested_by",
             "A Hephaestus maintainer's GitHub login on another person's report. It goes when that report is erased");
 
-    private static final Pattern ERASING_STATEMENT =
-            Pattern.compile("\\b(?:update|delete)\\b", Pattern.CASE_INSENSITIVE);
-
     /**
-     * SQL that erases: the columns an erasure clears or selects deleted rows by. A table of {@code null} means any table
-     * that the statement names.
+     * What an erasure reaches in a table: the columns that it assigns, or the columns by which it selects the rows that
+     * it deletes.
      */
-    private record Erasure(@Nullable String table, String sql) {}
+    private record Erasure(String table, String assigned, String deletedBy) {}
 
-    /** A store deletes the rows that its predicate selects, or clears the columns of its redaction on them. */
+    /** A store deletes the rows that its predicate selects, or assigns the columns of its redaction on them. */
     private static Erasure erasure(JdbcPersonDataStore store) {
-        String redaction = (String) Objects.requireNonNull(ReflectionTestUtils.getField(store, "redaction"));
-        String predicate = (String) Objects.requireNonNull(ReflectionTestUtils.getField(store, "predicate"));
-        String table = (String) Objects.requireNonNull(ReflectionTestUtils.getField(store, "table"));
-        return new Erasure(table, redaction.isEmpty() ? predicate : redaction);
+        String redaction = storeField(store, "redaction");
+        String predicate = storeField(store, "predicate");
+        String table = storeField(store, "table");
+        return redaction.isEmpty() ? new Erasure(table, "", predicate) : new Erasure(table, redaction, "");
     }
 
+    /** The JDBC store that a contributor is, or that it delegates to, such as a store that a wrapper fences. */
+    private static Optional<JdbcPersonDataStore> jdbcStore(Object contributor, int depth) {
+        if (contributor instanceof JdbcPersonDataStore store) return Optional.of(store);
+        if (depth == 0) return Optional.empty();
+        for (Class<?> type = contributor.getClass(); type != Object.class; type = type.getSuperclass()) {
+            for (Field field : type.getDeclaredFields()) {
+                if (!PersonDataContributor.class.isAssignableFrom(field.getType())) continue;
+                ReflectionUtils.makeAccessible(field);
+                Object delegate = ReflectionUtils.getField(field, contributor);
+                if (delegate != null) return jdbcStore(delegate, depth - 1);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** A field of the store itself: a subclass may declare its own field of the same name. */
+    private static String storeField(JdbcPersonDataStore store, String name) {
+        Field field = Objects.requireNonNull(ReflectionUtils.findField(JdbcPersonDataStore.class, name));
+        ReflectionUtils.makeAccessible(field);
+        return (String) Objects.requireNonNull(ReflectionUtils.getField(field, store));
+    }
+
+    private static final Pattern UPDATE = Pattern.compile(
+            "\\bupdate\\s+(?:only\\s+)?\"?(\\w+)\"?.*?\\bset\\b(.*)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern DELETE = Pattern.compile(
+            "\\bdelete\\s+from\\s+(?:only\\s+)?\"?(\\w+)\"?.*?\\bwhere\\b(.*)",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern WHERE = Pattern.compile("\\bwhere\\b", Pattern.CASE_INSENSITIVE);
+
+    /** The SET list of an UPDATE: up to its last WHERE, since a subquery inside the list has a WHERE of its own. */
+    private static String setList(String tail) {
+        var where = WHERE.matcher(tail);
+        int end = tail.length();
+        while (where.find()) end = where.start();
+        return tail.substring(0, end);
+    }
+
+    /** The UPDATE and DELETE statements of a source file, by what they reach. */
     private static List<Erasure> statementErasures(String source) {
-        return SourceSql.statements(source).stream()
-                .filter(sql -> ERASING_STATEMENT.matcher(sql).find())
-                .map(sql -> new Erasure(null, sql))
-                .toList();
+        var erasures = new ArrayList<Erasure>();
+        for (String sql : SourceSql.statements(source)) {
+            var update = UPDATE.matcher(sql);
+            if (update.find())
+                erasures.add(new Erasure(update.group(1).toLowerCase(Locale.ROOT), setList(update.group(2)), ""));
+            var delete = DELETE.matcher(sql);
+            if (delete.find()) erasures.add(new Erasure(delete.group(1).toLowerCase(Locale.ROOT), "", delete.group(2)));
+        }
+        return erasures;
     }
 
     private static List<String> unerasedColumns(
@@ -402,10 +480,11 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
     }
 
     private static boolean erases(Erasure erasure, String table, String column) {
-        boolean ofTable = erasure.table() == null
-                ? names(erasure.sql(), table)
-                : erasure.table().equals(table);
-        return ofTable && names(erasure.sql(), column);
+        return table.equals(erasure.table())
+                && (Pattern.compile("\\b" + column + "\\s*=")
+                                .matcher(erasure.assigned())
+                                .find()
+                        || names(erasure.deletedBy(), column));
     }
 
     private static boolean names(String sql, String identifier) {
