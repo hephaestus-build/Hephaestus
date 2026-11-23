@@ -40,6 +40,17 @@ scope their operations to the supplied workspace.
 | `@RequireAtLeastWorkspaceAdmin` | Requires ADMIN or OWNER role                            |
 | `@RequireWorkspaceOwner`        | Requires OWNER role only                                |
 
+## Person-owned tables
+
+Mark a person-owned entity with `@PersonOwned`.
+Its migration must add an indexed account column and an owner policy that calls `public.current_owner_account()`.
+Set `security_invoker` on each view over those rows.
+`PersonTableRlsCompletenessTest` checks the policy, index and views of each marked entity.
+
+Bind the signed-in account with `OwnerScope.fromPrincipal` in the transaction that accesses the rows.
+A worker binds the account from its stored job.
+Keep the workspace column and workspace checks on rules and endpoints that use workspace data.
+
 ## Authorization
 
 Instance admins can access active workspaces as ADMIN without a membership or an SCM identity.

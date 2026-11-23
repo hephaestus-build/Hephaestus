@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.export;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonOwned;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -42,6 +43,7 @@ import org.jspecify.annotations.Nullable;
  * {@code GLOBAL_ENTITIES} allowlist, alongside the other {@code core.auth} identity tables.
  */
 @Entity
+@PersonOwned
 @Table(name = "account_export")
 @Getter
 @Setter
