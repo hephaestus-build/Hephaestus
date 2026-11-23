@@ -54,14 +54,14 @@ Option 5.
    - Code checks that each cited entry has the person as its origin. A prompt rule alone is not enough.
    - It is never evidence about the person's work, and never about a third party.
    - It never supports a card or another record, and it never gets a grant.
-   - It never travels. "Keep and take along" is the person's act that turns it into a person-authored record with author kind `PERSON`.
+   - It never travels. The person's **Keep** turns it into a person-authored record with author kind `PERSON`. Only then can **Take along** transfer it.
 4. **A kept-in-mind item** comes from compaction and stays in its workspace for 400 days. The person can keep it.
 
 5. **One list shows every kind.** It holds the help settings and, for each workspace, the noted records and the kept-in-mind items, with their sources.
 6. **Each line has up to three actions.**
    - **Forget** redacts the item and leaves a tombstone. Hephaestus does not note it again until the person says it again.
    - **Not right** records a correction request. The item stops shaping answers until new evidence supports it.
-   - **Keep** turns a kept-in-mind item into a noted record, under record retention.
+   - **Keep** turns a kept-in-mind item into a person-authored record, under record retention.
 7. **Freshness.** A noted `CONTEXT` record expires 120 days after its last use or confirmation. Help settings and noted preferences do not expire.
 8. **A new note on the same subject supersedes the old one.** The old one stays in the record's history. Notes never stack.
 9. **The always-loaded block has a hard size limit.** It fills in this order: goals, corrections, help settings, preferences, context. Recall searches the rest.
@@ -95,7 +95,7 @@ Option 5.
 Not enforced yet. The implementation adds these tests:
 
 - `NotedRecordOriginTest` fails when a noted record cites an entry whose origin is not the person.
-- `NotedRecordNeverTravelsTest` fails when a noted record passes the transfer path without "Keep and take along".
+- `NotedRecordNeverTravelsTest` fails when a noted record passes the transfer path without **Keep** and **Take along**.
 - `ForgetLatchTest` fails when Hephaestus notes a forgotten item again before the person says it again.
 - `NoteSupersedesTest` fails when two active notes on one subject exist.
 - `ChangedSinceShownTest` fails when a card whose consequence digest changed is accepted.
@@ -104,7 +104,7 @@ Not enforced yet. The implementation adds these tests:
 ## Revisit trigger
 
 - Over four weeks, people use Forget or Not right on more than 10 % of noted records.
-- People ask for a noted record to follow them across workspaces without "Keep and take along".
+- People ask for a noted record to follow them across workspaces without **Keep** and **Take along**.
 - An evaluation case shows a memory-induced agreement with a wrong claim.
 
 ## Sources

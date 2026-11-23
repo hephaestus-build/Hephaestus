@@ -36,7 +36,7 @@ The real constraint is that the person agreed to each return, and each agreed oc
 
 1. **Keep the weekly digest as the only return.** People cannot agree on the moments that matter to them, such as a draft before review.
 2. **Proactive messages that the model times.** The model decides when to come back. Timing is not checkable, it costs model calls when nothing changed, and the person never agreed to it.
-3. **Scheduled tasks that pause when unanswered,** as ChatGPT tasks may pause when inactive. A routine that the person still values goes quiet with no question. A mentor who goes silent on their own is not a mentor.
+3. **Scheduled tasks that pause when unanswered,** as ChatGPT tasks may pause when inactive. A check-in that the person still values goes quiet with no question. A mentor who goes silent on their own is not a mentor.
 4. **A step-down after unanswered messages.** Inferred dislike makes Hephaestus timid, and the person cannot see why it changed.
 5. **A check-in: an agreed contact with a scope, a stable occurrence identity and a deterministic pre-check (chosen).**
 
@@ -72,8 +72,8 @@ Option 5.
 12. **The rhythm choice at first sign-in** offers "Monday focus", "Only when I ask" and "Choose later". The same screen offers notifications.
     - An offer creates nothing. The person's choice is the act that saves the check-in, with Undo ([ADR 0132](0132-personal-records-are-written-by-the-persons-act-or-noted-from-their-own-words.md) decision 11).
 13. **The weekly reflection replaces the weekly digest for a person who turns it on.** It carries the digest's links to feedback already delivered. Turning it off restores the plain digest if the digest was on. Everyone else keeps the opt-in digest.
-14. **Agreed routines stay** until the person stops them, their conditions fail, or access ends. Hephaestus never pauses, ends or slows a check-in on its own.
-15. **After 3 unanswered messages from a routine,** Hephaestus asks once, in place: "Keep this check-in?". Keep is the default. Any answer resets the count.
+14. **Agreed check-ins stay** until the person stops them, their conditions fail, or access ends. Hephaestus never pauses, ends or slows a check-in on its own.
+15. **After 3 unanswered messages from a check-in,** Hephaestus asks once, in place: "Keep this check-in?". Keep is the default. Any answer resets the count.
 16. **"Less often" and "Stop this check-in" sit on every check-in message.** Pause has its reverse, Resume. Stop can be undone while the row exists.
 17. **The purpose follows its record.** A closed goal ends its check-ins. A record in review sends them to `NEEDS_REVIEW`. Leaving a workspace ends its check-ins.
 18. **A Slack place.** A check-in in a team workspace can take that team's Slack direct message as its place. It uses the Slack route and detail level of ADR 0123 (proposed in #4862). If the binding narrows, the place falls back to the app, with one notice.
@@ -91,7 +91,7 @@ Option 5.
 - Good: a due occurrence always ends with a message, a recorded skip or an app entry. This holds also during a model outage.
 - Good: a restart, a time zone change or a daylight-saving change never fires one occurrence twice.
 - Bad: moving east across the date line can skip one local date. A skip is accepted, because a duplicate costs more.
-- Bad: a routine that the person ignores keeps firing until they answer the question after 3 messages.
+- Bad: a check-in that the person ignores keeps firing until they answer the question after 3 messages.
 - Bad: the scheduler and the pre-check library are new code, with their own tests.
 - Bad: the upgrade maps each digest subscription to a schedule and each `DIGEST` run to an inbox item.
 - Bad: in a delivery experiment, a weekly reflection can leave out a result. The person may already have seen it on its card.
@@ -108,7 +108,7 @@ Not enforced yet. The implementation adds these tests:
 - `LateSlotTest` fails when a slot found after its grace runs a model or sends a notification.
 - `NoBurstTest` fails when one check-in writes two overdue entries after an outage.
 - `FirstSignInOfferTest` fails when the rhythm choice at first sign-in offers the weekly reflection.
-- `UnansweredAsksOnceTest` fails when a routine pauses, ends or slows after unanswered messages.
+- `UnansweredAsksOnceTest` fails when a check-in pauses, ends or slows after unanswered messages.
 - `OnlyThePersonCreatesTest` fails when a turn creates a check-in without the person's act.
 - `HeldResultOutOfScheduledTurnTest` fails when a turn that a `SCHEDULE_DUE` item started reads a held result.
 - `CheckInNeverDrawnTest` fails when a check-in fire gets a draw.

@@ -71,7 +71,7 @@ Option 6.
    - **Sometimes**, the default, allows at most 1 a day.
    - **Often** allows at most 3 a day, at least 3 hours apart.
    - **Lighter touch until a date** sets the level to Only when agreed until that date. The person sets it on a check-in message. It ends at the date, or with Undo.
-5. **Feedback on the work is not contact.** It follows the work's own settings. A person's pause never blocks it.
+5. **Feedback on the work is not contact.** It follows the work's own settings. A person's pause never blocks it. Decision 18 still records each decision to post it, as a delivery decision.
 6. **In the app, Hephaestus is present.** A result is available at once on its item card. The start policy of ADR 0120 decides in code whether an event starts a turn.
 7. **An unprompted message needs a reason in code.** Else no message is written.
    - The reasons are a new admitted problem, a material change on an agreed goal, or an awaited result.
@@ -98,14 +98,15 @@ Option 6.
 14. **Dedupe works on the problem and its version,** never on the practice across workspaces.
 15. **Rules narrow, never widen.** The instance and the workspace may turn off messages that Hephaestus starts. The person's controls narrow further. A rule that cannot be evaluated removes the effect.
 16. **Silence is never read as dislike.** No rule lowers contact because messages went unanswered. [ADR 0133](0133-a-check-in-is-an-agreed-contact-with-a-scope.md) owns the one question that Hephaestus asks instead.
-17. **The policy runs at dispatch, at the effect commit and again at send.** A pause or a Not now stops a queued contact. A notification inside quiet hours waits.
+17. **The policy runs at dispatch, at the effect commit and again at send.** A pause or a Not now stops a queued contact. A notification inside quiet hours waits. At send, a notification whose message the person already saw is not sent.
     ADR 0134 (proposed in #4863) owns the order at each boundary. It also decides that a contact change is not an authority change.
-18. **Every decision to contact a person is recorded.** Code writes one `decision_point` row at each decision to contact a person, before any model runs.
+18. **Every decision to reach a person is recorded.** Code writes one `decision_point` row at each such decision, before any model runs.
     - A copy on the work: at the seal, in its transaction.
     - An unprompted message: at the start policy, when the inbox item is inserted.
     - An agreed check-in, a requested result and a stepping-back message: recorded too.
     - An answer to a message is not a decision to contact. It writes no row.
-    - A row holds the contact kind, the practices, the item, the version and the severity.
+    - A row holds its kind: `COPY_ON_THE_WORK` or a contact kind of decision 3.
+      It holds the practices, the item, the version and the severity.
       It also holds the policy's result, the action and the delivery. The action is `SPOKE`, `POLICY_SILENCE` or `STUDY_SILENCE`.
     - The table is workspace-scoped and append-only. An update may only fill an empty delivery column. Account erasure deletes the person's rows, and every row expires after 400 days.
     - The record exists so that every silence has a reason that code wrote. No product or staff surface shows a person's rows.
