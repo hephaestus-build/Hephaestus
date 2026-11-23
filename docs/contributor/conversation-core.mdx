@@ -4,11 +4,15 @@ description: How threads, inbox items, turns and effects make Hephaestus an AI m
 page_type: explanation
 ---
 
-Hephaestus is an AI mentor. The conversation core gives it one model for every input. Each input to a thread is an inbox item. One turn at a time consumes the inbox items of a thread.
+> **Code decides when Hephaestus speaks and who may read it. A model only chooses the words.**
+
+Hephaestus is an AI mentor. The conversation core is where that thesis becomes code.
+
+The core gives Hephaestus one model for every input. Each input to a thread is an inbox item. One turn at a time consumes the inbox items of a thread.
 Two rules keep it correct. A turn commits all its writes in one transaction, and a turn reads only what every reader of its output may read.
 
 :::note
-This page describes the accepted design of the conversation core. The code does not have all of it yet.
+This page describes the proposed design of the conversation core. Its decisions are proposed ADRs, and the code does not have all of it yet.
 A box or a state with the keyword `«planned»` is a part that the design adds.
 [System design](./system-design.mdx) and [Conversation runtime](./unified-pi-runtime.mdx) describe what the server does today.
 :::
