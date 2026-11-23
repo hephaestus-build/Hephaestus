@@ -29,8 +29,7 @@ This ADR supersedes ADR 0082 once.
 It states the conversation as rules, in the terms of ADR 0120, and its table says where each rule of ADR 0082 now lives.
 The other ADRs of the set do not amend ADR 0082.
 
-The **conversation agent** is the agent that runs turns on one account's private threads.
-Hephaestus is the application. It is not an agent.
+The conversation agent of ADR 0120 runs the turns of these threads. Hephaestus is the application, not an agent.
 
 ## Decision drivers
 
@@ -70,7 +69,7 @@ Option 4.
 12. **A requested result appears where it was requested,** on the route of the thread that asked ([ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 8).
 13. **The ledger is the memory of the conversation.** Each turn rebuilds its request from rows. The ledger, the personal records of ADR 0132 and the summaries are the only memory.
 14. **Commit, then show.** The server commits a row before a client shows it. No row stores a partial answer. The stream travels in `NOTIFY` frames below 8000 bytes.
-15. **Compaction** covers only the committed prefix. A pending message is never in a summary. An events entry keeps its provenance mark.
+15. **Compaction** covers only the committed prefix. A pending message is never in a summary. An entry of inbox events keeps its provenance mark.
 16. **"What Hephaestus used"** under each answer lists the personal records and entries that the answer drew on.
 17. **Hephaestus reads, and never builds or writes.** It reads its context folder and loads repositories. It cannot build, run tests or write to a repository.
 18. **Erasure stops the ledger.** Each ledger write holds the owner's person-data write fence. Entries expire 400 days after they were written, unless the person keeps an item (ADR 0132).

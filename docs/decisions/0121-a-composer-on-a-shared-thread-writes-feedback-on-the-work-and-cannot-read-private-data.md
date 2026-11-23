@@ -44,12 +44,14 @@ The real constraint is the input of the writer, not the text of its output.
 Option 4.
 
 1. **The audience rule.** Each thread is private or shared. A turn reads only sources that every reader of its output may read.
+   [ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md) decision 5 states the one exception: the person's Slack grant.
 2. **Private threads belong to one account's conversation agent.** The conversation agent never writes on the work. It has no tool that reaches a shared place.
 3. **Shared threads belong to the workspace.** A **work place** is the shared thread of one pull request or merge request.
+   - In 1.0, an issue gets no work place and no copy on the work. ADR 0124 (proposed in #4866) states the issue scope.
    - Its key is the workspace and the provider target.
    - The seal of the first review with an eligible copy on the work creates it.
    - A Slack channel thread is the other shared kind ([ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md)).
-4. **The feedback composer runs the turns of a work place.** It reads only scoped projections. Their SQL binds workspace, audience, place kind and canonical place together. The projections are:
+4. **The composer runs the turns of every shared thread.** On a work place, it reads only scoped projections. Their SQL binds workspace, audience, place kind and canonical place together. The projections are:
    - the eligible set for the work of this place and version.
    - the cited parts of the work.
    - the provider thread of Hephaestus's own copies, with replies and thread states.
@@ -68,15 +70,25 @@ Option 4.
    - The person confirms it on the item card, after a preview such as "Post 2 problems on PR #412".
    - The confirmation binds to the preview's receipt: operation ID, place, review, head, generation and shown selection.
    - If a fact changed, the server returns a fresh preview and writes nothing. A repeated confirmation writes nothing.
-   - The commands are Request a new copy, Exclude, Include again, Withdraw and Post these exact words. Each has its reverse.
+   - The commands are Request a new copy, Exclude, Include again, Withdraw and Post these exact words.
+   - Exclude and Include again reverse each other. Withdraw reverses any posted copy.
+   - Request a new copy and Post these exact words have no cancel. Withdraw removes the copy that they post.
+   - Exclude of a Critical or Major problem needs the workspace policy `allowSevereExclusion`. It is off by default.
+   - When the policy is off, the preview refuses that selection and says why.
+   - A workspace admin turns the policy on or off in either admin console. Each is the other's reverse.
    - The conversation agent can attach a command control to its message. It never issues a command.
    - The composer sees "post now" or "leave problem p out", never why. A reason stays in a private row.
 9. **The composer can answer a reply to its own copy,** in Automatic mode only.
    - The item is open, the head is the reviewed head, and the reply is less than 24 hours old.
    - At most one reply for each turn, and three for each thread and day. It never answers a bot.
    - A person who resolved the thread wins. The composer never edits a copy because of a reply.
-10. **Graded work uses no model on the work.** In a workspace that marks its work as graded, a fixed renderer writes every copy from the eligible set. The same guardrails and send checks apply.
+10. **Graded work uses no model on the work.** **Graded work** is a workspace mode.
+    - In it, a fixed renderer writes every copy on the work from the eligible set.
+    - The same guardrails and send checks apply.
+    - ADR 0149 (proposed in #4868) decides how graded work and a delivery experiment exclude each other.
 11. **The practice-page copy.** The composer writes it for results in the eligible set for the work. The conversation agent writes it for private-only results. Until a copy exists, the page renders the admitted results from rows.
+    - The composer's copy has one reader, the author. The author also reads the work, and the copy uses only shared inputs.
+    - So it fits one output route for each turn ([ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 8).
 12. **No model-based disclosure check.** The composer has no private input, so isolation tests prove the boundary. They assert workspace, place and audience together, with row-level fixtures. They run on the packaged server as a release gate.
 13. **Cutover.** Outside the rollout, main's `REVIEW_COMPOSE` stays the producer until the cutover, with its own lease check.
 
@@ -86,6 +98,7 @@ Option 4.
 - ADR 0086 decision 2 loses the `REVIEW_COMPOSE` run kind after the cutover.
 - ADR 0086 decision 12 stays and grows. The tools return staged drafts, and `reply_on_work` joins them.
 - ADR 0086 decision 13 stays: one notifying write, at most 3 edits and 12 model calls.
+- ADR 0137 (proposed in #4863) decision 10 points here. The `allowSevereExclusion` policy belongs to the Exclude command of decision 8.
 - [ADR 0079](0079-one-agent-system.md) § Interactive and proactive work runs `review_compose` in the review's sandbox. So does its update on the review run kinds. The composer now runs in the sandbox of its work place.
 
 ## Consequences
@@ -95,7 +108,10 @@ Option 4.
 - Good: a reply on the work and a person's command use the same inbox and commit rule as other input.
 - Bad: the composer cannot use what the person said privately, also when that would improve the copy.
 - Bad: a person who wants a change on the work must confirm a command on the card. A request in the conversation alone changes nothing.
-- Bad: one more sandbox subject for each open pull request with a copy. A warm review sandbox no longer composes.
+- Bad: two writers describe one review independently. The composer writes for the team, and the conversation agent writes for the person.
+  Citation tokens keep the outcomes equal. Nothing keeps the emphasis or the suggested next step consistent.
+- Bad: each open pull request with a copy costs one more turn and one more sandbox subject. A warm review sandbox no longer composes.
+- Bad: a confirmed Request a new copy cannot be stopped before it posts. Withdraw removes the copy after the post.
 - Bad: a bug in a projection's SQL is a leak. The isolation tests and review of each projection carry that risk.
 
 ## Confirmation
@@ -106,6 +122,7 @@ Not enforced yet. The implementation adds these tests:
 - `ComposerTokenContradictionTest` fails when a body states an outcome that contradicts its token.
 - `ExclusionBumpsEligibleSetTest` fails when a confirmed exclusion of a Major problem does not change the set and its generation first.
 - `PreviewDriftTest` and `RepeatedConfirmationTest` fail when a stale or repeated confirmation writes.
+- `ExclusionRefusedInPreviewTest` fails when the preview allows a Major exclusion while `allowSevereExclusion` is off.
 - A gateway test fails when a tool of one place kind answers a lease of another place kind.
 
 ## Revisit trigger

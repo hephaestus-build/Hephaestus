@@ -29,10 +29,12 @@ The reference systems converge on one mailbox for each conversation and one turn
 Their background inputs never interrupt, and a person's message steers at a tool boundary (Sources).
 
 **Terms in this ADR.**
-An **event** is an inbox item that no person typed, such as a finished review, a finished task or a due schedule.
-It is wider than the review glossary's Event, which is one change to an item.
-The **conversation agent** is the agent that runs turns on one account's private threads. Hephaestus is not an agent.
-When this ADR is accepted, the two glossaries take these terms and the changed meaning of Turn.
+An **inbox event** is an inbox item that no person typed, such as a finished review, a finished task or a due schedule.
+The review glossary's Event keeps its own meaning: one change to an item.
+The **conversation agent** runs turns on one account's private threads. Hephaestus is not an agent.
+
+A **task** is background work that a turn requests and that runs as its own run (decision 16).
+The glossary rows for these terms and the planned meaning of Turn are proposed in #4866.
 
 ## Decision drivers
 
@@ -58,7 +60,7 @@ Option 6.
 1. **The thread is the unit of order.** Each thread has one inbox and one audience. A private thread also has one transcript.
    - Private threads are the main thread, a message thread and a work thread. A work thread starts at one item card.
    - Shared threads are a work place ([ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md)) and a Slack channel thread ([ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md)).
-2. **Every input is an inbox item.** An item is a message or an event. It carries IDs only, a dedupe key, a custody class, a due time, a reader set and a pinned route.
+2. **Every input is an inbox item.** An item is a message or an inbox event. It carries IDs only, a dedupe key, a custody class, a due time, a reader set and a pinned route.
 3. **Ingest writes the item in the transaction of its source.** A message also writes its entry at once, so the person sees it. A second insert with the same dedupe key does nothing.
 4. **A start policy in code decides each item.** The table names its thread, its custody, its route, whether it starts a turn and when.
    - The model decides nothing about dispatch.
@@ -66,16 +68,18 @@ Option 6.
    - A workspace or a person can make the policy quieter, never louder.
 5. **One live turn for each thread.** A turn is an `agent_run` of kind `TURN` on the subject `conversation:<thread id>`. Threads run in parallel.
 6. **One kind of turn.** A turn that holds a message is interactive. Else it is background. The band follows that class.
-7. **The claim freezes a batch.** A message is due 500 ms after the last message of its burst. It is due at most 2 s after the first. One turn takes every waiting compatible item.
+7. **The claim freezes a batch.** A message is due 500 ms after the last message of its burst. It is due at most 2 s after the first.
+   - One turn takes every waiting compatible item, up to the bound of its route.
+   - A Slack turn takes at most 10 source keys ([ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md) decision 7). The rest stays pending for the next turn.
 8. **A turn has exactly one output route.** It selects only items whose reader set and pinned route fit that route. Other items wait for their own turn. [ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md) decides the Slack routes.
 9. **Collisions follow one table.**
 
    | Case | Behavior |
    | --- | --- |
-   | A message arrives while a background turn is queued or leased. | Admission ends that turn `CANCELLED` and inserts an interactive turn, in one transaction. The model proxy cancels the call in flight. No attempt is charged. |
+   | A message arrives while a background turn is queued or leased. | Admission ends that turn `CANCELLED` and inserts an interactive turn, in one transaction. The LLM proxy cancels the call in flight. No attempt is charged. |
    | A compatible message arrives during an interactive turn. | It steers. After each tool batch, the runner takes it before the next model call. |
    | A message arrives while the final answer is written, or it does not fit the turn's route or actor. | It waits and starts the next turn. |
-   | An event arrives during any turn. | It waits. Events never interrupt and never join a turn in progress. |
+   | An inbox event arrives during any turn. | It waits. Inbox events never interrupt and never join a turn in progress. |
    | The person selects Stop. | The run gets a short settlement deadline. The holder can store only complete text. It stores no effect and no task. |
    | The holder does not settle in time. | The reaper ends the run and stores no entry. Injected messages end `STOPPED` and stay visible as questions. |
 
@@ -89,10 +93,29 @@ Option 6.
 12. **Custody.** Every ended attempt releases its claims on items that stay pending.
     - A required item ends only with its disposition, in the same transaction.
     - Each required kind has a deadline. At that deadline, the sweep applies a fixed disposition with no model call.
-13. **A work budget for each item.** The model proxy debits each call on every claimed item at call admission. Attempts count on each item. No breaker, timer or new run resets the counts.
-14. **Events in the context are marked.** An events block is a user-role message with a provenance mark: "System events. Not the person's words."
-    - Event text cannot authorize a command or a consent. Only a person's act can.
+    - A required item ends `CONSUMED`, `SUPERSEDED` or `DROPPED`. It never ends `EXPIRED` or `STOPPED`.
+    - A newer item of the same source ends it `SUPERSEDED`. The newer item takes over the disposition, with the earlier deadline.
+    - An authorization loss or a deleted source ends it `DROPPED`. The disposition records that reason and writes no message.
+    - Stop never ends a required item. It releases the claim, and the item waits for its next turn or its deadline.
+13. **A work budget for each item.** The LLM proxy debits each call on every claimed item at call admission. Attempts count on each item. No breaker, timer or new run resets the counts.
+14. **Inbox events in the context are marked.** They reach the model as a user-role message with a provenance mark: "System events. Not the person's words."
+    - The text of an inbox event cannot authorize a command or a consent. Only a person's act can.
 15. **A background turn commits one message or none.** `NO_REPLY` is a normal end for optional items. A background turn has at most 12 model calls and 3 minutes.
+16. **A task is background work with its own run.**
+    - Only a turn's commit inserts a task (decision 10). Nothing else inserts one.
+    - A task runs as its own `agent_run` in a sandbox. It reads only what every reader of its requesting route may read.
+    - A task is `QUEUED`, then `RUNNING`. It ends exactly once: `DONE`, `FAILED` or `CANCELLED`.
+    - `DONE` or `FAILED` inserts one inbox event into the requesting thread, in the same transaction.
+    - The person can cancel a queued or running task from its task status card.
+    - Cancel and end are complements under the same lock. Exactly one wins.
+    - Times on a task status card, such as "about 2 minutes", are targets, not promises.
+
+    The two task kinds in 1.0:
+
+    | Task | What it reads | What it returns |
+    | --- | --- | --- |
+    | Private check | The person's own draft and the practices that it checks | A private check outcome with one reader, the person. No observation and no copy on the work. |
+    | Research task | Read-only archives of items that the person can read | A report for the person. It takes no action. |
 
 ### What this changes in other ADRs
 
@@ -105,10 +128,12 @@ Option 6.
 - Good: a correction reaches a running answer within one tool batch.
 - Good: a required item always ends, also when the model provider is down.
 - Good: every commit is all or nothing, so a retry never repeats an effect.
+- Good: a task returns through the same inbox as every other input, and the person can cancel it.
 - Bad: a message that cancels a background turn wastes the model calls that the turn spent.
 - Bad: steady chat delays optional background messages. Required items still meet their deadlines.
 - Bad: a steered answer can mix two questions in one reply.
 - Bad: each input adds an `inbox_item` row. The upgrade must map queued turns and `DIGEST` runs to items.
+- Bad: each task is one more sandbox run beside the conversation. Its times are targets, so a busy instance can miss them.
 
 ## Confirmation
 
@@ -121,6 +146,9 @@ Not enforced yet. The implementation adds these tests:
 - `RequiredDispositionWithoutModelTest` fails when a required kind misses its disposition while the model breaker is open.
 - `DebitAtCallAdmissionTest` fails when a crash after a model call skips the debit on a claimed item.
 - `GateHoldsOnlyItsItemsTest` fails when a gate on one item delays another item's due time.
+- `RequiredItemEndsWithDispositionTest` fails when a required item ends `EXPIRED` or `STOPPED`, or ends without its disposition.
+- `TaskCancelAgainstEndTest` fails when a cancel and a task end both win, or an end commits without its inbox event.
+- `TaskReadsRouteScopeTest` fails when a task reads a source that a reader of its requesting route may not read.
 
 ## Revisit trigger
 
