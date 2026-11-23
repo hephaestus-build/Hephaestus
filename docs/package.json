@@ -10,11 +10,11 @@
 		"serve": "node ../scripts/docs-astro.ts preview"
 	},
 	"dependencies": {
-		"@astrojs/markdown-satteri": "0.4.9",
-		"@astrojs/react": "7.1.8",
+		"@astrojs/markdown-satteri": "0.4.10",
+		"@astrojs/react": "7.1.9",
 		"@fumadocs/astro": "0.3.0",
 		"@fumadocs/satteri": "0.8.0",
-		"astro": "7.4.11",
+		"astro": "7.4.13",
 		"fumadocs-core": "16.18.4",
 		"fumadocs-ui": "npm:@fumadocs/base-ui@16.18.4",
 		"mermaid": "12.2.0",
