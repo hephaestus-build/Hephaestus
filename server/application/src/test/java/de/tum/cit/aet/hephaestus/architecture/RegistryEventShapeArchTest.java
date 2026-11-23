@@ -64,8 +64,7 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
         var modules = ModulithVerificationTest.applicationModules();
         var violations = new TreeSet<String>();
         for (Handler handler : handlers(productionTypes())) {
-            if (storedOrCrossesAMentoringBoundary(handler, modules))
-                violations.addAll(freeFormComponents(handler.event()));
+            if (checked(handler, modules)) violations.addAll(freeFormComponents(handler.event()));
         }
         assertThat(violations)
                 .as("Carry an id and read the content from its owner. Mark a free-form id or code with @ContentFree")
@@ -84,9 +83,15 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
         assertThat(freeFormComponents(Shared.class)).isEmpty();
         assertThat(freeFormComponents(Leaky.class))
                 .containsExactly(Leaky.class.getName() + ".excerpt", Leaky.class.getName() + ".raw");
-        assertThat(handlers(List.of(ComposedListener.class)))
-                .containsExactly(new Handler(ComposedListener.class, "on", Typed.class, true));
+        var modules = ModulithVerificationTest.applicationModules();
+        var composed = handlers(List.of(ComposedListener.class));
+        assertThat(composed).containsExactly(new Handler(ComposedListener.class, "on", Typed.class, true));
+        assertThat(checked(composed.getFirst(), modules)).isTrue();
         assertThat(freeFormComponents(Typed.class)).containsExactly(Typed.class.getName() + ".words");
+        // A stored payload that belongs to no module is checked too: the registry stores the String itself.
+        var stored = handlers(List.of(StoredTextListener.class)).getFirst();
+        assertThat(checked(stored, modules)).isTrue();
+        assertThat(freeFormComponents(stored.event())).containsExactly("java.lang.String is not a record of values");
     }
 
     @Test
@@ -101,8 +106,13 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
                             + harness.getActualTypeArguments()[1].getTypeName());
             }
         }
-        var untested = handlers(productionTypes()).stream()
+        var mentoring = handlers(productionTypes()).stream()
                 .filter(handler -> MentoringModules.holds(handler.listener().getPackageName()))
+                .toList();
+        assertThat(handledTwice(mentoring))
+                .as("A mentoring listener handles each event type once, so its harness test names the handler")
+                .isEmpty();
+        var untested = mentoring.stream()
                 .map(handler ->
                         handler.listener().getName() + " <- " + handler.event().getName())
                 .filter(handler -> !tested.contains(handler))
@@ -111,6 +121,24 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
                 .as(
                         "A mentoring handler needs a test that implements IdempotentListenerIntegrationTest<Listener, Event>")
                 .isEmpty();
+    }
+
+    @Test
+    void shouldReportAListenerThatHandlesOneEventTypeTwice() {
+        assertThat(handledTwice(handlers(List.of(TwoHandlersOfOneEvent.class, ComposedListener.class))))
+                .containsExactly(TwoHandlersOfOneEvent.class.getName() + " <- " + Typed.class.getName());
+    }
+
+    /** The pairs of a listener class and an event type that more than one of its methods handles. */
+    private static List<String> handledTwice(List<Handler> handlers) {
+        var seen = new TreeSet<String>();
+        var twice = new TreeSet<String>();
+        for (Handler handler : handlers) {
+            String pair =
+                    handler.listener().getName() + " <- " + handler.event().getName();
+            if (!seen.add(pair)) twice.add(pair);
+        }
+        return List.copyOf(twice);
     }
 
     private record Handler(Class<?> listener, String method, Class<?> event, boolean stored) {}
@@ -136,10 +164,11 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
         return handlers;
     }
 
-    private static boolean storedOrCrossesAMentoringBoundary(Handler handler, ApplicationModules modules) {
+    /** Whether a handler's event must carry content only by reference: the registry stores it, whatever its type. */
+    private static boolean checked(Handler handler, ApplicationModules modules) {
+        if (handler.stored()) return true;
         var eventModule = modules.getModuleByType(handler.event().getName());
         if (eventModule.isEmpty()) return false; // A framework event, such as ApplicationReadyEvent.
-        if (handler.stored()) return true;
         String event = eventModule.get().getIdentifier().toString();
         String listener = modules.getModuleByType(handler.listener().getName())
                 .map(module -> module.getIdentifier().toString())
@@ -186,6 +215,21 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
     private @interface ComposedHandler {}
 
     private record Typed(long workspaceId, String words) {}
+
+    @SuppressWarnings("unused") // Read by reflection only.
+    private static final class TwoHandlersOfOneEvent {
+        @EventListener
+        void first(Typed typed) {}
+
+        @EventListener
+        void second(Typed typed) {}
+    }
+
+    @SuppressWarnings("unused") // Read by reflection only.
+    private static final class StoredTextListener {
+        @ApplicationModuleListener
+        void on(String text) {}
+    }
 
     @SuppressWarnings("unused") // Read by reflection only.
     private static final class ComposedListener {

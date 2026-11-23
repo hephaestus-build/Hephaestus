@@ -175,7 +175,6 @@ class TransferIssueAdapter implements ActionAdapter {
                             ProductFeedbackUpdatedEvent.Kind.MADE_PRIVATE,
                             null,
                             false,
-                            null,
                             now)));
         });
     }

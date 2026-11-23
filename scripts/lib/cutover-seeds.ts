@@ -20,9 +20,10 @@ export interface CutoverSeed {
 
 const SEED = ".seed.sql";
 const EXPECT = ".expect.sql";
-// A PL/pgSQL assertion that can fail. A bare SELECT would pass whatever it returns.
-const DISPOSITION = /\bRAISE\s+EXCEPTION\b/iu;
-const COMMENTS = /--[^\n]*|\/\*[\s\S]*?\*\//gu;
+// A PL/pgSQL assertion that can fail: a DO block that raises. A bare SELECT would pass whatever it returns.
+const DISPOSITION = /\bDO\b[\s\S]*\bRAISE\s+EXCEPTION\b/iu;
+// Comments and string literals name no statement, so a marker inside them does not count.
+const NOT_CODE = /--[^\n]*|\/\*[\s\S]*?\*\/|'(?:[^']|'')*'/gu;
 
 /** Reads every seed of a directory, and refuses a seed that names no expected disposition. */
 export function readCutoverSeeds(directory = CUTOVER_SEEDS): CutoverSeed[] {
@@ -47,7 +48,7 @@ export function readCutoverSeeds(directory = CUTOVER_SEEDS): CutoverSeed[] {
 			continue;
 		}
 		const expect = read(EXPECT);
-		if (!DISPOSITION.test(expect.replaceAll(COMMENTS, ""))) {
+		if (!DISPOSITION.test(expect.replaceAll(NOT_CODE, ""))) {
 			problems.push(`${name}${EXPECT} raises no exception, so it cannot fail a wrong disposition`);
 			continue;
 		}

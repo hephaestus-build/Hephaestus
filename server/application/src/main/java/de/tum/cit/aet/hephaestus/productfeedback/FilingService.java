@@ -317,7 +317,6 @@ class FilingService {
                 ProductFeedbackUpdatedEvent.Kind.FILED,
                 filing.publicRoute() ? issue.url() : null,
                 filing.publicRoute(),
-                null,
                 now));
     }
 

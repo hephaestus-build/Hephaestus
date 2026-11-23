@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.events;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.SourceControlContract;
 import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 
@@ -8,6 +9,7 @@ import org.jspecify.annotations.Nullable;
  * holds the command and nothing else, in any letter case and with surrounding white space, as the user guide says. It
  * takes no argument.
  */
+@SourceControlContract
 public final class ReviewCommand {
     private static final String TEXT = "/hephaestus review";
 

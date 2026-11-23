@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.events;
 
 import de.tum.cit.aet.hephaestus.core.event.ContentFree;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SourceControlContract;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -23,6 +24,7 @@ import org.jspecify.annotations.Nullable;
  * @param replyAddress   where an answer to the comment goes, in the publishing adapter's own form; null when the
  *                       payload names no thread to answer in
  */
+@SourceControlContract
 public record BotCommandReceivedEvent(
         IntegrationKind kind,
         long workspaceId,

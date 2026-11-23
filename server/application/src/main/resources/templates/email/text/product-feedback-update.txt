@@ -2,7 +2,6 @@
 
 [# th:if="${updateKind == 'FILED' and !publicIssue}"]The maintainers can see it.
 
-[/][# th:if="${publicIssue and updateKind == 'DUPLICATE' and detail != null}"]Original issue: [(${detail})]
 
 [/][# th:if="${publicIssue and issueUrl != null}"]Open issue: [(${issueUrl})]
 [/]

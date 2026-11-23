@@ -11,7 +11,6 @@ import org.jspecify.annotations.Nullable;
  *
  * @param issueUrl the public issue the email links to; null for a private issue, whose address names the private
  *     repository
- * @param detail the original issue's URL for {@link Kind#DUPLICATE}, or null
  */
 public record ProductFeedbackUpdatedEvent(
         UUID feedbackId,
@@ -19,7 +18,6 @@ public record ProductFeedbackUpdatedEvent(
         Kind kind,
         @ContentFree @Nullable String issueUrl,
         boolean publicIssue,
-        @ContentFree @Nullable String detail,
         Instant at) {
 
     public enum Kind {

@@ -80,9 +80,6 @@ public class ProductFeedbackUpdateEmailListener implements EmailNotice<ProductFe
         // A private issue's address names the private repository; the reporter gets only the instance page.
         String issueUrl = event.issueUrl();
         if (event.publicIssue() && issueUrl != null) model.put("issueUrl", issueUrl);
-        // A duplicate's detail is the original issue's address, which a private issue does not show.
-        String detail = event.detail();
-        if (detail != null && event.publicIssue()) model.put("detail", detail);
         var rendered = renderer.render(EmailKind.PRODUCT_FEEDBACK_UPDATE, model);
         return Prepared.send(new EmailMessage(
                 EmailKind.PRODUCT_FEEDBACK_UPDATE,

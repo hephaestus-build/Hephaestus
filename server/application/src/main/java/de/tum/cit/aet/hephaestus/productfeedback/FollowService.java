@@ -139,7 +139,7 @@ class FollowService {
         }
         filing.setLastCommentId(newest == 0 ? null : newest);
         String url = Objects.requireNonNull(filing.getIssueUrl());
-        if (commented) notify(filing, report, ProductFeedbackUpdatedEvent.Kind.COMMENTED, url, null, now);
+        if (commented) notify(filing, report, ProductFeedbackUpdatedEvent.Kind.COMMENTED, url, now);
         boolean wasOpen = !Boolean.FALSE.equals(filing.getIssueOpen());
         if (wasOpen && !state.open()) {
             String reason = state.stateReason() == null
@@ -150,10 +150,10 @@ class FollowService {
                 case "duplicate" -> ProductFeedbackUpdatedEvent.Kind.DUPLICATE;
                 default -> ProductFeedbackUpdatedEvent.Kind.CLOSED_COMPLETED;
             };
-            notify(filing, report, kind, url, null, now);
+            notify(filing, report, kind, url, now);
             filing.setIssueStateReason(reason);
         } else if (!wasOpen && state.open()) {
-            notify(filing, report, ProductFeedbackUpdatedEvent.Kind.REOPENED, url, null, now);
+            notify(filing, report, ProductFeedbackUpdatedEvent.Kind.REOPENED, url, now);
             filing.setIssueStateReason(null);
         }
         filing.setIssueOpen(state.open());
@@ -165,17 +165,10 @@ class FollowService {
             ProductFeedback report,
             ProductFeedbackUpdatedEvent.Kind kind,
             String url,
-            @Nullable String detail,
             Instant now) {
         boolean isPublic = filing.publicRoute();
         events.publishEvent(new ProductFeedbackUpdatedEvent(
-                filing.getFeedbackId(),
-                report.getAccountId(),
-                kind,
-                isPublic ? url : null,
-                isPublic,
-                isPublic ? detail : null,
-                now));
+                filing.getFeedbackId(), report.getAccountId(), kind, isPublic ? url : null, isPublic, now));
     }
 
     /**
@@ -251,7 +244,7 @@ class FollowService {
                 filing.setUpdatedAt(now);
                 ProductFeedback report =
                         feedback.findById(filing.getFeedbackId()).orElseThrow();
-                notify(filing, report, ProductFeedbackUpdatedEvent.Kind.PUBLISHED, published.url(), null, now);
+                notify(filing, report, ProductFeedbackUpdatedEvent.Kind.PUBLISHED, published.url(), now);
             }));
             meters.promotion("published");
             return new ActionResult.Done(published.url());

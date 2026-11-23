@@ -8,7 +8,7 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.lang.ArchRule;
 import de.tum.cit.aet.hephaestus.integration.core.events.BotCommandReceivedEvent;
-import de.tum.cit.aet.hephaestus.integration.core.events.ReviewCommand;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SourceControlContract;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmPullRequestItems;
 import org.junit.jupiter.api.Test;
 
@@ -20,7 +20,7 @@ class DomainNeutralityArchTest extends HephaestusArchitectureTest {
     /** Source-control shapes that sit in the shared integration kernel, outside the adapter packages. */
     private static final DescribedPredicate<JavaClass> SOURCE_CONTROL_CONTRACTS = DescribedPredicate.describe(
             "source-control contracts of the shared integration kernel",
-            type -> type.isEquivalentTo(BotCommandReceivedEvent.class) || type.isEquivalentTo(ReviewCommand.class));
+            type -> type.isAnnotatedWith(SourceControlContract.class));
 
     @Test
     void shouldKeepTheMentoringModulesFreeOfSourceControlAndProviderAdapters() {
@@ -39,6 +39,7 @@ class DomainNeutralityArchTest extends HephaestusArchitectureTest {
                         .getFailureReport()
                         .getDetails())
                 .anySatisfy(detail -> assertThat(detail).contains("UsesAReviewCommand", "BotCommandReceivedEvent"))
+                .anySatisfy(detail -> assertThat(detail).contains("UsesANewContract", "NewSourceControlContract"))
                 .anySatisfy(detail -> assertThat(detail).contains("UsesAnAdapter", "ScmPullRequestItems"))
                 .noneSatisfy(detail -> assertThat(detail).contains("NeutralClass"));
     }
@@ -65,6 +66,16 @@ class DomainNeutralityArchTest extends HephaestusArchitectureTest {
     private static final class UsesAReviewCommand {
         long item(BotCommandReceivedEvent command) {
             return command.itemId();
+        }
+    }
+
+    @SourceControlContract
+    private record NewSourceControlContract(long mergeRequestId) {}
+
+    @SuppressWarnings("unused") // Read by ArchUnit only.
+    private static final class UsesANewContract {
+        long id(NewSourceControlContract contract) {
+            return contract.mergeRequestId();
         }
     }
 

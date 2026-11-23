@@ -12,6 +12,5 @@ public record ProductFeedbackUpdateEmailRequested(
         ProductFeedbackUpdatedEvent.Kind kind,
         @ContentFree @Nullable String issueUrl,
         boolean publicIssue,
-        @ContentFree @Nullable String detail,
         Instant requestedAt,
         Instant expiresAt) {}

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.spi;
 import org.jspecify.annotations.Nullable;
 
 /** @param defaultBranch the repository's default branch, once its provider has named it */
+@SourceControlContract
 public record MonitoredRepositoryRef(
         long repositoryItemId,
         long monitorId,
