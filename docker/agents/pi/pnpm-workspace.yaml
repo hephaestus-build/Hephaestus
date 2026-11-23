@@ -16,13 +16,8 @@ trustPolicyIgnoreAfter: 43200
 strictDepBuilds: true
 # Only direct dependencies can come from a Git repository or a tarball URL (pnpm.io/settings).
 blockExoticSubdeps: true
-overrides:
-  # @earendil-works/pi-coding-agent pins undici exactly; take undici security fixes without a new agent.
-  "undici@>=8.0.0 <8.12.2": 8.12.2
-  # It pins minimatch exactly as well. GHSA-g3hv-75wg-m249 is fixed only in 11, and pi calls only `minimatch()`.
-  "minimatch@<11.0.1": 11.0.3
 
 # OpenAI-compatible proxies may name cache writes created_cache_tokens; read it like cache_write_tokens.
 # The repository root workspace applies the same file.
 patchedDependencies:
-  "@earendil-works/pi-ai@1.4.0": patches/@earendil-works__pi-ai@1.4.0.patch
+  "@earendil-works/pi-ai@1.6.0": patches/@earendil-works__pi-ai@1.6.0.patch

@@ -160,6 +160,9 @@ public class PiRuntimeFactory {
         // A model call can wait for its pool's grant longer than the SDK's default of 5 minutes. The proxy answers or
         // refuses every waiting call by the attempt's deadline, and its own bounds end a silent provider.
         settings.put("httpIdleTimeoutMs", 0);
+        // Pi warms a prompt cache only for a model with a cache lifetime and a price, which this one does not declare.
+        // Off keeps a later model setting from starting model calls that no review asked for.
+        settings.put("cacheWarming", "off");
         try {
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(settings);
         } catch (JacksonException e) {

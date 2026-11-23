@@ -16,6 +16,8 @@ if (parentPort !== null) {
 	// The loop that started this thread wrote the job.
 	// oxlint-disable-next-line typescript/no-unsafe-assignment
 	const job: GlobJob = workerData;
-	const found = globSync(job.pattern, { cwd: job.cwd, exclude: [...job.ignore] });
+	// Pi's find tool tells the model fd's rule: a pattern without '/' matches file names at any depth.
+	const pattern = job.pattern.includes("/") ? job.pattern : `**/${job.pattern}`;
+	const found = globSync(pattern, { cwd: job.cwd, exclude: [...job.ignore] });
 	parentPort.postMessage(found.slice(0, job.limit), []);
 }

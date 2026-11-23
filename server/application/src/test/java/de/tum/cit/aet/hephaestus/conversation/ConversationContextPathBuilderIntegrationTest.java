@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -250,6 +251,62 @@ class ConversationContextPathBuilderIntegrationTest extends AbstractWorkspaceInt
         assertThat(path.get(2))
                 .endsWith(" Fail me\n\n" + ConversationContextPathBuilder.FAILED_MARKER)
                 .doesNotContain("Lost answer");
+    }
+
+    @Test
+    void shouldKeepEveryToolCallWithItsResultWhenAStopSkippedCallsThatPiRecordedAsAborted() {
+        ask(main, "Look it up");
+        ConversationTurn turn = claims.claimNext().orElseThrow();
+        ObjectNode calls = ConversationLedgerFixtures.answer(ConversationLedgerFixtures.piId(), "Let me look.");
+        ArrayNode content = (ArrayNode) calls.path("message").path("content");
+        for (String callId : List.of("call-1", "call-2")) {
+            content.addObject()
+                    .put("type", "toolCall")
+                    .put("id", callId)
+                    .put("name", "search_conversation")
+                    .putObject("arguments")
+                    .put("query", "rollback");
+        }
+        ((ObjectNode) calls.path("message")).put("stopReason", "toolUse");
+        turns.end(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getRunId()),
+                new ConversationTurnService.Ending(
+                        ConversationTurn.Status.STOPPED,
+                        List.of(
+                                calls,
+                                ConversationLedgerFixtures.toolResult(
+                                        ConversationLedgerFixtures.piId(),
+                                        "call-1",
+                                        "search_conversation",
+                                        "One message.",
+                                        false),
+                                // Pi answers each call that a stop skipped.
+                                ConversationLedgerFixtures.toolResult(
+                                        ConversationLedgerFixtures.piId(),
+                                        "call-2",
+                                        "search_conversation",
+                                        "Operation aborted",
+                                        true)),
+                        null,
+                        null));
+
+        List<ObjectNode> path = mainPath();
+
+        assertThat(path).hasSize(4);
+        List<String> called = new ArrayList<>();
+        for (JsonNode block : path.get(1).path("message").path("content")) {
+            if (block.path("type").asString("").equals("toolCall")) {
+                called.add(block.path("id").asString());
+            }
+        }
+        assertThat(called).containsExactly("call-1", "call-2");
+        assertThat(text(path.get(1))).isEqualTo("Let me look." + ConversationContextPathBuilder.STOPPED_MARKER);
+        assertThat(path.subList(2, 4))
+                .extracting(entry -> entry.path("message").path("toolCallId").asString())
+                .containsExactly("call-1", "call-2");
     }
 
     @Test

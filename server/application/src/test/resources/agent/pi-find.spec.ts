@@ -18,3 +18,14 @@ void test("find runs apart from the loop and finds what the walk finds", async (
 	const found = await globApart({ pattern: "*.ts", cwd: source, ignore: [], limit: 10 });
 	assert.ok(found.some((file) => file.endsWith("a.ts")));
 });
+
+void test("a pattern without a slash matches file names at any depth, and a path pattern from the search directory", async () => {
+	const names = await globApart({ pattern: "b.ts", cwd: source, ignore: [], limit: 10 });
+	assert.deepEqual(names, [path.join("nested", "b.ts")]);
+	const anchored = await globApart({ pattern: "nested/*.ts", cwd: source, ignore: [], limit: 10 });
+	assert.deepEqual(anchored, [path.join("nested", "b.ts")]);
+	assert.deepEqual(
+		await globApart({ pattern: "source/*.ts", cwd: source, ignore: [], limit: 10 }),
+		[],
+	);
+});
