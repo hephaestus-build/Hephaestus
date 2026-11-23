@@ -358,16 +358,16 @@ The conversation agent, the composer and the review agent are agents. Hephaestus
 | Term | Meaning | Proposed in |
 | --- | --- | --- |
 | **Turn** (planned) | One run on one thread. It takes a frozen batch of inbox items and commits all of its writes or none. It can run with no person's question. | ADR 0120 (#4862) |
-| **Interactive turn** | A turn whose batch holds a person's message. Its answer streams. | ADR 0120 (#4862) |
+| **Interactive turn** | A turn whose batch holds a person's message. It gets priority. Only an answer to the owner in the app streams. A Slack answer or a channel answer posts as one complete message. | ADR 0120 (#4862) |
 | **Background turn** | A turn whose batch holds no person's message. It commits one message from Hephaestus, or none. | ADR 0120 (#4862) |
 | **Inbox item** | One input of a thread: a person's message or an inbox event. It holds IDs only. | ADR 0120 (#4862) |
 | **Inbox event** | An inbox item that no person typed, such as a finished review, a finished task, a due check-in or a withheld copy. **Event** alone keeps its review meaning. | ADR 0120 (#4862) |
-| **Custody** | Who answers for an inbox item until it ends. A required item ends only with its disposition. | ADR 0120 (#4862) |
+| **Custody** | Who answers for an inbox item until it ends. A required item ends only with its disposition, at its deadline at the latest. A message is never a required item. | ADR 0120 (#4862) |
 | **Start policy** | The table in code that decides whether and when an inbox item starts a turn. No model decides it. | ADR 0120 (#4862) |
 | **Commit rule** | A turn writes its entries, consumes its inbox items, and inserts its effects and tasks in one transaction, or it writes nothing. | ADR 0120 (#4862) |
 | **Steering** | A compatible message that enters an interactive turn at the next tool-result boundary. | ADR 0120 (#4862) |
 | **Route** | The one output place of a turn, `APP`, `SLACK_DM`, `WORK` or `CHANNEL`, with its readers. It is fixed when the turn is claimed. | ADR 0120 (#4862) |
-| **Task** | Background work that only a turn's commit inserts. It reads only what every reader of its requesting route may read, and ends with one inbox event. | ADR 0120 (#4862) |
+| **Task** | Background work that only a turn's commit inserts. It reads only what every reader of its result route may read. Each task kind names the routes that may request it and show its result. A done or failed task inserts one inbox event. A cancelled task inserts none. | ADR 0120 (#4862) |
 | **Audience** | Who may read what the turns of a thread write: private (one account) or shared (the workspace). | ADR 0121 (#4862) |
 | **Private thread** | A thread of one account: the main thread, a message thread under one message, or the work thread of one item. | ADR 0131 (#4862) |
 | **Work thread** | The private thread about one item. The person opens it from the item card, or from the extension on the item's page. | ADR 0131 (#4862) |
@@ -375,11 +375,11 @@ The conversation agent, the composer and the review agent are agents. Hephaestus
 | **Work place** | The shared thread of one pull request or merge request. An issue has none in 1.0. | ADR 0121 (#4862) |
 | **Channel thread** | The shared thread of one Slack thread where a person mentioned Hephaestus. Its turns read the Slack thread itself, public repository data and channel-readable catalog entries only. | ADR 0123 (#4862) |
 | **Conversation agent** | The sandboxed agent that runs the turns of one account's private threads in a workspace. It answers, starts tasks and writes messages from Hephaestus. It never writes on the work. | ADR 0121 (#4862) |
-| **Composer** | The sandboxed agent that runs the turns of every shared thread. It reads only scoped projections of its exact place, never private data. On a work place it writes the copy on the work and replies to it. In a channel thread it writes one answer. It also writes the practice-page copy of results in the eligible set, from shared inputs only. The **Feedback composer** is its current form. | ADR 0121 (#4862) |
+| **Composer** | The sandboxed agent that runs the turns of every shared thread. It reads only scoped projections of its exact place, never private data. On a work place it writes the copy on the work and replies to it. In a channel thread it writes one answer. The server projects the practice-page copy of results in the eligible set from the composed copy. The **Feedback composer** is its current form. | ADR 0121 (#4862) |
 | **Graded work** | A workspace mode in which a fixed renderer writes every copy on the work from the eligible set, with no model. | ADR 0121 (#4862) |
 | **Typed command** | The person's confirmed act from a card that changes a shared place. It carries IDs only, and its confirmation binds the facts of its preview. | ADR 0121 (#4862) |
 | **The composer's guardrails** | The composer's checks on each tool call and at commit: destination rules, observation reference validation, required Critical and Major problems and Markdown sanitization. | ADR 0121 (#4862) |
-| **Copy deadline** | Two hours after the seal. Then an Automatic copy on the work whose first write has not started is withheld, and nothing is posted in its place. | ADR 0122 (#4862) |
+| **Copy deadline** | Two hours after the seal. Then every copy on the work that is still pending and not staged is withheld, in both feedback modes. An Automatic copy whose first write has not started is withheld too. Nothing is posted in its place. | ADR 0122 (#4862) |
 | **Citation token** | A reference in an entry to a result at a version. The server renders the outcome from current rows, so the model never writes it. | ADR 0150 (#4862) |
 | **Authorization recheck** | A check of current access before a consequential read or write: at context read, at model request and at each send outside the app. | ADR 0134 (#4863) |
 | **Contact policy** | The code that decides whether Hephaestus may interrupt a person now, on a channel. It has no model. | ADR 0139 (#4865) |
@@ -388,7 +388,7 @@ The conversation agent, the composer and the review agent are agents. Hephaestus
 | **Silent draw** | A delivery experiment's draw to stay silent on one unprompted decision. A copy on the work settles withheld with `STUDY_SILENCE`, and no composer turn starts. An unprompted message's inbox item is dropped with the same reason. It never applies to a Critical problem. | ADR 0149 (#4868) |
 | **Held result** | A result that a silent draw holds back. The item card and the practice page still show it, with no label that names the draw. Scheduled turns and unprompted messages leave it out until the hold ends, as ADR 0149 lists. | ADR 0149 (#4868) |
 | **Practice opportunity** | The first admitted review of a new item version, for one person and one practice. A hold ends at the next one. | ADR 0149 (#4868) |
-| **Research steward** | The instance role that holds the stop switch of each practice in a delivery experiment. The steward never sees a person or an outcome, and the account that created the experiment cannot be its steward. | ADR 0149 (#4868) |
+| **Research steward** | The instance role that approves every research release and holds the stop switch of each practice in a delivery experiment. The steward never sees a person or an outcome, and the account that created the experiment cannot be its steward. | ADR 0149 (#4868) |
 | **Run fingerprint** | The configuration digest of one run, with its runtime fingerprint. The digest covers the practice versions, feedback modes, destinations, help defaults, model assignment and prompt digest. | ADR 0149 (#4868) |
 | **Period lock** | A lock that freezes the settings behind the run fingerprint for one workspace, until an admin unlocks it | ADR 0149 (#4868) |
 | **Experiment pseudonym** | One pseudonym for each person and delivery experiment. Its key is stored encrypted. Closing the experiment destroys the key for good. | ADR 0141 (#4868) |
@@ -397,7 +397,7 @@ The conversation agent, the composer and the review agent are agents. Hephaestus
 | **Release check** | The manual checklist that a maintainer runs and signs on the packaged artifact of a release candidate. | ADR 0142 (#4868) |
 | **Scenario replay** | A research tool that replays a pseudonymized past project in time order, with recorded or frozen reactions and switches for goals, memory and history. It is not an evaluation layer and not a release gate. | ADR 0142 (#4868) |
 | **Scenario** | One Ichnaea case that holds a world and a timeline for the packaged server. The must-pass scenarios, the release cases, the contact simulation and scenario replay share its format. | ADR 0142 (#4868) |
-| **Settle barrier** | The server's signal that a scenario step is done: no run, inbox event, due item or outbox action of the scenario is pending. | ADR 0142 (#4868) |
+| **Settle barrier** | The server's signal that a scenario step is done: no work of the scenario can run at the current virtual time. Every observation up to the step's watermark has arrived. Future due times and declared blocked states come back to the driver. Unexplained active work past a bound is a capture failure. | ADR 0142 (#4868) |
 | **Observation stream** | The ordered events that the server emitted during a scenario, and what reached each fake. Scorers read only this stream. | ADR 0142 (#4868) |
 
 [Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx) owns the mechanics of threads, inbox items and turns.

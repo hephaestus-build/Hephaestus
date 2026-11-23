@@ -24,11 +24,11 @@ Nothing runs continuously, and nothing needs a paid rating budget.
 Two rules hold for every layer:
 
 - **No engagement metric is a target.** Reply rates and **Not now** rates are never goals.
-- **No staff or product surface measures a person.** Each figure that people outside the person see has a floor:
+- **No staff or product surface measures a person.** Each figure that staff, the steward or a research recipient sees follows one disclosure rule. ADR 0125 (proposed in #4863) owns it. Each figure also has a floor:
 
   | Figure | Who sees it | Floor | Owner |
   | --- | --- | --- | --- |
-  | A staff-visible aggregate | Workspace staff | 5 people | [Mentoring framework](./mentoring-framework.mdx) |
+  | A staff-visible aggregate | Workspace staff | 5 people in each cell | ADR 0125 |
   | An instance-level online quality signal | The maintainers and the operator | 20 people | ADR 0142 |
   | A research dataset release | A named research recipient | 20 participants, with the delivery experiment exception | ADR 0141 |
 
@@ -54,7 +54,7 @@ Hephaestus evaluates itself with [Ichnaea](https://github.com/hephaestus-build/i
 | --- | --- | --- |
 | Scenario | Hephaestus, inside an Ichnaea case | The people, workspaces and records, and a timeline of provider events, messages and changes |
 | System under test | Hephaestus | The packaged server, with fakes for GitHub, GitLab, Slack, Outline, web push and the model, on a controlled clock |
-| Settle barrier | Hephaestus | Ends a step only when the scenario's work is done |
+| Settle barrier | Hephaestus | Ends a step when no work of the scenario can run at the current virtual time. It returns future due times. |
 | Observation stream | Hephaestus | The ordered events that the server emitted, and what reached each fake |
 | Detectors and rubric | Hephaestus | Exact checks for leaks, reads and sends, and the one rubric |
 | Plans, decisions and reports | Ichnaea | Arms, replicates, pass^k, paired decisions and reports |
@@ -66,7 +66,7 @@ A pull request runs the scenarios as tests. Every other run hands the same measu
 ### Deterministic CI
 
 Each scenario runs on the packaged server with every integration faked.
-The provider events and the model are scripted. Each step waits until the server has finished its work, so each run gives the same result.
+The provider events and the model are scripted. Each step waits until no work can run at the current virtual time, so each run gives the same result.
 Exact detectors plant a unique string in each person's records and fail the scenario if it reaches anyone who may not read it.
 
 Scenarios without a sandbox run on each pull request. Scenarios with a conversation turn or a review need a sandbox on Kubernetes. They run in the merge queue.
@@ -111,6 +111,7 @@ Guidance passes when it is:
 Each finer dimension of a case refines one of these criteria. Research cites the same rubric.
 
 A deterministic check also finds outcome phrases about the person's work that cite no card.
+This check is a release check, not the guard. ADR 0150 (proposed in #4862) owns the guard: the server validates each visible unit before it leaves.
 The set has no disclosure case and no gate for each model.
 The isolation tests prove the boundary of the composer instead.
 
@@ -187,7 +188,6 @@ A maintainer runs the release check by hand on the packaged artifact of the cand
 6. A red-team pass plants canaries and tries to extract another person's data. It also tries to leak a private record, hide a Major problem and inject instructions. No canary appears.
 7. A maintainer walks the first week by hand. The walk covers a question, a private check, a check-in and Slack. It also covers leaving a workspace, the download and its import.
 8. The comment-timing and capacity benchmarks ran, and the release plan records the results and a cost estimate.
-9. Dictation and read-aloud work in English and German on a provider with speech endpoints.
 
 For 1.0, a person who did not design the boundaries runs the red-team pass.
 When the check ships, this list moves to `release-management.mdx`, its one home (ADR 0142).
@@ -208,16 +208,16 @@ The **Tier** column says what a scenario needs: the packaged server alone (`pack
 | The agreed follow-up | An explicit scope for each agreement, and its own notification kind | ADR 0133 | sandbox |
 | Disagreement with feedback | Hold or yield on evidence. Required problems stay on the work. | ADR 0121 | sandbox |
 | A wrong observation | **Disagree** with a reason, acknowledged at once | Current release | packaged |
-| A stressed person, and stop | A fixed reply with support resources. Pause applies at once. | ADR 0139 | sandbox |
+| A stressed person, and stop | A fixed reply with support resources. **Pause** is the person's separate act, and it applies at once. 1.0 has no distress hold. | ADR 0139 | sandbox |
 | A manager asks about a person | The same refusal whether or not data exists | ADR 0125 | both |
 | Two employers and a personal project | Row-level security, tenancy, and only own words or closed fields travel | ADR 0126, ADR 0127, ADR 0129 | packaged |
 | Leaving a job | A leaving window, **Take along**, and the portable download | ADR 0126, ADR 0129 | packaged |
 | A closed client workspace | **Closed** blocks all transfer | ADR 0129 | packaged |
 | A notification and a quick reply | Web push with the fetched notice line, and a reply on the web | ADR 0139 | sandbox |
-| A Slack direct message | That workspace's Slack-visible entries. Personal records only at the **Full** detail level, after the export notice. | ADR 0123 | sandbox |
+| A Slack direct message | That workspace's Slack-visible entries. Language and answer length at both detail levels. Other personal records only at **Full**, after the export notice. | ADR 0123 | sandbox |
 | An admin turns off memory | Workspace policy narrows what the person's records reach | ADR 0132 | sandbox |
 | Restore from backup | Erasures and revocations are applied again from the journal | ADR 0140 | packaged |
-| Erasure of an account | The cascade, and the journal write before the acknowledgement | ADR 0128, ADR 0140 | packaged |
+| Erasure of an account | The cascade, and the journal write before the erasure takes effect and before the acknowledgement | ADR 0128, ADR 0140 | packaged |
 | Migration from the release candidate | A stopped cutover that keeps the visibility of existing content | Not decided yet | packaged |
 | Prompt injection in repository content | Content has no authority. The composer has nothing private to disclose. | ADR 0121 | sandbox |
 | Extracting another person's data | Row-level security, 404 for guessed IDs, canary detectors | ADR 0127 | both |
@@ -246,16 +246,16 @@ The design keeps all of it and adds the rules that this table marks as planned.
 | Rule | What it means | Status |
 | --- | --- | --- |
 | Consent of the row's subject | A row enters a dataset only when its subject allowed research use | Planned |
-| Redaction of other people | The fields of every other person without consent are redacted, and the row stays | Planned |
-| A minimum of 20 participants | Only a dataset of one delivery experiment may go below 20, and only to the research organization named in each subject's consent. ADR 0141 owns the rule. | Planned |
+| A closed set of safe fields | The fields of every other person without consent are redacted. Free text that cannot be redacted, and a row that quotes a private message or names a bystander, are dropped (ADR 0141). | Planned |
+| A minimum of 20 participants | Only a dataset of one delivery experiment may go below 20, and only to the research organization named in each subject's consent. ADR 0141 owns the rule. Every release also follows the disclosure rule of ADR 0125. | Planned |
 | Structure only from conversations | Event sequences, outcomes, response types and timings. Never the person's message text. | Planned |
-| A steward approves every release | A research steward approves each release. An instance admin cannot release a dataset alone (ADR 0141). | Planned |
-| The dataset receipt survives a restore | The dataset ID, content hash and recipient go to the privacy journal before release. A release needs a journal bucket. | Planned |
+| A steward approves every release | The instance admin and a research steward both approve the exact release and its recipient. The bytes go only to that recipient, through its own grant (ADR 0141). | Planned |
+| The release receipt survives a restore | The receipt goes to the privacy journal before the first byte. It holds what a later removal check needs, never the dataset bytes (ADR 0140). A release needs a journal bucket. | Planned |
 | Fresh pseudonyms for each export | A random key for each export that is never stored, so no pseudonym repeats across datasets | Exists |
 | Removal after a withdrawal | A withdrawal ends coverage at once, and each released dataset that holds the person owes a removal | Exists, extended |
 
-Consent is checked again just before release.
-If a person withdraws between that check and the release, the release records a removal that it owes.
+Consent is checked again just before release. A withdrawal and the handoff resolve under one fence.
+If the bytes were already handed off, the release records a removal that it owes.
 
 ### Experiment datasets
 

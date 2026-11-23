@@ -11,7 +11,7 @@ Hephaestus is an AI mentor: it gives each developer practice feedback on their r
 
 Code decides when Hephaestus speaks. It decides whether a result, a check-in or a withheld copy becomes a message, and when a notification may interrupt.
 Code also decides who may read it. A turn reads only what every reader of its output may read, so private context never reaches the work or a channel.
-The one stated exception is the person's own choice. At the **Full** Slack detail level, a Slack answer may use their goals, notes and help settings (ADR 0123).
+The one stated exception is the person's own choice. At the **Full** Slack detail level, a Slack answer may also use their goals, notes and other help settings (ADR 0123).
 
 The model writes the words inside those decisions. It never states a result that the rows do not hold.
 A model also judges work in a review, and it can propose a noted record from the person's own words. Code admits each judgement and each record before anyone reads it, and a model never decides dispatch, routing or readers.
@@ -50,8 +50,8 @@ The **copy on the work** is the copy that Hephaestus posts on the pull request o
 | Who writes the copy on my pull request? | The composer. It works on the shared thread of that pull request, and it cannot read your private data. |
 | Does a review result interrupt my conversation? | No. A result shows on its item card at once. Your message always goes first. |
 | Can my conversation change the copy on my work? | Only through a command that you confirm on a card, after a preview. The command never carries your reasons. |
-| What if the model is down? | Two hours after the seal, a copy whose write has not started is withheld. Nothing is posted in its place. |
-| Can my manager see this? | No. Hephaestus has no view of one person for admins or managers. The operator of the servers can read what they hold, and Hephaestus says so. A Slack owner can export direct messages, so Slack answers use your personal records only if you choose the **Full** detail level. |
+| What if the model is down? | Two hours after the seal, a copy that is not posting or waiting for approval is withheld. Nothing is posted in its place. |
+| Can my manager see this? | No. Hephaestus has no view of one person for admins or managers. The operator of the servers can read what they hold, and Hephaestus says so. A Slack owner can export direct messages, so Slack answers use your goals and notes only if you choose the **Full** detail level. |
 
 ### The core loop
 
@@ -73,10 +73,10 @@ flowchart LR
 ```
 
 1. **A review only produces observations.** The server admits each candidate when its evidence holds. The seal then stores the results in one transaction, and nothing changes them later.
-2. **The result is available at once.** The item card shows it at the seal, before any model runs.
+2. **The result is available at once.** The item card shows it at the seal, before any model runs. In On request mode, it shows when the person asks, within what the destinations allow (ADR 0137).
 3. **The composer writes the copy on the work.** It runs on the work place, the shared thread of one pull request. It reads only the data of that work.
 4. **The conversation agent tells the person.** The finished review reaches the person's thread as an inbox item. A background turn, which no message started, writes at most one message, or none.
-5. **The person answers or asks.** An answer streams in the conversation.
+5. **The person answers or asks.** An answer streams in the app.
 6. **Private context reaches the work only by the person's act.** A typed command needs a confirmed preview.
 
 ### The concepts, one line each
@@ -214,7 +214,7 @@ These principles come from the research above. The design keeps each one with a 
 ## What Hephaestus is not
 
 - **Not a performance instrument.** It says nothing about a person to anyone, not even whether they use it. [Privacy](#privacy) gives the rules.
-- **Not a judge of people.** Nothing shows a score, rank, streak, badge or level, and nothing ranks people. Activity shows people unordered or as team aggregates (ADR 0125, proposed in #4863).
+- **Not a judge of people.** Nothing shows a score, rank, streak, badge or level, and nothing ranks people. Activity shows people unordered or as team aggregates. ADR 0125 (proposed in #4863) owns what Activity shows.
 - **Not a friend, a therapist, a companion or an HR channel.**
 - **Not a ghostwriter.** It never writes what the person submits as their own work.
 - **Not an agent.** The sandboxed runtime is the agent. Hephaestus and its answers are not.
@@ -239,7 +239,7 @@ This walk shows each decision that Sam makes and each wait.
 | Tuesday | Extension | The result shows the cited line and one next step. Only Sam sees it. A card offers once to check drafts automatically. Sam accepts. |
 | Tuesday | GitHub | The review of the pull request seals. The composer posts the copy on the work with one Major problem. It holds nothing private about Sam. |
 | Tuesday | Ask Hephaestus | One message from Hephaestus explains two Minor problems and links them to Sam's goal. One notification follows. |
-| Wednesday | Slack | Sam read the export notice and chose the **Full** Slack detail level. So the answer to a direct message can use Sam's goal and help settings. |
+| Wednesday | Slack | Sam read the export notice and chose the **Full** Slack detail level. So the answer to a direct message can use Sam's goal and every help setting. At **Notice** it uses only language and answer length. |
 | Thursday | Item card | Sam selects **Disagree** with a reason on a wrong detail. The acknowledgement comes at once. |
 | Friday | Ask Hephaestus | At 16:00 the weekly reflection names one change in the week's work and asks one question. |
 | Sunday | Our work | Sam sees the goal, the check-ins and where help stepped back. Under **What Hephaestus keeps in mind**, Sam forgets one wrong item. |
@@ -270,18 +270,18 @@ The web app is complete. Another place can lack a control, but never a fact.
 | --- | --- | --- | --- |
 | Web app | The home: Ask Hephaestus, Activity, practice pages and settings. On a phone it installs as an app. | Every message, card, thread, control and setting | Exists, extended |
 | Chrome extension | The client beside the work. On an item's page it shows that item's card and work thread. | Cards, work threads, **Check before review** | Exists, extended |
-| Slack direct message | A channel into the person's private threads, where the person already is | Slack-visible entries. Personal records only at the **Full** detail level, after the export notice. | Exists, extended |
+| Slack direct message | A channel into the person's private threads, where the person already is | Slack-visible entries, with language and answer length at both detail levels. Other personal records only at **Full**, after the export notice. | Exists, extended |
 | Slack channel thread | The team's place. A linked, active member whose AI choice allows a model may ask. | Answers from public repository data and channel-readable practices only | Planned |
 | Web push | A notification channel | The notice line of one message | Planned |
 | Email | The fallback notification channel | The notice line, if the person chose email | Planned |
 | Native iOS and Android apps | Thin clients of the same API ([ADR 0113](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0113-the-mobile-apps-are-native-clients-of-the-server-api.md)) | Everything in the web app | Later |
-| Voice | Speech-to-speech in one named workspace | A call with captions and a switch to text | Later. Dictation and read-aloud are planned for 1.0. |
+| Voice | Speech-to-speech in one named workspace, with dictation and read-aloud | A call with captions and a switch to text | Later (ADR 0143, proposed in #4869) |
 
 In a channel thread, an unlinked asker gets one ephemeral reply. Slack guests and Slack Connect people are never answered.
 Three rules hold in every place:
 
-- **The answer goes where the question was asked.** A requested result goes where it was requested.
-- **Nothing typed in the app goes to Slack.** A card reaches Slack one way, by revision.
+- **The answer goes where the question was asked.** A requested result goes where it was requested, if its task kind allows that route. A private check result shows only in the app. Slack gets a fixed reply with an app link (ADR 0120).
+- **Nothing typed in the app goes to Slack.** Slack shows no count or hint of app-only entries, only a fixed **Open in app** link (ADR 0123). A card reaches Slack one way, by revision.
 - **Personal context never enters a place that other people read.** A Slack channel is such a place. The one exception is a Slack direct message at the **Full** detail level, after the export notice (ADR 0123).
 
 ## What a person meets
@@ -294,7 +294,7 @@ Each account has a main thread, a message thread under any message, and one work
 
 | Kind of text | How it arrives | Example |
 | --- | --- | --- |
-| Answer | Streamed, because the person waits | An answer about how to split a pull request |
+| Answer | Streamed in the app, because the person waits. In Slack, one complete message. | An answer about how to split a pull request |
 | Message from Hephaestus | Written complete, never streamed. It opens with a summary and a reason line. | "Review ready: one problem on PR #42, how to verify it" |
 | Correction | A new message below the wrong one. A message never changes. | "I said the check passed. It did not. Here is the result." |
 
@@ -306,11 +306,13 @@ Under each answer, **What Hephaestus used** lists the records and entries that t
 
 An item card is a projection of rows about one item, for one person (ADR 0150, proposed in #4862).
 No model writes it, so it changes without a model.
-The card exists from the first queued review, so "Reviewing #42" is a state of the card.
+The card exists from the first queued review, so "Reviewing #42" is a state of the card. An On request result is the exception (ADR 0137).
 
 The same card shows in four places: each message that cites it, a new section of Activity, the practice page and the extension.
+Only the owner reads that Activity section. It has its own owner-scoped route and cache, apart from the member-visible parts of Activity (ADR 0125).
 Needs you stays as it is: the review requests and pull requests that wait for the person. A task shows on its task status card.
-**Mark card done** closes a card. A later review of a newer version with a new or changed problem opens it again.
+
+**Mark card done** closes a card, and its reverse opens it again. A review of a newer version with a new or changed problem also opens it. A duplicate seal never does.
 **Mute card notifications** stops messages and notifications about it.
 
 | Delivery of the copy on the work | Card text |
@@ -385,7 +387,7 @@ Each one is the mechanism of one trust commitment.
 | A shared place reads no private data. | A personal record appears on the work | The composer reads only the data of its place. Isolation tests prove it. | Private never shows in public | ADR 0121 |
 | Only the person's act bridges private and public. | Hephaestus discloses a private reason in public | A typed command carries IDs only, after the person confirms a preview | Private never shows in public | ADR 0121 |
 | Inside a workspace, records refer to sources and never copy them. | Erased content survives in a copy | Provenance references. A revocation makes every consumer stale at once. | Private never shows in public | ADR 0128 |
-| Erasure survives a database restore. | A restore brings back erased data | A privacy journal in object storage. Delivery experiments and research datasets require it. | Private never shows in public | ADR 0140 |
+| Erasure survives a database restore. | A restore brings back erased data | A deny intent is in the privacy journal in object storage before it takes effect. A restore reapplies the journal before it serves data. | Private never shows in public | ADR 0140 |
 | Each person's rows belong to their account. | One person reads another's records through a bug in one query | PostgreSQL row-level security on every person table, on top of [workspace tenancy](./workspace-context.mdx) | Authority is never inherited | ADR 0127 |
 | Access is checked again before it is used. | Stale permissions act | An authorization recheck at context read, model request and every send to another person | Authority is never inherited | ADR 0134 |
 | A contact change is not a permission change. | A pause stops a running answer | Pause, quiet hours and **Not now** change contact only. They never stop work in progress. | Authority is never inherited | ADR 0134 |
@@ -400,7 +402,10 @@ The manual path covers **Forget**, a withdrawal from an experiment and the destr
 
 Learning moves in two steps. First the person transfers a lesson to their personal space, on a card.
 Then the toggle "Use what travels with me here", on by default and off with one switch, lets it shape answers in another workspace.
-Evidence never moves, and learning arrives without its origin. The source's export policy (Open, Personal only or Closed) and the destination both decide.
+Evidence never moves. The source's export policy (Open, Personal only or Closed) travels with each record. It is checked at export and at each use in the destination.
+
+A Personal only record never reaches another employer, so the portable download leaves it out.
+Context that reaches another team on its own holds only closed fields and the person's confirmed words. ADR 0129 (proposed in #4863) owns these rules.
 Each record that arrives has **Keep out of this space**.
 
 ## How it decides and acts
@@ -410,12 +415,15 @@ Each record that arrives has **Keep out of this space**.
 | Writer | Writes | Never writes |
 | --- | --- | --- |
 | A review | Candidate observations. The server admits and seals them. | Anything that another person reads |
-| The composer | On a work place: the copy on the work, and replies to it. In a channel thread: one answer. The practice-page copy of results in the eligible set. | Anything from private data. Its practice-page copy has one reader but uses only shared inputs. |
+| The composer | On a work place: the copy on the work, and replies to it. In a channel thread: one complete answer. | Anything from private data |
 | The conversation agent | Answers, messages from Hephaestus, tasks, personal records, and the practice-page copy of private-only results | Anything on the work |
 
 The eligible set is the admitted problems of the work that may go on the work.
+The server projects the practice-page copy of eligible results from the composed copy. It is not a second write of the composer (ADR 0121).
+
 Code, not the model, decides whether a finished review or task starts a turn, and whether a notification goes out.
 A workspace or a person can make that policy quieter, never louder.
+Unprompted guidance about a new problem also needs a current agreement qualification of its practice. ADR 0142 (proposed in #4868) owns that floor.
 
 ### Example: a review of Sam's pull request
 
@@ -438,8 +446,9 @@ The copy holds every Critical and Major problem first, and its Markdown is sanit
 In 1.0, only the author of an item gets a copy on the work. On a graded workspace, a fixed renderer writes every copy, with no model.
 ADR 0121 (proposed in #4862) owns the guardrails. ADR 0149 (proposed in #4868) decides how graded work and a delivery experiment exclude each other.
 
-The seal sets a deadline 2 hours later. At the deadline, every Automatic copy whose first write has not started is withheld, even a ready one.
-Approve first must stage its copy before the deadline, and then main's approval expiry of one day applies. A merge or a close withholds the copy, and a newer version replaces it.
+The seal sets a deadline 2 hours later. At the deadline, every copy that is still pending and not staged is withheld, in both feedback modes.
+An Automatic copy that is ready but whose first write has not started is withheld too. A staged Approve first copy expires after main's one day.
+A merge or a close withholds the copy, and a newer version replaces it.
 Nothing is posted in its place, the review stays complete, and the card offers **Request a new copy**.
 
 A missed deadline, a refusal or an expired approval can withhold a copy with a Critical or Major problem. Then the author gets one private message, unless the author paused contact.
@@ -472,8 +481,8 @@ Hephaestus has no path from one person to the employer, so that it stays outside
 
 Hephaestus has no per-person staff analytics.
 The monthly practice outcome is the only staff number that the design adds, and it counts a workspace, not a person.
-Every staff-visible aggregate, the monthly practice outcome included, needs at least 5 people.
-A split shows all its cells or only its total, and the reader is not told why.
+Every figure that staff, the steward or a research recipient sees follows one disclosure rule, with at least 5 people in each cell.
+The server applies it before any figure or dataset leaves. ADR 0125 (proposed in #4863) owns the rule.
 
 Settings show **Who runs this server**, with the operator's name and a link to its statement.
 The first-screen line promises only what Hephaestus enforces: "Acme's admins and managers cannot see this in Hephaestus."
@@ -517,7 +526,7 @@ Hephaestus degrades honestly. A question is never refused for load.
 
 | Condition | What the person sees | Decided in |
 | --- | --- | --- |
-| All sandbox places are busy | A sandbox place is a slot where one agent run can start. "Queued · answering in about N s". Background work waits first. | ADR 0147 |
+| All sandbox places are busy | A sandbox place is a slot where one agent run can start. "Queued". On shared capacity, an estimate is static or comes from the person's own turns, never from other people's load. Background work waits first. | ADR 0147 |
 | The answer is unread when its turn ends | If the answer is still unread 30 seconds after its turn ends, one push goes out, unless the person is active in that workspace. | [ADR 0116](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0116-a-push-is-one-web-push-message-from-the-instance.md) |
 | The model provider is down | A circuit breaker stops background work. Check-ins still get their due entry, with no model. | ADR 0147 |
 | No copy for the work after two hours | The copy is withheld. The card offers **Request a new copy**. | ADR 0122 |

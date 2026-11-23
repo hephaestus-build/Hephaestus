@@ -373,7 +373,7 @@ The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) ow
 | **Copy on the work** | The copy of one piece of feedback that Hephaestus posts on the pull request or merge request. | comment on the work, feedback on the work (for the copy) | ADR 0121 (#4862) |
 | **Personal space** | A workspace that only its owner can enter. Records that travel with the person live here. | private workspace, home | ADR 0126 (#4863) |
 | **Item card** | The projection of rows about one item, for its owner. It shows the problems with their cited lines, the delivery state of each copy, the task status and "Could not check". No model writes it. | live card, result card, PR card | ADR 0150 (#4862) |
-| **Mark card done** | The person's action that closes an item card until a later review finds a new or changed problem | Done (alone), dismiss | ADR 0150 (#4862) |
+| **Mark card done** | The person's action that closes an item card. Its reverse opens it again. A review of a newer version that finds a new or changed problem also opens it. A duplicate seal does not. | Done (alone), dismiss | ADR 0150 (#4862) |
 | **Mute card notifications** | The person's action that stops messages and notifications about one item card | Mute (alone) | ADR 0150 (#4862) |
 | **Request a new copy** | The item card's action after the copy on the work was withheld. It starts a new composition with a new deadline. | retry, fallback | ADR 0122 (#4862) |
 | **Task status card** | The state of one task, with its estimate and **Cancel** | progress line, job line | ADR 0120 (#4862) |
@@ -391,10 +391,10 @@ The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) ow
 | **Help settings** | How the person likes help: answer length, command first, language, form of address and help style. They apply in every workspace. | preferences (alone), persona | ADR 0132 (#4865) |
 | **Help style** | **Give me a hint first** or **Just tell me** |  | ADR 0132 (#4865) |
 | **Help mode** | What Hephaestus does now on one practice: explain, hint, ask first, or step back. The UI shows it in words. | level, tier | ADR 0130 (#4863) |
-| **Our work** | The private page of the person's relationship with Hephaestus, organized around goals | mentor page, dashboard | ADR 0121 (#4862) |
+| **Our work** | The private page of the person's relationship with Hephaestus, organized around goals: the goals, the check-ins and where help stepped back. Only the account reads it, and its name makes no record readable to the workspace. | mentor page, dashboard | ADR 0121 (#4862) |
 | **Who runs this server** | The Settings entry that names the instance operator and links its statement | data controller (in UI) | ADR 0125 (#4863) |
 | **Monthly practice outcome** | The one value for each practice that workspace admins see each month, from observations on the work, over at least 5 people | team score, usage report | ADR 0125 (#4863) |
-| **Slack detail level** | **Full** or **Notice** for what Slack shows. **Full** needs the export notice, and lets a Slack turn read the person's own records of that workspace. | Slack privacy mode | ADR 0123 (#4862) |
+| **Slack detail level** | **Full** or **Notice** for what Slack shows. At both levels, a Slack turn reads the person's language and answer length. **Full** needs the export notice, and also lets a Slack turn read the person's goals, noted records and other help settings of that workspace. | Slack privacy mode | ADR 0123 (#4862) |
 | **Delivery experiment** | A comparison of a delivery rule by random assignment, for each enrolled person and each unprompted decision | A/B test, study, trial (for the experiment), micro-randomized trial (in product text) | ADR 0149 (#4868) |
 | **Experiment enrollment** | A person's own choice to take part in one delivery experiment, apart from research use. **Enroll** and **Withdraw** change it. | study consent | ADR 0149 (#4868) |
 

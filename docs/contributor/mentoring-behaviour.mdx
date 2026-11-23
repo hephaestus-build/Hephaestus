@@ -42,7 +42,7 @@ It is code with no model. It runs when a message is committed, and again before 
 
 | ID | Rule | Decided in |
 | --- | --- | --- |
-| C5 | An unprompted message carries a problem in a new admitted observation, a material change on an agreed goal, or an awaited result. | ADR 0139 |
+| C5 | An unprompted message carries a problem in a new admitted observation, a material change on an agreed goal, or an awaited result. A new problem counts only when its practice has a current agreement qualification (ADR 0142). | ADR 0139, ADR 0142 |
 | C5a | A withheld copy on the work with a Critical or Major problem also qualifies. The reasons are the deadline, a second guardrail refusal and an expired approval. That message is unprompted contact, so **Pause** or a mute blocks it. The item card always shows the withheld state. Nothing else qualifies. | ADR 0122, ADR 0139 |
 | C6 | Code decides whether a finished review or task starts a turn. The model decides nothing about it. | ADR 0120, ADR 0139 |
 | C7 | A background turn writes at most one message, or none. Three results in one minute become one message. | ADR 0120 |
@@ -65,6 +65,7 @@ ADR 0134 (proposed in #4863) owns this order. A contact change never counts as a
 ## The notification budget
 
 The notification budget is the set of limits that the initiative level sets. The contact policy adds the checks of channel, activity and quiet hours.
+A Slack direct message that Hephaestus starts is its one interrupting effect. These rules apply at its send, and its app entry commits either way (ADR 0139).
 
 | ID | Rule | Decided in |
 | --- | --- | --- |
@@ -76,7 +77,7 @@ The notification budget is the set of limits that the initiative level sets. The
 | N6 | **Hide content in notifications** shows the fixed text of the kind on the lock screen. | ADR 0139 |
 | N7 | A message that the person saw in any client cancels its notification, if the write has not started. | ADR 0116, ADR 0139 |
 | N8 | No escalation. Hephaestus never sends "if unseen in Slack, then push". | ADR 0139 |
-| N9 | A result asked for in Slack gets one Slack reply and no other notification. | ADR 0131, ADR 0116 |
+| N9 | A result asked for in Slack gets one Slack reply and no other notification. For a result that only the app shows, such as a private check, the reply is a fixed acknowledgement with an app link. | ADR 0131, ADR 0116, ADR 0120 |
 | N10 | Notifications are one clear choice at first sign-in, together with the rhythm. | ADR 0133 |
 
 ### Example: two contacts on a Friday night
@@ -246,7 +247,7 @@ Each hard case has fixed behavior and a scenario test.
 
 | ID | Never | Decided in |
 | --- | --- | --- |
-| X1 | Shows a score, rank, streak, badge, level or points, or ranks people anywhere. Activity shows people unordered or as team aggregates. | ADR 0124, ADR 0125 |
+| X1 | Shows a score, rank, streak, badge, level or points, or ranks people anywhere. Activity shows people unordered or as team aggregates, and its member-visible parts follow the provider's reader rules. | ADR 0124, ADR 0125 |
 | X2 | Tells anyone about a person, not even whether they use Hephaestus. | ADR 0125 |
 | X3 | Writes text that the person submits as their own work. A course workspace can turn on a runtime check. | ADR 0124 |
 | X4 | Claims a feeling, infers an emotion, or stores one. | ADR 0124 |

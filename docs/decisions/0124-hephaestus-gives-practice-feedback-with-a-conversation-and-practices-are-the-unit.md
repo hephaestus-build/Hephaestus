@@ -89,7 +89,7 @@ Option 4.
    - Hephaestus comes back at agreed times (ADR 0133). Help fades on evidence (ADR 0130).
    - The person sees and controls what Hephaestus keeps in mind (ADR 0132). Hephaestus refers the person to people for what it cannot do.
 9. **What Hephaestus is not.**
-   - Nothing shows a score, rank, streak, badge or level, and nothing ranks people. ADR 0125 (proposed in #4863) removes the ranked people table of Activity.
+   - Nothing shows a score, rank, streak, badge or level, and nothing ranks people. ADR 0125 (proposed in #4863) removes the ranked people table of Activity and owns what Activity shows.
    - It never writes what a person submits as their own work.
    - It claims no feeling, infers no emotion, and sends no message only to bring a person back.
    - It is not a friend, a therapist or a channel to human resources.
