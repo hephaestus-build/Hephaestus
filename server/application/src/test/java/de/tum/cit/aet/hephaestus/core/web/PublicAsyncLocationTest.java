@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -37,6 +38,7 @@ class PublicAsyncLocationTest extends BaseUnitTest {
         var jwt = Jwt.withTokenValue("test-token")
                 .header("alg", "none")
                 .subject("41")
+                .claim("jti", "00000000-0000-0000-0000-000000000041")
                 .build();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
         var request = new MockHttpServletRequest();
@@ -59,7 +61,7 @@ class PublicAsyncLocationTest extends BaseUnitTest {
         var export = new AccountExport();
         export.setId(13L);
         export.setAccountId(41L);
-        when(service.requestExport(41L)).thenReturn(export);
+        when(service.requestExport(argThat(act -> act.account() == 41L))).thenReturn(export);
         var controller = new AccountExportController(service, urls());
 
         var response = controller.requestExport();

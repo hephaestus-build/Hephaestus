@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityFact;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
@@ -20,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 final class PersonErasureAllStoresFixture {
     static final String CANARY = "person-all-stores-canary";
     private final JdbcTemplate jdbc;
+    private final JdbcTemplate owner = PostgreSQLTestContainer.ownerJdbc();
     private final SchemaRowSeeder rows;
     private final long generatedIdBase;
     private final List<SeededRow> seeded = new ArrayList<>();
@@ -934,7 +936,11 @@ final class PersonErasureAllStoresFixture {
                 values.put(key, type.startsWith("timestamp") ? Timestamp.from(Instant.now()) : UUID.randomUUID());
             }
         }
-        rows.insert(table, values);
+        if ("account_export".equals(table)) {
+            new SchemaRowSeeder(owner).insert(table, values);
+        } else {
+            rows.insert(table, values);
+        }
         Map<String, Object> keys = new HashMap<>();
         for (String key : keyNames) keys.put(key, Objects.requireNonNull(values.get(key)));
         seeded.add(new SeededRow(table, Map.copyOf(keys)));
@@ -955,8 +961,10 @@ final class PersonErasureAllStoresFixture {
             predicates.add("t.\"" + key + "\"=?");
             arguments.add(value);
         });
-        return strings(
+        JdbcTemplate reader = "account_export".equals(row.table()) ? owner : jdbc;
+        return reader.query(
                 "SELECT to_jsonb(t)::text FROM \"" + row.table() + "\" t WHERE " + String.join(" AND ", predicates),
+                (result, index) -> Objects.requireNonNull(result.getString(1)),
                 arguments.toArray());
     }
 

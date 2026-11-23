@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
@@ -137,9 +138,8 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
                 };
         var registry = new PersonDataRegistry(List.of(new TransactionProofCatalog(List.of(preferences, profile))));
         var service = new PersonDataService(
-                resolver,
+                new PersonDataScopeResolver(resolver, List.of(), new OwnerScope(jdbc)),
                 registry,
-                List.of(),
                 requests,
                 suppression,
                 fence,

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -45,7 +46,13 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
         when(transactionManager.getTransaction(any())).thenAnswer(invocation -> new SimpleTransactionStatus());
         worker = new ExportGenerationWorker(
-                repository, assembler, objectMapper, Clock.fixed(NOW, ZoneOffset.UTC), metrics, transactionManager);
+                repository,
+                assembler,
+                objectMapper,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                metrics,
+                transactionManager,
+                mock(OwnerScope.class));
     }
 
     private AccountExport existingExport() {

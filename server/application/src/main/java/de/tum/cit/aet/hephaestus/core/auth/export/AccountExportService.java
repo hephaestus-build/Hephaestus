@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.export.dto.ExportStatusDTO;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Instant;
@@ -44,16 +46,19 @@ public class AccountExportService {
     private final ApplicationEventPublisher events;
     private final AuthEventLogger authEventLogger;
     private final Clock clock;
+    private final OwnerScope ownerScope;
 
     public AccountExportService(
             AccountExportRepository accountExportRepository,
             ApplicationEventPublisher events,
             AuthEventLogger authEventLogger,
-            Clock clock) {
+            Clock clock,
+            OwnerScope ownerScope) {
         this.accountExportRepository = accountExportRepository;
         this.events = events;
         this.authEventLogger = authEventLogger;
         this.clock = clock;
+        this.ownerScope = ownerScope;
     }
 
     /** Statuses that count as "in flight" for the one-export-per-account cap. */
@@ -77,7 +82,8 @@ public class AccountExportService {
      *     per account (DoS / storage-amplification guard).
      */
     @Transactional
-    public AccountExport requestExport(Long accountId) {
+    public AccountExport requestExport(PersonAct act) {
+        long accountId = ownerScope.fromPrincipal(act);
         // Fast-path friendly check; the authoritative guard is the partial unique index
         // uq_account_export_in_flight (changeset -14-), which closes the check-then-insert TOCTOU below.
         if (accountExportRepository.existsByAccountIdAndStatusIn(accountId, IN_FLIGHT)) {
@@ -101,7 +107,8 @@ public class AccountExportService {
 
     /** Ownership-scoped status view; empty if the id doesn't exist or isn't this account's. */
     @Transactional(readOnly = true)
-    public Optional<ExportStatusDTO> status(Long exportId, Long accountId) {
+    public Optional<ExportStatusDTO> status(Long exportId, PersonAct act) {
+        long accountId = ownerScope.fromPrincipal(act);
         return accountExportRepository.findByIdAndAccountId(exportId, accountId).map(this::toStatus);
     }
 
@@ -111,7 +118,8 @@ public class AccountExportService {
      * so the controller answers 404 uniformly.
      */
     @Transactional(readOnly = true)
-    public Optional<byte[]> downloadPayload(Long exportId, Long accountId) {
+    public Optional<byte[]> downloadPayload(Long exportId, PersonAct act) {
+        long accountId = ownerScope.fromPrincipal(act);
         return accountExportRepository
                 .findByIdAndAccountId(exportId, accountId)
                 .filter(e -> e.getStatus() == AccountExport.Status.READY)
@@ -120,17 +128,7 @@ public class AccountExportService {
                 .filter(payload -> payload.length > 0);
     }
 
-    /**
-     * Hourly retention enforcement: flips every READY export past its {@code expiresAt} to EXPIRED and
-     * nulls the payload so exported PII isn't retained beyond the download window. One bulk
-     * {@code @Modifying} UPDATE — no BYTEA blobs are loaded into the persistence context.
-     *
-     * <p>{@code @Transactional} is load-bearing: the bulk {@code @Modifying(flushAutomatically = true)}
-     * query needs an active transaction, and the scheduler ({@link ExportRetentionSweeper}) calls this
-     * across a real proxy hop with none of its own.
-     *
-     * @return the number of exports expired by this run
-     */
+    /** Expires READY exports whose download window has ended. */
     @Transactional
     public int expireRetention() {
         return accountExportRepository.expireReadyBefore(Instant.now(clock));

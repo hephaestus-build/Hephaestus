@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
@@ -296,9 +297,8 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                     }
                 };
         var recoveryService = new PersonDataService(
-                resolver,
+                new PersonDataScopeResolver(resolver, List.of(), new OwnerScope(jdbc)),
                 new PersonDataRegistry(List.of(new RecoveryStores(List.of(failing)))),
-                List.of(),
                 beans.getBean(PersonDataRequestRepository.class),
                 beans.getBean(IdentityRestrictionService.class),
                 beans.getBean(PersonDataWriteFence.class),

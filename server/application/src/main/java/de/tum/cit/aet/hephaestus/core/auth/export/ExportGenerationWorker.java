@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.export;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Job;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Outcome;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Duration;
@@ -26,6 +27,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @ConditionalOnServerRole
 @Component
+@OwnerScope.StoredOwnerOperation
 public class ExportGenerationWorker {
 
     private static final Logger log = LoggerFactory.getLogger(ExportGenerationWorker.class);
@@ -39,6 +41,7 @@ public class ExportGenerationWorker {
     private final Clock clock;
     private final PrivacyJobMetrics metrics;
     private final TransactionTemplate transaction;
+    private final OwnerScope ownerScope;
 
     public ExportGenerationWorker(
             AccountExportRepository accountExportRepository,
@@ -46,13 +49,15 @@ public class ExportGenerationWorker {
             ObjectMapper objectMapper,
             Clock clock,
             PrivacyJobMetrics metrics,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            OwnerScope ownerScope) {
         this.accountExportRepository = accountExportRepository;
         this.assembler = assembler;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.metrics = metrics;
         this.transaction = new TransactionTemplate(transactionManager);
+        this.ownerScope = ownerScope;
     }
 
     // The generation owns its transactions: one for the bundle, and one for a failure after that rolls back.
@@ -90,6 +95,7 @@ public class ExportGenerationWorker {
     }
 
     private Generation assemble(Long exportId, Long accountId) {
+        ownerScope.ofJob(accountId);
         AccountExport export = accountExportRepository
                 .lockByIdAndAccountId(exportId, accountId)
                 .orElse(null);
@@ -122,6 +128,7 @@ public class ExportGenerationWorker {
         try {
             // Repository errors can mark a transaction rollback-only; recovery needs a fresh transaction.
             transaction.executeWithoutResult(status -> {
+                ownerScope.ofJob(accountId);
                 accountExportRepository
                         .lockByIdAndAccountId(exportId, accountId)
                         .filter(export -> export.getStatus() == AccountExport.Status.PENDING

@@ -31,6 +31,9 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
 import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyCredential;
 import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyCredentialRepository;
 import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyJson;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonActFixture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Instant;
@@ -46,6 +49,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.web.webauthn.api.Bytes;
 import org.springframework.security.web.webauthn.api.ImmutableCredentialRecord;
 import org.springframework.security.web.webauthn.api.ImmutablePublicKeyCose;
@@ -229,7 +233,7 @@ class AccountExportServiceTest extends BaseUnitTest {
 
         when(repo.findByIdAndAccountId(1000L, ACCOUNT_ID)).thenReturn(Optional.empty());
 
-        Optional<?> result = service.status(1000L, ACCOUNT_ID);
+        Optional<?> result = service.status(1000L, PersonActFixture.self(ACCOUNT_ID));
 
         assertThat(result).isEmpty();
         verify(repo).findByIdAndAccountId(1000L, ACCOUNT_ID);
@@ -241,7 +245,8 @@ class AccountExportServiceTest extends BaseUnitTest {
         AccountExportService service = newService(repo);
         when(repo.findByIdAndAccountId(1000L, OTHER_ACCOUNT_ID)).thenReturn(Optional.empty());
 
-        assertThat(service.downloadPayload(1000L, OTHER_ACCOUNT_ID)).isEmpty();
+        assertThat(service.downloadPayload(1000L, PersonActFixture.self(OTHER_ACCOUNT_ID)))
+                .isEmpty();
     }
 
     @Test
@@ -253,7 +258,8 @@ class AccountExportServiceTest extends BaseUnitTest {
         pending.setStatus(AccountExport.Status.PROCESSING);
         when(repo.findByIdAndAccountId(5L, ACCOUNT_ID)).thenReturn(Optional.of(pending));
 
-        assertThat(service.downloadPayload(5L, ACCOUNT_ID)).isEmpty();
+        assertThat(service.downloadPayload(5L, PersonActFixture.self(ACCOUNT_ID)))
+                .isEmpty();
     }
 
     @Test
@@ -267,7 +273,8 @@ class AccountExportServiceTest extends BaseUnitTest {
         ready.setExpiresAt(Instant.parse("2026-05-29T11:00:00Z")); // before fixed clock now
         when(repo.findByIdAndAccountId(6L, ACCOUNT_ID)).thenReturn(Optional.of(ready));
 
-        assertThat(service.downloadPayload(6L, ACCOUNT_ID)).isEmpty();
+        assertThat(service.downloadPayload(6L, PersonActFixture.self(ACCOUNT_ID)))
+                .isEmpty();
     }
 
     @Test
@@ -281,7 +288,8 @@ class AccountExportServiceTest extends BaseUnitTest {
         ready.setExpiresAt(Instant.parse("2026-05-31T12:00:00Z")); // after fixed clock now
         when(repo.findByIdAndAccountId(7L, ACCOUNT_ID)).thenReturn(Optional.of(ready));
 
-        assertThat(service.downloadPayload(7L, ACCOUNT_ID)).contains("{\"ok\":true}".getBytes(UTF_8));
+        assertThat(service.downloadPayload(7L, PersonActFixture.self(ACCOUNT_ID)))
+                .contains("{\"ok\":true}".getBytes(UTF_8));
     }
 
     @Test
@@ -300,9 +308,9 @@ class AccountExportServiceTest extends BaseUnitTest {
             return e;
         });
 
-        AccountExportService service = new AccountExportService(repo, events, logger, clock);
+        AccountExportService service = new AccountExportService(repo, events, logger, clock, mockOwnerScope());
 
-        AccountExport created = service.requestExport(ACCOUNT_ID);
+        AccountExport created = service.requestExport(PersonActFixture.self(ACCOUNT_ID));
 
         assertThat(created.getId()).isEqualTo(1234L);
         assertThat(created.getStatus()).isEqualTo(AccountExport.Status.PENDING);
@@ -317,18 +325,40 @@ class AccountExportServiceTest extends BaseUnitTest {
         AuthEventLogger logger = mock(AuthEventLogger.class);
         when(repo.existsByAccountIdAndStatusIn(eq(ACCOUNT_ID), any())).thenReturn(true);
 
-        AccountExportService service = new AccountExportService(repo, events, logger, clock);
+        AccountExportService service = new AccountExportService(repo, events, logger, clock, mockOwnerScope());
 
         assertThatExceptionOfType(ResponseStatusException.class)
-                .isThrownBy(() -> service.requestExport(ACCOUNT_ID))
+                .isThrownBy(() -> service.requestExport(PersonActFixture.self(ACCOUNT_ID)))
                 .satisfies(ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
         verify(repo, never()).save(any());
         verify(events, never()).publishEvent(any(Object.class));
     }
 
+    @Test
+    void shouldRefuseAnActByADelegate() {
+        var scope = new OwnerScope(mock(JdbcTemplate.class));
+        var service = new AccountExportService(
+                mock(AccountExportRepository.class),
+                mock(ApplicationEventPublisher.class),
+                mock(AuthEventLogger.class),
+                clock,
+                scope);
+        var act = PersonActFixture.delegate(ACCOUNT_ID);
+        assertThatExceptionOfType(ResponseStatusException.class).isThrownBy(() -> service.requestExport(act));
+        assertThatExceptionOfType(ResponseStatusException.class).isThrownBy(() -> service.status(5L, act));
+        assertThatExceptionOfType(ResponseStatusException.class).isThrownBy(() -> service.downloadPayload(5L, act));
+    }
+
+    private static OwnerScope mockOwnerScope() {
+        var scope = mock(OwnerScope.class);
+        when(scope.fromPrincipal(any()))
+                .thenAnswer(invocation -> invocation.<PersonAct>getArgument(0).requireSelf());
+        return scope;
+    }
+
     private AccountExportService newService(AccountExportRepository repo) {
         return new AccountExportService(
-                repo, mock(ApplicationEventPublisher.class), mock(AuthEventLogger.class), clock);
+                repo, mock(ApplicationEventPublisher.class), mock(AuthEventLogger.class), clock, mockOwnerScope());
     }
 
     private static void setId(Object entity, Long id) {
