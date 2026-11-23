@@ -25,6 +25,7 @@ The other sections give the detail.
 
 Hephaestus reads the work that people already do in GitHub, GitLab and Slack.
 It checks that work against the engineering practices that their team values, such as "say how to verify a change".
+It reviews pull requests and merge requests. It also reviews issues in a workspace where an admin includes them.
 It is open source, and an organization runs it on its own servers with the model that it chooses.
 
 A good human mentor does four things, and Hephaestus does the same four things:
@@ -82,6 +83,7 @@ flowchart LR
 | Workspace | The team's tenant. SQL keeps workspaces apart. | Exists |
 | Practice | A defined way of working that Hephaestus uses to review work. The unit of learning. | Exists |
 | Observation | A record from reviewing one practice for one item at a version | Exists |
+| Reviewed item | A pull request or a merge request, and an issue where a workspace admin includes issues | Pull requests exist. Issues are planned. |
 | Personal space | A workspace that only its owner can enter. Records that travel with the person live here. | Planned |
 | Conversation | The person's private threads with Hephaestus in one workspace | Planned, as a change to the current conversation |
 | Item card | A view of one item's results and delivery. It changes without a model. | Planned |
@@ -191,11 +193,12 @@ This walk shows each decision that Sam makes and each wait.
 
 | Day | Where | What happens |
 | --- | --- | --- |
-| Monday | Web app | At first sign-in, one screen offers a rhythm and notifications. Sam picks "Monday focus and Friday reflection". |
+| Monday | Web app | At first sign-in, one screen offers a rhythm and notifications. Sam picks "Monday focus". |
 | Monday | Ask Hephaestus | The header shows "Acme Web", one privacy line and the AI label. The answer starts in about two seconds and uses Acme Web's practices. |
 | Monday | Ask Hephaestus | Sam says "Short answers, command first." Hephaestus saves a help setting, with no card. Every later answer is short. |
 | Monday | Ask Hephaestus | Sam names a goal: small, reviewable pull requests. The entry says "Saved as a goal · Undo · Edit". |
-| Tuesday | Extension | Sam asks for a check of a draft. A task status card says "Checking your draft on PR #42 · about 1 min". |
+| Monday | Ask Hephaestus | After this first useful answer, Hephaestus offers a Friday reflection once, on a card. Sam accepts. |
+| Tuesday | Extension | Sam asks for a check of a draft. A task status card says "Checking your draft on PR #42 · about 2 minutes, up to 10 when busy". |
 | Tuesday | Extension | The result shows the cited line and one next step. Only Sam sees it. Hephaestus offers once to check drafts automatically. Sam accepts on a card. |
 | Tuesday | GitHub | The review of the pull request seals. The composer posts one Major problem on the pull request. It holds nothing private about Sam. |
 | Tuesday | Ask Hephaestus | One message from Hephaestus explains two Minor problems and links them to Sam's goal. One notification follows. |
@@ -204,8 +207,7 @@ This walk shows each decision that Sam makes and each wait.
 | Friday | Ask Hephaestus | At 16:00 the weekly reflection names one change in the week's work and asks one question. |
 | Sunday | Our work | Sam sees the goal, the check-in and the growth mark. Under **What Hephaestus keeps in mind**, Sam forgets one wrong item. |
 
-The week has three real decisions and three cards.
-Each card is a real decision or a wait for real work.
+Each card in the week is a real decision of Sam's, and each wait is real work.
 The goal and the help setting save with **Undo**, so they need no card.
 
 ### Month six and year three
@@ -267,6 +269,7 @@ Code builds it from database rows, so no model writes it and it changes without 
 The card exists from the first queued review, so "Reviewing #42" is a state of the card.
 
 The same card shows in four places: each message that cites it, Activity, the practice page and the extension.
+Item cards stay out of Needs you. Needs you lists the suggestions and tasks that wait for the person.
 **Mark card done** closes it. A later review of a newer version with a new or changed problem opens it again.
 **Mute card notifications** stops messages and notifications about it.
 
@@ -465,12 +468,16 @@ Hephaestus has no path from one person to the employer, so that it stays outside
 | Who | What they see | Status |
 | --- | --- | --- |
 | The person | Everything about themselves: conversation, memory, goals, check-ins, private checks and feedback | Planned |
-| Workspace admins | Each month, one practice outcome for each practice, from observations on the work only, with a minimum group size | Planned |
+| Workspace admins | Each month, one practice outcome for each practice, from observations on the work only, over at least 5 people | Planned |
 | Workspace admins | Items in their approval and correction tasks, with exact fields and an expiry | Planned |
 | Workspace admins | Per-person results, and View as user | Exists. The design deletes both. |
 | Support | Only a support snapshot that the person shares with a named recipient and can revoke | Planned |
 | Readers of the work | The copy on the work, which names the work and its author | Exists |
 | The instance operator | Whatever its servers, database, backups and model endpoints hold | A fact that no application can change |
+
+Hephaestus has no per-person staff analytics.
+The monthly practice outcome is the only staff number that the design adds, and it counts a workspace, not a person.
+Every aggregate needs at least 5 people. A split shows all its cells or only its total, and the reader is not told why.
 
 Settings show **Who runs this server**, with the operator's name and a link to its statement.
 The first-screen line promises only what Hephaestus enforces: "Acme's admins and managers cannot see this in Hephaestus."
@@ -496,6 +503,54 @@ These items go to the operator's counsel. This page is not legal advice.
 - Co-determination law can apply whatever the intent.
 - On an education instance, grading with Hephaestus could be high-risk. The deployer guide says not to grade with it.
 - Records kept for the person's learning need an operator maximum and an inactivity notice.
+
+## Research use
+
+Hephaestus is also the reference implementation of an AI mentor that research studies.
+Research uses two planned tools: delivery experiments and study datasets.
+Both rest on each person's consent, and no staff role or product surface sees their per-person data.
+[Mentoring evaluation](./mentoring-evaluation.mdx#research-datasets-and-consent) gives the dataset rules.
+
+### Delivery experiments
+
+A delivery experiment compares a delivery rule by random assignment, for each person and each decision.
+A person enrolls in one experiment, apart from **Allow research use of my data**, and can withdraw at once.
+
+| Drawn | Never drawn |
+| --- | --- |
+| The copy on the work | A Critical problem. It always goes out. |
+| An unprompted message | Answers, requested results and private checks |
+|  | Agreed check-ins and stepping-back messages |
+
+- A silent draw refuses the whole copy with its own reason. A copy never goes out without its required Critical and Major problems.
+- A research steward holds a stop switch for each practice. The steward sees no outcomes and is never the experiment's author.
+- Run fingerprints and period locks keep the treatment of a period fixed.
+- An experiment workspace reviews provider records only. Slack stays a conversation channel there.
+- An experiment workspace does not use the deterministic renderer for graded work, because it would change the treatment.
+
+### The decision record
+
+Each unprompted decision writes one decision record, at the moment of the decision.
+The record holds the practice, the item and its version, the outcome and severity, and whether the policy would speak.
+It also holds the draw, the action that followed, and the exposure: a card open, a notification open or a seen message.
+Code writes it, and no model reads it.
+Each change of a help mode is recorded with its time.
+
+### Held results
+
+A silent draw holds its result.
+A held result stays on the item card, so the person can still find it.
+It stays out of the weekly reflection, the Monday focus and goal follow-ups.
+It is released when the next piece of work of the same practice and author is reviewed, or when the person asks.
+
+### The pilot and its operator
+
+In the first weeks of a pilot, copies on the work run in Approve first. Experts approve each copy before it posts.
+Their approvals, edits and rejections become expert labels. Later study cycles do not use Approve first, because it changes the treatment.
+
+When the researcher is also course staff, a colleague operates the study instance or holds the steward role.
+Operator access is logged.
+Uptake is a research outcome, never a product goal.
 
 ## Degradation
 
@@ -523,6 +578,8 @@ The build goes in four stages:
 2. **A first real group.** Early users try memory, the private check and check-ins on a release candidate.
 3. **What the group informs.** Feedback on the work and in conversation, learning that travels, and Slack.
 4. **The release track.** The cutover, the privacy journal, the restore drill, and the [release check](./mentoring-evaluation.mdx#the-release-check).
+
+The delivery experiment tools are part of 1.0. They merge before the first open-source pilot, off the longest path.
 
 The signals of the early group are fixed before it starts.
 They are the return rate in week four, the rate of check-ins kept after three, and the **Forget** rate.
@@ -580,7 +637,7 @@ These come after 1.0. The 1.0 design keeps only stable IDs and open enums for th
 - A member endpoint for the person's own assistants over MCP.
 - Actions on the work with the person's approval, and change tasks.
 - A public reply on the work for a reviewer's feedback.
-- Signed import, research study tools and richer fading.
+- Signed import and richer fading.
 
 ### The riskiest assumptions
 

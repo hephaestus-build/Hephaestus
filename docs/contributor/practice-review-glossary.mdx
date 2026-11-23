@@ -349,32 +349,42 @@ An execution that made no model call adds no usage row.
 
 These terms name the runtime of the planned design in [Mentoring framework](./mentoring-framework.mdx).
 The current release does not have them.
+The last column names the pull request that proposes the decision behind each term.
 When a part ships, its row moves to the runtime terms.
+
 The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) owns the product terms of the same design.
 The conversation agent, the composer and the review agent are agents. Hephaestus is not an agent.
 
-| Term | Meaning |
-| --- | --- |
-| **Conversation agent** | The sandboxed agent that runs turns on one account's private threads in a workspace. It answers, starts tasks and writes messages from Hephaestus. It never writes on the work. |
-| **Composer** | The sandboxed agent that runs turns on a shared thread. It writes the copy on the work, and it reads only the data of its exact place. |
-| **Private thread** | A thread of one account: the main thread, a message thread under one message, or the work thread of one item. |
-| **Shared thread** | A thread of the workspace: the work place of one pull request or merge request, or a channel thread. It has no personal records. |
-| **Work place** | The shared thread of one pull request or merge request. The composer writes the copy on the work there. |
-| **Channel thread** | The shared thread of one Slack thread where a person mentioned Hephaestus. Its turns read public repository data and channel-readable practices only. |
-| **Inbox item** | One input of a thread: a person's message, a finished review, a finished task or a due check-in. It holds IDs only. |
-| **Interactive turn** | A turn that holds a person's message. Its answer streams. |
-| **Background turn** | A turn that holds no person's message. It writes at most one message from Hephaestus, or none. |
-| **Start policy** | The table in code that decides whether and when an inbox item starts a turn. No model decides it. |
-| **Typed command** | The person's confirmed act from a card that changes a shared place. It carries IDs only, and its confirmation binds the facts of its preview. |
-| **Citation token** | A reference in an entry to a result at a version. The client renders the outcome from current rows, so the model never writes it. |
-| **Guardrails** | The composer's checks on each tool call and at commit: destination rules, observation reference validation, required Critical and Major problems and Markdown sanitization. |
-| **Copy deadline** | Two hours after the seal. A copy on the work that is not ready by then is withheld, and nothing is posted in its place. |
-| **Contact policy** | The code that decides whether Hephaestus may interrupt a person now, on a channel. It has no model. |
-| **Notification budget** | The rules for notifications at commit. At most one goes out for each message, under the daily limit of the initiative level, and none while the person is active. |
-| **Authorization recheck** | A check of current access before a consequential read or write: at context read, at model request and at each send to another person. |
-| **Release evaluation cases** | 20 to 50 cases from real failures that run on the reference local model before each release, scored pass^k. |
-| **Contact simulation** | The offline run of simulated people over weeks that counts breaches of the contact rules. It checks timing and frequency only. |
-| **Release check** | The manual checklist that a maintainer runs and signs on the packaged artifact of a release candidate. |
+| Term | Meaning | Proposed in |
+| --- | --- | --- |
+| **Conversation agent** | The sandboxed agent that runs turns on one account's private threads in a workspace. It answers, starts tasks and writes messages from Hephaestus. It never writes on the work. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Composer** | The sandboxed agent that runs turns on a shared thread. It writes the copy on the work, and it reads only the data of its exact place. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Private thread** | A thread of one account: the main thread, a message thread under one message, or the work thread of one item. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Shared thread** | A thread of the workspace: the work place of one pull request or merge request, or a channel thread. It has no personal records. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Work place** | The shared thread of one pull request or merge request. The composer writes the copy on the work there. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Channel thread** | The shared thread of one Slack thread where a person mentioned Hephaestus. Its turns read public repository data and channel-readable practices only. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Inbox item** | One input of a thread: a person's message, a finished review, a finished task or a due check-in. It holds IDs only. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Interactive turn** | A turn that holds a person's message. Its answer streams. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Background turn** | A turn that holds no person's message. It writes at most one message from Hephaestus, or none. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Start policy** | The table in code that decides whether and when an inbox item starts a turn. No model decides it. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Typed command** | The person's confirmed act from a card that changes a shared place. It carries IDs only, and its confirmation binds the facts of its preview. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Citation token** | A reference in an entry to a result at a version. The client renders the outcome from current rows, so the model never writes it. | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Guardrails** | The composer's checks on each tool call and at commit: destination rules, observation reference validation, required Critical and Major problems and Markdown sanitization. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Copy deadline** | Two hours after the seal. A copy on the work that is not ready by then is withheld, and nothing is posted in its place. | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Contact policy** | The code that decides whether Hephaestus may interrupt a person now, on a channel. It has no model. | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Notification budget** | The rules for notifications at commit. At most one goes out for each message, under the daily limit of the initiative level, and none while the person is active. | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Authorization recheck** | A check of current access before a consequential read or write: at context read, at model request and at each send to another person. | [#4863](https://github.com/hephaestus-build/Hephaestus/pull/4863) |
+| **Release evaluation cases** | 20 to 50 cases from real failures that run on the reference local model before each release, scored pass^k. | [#4867](https://github.com/hephaestus-build/Hephaestus/pull/4867) |
+| **Contact simulation** | The offline run of simulated people over weeks that counts breaches of the contact rules. It checks timing and frequency only. | [#4867](https://github.com/hephaestus-build/Hephaestus/pull/4867) |
+| **Release check** | The manual checklist that a maintainer runs and signs on the packaged artifact of a release candidate. | [#4867](https://github.com/hephaestus-build/Hephaestus/pull/4867) |
+| **Decision record** | One append-only record for each unprompted decision about the copy on the work or a message. It holds the practice, the item version, the outcome, the draw, the action and the exposure. | ADR 0149, not yet proposed |
+| **Silent draw** | A delivery experiment's draw to stay silent on one unprompted decision. It refuses the whole copy with its own reason, never for a Critical problem. | ADR 0149, not yet proposed |
+| **Held result** | A result that a silent draw holds back. The item card shows it. Scheduled turns leave it out until the next reviewed piece of work of that practice and author, or until the person asks. | ADR 0149, not yet proposed |
+| **Research steward** | The instance role that holds the stop switch of each practice in a delivery experiment. The steward sees no outcomes and is never the experiment's author. | ADR 0149, not yet proposed |
+| **Run fingerprint** | The model, the prompt digest and the practice versions that one run used | ADR 0149, not yet proposed |
+| **Period lock** | A lock that keeps the run fingerprint of a study period fixed until a steward unlocks it | ADR 0149, not yet proposed |
+| **Study pseudonym** | One pseudonym for each person and delivery experiment. The steward holds its key, and the end of the experiment destroys the key. | [#4867](https://github.com/hephaestus-build/Hephaestus/pull/4867) |
+| **Scenario replay** | The evaluation tool that replays a pseudonymized past project in time order, with frozen reactions and switches for goals, memory and history. It is not a release gate. | [#4867](https://github.com/hephaestus-build/Hephaestus/pull/4867) |
 
 [Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx) owns the mechanics of threads, inbox items and turns.
 The design widens two terms of the runtime table: a turn can run without a person's question, and a thread is the unit of order.

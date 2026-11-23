@@ -46,6 +46,7 @@ It is code with no model. It runs when a message is committed, and again before 
 | C8 | The same problem on the same version is never sent twice. A new version can be sent. |
 | C9 | The instance and the workspace can turn off messages that Hephaestus starts. The person's controls narrow further. Rules narrow, never widen. |
 | C10 | Optional background items wait until two minutes after the person's last message. A requested result and an agreed check-in never wait. |
+| C11 | Each unprompted decision writes one decision record. A [delivery experiment](./mentoring-framework.mdx#delivery-experiments) can draw it silent, but never for a Critical problem. |
 
 ### The order of checks
 
@@ -106,11 +107,11 @@ It appears in the conversation, on the practice page, as a notification, or in t
 | --- | --- | --- |
 | Monday focus | Names what waits on the person this week, and one step for a goal. A pre-check skips the week when nothing waits. | At first sign-in, in the rhythm choice |
 | Check my drafts before review | Runs a private check when the person pushes a draft. It is the only way that automatic draft checks start. | After a useful first check |
-| Weekly reflection | Names one change in the week's work and asks one question | At first sign-in, as the Friday half of the rhythm choice, or later |
+| Weekly reflection | Names one change in the week's work and asks one question | Once, after the person's first useful interaction. Never at first sign-in. |
 | Goal follow-up | One useful next step about a named goal, when the active work changes materially | Beside a goal |
 | Periodic review | Looks back over a quarter or a course term and asks what comes next | Once, after the first month |
 
-The rhythm choice at first sign-in offers "Monday focus and Friday reflection", "Only when I ask" and "Choose later".
+The rhythm choice at first sign-in offers "Monday focus", "Only when I ask" and "Choose later". It never offers the weekly reflection.
 
 | ID | Rule |
 | --- | --- |
@@ -122,6 +123,8 @@ The rhythm choice at first sign-in offers "Monday focus and Friday reflection", 
 | K6 | An agreed check-in stays until the person stops it, its conditions fail, or access ends. |
 | K7 | After 3 unanswered messages from one check-in, Hephaestus asks once in place: "Keep this check-in?" **Keep** is the default. |
 | K8 | Hephaestus never pauses or slows a check-in on its own. Silence is never read as dislike. |
+| K9 | A delivery experiment never draws a check-in. The check-in is recorded and always fires. |
+| K10 | A result that a study holds back stays out of the weekly reflection, the Monday focus and goal follow-ups. It returns when the next piece of work of the same practice and author is reviewed, or when the person asks. The item card still shows it. |
 
 ### Example: Monday focus
 
@@ -149,6 +152,7 @@ Everyone else keeps the digest. Turning the reflection off restores the digest, 
 | G4 | A goal follow-up comes at most once a day for each goal, and only in waking hours. |
 | G5 | A goal can carry its own help preference. It overrides the computed help mode. |
 | G6 | A goal can travel with the person to another workspace, by transfer on a card. |
+| G7 | A goal follow-up never uses a result that a study holds back (K10). |
 
 ### Growth and fading
 

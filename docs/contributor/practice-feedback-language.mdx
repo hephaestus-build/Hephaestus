@@ -363,32 +363,35 @@ The [review glossary](./practice-review-glossary.mdx#runtime-terms) defines the 
 
 These terms name parts of the planned design in [Mentoring framework](./mentoring-framework.mdx).
 The current release does not have them.
+The last column names the pull request that proposes the decision behind each term.
 When a part ships, its row moves to the table of its area.
 The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) owns the runtime terms of the same design.
 
-| Term | Meaning | Avoid for this concept |
-| --- | --- | --- |
-| **Personal space** | A workspace that only its owner can enter. Records that travel with the person live here. | private workspace, home |
-| **Item card** | A view of one item's results and the delivery of its copy on the work, for one person. Code builds it from rows, with no model. | live card, result card |
-| **Mark card done** | The person's action that closes an item card until a later review finds a new or changed problem | Done (alone), dismiss |
-| **Mute card notifications** | The person's action that stops messages and notifications about one item card | Mute (alone) |
-| **Request a new copy** | The item card's action after the copy on the work was withheld at its deadline. It starts a new composition with a new deadline. | retry, fallback |
-| **Task status card** | The state of one background task, with its estimate and **Cancel** | progress line, job line |
-| **Message from Hephaestus** | A message that Hephaestus starts, such as a requested result or a check-in. It is written complete and never streamed. | proactive message, nudge |
-| **Private check** | A review of the person's own draft that only that person sees. It writes no observation and no copy on the work. | rehearsal, pre-review |
-| **Check-in** | An agreed contact with a scope: what it is about, where it appears, when it fires and how it stops | reminder, nudge |
-| **Weekly reflection** | A check-in that names one change in the week's work and asks one question. For a person who turns it on, it replaces the weekly digest. | recap, weekly summary |
-| **Goal** | A personal record of what the person wants to get better at, in their own words | objective, target |
-| **Goal follow-up** | A check-in that brings one useful next step about a named goal, at most once a day | goal reminder |
-| **Personal record** | A goal, lesson, preference or context of the account owner | memory (for the record), note |
-| **Noted record** | A personal record that Hephaestus wrote from the person's own messages. It stays in its workspace and is never evidence. | inferred memory, profile fact |
-| **What Hephaestus keeps in mind** | The one list of everything that Hephaestus remembers about the person, with **Forget**, **Not right** and **Keep** | memories page, profile |
-| **Help settings** | How the person likes help: answer length, command first, language, form of address and help style. They apply in every workspace. | preferences (alone), persona |
-| **Help style** | **Give me a hint first** or **Just tell me** |  |
-| **Help mode** | What Hephaestus does now on one practice: explain, hint, ask first, or step back. The UI shows it in words. | level, tier |
-| **Our work** | The page of the person's relationship with Hephaestus, organized around goals | mentor page, dashboard |
-| **Who runs this server** | The Settings entry that names the instance operator and links its statement | data controller (in UI) |
-| **Monthly practice outcome** | The one value for each practice that workspace admins see each month, from observations on the work, over a minimum group size | team score, usage report |
+| Term | Meaning | Avoid for this concept | Proposed in |
+| --- | --- | --- | --- |
+| **Personal space** | A workspace that only its owner can enter. Records that travel with the person live here. | private workspace, home | [#4863](https://github.com/hephaestus-build/Hephaestus/pull/4863) |
+| **Item card** | A view of one item's results and the delivery of its copy on the work, for one person. Code builds it from rows, with no model. | live card, result card | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Mark card done** | The person's action that closes an item card until a later review finds a new or changed problem | Done (alone), dismiss | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Mute card notifications** | The person's action that stops messages and notifications about one item card | Mute (alone) | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Request a new copy** | The item card's action after the copy on the work was withheld at its deadline. It starts a new composition with a new deadline. | retry, fallback | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Task status card** | The state of one background task, with its estimate and **Cancel** | progress line, job line | [#4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) |
+| **Message from Hephaestus** | A message that Hephaestus starts, such as a requested result or a check-in. It is written complete and never streamed. | proactive message, nudge | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Private check** | A review of the person's own draft that only that person sees. It writes no observation and no copy on the work. | rehearsal, pre-review | [#4863](https://github.com/hephaestus-build/Hephaestus/pull/4863) |
+| **Check-in** | An agreed contact with a scope: what it is about, where it appears, when it fires and how it stops | reminder, nudge | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Weekly reflection** | A check-in that names one change in the week's work and asks one question. For a person who turns it on, it replaces the weekly digest. | recap, weekly summary | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Goal** | A personal record of what the person wants to get better at, in their own words | objective, target | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Goal follow-up** | A check-in that brings one useful next step about a named goal, at most once a day | goal reminder | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Personal record** | A goal, lesson, preference or context of the account owner | memory (for the record), note | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Noted record** | A personal record that Hephaestus wrote from the person's own messages. It stays in its workspace and is never evidence. | inferred memory, profile fact | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **What Hephaestus keeps in mind** | The one list of everything that Hephaestus remembers about the person, with **Forget**, **Not right** and **Keep** | memories page, profile | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Help settings** | How the person likes help: answer length, command first, language, form of address and help style. They apply in every workspace. | preferences (alone), persona | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Help style** | **Give me a hint first** or **Just tell me** |  | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Help mode** | What Hephaestus does now on one practice: explain, hint, ask first, or step back. The UI shows it in words. | level, tier | [#4863](https://github.com/hephaestus-build/Hephaestus/pull/4863) |
+| **Our work** | The page of the person's relationship with Hephaestus, organized around goals | mentor page, dashboard | [#4865](https://github.com/hephaestus-build/Hephaestus/pull/4865) |
+| **Who runs this server** | The Settings entry that names the instance operator and links its statement | data controller (in UI) | [#4863](https://github.com/hephaestus-build/Hephaestus/pull/4863) |
+| **Monthly practice outcome** | The one value for each practice that workspace admins see each month, from observations on the work, over a minimum group size | team score, usage report | [#4863](https://github.com/hephaestus-build/Hephaestus/pull/4863) |
+| **Delivery experiment** | A comparison of a delivery rule by random assignment, for each enrolled person and each unprompted decision | A/B test, study (in UI), micro-randomized trial (in product text) | ADR 0149, not yet proposed |
+| **Experiment enrollment** | A person's own choice to take part in one delivery experiment, apart from research use. **Enroll** and **Withdraw** change it. | study consent | ADR 0149, not yet proposed |
 
 ### Member onboarding and AI choices
 
