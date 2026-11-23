@@ -77,7 +77,7 @@ Option 6.
    - The reasons are a new admitted problem, a material change on an agreed goal, or an awaited result.
    - A further reason is a withheld copy on the work with a Critical or Major problem. ADR 0122 (proposed in #4862) decision 8 names the withholding reasons.
    - ADR 0122 always records the withholding as a `DELIVERY_WITHHELD` inbox event, except for a silent draw. Only the message is contact, so a pause or a mute stops it.
-   - The results that an unprompted message may cite exclude results that a delivery experiment holds (ADR 0149, proposed in #4868). A new admitted problem never cites a held result.
+   - An unprompted message never cites a result that a delivery experiment holds. ADR 0149 (proposed in #4868) decision 8 owns the hold.
 8. **Gates hold optional background items, never threads.**
    - Idle only holds them until 2 minutes after the person's last message.
    - Active hours hold them to the next working period.
@@ -110,7 +110,7 @@ Option 6.
     - The record exists so that every silence has a reason that code wrote. No product or staff surface shows a person's rows.
     - A person who is not enrolled in a delivery experiment has rows with no probability, no draw and no exposure.
       No dataset exports such a row. ADR 0149 adds those columns for an enrolled person, and decides which datasets they enter.
-19. **A delivery experiment can draw only on unprompted contact,** as ADR 0149 decides. A decision that this policy keeps silent is recorded and never drawn.
+19. **A delivery experiment can draw only on unprompted contact,** as ADR 0149 decision 2 decides. A decision that this policy keeps silent is recorded and never drawn.
 
 ### What this changes in other ADRs
 

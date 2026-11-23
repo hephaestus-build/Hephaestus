@@ -77,8 +77,8 @@ Option 5.
 16. **"Less often" and "Stop this check-in" sit on every check-in message.** Pause has its reverse, Resume. Stop can be undone while the row exists.
 17. **The purpose follows its record.** A closed goal ends its check-ins. A record in review sends them to `NEEDS_REVIEW`. Leaving a workspace ends its check-ins.
 18. **A Slack place.** A check-in in a team workspace can take that team's Slack direct message as its place. It uses the Slack route and detail level of ADR 0123 (proposed in #4862). If the binding narrows, the place falls back to the app, with one notice.
-    - Whether it may carry a personal-space record to Slack follows ADR 0126 (proposed in #4863) decision 8.
-19. **A delivery experiment never draws a check-in, and a scheduled turn never reads a held result.** ADR 0149 (proposed in #4868) owns the hold and when it ends. The item card and the practice page still show a held result.
+    - It never takes a personal-space record to Slack. ADR 0126 (proposed in #4863) decision 8 owns that rule.
+19. **A delivery experiment never draws a check-in, and a scheduled turn never reads a held result.** ADR 0149 (proposed in #4868) decisions 8 and 9 own the hold and when it ends. The item card and the practice page still show a held result.
 
 ### What this changes in other ADRs
 
@@ -110,6 +110,7 @@ Not enforced yet. The implementation adds these tests:
 - `FirstSignInOfferTest` fails when the rhythm choice at first sign-in offers the weekly reflection.
 - `UnansweredAsksOnceTest` fails when a routine pauses, ends or slows after unanswered messages.
 - `OnlyThePersonCreatesTest` fails when a turn creates a check-in without the person's act.
+- `HeldResultOutOfScheduledTurnTest` fails when a turn that a `SCHEDULE_DUE` item started reads a held result.
 - `CheckInNeverDrawnTest` fails when a check-in fire gets a draw.
 
 ## Revisit trigger
