@@ -69,7 +69,7 @@ Option 4.
    - The message is unprompted contact. The contact policy of ADR 0139 (proposed in #4865) can block it, for example after a pause.
    - Without a message, the start policy starts no turn. The sweep ends the inbox event with its fixed disposition.
    - The message can carry the card controls of decision 9.
-   - A copy that a silent draw withholds is the one exception. ADR 0149 (proposed in #4868) decides its disposition, `STUDY_SILENCE`.
+   - A copy that a silent draw withholds is the one exception. ADR 0149 (proposed in #4868) decision 7 decides its disposition, `STUDY_SILENCE`.
 9. **Two direct controls on the item card.** Both need no conversation turn and use the preview and confirmation of ADR 0121.
    - **Request a new copy.** The proposal row returns to `PENDING`, with the next generation and a new deadline. The composer writes a fresh copy.
    - **Post these exact words.** Only in Automatic mode, and only for a composed body that was withheld before its write started. The preview shows the body. The confirmation takes the place of the deadline in the create predicate.
