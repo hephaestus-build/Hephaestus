@@ -74,7 +74,7 @@ overrides:
   mermaid: 12.2.0
   vitest: "catalog:"
   "@vitest/browser": "catalog:"
-  dompurify: 3.4.17
+  dompurify: 3.4.18
   "js-yaml@>=4.0.0": 4.3.2
   # CVE-2026-116795. markdownlint pins 2.8.6 exactly.
   "re2js@<2.8.7": 2.8.8
