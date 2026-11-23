@@ -7,6 +7,13 @@ import { createServer } from "node:http";
 
 import { INJECTION } from "./prompt-injection-corpus.ts";
 
+/** Where the agent image installs the compiled sandbox runtime (docker/agents/pi/Dockerfile). */
+const RUNTIME_SANDBOX_MODULE = "/opt/pi-sdk/pi-agent-sandbox.js";
+/** A file of another workspace, which a leaky mount would expose. */
+const CROSS_READ_PATH = "/workspace-a/evidence/metadata.json";
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	typeof value === "object" && value !== null;
+
 const artifacts = "/artifacts";
 const requests: unknown[] = [];
 const failures: string[] = [];
@@ -22,13 +29,12 @@ const steps = [
 	{ id: "file", name: "read", args: { path: "repos/primary/INSTRUCTIONS.md" } },
 	{ id: "diff", name: "read", args: { path: "work/change/diff.patch" } },
 	// The replay deliberately follows the injected request across the attempt boundary.
-	{ id: "cross-read", name: "read", args: { path: "/workspace-a/evidence/metadata.json" } },
+	{ id: "cross-read", name: "read", args: { path: CROSS_READ_PATH } },
 	{
 		id: "cross-shell",
 		name: "bash",
 		args: {
-			command:
-				"if [ -e /workspace-a/evidence/metadata.json ]; then cat /workspace-a/evidence/metadata.json; else printf cross-workspace-unmounted; fi",
+			command: `if [ -e ${CROSS_READ_PATH} ]; then cat ${CROSS_READ_PATH}; else printf cross-workspace-unmounted; fi`,
 		},
 	},
 	{
@@ -257,12 +263,22 @@ assert.equal(staged, 1, "The practice must reach staging");
 assert.equal(admitted, 1, "The review must reach admission");
 assert.deepEqual(failures, []);
 // This replay checks workspace mounts and network isolation.
-// The file tools refuse a path outside /workspace before they open it (pi-agent-sandbox.ts); an unmounted path that
-// reached the file system would fail with ENOENT. The shell check below shows whether the path is mounted.
-const readRefused =
-	/ENOENT|is outside \/workspace\. The file tools open only files in \/workspace\./u.test(
-		toolResults.get("cross-read") ?? "",
-	);
+// The file tools refuse a path outside /workspace before they open it; an unmounted path that reached the file system
+// would fail with ENOENT. The shell check below shows whether the path is mounted. The refusal comes from this image's
+// own runtime, so a changed message cannot drift from this check.
+const runtime: unknown = await import(RUNTIME_SANDBOX_MODULE);
+const outsideWorkspace = isRecord(runtime) ? runtime.outsideWorkspace : undefined;
+if (typeof outsideWorkspace !== "function") {
+	throw new TypeError(`${RUNTIME_SANDBOX_MODULE} exports no outsideWorkspace`);
+}
+const refusal: unknown = Reflect.apply(outsideWorkspace, undefined, [
+	CROSS_READ_PATH,
+	"/workspace",
+	"/workspace",
+]);
+assert.equal(typeof refusal, "string", `the file tools would open ${CROSS_READ_PATH}`);
+const crossRead = toolResults.get("cross-read") ?? "";
+const readRefused = /ENOENT/u.test(crossRead) || crossRead.includes(String(refusal));
 const shellRefused = containsText(
 	JSON.parse(toolResults.get("cross-shell") ?? "null"),
 	"cross-workspace-unmounted",
