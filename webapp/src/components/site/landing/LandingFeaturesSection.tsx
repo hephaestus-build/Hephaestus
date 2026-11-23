@@ -1,10 +1,10 @@
 import { cn } from "cn";
 import { FlaskConical } from "lucide-react";
 import { motion } from "motion/react";
-import { useMediaQuery } from "usehooks-ts";
 import { SlackIcon } from "@/components/icons/brand";
 import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { Badge } from "@/components/ui/badge";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import {
 	LandingCluster,
 	LandingFeedbackCard,
