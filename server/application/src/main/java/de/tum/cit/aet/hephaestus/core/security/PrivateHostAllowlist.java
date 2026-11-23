@@ -195,12 +195,8 @@ public final class PrivateHostAllowlist {
             return network.getAddress().length == 4;
         }
 
-        /**
-         * Spring Security's matcher compares bytes without checking the address family: an IPv4 address
-         * can match an IPv6 prefix, or overrun a long one. So the family is compared first.
-         */
         boolean matches(InetAddress address) {
-            return address.getAddress().length == network.getAddress().length && matcher.matches(address);
+            return matcher.matches(address);
         }
 
         boolean isInside(Range outer) {
