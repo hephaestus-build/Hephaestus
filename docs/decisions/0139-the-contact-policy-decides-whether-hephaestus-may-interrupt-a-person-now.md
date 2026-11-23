@@ -6,9 +6,9 @@
 
 **Amends:** [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) rule 6 (what the client shows) and rule 7 (the kinds and quiet hours)
 
-**Relates to:** ADR 0149 (proposed in #4867, delivery experiments and the decision record)
+**Relates to:** ADR 0149 (proposed in #4868, delivery experiments)
 
-**Builds on:** [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-answers-stream-and-observations-render-as-cards.md) (messages from Hephaestus), [ADR 0133](0133-a-check-in-is-an-agreed-contact-with-a-scope.md) (agreed contact), [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) (push)
+**Builds on:** ADR 0131 (proposed in #4862, messages from Hephaestus), [ADR 0133](0133-a-check-in-is-an-agreed-contact-with-a-scope.md) (agreed contact), [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) (push)
 
 ## Context
 
@@ -96,18 +96,18 @@ Option 6.
 19. **The policy runs at dispatch, at the effect commit and again at send.** A pause or a Not now stops a queued contact. A notification inside quiet hours waits.
 20. **A contact change is not an authority change.** Pause, quiet hours, Not now, Less often, mute and stop never bump an authorization generation. They never stop a streaming answer or reset a cache.
 21. **Silent Mode** stops web push too, as it stops email and provider writes.
-22. **Every decision about unprompted contact is recorded.** Code writes one decision record before any model runs.
-    - It records each publish decision for a copy on the work, at the seal.
-    - It records each start of an unprompted message, at the start policy.
-    - The record holds the probability, the draw, the delivery and whether the person saw it.
-    - The person saw it at the first card open, notification open or seen message. No one is ever shown that fact.
-    - Check-in fires, requested results and stepping-back messages are recorded too. An answer to a message writes no record.
-23. **A study draws only on unprompted contact.** ADR 0149 (proposed in #4867) decides delivery experiments.
-    - A draw needs a running experiment, an enrolled person and a decision with no Critical problem.
-    - A Critical problem always speaks. A requested result and a check-in are never drawn.
-    - The draw follows the policy. A decision that the policy keeps silent is recorded and never drawn.
-    - A silent draw is a refusal with the reason `STUDY_SILENCE`. The required item ends with that reason (ADR 0120 decision 12).
-    - A silent draw writes no private message. Rule 6 counts only a copy withheld at its deadline. The item card still shows the result.
+22. **Every decision to contact a person is recorded.** Code writes one `decision_point` row at each decision to contact a person without a request, before any model runs.
+    - A copy on the work: at the seal, in its transaction.
+    - An unprompted message: at the start policy, when the inbox item is inserted.
+    - An agreed check-in, a requested result and a stepping-back message: recorded too.
+    - An answer to a message is not a decision to contact. It writes no row.
+    - A row holds the contact kind, the practices, the item, the version and the severity.
+      It also holds the policy's result, the action and the delivery. The action is `SPOKE`, `POLICY_SILENCE` or `STUDY_SILENCE`.
+    - The table is workspace-scoped and append-only. An update may only fill an empty delivery column. Account erasure deletes the person's rows, and every row expires after 400 days.
+    - The record exists so that every silence has a reason that code wrote. No product or staff surface shows a person's rows.
+    - A person who is not enrolled in a delivery experiment has rows with no probability, no draw and no exposure.
+      No dataset exports such a row. ADR 0149 adds those columns for an enrolled person.
+23. **A delivery experiment can draw only on unprompted contact,** as ADR 0149 decides. A decision that this policy keeps silent is recorded and never drawn.
 
 ### What this changes in other ADRs
 
@@ -126,7 +126,7 @@ Option 6.
 - Bad: the notice-line fetch is one more request on each push. A failed fetch shows only the fixed text.
 - Bad: the reason check can miss an update that the person would want. "More like this" tunes it only within its three reasons.
 - Bad: Hephaestus ignores device Focus settings it cannot read. A device rule can still hide what the server sends.
-- Bad: in a delivery experiment, a Major problem can stay off the work by a silent draw. The person sees it only on the item card.
+- Bad: one decision record for each decision to contact, kept 400 days.
 
 ## Confirmation
 
@@ -140,7 +140,7 @@ Not enforced yet. The implementation adds these tests:
 - `SendRecheckTest` fails when a contact queued before a pause is sent after it.
 - `AppOnlyStarterRouteTest` fails when an app-only starter is routed to Slack.
 - `DecisionRecordTest` fails when an unprompted decision has no record, or a model call starts before it.
-- `NeverDrawnTest` fails when a decision with a Critical problem, a requested result or a check-in gets a draw.
+- `DecisionRecordWithoutDrawTest` fails when the row of a person who is not enrolled holds a probability, a draw or an exposure.
 
 ## Revisit trigger
 

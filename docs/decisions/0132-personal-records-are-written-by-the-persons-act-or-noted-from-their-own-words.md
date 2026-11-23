@@ -4,9 +4,7 @@
 **Date:** 2026-11-23
 **Authors:** Felix T.J. Dietrich
 
-**Amends:** [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) decision 9 (no separate memory and no notes)
-
-**Builds on:** [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-answers-stream-and-observations-render-as-cards.md) (the conversation and its ledger)
+**Builds on:** ADR 0131 (proposed in #4862, the conversation and its ledger)
 
 **Relates to:** [ADR 0133](0133-a-check-in-is-an-agreed-contact-with-a-scope.md) (a check-in is saved like a record)
 
@@ -78,9 +76,8 @@ Option 5.
 
 ### What this changes in other ADRs
 
-- [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) decision 9 changes. Hephaestus writes noted records, and the ledger is no longer the only memory. [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-answers-stream-and-observations-render-as-cards.md) restates this.
-- ADR 0082 decision 17 changes for one case. A kept-in-mind item that the person keeps follows record retention, not the 400-day entry retention.
-- ADR 0129 (proposed in the product and trust pull request) owns how a person-authored record travels. This ADR only says that a noted record never does.
+- ADR 0131 (proposed in #4862) supersedes ADR 0082. Its table lists the two decisions of ADR 0082 that this ADR changes: 9 (memory) and 17 (retention).
+- ADR 0129 (proposed in #4863) owns how a person-authored record travels. This ADR only says that a noted record never does.
 
 ## Consequences
 

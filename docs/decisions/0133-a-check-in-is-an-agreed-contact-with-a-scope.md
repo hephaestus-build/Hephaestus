@@ -4,11 +4,9 @@
 **Date:** 2026-11-23
 **Authors:** Felix T.J. Dietrich
 
-**Amends:** [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) decisions 19 and 21 (the weekly digest and nudges)
+**Builds on:** ADR 0131 (proposed in #4862, the main thread), [ADR 0132](0132-personal-records-are-written-by-the-persons-act-or-noted-from-their-own-words.md) (saves with Undo, goals)
 
-**Builds on:** [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-answers-stream-and-observations-render-as-cards.md) (the main thread), [ADR 0132](0132-personal-records-are-written-by-the-persons-act-or-noted-from-their-own-words.md) (saves with Undo, goals)
-
-**Relates to:** [ADR 0139](0139-the-contact-policy-decides-whether-hephaestus-may-interrupt-a-person-now.md) (the contact policy decides each fire and its notification), ADR 0149 (proposed in #4867, delivery experiments)
+**Relates to:** [ADR 0139](0139-the-contact-policy-decides-whether-hephaestus-may-interrupt-a-person-now.md) (the contact policy decides each fire and its notification), ADR 0149 (proposed in #4868, delivery experiments)
 
 ## Context
 
@@ -83,8 +81,7 @@ Option 5.
 
 ### What this changes in other ADRs
 
-- [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) decision 19 stays for a person who does not turn on the weekly reflection. For a person who does, decision 13 above applies.
-- ADR 0082 decision 21 changes. A digest, a nudge and every check-in are `SCHEDULE_DUE` inbox items, as ADR 0120 (proposed in #4862) states. The `DIGEST` run kind goes. Admission of claims stays.
+- ADR 0131 (proposed in #4862) supersedes ADR 0082. Its table lists how this ADR changes ADR 0082 decisions 19 and 21. The digest stays for a person who does not turn on the weekly reflection. For a person who does, decision 13 above applies.
 - [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) rule 7 gets an update on acceptance: the agreed check-in becomes a notification kind ([ADR 0139](0139-the-contact-policy-decides-whether-hephaestus-may-interrupt-a-person-now.md)).
 
 ## Consequences
