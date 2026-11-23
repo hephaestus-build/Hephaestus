@@ -89,6 +89,7 @@ Option 6.
     - The fetch never refreshes a credential.
     - "Hide content in notifications" keeps the fixed text.
 12. **The channel.** For an unpinned background batch, the policy chooses `APP` or `SLACK_DM` at the claim. It chooses among the routes that every item of the batch may take. An item that only the app may show gets `APP`.
+    - No escalation. A message that is unseen on one channel never goes out again on another channel.
 13. **The person stays in control.**
     - A one-step pause stops every message and notification that Hephaestus starts. Rule 3 gives its effect on each kind.
     - "Not now" mutes that topic in that workspace for a stated time.
