@@ -91,6 +91,9 @@ Option 4.
     - So it fits one output route for each turn ([ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 8).
 12. **No model-based disclosure check.** The composer has no private input, so isolation tests prove the boundary. They assert workspace, place and audience together, with row-level fixtures. They run on the packaged server as a release gate.
 13. **Cutover.** Outside the rollout, main's `REVIEW_COMPOSE` stays the producer until the cutover, with its own lease check.
+14. **Our work is a private page.** It shows the person's relationship with Hephaestus, organized around goals: the goals, the check-ins and where help stepped back.
+    - Its audience is the account alone, as for a private thread. No staff role reads it.
+    - No shared thread writes to it, and nothing on it reaches a shared place except by a typed command.
 
 ### What this changes in other ADRs
 

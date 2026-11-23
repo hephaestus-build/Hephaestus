@@ -62,9 +62,10 @@ Option 4.
    - Notice carries a fixed notice line and an Open button.
    - The default is Notice. Full needs the export notice first. "Keep my context out of Slack" selects Notice.
    - Full is the explicit Slack grant. It is the one stated exception to the audience rule ([ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) decision 1).
-   - Under Full, a Slack turn also reads the person's help settings, goals and noted records of this workspace. This list is closed.
+   - At every level, a Slack turn reads the person's language and answer length. They shape the form of an answer, and they are no record of work.
+   - Under Full, a Slack turn also reads the person's other help settings, goals and noted records of this workspace. This list is closed.
    - It never reads an app-only entry, a summary, a kept-in-mind item, a private check outcome or another workspace's record.
-   - At Notice, a Slack turn reads no personal record.
+   - At Notice, a Slack turn reads no personal record beyond language and answer length.
 6. **Cards go to Slack one way, by revision.**
    - An update renders the card's current revision at send time. It goes only to posts with a lower posted revision.
    - Each post has at most one pending update. A card update notifies nobody.

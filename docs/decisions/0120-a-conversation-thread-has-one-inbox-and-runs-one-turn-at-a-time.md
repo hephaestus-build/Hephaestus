@@ -91,6 +91,7 @@ Option 6.
     - No tool call writes outside this transaction. A tool that proposes a write returns a staged draft.
 11. **One lock order.** Every transaction takes source locks, then the sandbox row, then threads by key, then runs, then effects. No lock is held across a long-poll wait or a provider call.
 12. **Custody.** Every ended attempt releases its claims on items that stay pending.
+    - A message is never a required item. Required items come only from obligations that the system tracks with a deadline.
     - A required item ends only with its disposition, in the same transaction.
     - Each required kind has a deadline. At that deadline, the sweep applies a fixed disposition with no model call.
     - A required item ends `CONSUMED`, `SUPERSEDED` or `DROPPED`. It never ends `EXPIRED` or `STOPPED`.
