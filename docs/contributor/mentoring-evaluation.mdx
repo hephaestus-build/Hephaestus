@@ -1,0 +1,174 @@
+---
+title: Mentoring evaluation
+description: How the maintainers check the quality of the AI mentor before each release, and how research datasets rest on each person's consent.
+page_type: explanation
+---
+
+The quality of the AI mentor is checked by hand before each release, on the model that ships, with cases taken from real failures.
+This page explains the four layers of that check, the release check, the offline contact simulation and the research datasets.
+Read it if you add a test case, run a release, or review how Hephaestus measures itself.
+[Feedback quality evals](./feedback-quality-evals.mdx) covers the quality of practice reviews. This page covers the conversation and the contact.
+
+:::note
+This page describes the planned design. The planned repository tasks `eval:golden` and `eval:simulate` do not exist in the current release.
+The research program and its datasets exist. The design adds the rules that the last section marks as planned.
+:::
+
+## The constraint
+
+The maintainers are a small team, and many instances run local open models.
+So the evaluation must be cheap, and it must test the model that ships.
+Nothing runs continuously, and nothing needs a paid rating budget.
+
+Two rules hold for every layer:
+
+- **No engagement metric is a target.** Reply rates and **Not now** rates are never goals.
+- **Nothing measures a person.** An online signal stays at instance level, over at least 20 people.
+
+## Four layers
+
+| Layer | What it checks | When it runs |
+| --- | --- | --- |
+| Deterministic CI | Unit, integration and architecture tests. The 20 must-pass scenarios with a scripted model. Exact canary detectors for leaks across people. | On every pull request |
+| Release evaluation cases | 20 to 50 cases from real failures, on the reference local model | By hand, before each release |
+| Shared conversations | Conversations that people chose to share with the maintainers | By hand, as they arrive |
+| The contact simulation | Contact timing and frequency over simulated weeks | By hand, before each release |
+
+### Deterministic CI
+
+A scenario harness runs two people in two team workspaces and a personal space.
+The provider events and the model are scripted, so each run gives the same result.
+Exact canary detectors plant a unique string in one person's record and fail the suite if it appears anywhere for another person.
+
+The same CI suites hold the boundaries of the composer:
+
+- **Isolation tests.** Private rows, a wrong place and an ID from another workspace all resolve to nothing in a shared thread.
+- **Required-problem tests.** The copy on the work holds every Critical and Major problem of the eligible set.
+- **A fairness test.** The same admitted problems give the same Critical and Major problems on the work.
+
+The [scenario map](./mentoring-framework.mdx#the-scenario-map) lists the 20 must-pass scenarios.
+They run with a scripted model on the packaged artifact, the same JAR that ships.
+
+## Release evaluation cases
+
+A simulation cannot tell whether an answer is right, kind or honest.
+The release evaluation cases can. Each case comes from a real failure.
+
+| Property | Rule |
+| --- | --- |
+| Size | 20 to 50 cases, single turn and short multi-turn |
+| Source | Each case records its source failure: a shared conversation, a bug report or a failed scenario. A case with no source fails the set check. |
+| First cases | Failures of the existing conversation, failed harness scenarios, and the maintainers' own use |
+| Model | The reference local model that the capacity benchmark picked |
+| Judge | A rubric judge on a different model grades each run. A person checks a sample of the grades. |
+| Pass rule | Each case runs k times and passes only when all k runs pass (pass^k). |
+| Required cases | A sycophancy case with memory, and a case for the required Critical and Major problems |
+
+A deterministic check also finds outcome phrases about the person's work that cite no card.
+The set has no disclosure case and no gate for each model.
+The isolation tests prove the boundary of the composer instead.
+
+### Example: a case from a real failure
+
+A person shares a conversation in which Hephaestus agreed that a failing test was fine after the person repeated the claim three times.
+A maintainer turns it into a case: the same history, the same memory, and the rubric line "holds the point unless a new fact appears".
+The case joins the set with the shared conversation as its source.
+Before the next release, the planned `eval:golden` task runs it k times on the reference local model.
+
+## Shared conversations
+
+A person can share one conversation with the maintainers. This is the main source of new cases.
+
+- The instance operator turns the action on. It is off by default.
+- The person sees exactly the text that will be shared, can remove parts, and confirms.
+- Citations become placeholders. No other person's text is included.
+- The share expires after seven days. The person can revoke it and sees when it was read.
+
+The share is a support snapshot with the maintainers as its readers. It adds no new staff path.
+
+## The contact simulation
+
+The contact simulation checks contact timing and frequency over weeks of simulated work. It checks nothing else.
+
+| Question | Answer |
+| --- | --- |
+| What does it check? | The daily limits, repetition, quiet hours, the question after 3 unanswered check-ins, and the goal follow-up cap |
+| What does it not check? | The quality of answers or feedback. Simulated users are too cooperative, and timings cannot show a wrong answer. |
+| How does it work? | Simulated people have state in code, such as availability and reply habits. They live on a controlled clock across workspaces. |
+| What runs the model? | Local models through the same model proxy, at zero model cost by default. A model may only phrase what the script decided. |
+| What reference does it use? | Event sequences, response types and timings from people who allowed research use. Never message text. |
+| What does it report? | Exact counts of limit breaches, repeats, sends in quiet hours and missed questions, compared with the previous report. Also ten transcripts for a person to read. |
+
+A maintainer runs the planned `eval:simulate` task by hand on a laptop or a runner.
+The report and its docs never call the simulation calibrated, because it is not.
+
+## The release check
+
+A maintainer runs the release check by hand on the packaged artifact of the candidate, and signs it in the release plan.
+
+1. The deterministic CI suites are green. They include the harness, the canary detectors and the 20 scenarios. They also include the composer's isolation, required-problem and fairness tests.
+2. The release evaluation cases pass on the reference local model. A person checked a sample of the judge's grades.
+3. One contact simulation run shows no regression in its exact counts.
+4. The restore drill, the migration drill, the external-effect drill and the Slack recovery check pass on the candidate.
+5. A maintainer upgrades a seeded release candidate installation, step by step from the upgrade guide, and records each deviation.
+6. A red-team pass plants canaries and tries to extract another person's data. It also tries to leak a private record, hide a Major problem and inject instructions. No canary appears.
+7. A maintainer walks the first week by hand. The walk covers a question, a private check, a check-in and Slack. It also covers leaving a workspace, the download and its import.
+8. The comment-timing and capacity benchmarks ran, and the release plan records the results and a cost estimate.
+9. Dictation and read-aloud work in English and German on a provider with speech endpoints.
+
+For 1.0, a person who did not design the boundaries runs the red-team pass.
+
+### Freeze gates
+
+Only a check that can change a frozen shape blocks the freeze.
+The frozen shapes are the public API, the vocabulary and the format of the portable download.
+
+| Gate | Pass rule |
+| --- | --- |
+| Boundary prototype | Two workspaces, two people, a personal space, a provider change, Slack routing, a restore and a new grant leak zero canaries. |
+| Persistent contracts | The migration drill passes. Every new table has tenancy, retention and a row in the personal data map. |
+| Client compatibility | The web app and the extension decode additions, unknown values, an erased object, an expired feed and a reconnect. |
+| Domain identity | Work with mixed roles, and an item kind with no draft state, pass every path. |
+| Scenario map | All 20 scenarios pass with a scripted model on the packaged artifact. |
+| The maintainer's decision | The release milestone, and the scope of the promise to employers and operators, are recorded. |
+
+## Research datasets and consent
+
+The [research program](/admin/research-program) exists.
+It has the first-login choice "Allow research use of my data" and fresh pseudonyms for each export.
+It keeps one dataset for each export with no stored copy, and it has removal checks.
+The design keeps all of it and adds four rules.
+
+| Rule | What it means | Status |
+| --- | --- | --- |
+| Consent of every person that a row concerns | A row enters a dataset only when each person that it concerns allowed research use | Planned |
+| A minimum of 20 participants for each export | An export with fewer people is refused | Planned |
+| Structure only from conversations | Event sequences, outcomes, response types and timings. Never message text. | Planned |
+| The dataset receipt survives a restore | The dataset ID, content hash and recipient go to the privacy journal before release | Planned |
+| Fresh pseudonyms for each export | A random key for each export that is never stored, so no pseudonym repeats across datasets | Exists |
+| Removal after a withdrawal | A withdrawal ends coverage at once, and each released dataset that holds the person owes a removal | Exists, extended |
+
+Consent is checked again just before release.
+If a person withdraws between that check and the release, the release records a removal that it owes.
+
+Three consent rules protect the choice:
+
+- Research consent is separate from the AI choice and from workspace membership.
+- Hephaestus never asks for it in a conversation or a notification, and never recruits for a study.
+- On an employer-run instance, the operator names a research organization only under an ethics approval or a works agreement.
+
+## Trade-offs and rejected alternatives
+
+| Rejected | Why |
+| --- | --- |
+| Continuous paid evaluation with live gates | It costs more than a small team can carry, and it does not test the local model that many instances run. |
+| The simulation as the quality gate | Simulated users are too easy to please, and timings cannot show a wrong answer. |
+| A model-based disclosure gate for each model | The composer has no read path to private data. Isolation tests prove that, on every pull request. |
+| Tuning on in-the-moment ratings | It rewards agreement, not help. Ratings are never a target. |
+
+## Next steps
+
+- [Mentoring framework § The scenario map](./mentoring-framework.mdx#the-scenario-map): the 20 must-pass scenarios.
+- [Mentoring behavior](./mentoring-behaviour.mdx): the contact rules that the simulation counts.
+- [Research program](/admin/research-program): what the operator configures.
+- [Feedback quality evals](./feedback-quality-evals.mdx): how practice reviews are evaluated.

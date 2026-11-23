@@ -345,6 +345,41 @@ The [data model](./practice-feedback-schema.mdx) owns durable keys and guards.
 It does not mean that the scan used up its budget.
 An execution that made no model call adds no usage row.
 
+## Mentoring terms (planned)
+
+These terms name the runtime of the planned design in [Mentoring framework](./mentoring-framework.mdx).
+The current release does not have them.
+When a part ships, its row moves to the runtime terms.
+The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) owns the product terms of the same design.
+The conversation agent, the composer and the review agent are agents. Hephaestus is not an agent.
+
+| Term | Meaning |
+| --- | --- |
+| **Conversation agent** | The sandboxed agent that runs turns on one account's private threads in a workspace. It answers, starts tasks and writes messages from Hephaestus. It never writes on the work. |
+| **Composer** | The sandboxed agent that runs turns on a shared thread. It writes the copy on the work, and it reads only the data of its exact place. |
+| **Private thread** | A thread of one account: the main thread, a message thread under one message, or the work thread of one item. |
+| **Shared thread** | A thread of the workspace: the work place of one pull request or merge request, or a channel thread. It has no personal records. |
+| **Work place** | The shared thread of one pull request or merge request. The composer writes the copy on the work there. |
+| **Channel thread** | The shared thread of one Slack thread where a person mentioned Hephaestus. Its turns read public repository data and channel-readable practices only. |
+| **Inbox item** | One input of a thread: a person's message, a finished review, a finished task or a due check-in. It holds IDs only. |
+| **Interactive turn** | A turn that holds a person's message. Its answer streams. |
+| **Background turn** | A turn that holds no person's message. It writes at most one message from Hephaestus, or none. |
+| **Start policy** | The table in code that decides whether and when an inbox item starts a turn. No model decides it. |
+| **Typed command** | The person's confirmed act from a card that changes a shared place. It carries IDs only, and its confirmation binds the facts of its preview. |
+| **Citation token** | A reference in an entry to a result at a version. The client renders the outcome from current rows, so the model never writes it. |
+| **Guardrails** | The composer's checks on each tool call and at commit: destination rules, observation reference validation, required Critical and Major problems and Markdown sanitization. |
+| **Copy deadline** | Two hours after the seal. A copy on the work that is not ready by then is withheld, and nothing is posted in its place. |
+| **Contact policy** | The code that decides whether Hephaestus may interrupt a person now, on a channel. It has no model. |
+| **Notification budget** | The rules for notifications at commit. At most one goes out for each message, under the daily limit of the initiative level, and none while the person is active. |
+| **Authorization recheck** | A check of current access before a consequential read or write: at context read, at model request and at each send to another person. |
+| **Release evaluation cases** | 20 to 50 cases from real failures that run on the reference local model before each release, scored pass^k. |
+| **Contact simulation** | The offline run of simulated people over weeks that counts breaches of the contact rules. It checks timing and frequency only. |
+| **Release check** | The manual checklist that a maintainer runs and signs on the packaged artifact of a release candidate. |
+
+[Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx) owns the mechanics of threads, inbox items and turns.
+The design widens two terms of the runtime table: a turn can run without a person's question, and a thread is the unit of order.
+[Pull request #4862](https://github.com/hephaestus-build/Hephaestus/pull/4862) proposes the decisions behind them.
+
 ## Standard terms
 
 This section records conceptual correspondence, not claims of standard conformance.
