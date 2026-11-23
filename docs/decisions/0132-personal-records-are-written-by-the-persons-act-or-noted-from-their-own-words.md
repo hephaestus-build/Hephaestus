@@ -68,6 +68,7 @@ Option 5.
 10. **Retention belongs to the person.** Records stay until the person deletes them, erases the account, or leaves a workspace under a Closed policy. An operator may set a maximum of at least three years.
 
 11. **An act on the person's own workspace saves in the conversation, with Undo.** A goal, a help setting or a check-in is saved at once. The entry says "Saved as a goal · Undo · Edit". Undo is the reverse, on the same acceptance path.
+    - A local save never transfers. A transfer is the person's separate act, with the card of ADR 0129 (proposed in #4863).
 12. **A card appears only where a decision is real.** Examples are a transfer, a Slack place, a self-report and anything public.
 13. **A card's payload never changes.** The server renders its consequence as codes with parameters, and a digest of them. The consequence says where the record lives, what it reaches, who reads it and when it comes.
 14. **Acceptance runs in one transaction.** It checks the actor, the edits, the current consequence digest and the provenance reference. It also checks the policies and the limits, then applies the effect.
