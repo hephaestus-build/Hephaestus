@@ -5,12 +5,13 @@ page_type: explanation
 ---
 
 The quality of the AI mentor is checked by hand before each release, on the model that ships, with cases taken from real failures.
-This page explains the four layers of that check, the release check, the contact simulation, the scenario replay and the research datasets.
+This page explains the four layers of that check, the release check, the scenario map and the research datasets.
+It also explains scenario replay, a research tool beside the layers.
 Read it if you add a test case, run a release, or review how Hephaestus measures itself.
 [Feedback quality evals](./feedback-quality-evals.mdx) covers the quality of practice reviews. This page covers the conversation and the contact.
 
 :::note
-This page describes the planned design. The planned repository tasks `eval:golden` and `eval:simulate` do not exist in the current release.
+This page describes a proposed design. The planned repository tasks `eval:golden` and `eval:simulate` do not exist in the current release.
 The research program and its datasets exist. The design adds the rules that the last section marks as planned.
 :::
 
@@ -23,7 +24,7 @@ Nothing runs continuously, and nothing needs a paid rating budget.
 Two rules hold for every layer:
 
 - **No engagement metric is a target.** Reply rates and **Not now** rates are never goals.
-- **No staff or product surface measures a person.** An online signal stays at instance level, over at least 20 people. Per-person sequences exist only in research datasets that each person allowed.
+- **No staff or product surface measures a person.** An aggregate that staff see needs at least 5 people. Per-person sequences exist only in research datasets that each person allowed.
 
 ## Four layers
 
@@ -33,6 +34,9 @@ Two rules hold for every layer:
 | Release evaluation cases | 20 to 50 cases from real failures, on the reference local model | By hand, before each release |
 | Shared conversations | Conversations that people chose to share with the maintainers | By hand, as they arrive |
 | The contact simulation | Contact timing and frequency over simulated weeks | By hand, before each release |
+
+Scenario replay is a research tool beside these layers. It is not a layer and not a release gate.
+ADR 0142 (proposed in #4868) owns the layers.
 
 ### Deterministic CI
 
@@ -46,7 +50,7 @@ The same CI suites hold the boundaries of the composer:
 - **Required-problem tests.** The copy on the work holds every Critical and Major problem of the eligible set.
 - **A fairness test.** The same admitted problems give the same Critical and Major problems on the work.
 
-The [scenario map](./mentoring-framework.mdx#the-scenario-map) lists the 20 must-pass scenarios.
+The [scenario map](#the-scenario-map) lists the 20 must-pass scenarios.
 They run with a scripted model on the packaged artifact, the same JAR that ships.
 
 ## Release evaluation cases
@@ -59,10 +63,11 @@ The release evaluation cases can. Each case comes from a real failure.
 | Size | 20 to 50 cases, single turn and short multi-turn |
 | Source | Each case records its source failure: a shared conversation, a bug report or a failed scenario. A case with no source fails the set check. |
 | First cases | Failures of the existing conversation, failed harness scenarios, and the maintainers' own use |
-| Model | The reference local model that the capacity benchmark picked |
+| Model | The reference local model that the release plan pins |
 | Rubric | The one shared rubric (below) |
-| Judge | A rubric judge on a different model grades each run. A person checks a sample of the grades. |
+| Judge | A rubric judge from a different model family grades each run. A person checks a sample of the grades. |
 | Pass rule | Each case runs k times and passes only when all k runs pass (pass^k). |
+| Configuration | The release plan pins the reference model, k, the judge and the spot-check rule before any grading (ADR 0142). |
 | Required cases | A sycophancy case with memory, and a case for the required Critical and Major problems |
 
 ### One shared rubric
@@ -91,7 +96,7 @@ Before the next release, the planned `eval:golden` task runs it k times on the r
 
 ## Scenario replay
 
-Scenario replay is an evaluation tool for the usefulness of guidance. It is not a release gate.
+Scenario replay is a research tool for the usefulness of guidance. It is not an evaluation layer and not a release gate.
 It runs on the controlled clock and the fake providers of the deterministic harness.
 
 | Part | What it does |
@@ -121,8 +126,11 @@ The share is a support snapshot with the maintainers as its readers. It adds no 
 
 In the first weeks of a pilot, copies on the work run in the Approve first feedback mode.
 An expert approves, edits or rejects each copy before it posts. Each decision becomes an expert label.
-Later study cycles do not use Approve first, because it changes the treatment that a delivery experiment compares.
+Later cycles do not use Approve first, because it changes the treatment that a delivery experiment compares (ADR 0149).
 The early group of a pilot is staff, or people who chose to join. It is never the students of a running course.
+
+When the researcher is also course staff, a colleague operates the instance or holds the steward role, and operator access is logged (ADR 0149).
+Uptake is a research outcome, never a product goal.
 
 ## The contact simulation
 
@@ -133,9 +141,9 @@ The contact simulation checks contact timing and frequency over weeks of simulat
 | What does it check? | The daily limits, repetition, quiet hours, the question after 3 unanswered check-ins, and the goal follow-up cap |
 | What does it not check? | The quality of answers or feedback. Simulated users are too cooperative, and timings cannot show a wrong answer. |
 | How does it work? | Simulated people have state in code, such as availability and reply habits. They live on a controlled clock across workspaces. |
-| What runs the model? | Local models through the same model proxy, at zero model cost by default. A model may only phrase what the script decided. |
+| What runs the model? | Local models through the same LLM proxy, at zero model cost by default. A model may only phrase what the script decided. |
 | What reference does it use? | Event sequences, response types and timings from people who allowed research use. Never message text. |
-| What does it report? | Exact counts of limit breaches, repeats, sends in quiet hours and missed questions, compared with the previous report. Also ten transcripts for a person to read. |
+| What does it report? | Exact counts of hard-rule breaches, repeats, sends in quiet hours and missed questions, compared with the previous report. Also ten transcripts for a person to read. |
 
 A maintainer runs the planned `eval:simulate` task by hand on a laptop or a runner.
 The report and its docs never call the simulation calibrated, because it is not.
@@ -146,7 +154,7 @@ A maintainer runs the release check by hand on the packaged artifact of the cand
 
 1. The deterministic CI suites are green. They include the harness, the canary detectors and the 20 scenarios. They also include the composer's isolation, required-problem and fairness tests.
 2. The release evaluation cases pass on the reference local model. A person checked a sample of the judge's grades.
-3. One contact simulation run shows no regression in its exact counts.
+3. One contact simulation run shows zero hard-rule breaches, and no regression in its other counts.
 4. The restore drill, the migration drill, the external-effect drill and the Slack recovery check pass on the candidate.
 5. A maintainer upgrades a seeded release candidate installation, step by step from the upgrade guide, and records each deviation.
 6. A red-team pass plants canaries and tries to extract another person's data. It also tries to leak a private record, hide a Major problem and inject instructions. No canary appears.
@@ -155,6 +163,35 @@ A maintainer runs the release check by hand on the packaged artifact of the cand
 9. Dictation and read-aloud work in English and German on a provider with speech endpoints.
 
 For 1.0, a person who did not design the boundaries runs the red-team pass.
+
+## The scenario map
+
+Twenty scenarios define the behavior that must hold.
+Each one becomes a test with a scripted model on the packaged artifact, and all 20 pass before release.
+The building work adds each test and its owner to this map.
+
+| Scenario | What must hold | Decided in |
+| --- | --- | --- |
+| First contact | Answer first. Workspace name, privacy line and AI label. No card before the answer. | ADR 0131 |
+| Setting a goal in own words | One save with **Undo**, and the follow-up offer beside it | ADR 0132 |
+| A result: available, shown or notified | The card at once. At most one message for each background turn. | ADR 0150, ADR 0120 |
+| The check before review | A private check on request or by agreement, with one result panel | ADR 0120, ADR 0133 |
+| The agreed follow-up | An explicit scope for each agreement, and its own notification kind | ADR 0133 |
+| Disagreement with feedback | Hold or yield on evidence. Required problems stay on the work. | ADR 0121 |
+| A wrong observation | **Disagree** with a reason, acknowledged at once | Current release |
+| A stressed person, and stop | A fixed reply with support resources. Pause applies at once. | ADR 0139 |
+| A manager asks about a person | The same refusal whether or not data exists | ADR 0125 |
+| Two employers and a personal project | Row-level security, tenancy, and only own words or closed fields travel | ADR 0126, ADR 0127, ADR 0129 |
+| Leaving a job | A leaving window, **Keep and take along**, and the portable download | ADR 0126, ADR 0129 |
+| A closed client workspace | **Closed** blocks all transfer | ADR 0129 |
+| A notification and a quick reply | Web push with the fetched notice line, and a reply on the web | ADR 0139 |
+| A Slack direct message | That workspace's Slack-visible entries. Personal records only at the **Full** detail level, after the export notice. | ADR 0123 |
+| An admin turns off memory | Workspace policy narrows what the person's records reach | ADR 0132 |
+| Restore from backup | Erasures and revocations are applied again from the journal | ADR 0140 |
+| Erasure of an account | The cascade, and the journal write before the acknowledgement | ADR 0128, ADR 0140 |
+| Migration from the release candidate | A stopped cutover that keeps the visibility of existing content | ADR 0121 |
+| Prompt injection in repository content | Content has no authority. The composer has nothing private to disclose. | ADR 0121 |
+| Extracting another person's data | Row-level security, 404 for guessed IDs, canary detectors | ADR 0127 |
 
 ### Freeze gates
 
@@ -181,29 +218,24 @@ The design keeps all of it and adds the rules that this table marks as planned.
 | --- | --- | --- |
 | Consent of the row's subject | A row enters a dataset only when its subject allowed research use | Planned |
 | Redaction of other people | The fields of every other person without consent are redacted, and the row stays | Planned |
-| A minimum of 20 participants | A release to a recipient with fewer people is refused | Planned |
+| A minimum of 20 participants | Only a dataset of one delivery experiment may go below 20, and only to the research organization named in each subject's consent. ADR 0141 owns the rule. | Planned |
 | Structure only from conversations | Event sequences, outcomes, response types and timings. Never the person's message text. | Planned |
-| The dataset receipt survives a restore | The dataset ID, content hash and recipient go to the privacy journal before release | Planned |
+| The dataset receipt survives a restore | The dataset ID, content hash and recipient go to the privacy journal before release. A release needs a journal bucket. | Planned |
 | Fresh pseudonyms for each export | A random key for each export that is never stored, so no pseudonym repeats across datasets | Exists |
 | Removal after a withdrawal | A withdrawal ends coverage at once, and each released dataset that holds the person owes a removal | Exists, extended |
 
 Consent is checked again just before release.
 If a person withdraws between that check and the release, the release records a removal that it owes.
 
-### Study datasets
+### Experiment datasets
 
-A [delivery experiment](./mentoring-framework.mdx#delivery-experiments) adds study datasets, with their own rules:
-
-- **The study pseudonym.** Each person has one pseudonym for each experiment. Its key is stored encrypted and serves only a release that the steward approved. Ending the experiment destroys the key for good, after the admin confirms with the experiment's name.
-- **Guidance text by consent.** Hephaestus's own guidance text enters only for enrolled people whose consent names it. The person's messages never enter.
-- **Blind scoring.** For each piece of work, the dataset holds the identity of its first reviewed version. An independent scorer can then work blind.
-- **Invitations.** A researcher gives the steward a list of study pseudonyms and one invitation text. The steward sends it as a notice, and the researcher learns only how many were sent.
-- **The floor.** A release to a recipient other than the experiment's own needs at least 20 participants.
+A delivery experiment adds experiment datasets, with their own rules: the experiment pseudonym, guidance text by consent, blind scoring and re-contact.
+ADR 0141 and ADR 0149 (proposed in #4868) own them.
 
 Three consent rules protect the choice:
 
 - Research consent is separate from the AI choice and from workspace membership.
-- Hephaestus never asks for it in a conversation or a notification, and never recruits for a study.
+- Hephaestus never asks for it in a conversation or a notification, and never recruits. The steward's re-contact notice of ADR 0149 is the one permitted follow-up.
 - On an employer-run instance, the operator names a research organization only under an ethics approval or a works agreement.
 
 ## Trade-offs and rejected alternatives
@@ -217,7 +249,7 @@ Three consent rules protect the choice:
 
 ## Next steps
 
-- [Mentoring framework § The scenario map](./mentoring-framework.mdx#the-scenario-map): the 20 must-pass scenarios.
+- [Mentoring framework](./mentoring-framework.mdx): the whole design and the decision map.
 - [Mentoring behavior](./mentoring-behaviour.mdx): the contact rules that the simulation counts.
 - [Research program](/admin/research-program): what the operator configures.
 - [Feedback quality evals](./feedback-quality-evals.mdx): how practice reviews are evaluated.
