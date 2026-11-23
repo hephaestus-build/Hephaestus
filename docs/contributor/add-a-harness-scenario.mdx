@@ -1,0 +1,80 @@
+---
+title: Add a harness scenario
+description: Add a scenario to the scenario harness, which checks that no data reaches a person, workspace or personal space that may not read it.
+page_type: how-to
+---
+
+Add a scenario when you add or change a boundary rule.
+Such a rule decides who may read a record, where an answer goes, or when an effect is sent.
+The scenario harness plays a timeline of steps against a subject on a controlled clock, with a scripted model.
+Exact canary detectors then fail the test if data reaches a reader who may not read it.
+The harness runs in `test:server:unit`, so it checks every pull request without a model.
+
+:::note
+Today every scenario runs against `PrototypeSubject`, a minimal conversation in the test tree.
+So a scenario checks the rule and the detectors, not the server.
+Scenarios run against the packaged server in a later release.
+:::
+
+The harness is in `server/application/src/test/java/de/tum/cit/aet/hephaestus/scenario/`. It has these parts:
+
+| Part | What it does |
+| --- | --- |
+| `Fixture` | Gives every scenario two people, Alex and Jordan, in two team workspaces. Alex also has a personal space. Each workspace has its own Slack team. |
+| `Scenario` and `Step` | A named timeline. Each step is at an offset from the start. Steps at one offset run in the order given, before any timer of the subject. |
+| `Judge` | Keeps its own view of who may read what. It checks each model request, read, entry and sent effect against that view, at the time it happens. |
+| `PrototypeSubject` | Keeps the rules. Each `Fault` breaks one rule, so a test can show that the judge catches it. |
+| `ScriptedModel` | The model of a scenario. `echo()` repeats every request, so whatever reaches the model also reaches the answer. |
+| `Cassette` | Records model calls by a canonical request hash, and replays them with no model. |
+
+The judge fails an output in three ways:
+
+- **Canary leak.** The canary of a record is in the output or in the model request of its run. A reader of the output may not read that record. A paraphrase also fails.
+- **Unauthorized read.** A run read, cited or rests on a record that one of its readers may not read.
+- **Unauthorized send.** An effect was sent after the authority that it was queued under ended or changed.
+
+## Steps
+
+1. Find the example that is nearest to your case:
+
+   | Case | Example in the harness |
+   | --- | --- |
+   | Canaries | `BoundaryPrototypeTest.shouldFailWhenAnotherPersonsCanaryReachesAnAnswer` |
+   | Disclosure | `BoundaryPrototypeTest.shouldShowEachRecordToEveryoneWhoMayReadItWhenTheSubjectKeepsTheRules` |
+   | Races | `BackgroundTurnCollisionTest` |
+   | Basis chain | `BoundaryPrototypeTest.shouldKeepAnErasedRecordAndWhatRestsOnItGoneWhenTheBackupIsRestored` |
+   | Replay | `MentoringReplayTest` |
+   | Lifecycle | `BoundaryPrototypeTest.shouldNeitherAnswerNorRemindAPersonWhenTheyLeftAndWereRegrantedSinceTheReminderWasQueued` |
+
+2. Write the timeline. `Scenario.named(…)` starts from the fixture. Add each step with `.at(offset, step)`.
+   Plant each record with `Step.Plant`. Each record gets its own canary from its ID.
+3. If you add a rule, add it to `Judge` first. Then add it to `PrototypeSubject`.
+   The judge is the specification, and the subject must follow it.
+4. Make the subject carry `ScenarioRecord.content()`, never `text()` alone.
+   The canary is in the content, so the detectors cannot see where the text alone goes.
+5. Run the scenario with `Harness.run(scenario, subject, ScriptedModel.echo())`.
+6. Call `result.report().assertClean()`. It fails with every canary leak, unauthorized read and unauthorized send.
+7. Add a positive control. Assert that the canary of each record reaches the readers who may read it.
+   Without a positive control, a subject that answers nothing also passes.
+8. If you added a rule, add a `Fault` to `PrototypeSubject` that breaks it.
+   Add a row for it to `BoundaryPrototypeTest.faults()` with the finding that the report must show.
+9. Extend `BaseUnitTest`, so `test:server:unit` runs the test.
+10. Optional: to replay a scenario with no model, record it with `Cassette.recording(model)` and write the cassette.
+    Then run it again with `Cassette.replaying(file)`.
+    A request that is not in the cassette fails with its hash and its canonical body.
+
+## Check that it worked
+
+1. From `server/`, run the harness tests:
+
+   ```bash
+   ./gradlew :application:test --tests 'de.tum.cit.aet.hephaestus.scenario.*'
+   ```
+
+   All tests pass.
+
+2. Break your rule in the subject, and run the tests again.
+   The report names the broken rule, the record or effect, and the reader.
+
+`ScenarioReport.attempts()` counts the canary checks that could have failed.
+A clean report with no attempts proves nothing.

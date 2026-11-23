@@ -9,6 +9,7 @@
 		"local-verification",
 		"---Testing---",
 		"testing",
+		"add-a-harness-scenario",
 		"e2e-testing",
 		"security-mutation-testing",
 		"sandbox-footprint",

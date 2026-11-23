@@ -60,6 +60,8 @@ Deterministic tests protect the contract that the code depends on:
 Do not test prompt wording.
 A wording pin fails on an improvement and on a removed rule alike, so it cannot tell them apart.
 
+To check a rule about who may read a record, where an answer goes, or when an effect is sent, [add a harness scenario](./add-a-harness-scenario.mdx).
+
 Behavior quality is a measurement on labelled cases ([Feedback quality evaluation](./feedback-quality-evals.mdx)).
 Label each failure mode pass or fail. Validate a model judge against human labels before you use its result.
 A safety rule, such as the rule that quoted instructions are data, gets labelled cases, not a wording pin.
