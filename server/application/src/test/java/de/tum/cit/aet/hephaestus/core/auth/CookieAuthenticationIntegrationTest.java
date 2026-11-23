@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -13,6 +14,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import java.net.URI;
@@ -63,6 +65,29 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
+
+    @Test
+    void shouldDownloadTheSignedInAccountsReadyExport() {
+        IssuedAccount owner = issueRealTokenForNewAccount("Export download");
+        String payload = "{\"export\":\"ready\"}";
+        long id = Objects.requireNonNull(PostgreSQLTestContainer.ownerJdbc()
+                .queryForObject("""
+                INSERT INTO account_export(account_id, status, expires_at, payload)
+                VALUES (?, 'READY', now() + interval '1 day', ?) RETURNING id
+                """, Long.class, owner.accountId(), payload.getBytes(UTF_8)));
+
+        webTestClient
+                .get()
+                .uri("/user/exports/{id}/download", id)
+                .headers(headers -> headers.setBearerAuth(owner.token()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_JSON)
+                .expectBody()
+                .json(payload);
+    }
 
     @Test
     void shouldFollowTheCanonicalExportLocationWithWorkspaceSubdomainsEnabled() {

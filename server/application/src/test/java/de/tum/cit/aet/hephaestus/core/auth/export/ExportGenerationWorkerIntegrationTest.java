@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
@@ -33,6 +35,9 @@ class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
     private JdbcTemplate jdbc;
 
     @Autowired
+    private OwnerScope ownerScope;
+
+    @Autowired
     private Clock clock;
 
     @Autowired
@@ -42,8 +47,7 @@ class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
     void shouldCommitFailureWhenTheAssemblyTransactionIsAborted() {
         Long accountId = Objects.requireNonNull(
                 accountRepository.save(new Account("Failed export subject")).getId());
-        Long exportId = Objects.requireNonNull(
-                repository.save(new AccountExport(accountId)).getId());
+        Long exportId = seedExport(accountId);
         ExportBundleAssembler assembler = mock(ExportBundleAssembler.class);
         when(assembler.assemble(accountId)).thenAnswer(invocation -> {
             jdbc.execute("SELECT 1 / 0");
@@ -51,11 +55,17 @@ class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
         });
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ExportGenerationWorker worker = new ExportGenerationWorker(
-                repository, assembler, objectMapper, clock, new PrivacyJobMetrics(registry), transactionManager);
+                repository,
+                assembler,
+                objectMapper,
+                clock,
+                new PrivacyJobMetrics(registry),
+                transactionManager,
+                ownerScope);
 
         worker.generate(exportId, accountId);
 
-        assertFailureCommitted(exportId, registry);
+        assertFailureCommitted(exportId, accountId, registry);
     }
 
     @Test
@@ -63,8 +73,7 @@ class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
         Long accountId = Objects.requireNonNull(accountRepository
                 .save(new Account("Export commit failure subject"))
                 .getId());
-        Long exportId = Objects.requireNonNull(
-                repository.save(new AccountExport(accountId)).getId());
+        Long exportId = seedExport(accountId);
         ExportBundleAssembler assembler = mock(ExportBundleAssembler.class);
         when(assembler.assemble(accountId)).thenAnswer(invocation -> {
             // Dirty checking defers this constraint violation until the generation transaction commits.
@@ -89,15 +98,31 @@ class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
         });
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ExportGenerationWorker worker = new ExportGenerationWorker(
-                repository, assembler, objectMapper, clock, new PrivacyJobMetrics(registry), transactionManager);
+                repository,
+                assembler,
+                objectMapper,
+                clock,
+                new PrivacyJobMetrics(registry),
+                transactionManager,
+                ownerScope);
 
         worker.generate(exportId, accountId);
 
-        assertFailureCommitted(exportId, registry);
+        assertFailureCommitted(exportId, accountId, registry);
     }
 
-    private void assertFailureCommitted(Long exportId, SimpleMeterRegistry registry) {
-        AccountExport export = repository.findById(exportId).orElseThrow();
+    private long seedExport(long accountId) {
+        return Objects.requireNonNull(new TransactionTemplate(transactionManager).execute(status -> {
+            ownerScope.ofJob(accountId);
+            return repository.save(new AccountExport(accountId)).getId();
+        }));
+    }
+
+    private void assertFailureCommitted(Long exportId, Long accountId, SimpleMeterRegistry registry) {
+        AccountExport export = Objects.requireNonNull(new TransactionTemplate(transactionManager).execute(status -> {
+            ownerScope.ofJob(accountId);
+            return repository.findById(exportId).orElseThrow();
+        }));
         assertThat(export.getStatus()).isEqualTo(AccountExport.Status.FAILED);
         assertThat(export.getFailureReason()).isEqualTo("assembly_failed");
         assertThat(export.getPayload()).isNull();

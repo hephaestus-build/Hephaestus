@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,12 +35,15 @@ class ApiSuccessStatusContractTest {
         var exports = mock(AccountExportService.class);
         var export = new AccountExport(42L);
         export.setId(17L);
-        when(exports.requestExport(42L)).thenReturn(export);
+        when(exports.requestExport(any())).thenReturn(export);
         var urls = new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create("https://heph.example.test")));
         var mvc = MockMvcBuilders.standaloneSetup(new AccountExportController(exports, urls))
                 .build();
-        var jwt =
-                Jwt.withTokenValue("test").header("alg", "ES256").subject("42").build();
+        var jwt = Jwt.withTokenValue("test")
+                .header("alg", "ES256")
+                .subject("42")
+                .claim("jti", "00000000-0000-0000-0000-000000000042")
+                .build();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
         try {
             mvc.perform(post("/user/exports"))

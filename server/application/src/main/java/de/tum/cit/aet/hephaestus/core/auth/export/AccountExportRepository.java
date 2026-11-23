@@ -7,7 +7,6 @@ import java.util.Collection;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -40,13 +39,6 @@ public interface AccountExportRepository extends JpaRepository<AccountExport, Lo
      * one UPDATE, without loading the (large) BYTEA blobs into the persistence context. Returns the
      * number of rows affected.
      */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("""
-        UPDATE AccountExport e
-           SET e.status = de.tum.cit.aet.hephaestus.core.auth.export.AccountExport.Status.EXPIRED,
-               e.payload = NULL
-         WHERE e.status = de.tum.cit.aet.hephaestus.core.auth.export.AccountExport.Status.READY
-           AND e.expiresAt < :now
-        """)
+    @Query(value = "SELECT public.person_row_sweep('EXPIRED_EXPORTS', :now)", nativeQuery = true)
     int expireReadyBefore(@Param("now") Instant now);
 }

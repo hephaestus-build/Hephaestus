@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795478400000-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT" onFailMessage="A run or action still holds a live lease. Follow Stop every role before enabling person row-level security in the upgrade guide.">
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT CASE WHEN EXISTS (SELECT FROM public.agent_run WHERE leased_until > clock_timestamp())
+                              OR EXISTS (SELECT FROM public.agent_action WHERE leased_until > clock_timestamp())
+                            THEN 1 ELSE 0 END
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>Bind export rows to the account set for the transaction.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE FUNCTION public.current_owner_account() RETURNS bigint
+    LANGUAGE sql STABLE
+    AS $$ SELECT NULLIF(pg_catalog.current_setting('hephaestus.owner_account', true), '')::bigint $$;
+
+ALTER TABLE public.account_export ENABLE ROW LEVEL SECURITY;
+CREATE POLICY account_export_owner ON public.account_export TO hephaestus_app
+    USING (account_id = public.current_owner_account())
+    WITH CHECK (account_id = public.current_owner_account());
+
+CREATE FUNCTION public.person_row_sweep(rule text, cutoff timestamptz) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+    DECLARE affected integer;
+    BEGIN
+        IF rule IS DISTINCT FROM 'EXPIRED_EXPORTS' OR cutoff IS NULL THEN
+            RAISE EXCEPTION 'Invalid person row sweep' USING ERRCODE = '22023';
+        END IF;
+        UPDATE public.account_export
+        SET status = 'EXPIRED', payload = NULL
+        WHERE status = 'READY' AND expires_at < LEAST(cutoff, clock_timestamp());
+        GET DIAGNOSTICS affected = ROW_COUNT;
+        RETURN affected;
+    END
+    $$;
+ALTER FUNCTION public.person_row_sweep(text, timestamptz) OWNER TO hephaestus_owner;
+REVOKE ALL ON FUNCTION public.person_row_sweep(text, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.person_row_sweep(text, timestamptz) TO hephaestus_app;
+        ]]></sql>
+        <rollback>
+            <sql>DROP FUNCTION public.person_row_sweep(text, timestamptz)</sql>
+            <sql>DROP POLICY account_export_owner ON public.account_export</sql>
+            <sql>ALTER TABLE public.account_export DISABLE ROW LEVEL SECURITY</sql>
+            <sql>DROP FUNCTION public.current_owner_account()</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

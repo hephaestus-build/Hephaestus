@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.conversation.adapter.ConversationPersonDataCata
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationSandboxCopies;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonConversationCopySource;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
@@ -291,9 +292,9 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                 .findFirst()
                 .orElseThrow();
         return new PersonDataService(
-                beans.getBean(PersonIdentityResolver.class),
+                new PersonDataScopeResolver(
+                        beans.getBean(PersonIdentityResolver.class), List.of(), new OwnerScope(jdbc)),
                 new PersonDataRegistry(List.of(new ToolCopyStore(List.of(store)))),
-                List.of(),
                 beans.getBean(PersonDataRequestRepository.class),
                 beans.getBean(IdentityRestrictionService.class),
                 beans.getBean(PersonDataWriteFence.class),

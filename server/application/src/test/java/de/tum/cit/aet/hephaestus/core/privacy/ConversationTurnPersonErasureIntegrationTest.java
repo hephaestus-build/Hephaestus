@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
@@ -447,9 +448,8 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 .findFirst()
                 .orElseThrow();
         return new PersonDataService(
-                resolver,
+                new PersonDataScopeResolver(resolver, List.of(), new OwnerScope(jdbc)),
                 new PersonDataRegistry(List.of(new ErasureSteps(List.of(source, toolResults)))),
-                List.of(),
                 requests,
                 suppression,
                 writeFence,

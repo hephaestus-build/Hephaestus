@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonActFixture;
 import de.tum.cit.aet.hephaestus.notification.NotificationRedeliveryJob;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -42,6 +44,8 @@ class AccountExportDurabilityIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    private final JdbcTemplate fixture = PostgreSQLTestContainer.ownerJdbc();
+
     @Test
     void shouldGenerateTheExportWhenTheRegistryResubmitsAnInterruptedGeneration() {
         long accountId = Objects.requireNonNull(
@@ -49,8 +53,8 @@ class AccountExportDurabilityIntegrationTest extends BaseIntegrationTest {
         long[] exportId = new long[1];
         Map<String, @Nullable Object> owed =
                 Objects.requireNonNull(new TransactionTemplate(transactionManager).execute(status -> {
-                    exportId[0] = Objects.requireNonNull(
-                            exports.requestExport(accountId).getId());
+                    exportId[0] = Objects.requireNonNull(exports.requestExport(PersonActFixture.self(accountId))
+                            .getId());
                     // The owed generation commits with the PENDING row, before any listener runs.
                     return jdbc.queryForMap(
                             "SELECT listener_id, event_type, serialized_event FROM event_publication"
@@ -61,14 +65,13 @@ class AccountExportDurabilityIntegrationTest extends BaseIntegrationTest {
 
         // The state a stopped process leaves: the export still pending, its publication marked FAILED by the staleness
         // monitor and older than the redelivery job's minimum age.
-        jdbc.update(
+        fixture.update(
                 "UPDATE account_export SET status = 'PENDING', payload = NULL, completed_at = NULL, expires_at = NULL"
                         + " WHERE id = ?",
                 exportId[0]);
         jdbc.update(
-                "INSERT INTO event_publication"
-                        + " (id, listener_id, event_type, serialized_event, publication_date, status, completion_attempts)"
-                        + " VALUES (?, ?, ?, ?, ?, 'FAILED', 1)",
+                "INSERT INTO event_publication (id, listener_id, event_type, serialized_event, publication_date,"
+                        + " status, completion_attempts) VALUES (?, ?, ?, ?, ?, 'FAILED', 1)",
                 UUID.randomUUID(),
                 owed.get("listener_id"),
                 owed.get("event_type"),
@@ -87,21 +90,23 @@ class AccountExportDurabilityIntegrationTest extends BaseIntegrationTest {
     void shouldLeaveAReadyExportUnchangedWhenItsGenerationIsDeliveredAgain() {
         long accountId = Objects.requireNonNull(
                 accounts.save(new Account("Redelivered export subject")).getId());
-        long exportId = Objects.requireNonNull(exports.requestExport(accountId).getId());
+        long exportId = Objects.requireNonNull(
+                exports.requestExport(PersonActFixture.self(accountId)).getId());
         assertThat(status(exportId)).isEqualTo("READY");
         Object completedAt =
-                jdbc.queryForObject("SELECT completed_at FROM account_export WHERE id = ?", Object.class, exportId);
+                fixture.queryForObject("SELECT completed_at FROM account_export WHERE id = ?", Object.class, exportId);
 
         worker.on(new AccountExportRequested(exportId, accountId));
 
         assertThat(status(exportId)).isEqualTo("READY");
-        assertThat(jdbc.queryForObject("SELECT completed_at FROM account_export WHERE id = ?", Object.class, exportId))
+        assertThat(fixture.queryForObject(
+                        "SELECT completed_at FROM account_export WHERE id = ?", Object.class, exportId))
                 .isEqualTo(completedAt);
     }
 
     private String status(long exportId) {
         return Objects.requireNonNull(
-                jdbc.queryForObject("SELECT status FROM account_export WHERE id = ?", String.class, exportId));
+                fixture.queryForObject("SELECT status FROM account_export WHERE id = ?", String.class, exportId));
     }
 
     private static String publicationOf(long exportId) {
