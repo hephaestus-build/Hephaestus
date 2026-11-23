@@ -477,7 +477,7 @@ stateDiagram-v2
     UNCONFIRMED --> [*]
 ```
 
-`PENDING` is the one state that the design adds to `feedback.state`, and `DEADLINE_PASSED` is the one stop reason that it adds.
+`PENDING` is the one state that the design adds to `feedback.state`, and `DEADLINE_PASSED` and `STUDY_SILENCE` are the two stop reasons that it adds.
 
 The deadline withholds a copy that the composer did not stage in time, and a `READY` Automatic copy whose write did not start. The stop reason is `DEADLINE_PASSED`.
 Approve first keeps its own clock: after staging, main's approval expiry applies (ADR 0122 decision 5). A second refusal of the composer's guardrails withholds with the refusal reason.
@@ -841,7 +841,7 @@ inbox_item  thread_id     work place of PR #412
 **The decision record at 10:00.** Code writes one row before any model runs (ADR 0139 decision 18, proposed in #4865):
 
 ```text
-decision_point  contact kind   copy on the work
+decision_point  kind           COPY_ON_THE_WORK
                 practice       retry policy
                 item, version  PR #412, head 9f3c2e1
                 severity       Major
