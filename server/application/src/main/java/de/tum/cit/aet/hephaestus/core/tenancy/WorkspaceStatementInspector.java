@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.core.tenancy;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import io.micrometer.core.instrument.Counter;
 import java.io.Serial;
 import java.util.ArrayDeque;
@@ -26,11 +25,12 @@ import org.slf4j.LoggerFactory;
  *   <li>Active bypass on the thread ({@code @WorkspaceAgnostic}) — pass</li>
  *   <li>Mode {@link TenancyEnforcement#OFF} — pass</li>
  *   <li>Caffeine cache hit on the literal SQL — return cached decision</li>
+ *   <li>Recognize the statement form. Report a violation if the form is unknown or analysis fails.</li>
  *   <li>Word-boundary regex: {@code workspace_id} mentioned anywhere — pass, unless the statement reads a
  *       provider mirror table, which must bind the workspace to a parameter (ADR 0077)</li>
  *   <li>Load by the table's complete composite primary key: a WHERE clause that is only
  *       {@code (a.k1, a.k2) IN ((?, ?), …)} over exactly the mapped key columns — pass (ADR 0004 update)</li>
- *   <li>Table-extract regex: pull table names from {@code FROM/JOIN/UPDATE/INTO} clauses,
+ *   <li>Table-extract regex: pull table names from {@code FROM/JOIN/UPDATE/TABLE} clauses,
  *       intersect with {@link WorkspaceScopedTables#scopedTables()}. Any match without
  *       a {@code workspace_id} reference anywhere in the statement is a violation.</li>
  * </ol>
@@ -72,7 +72,7 @@ public class WorkspaceStatementInspector implements StatementInspector {
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern COMMENT_OR_LITERAL_PATTERN =
-            Pattern.compile("--[^\\n]*|/\\*.*?\\*/|'(?:''|[^'])*'", Pattern.DOTALL);
+            Pattern.compile("--[^\\n]*|/\\*.*?\\*/|'(?:[^']++|'')*+'", Pattern.DOTALL);
     /** The alias of the {@code workspace} table in a FROM or JOIN. */
     private static final Pattern WORKSPACE_ALIAS_PATTERN = Pattern.compile(
             "\\b(?:FROM|JOIN)\\s+(?:public\\s*\\.\\s*)?\"?workspace\"?\\s+(?:AS\\s+)?(?!(?:ON|WHERE|JOIN|LEFT|INNER|CROSS)\\b)([A-Za-z_][A-Za-z0-9_]*)",
@@ -89,11 +89,11 @@ public class WorkspaceStatementInspector implements StatementInspector {
             + "(?:\\s+(?:AS\\s+)?(?!(?:WHERE|JOIN|ON|LEFT|RIGHT|INNER|OUTER|FULL|CROSS|NATURAL|GROUP|ORDER|LIMIT"
             + "|OFFSET|HAVING|UNION|FOR|SET|USING|RETURNING|WINDOW|FETCH)\\b)[A-Za-z_][A-Za-z0-9_]*)?";
 
-    // Every table a statement reads or writes: each item of a FROM list, comma-separated ones included, and the target
-    // of each JOIN and UPDATE. INSERT is outside this read-leak check.
+    // Each item of a FROM list, and each JOIN, UPDATE and TABLE reference. INSERT targets take their workspace from the
+    // row.
     private static final Pattern TABLE_REFERENCE_PATTERN = Pattern.compile(
-            "\\bFROM\\s+(" + FROM_ITEM + "(?:\\s*,\\s*" + FROM_ITEM + ")*)|(?:\\bJOIN\\b|\\bUPDATE\\b)\\s+("
-                    + TABLE_NAME + ")",
+            "\\bFROM\\s+(" + FROM_ITEM + "(?:\\s*,\\s*" + FROM_ITEM + ")*)|\\b(?:JOIN|UPDATE|TABLE)\\s+(" + TABLE_NAME
+                    + ")",
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern FROM_ITEM_TABLE_PATTERN =
@@ -228,9 +228,14 @@ public class WorkspaceStatementInspector implements StatementInspector {
                     + "(?:\\s*,\\s*\\(\\s*\\?(?:\\s*,\\s*\\?)*\\s*\\))*)\\s*\\)\\s*$",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
-    /** Identifies INSERTs cheaply without anchoring to whitespace shape. */
-    private static final Pattern INSERT_STATEMENT_PATTERN =
-            Pattern.compile("^\\s*INSERT\\s+INTO\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SUPPORTED_STATEMENT_PATTERN = Pattern.compile(
+            "^\\s*(?:(?:/\\*.*?\\*/|--[^\\n]*)\\s*)*(?:SELECT|WITH|INSERT\\s+INTO|UPDATE|DELETE\\s+FROM)\\b",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    private static final Pattern INSERT_TARGET_PATTERN = Pattern.compile(
+            "^\\s*(?:(?:/\\*.*?\\*/|--[^\\n]*)\\s*)*INSERT\\s+INTO\\s+" + TABLE_NAME
+                    + "(?:\\s+AS\\s+\"?[A-Za-z_][A-Za-z0-9_]*\"?)?(?:\\s*\\([^()]*\\))?",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     /**
      * A standalone {@code OR} token. The PK-only fast paths anchor on a single
@@ -336,10 +341,18 @@ public class WorkspaceStatementInspector implements StatementInspector {
     }
 
     private Decision analyze(String sql) {
-        // INSERTs cannot leak data across workspaces — they create new rows.
-        if (INSERT_STATEMENT_PATTERN.matcher(sql).find()) {
-            return Decision.ok();
+        try {
+            if (SUPPORTED_STATEMENT_PATTERN.matcher(sql).find()) {
+                return inspectSupportedStatement(sql);
+            }
+        } catch (RuntimeException failure) {
+            log.debug("Tenancy analysis failed ({})", failure.getClass().getName());
         }
+        parseFailureCounter.increment();
+        return Decision.violation(Set.of());
+    }
+
+    private Decision inspectSupportedStatement(String sql) {
         // Hibernate-emitted DML the database applies to at most the row its key names: the row was
         // already loaded within a workspace-checked scope, and the caller had to hold its identity
         // to write it. One key column or the whole composite key, validated together.
@@ -359,34 +372,23 @@ public class WorkspaceStatementInspector implements StatementInspector {
         if (keyedSelect(sql)) {
             return Decision.ok();
         }
-        if (WORKSPACE_ID_PATTERN.matcher(sql).find()) {
+        Matcher insertTarget = INSERT_TARGET_PATTERN.matcher(sql);
+        String source = insertTarget.find() ? sql.substring(insertTarget.end()) : sql;
+        if (WORKSPACE_ID_PATTERN.matcher(source).find()) {
             // A mirror row carries no workspace_id, so the word alone proves nothing about it (ADR 0077).
-            Set<String> mirrors = mirrorTablesIn(sql);
-            return mirrors.isEmpty() || bindsWorkspace(sql) ? Decision.ok() : Decision.violation(mirrors);
+            Set<String> mirrors = mirrorTablesIn(source);
+            return mirrors.isEmpty() || bindsWorkspace(source) ? Decision.ok() : Decision.violation(mirrors);
         }
         // After the workspace_id check, so a key that includes the workspace is settled there without a metamodel
         // lookup.
         if (keyedTupleSelect(sql)) {
             return Decision.ok();
         }
-        try {
-            Set<String> unguarded = new HashSet<>();
-            for (String name : tableReferences(sql)) {
-                if (scopedTables.isScoped(name)) unguarded.add(name);
-            }
-            return unguarded.isEmpty() ? Decision.ok() : Decision.violation(Set.copyOf(unguarded));
-        } catch (Exception e) {
-            // The inspector must NEVER throw. Fail-open with an observable counter so
-            // pathological inputs surface in metrics rather than as request failures.
-            parseFailureCounter.increment();
-            if (log.isDebugEnabled()) {
-                log.debug(
-                        "Tenancy regex analysis failed ({}): {}",
-                        e.getClass().getName(),
-                        LoggingUtils.truncate(sql, 200));
-            }
-            return Decision.ok();
+        Set<String> unguarded = new HashSet<>();
+        for (String name : tableReferences(source)) {
+            if (scopedTables.isScoped(name)) unguarded.add(name);
         }
+        return unguarded.isEmpty() ? Decision.ok() : Decision.violation(Set.copyOf(unguarded));
     }
 
     /**
@@ -460,10 +462,11 @@ public class WorkspaceStatementInspector implements StatementInspector {
         return scopedTables.isSingleKeyColumn(name, column, write);
     }
 
-    /** Every table {@code sql} names in a FROM list, a JOIN or an UPDATE, as bare lowercase names. */
+    /** Every table {@code sql} names in a FROM list, JOIN, UPDATE or TABLE, as bare lowercase names. */
     private static Set<String> tableReferences(String sql) {
         Set<String> tables = new HashSet<>();
-        Matcher matcher = TABLE_REFERENCE_PATTERN.matcher(sql);
+        Matcher matcher = TABLE_REFERENCE_PATTERN.matcher(
+                COMMENT_OR_LITERAL_PATTERN.matcher(sql).replaceAll(" "));
         while (matcher.find()) {
             if (matcher.group(2) != null) {
                 tables.add(unqualify(matcher.group(2)).toLowerCase(Locale.ROOT));

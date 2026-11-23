@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Locale;
+import java.util.Set;
 import org.hibernate.cfg.AvailableSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +28,7 @@ public class TenancyConfiguration {
     @Bean
     Counter tenancyParseFailureCounter(MeterRegistry registry) {
         return Counter.builder(CoreMetrics.TENANCY_PARSE_FAILURE_TOTAL)
-                .description("SQL statements WorkspaceStatementInspector could not parse — fail-open.")
+                .description("SQL statements the workspace tenancy inspector could not analyze.")
                 .tag("module", "tenancy")
                 .register(registry);
     }
@@ -35,7 +36,8 @@ public class TenancyConfiguration {
     @Bean
     TenancyViolationReporter tenancyViolationReporter(MeterRegistry registry) {
         return (sql, unguardedTables, mode) -> {
-            for (String table : unguardedTables) {
+            Set<String> labels = unguardedTables.isEmpty() ? Set.of("unknown") : unguardedTables;
+            for (String table : labels) {
                 registry.counter(
                                 CoreMetrics.TENANCY_VIOLATION_TOTAL,
                                 "module",
@@ -47,9 +49,9 @@ public class TenancyConfiguration {
                         .increment();
             }
             log.warn(
-                    "Tenancy violation ({}): scoped tables {} queried without workspace_id predicate. SQL: {}",
+                    "Tenancy violation ({}): {}. SQL: {}",
                     mode.name().toLowerCase(Locale.ROOT),
-                    unguardedTables,
+                    TenancyViolationException.reason(unguardedTables),
                     LoggingUtils.truncate(sql, 200));
             if (mode == TenancyEnforcement.THROW) {
                 throw new TenancyViolationException(unguardedTables);
