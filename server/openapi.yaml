@@ -22702,8 +22702,8 @@ components:
         lastUsedAt:
           type: string
           format: date-time
-          description: "When the client last signed in, refreshed or called, to within\
-            \ an hour"
+          description: "When the client last signed in, refreshed, or made a tool\
+            \ call that succeeded, to within an hour"
         passkeyBacked:
           type: boolean
           description: "The approving admin confirmed with a passkey, as the workspace's\

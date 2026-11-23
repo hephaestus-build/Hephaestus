@@ -122,7 +122,10 @@ public class McpClientGrant {
     @Column(name = "passkey_credential_id", length = 2048)
     private @Nullable String passkeyCredentialId;
 
-    /** When the client last exchanged, refreshed or called, to within {@link #LAST_USED_PRECISION}. */
+    /**
+     * When the client last exchanged, refreshed, or made a tool call that succeeded, to within
+     * {@link #LAST_USED_PRECISION}. A refused call is not a use.
+     */
     @Column(name = "last_used_at")
     private @Nullable Instant lastUsedAt;
 

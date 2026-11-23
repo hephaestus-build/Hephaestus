@@ -456,6 +456,16 @@ public class McpAuthorizationService implements McpClientGrants {
                 .toList();
     }
 
+    /**
+     * Records that a client's tool call succeeded, at most once in each {@link McpClientGrant#LAST_USED_PRECISION}. A
+     * call that the policy or the tool refused is not a use, so it never keeps a refused client looking busy.
+     */
+    @Transactional
+    public void recordUse(long workspaceId, UUID grantId) {
+        Instant now = clock.instant();
+        grants.markUsed(workspaceId, grantId, now, now.minus(McpClientGrant.LAST_USED_PRECISION));
+    }
+
     @Override
     @Transactional
     public boolean revoke(Long workspaceId, UUID grantId, Long actingAccountId) {

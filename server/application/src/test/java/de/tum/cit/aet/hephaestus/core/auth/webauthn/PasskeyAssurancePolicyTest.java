@@ -296,7 +296,7 @@ class PasskeyAssurancePolicyTest {
     @Test
     void shouldAcceptAnMcpCallWhoseGrantHoldsAPasskeyProof() {
         SecurityContextHolder.getContext().setAuthentication(mcpClient());
-        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW.minus(Duration.ofDays(90))));
+        onMcpCall(new McpCallGrant(1L, UUID.randomUUID(), true, NOW.minus(Duration.ofDays(90))));
 
         policy(false, false).requireWorkspaceAdmin(true, false, true);
         policy(false, true).requireWorkspaceAdmin(true, false, false);
@@ -310,7 +310,7 @@ class PasskeyAssurancePolicyTest {
                         .header("alg", "ES256")
                         .subject("42")
                         .build()));
-        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW));
+        onMcpCall(new McpCallGrant(1L, UUID.randomUUID(), true, NOW));
 
         assertThatThrownBy(() -> policy(false, false).requireWorkspaceAdmin(true, false, false))
                 .isInstanceOf(PasskeyRequiredException.class);
@@ -320,7 +320,7 @@ class PasskeyAssurancePolicyTest {
     @Test
     void shouldRefuseAnMcpCallWhoseGrantHoldsNoPasskeyProof() {
         SecurityContextHolder.getContext().setAuthentication(mcpClient());
-        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, null));
+        onMcpCall(new McpCallGrant(1L, UUID.randomUUID(), true, null));
 
         assertThatThrownBy(() -> policy(false, false).requireWorkspaceAdmin(true, false, false))
                 .isInstanceOf(PasskeyRequiredException.class);
@@ -329,7 +329,7 @@ class PasskeyAssurancePolicyTest {
     @Test
     void shouldNeverLetAGrantsPasskeyProofStandForAnInstanceAdminOrARecovery() {
         SecurityContextHolder.getContext().setAuthentication(mcpClient());
-        onMcpCall(new McpCallGrant(UUID.randomUUID(), true, NOW));
+        onMcpCall(new McpCallGrant(1L, UUID.randomUUID(), true, NOW));
         PasskeyAssurancePolicy instance = policy(true, false);
         account.setAppRole(Account.AppRole.APP_ADMIN);
         assertThatThrownBy(() -> instance.requireWorkspaceAdmin(true, false, false))
