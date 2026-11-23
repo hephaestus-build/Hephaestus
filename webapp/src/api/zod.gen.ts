@@ -5027,7 +5027,7 @@ export const zSlackMonitoredChannel = z.object({
 	consentState: zSlackMonitoredChannelConsentState,
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.string().regex(/^[1-9][0-9]*$/),
-	optedOutMemberCount: z.int(),
+	optedOutMemberCount: z.int().nullable(),
 	slackChannelId: z.string(),
 	slackTeamId: z.string(),
 });
@@ -6702,7 +6702,7 @@ export const zWorkspaceSplitPart = z.object({
 });
 
 /**
- * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total. A split with a part of 1 or 2, or with every developer in one part, shows only its total
+ * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total. A split with a part of 1 to 4, or with every developer in one part, shows only its total
  */
 export const zWorkspaceSplit = z.object({
 	developers: z

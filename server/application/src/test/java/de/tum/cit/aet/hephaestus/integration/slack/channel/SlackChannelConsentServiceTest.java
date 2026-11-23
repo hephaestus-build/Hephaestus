@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -171,6 +172,21 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
     @AfterEach
     void clearAuthentication() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void shouldLeaveOutTheOptOutCountWhenFewerThanFiveMembersOptedOut() {
+        when(monitoredChannelRepository.findByWorkspaceIdOrderByCreatedAtDesc(WS))
+                .thenReturn(List.of(channel(ConsentState.ACTIVE, null)));
+        when(participantConsentRepository.countByWorkspaceIdAndIngestionOptedOutTrue(WS))
+                .thenReturn(4L, 6L);
+
+        assertThat(service().listChannels(WS))
+                .extracting(SlackMonitoredChannelDTO::optedOutMemberCount)
+                .containsOnlyNulls();
+        assertThat(service().listChannels(WS))
+                .extracting(SlackMonitoredChannelDTO::optedOutMemberCount)
+                .containsExactly(6L);
     }
 
     @Test

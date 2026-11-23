@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
+import de.tum.cit.aet.hephaestus.core.SmallCounts;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceTilesDTO;
@@ -28,9 +29,11 @@ public class PracticesAcrossWorkspaceController {
     @Operation(
             operationId = "getPracticeWorkspaceOverview",
             summary = "How the workspace's developers split across practice groups and practices, the reader marked",
-            description = "Counts developers, never names them. Every split shows all its parts, however few"
-                    + " developers they count. The splits count every developer's current standing once and take no"
-                    + " window.")
+            description = "Counts developers, never names them. A split shows all its parts or only its total, and a"
+                    + " count of fewer than "
+                    + SmallCounts.MINIMUM
+                    + " developers shows as null. The splits count every developer's current standing once and take"
+                    + " no window.")
     public PracticesAcrossWorkspaceDTO overview(WorkspaceContext ws) {
         return service.read(ws);
     }
@@ -39,8 +42,9 @@ public class PracticesAcrossWorkspaceController {
     @Operation(
             operationId = "getPracticeWorkspaceTiles",
             summary = "The reader's figures over one window beside the workspace's middle half",
-            description =
-                    "A middle half shows when at least 3 developers besides the reader are counted in the window and its ends do not meet.")
+            description = "A middle half shows when at least "
+                    + SmallCounts.MINIMUM
+                    + " developers besides the reader are counted in the window and its ends do not meet.")
     public PracticesAcrossWorkspaceTilesDTO tiles(
             WorkspaceContext ws, @RequestParam PracticesAcrossWorkspaceWindow window) {
         return service.readTiles(ws, window);

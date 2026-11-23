@@ -1,0 +1,3 @@
+# A count of fewer than 5 people is not shown to staff. The Slack opt-out count is null for 1 to 4.
+# .changeset/counts-of-people-from-five.md tells API clients.
+in API POST /workspaces/{workspaceSlug}/slack/channels the response property `optedOutMemberCount` became nullable for the status `200`

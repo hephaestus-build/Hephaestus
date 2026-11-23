@@ -1,9 +1,13 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
+import de.tum.cit.aet.hephaestus.core.SmallCounts;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceRangeDTO;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitDTO;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitPartDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
 import java.util.Collection;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 
 /** How the page counts developers (ADR 0051): a split per practice group and practice, and a middle half per figure. */
@@ -37,6 +41,20 @@ public final class WorkspaceSplits {
         int mixed = count(withAStanding, Verdict.MIXED);
         int strength = count(withAStanding, Verdict.STRENGTH);
         return new Split(developing, mixed, strength, withAStanding.size() - developing - mixed - strength);
+    }
+
+    /** The split as members may see it: every cell, or only the total ({@link SmallCounts}). */
+    public static WorkspaceSplitDTO shown(Split split) {
+        int[] cells = {split.developing(), split.mixed(), split.strength(), split.noneYet()};
+        boolean spread = SmallCounts.spread(cells);
+        Verdict[] verdicts = Verdict.values();
+        List<WorkspaceSplitPartDTO> parts = IntStream.range(0, verdicts.length)
+                .mapToObj(cell -> new WorkspaceSplitPartDTO(verdicts[cell], spread ? cells[cell] : null))
+                .toList();
+        return new WorkspaceSplitDTO(
+                parts,
+                spread ? split.noneYet() : null,
+                SmallCounts.shown(IntStream.of(cells).sum()));
     }
 
     private static int count(Collection<PracticeStanding> standings, Verdict verdict) {

@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { FEWER_THAN_SMALLEST, SHOWN_FROM_SMALLEST } from "@/lib/small-counts";
 
 import { ConsentStateBadge } from "./consent-terms";
 
@@ -36,6 +37,14 @@ export interface SlackChannelRowProps {
 	onSetUpAgain: (channel: SlackMonitoredChannel) => void;
 	/** Open the consent-history sheet. */
 	onViewHistory: (channel: SlackMonitoredChannel) => void;
+}
+
+/** The tooltip of the opt-out count. The server sends null for 1 to 4, so nobody is singled out. */
+function optedOutText(count: number | null): string {
+	if (count === null) {
+		return `${FEWER_THAN_SMALLEST} workspace members opted out (App Home). ${SHOWN_FROM_SMALLEST}.`;
+	}
+	return `${count} workspace member${count === 1 ? "" : "s"} opted out (App Home)`;
 }
 
 /**
@@ -66,20 +75,17 @@ export function SlackChannelRow({
 			</TableCell>
 
 			<TableCell numeric className="text-right">
-				{channel.optedOutMemberCount > 0 ? (
+				{channel.optedOutMemberCount === 0 ? (
+					<span className="text-muted-foreground">0</span>
+				) : (
 					<Tooltip>
 						{/* Default TooltipTrigger renders a real <button>, so it's reachable by keyboard
 						and screen-reader users — a bare <span> trigger has no focus stop. */}
 						<TooltipTrigger className="cursor-help underline decoration-dotted underline-offset-2">
-							{channel.optedOutMemberCount}
+							{channel.optedOutMemberCount ?? FEWER_THAN_SMALLEST}
 						</TooltipTrigger>
-						<TooltipContent>
-							{channel.optedOutMemberCount} workspace member
-							{channel.optedOutMemberCount === 1 ? "" : "s"} opted out (App Home)
-						</TooltipContent>
+						<TooltipContent>{optedOutText(channel.optedOutMemberCount)}</TooltipContent>
 					</Tooltip>
-				) : (
-					<span className="text-muted-foreground">0</span>
 				)}
 			</TableCell>
 

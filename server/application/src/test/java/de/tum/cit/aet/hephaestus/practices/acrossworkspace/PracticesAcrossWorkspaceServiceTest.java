@@ -82,6 +82,8 @@ class PracticesAcrossWorkspaceServiceTest {
     private static final long QUIET = 9L;
     private static final long HIDDEN = 10L;
     private static final long STEADY = 11L;
+    private static final long CAREFUL = 12L;
+    private static final long THOROUGH = 13L;
 
     private final Instant now = Instant.parse("2026-10-20T10:00:00Z");
     private final Clock clock = Clock.fixed(now, ZoneOffset.UTC);
@@ -248,7 +250,14 @@ class PracticesAcrossWorkspaceServiceTest {
         result(reviewed, QUIET, 11, 70, ResultOutcome.MET);
         result(reviewed, STEADY, 12, 80, ResultOutcome.MET);
         result(reviewed, STEADY, 13, 85, ResultOutcome.MET);
+        result(reviewed, CAREFUL, 14, 70, ResultOutcome.MET);
+        result(reviewed, CAREFUL, 15, 75, ResultOutcome.MET);
+        result(reviewed, THOROUGH, 16, 70, ResultOutcome.MET);
+        result(reviewed, THOROUGH, 17, 75, ResultOutcome.MET);
+        result(reviewed, THOROUGH, 18, 80, ResultOutcome.MET);
         when(memberships.isActiveVisibleMember(1L, STEADY)).thenReturn(true);
+        when(memberships.isActiveVisibleMember(1L, CAREFUL)).thenReturn(true);
+        when(memberships.isActiveVisibleMember(1L, THOROUGH)).thenReturn(true);
 
         var recent = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_30);
         var quarter = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_90);
@@ -256,8 +265,8 @@ class PracticesAcrossWorkspaceServiceTest {
         // One developer in the last 30 days is too few to count or to give a typical range.
         assertThat(recent.developersWithAStandingInWindow()).isNull();
         assertThat(recent.reviewedWork().middle()).isNull();
-        // Over 90 days, three developers besides the reader give one.
-        assertThat(quarter.developersWithAStandingInWindow()).isEqualTo(4);
+        // Over 90 days, five developers besides the reader give one, and six with a standing show as a count.
+        assertThat(quarter.developersWithAStandingInWindow()).isEqualTo(6);
         assertThat(quarter.reviewedWork().middle()).isNotNull();
         assertThat(quarter.yourPractices()).isEqualTo(2);
         assertThat(quarter.practicesGoingWell().yours()).isEqualTo((int)
@@ -269,15 +278,19 @@ class PracticesAcrossWorkspaceServiceTest {
     @Test
     void shouldNotCountADeveloperWhoseOnlyObservationsWereSealedInFeedbackModeOff() {
         result(reviewed, READER, 1, 5, ResultOutcome.MET);
-        // Two more counted developers keep the count at 3 or more, which the page shows (ADR 0112).
+        // Four more counted developers keep the count at 5 or more, which the page shows.
         result(reviewed, QUIET, 2, 5, ResultOutcome.MET);
         result(reviewed, STEADY, 3, 5, ResultOutcome.MET);
+        result(reviewed, CAREFUL, 4, 5, ResultOutcome.MET);
+        result(reviewed, THOROUGH, 5, 5, ResultOutcome.MET);
         when(memberships.isActiveVisibleMember(1L, STEADY)).thenReturn(true);
+        when(memberships.isActiveVisibleMember(1L, CAREFUL)).thenReturn(true);
+        when(memberships.isActiveVisibleMember(1L, THOROUGH)).thenReturn(true);
         result(reviewed, PROLIFIC, 10, 5, ResultOutcome.MET, FeedbackMode.OFF);
 
         var tiles = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_30);
 
-        assertThat(tiles.developersWithAStandingInWindow()).isEqualTo(3);
+        assertThat(tiles.developersWithAStandingInWindow()).isEqualTo(5);
         var prolific =
                 standings.getStandingSnapshots(1L, PROLIFIC, List.of(now)).getFirst();
         assertThat(Objects.requireNonNull(prolific.practices().get(reviewed.getSlug()))

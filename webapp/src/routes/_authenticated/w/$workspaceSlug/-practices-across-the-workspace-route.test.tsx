@@ -108,7 +108,7 @@ describe("Practices across the workspace", () => {
 		table.getByRole("img", {
 			name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
 		});
-		// A split with a part of one or two shows only its total, with no You bracket (ADR 0112).
+		// A split with a part of 1 to 4 shows only its total, with no You bracket.
 		table.getByRole("img", {
 			name: "28 developers in this workspace. Their split stays hidden to protect small counts.",
 		});
@@ -170,7 +170,7 @@ describe("Practices across the workspace", () => {
 			),
 		);
 		practices.getByRole("img", {
-			name: "28 developers in this workspace: 9 Needs attention, 4 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
+			name: "28 developers in this workspace: 9 Needs attention, 5 Mixed feedback, 7 Going well, 7 none yet. You are in the Needs attention part.",
 		});
 		expect(overviewReads()).toHaveLength(1);
 		expect(profileReads()).toStrictEqual([]);

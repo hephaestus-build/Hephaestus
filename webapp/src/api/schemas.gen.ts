@@ -9869,7 +9869,7 @@ export const PracticesAcrossWorkspaceTilesSchema = {
 			type: ["null", "integer"],
 			format: "int32",
 			description:
-				"Developers with a standing in a practice group shown in the window, the developers the tiles compare. Null for fewer than 3",
+				"Developers with a standing in a practice group shown in the window, the developers the tiles compare. Null for fewer than 5",
 		},
 		includesEarlierReviews: {
 			type: "boolean",
@@ -16202,9 +16202,10 @@ export const SlackMonitoredChannelSchema = {
 			pattern: "^[1-9][0-9]*$",
 		},
 		optedOutMemberCount: {
-			type: "integer",
+			type: ["null", "integer"],
 			format: "int64",
-			description: "Number of workspace members who have opted out of ingestion (workspace-wide)",
+			description:
+				"Number of workspace members who have opted out of ingestion (workspace-wide). Null for fewer than 5",
 		},
 		slackChannelId: {
 			type: "string",
@@ -19228,13 +19229,13 @@ export const WorkspaceReviewScopeSchema = {
 export const WorkspaceSplitSchema = {
 	type: "object",
 	description:
-		"How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total. A split with a part of 1 or 2, or with every developer in one part, shows only its total",
+		"How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total. A split with a part of 1 to 4, or with every developer in one part, shows only its total",
 	properties: {
 		developers: {
 			type: ["null", "integer"],
 			format: "int32",
 			description:
-				"Every developer the split counts, the parts and none yet together, the reader included when counted. Null for fewer than 3",
+				"Every developer the split counts, the parts and none yet together, the reader included when counted. Null for fewer than 5",
 		},
 		noneYet: {
 			type: ["null", "integer"],
@@ -19304,14 +19305,14 @@ export const WorkspaceTileSchema = {
 				{
 					$ref: "#/components/schemas/WorkspaceRange",
 					description:
-						"The workspace's middle half; absent while fewer than 3 other developers are counted, or when its ends meet",
+						"The workspace's middle half; absent while fewer than 5 other developers are counted, or when its ends meet",
 				},
 				{
 					type: "null",
 				},
 			],
 			description:
-				"The workspace's middle half; absent while fewer than 3 other developers are counted, or when its ends meet",
+				"The workspace's middle half; absent while fewer than 5 other developers are counted, or when its ends meet",
 		},
 		yours: {
 			type: "integer",

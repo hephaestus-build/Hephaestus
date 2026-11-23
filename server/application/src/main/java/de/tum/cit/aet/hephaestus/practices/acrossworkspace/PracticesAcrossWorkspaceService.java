@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
+import de.tum.cit.aet.hephaestus.core.SmallCounts;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -94,7 +95,7 @@ public class PracticesAcrossWorkspaceService {
                         Objects.requireNonNull(practice.getCurrentVersion().getName()),
                         current.readerCounted() ? standingIn(yours, practice.getSlug()) : null,
                         current.readerCounted() ? basisIn(yours, practice.getSlug()) : null,
-                        SmallCounts.shown(WorkspaceSplits.split(current.withAStanding().stream()
+                        WorkspaceSplits.shown(WorkspaceSplits.split(current.withAStanding().stream()
                                 .map(developer -> standingIn(current.snapshotOf(developer), practice.getSlug()))
                                 .toList()))));
             }
@@ -106,7 +107,7 @@ public class PracticesAcrossWorkspaceService {
                     group.getColor(),
                     current.readerCounted() && yourGroup != null ? yourGroup.standing() : null,
                     current.readerCounted() && yourGroup != null ? yourGroup.basis() : null,
-                    SmallCounts.shown(WorkspaceSplits.split(current.withAStanding().stream()
+                    WorkspaceSplits.shown(WorkspaceSplits.split(current.withAStanding().stream()
                             .map(developer -> groupStanding(current.groupStandingOf(developer, group.getSlug())))
                             .toList())),
                     practiceSplits));

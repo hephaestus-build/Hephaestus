@@ -15390,7 +15390,7 @@ paths:
       - Practice Standings
   /workspaces/{workspaceSlug}/practices/tiles:
     get:
-      description: A middle half shows when at least 3 developers besides the reader
+      description: A middle half shows when at least 5 developers besides the reader
         are counted in the window and its ends do not meet.
       operationId: getPracticeWorkspaceTiles
       parameters:
@@ -15433,9 +15433,9 @@ paths:
       - practices-across-workspace
   /workspaces/{workspaceSlug}/practices/workspace-overview:
     get:
-      description: "Counts developers, never names them. Every split shows all its\
-        \ parts, however few developers they count. The splits count every developer's\
-        \ current standing once and take no window."
+      description: "Counts developers, never names them. A split shows all its parts\
+        \ or only its total, and a count of fewer than 5 developers shows as null.\
+        \ The splits count every developer's current standing once and take no window."
       operationId: getPracticeWorkspaceOverview
       parameters:
       - description: Workspace slug
@@ -25362,7 +25362,7 @@ components:
           - integer
           format: int32
           description: "Developers with a standing in a practice group shown in the\
-            \ window, the developers the tiles compare. Null for fewer than 3"
+            \ window, the developers the tiles compare. Null for fewer than 5"
         includesEarlierReviews:
           type: boolean
           description: Whether a counted standing in the window was read only from
@@ -30375,10 +30375,12 @@ components:
           description: Internal allow-list row id
           pattern: "^[1-9][0-9]*$"
         optedOutMemberCount:
-          type: integer
+          type:
+          - "null"
+          - integer
           format: int64
           description: Number of workspace members who have opted out of ingestion
-            (workspace-wide)
+            (workspace-wide). Null for fewer than 5
         slackChannelId:
           type: string
           description: Slack channel id (stable C…/G… id; the natural key)
@@ -32926,7 +32928,7 @@ components:
       type: object
       description: "How the developers with a standing split across one practice group\
         \ or one practice, counted in developers: a part per verdict, none yet, and\
-        \ their total. A split with a part of 1 or 2, or with every developer in one\
+        \ their total. A split with a part of 1 to 4, or with every developer in one\
         \ part, shows only its total"
       properties:
         developers:
@@ -32935,7 +32937,7 @@ components:
           - integer
           format: int32
           description: "Every developer the split counts, the parts and none yet together,\
-            \ the reader included when counted. Null for fewer than 3"
+            \ the reader included when counted. Null for fewer than 5"
         noneYet:
           type:
           - "null"
@@ -33001,10 +33003,10 @@ components:
         middle:
           anyOf:
           - $ref: "#/components/schemas/WorkspaceRange"
-            description: "The workspace's middle half; absent while fewer than 3 other\
+            description: "The workspace's middle half; absent while fewer than 5 other\
               \ developers are counted, or when its ends meet"
           - type: "null"
-          description: "The workspace's middle half; absent while fewer than 3 other\
+          description: "The workspace's middle half; absent while fewer than 5 other\
             \ developers are counted, or when its ends meet"
         yours:
           type: integer

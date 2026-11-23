@@ -49,7 +49,7 @@ export const AllTime: Story = {
 	},
 };
 
-/** One developer counted: fewer than 3, so no tile has a typical range. */
+/** One developer counted: fewer than 5, so no tile has a typical range. */
 export const OneDeveloper: Story = {
 	args: { tiles: ONE_DEVELOPER_TILES },
 	play: async ({ canvas }) => {

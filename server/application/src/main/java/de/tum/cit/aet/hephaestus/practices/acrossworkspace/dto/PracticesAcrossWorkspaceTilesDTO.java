@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import de.tum.cit.aet.hephaestus.core.SmallCounts;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.PracticesAcrossWorkspaceWindow;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.Nullable;
@@ -16,7 +17,8 @@ public record PracticesAcrossWorkspaceTilesDTO(
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,
                 description = "Developers with a standing in a practice group shown in the window, the developers the"
-                        + " tiles compare. Null for fewer than 3")
+                        + " tiles compare. Null for fewer than "
+                        + SmallCounts.MINIMUM)
         @Nullable
         Integer developersWithAStandingInWindow,
 

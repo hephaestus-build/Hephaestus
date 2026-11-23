@@ -4894,7 +4894,7 @@ export type PracticesAcrossWorkspace = {
  */
 export type PracticesAcrossWorkspaceTiles = {
 	/**
-	 * Developers with a standing in a practice group shown in the window, the developers the tiles compare. Null for fewer than 3
+	 * Developers with a standing in a practice group shown in the window, the developers the tiles compare. Null for fewer than 5
 	 */
 	developersWithAStandingInWindow: null | number;
 	/**
@@ -6959,9 +6959,9 @@ export type SlackMonitoredChannel = {
 	 */
 	id: string;
 	/**
-	 * Number of workspace members who have opted out of ingestion (workspace-wide)
+	 * Number of workspace members who have opted out of ingestion (workspace-wide). Null for fewer than 5
 	 */
-	optedOutMemberCount: number;
+	optedOutMemberCount: null | number;
 	/**
 	 * Slack channel id (stable C…/G… id; the natural key)
 	 */
@@ -8823,11 +8823,11 @@ export type WorkspaceReviewScope = {
 };
 
 /**
- * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total. A split with a part of 1 or 2, or with every developer in one part, shows only its total
+ * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total. A split with a part of 1 to 4, or with every developer in one part, shows only its total
  */
 export type WorkspaceSplit = {
 	/**
-	 * Every developer the split counts, the parts and none yet together, the reader included when counted. Null for fewer than 3
+	 * Every developer the split counts, the parts and none yet together, the reader included when counted. Null for fewer than 5
 	 */
 	developers: null | number;
 	/**
@@ -8876,7 +8876,7 @@ export type WorkspaceSyncProgress = {
  */
 export type WorkspaceTile = {
 	/**
-	 * The workspace's middle half; absent while fewer than 3 other developers are counted, or when its ends meet
+	 * The workspace's middle half; absent while fewer than 5 other developers are counted, or when its ends meet
 	 */
 	middle: WorkspaceRange | null;
 	/**

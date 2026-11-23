@@ -7032,7 +7032,7 @@ export const getOwnPracticeStandings = <ThrowOnError extends boolean = false>(
 /**
  * The reader's figures over one window beside the workspace's middle half
  *
- * A middle half shows when at least 3 developers besides the reader are counted in the window and its ends do not meet.
+ * A middle half shows when at least 5 developers besides the reader are counted in the window and its ends do not meet.
  */
 export const getPracticeWorkspaceTiles = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeWorkspaceTilesData, ThrowOnError>,
@@ -7054,7 +7054,7 @@ export const getPracticeWorkspaceTiles = <ThrowOnError extends boolean = false>(
 /**
  * How the workspace's developers split across practice groups and practices, the reader marked
  *
- * Counts developers, never names them. Every split shows all its parts, however few developers they count. The splits count every developer's current standing once and take no window.
+ * Counts developers, never names them. A split shows all its parts or only its total, and a count of fewer than 5 developers shows as null. The splits count every developer's current standing once and take no window.
  */
 export const getPracticeWorkspaceOverview = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeWorkspaceOverviewData, ThrowOnError>,
