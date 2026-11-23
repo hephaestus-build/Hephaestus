@@ -33,6 +33,7 @@
 		"onboarding-guidelines",
 		"---Architecture---",
 		"system-design",
+		"conversation-core",
 		"ingest-durability",
 		"transactions",
 		"outbox",

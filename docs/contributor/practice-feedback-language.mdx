@@ -354,6 +354,8 @@ A destination matches a delivery strategy only by the place where feedback appea
 | **Thread** | A conversation that starts at one top-level message of the conversation. It is one level deep. Each message has at most one. A thread started in Slack also appears in Slack. UI and user docs say thread. | fork, branch, sub-chat |
 | **Message** (conversation) | One question, answer or weekly digest in a conversation. It never counts feedback. | chat message, entry (in UI), turn (in UI) |
 | **Weekly digest** | A message that Hephaestus writes into a developer's conversation at most once a week, when the developer turned it on. It links to feedback that reached the developer and says what changed on the Practice profile. It is not a destination and delivers no feedback. | summary, report, newsletter, recap |
+| **Work thread** | A thread about one item, which the developer opens from its item card or from the extension on the item's page. It belongs to the accepted [conversation core](./conversation-core.mdx) design. | thread of the PR |
+| **Item card** | The card of one item for one developer: its results, the state of the copy on the work, and the messages that cite them. It belongs to the accepted [conversation core](./conversation-core.mdx) design. | result card, PR card |
 
 The [review glossary](./practice-review-glossary.mdx#runtime-terms) defines the turn, the conversation sandbox, the context folder, the context document and the context loader.
 [ADR 0057](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0057-one-heph-conversation-per-developer.md) owns the decisions behind these terms.

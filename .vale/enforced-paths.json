@@ -180,6 +180,7 @@
 	"docs/contributor/ci-cd.mdx",
 	"docs/contributor/coding-guidelines.mdx",
 	"docs/contributor/composition-label-rubric.mdx",
+	"docs/contributor/conversation-core.mdx",
 	"docs/contributor/database-migration.mdx",
 	"docs/contributor/database-schema.mdx",
 	"docs/contributor/dependencies.mdx",

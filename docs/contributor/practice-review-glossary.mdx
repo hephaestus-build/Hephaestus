@@ -345,6 +345,28 @@ The [data model](./practice-feedback-schema.mdx) owns durable keys and guards.
 It does not mean that the scan used up its budget.
 An execution that made no model call adds no usage row.
 
+### Conversation core terms
+
+These terms belong to the accepted design of the [conversation core](./conversation-core.mdx). The code does not have all of them yet.
+
+| Term | Meaning | Identifier |
+| --- | --- | --- |
+| **Conversation agent** | The sandboxed agent that runs the turns of one account's private threads in a workspace. It never writes on the work. | conversation subject, `TURN` run |
+| **Composer** | The sandboxed agent that runs the turns of a shared thread. It reads only scoped projections of its exact place. | `CompositionSessions` |
+| **Audience** | Who may read what the turns of a thread write: private (one account) or shared (the workspace). | `conversation.audience` |
+| **Work place** | The shared thread of one pull request or merge request, where the composer writes the copy on the work. | `conversation.place_kind = WORK_PLACE` |
+| **Channel thread** | The shared thread of one Slack channel thread in which a person mentioned Hephaestus. | `conversation.place_kind = CHANNEL_THREAD` |
+| **Inbox item** | One input for a thread: a message or an event, with a dedupe key, a custody and IDs only. | `inbox_item` |
+| **Custody** | Who answers for an inbox item until it ends. A required item ends only with its disposition. An optional item can end with no message. | `inbox_item.custody` |
+| **Interactive turn** | A turn whose batch holds a person's message. | `agent_run.band = INTERACTIVE` |
+| **Background turn** | A turn whose batch holds no person's message. It commits one message or none. | `agent_run.band = BACKGROUND` |
+| **Commit rule** | A turn writes its entries, consumes its inbox items, and inserts its effects and tasks in one transaction, or it writes nothing. | — |
+| **Steering** | A compatible message that enters an interactive turn at the next tool-result boundary. | `inbox_item.injected_at` |
+| **Route** | The one output place of a turn: `APP`, `SLACK_DM`, `WORK` or `CHANNEL`, with its reader set. | `conversation_turn.route` |
+| **Typed command** | A person's act that reaches a shared place, with IDs and enumerated values only, confirmed after a preview. | `COMMAND` inbox item |
+| **Copy deadline** | Two hours after the seal. A copy on the work that is not composed by then is withheld. | `feedback.deadline_at`, `DEADLINE_PASSED` |
+| **Task** | Background work that ends with an inbox item for the thread that requested it. | `task` |
+
 ## Standard terms
 
 This section records conceptual correspondence, not claims of standard conformance.
