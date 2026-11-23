@@ -35,7 +35,7 @@ RUN pnpm exec node /opt/practice-scripts/build.ts /opt/pi-sdk/node_modules/types
 # Debian 13: its fd (>= 8.7) takes the `--no-require-git` Pi's find tool passes outside a repository.
 FROM node:${NODE_VERSION}-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d AS os-packages
 RUN apt-get update -o APT::Update::Error-Mode=any -qq && apt-get upgrade -y -qq && \
-    apt-get install -y --no-install-recommends bash git ripgrep fd-find findutils tree jq ca-certificates grep coreutils util-linux tar && \
+    apt-get install -y --no-install-recommends bash git ripgrep fd-find findutils jq ca-certificates grep coreutils util-linux tar && \
     rm -rf /var/lib/apt/lists/*
 
 FROM os-packages AS runtime
