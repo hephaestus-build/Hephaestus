@@ -53,6 +53,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -384,8 +385,17 @@ final class LiveRunnerWorkspace {
         // Neither the stand-in proxy nor a review attempt's token reads the claim; the runner refuses to start
         // without one.
         environment.put("LLM_PROXY_CLAIM", "{\"x-agent-run\":\"live-run\",\"x-agent-epoch\":\"1\"}");
-        List<String> command = spec.command();
-        if (command.isEmpty()) throw new IllegalArgumentException("The live runner has no command");
+        if (spec.command().isEmpty()) throw new IllegalArgumentException("The live runner has no command");
+        // In a review, gateway-init.ts derives the change view (work/change/) before the plan's command starts. Without
+        // it, every read of the diff and every result that cites the change fails, so the live run does the same.
+        List<String> command = Stream.concat(
+                        Stream.of(
+                                "sh",
+                                "-c",
+                                "node " + SandboxLayout.WORKSPACE_ROOT + "/pi-change-view.js && exec \"$@\"",
+                                "sh"),
+                        spec.command().stream())
+                .toList();
         return new GenericContainer<>(DockerImageName.parse(spec.image()))
                 // The caller selects a prebuilt image. A missing image fails before a model request.
                 .withImagePullPolicy(ignored -> false)
