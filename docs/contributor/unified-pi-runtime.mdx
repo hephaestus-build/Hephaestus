@@ -460,15 +460,19 @@ The runtime contract states what the run kinds rely on from the loop that runs a
 Its cases are in `runtime-contract.ts`, and `runtime-contract.spec.ts` runs them in `vp run test:agents`.
 Each case drives a session with a scripted model and checks one of these promises:
 
-- The model gets the descriptor's system prompt and tools with their schemas.
+- The model gets the descriptor's system prompt, tools with their schemas, and thinking level.
 - A tool call runs the tool, and its result reaches the next request. The tool events carry the call ID, arguments and result.
 - The session log keeps the run's messages and their content in order.
 - The hooks and the events come in the order that the run kinds rely on.
 - A `tool_call` hook that blocks keeps the tool from running.
+- The `context` hooks decide in turn what the model sees.
+- A settle hook learns the run's outcome. A later run on the same log sees the context edits that it returned.
+- The loop retries a transient provider failure. A failure that outlasts the retries ends the run, and the retry events say so.
+- An abort ends the model call and settles the run as aborted.
 
 The cases run on Pi through `openRunSession`.
 For each case, a Pi build that breaks its promise must fail it, and the spec checks that it does.
-A broken build replaces the system prompt, ignores a block, moves a hook, or reorders or strips events.
+A broken build replaces the system prompt, drops a hook's result, moves a hook, reorders or strips events, or disables retry and abort.
 
 These parts are outside the contract:
 
