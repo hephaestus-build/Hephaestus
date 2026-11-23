@@ -581,15 +581,9 @@ importers:
       '@tanstack/react-query':
         specifier: 5.102.8
         version: 5.102.8(react@19.2.8)
-      '@tanstack/react-query-devtools':
-        specifier: 5.102.8
-        version: 5.102.8(@tanstack/react-query@5.102.8(react@19.2.8))(react@19.2.8)
       '@tanstack/react-router':
         specifier: 1.170.46
         version: 1.170.46(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@tanstack/react-router-devtools':
-        specifier: 1.167.2
-        version: 1.167.2(@tanstack/react-router@1.170.46(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@tanstack/router-core@1.171.39)(csstype@3.2.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@tanstack/react-table':
         specifier: 9.3.1
         version: 9.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -641,9 +635,6 @@ importers:
       streamdown:
         specifier: 2.7.1
         version: 2.7.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)
-      use-sync-external-store:
-        specifier: 1.7.0
-        version: 1.7.0(react@19.2.8)
       usehooks-ts:
         specifier: 3.1.1
         version: 3.1.1(react@19.2.8)
@@ -663,9 +654,6 @@ importers:
       '@fontsource-variable/inter':
         specifier: 5.3.0
         version: 5.3.0
-      '@gitlab/svgs':
-        specifier: 3.170.0
-        version: 3.170.0
       '@oxlint/plugins':
         specifier: 'catalog:'
         version: 1.89.0
@@ -699,6 +687,12 @@ importers:
       '@tailwindcss/vite':
         specifier: 4.3.3
         version: 4.3.3(@voidzero-dev/vite-plus-core@1.4.0(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
+      '@tanstack/react-query-devtools':
+        specifier: 5.102.8
+        version: 5.102.8(@tanstack/react-query@5.102.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/react-router-devtools':
+        specifier: 1.167.2
+        version: 1.167.2(@tanstack/react-router@1.170.46(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@tanstack/router-core@1.171.39)(csstype@3.2.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@tanstack/router-plugin':
         specifier: 1.168.48
         version: 1.168.48(@rspack/core@1.7.12(@swc/helpers@0.5.24))(@tanstack/react-router@1.170.46(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@voidzero-dev/vite-plus-core@1.4.0(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))(esbuild@0.28.2)(rolldown@1.2.19)(supports-color@8.1.1)(webpack@5.112.2(@swc/core@1.16.20(@swc/helpers@0.5.24))(@swc/html@1.16.20)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.32))(csso@5.0.5)(esbuild@0.28.2)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.32)(svgo@3.3.5))
@@ -2007,9 +2001,6 @@ packages:
 
   '@fumari/image-size@0.1.1':
     resolution: {integrity: sha512-iaiV2wyzJ4mW358NX4CX3yGit+WjKYzpaQ+rldK9BjL/5jFpeV6ruWnZVq7MEyMn3Gd0DLi8g/79NZAAQaGscw==}
-
-  '@gitlab/svgs@3.170.0':
-    resolution: {integrity: sha512-bHSjZbntoz0HiXyTBauO4tRr8gze9pVwCEnf9V7jJVKONzVB0G7HbHriCsAQrU/PleE0dfznUNah85R1p78tlA==}
 
   '@google/genai@2.32.0':
     resolution: {integrity: sha512-60c79uXpR0a47bmGqDxbXEBuQUalNmwo5mx5kqb91jIW4FoqpsLSt86DeVhRhtH5+s/16Wqxt3sXzFQn2U1OHQ==}
@@ -11463,8 +11454,6 @@ snapshots:
       tailwindcss: 4.3.3
 
   '@fumari/image-size@0.1.1': {}
-
-  '@gitlab/svgs@3.170.0': {}
 
   '@google/genai@2.32.0(@modelcontextprotocol/sdk@1.32.2(supports-color@8.1.1)(zod@4.6.7))(supports-color@8.1.1)':
     dependencies:

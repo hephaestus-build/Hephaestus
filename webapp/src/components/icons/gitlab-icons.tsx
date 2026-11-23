@@ -1,8 +1,35 @@
+/**
+ * Owned from: https://gitlab.com/gitlab-org/gitlab-services/design.gitlab.com/-/tree/56c336c8a6df5a2537cdbd43161aa858d8d9752e/packages/gitlab-svgs/sprite_icons
+ * Package: pkg:npm/%40gitlab/svgs@3.170.0
+ * License: MIT
+ * Changes: Keep the path data of 20 icons from the release's optimized dist/sprite_icons, wrapped in React components.
+ *
+ * Copyright (c) 2011-present GitLab Inc.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
 import type { SVGProps } from "react";
 /**
- * React wrapper components for GitLab SVG icons from `@gitlab/svgs`.
+ * React wrapper components for GitLab SVG icons.
  *
- * Path data is copied from the installed `@gitlab/svgs` dist so we avoid
+ * Path data is copied from the upstream release in the header, so we avoid
  * adding an SVGR build plugin for just a handful of icons. Most source SVGs
  * use `viewBox="0 0 16 16"` and a single `<path>` element; a status icon drawn
  * on GitLab's 14px grid passes its own box, and its paths are joined into one,
