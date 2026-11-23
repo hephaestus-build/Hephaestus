@@ -934,6 +934,66 @@ tests:
               summary: A review failed because the holder of each of its attempts stopped renewing its lease
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: lost attempts above 1 % of a kind's started attempts fire; exactly 1 %, queued runs, deferred claims and no attempts do not
+    interval: 10m
+    input_series:
+      # Turns: one lost attempt of each outcome, the least that fires, in 100 claims.
+      - series: 'agent_run_reaped_total{job="hephaestus",instance="server:9090",kind="turn",outcome="requeued"}'
+        values: "0 1x41"
+      - series: 'agent_run_reaped_total{job="hephaestus",instance="server:9090",kind="turn",outcome="continued"}'
+        values: "0 0 1x40"
+      - series: 'agent_run_reaped_total{job="hephaestus",instance="server:9090",kind="turn",outcome="attempts_exhausted"}'
+        values: "0 0 0 1x39"
+      - series: 'agent_run_claim_wait_seconds_count{job="hephaestus",instance="server:9090",kind="turn",band="interactive"}'
+        values: "0+25x40"
+      - series: 'agent_run_deferred_total{job="hephaestus",instance="server:9090",kind="turn",reason="locked"}'
+        values: "0x40"
+      # Reviews: 3 lost in 400 claims, 200 of them deferred. 1.5 % of started attempts fires; 0.75 % of claims would not.
+      - series: 'agent_run_reaped_total{job="hephaestus",instance="server:9090",kind="review",outcome="requeued"}'
+        values: "0 1 2 3x40"
+      - series: 'agent_run_claim_wait_seconds_count{job="hephaestus",instance="server:9090",kind="review",band="background"}'
+        values: "0+100x40"
+      - series: 'agent_run_deferred_total{job="hephaestus",instance="server:9090",kind="review",reason="model_pool"}'
+        values: "0+50x40"
+      # Digests: 3 lost in 300 claims is exactly 1 %, which stays quiet. Queued runs that never started or waited past
+      # their deadline had no holder, so they are no lost attempts; counting them would fire.
+      - series: 'agent_run_reaped_total{job="hephaestus",instance="server:9090",kind="digest",outcome="requeued"}'
+        values: "0 1 2 3x40"
+      - series: 'agent_run_reaped_total{job="hephaestus",instance="server:9090",kind="digest",outcome="not_started"}'
+        values: "0+5x40"
+      - series: 'agent_run_reaped_total{job="hephaestus",instance="server:9090",kind="digest",outcome="deadline"}'
+        values: "0+5x40"
+      - series: 'agent_run_claim_wait_seconds_count{job="hephaestus",instance="server:9090",kind="digest",band="background"}'
+        values: "0+75x40"
+      - series: 'agent_run_deferred_total{job="hephaestus",instance="server:9090",kind="digest",reason="locked"}'
+        values: "0x40"
+      # Compositions: 3 lost after their claims left the window. With no attempt to divide by, nothing fires.
+      - series: 'agent_run_reaped_total{job="hephaestus",instance="server:9090",kind="review_compose",outcome="requeued"}'
+        values: "0 1 2 3x40"
+      - series: 'agent_run_claim_wait_seconds_count{job="hephaestus",instance="server:9090",kind="review_compose",band="background"}'
+        values: "10x40"
+      - series: 'agent_run_deferred_total{job="hephaestus",instance="server:9090",kind="review_compose",reason="locked"}'
+        values: "0x40"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusAgentAttemptsLost
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: HephaestusAgentAttemptsLost
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: turn
+            exp_annotations:
+              summary: More than 1 % of the attempts of one run kind lost their holder in six hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+          - exp_labels:
+              severity: warning
+              kind: review
+            exp_annotations:
+              summary: More than 1 % of the attempts of one run kind lost their holder in six hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: a reaper that keeps failing fires, a short failure does not
     interval: 1m
     input_series:

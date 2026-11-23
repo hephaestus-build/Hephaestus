@@ -468,6 +468,30 @@ groups:
         annotations:
           summary: A review failed because the holder of each of its attempts stopped renewing its lease
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A lost attempt is a lease that expired while its holder ran it. `deadline` also counts queued runs that never had
+      # a holder, so it stays out. No series counts started attempts, so claims less deferred claims stand in for them;
+      # a review claim that ends at its admission, such as for a spent budget, still counts, so the share reads low.
+      - alert: HephaestusAgentAttemptsLost
+        expr: >-
+          (
+            sum by (kind) (increase(agent_run_reaped_total{job="hephaestus",outcome=~"requeued|continued|attempts_exhausted"}[6h]))
+            / (
+              sum by (kind) (increase(agent_run_claim_wait_seconds_count{job="hephaestus"}[6h]))
+              - sum by (kind) (increase(agent_run_deferred_total{job="hephaestus"}[6h]))
+            )
+          ) > 0.01
+          and
+          sum by (kind) (increase(agent_run_reaped_total{job="hephaestus",outcome=~"requeued|continued|attempts_exhausted"}[6h])) >= 3
+          and
+          (
+            sum by (kind) (increase(agent_run_claim_wait_seconds_count{job="hephaestus"}[6h]))
+            - sum by (kind) (increase(agent_run_deferred_total{job="hephaestus"}[6h]))
+          ) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 1 % of the attempts of one run kind lost their holder in six hours
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusAgentRunReaperFailing
         expr: sum(increase(agent_run_reaper_failure_total{job="hephaestus"}[10m])) >= 10
         for: 10m
