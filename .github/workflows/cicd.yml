@@ -148,7 +148,8 @@ jobs:
       images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.images == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.images != 'false' || steps.filter.outputs.kubernetes == 'true' || steps.filter.outputs.chart-upgrade == 'true' || steps.filter.outputs.sandbox-qualification == 'true')))) }}
       # A head that only moved `next/` migrations to later names after the last green head of this pull
       # request (scripts/detect-rename-only.ts). It runs Security, which holds the order guard, the server
-      # package and the Generated API replay; every other leg skips. ci-cd.mdx § Rename-only heads.
+      # package and the Generated API replay; the other fast-tier checks skip and Release notes still runs.
+      # ci-cd.mdx § Rename-only heads.
       rename-only: ${{ steps.rename_only.outputs.rename-only == 'true' && steps.opt_in.outputs.light == 'false' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.images == 'false' && steps.release_candidate.outputs.release-candidate != 'true' }}
       should_skip: ${{ steps.rename_only.outputs.rename-only == 'true' && steps.opt_in.outputs.light == 'false' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.images == 'false' && steps.release_candidate.outputs.release-candidate != 'true' }}
     timeout-minutes: 15

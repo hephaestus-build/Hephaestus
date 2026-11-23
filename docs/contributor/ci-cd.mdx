@@ -1105,7 +1105,7 @@ Any other difference, or a failure to read the evidence, runs the whole fast tie
 
 A rename-only head runs `Security`, which holds the order guard, `Server package` and `Generated API`.
 `Generated API` replays the migration chain in its new order and checks the ERD.
-Database tests and drills wait for the merge group. Every other leg skips.
+Database tests and drills wait for the merge group. The other fast-tier checks skip. `Release notes` still runs, as on every pull request.
 `CI Status Gate` fails a rename-only head unless those three legs passed.
 The merge group still runs every selected check.
 
