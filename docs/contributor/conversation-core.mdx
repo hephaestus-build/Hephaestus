@@ -190,6 +190,7 @@ erDiagram
         uuid id PK
         uuid thread_id FK
         uuid consumed_turn_id
+        varchar consumed_by "TURN or SWEEP"
         varchar kind
         varchar source_key
         varchar custody
@@ -259,21 +260,21 @@ An inbox item holds IDs only, never text. A shared thread has inbox items and tu
 
 ### An inbox item
 
-This state machine shows how an inbox item ends. Look at the custody: a required item ends only with its disposition, and a time-based disposition needs no model.
+This state machine shows how an inbox item ends. Look at the custody: a required item always ends `CONSUMED`, by a turn or by the sweep. Only an optional item can expire.
 
 ```mermaid
 stateDiagram-v2
     accTitle: Lifecycle of an inbox item
-    accDescr: A producer inserts an item as PENDING and unclaimed. A claim marks it for a run, and an attempt that ends without a commit releases it. A commit consumes a claimed item. A collapse supersedes an unclaimed item. A closed item or a time-based disposition expires it. A failed authorization recheck or a deleted source drops it. Stop stops it.
+    accDescr: A producer inserts an item as PENDING and unclaimed. A claim marks it for a run, and an attempt that ends without a commit releases it. A turn commit consumes a claimed item. At its disposition deadline, the sweep consumes an unclaimed required item without a model. A collapse supersedes an unclaimed item. An optional item whose time passed with no outcome expires. A failed authorization recheck or a deleted source drops it. Stop stops it.
     state "PENDING, unclaimed" as Unclaimed
     state "PENDING, claimed" as Claimed
     [*] --> Unclaimed : / inserted with its source change
     Unclaimed --> Claimed : claim [eligible, route matches] / claimed by the run
     Claimed --> Unclaimed : attempt ends [no commit] / custody released
-    Claimed --> CONSUMED : turn commit
+    Claimed --> CONSUMED : turn commit / consumed_by TURN
+    Unclaimed --> CONSUMED : disposition deadline [REQUIRED] / disposition without a model, consumed_by SWEEP
     Unclaimed --> SUPERSEDED : collapse [newer source version]
-    Unclaimed --> EXPIRED : item closed [OPTIONAL]
-    Unclaimed --> EXPIRED : disposition due [REQUIRED] / disposition without a model
+    Unclaimed --> EXPIRED : time passes [OPTIONAL, no outcome]
     Unclaimed --> DROPPED : authorization recheck fails, or source deleted
     Unclaimed --> STOPPED : Stop of a queued turn
     Claimed --> STOPPED : Stop [injected message]
@@ -285,6 +286,9 @@ stateDiagram-v2
 ```
 
 Claimed and unclaimed are both `PENDING` in `inbox_item.state`. A claimed item has `claimed_by_run` set.
+`consumed_by` records who settled a `CONSUMED` item: `TURN` for a commit, `SWEEP` for a disposition. The disposition is a withheld copy, a skipped check-in or a fixed message.
+A required item never ends `EXPIRED`. An optional item expires when its time passes with no outcome, for example after its pull request merges.
+
 The thread timer `next_turn_at` is the earliest eligible time of the pending, unclaimed items that start a turn.
 The eligible time of an item is the later of its due time and its gate hold. Thus a quiet-hours gate holds an item, not the thread.
 
@@ -364,6 +368,7 @@ The review stays Complete in every case. A withheld copy is a delivery fact, nev
 ## Collisions
 
 Every transaction takes its locks in one order: source locks, the sandbox row, threads, runs, then effects.
+In the sequences below, each `critical` fragment is one database transaction, and its title names it.
 The commit and a cancel use complementary predicates under the same locks, so exactly one of them wins.
 If the commit wins, its effects and tasks are valid. If the cancel wins, the commit writes nothing.
 
@@ -400,13 +405,13 @@ sequenceDiagram
     autonumber
     actor D as Developer
     participant I as Ingest
-    participant DB as PostgreSQL
     participant G as Sandbox gateway
+    participant DB as PostgreSQL
     participant P as LLM proxy
     participant M as Conversation agent
     M->>P: Model call of the background turn
     D->>I: Message, in the web app
-    critical Admission transaction
+    critical Admission
         I->>DB: USER entry and MESSAGE inbox item
         I->>DB: End the background run, release custody
         I->>DB: Insert an interactive TURN run
@@ -425,7 +430,7 @@ sequenceDiagram
         G-)D: Streamed response
     end
     M->>G: End of turn
-    critical Commit transaction
+    critical Commit
         G->>DB: Entries, consume both items, effects and tasks
     end
 ```
@@ -434,6 +439,7 @@ sequenceDiagram
 
 This sequence shows a second message during an interactive turn.
 Look at the tool-result boundary: the runner asks for new input only between tool batches. The gateway marks each message for one run and epoch.
+The guard `Match` means that the route of the message is the route of the turn.
 
 ```mermaid
 ---
@@ -459,15 +465,16 @@ sequenceDiagram
     I->>DB: USER entry and MESSAGE inbox item, PENDING
     G-->>M: Tool result
     M->>G: New input for this run?
-    G->>DB: Select the items that the route allows, mark them for the run and epoch
-    alt Same route
+    alt Match
+        G->>DB: Select the message, mark it for the run and epoch
         G-->>M: The second message
         M->>M: Add to context
-    else Another route
+    else No match
+        G->>DB: Select nothing, the message stays PENDING
         G-->>M: Nothing
     end
     M->>G: End of turn
-    critical Commit transaction
+    critical Commit
         G->>DB: Entries, consume every message that the turn took
     end
 ```
@@ -511,7 +518,7 @@ sequenceDiagram
     participant W as GitHub or GitLab
     participant M as Conversation agent
     R->>S: admit-results
-    critical Seal transaction
+    critical Seal
         S->>DB: Results, ON_WORK copy PENDING with deadline_at
         S->>DB: REVIEW_FINISHED for the work place, REQUIRED
         S->>DB: REVIEW_FINISHED for the main thread, OPTIONAL
@@ -524,7 +531,7 @@ sequenceDiagram
         C->>G: publish_package
         G-->>C: Staged draft
         C->>G: End of turn
-        critical Commit transaction
+        critical Commit
             G->>DB: Guardrails again, copy READY, DELIVER_FEEDBACK effect
         end
         O->>DB: Lease the effect, first-write predicate, mark started
@@ -538,7 +545,7 @@ sequenceDiagram
             M->>G: next
             G-->>M: Background turn on the main thread
             M->>G: End of turn
-            critical Commit transaction
+            critical Commit
                 G->>DB: One message that cites the results
             end
         end
@@ -563,7 +570,7 @@ config:
 ---
 sequenceDiagram
     accTitle: The deadline withholds a copy, and the person requests a new one
-    accDescr: No composer turn committed before the deadline. The sweep withholds the copy with DEADLINE_PASSED, settles the work place item and inserts DELIVERY_WITHHELD for the author's main thread. On the item card, the developer selects Request a new copy and confirms the preview. Ingest records the old disposition, moves the copy to PENDING with the next generation and a new deadline, and inserts a COMMAND item for the work place. A composer turn commits a fresh copy through the sandbox gateway, and the action outbox delivers it.
+    accDescr: No composer turn committed before the deadline. The sweep withholds the copy with DEADLINE_PASSED, consumes the work place item as the sweep and inserts DELIVERY_WITHHELD for the author's main thread. On the item card, the developer selects Request a new copy and confirms the preview. Ingest records the old disposition, moves the copy to PENDING with the next generation and a new deadline, and inserts a COMMAND item for the work place. A composer turn commits a fresh copy through the sandbox gateway, and the action outbox delivers it.
     autonumber
     actor D as Developer
     participant I as Ingest
@@ -574,15 +581,15 @@ sequenceDiagram
     participant O as Action outbox
     participant W as GitHub or GitLab
     SW->>DB: Find due copies
-    critical Deadline sweep transaction
+    critical Sweep
         SW->>DB: Copy WITHHELD, DEADLINE_PASSED
-        SW->>DB: Settle REVIEW_FINISHED of the work place
+        SW->>DB: REVIEW_FINISHED of the work place CONSUMED, consumed_by SWEEP
         SW->>DB: DELIVERY_WITHHELD for the author's main thread
     end
     D->>I: Request a new copy, on the item card
     I-->>D: Preview: the problems to post
     D->>I: Confirm the preview
-    critical Confirmation transaction
+    critical Confirmation
         I->>DB: Disposition history row
         I->>DB: Copy PENDING, next generation, new deadline
         I->>DB: COMMAND post_now for the work place
@@ -590,7 +597,7 @@ sequenceDiagram
     C->>G: next
     G-->>C: Turn on the work place
     C->>G: End of turn
-    critical Commit transaction
+    critical Commit
         G->>DB: Copy READY, DELIVER_FEEDBACK effect
     end
     O->>W: Write the comment with its marker
@@ -646,17 +653,17 @@ sequenceDiagram
         M->>G: next
         G-->>M: Turn, route SLACK_DM: Slack-visible entries only
         M->>G: End of turn
-        critical Commit transaction
+        critical Commit
             G->>DB: Answer entry, SLACK_POST effect
         end
-    else Mention in a channel thread
+    else Channel mention
         I->>DB: MESSAGE item for the channel thread, route CHANNEL
         C->>G: next
         G-->>C: Turn, route CHANNEL: channel-readable sources only
         C->>G: answer_in_channel
         G-->>C: Staged draft
         C->>G: End of turn
-        critical Commit transaction
+        critical Commit
             G->>DB: SLACK_POST effect with Continue privately
         end
     end
@@ -669,7 +676,7 @@ sequenceDiagram
 
 - **Every input is a row first.** A provider event is a `provider_event` row before the provider gets its answer ([Ingest durability](./ingest-durability.mdx)). A message is a `USER` entry and an inbox item before the server answers.
 - **A lost attempt changes nothing.** The lease epoch fences every write. A turn that lost its lease cannot commit, and its inbox items go back to `PENDING`.
-- **Required items always end.** Each required kind has a disposition deadline. The sweep applies the disposition under the thread lock, with no model call.
+- **Required items always end.** Each required kind has a disposition deadline. The sweep applies the disposition under the thread lock, with no model call, and the item ends `CONSUMED` with `consumed_by = SWEEP`.
 - **Any replica serves any step.** No part keeps conversation state in memory between turns. The dispatcher and the sweep run on every replica and have no leader.
 - **Restore holds the outbox.** After a restore, the outbox waits until the delivery identities and generations are rebuilt from the provider markers.
 - **Failover fails closed.** During a database failover, admission and every commit fail, and no partial turn is visible.
