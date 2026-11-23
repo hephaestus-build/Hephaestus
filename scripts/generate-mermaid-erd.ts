@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { parseArgs } from "node:util";
 
-import { Command, InvalidArgumentError, Option } from "commander";
 import { Client } from "pg";
 
 type LogLevel = "debug" | "info" | "silent";
@@ -872,56 +872,81 @@ function parseLogLevel(value: string): LogLevel {
 	if (value === "debug" || value === "info" || value === "silent") {
 		return value;
 	}
-	throw new InvalidArgumentError(`Invalid log level: ${value}`);
+	throw new Error(`Invalid log level: ${value}`);
 }
 
-interface CliOptions {
-	jdbcUrl?: string;
-	username?: string;
-	password?: string;
-	outputDir?: string;
-	sources: string;
-	schema: string;
-	includeLiquibase: boolean;
-	dryRun: boolean;
-	logLevel: LogLevel;
-}
+const STRING_OPTIONS = {
+	"jdbc-url": { type: "string" },
+	username: { type: "string" },
+	password: { type: "string" },
+	"output-dir": { type: "string" },
+	sources: { type: "string", default: DEFAULT_SOURCE_ROOT },
+	schema: { type: "string", default: "public" },
+	"log-level": { type: "string", default: "info" },
+} as const;
+
+const HELP = `Usage: generate-mermaid-erd [options] [jdbcUrl] [username] [password] [outputDir]
+
+Generate a Mermaid ERD from a PostgreSQL database schema
+
+Arguments:
+  jdbcUrl                JDBC URL (jdbc:postgresql://host:port/database)
+  username               Database username
+  password               Database password
+  outputDir              Output directory
+
+Options:
+  --jdbc-url <url>       JDBC URL (overrides positional argument)
+  --username <username>  Database username (overrides positional)
+  --password <password>  Database password (overrides positional)
+  --output-dir <dir>     Output directory, replaced on each run
+  --sources <dir>        Java root whose packages are the modules (default:
+                         "${DEFAULT_SOURCE_ROOT}")
+  --schema <schema>      Database schema to inspect (default: "public")
+  --include-liquibase    Include Liquibase metadata tables (default: false)
+  --dry-run              Validate configuration and exit (default: false)
+  --log-level <level>    Log verbosity (choices: "debug", "info", "silent",
+                         default: "info")
+  -h, --help             Display help for command`;
 
 async function main() {
-	const program = new Command();
-	program
-		.name("generate-mermaid-erd")
-		.description("Generate a Mermaid ERD from a PostgreSQL database schema")
-		.argument("[jdbcUrl]", "JDBC URL (jdbc:postgresql://host:port/database)")
-		.argument("[username]", "Database username")
-		.argument("[password]", "Database password")
-		.argument("[outputDir]", "Output directory")
-		.option("--jdbc-url <url>", "JDBC URL (overrides positional argument)")
-		.option("--username <username>", "Database username (overrides positional)")
-		.option("--password <password>", "Database password (overrides positional)")
-		.option("--output-dir <dir>", "Output directory, replaced on each run")
-		.option("--sources <dir>", "Java root whose packages are the modules", DEFAULT_SOURCE_ROOT)
-		.option("--schema <schema>", "Database schema to inspect", "public")
-		.option("--include-liquibase", "Include Liquibase metadata tables", false)
-		.option("--dry-run", "Validate configuration and exit", false)
-		.addOption(
-			new Option("--log-level <level>", "Log verbosity")
-				.choices(["debug", "info", "silent"])
-				.default("info")
-				.argParser(parseLogLevel),
-		);
-
-	program.parse(process.argv);
-
-	const options = program.opts<CliOptions>();
-	const { args } = program;
-	const jdbcUrl = options.jdbcUrl ?? args[0] ?? process.env.HEPHAESTUS_DB_JDBC_URL;
-	const username = options.username ?? args[1] ?? process.env.POSTGRES_USER;
-	const password = options.password ?? args[2] ?? process.env.POSTGRES_PASSWORD;
-	const outputDir = options.outputDir ?? args[3] ?? DEFAULT_OUTPUT_DIR;
-
-	const logger = createLogger(options.logLevel);
-
+	const args = process.argv.slice(2);
+	// A required string consumes the next argument even when it begins with a dash,
+	// which matters for credentials supplied as separate arguments.
+	for (let index = 0; index < args.length - 1; index += 1) {
+		const flag = args[index];
+		const value = args[index + 1];
+		if (flag === undefined || value === undefined || flag === "--") {
+			break;
+		}
+		if (flag.startsWith("--") && Object.hasOwn(STRING_OPTIONS, flag.slice(2))) {
+			args.splice(index, 2, `${flag}=${value}`);
+		}
+	}
+	const { values, positionals } = parseArgs({
+		args,
+		allowPositionals: true,
+		options: {
+			...STRING_OPTIONS,
+			"include-liquibase": { type: "boolean", default: false },
+			"dry-run": { type: "boolean", default: false },
+			help: { type: "boolean", short: "h" },
+		},
+	});
+	const logLevel = parseLogLevel(values["log-level"]);
+	if (values.help === true) {
+		console.log(HELP);
+		return;
+	}
+	if (positionals.length > 4) {
+		throw new Error(`Expected at most four positional arguments, received ${positionals.length}.`);
+	}
+	const [positionalUrl, positionalUser, positionalPassword, positionalOutput] = positionals;
+	const jdbcUrl = values["jdbc-url"] ?? positionalUrl ?? process.env.HEPHAESTUS_DB_JDBC_URL;
+	const username = values.username ?? positionalUser ?? process.env.POSTGRES_USER;
+	const password = values.password ?? positionalPassword ?? process.env.POSTGRES_PASSWORD;
+	const outputDir = values["output-dir"] ?? positionalOutput ?? DEFAULT_OUTPUT_DIR;
+	const logger = createLogger(logLevel);
 	const resolvedJdbcUrl = ensureNonEmpty(
 		jdbcUrl,
 		"JDBC URL is required. Provide --jdbc-url or positional argument.",
@@ -947,23 +972,23 @@ async function main() {
 	};
 
 	logger.debug(
-		`Resolved configuration: jdbcUrl=${sanitizeJdbcUrl(resolvedJdbcUrl)}, username=${resolvedUsername}, password=${maskSecret(resolvedPassword)}, output=${resolvedOutput}, schema=${options.schema}`,
+		`Resolved configuration: jdbcUrl=${sanitizeJdbcUrl(resolvedJdbcUrl)}, username=${resolvedUsername}, password=${maskSecret(resolvedPassword)}, output=${resolvedOutput}, schema=${values.schema}`,
 	);
 
-	if (options.dryRun) {
+	if (values["dry-run"]) {
 		logger.info("Dry run enabled. Configuration validated successfully.");
 		return;
 	}
 
 	const generator = new MermaidErdGenerator(config, {
-		schema: options.schema,
-		includeLiquibase: options.includeLiquibase,
+		schema: values.schema,
+		includeLiquibase: values["include-liquibase"],
 		logger,
 	});
 
 	await generator.connect();
 	try {
-		await generator.generate(resolvedOutput, options.sources);
+		await generator.generate(resolvedOutput, values.sources);
 	} finally {
 		await generator.disconnect();
 	}
