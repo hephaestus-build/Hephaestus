@@ -175,6 +175,39 @@ Modulith verification therefore does not enforce their persistence encapsulation
 The architecture tests enforce the core, domain and provider boundary.
 [Workspace context](./workspace-context) owns tenant enforcement.
 
+### Mentoring modules
+
+[Proposed ADR 0138](https://github.com/hephaestus-build/Hephaestus/blob/225d54c044378aef8485248a3e9174841eda29d3/docs/decisions/0138-domain-modules-own-rows-and-rules-and-agent-modules-host-runs.md) adds three domain modules for the conversation agent: `relationship`, `learning` and `mentoring`.
+They are layers in this order.
+Each one may depend on the modules before it.
+Only `agent` and `notification` sit above all three.
+No other module may depend on them, so `practices` never depends on `mentoring`.
+
+A domain module owns rows and rules. Its run kinds, gateway routes and tools live in an `agent` package that depends on it.
+
+These tests apply the rules to every edge that touches a mentoring module:
+
+| Rule | Test |
+| --- | --- |
+| A module declares no dependency up the layers. | `ModulithVerificationTest` |
+| A native query reads no table of another module. | `TableOwnershipArchTest` |
+| No class uses an entity of another module, so no JPA association crosses the edge. | `RepositoryOwnershipArchTest` |
+| A foreign key follows a declared module edge. | `ForeignKeyDirectionDatabaseTest` |
+| A mentoring module uses no source-control model and no provider adapter. | `DomainNeutralityArchTest` |
+| A mentoring module reads the time only from the injected `Clock`. | `SystemClockArchTest` |
+| A listener of a mentoring module has a test that implements `IdempotentListenerIntegrationTest`. | `RegistryEventShapeArchTest` |
+
+The event publication registry stores each event that an `@ApplicationModuleListener` receives.
+Every such event, in every module, carries IDs only.
+A `String` component is an ID only when it has `@Identifier`.
+`RegistryEventShapeArchTest` checks this, and its closed list holds the text components that events had before the rule.
+The harness delivers one event twice and two events in swapped order. The listener must reach the same state in each case.
+
+A producer of a privacy fact calls the `PrivacyJournal` port in the transaction of the fact's cause.
+`PrivacyJournalKind` is the one list of kinds. Each kind removes data or ends a grant.
+The server's journal stores no fact yet, so the erasure recovery manifest still lists erasures by hand.
+Tests read the facts that a producer records from `RecordingPrivacyJournal`.
+
 ### Context map
 
 The architecture tier generates the context map from the verified module model. CI retains it in `server-context-map-<attempt>` for fourteen days.
@@ -206,6 +239,7 @@ Do not keep a hand-drawn copy of the graph. The table below owns the relationshi
 | `notification` | Account notifications and their transports | Customer/Supplier: notification-producing domains | [ADR 0044](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0044-email-is-a-notification-transport.md) |
 | `observability` | Structured logging and metric contracts | Shared Kernel: observability | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `practices` | Definitions, reviews, results and feedback | Customer/Supplier: evidence providers and execution | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `relationship` | A person's relationship with Hephaestus, its settings and its change feed | Customer/Supplier: `learning`, `mentoring` and the runtime | [Proposed ADR 0138](https://github.com/hephaestus-build/Hephaestus/blob/225d54c044378aef8485248a3e9174841eda29d3/docs/decisions/0138-domain-modules-own-rows-and-rules-and-agent-modules-host-runs.md) |
 | `productfeedback` | Feedback about Hephaestus and its issue filing | Customer/Supplier: the SCM ProductFeedbackIssues port | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `workspace` | Tenant lifecycle and workspace policies | Customer/Supplier: product modules and provider lifecycle | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 
