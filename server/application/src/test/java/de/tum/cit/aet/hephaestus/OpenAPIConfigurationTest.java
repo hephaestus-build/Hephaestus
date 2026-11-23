@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus;
 
+import static de.tum.cit.aet.hephaestus.config.NamedEnumModelConverter.OPEN_ENUM_NOTE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
@@ -58,7 +59,7 @@ class OpenAPIConfigurationTest {
         Schema<?> type = Objects.requireNonNull(api.getComponents().getSchemas().get("ProblemType"));
         assertThat(type.getEnum()).isNull();
         assertThat(type.getFormat()).isEqualTo("uri-reference");
-        assertThat(type.getDescription()).startsWith(OpenAPIConfiguration.OPEN_ENUM_NOTE);
+        assertThat(type.getDescription()).startsWith(OPEN_ENUM_NOTE);
         List<Object> examples = List.copyOf(type.getExamples());
         assertThat(examples)
                 .startsWith("about:blank")
@@ -310,7 +311,7 @@ class OpenAPIConfigurationTest {
         assertThat(status.getEnum()).isNull();
         List<Object> known = List.copyOf(status.getExamples());
         assertThat(known).containsExactly("RUNNING", "DONE");
-        assertThat(status.getDescription()).startsWith(OpenAPIConfiguration.OPEN_ENUM_NOTE);
+        assertThat(status.getDescription()).startsWith(OPEN_ENUM_NOTE);
         assertThat(component(api, "ResultOutcome").getEnum()).isNotNull();
         assertThat(component(api, "QueueState").getEnum()).isNotNull();
     }

@@ -4,7 +4,10 @@ export type ClientOptions = {
 	baseUrl: `${string}://${string}/api` | (string & {});
 };
 
-export type AboutRole = "AUTHOR" | "REVIEWER" | "ASSIGNEE" | "MERGER";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type AboutRole = string;
 
 export type AcceptPracticeReleaseRequest = {
 	choices: {

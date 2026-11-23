@@ -2,7 +2,10 @@
 
 import * as z from "zod";
 
-export const zAboutRole = z.enum(["AUTHOR", "REVIEWER", "ASSIGNEE", "MERGER"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zAboutRole = z.string();
 
 export const zAccountAppRole = z.enum(["USER", "APP_ADMIN"]);
 

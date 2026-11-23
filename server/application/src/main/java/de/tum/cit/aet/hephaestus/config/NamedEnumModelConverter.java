@@ -9,9 +9,10 @@ import io.swagger.v3.oas.models.media.StringSchema;
 import java.lang.annotation.Annotation;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
-import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -21,8 +22,13 @@ import tools.jackson.databind.json.JsonMapper;
  * the name of the type that declares it ({@code FeedbackDTO.Kind} becomes {@code FeedbackKind}), and a name that two
  * enums with different values would share fails the build of the spec.
  */
-@Component
 public class NamedEnumModelConverter implements ModelConverter {
+
+    public static final String OPEN_ENUM_NOTE =
+            "Extensible enum: a client accepts a value that the examples do not name.";
+
+    /** The compatibility policy keeps both enums closed because a new value changes what an observation means. */
+    public static final Set<String> CLOSED_PUBLIC_ENUMS = Set.of("ResultOutcome", "Severity");
 
     private static final String BASE_PACKAGE = "de.tum.cit.aet.hephaestus";
 
@@ -30,9 +36,11 @@ public class NamedEnumModelConverter implements ModelConverter {
     private static final List<String> CONTAINER_SUFFIXES = List.of("DTOs", "DTO", "Controller");
 
     private final JsonMapper mapper;
+    private final Predicate<Class<?>> openWireCode;
 
-    public NamedEnumModelConverter(JsonMapper mapper) {
+    public NamedEnumModelConverter(JsonMapper mapper, Predicate<Class<?>> openWireCode) {
         this.mapper = mapper;
+        this.openWireCode = openWireCode;
     }
 
     @Override
@@ -43,28 +51,40 @@ public class NamedEnumModelConverter implements ModelConverter {
             return chain.hasNext() ? chain.next().resolve(type, context, chain) : null;
         }
         var usage = schemaAnnotation(type.getCtxAnnotations());
-        if (usage != null && usage.allowableValues().length > 0) {
+        boolean open = openWireCode.test(raw);
+        String name = schemaName(raw);
+        if (!open && usage != null && usage.allowableValues().length > 0) {
+            if (CLOSED_PUBLIC_ENUMS.contains(name)) {
+                throw new IllegalStateException("The schema " + name + " must use its named closed enum.");
+            }
             // The property accepts only some of the enum's values: those, not the whole type.
             StringSchema subset = new StringSchema();
             Stream.of(usage.allowableValues()).forEach(subset::addEnumItem);
             return subset;
         }
-        String name = schemaName(raw);
         // The wire names, as the application's mapper writes them (it honours @JsonValue and @JsonProperty).
         List<String> values = Stream.of(raw.getEnumConstants())
                 .map(constant -> mapper.convertValue(constant, String.class))
                 .toList();
         Schema<?> defined = context.getDefinedModels().get(name);
-        if (defined != null && !values.equals(defined.getEnum())) {
-            throw new IllegalStateException("Two types publish the schema name " + name + ": " + raw.getName()
-                    + " with " + values + " and another with " + defined.getEnum() + ". Give one @Schema(name = ...).");
+        if (defined != null) {
+            var existingValues = open ? defined.getExamples() : defined.getEnum();
+            if (!values.equals(existingValues)) {
+                throw new IllegalStateException("Two types publish the schema name " + name + ": " + raw.getName()
+                        + " with " + values + " and another with " + existingValues
+                        + ". Give one @Schema(name = ...).");
+            }
         }
         if (defined == null) {
             StringSchema schema = new StringSchema();
-            values.forEach(schema::addEnumItem);
             var own = raw.getAnnotation(io.swagger.v3.oas.annotations.media.Schema.class);
             if (own != null && !own.description().isBlank()) {
                 schema.setDescription(own.description());
+            }
+            if (open) {
+                openWireSchema(schema, values);
+            } else {
+                values.forEach(schema::addEnumItem);
             }
             context.defineModel(name, schema);
         }
@@ -73,6 +93,14 @@ public class NamedEnumModelConverter implements ModelConverter {
             reference.setDefault(usage.defaultValue());
         }
         return reference;
+    }
+
+    public static <T> void openWireSchema(Schema<T> schema, List<T> values) {
+        schema.setEnum(null);
+        schema.setExamples(values);
+        String description = schema.getDescription();
+        schema.setDescription(
+                description == null || description.isBlank() ? OPEN_ENUM_NOTE : OPEN_ENUM_NOTE + " " + description);
     }
 
     /**
