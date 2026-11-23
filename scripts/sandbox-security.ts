@@ -93,7 +93,8 @@ function verifyCase(
 	checks: Record<string, unknown>,
 ) {
 	if (name === "leaky-mount") {
-		assert.equal(checks.readRefused, false);
+		// The file tools refuse any path outside /workspace, mounted or not; the shell shows the leaked mount.
+		assert.equal(checks.readRefused, true);
 		assert.equal(checks.shellRefused, false);
 		assert.equal(checks.postBlocked, true);
 		assert.equal(requestHit, true, "Removing mount isolation must trip the canary oracle");
