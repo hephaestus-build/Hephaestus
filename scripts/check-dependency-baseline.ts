@@ -13,6 +13,7 @@
  *
  * Usage: `node scripts/check-dependency-baseline.ts [--write]`.
  */
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -23,12 +24,20 @@ import { asRecord, isRecord, parseJson } from "./lib/json.ts";
 export const BASELINE_FILE = "security/dependency-baseline.json";
 export const RETIRED_FILE = "security/retired-dependencies.json";
 
-// Each lockfile that the repository installs from. The agent images resolve on their own.
-export const LOCKFILES = [
-	"pnpm-lock.yaml",
-	"docker/agents/pi/pnpm-lock.yaml",
-	"docker/agents/practice-scripts/pnpm-lock.yaml",
-] as const;
+/**
+ * Each pnpm lockfile in the checkout, committed or new: the workspace's, and the agent images', which
+ * resolve on their own. Found by name, so a new install root enters the counts and the retired check.
+ */
+export function lockfiles(cwd = process.cwd()): string[] {
+	return execFileSync(
+		"git",
+		["ls-files", "--cached", "--others", "--exclude-standard", "--", ":(glob)**/pnpm-lock.yaml"],
+		{ cwd, encoding: "utf8" },
+	)
+		.split("\n")
+		.filter(Boolean)
+		.toSorted();
+}
 
 export interface ImporterCounts {
 	direct: { prod: number; dev: number };
@@ -160,21 +169,44 @@ const packageName = (key: string): string => {
  */
 export function lockedNames(text: string, file: string): Set<string> {
 	const { env, lock } = lockDocuments(text, file);
-	return new Set(
-		[env?.packages, lock.packages]
-			.flatMap((packages) => (isRecord(packages) ? Object.keys(packages) : []))
-			.map(packageName),
-	);
+	const names = new Set<string>();
+	for (const packages of [env?.packages, lock.packages]) {
+		for (const [key, entry] of isRecord(packages) ? Object.entries(packages) : []) {
+			names.add(packageName(key));
+			// A package can ship others inside its tarball; pnpm lists their names, not their versions.
+			const bundled = isRecord(entry) ? entry.bundledDependencies : undefined;
+			for (const name of Array.isArray(bundled) ? bundled : []) {
+				if (typeof name === "string") {
+					names.add(name);
+				}
+			}
+		}
+	}
+	// A workspace package that satisfies a dependency is linked under the dependency's name, with no
+	// entry in `packages`.
+	for (const importer of isRecord(lock.importers) ? Object.values(lock.importers) : []) {
+		const dependencies = isRecord(importer)
+			? references(importer, [...PROD_FIELDS, "devDependencies"])
+			: [];
+		for (const [name, value] of dependencies) {
+			const reference = isRecord(value) ? value.version : value;
+			if (typeof reference === "string" && reference.startsWith("link:")) {
+				names.add(name);
+			}
+		}
+	}
+	return names;
 }
 
 /** The retired packages that a lockfile installs again, each with the reason it was retired. */
 export function retiredInLockfiles(
 	retired: unknown,
 	read: (file: string) => string = (file) => readFileSync(file, "utf8"),
+	files: readonly string[] = lockfiles(),
 ): string[] {
 	const reasons = asRecord(retired, RETIRED_FILE);
 	const found: string[] = [];
-	for (const file of LOCKFILES) {
+	for (const file of files) {
 		const names = lockedNames(read(file), file);
 		for (const [name, reason] of Object.entries(reasons)) {
 			if (typeof reason !== "string" || reason.trim() === "") {
@@ -188,9 +220,12 @@ export function retiredInLockfiles(
 	return found;
 }
 
-export function measure(read: (file: string) => string = (file) => readFileSync(file, "utf8")) {
+export function measure(
+	read: (file: string) => string = (file) => readFileSync(file, "utf8"),
+	files: readonly string[] = lockfiles(),
+) {
 	return Object.fromEntries(
-		LOCKFILES.map((file) => [file, countLockfile(read(file), file)]),
+		files.map((file) => [file, countLockfile(read(file), file)]),
 	) satisfies Baseline;
 }
 

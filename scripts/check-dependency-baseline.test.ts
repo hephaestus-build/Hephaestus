@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
 	compare,
 	countLockfile,
-	LOCKFILES,
 	lockedNames,
+	lockfiles,
 	render,
 	retiredInLockfiles,
 } from "./check-dependency-baseline.ts";
@@ -185,30 +189,64 @@ await test("the names a lockfile installs come from both documents, scoped and a
 		"react",
 		"react-dom",
 		"scheduler",
+		// `app` links the workspace package `shared` under that name.
+		"shared",
 		"tool",
 	]);
 });
 
 await test("a lockfile that installs a retired package fails, whatever the counts", () => {
+	const files = ["pnpm-lock.yaml", "image/pnpm-lock.yaml"];
 	const read = () => LOCKFILE;
-	assert.deepEqual(retiredInLockfiles({ "is-even": "Owned." }, read), []);
+	assert.deepEqual(retiredInLockfiles({ "is-even": "Owned." }, read, files), []);
 	assert.deepEqual(
-		retiredInLockfiles({ "left-pad": "String.prototype.padStart." }, read),
-		LOCKFILES.map(
-			(file) => `${file} installs left-pad, which is retired: String.prototype.padStart.`,
-		),
+		retiredInLockfiles({ "left-pad": "String.prototype.padStart." }, read, files),
+		files.map((file) => `${file} installs left-pad, which is retired: String.prototype.padStart.`),
 	);
 	// The root importer declares `vite` as an alias of Vite+ core: the installed name is what counts.
 	assert.equal(
-		retiredInLockfiles({ "@voidzero-dev/vite-plus-core": "Aliased." }, read).length,
-		LOCKFILES.length,
+		retiredInLockfiles({ "@voidzero-dev/vite-plus-core": "Aliased." }, read, files).length,
+		files.length,
 	);
-	assert.deepEqual(retiredInLockfiles({ vite: "Only an alias here." }, read), []);
+	assert.deepEqual(retiredInLockfiles({ vite: "Only an alias here." }, read, files), []);
 	// The env document's config dependencies run during an install, so they count too.
-	assert.equal(retiredInLockfiles({ pnpm: "Env." }, read).length, LOCKFILES.length);
+	assert.equal(retiredInLockfiles({ pnpm: "Env." }, read, files).length, files.length);
+});
+
+await test("a retired package bundled inside another one, or linked from the workspace, still fails", () => {
+	const bundled = LOCKFILE.replace(
+		"  tool@1.0.0:\n    resolution: {integrity: sha512-f}\n",
+		"  tool@1.0.0:\n    resolution: {integrity: sha512-f}\n    bundledDependencies:\n      - left-pad\n      - is-even\n",
+	);
+	assert.ok(lockedNames(bundled, "fixture").has("is-even"));
+	assert.equal(retiredInLockfiles({ "is-even": "Bundled." }, () => bundled, ["a"]).length, 1);
+	// `shared` satisfies `app`'s dependency through a workspace link, under the dependency's name.
+	const linked = LOCKFILE.replace(
+		"      shared:\n        specifier: workspace:*",
+		"      is-odd:\n        specifier: ^1.0.0",
+	);
+	assert.ok(lockedNames(linked, "fixture").has("is-odd"));
+	assert.equal(retiredInLockfiles({ "is-odd": "Linked." }, () => linked, ["a"]).length, 1);
+});
+
+await test("every pnpm lockfile in the checkout is found, a new nested one included", () => {
+	const root = mkdtempSync(path.join(tmpdir(), "dependency-lockfiles-"));
+	try {
+		execFileSync("git", ["init", "--quiet"], { cwd: root });
+		mkdirSync(path.join(root, "tools/new"), { recursive: true });
+		writeFileSync(path.join(root, "pnpm-lock.yaml"), "");
+		writeFileSync(path.join(root, "tools/new/pnpm-lock.yaml"), "");
+		writeFileSync(path.join(root, "tools/new/yarn.lock"), "");
+		assert.deepEqual(lockfiles(root), ["pnpm-lock.yaml", "tools/new/pnpm-lock.yaml"]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
 });
 
 await test("a retired entry without a reason is refused", () => {
-	assert.throws(() => retiredInLockfiles({ "left-pad": " " }, () => LOCKFILE), /needs the reason/u);
-	assert.throws(() => retiredInLockfiles([], () => LOCKFILE), TypeError);
+	assert.throws(
+		() => retiredInLockfiles({ "left-pad": " " }, () => LOCKFILE, ["a"]),
+		/needs the reason/u,
+	);
+	assert.throws(() => retiredInLockfiles([], () => LOCKFILE, ["a"]), TypeError);
 });
