@@ -114,6 +114,12 @@ The capped claims of one kind take an advisory lock in turn, so the cap holds ac
 A claim leases a turn for `hephaestus.agent.capacity.turn-lease-ttl` (60 seconds), and any other run for `lease-ttl`.
 A person waits for a turn, so a lost turn is taken back sooner.
 
+No claim leases a run while a database migration runs ([Work during a migration](/admin/runtime-roles#work-during-a-migration)).
+Each claim query adds `MaintenanceBarrier.LIFTED`, which takes the migration's advisory lock shared for its transaction, without waiting.
+The due reads of the sandbox dispatch and of the `next` wait add it too, so no sandbox starts and no wait wakes for a run that no claim may take.
+The run gauges do not add it: a due run still counts as due.
+`MaintenanceBarrierArchTest` requires the barrier in every query that takes a new lease, also of actions and provider events.
+
 ## Subject outcomes
 
 `ReviewJobTerminal` owns the mapping from a review job's terminal state to its run reason.

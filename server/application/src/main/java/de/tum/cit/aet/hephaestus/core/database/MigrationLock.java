@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
+import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.web.DocsSite;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -30,6 +31,8 @@ import org.springframework.stereotype.Component;
  * run mode releases it. A previous release takes no advisory lock: its processes must not migrate the same database
  * at the same time as this one. The run mode also moves a database on 1.0.0-rc.1 to the 1.0 baseline under this lock
  * ({@link BaselineSynchronization}).
+ *
+ * <p>While the lock is held, no claim takes a new lease ({@link MaintenanceBarrier}).
  */
 @Component
 @ConditionalOnBooleanProperty(name = "spring.liquibase.enabled", matchIfMissing = true)
@@ -37,11 +40,10 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(MigrationLock.class);
 
-    private static final String LOCK =
-            "SELECT pg_try_advisory_lock(hashtext('hephaestus'), hashtext('database-migration'))";
+    /** The lock is also the maintenance barrier: no claim takes a new lease while a migration holds it. */
+    private static final String LOCK = "SELECT pg_try_advisory_lock(" + MaintenanceBarrier.MIGRATION_LOCK + ")";
 
-    private static final String UNLOCK =
-            "SELECT pg_advisory_unlock(hashtext('hephaestus'), hashtext('database-migration'))";
+    private static final String UNLOCK = "SELECT pg_advisory_unlock(" + MaintenanceBarrier.MIGRATION_LOCK + ")";
 
     /**
      * How often a waiting process tries the lock again. It polls rather than blocks in {@code pg_advisory_lock}: a
@@ -124,7 +126,9 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
                             + ". Wait until it ends, then start this process again. "
                             + migrationGuide);
                 }
-                if (!reported) {
+                // A claim holds the lock shared for milliseconds (MaintenanceBarrier): only a second miss is a
+                // migration.
+                if (!reported && System.nanoTime() - start >= RETRY.toNanos()) {
                     log.atWarn()
                             .addKeyValue("event.name", "database.migration.lock_awaited")
                             .log("Waiting up to {} for another database migration to end", timeout);

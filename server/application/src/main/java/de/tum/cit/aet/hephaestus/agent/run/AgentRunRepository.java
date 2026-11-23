@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.run;
 
+import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
 import java.util.Collection;
@@ -92,6 +93,12 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
               AND (r.deferred_until IS NULL OR r.deferred_until <= clock_timestamp())
             """;
 
+    /**
+     * No run is offered while a database migration runs ({@link MaintenanceBarrier}): no sandbox starts for it, and no
+     * waiting {@code next} wakes for it. The run gauges still count it as due.
+     */
+    String BARRIER_LIFTED = "  AND " + MaintenanceBarrier.LIFTED + "\n";
+
     String ORDER = """
             ORDER BY CASE WHEN r.band = 'INTERACTIVE' THEN 0
                           ELSE GREATEST(1, (CASE r.band WHEN 'BATCH' THEN 1 ELSE 2 END)
@@ -126,7 +133,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     @Query(value = """
             SELECT r.id AS id, r.workspace_id AS "workspaceId", r.kind AS kind,
                    r.concurrency_key AS "concurrencyKey"
-            """ + CLAIMABLE + NOT_DEFERRED + """
+            """ + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
                 AND r.kind IN (:kinds)
             """ + ORDER + """
             LIMIT :limit OFFSET :offset
@@ -146,7 +153,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     @Query(value = """
             SELECT r.id AS id, r.workspace_id AS "workspaceId", r.kind AS kind,
                    r.concurrency_key AS "concurrencyKey"
-            """ + CLAIMABLE + NOT_DEFERRED + """
+            """ + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
                 AND r.kind IN (:kinds) AND r.workspace_id IN (:workspaceIds) AND r.concurrency_key IN (:subjectKeys)
             """, nativeQuery = true)
     List<DueRow> findDueOfSubjects(
@@ -168,10 +175,11 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     @WorkspaceAgnostic("The claim offers the queued runs of every workspace, in fair-share order")
     @Query(
-            value = "WITH picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + """
+            value = "WITH picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
                 AND r.kind IN (:kinds)
                 AND (:#{#excluded.isEmpty()} OR r.id NOT IN (:excluded))
-            """ + CLAIM_ORDER + ")" + LEASE,
+            """ + CLAIM_ORDER + ")"
+                    + LEASE,
             nativeQuery = true)
     Optional<LeaseRow> claim(
             @Param("kinds") Collection<String> kinds,
@@ -182,9 +190,10 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     /** The claim of one subject, for the sandbox that serves only it: the same rule and order, within one subject. */
     @Query(
-            value = "WITH picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + """
+            value = "WITH picked AS (SELECT r.id " + CLAIMABLE + NOT_DEFERRED + BARRIER_LIFTED + """
                 AND r.workspace_id = :workspaceId AND r.concurrency_key = :concurrencyKey AND r.kind IN (:kinds)
-            """ + CLAIM_ORDER + ")" + LEASE,
+            """ + CLAIM_ORDER + ")"
+                    + LEASE,
             nativeQuery = true)
     Optional<LeaseRow> claimSubject(
             @Param("workspaceId") long workspaceId,

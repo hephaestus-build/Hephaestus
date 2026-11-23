@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
@@ -16,13 +18,18 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
+import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
@@ -48,6 +55,20 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private DataSource dataSource;
+
+    @Autowired
+    private ApplicationContext context;
+
+    private ActionExecutor executor() {
+        return new ActionExecutor(
+                store,
+                context.getBean(ObjectMapper.class),
+                List.copyOf(context.getBeansOfType(ActionAdapter.class).values()),
+                new SimpleMeterRegistry());
+    }
 
     @Test
     void shouldKeepOneActionPerIdempotencyKey() {
@@ -83,6 +104,44 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         assertThat(claimOwn(List.of(create, edit)))
                 .extracting(ActionStore.Claim::id)
                 .containsExactly(edit);
+    }
+
+    @Test
+    void shouldTakeNoActionWhileAMigrationRunsAndTakeItOnceTheMigrationEnds() throws Exception {
+        String lane = "barrier:" + UUID.randomUUID();
+        UUID queued = actions.enqueue(request(lane, lane + ":queued", null, 3));
+        String started = "barrier-now:" + UUID.randomUUID();
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThat(store.claim(1000, LEASE, admission())).isEmpty();
+            assertThat(store.claim(queued, LEASE, admission())).isEmpty();
+            assertThat(store.start(request(started, started, null, 1), LEASE)).isEmpty();
+            assertThatThrownBy(() -> executor().runNow(request(started, started, null, 1)))
+                    .as("a caller that waits for the result hears that Hephaestus is updating")
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            refused -> assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+        }
+
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_action WHERE idempotency_key = ?", Long.class, started))
+                .isZero();
+        assertThat(store.claim(queued, LEASE, admission()))
+                .map(ActionStore.Claim::id)
+                .contains(queued);
+    }
+
+    @Test
+    void shouldLetAnActionClaimedBeforeAMigrationWriteAndSettleWhileTheMigrationRuns() throws Exception {
+        UUID id = actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), null, 3));
+        var claim = claimOwn(List.of(id)).getFirst();
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThat(store.beginWrite(id, claim.epoch(), MARGIN)).isTrue();
+            assertThat(store.settle(
+                            id, claim.epoch(), new ActionResult.Done("in-flight"), ActionStoreIntegrationTest::ignore))
+                    .isPresent();
+        }
     }
 
     @Test

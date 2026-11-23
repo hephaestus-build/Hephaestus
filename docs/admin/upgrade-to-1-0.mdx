@@ -296,6 +296,9 @@ Use [If migration fails](./upgrade#if-migration-fails).
    Export the keys again and keep that copy with the restore point.
 9. Migrate.
    Do phase 2 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) with the target chart and your changed site values.
+   While the migration runs, a server that you did not stop claims no queued work ([Work during a migration](./runtime-roles#work-during-a-migration)).
+   It still queues work, and a server of 1.0.0-rc.14 or earlier claims too. Thus, step 5 is still necessary.
+   Step 5 is still necessary.
    Save the log of the migration Job.
    Require its `Complete` condition and no `ERROR` line in the log.
    If the Job fails, keep the server stopped and go to [Roll back](#roll-back).

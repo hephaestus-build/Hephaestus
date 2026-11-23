@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
 import java.util.Collection;
@@ -136,6 +137,7 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
                  SET state = 'EXECUTING', lease_epoch = c.lease_epoch + 1, attempts = c.attempts + 1,
                      leased_until = clock_timestamp() + make_interval(secs => :lease), updated_at = clock_timestamp()
                WHERE c.id = :id AND c.state = 'ADMITTED' AND\s""" + DECODABLE + """
+                 AND\s""" + MaintenanceBarrier.LIFTED + """
                  AND c.next_attempt_at <= clock_timestamp()
                  AND (c.expires_at IS NULL OR c.expires_at > clock_timestamp())
                  AND NOT EXISTS (
@@ -221,9 +223,10 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
               INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, payload,
                 subject_account_id, native_recipient, attempts, max_attempts, next_attempt_at, expires_at, lease_epoch, leased_until,
                 created_at, updated_at)
-              VALUES (:id, CAST(:workspaceId AS bigint), :kind, :laneKey, :key, 'EXECUTING', CAST(:payload AS jsonb),
+              SELECT :id, CAST(:workspaceId AS bigint), :kind, :laneKey, :key, 'EXECUTING', CAST(:payload AS jsonb),
                 CAST(:subject AS bigint), CAST(:nativeRecipient AS jsonb), 1, :maxAttempts, clock_timestamp(), CAST(:expiresAt AS timestamptz), 1,
-                clock_timestamp() + make_interval(secs => :lease), clock_timestamp(), clock_timestamp())
+                clock_timestamp() + make_interval(secs => :lease), clock_timestamp(), clock_timestamp()
+               WHERE\s""" + MaintenanceBarrier.LIFTED + """
               ON CONFLICT (idempotency_key) DO NOTHING
               RETURNING *)
             """ + CLAIMED + " FROM a", nativeQuery = true)
@@ -284,6 +287,7 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             WITH due AS (
               SELECT d.id FROM agent_action d
                WHERE\s""" + DECODABLE + """
+                 AND\s""" + MaintenanceBarrier.LIFTED + """
                  AND ((d.state = 'ADMITTED' AND d.next_attempt_at <= clock_timestamp()
                        AND (d.expires_at IS NULL OR d.expires_at > clock_timestamp()))
                    OR (d.state = 'EXECUTING' AND d.leased_until <= clock_timestamp()
