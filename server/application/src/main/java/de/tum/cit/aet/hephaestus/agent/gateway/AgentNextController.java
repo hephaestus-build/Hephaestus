@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -8,6 +9,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -35,16 +37,20 @@ public class AgentNextController {
     private final AgentSandboxes sandboxes;
     private final Map<AgentRunKind, SandboxRunKind> kinds;
     private final AgentReviewDrain drain;
+    private final AgentNextWaits waits;
 
-    public AgentNextController(AgentSandboxes sandboxes, List<SandboxRunKind> kinds, AgentReviewDrain drain) {
+    public AgentNextController(
+            AgentSandboxes sandboxes, List<SandboxRunKind> kinds, AgentReviewDrain drain, AgentNextWaits waits) {
         this.sandboxes = sandboxes;
         this.kinds = SandboxRunKind.byKind(kinds);
         this.drain = drain;
+        this.waits = waits;
     }
 
     /**
-     * The subject's next run, leased to this sandbox; {@code 204} when none is due. Only the run kinds that this
-     * sandbox's kind drives are offered, and each kind moves its domain row in the transaction of the lease.
+     * The subject's next run, leased to this sandbox; {@code 204} when none came due while the request waited. Only
+     * the run kinds that this sandbox's kind drives are offered, and each kind moves its domain row in the transaction
+     * of the lease.
      */
     @PostMapping("/next")
     public ResponseEntity<Assignment> next(@AuthenticationPrincipal AgentSandboxes.LiveSandbox sandbox) {
@@ -52,24 +58,29 @@ public class AgentNextController {
                 .filter(kind -> kind.sandbox() == sandbox.kind())
                 .map(SandboxRunKind::kind)
                 .collect(Collectors.toUnmodifiableSet());
-        return drain.claim(() -> sandboxes.lease(
-                        sandbox,
-                        offered,
-                        () -> kinds.values().stream()
-                                .filter(kind -> kind.sandbox() == sandbox.kind())
-                                .forEach(kind -> kind.beforeWrite(sandbox)),
-                        lease -> {
-                            // The token filter restores the request scope after common advice records a failure.
-                            MDC.put(StructuredLogKeys.RUN_ID, lease.runId().toString());
-                            MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(lease.epoch()));
-                            return Objects.requireNonNull(kinds.get(lease.kind()))
-                                    .claimed(new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt()));
-                        }))
+        return waits.claim(sandbox, offered, () -> lease(sandbox, offered))
                 // A TURN binds its work deadline in claimed(), after this immutable lease snapshot was read.
                 // Its gateway writes and renewals enforce the stored deadline even when this field is null.
                 .map(lease -> ResponseEntity.ok(new Assignment(
                         lease.runId(), lease.epoch(), lease.kind(), lease.leasedUntil(), lease.deadline())))
                 .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    /** One claim of the subject's next run, while the drain admits claims. */
+    private Optional<AgentRunLease> lease(AgentSandboxes.LiveSandbox sandbox, Set<AgentRunKind> offered) {
+        return drain.claim(() -> sandboxes.lease(
+                sandbox,
+                offered,
+                () -> kinds.values().stream()
+                        .filter(kind -> kind.sandbox() == sandbox.kind())
+                        .forEach(kind -> kind.beforeWrite(sandbox)),
+                lease -> {
+                    // The token filter restores the request scope after common advice records a failure.
+                    MDC.put(StructuredLogKeys.RUN_ID, lease.runId().toString());
+                    MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(lease.epoch()));
+                    return Objects.requireNonNull(kinds.get(lease.kind()))
+                            .claimed(new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt()));
+                }));
     }
 
     /**

@@ -61,6 +61,8 @@ class BackgroundWorkArchTest extends HephaestusArchitectureTest {
             "delivers sync hints only to this process's SSE requests; it never claims work or writes to a provider",
             "de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits.start",
             "renews and fences the permits that this process's model calls hold, and wakes the calls that wait for one",
+            "de.tum.cit.aet.hephaestus.agent.gateway.AgentNextWaits.start",
+            "wakes the sandbox next requests that wait on this process; each woken request claims its own run",
             "de.tum.cit.aet.hephaestus.agent.proxy.ScanCallLeases.<init>",
             "renews the scan call leases that this process's calls hold",
             "de.tum.cit.aet.hephaestus.conversation.ConversationTimeline$PartialAnswersConfiguration.conversationPartialAnswers",

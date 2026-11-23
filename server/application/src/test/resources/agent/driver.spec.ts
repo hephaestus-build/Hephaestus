@@ -346,6 +346,59 @@ void test("the driver pulls again after the gateway failed to answer next", asyn
 	assert.deepEqual(ends(calls), [JSON.stringify({ outcome: "completed" })]);
 });
 
+/**
+ * The pauses between three `next` calls that each answer no run after `holdMs`, as a gateway holds a waiting `next`,
+ * in milliseconds from one answer to the following call.
+ */
+async function pausesBetweenEmptyNexts(holdMs: number, idleWaitMs: number): Promise<number[]> {
+	const stop = new AbortController();
+	const answered: number[] = [];
+	const pauses: number[] = [];
+	const fetch: typeof globalThis.fetch = async (input) => {
+		assert.ok(url(input).endsWith("/internal/agent/next"));
+		const last = answered.at(-1);
+		if (last !== undefined) {
+			pauses.push(performance.now() - last);
+		}
+		await sleep(holdMs);
+		answered.push(performance.now());
+		if (answered.length === 3) {
+			stop.abort();
+		}
+		return new Response(null, { status: 204 });
+	};
+	await drive({
+		gatewayUrl: GATEWAY,
+		token: "sandbox-token",
+		kinds: {},
+		signal: stop.signal,
+		fetch,
+		idleWaitMs,
+		log: quiet,
+		isolation: ISOLATED,
+	});
+	return pauses;
+}
+
+void test("a next that the gateway held until it ended with no run is asked again at once", async () => {
+	// Held longer than the idle wait, so no part of that wait is left: a driver that still waited it pauses 1 s.
+	const pauses = await pausesBetweenEmptyNexts(1100, 1000);
+
+	assert.equal(pauses.length, 2);
+	for (const pause of pauses) {
+		assert.ok(pause < 900, `paused ${String(pause)} ms`);
+	}
+});
+
+void test("a next that answers no run at once is asked again only after the idle wait", async () => {
+	const pauses = await pausesBetweenEmptyNexts(0, 200);
+
+	assert.equal(pauses.length, 2);
+	for (const pause of pauses) {
+		assert.ok(pause >= 190, `paused ${String(pause)} ms`);
+	}
+});
+
 void test("an assignment that does not name a run, its claim and its lease is no run to start", () => {
 	assert.deepEqual(parseAssignment(assignment("TURN")).deadline, null);
 	for (const broken of [

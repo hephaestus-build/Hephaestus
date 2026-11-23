@@ -391,6 +391,19 @@ The sandbox can claim only its own conversation's work.
 The run row holds the lease and epoch in PostgreSQL. The gateway keeps no assignment map.
 Only the sandbox renews the lease.
 
+A warm sandbox's `next` waits for its next run (`AgentNextWaits`).
+The server holds the request for up to 25 seconds and then answers `204`. The driver then asks again at once.
+
+On each `agent_run` notification, and every 2 seconds, each server runs one query.
+The query finds the waiting subjects that have a run that the claim would offer.
+The server wakes only those requests, and each one claims through the normal claim.
+Thus, a wake on two servers cannot lease a run twice.
+
+A waiting request parks its virtual gateway thread.
+At most half of the gateway's connections wait. A request past that limit claims once and answers at once.
+A waiting request is no use of the sandbox, so the idle reaper still takes back a sandbox that only waits.
+A server that stops answers each waiting request with `204` before the review drain starts.
+
 A server restart can interrupt a model call, which the sandbox loop can retry through another replica.
 The run reaper recovers a turn whose sandbox stops renewing its lease.
 

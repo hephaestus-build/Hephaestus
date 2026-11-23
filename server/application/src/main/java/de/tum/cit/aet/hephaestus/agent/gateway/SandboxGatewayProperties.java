@@ -23,6 +23,7 @@ import org.springframework.validation.annotation.Validated;
  *     turns at once (estimated).
  * @param maxConnections Most connections that the sandbox gateway holds open at once. Up to 100 further connections wait
  *     in the operating system's queue, and the rest fail. A review at its most calls in flight holds 170, and a normal review about 54 (estimated).
+ *     At most half of them wait for a sandbox's next run; a further sandbox asks again after 2 seconds.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.sandbox.gateway")

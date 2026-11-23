@@ -57,7 +57,7 @@ export interface DriverOptions {
 	isolation: Promise<Isolation>;
 	/** How often the lease is renewed; the server's lease lasts at least twice as long. */
 	renewEveryMs?: number;
-	/** How long the driver waits after the gateway had no run for it. */
+	/** The least time from one `next` that answered no run to the next `next`. */
 	idleWaitMs?: number;
 	fetch?: typeof globalThis.fetch;
 	log?: (line: string) => void;
@@ -66,6 +66,10 @@ export interface DriverOptions {
 const RENEW_EVERY_MS = 25_000;
 /** Retry a failed renewal while the replacement gateway starts accepting connections. */
 const RENEW_RETRY_WAIT_MS = 1000;
+/**
+ * The gateway holds `next` until a run of the subject is due, or for about 25 seconds, and the driver then asks again at
+ * once. A gateway that answers at once, as one that is stopping does, is asked again only after this wait.
+ */
 const IDLE_WAIT_MS = 2000;
 /** The longest wait for one gateway call: a gateway that answers later has failed the call. */
 const CALL_TIMEOUT_MS = 30_000;
@@ -89,6 +93,7 @@ export async function drive(options: DriverOptions): Promise<void> {
 	let failures = 0;
 	while (!stopped()) {
 		let offered: Offered | null;
+		const asked = performance.now();
 		try {
 			offered = await next(fetch, options.gatewayUrl, auth, signal);
 			failures = 0;
@@ -101,8 +106,13 @@ export async function drive(options: DriverOptions): Promise<void> {
 			offered = null;
 		}
 		if (offered === null) {
-			const wait = Math.min(MAX_RETRY_WAIT_MS, idle * 2 ** Math.min(failures, 10));
-			await sleep(wait, undefined, { signal }).catch(() => undefined);
+			const wait =
+				failures > 0
+					? Math.min(MAX_RETRY_WAIT_MS, idle * 2 ** Math.min(failures, 10))
+					: idle - (performance.now() - asked);
+			if (wait > 0) {
+				await sleep(wait, undefined, { signal }).catch(() => undefined);
+			}
 			continue;
 		}
 		if ((await runOne(offered, { ...options, fetch, log, auth })) === "unisolated") {
@@ -117,7 +127,7 @@ export interface Offered {
 	clockOffsetMs: number;
 }
 
-/** The subject's next run, or null when none is due. */
+/** The subject's next run, or null when none came due while the gateway held the call. */
 export async function next(
 	fetch: typeof globalThis.fetch,
 	gatewayUrl: string,
