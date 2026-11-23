@@ -395,6 +395,13 @@ void test("vulnerability remediation bypasses normal update latency", () => {
 	});
 });
 
+/** The keys a package rule selects on. */
+function ruleSelectors(rule: Record<string, unknown>) {
+	return Object.keys(rule)
+		.filter((key) => key.startsWith("match"))
+		.toSorted();
+}
+
 /** The string entries of a rule's matcher, or undefined when the rule has no such matcher. */
 function strings(value: unknown) {
 	return Array.isArray(value)
@@ -459,8 +466,12 @@ void test("a Spring Boot patch opens when it is released, outside the weekly bat
 	const rules = config.packageRules.filter(isRecord);
 	const index = rules.findIndex((rule) => rule.groupName === "Spring Boot");
 	const rule = rules[index];
-	assert.ok(rule && matchesBootPatch(rule));
+	// The rules select on exactly these keys: any other selector could drop the Boot plugin or BOM.
+	assert.ok(rule);
+	assert.deepEqual(ruleSelectors(rule), ["matchDepNames", "matchManagers", "matchUpdateTypes"]);
+	assert.deepEqual(rule.matchManagers, ["gradle"]);
 	assert.deepEqual(rule.matchDepNames, boot.depNames);
+	assert.deepEqual(rule.matchUpdateTypes, ["patch"]);
 	assert.deepEqual(rule.schedule, ["* * * * *"]);
 	assert.equal(rule.minimumReleaseAge, null);
 	assert.equal(rule.prConcurrentLimit, 0);
@@ -482,10 +493,16 @@ void test("a Spring Boot patch opens when it is released, outside the weekly bat
 		.slice(index + 1)
 		.filter((later) => matchesBootPatch(later) && effects.some((key) => key in later));
 	assert.deepEqual(overriding, [], "a later rule overrides the Spring Boot patch rule");
+	// Renovate splits minor and patch releases at lookup, before it knows the update type.
 	const separate = rules.filter(
 		(candidate) => "separateMinorPatch" in candidate && matchesBootPatch(candidate),
 	);
-	assert.equal(separate.at(-1)?.separateMinorPatch, true, "a newer Boot minor hides the patch");
+	const split = separate.at(-1);
+	assert.ok(split, "a newer Boot minor hides the patch");
+	assert.equal(split.separateMinorPatch, true);
+	assert.deepEqual(ruleSelectors(split), ["matchDepNames", "matchManagers"]);
+	assert.deepEqual(split.matchManagers, ["gradle"]);
+	assert.deepEqual(split.matchDepNames, boot.depNames);
 });
 
 /** The datasources a manager's match strings extract from a file, through their `datasource` group. */
