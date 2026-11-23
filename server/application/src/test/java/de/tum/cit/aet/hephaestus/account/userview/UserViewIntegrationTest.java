@@ -45,7 +45,6 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -204,26 +203,14 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldListOnlyTheViewedUsersConversationWhenOthersExistInAndOutsideTheWorkspace() {
-        User other = persistUser("another-view-user");
-        ensureMembership(workspace, other, Membership.WorkspaceRole.MEMBER);
-        ConversationTurnService.Submission own = question(workspace, viewed, "Viewed user's question");
-        ConversationTurnService.Submission colleagues = question(workspace, other, "Other private question");
-        Workspace elsewhere = createWorkspace("other-view", "Other view", other.getLogin(), AccountType.USER, other);
-        ConversationTurnService.Submission foreign = question(elsewhere, viewed, "Other workspace question");
+    void shouldHideTheViewedUsersConversation() {
+        question(workspace, viewed, "Viewed user's question");
 
         sessionRequest("/workspaces/acme/conversation/entries")
                 .exchange()
                 .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.content[*].id")
-                .value(ids -> assertThat(ids)
-                        .asInstanceOf(InstanceOfAssertFactories.LIST)
-                        .containsExactly(own.question().getId().toString())
-                        .doesNotContain(
-                                colleagues.question().getId().toString(),
-                                foreign.question().getId().toString()));
+                .isNotFound()
+                .expectBody(Void.class);
         assertThat(userViewRowsFor(viewed)).isOne();
     }
 

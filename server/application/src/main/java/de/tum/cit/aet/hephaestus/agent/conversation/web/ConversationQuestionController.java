@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnDTO;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
-import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -38,7 +37,7 @@ public class ConversationQuestionController {
     private final AppConversationQuestions questions;
     private final ConversationTimeline timeline;
     private final ConversationTurnService turns;
-    private final CurrentDeveloperLookup developer;
+    private final ConversationRequestScope scope;
 
     @PostMapping("/turns")
     @Operation(
@@ -58,11 +57,12 @@ public class ConversationQuestionController {
     public ConversationSubmissionDTO submitConversationTurn(
             WorkspaceContext workspace, @Valid @RequestBody ConversationTurnRequestDTO request) {
         long workspaceId = workspace.id();
-        long account = CurrentConversationAccount.of(developer);
-        ConversationTurnService.Submission submission = questions.ask(workspaceId, account, request);
-        return new ConversationSubmissionDTO(
-                timeline.turn(workspaceId, account, submission.turn().getId()),
-                timeline.entry(workspaceId, account, submission.question().getId()));
+        return scope.execute(account -> {
+            ConversationTurnService.Submission submission = questions.ask(workspaceId, account, request);
+            return new ConversationSubmissionDTO(
+                    timeline.turn(workspaceId, account, submission.turn().getId()),
+                    timeline.entry(workspaceId, account, submission.question().getId()));
+        });
     }
 
     @PatchMapping("/turns/{turnId}/status")
@@ -78,9 +78,10 @@ public class ConversationQuestionController {
         if (request.status() != ConversationTurn.Status.STOPPED) {
             throw new InvalidInputException("A turn can only be stopped.");
         }
-        long account = CurrentConversationAccount.of(developer);
-        timeline.requireOwnedTurn(workspace.id(), account, turnId);
-        turns.stop(workspace.id(), turnId);
-        return timeline.turn(workspace.id(), account, turnId);
+        return scope.execute(account -> {
+            timeline.requireOwnedTurn(workspace.id(), account, turnId);
+            turns.stop(workspace.id(), turnId);
+            return timeline.turn(workspace.id(), account, turnId);
+        });
     }
 }

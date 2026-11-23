@@ -190,7 +190,8 @@ This is a view of existing content, not a user login. It does not enter onboardi
 settings or create an account, so it cannot reproduce the member's first-login experience.
 
 A successful `USER_VIEW` row records authorization to attempt a read, not proof that the handler returned content.
-A missing result or conversation can still produce a 404 after the row commits.
+A missing result can still produce a 404 after the row commits.
+Conversation routes return 404 during a user view. Only the signed-in owner can read their conversation.
 The row carries these fields:
 
 - `acting_account_id` = the instance administrator.

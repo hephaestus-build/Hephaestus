@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntryDTO;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
-import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -39,7 +38,7 @@ public class ConversationEntryController {
 
     private final ConversationTimeline timeline;
     private final ConversationEntryService entries;
-    private final CurrentDeveloperLookup developer;
+    private final ConversationRequestScope scope;
 
     @PutMapping("/entries/{entryId}/vote")
     @Operation(summary = "Rate one of Hephaestus's messages as helpful or not helpful")
@@ -81,15 +80,18 @@ public class ConversationEntryController {
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                             schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<Void> deleteConversationEntry(WorkspaceContext workspace, @PathVariable UUID entryId) {
-        timeline.requireOwnedEntry(workspace.id(), CurrentConversationAccount.of(developer), entryId);
-        entries.deleteMessage(workspace.id(), entryId);
-        return ResponseEntity.noContent().build();
+        return scope.execute(account -> {
+            timeline.requireOwnedEntry(workspace.id(), account, entryId);
+            entries.deleteMessage(workspace.id(), entryId);
+            return ResponseEntity.noContent().build();
+        });
     }
 
     private ConversationEntryDTO vote(long workspaceId, UUID entryId, ConversationEntry.@Nullable Vote vote) {
-        long account = CurrentConversationAccount.of(developer);
-        timeline.requireOwnedEntry(workspaceId, account, entryId);
-        entries.vote(workspaceId, entryId, vote);
-        return timeline.entry(workspaceId, account, entryId);
+        return scope.execute(account -> {
+            timeline.requireOwnedEntry(workspaceId, account, entryId);
+            entries.vote(workspaceId, entryId, vote);
+            return timeline.entry(workspaceId, account, entryId);
+        });
     }
 }

@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.conversation.web;
 
-import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -37,8 +35,7 @@ public class ConversationLiveController {
     public SseEmitter streamConversationEvents(WorkspaceContext workspace, HttpServletResponse response) {
         response.setHeader("Cache-Control", "no-cache");
         response.setHeader("X-Accel-Buffering", "no");
-        long accountId = SecurityUtils.getCurrentAccountId()
-                .orElseThrow(() -> new EntityNotFoundException("Account", "current authenticated account"));
+        long accountId = ConversationRequestScope.requireAct().requireSelf();
         return hub.subscribe(workspace.id(), accountId);
     }
 }

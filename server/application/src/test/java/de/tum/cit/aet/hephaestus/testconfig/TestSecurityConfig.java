@@ -5,11 +5,13 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -123,6 +125,7 @@ public class TestSecurityConfig {
                             .orElse(userId));
             claims.put("iss", "https://test-issuer");
             claims.put("aud", "test-audience");
+            claims.put("jti", mockTokenId(token));
 
             claims.put("auth_time", Instant.now().getEpochSecond());
 
@@ -147,10 +150,15 @@ public class TestSecurityConfig {
                 .claim("sub", sub)
                 .claim("iss", "https://test-issuer")
                 .claim("aud", "test-audience")
+                .claim("jti", mockTokenId(token))
                 .claim("roles", Arrays.asList(roles))
                 .claim("auth_time", Instant.now().getEpochSecond())
                 .issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(3600))
                 .build();
+    }
+
+    private static String mockTokenId(String token) {
+        return UUID.nameUUIDFromBytes(token.getBytes(StandardCharsets.UTF_8)).toString();
     }
 }
