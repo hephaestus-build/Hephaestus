@@ -88,10 +88,13 @@ public class AgentNextWaits implements SmartLifecycle {
 
     /**
      * Claims through {@code claim} until it leases a run, the wait ends, or this replica stops. A later request of the
-     * same sandbox ends this one's wait: the sandbox pulls one run at a time, so its caller gave the earlier one up.
+     * same sandbox ends this one's wait, also when the later one cannot wait: the sandbox pulls one run at a time, so
+     * its caller gave the earlier one up.
      */
     public <T> Optional<T> claim(
             AgentSandboxes.LiveSandbox sandbox, Set<AgentRunKind> kinds, Supplier<Optional<T>> claim) {
+        Waiter abandoned = waiters.remove(sandbox.id());
+        if (abandoned != null) abandoned.supersede();
         if (!running || kinds.isEmpty() || !capacity.tryAcquire()) return claim.get();
         var waiter = new Waiter(sandbox, kinds);
         long until = System.nanoTime() + wait.toNanos();

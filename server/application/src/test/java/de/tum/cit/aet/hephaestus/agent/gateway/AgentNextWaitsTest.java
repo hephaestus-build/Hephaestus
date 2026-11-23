@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -36,15 +37,18 @@ class AgentNextWaitsTest {
     private final AgentRuns runs = mock(AgentRuns.class);
     private final AgentRunNotifications notifications = mock(AgentRunNotifications.class);
     private final ExecutorService requests = Executors.newVirtualThreadPerTaskExecutor();
+    private final List<AgentNextWaits> replicas = new ArrayList<>();
 
     @AfterEach
     void stop() {
+        replicas.forEach(AgentNextWaits::stop);
         requests.shutdownNow();
     }
 
     private AgentNextWaits started(int capacity) {
         var waits = new AgentNextWaits(runs, notifications, capacity, LONG, LONG);
         waits.start();
+        replicas.add(waits);
         return waits;
     }
 
@@ -79,6 +83,25 @@ class AgentNextWaitsTest {
         assertThat(earlier.get(5, TimeUnit.SECONDS)).isEmpty();
         waitFor(waits, 1);
         assertThat(later).isNotDone();
+    }
+
+    @Test
+    void shouldEndTheEarlierWaitWhenTheSameSandboxAsksAgainWhileEveryWaitIsTaken() throws Exception {
+        var waits = started(2);
+        var sandbox = sandbox("review:a");
+        var earlierClaims = new AtomicInteger();
+        var earlier = next(waits, sandbox, earlierClaims);
+        var other = next(waits, sandbox("review:b"), new AtomicInteger());
+        waitFor(waits, 2);
+
+        // Every wait is taken, so the later request may claim once and answer at once.
+        var later = next(waits, sandbox, new AtomicInteger());
+
+        assertThat(earlier.get(5, TimeUnit.SECONDS)).isEmpty();
+        assertThat(earlierClaims).hasValue(1);
+        waits.stop();
+        assertThat(later.get(5, TimeUnit.SECONDS)).isEmpty();
+        assertThat(other.get(5, TimeUnit.SECONDS)).isEmpty();
     }
 
     @Test
