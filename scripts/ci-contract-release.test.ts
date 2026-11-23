@@ -796,9 +796,10 @@ void describe("ci-contract: release", () => {
 		const checkout = step(reportWorkflow, reviewPath, "actions/checkout");
 		assert.equal(checkout.get("fetch-depth"), 1);
 		assert.equal(checkout.get("persist-credentials"), false);
-		assert.equal(
-			namedStep(reportWorkflow, reviewPath, "Review dependency changes").get("uses"),
-			"actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+		// The action is pinned to a commit; which commit is Renovate's to move.
+		assert.match(
+			String(namedStep(reportWorkflow, reviewPath, "Review dependency changes").get("uses")),
+			/^actions\/dependency-review-action@[0-9a-f]{40}$/u,
 		);
 		const review = step(reportWorkflow, reviewPath, "actions/dependency-review-action");
 		assert.equal(review.get("config-file"), "./.github/dependency-review-config.yml");

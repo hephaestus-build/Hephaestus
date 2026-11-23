@@ -94,7 +94,7 @@ jobs:
       - name: Secret detection
         id: secrets
         continue-on-error: true
-        uses: trufflesecurity/trufflehog@3bd2b5887eb0efb8fa18bfd1d296032924e4ffdc # v3.99.9
+        uses: trufflesecurity/trufflehog@d232362a64a09a9e7d58267b8f5acef00ae90e23 # v3.100.0
         with:
           # The action pins the wrapper, not its scanner: the version input otherwise uses latest.
           image: ghcr.io/trufflesecurity/trufflehog
