@@ -88,6 +88,24 @@ await test("an assertion that only a dollar-quoted string names fails the format
 	);
 });
 
+const hiddenAssertions: { name: string; expect: string }[] = [
+	{ name: "a quoted semicolon", expect: "SELECT '; DO $$BEGIN RAISE EXCEPTION; END$$;';" },
+	{
+		name: "a raise inside a string of the DO body",
+		expect: "DO $$BEGIN PERFORM $x$RAISE EXCEPTION$x$; END$$;",
+	},
+];
+for (const { name, expect } of hiddenAssertions) {
+	await test(`an assertion behind ${name} fails the format check`, () => {
+		withSeeds(
+			{ "d10.seed.sql": "INSERT INTO legacy VALUES (1);", "d10.expect.sql": expect },
+			(directory) => {
+				assert.throws(() => readCutoverSeeds(directory), /raises no exception/u);
+			},
+		);
+	});
+}
+
 await test("an expected disposition without its seed fails the format check", () => {
 	withSeeds({ "d10.expect.sql": ASSERTION, "notes.txt": "" }, (directory) => {
 		assert.throws(

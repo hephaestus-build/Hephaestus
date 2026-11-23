@@ -92,8 +92,10 @@ The higher module then writes both rows in one transaction through the lower mod
 Main's earlier foreign keys against an edge are listed in `legacy-foreign-keys.txt`. A key that touches a mentoring module has no exception ([System design § Mentoring modules](./system-design#mentoring-modules)).
 
 A column that references a person needs an erasure action that reaches it.
-Its table's store deletes the person's rows through the column, or its redaction clears the column.
-An `UPDATE` or `DELETE` statement in the catalog's package that names the column also counts.
+Its table's store deletes the person's rows through the column, or its redaction assigns the column.
+A contributor beside the catalog can also run an `UPDATE` whose `SET` list assigns the column, or a `DELETE` whose `WHERE` selects by it.
+A column that only a predicate or an export names has no erasure action.
+
 Otherwise `PersonalDataMapArchTest.PERSON_COLUMNS_OUTSIDE_THE_CATALOG` states what erases or keeps it.
 `PersonalDataMapArchTest` finds these columns in the migrated schema. The [personal-data map](../admin/dsms/personal-data-map) owns the stores.
 

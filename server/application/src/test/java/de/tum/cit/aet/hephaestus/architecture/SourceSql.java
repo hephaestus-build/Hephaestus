@@ -16,7 +16,41 @@ final class SourceSql {
     private static final Pattern JOINED = Pattern.compile("\"\\s*\\+\\s*\"");
     private static final Pattern SQL_COMMENT = Pattern.compile("--[^\\n]*|/\\*.*?\\*/", Pattern.DOTALL);
 
+    private static final Pattern QUERY_ANNOTATION = Pattern.compile("@(?:\\w+\\.)*(?:Query|NativeQuery)\\s*\\(");
+
     private SourceSql() {}
+
+    /**
+     * The source without its query annotations, whose SQL the compiled class holds whole, so that a test that reads both
+     * counts each annotation once.
+     */
+    static String withoutQueryAnnotations(String source) {
+        var kept = new StringBuilder();
+        int from = 0;
+        var annotation = QUERY_ANNOTATION.matcher(source);
+        while (annotation.find(from)) {
+            kept.append(source, from, annotation.start());
+            int index = annotation.end();
+            int depth = 1;
+            while (index < source.length() && depth > 0) {
+                if (source.startsWith("\"\"\"", index)) {
+                    int end = source.indexOf("\"\"\"", index + 3);
+                    index = end < 0 ? source.length() : end + 3;
+                    continue;
+                }
+                char next = source.charAt(index);
+                if (next == '"') {
+                    index++;
+                    while (index < source.length() && source.charAt(index) != '"')
+                        index += source.charAt(index) == '\\' ? 2 : 1;
+                } else if (next == '(') depth++;
+                else if (next == ')') depth--;
+                index++;
+            }
+            from = index;
+        }
+        return kept.append(source.substring(Math.min(from, source.length()))).toString();
+    }
 
     static List<String> statements(String source) {
         var statements = new ArrayList<String>();

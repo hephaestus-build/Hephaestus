@@ -374,6 +374,15 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                 .as("an update that only selects by the column leaves the reference in place")
                 .containsExactly("conversation.reviewer_account_id");
 
+        mentioned.addAll(statementErasures("String touch = \"UPDATE conversation SET last_activity_at = now() WHERE"
+                + " reviewer_account_id = :reviewer AND EXISTS (SELECT 1 FROM account WHERE id = :reviewer)\";"));
+        assertThat(unerasedColumns(columns, Set.of("conversation"), mentioned))
+                .as("a predicate after the SET list assigns nothing")
+                .containsExactly("conversation.reviewer_account_id");
+        assertThat(assignedColumns(
+                        "a = (SELECT x FROM t WHERE y = 1), t.b = CASE WHEN c = 2 THEN NULL END WHERE reviewer = 1"))
+                .containsExactly("a", "b");
+
         var cleared = new ArrayList<Erasure>(mentioned);
         cleared.addAll(
                 statementErasures(
@@ -389,6 +398,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
     private static final Map<String, String> PERSON_COLUMNS_OUTSIDE_THE_CATALOG = Map.of(
             "account.primary_email",
             "AccountPurger clears it on the account row, which erasure keeps as a tombstone",
+            "conversation.slack_user_id",
+            "The owner's own Slack user id. The row goes when its owner is erased",
             "commit_contributor.email",
             "The email of the contributor that user_id names. The row goes when that user is erased",
             "product_feedback_filing.mention_login",
@@ -401,17 +412,19 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "A Hephaestus maintainer's GitHub login on another person's report. It goes when that report is erased");
 
     /**
-     * What an erasure reaches in a table: the columns that it assigns, or the columns by which it selects the rows that
-     * it deletes.
+     * What an erasure reaches in a table: the columns that its top-level SET list assigns, or the predicate by which it
+     * selects the rows that it deletes.
      */
-    private record Erasure(String table, String assigned, String deletedBy) {}
+    private record Erasure(String table, Set<String> assigned, String deletedBy) {}
 
     /** A store deletes the rows that its predicate selects, or assigns the columns of its redaction on them. */
     private static Erasure erasure(JdbcPersonDataStore store) {
         String redaction = storeField(store, "redaction");
         String predicate = storeField(store, "predicate");
         String table = storeField(store, "table");
-        return redaction.isEmpty() ? new Erasure(table, "", predicate) : new Erasure(table, redaction, "");
+        return redaction.isEmpty()
+                ? new Erasure(table, Set.of(), predicate)
+                : new Erasure(table, assignedColumns(redaction), "");
     }
 
     /** The JDBC store that a contributor is, or that it delegates to, such as a store that a wrapper fences. */
@@ -441,14 +454,46 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
     private static final Pattern DELETE = Pattern.compile(
             "\\bdelete\\s+from\\s+(?:only\\s+)?\"?(\\w+)\"?.*?\\bwhere\\b(.*)",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-    private static final Pattern WHERE = Pattern.compile("\\bwhere\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern TARGET = Pattern.compile("^\\s*(?:\\w+\\.)?\"?(\\w+)\"?\\s*=");
+    private static final Pattern END_OF_SET = Pattern.compile("(?i)(where|from|returning)\\b");
 
-    /** The SET list of an UPDATE: up to its last WHERE, since a subquery inside the list has a WHERE of its own. */
-    private static String setList(String tail) {
-        var where = WHERE.matcher(tail);
-        int end = tail.length();
-        while (where.find()) end = where.start();
-        return tail.substring(0, end);
+    /**
+     * The columns that a SET list assigns. The list ends at the first WHERE, FROM or RETURNING outside parentheses and
+     * quotes, so a predicate or a subquery assigns nothing.
+     */
+    static Set<String> assignedColumns(String setList) {
+        var items = new ArrayList<String>();
+        var item = new StringBuilder();
+        int depth = 0;
+        boolean quoted = false;
+        for (int index = 0; index < setList.length(); index++) {
+            char next = setList.charAt(index);
+            if (next == '\'') quoted = !quoted;
+            if (!quoted) {
+                if (next == '(') depth++;
+                if (next == ')') depth--;
+                boolean wordStart = index == 0 || !Character.isLetterOrDigit(setList.charAt(index - 1));
+                if (depth == 0
+                        && wordStart
+                        && END_OF_SET
+                                .matcher(setList)
+                                .region(index, setList.length())
+                                .lookingAt()) break;
+                if (depth == 0 && next == ',') {
+                    items.add(item.toString());
+                    item.setLength(0);
+                    continue;
+                }
+            }
+            item.append(next);
+        }
+        items.add(item.toString());
+        var assigned = new TreeSet<String>();
+        for (String assignment : items) {
+            var target = TARGET.matcher(assignment);
+            if (target.find()) assigned.add(target.group(1).toLowerCase(Locale.ROOT));
+        }
+        return assigned;
     }
 
     /** The UPDATE and DELETE statements of a source file, by what they reach. */
@@ -457,9 +502,11 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         for (String sql : SourceSql.statements(source)) {
             var update = UPDATE.matcher(sql);
             if (update.find())
-                erasures.add(new Erasure(update.group(1).toLowerCase(Locale.ROOT), setList(update.group(2)), ""));
+                erasures.add(
+                        new Erasure(update.group(1).toLowerCase(Locale.ROOT), assignedColumns(update.group(2)), ""));
             var delete = DELETE.matcher(sql);
-            if (delete.find()) erasures.add(new Erasure(delete.group(1).toLowerCase(Locale.ROOT), "", delete.group(2)));
+            if (delete.find())
+                erasures.add(new Erasure(delete.group(1).toLowerCase(Locale.ROOT), Set.of(), delete.group(2)));
         }
         return erasures;
     }
@@ -481,10 +528,7 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
 
     private static boolean erases(Erasure erasure, String table, String column) {
         return table.equals(erasure.table())
-                && (Pattern.compile("\\b" + column + "\\s*=")
-                                .matcher(erasure.assigned())
-                                .find()
-                        || names(erasure.deletedBy(), column));
+                && (erasure.assigned().contains(column) || names(erasure.deletedBy(), column));
     }
 
     private static boolean names(String sql, String identifier) {
@@ -492,8 +536,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
     }
 
     /**
-     * The sources of each store's catalog package, by store: the class that declares {@code @PersonDataStores} and the
-     * contributors beside it.
+     * The person-data code of each store's catalog package, by store: the catalog that declares
+     * {@code @PersonDataStores} and the contributors beside it. Other classes of the package run no erasure.
      */
     private static Map<String, String> catalogSources() throws IOException {
         Map<String, String> sources = new HashMap<>();
@@ -503,8 +547,14 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             if (declaration == null) continue;
             var text = new StringBuilder();
             try (var siblings = Files.list(source.getParent())) {
-                for (Path sibling : siblings.filter(path -> path.toString().endsWith(".java"))
-                        .toList()) text.append(Files.readString(sibling));
+                for (Path sibling : siblings.filter(
+                                path -> path.toString().endsWith(".java") && !path.endsWith("package-info.java"))
+                        .toList()) {
+                    Class<?> type = sourceClass(sibling);
+                    if (PersonDataCatalog.class.isAssignableFrom(type)
+                            || PersonDataContributor.class.isAssignableFrom(type))
+                        text.append(Files.readString(sibling));
+                }
             }
             for (String store : declaration.value()) sources.merge(store, text.toString(), String::concat);
         }

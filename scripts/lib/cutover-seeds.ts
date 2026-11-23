@@ -21,18 +21,94 @@ export interface CutoverSeed {
 const SEED = ".seed.sql";
 const EXPECT = ".expect.sql";
 // An assertion that runs and can fail: a DO statement whose body raises. A bare SELECT passes whatever it returns.
-const DO_STATEMENT = /(?:^|;)\s*DO\s+(?<quote>\$\w*\$)(?<body>[\s\S]*?)\k<quote>/giu;
+const DOLLAR_QUOTE = /^\$(?:[A-Za-z_]\w*)?\$/u;
 const RAISE = /\bRAISE\s+EXCEPTION\b/iu;
-const COMMENTS = /--[^\n]*|\/\*[\s\S]*?\*\//gu;
-const QUOTED = /'(?:[^']|'')*'/gu;
 
-function assertsDisposition(sql: string): boolean {
-	for (const statement of sql.replaceAll(COMMENTS, "").matchAll(DO_STATEMENT)) {
-		if (RAISE.test((statement.groups?.body ?? "").replaceAll(QUOTED, ""))) {
-			return true;
+/** A piece of SQL: code, or a quoted or commented span that runs nothing by itself. */
+interface Token {
+	code: boolean;
+	text: string;
+}
+
+/** Splits SQL into code and the comments, string literals and dollar-quoted strings between it. */
+function tokenize(sql: string): Token[] {
+	const tokens: Token[] = [];
+	let code = "";
+	let index = 0;
+	const quoted = (end: number) => {
+		tokens.push({ code: true, text: code }, { code: false, text: sql.slice(index, end) });
+		code = "";
+		index = end;
+	};
+	while (index < sql.length) {
+		const rest = sql.slice(index);
+		const dollar = DOLLAR_QUOTE.exec(rest);
+		if (rest.startsWith("--")) {
+			const end = sql.indexOf("\n", index);
+			quoted(end === -1 ? sql.length : end);
+		} else if (rest.startsWith("/*")) {
+			const end = sql.indexOf("*/", index + 2);
+			quoted(end === -1 ? sql.length : end + 2);
+		} else if (rest.startsWith("'")) {
+			let end = index + 1;
+			while (end < sql.length && !(sql[end] === "'" && sql[end + 1] !== "'")) {
+				end += sql[end] === "'" ? 2 : 1;
+			}
+			quoted(Math.min(end + 1, sql.length));
+		} else if (dollar) {
+			const end = sql.indexOf(dollar[0], index + dollar[0].length);
+			quoted(end === -1 ? sql.length : end + dollar[0].length);
+		} else {
+			code += sql[index];
+			index += 1;
 		}
 	}
-	return false;
+	tokens.push({ code: true, text: code });
+	return tokens;
+}
+
+/** Whether a statement's code raises: RAISE EXCEPTION outside its own comments and strings. */
+function raises(body: string): boolean {
+	return tokenize(body).some((token) => token.code && RAISE.test(token.text));
+}
+
+/** The statements of the SQL: they end at a semicolon in code, never at one inside a quoted span. */
+function statementsOf(sql: string): Token[][] {
+	let statement: Token[] = [];
+	const statements: Token[][] = [];
+	for (const token of tokenize(sql)) {
+		if (!token.code) {
+			statement.push(token);
+			continue;
+		}
+		const parts = token.text.split(";");
+		for (const [position, part] of parts.entries()) {
+			statement.push({ code: true, text: part });
+			if (position < parts.length - 1) {
+				statements.push(statement);
+				statement = [];
+			}
+		}
+	}
+	statements.push(statement);
+	return statements;
+}
+
+/** Whether the SQL holds a DO statement whose dollar-quoted body raises. */
+function assertsDisposition(sql: string): boolean {
+	return statementsOf(sql).some((pieces) => {
+		const meaningful = pieces.filter((piece) => !piece.code || piece.text.trim() !== "");
+		const [head, body] = meaningful;
+		if (head?.code !== true || body?.code !== false) {
+			return false;
+		}
+		const quote = DOLLAR_QUOTE.exec(body.text)?.[0];
+		return (
+			/^\s*DO\s*$/iu.test(head.text) &&
+			quote !== undefined &&
+			raises(body.text.slice(quote.length, body.text.length - quote.length))
+		);
+	});
 }
 
 /** Reads every seed of a directory, and refuses a seed that names no expected disposition. */

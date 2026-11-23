@@ -27,6 +27,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.AnnotatedElementUtils;
@@ -131,12 +132,16 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
                 .containsExactly(ComposedListener.class.getName() + " <- " + Typed.class.getName());
     }
 
-    /** The listener and event pairs that a concrete test on the idempotent listener harness covers. */
+    /** The listener and event pairs that a test on the idempotent listener harness covers, which JUnit runs. */
     private static Set<String> harnessTests(JavaClasses scope) {
         Set<String> tested = new TreeSet<>();
         for (var test : scope) {
-            if (inProduction(test) || test.isInterface() || test.getModifiers().contains(JavaModifier.ABSTRACT))
-                continue;
+            // JUnit runs the harness only in a concrete, visible and enabled test class.
+            if (inProduction(test)
+                    || test.isInterface()
+                    || test.getModifiers().contains(JavaModifier.ABSTRACT)
+                    || test.getModifiers().contains(JavaModifier.PRIVATE)
+                    || test.isAnnotatedWith(Disabled.class)) continue;
             for (Type contract : test.reflect().getGenericInterfaces()) {
                 if (contract instanceof ParameterizedType harness
                         && harness.getRawType() == IdempotentListenerIntegrationTest.class)
@@ -238,8 +243,24 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
     private abstract static class AbstractHarness
             implements IdempotentListenerIntegrationTest<TwoHandlersOfOneEvent, Typed> {}
 
-    @SuppressWarnings("unused") // Read by ArchUnit only.
-    private static final class ConcreteHarness implements IdempotentListenerIntegrationTest<ComposedListener, Typed> {
+    @Disabled("A fixture: a disabled test enrols no listener")
+    static final class DisabledHarness implements IdempotentListenerIntegrationTest<StoredTextListener, String> {
+        @Override
+        public Events<String> newEvents() {
+            return new Events<>("a", "b");
+        }
+
+        @Override
+        public void deliver(String event) {}
+
+        @Override
+        public Object stateAfter(Events<String> events) {
+            return 0;
+        }
+    }
+
+    /** A fixture that JUnit discovers and runs: a listener that keeps no state passes the harness. */
+    static final class ConcreteHarness implements IdempotentListenerIntegrationTest<ComposedListener, Typed> {
         @Override
         public Events<Typed> newEvents() {
             return new Events<>(new Typed(1L, ""), new Typed(2L, ""));

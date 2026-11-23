@@ -5,9 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaCodeUnitAccess;
 import com.tngtech.archunit.core.domain.JavaField;
 import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityManager;
@@ -38,8 +42,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
  * A module reads only its own tables, and another module's through that module's interface (ADR 0138). The test reads
- * every SQL string in the production source, whichever API runs it: a query annotation, its count query, a
- * {@code JdbcTemplate} call or an entity manager. The tables of a module are the tables of its entities, its join
+ * every SQL string in the production source, whichever API runs it, and the compiled value of each query
+ * annotation, its count query included. The tables of a module are the tables of its entities, its join
  * tables, and the tables without an entity that {@link #NATIVE_TABLES} assigns. An edge that touches a mentoring
  * module has no exception. Main's earlier reads are listed one by one in {@code legacy-native-table-reads.txt}.
  */
@@ -82,10 +86,11 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                         SOURCES.relativize(source).toString().replace('/', '.').replace(".java", "");
                 var module = modules.getModuleByType(type);
                 if (module.isEmpty()) continue;
+                var inSource = SourceSql.statements(SourceSql.withoutQueryAnnotations(Files.readString(source)));
                 reads.addAll(reads(
                         module.get().getIdentifier().toString(),
                         type,
-                        sites(SourceSql.statements(Files.readString(source)), compiled.getOrDefault(type, List.of())),
+                        sites(inSource, compiled.getOrDefault(type, List.of())),
                         owners));
             }
         }
@@ -102,12 +107,9 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                 Map.of("relationship", "relationship", "conversation_entry", "conversation", "result", "practices");
         String source = """
                 class Fixture {
-                    @Query(value = "SELECT * FROM result r", countQuery = "SELECT count(*) FROM \\"public\\".\\"relationship\\" x",
-                           nativeQuery = true)
-                    List<Long> page();
-                    @Query(value = "SELECT * FROM " + "conversation_entry", nativeQuery = true)
-                    List<Long> joined();
-                    void jdbc() { jdbc.update("DELETE FROM /* rows of a person */ conversation_entry WHERE id = ?", 1); }
+                    @Query(value = "SELECT * FROM relationship WHERE id IN (SELECT 1)", nativeQuery = true)
+                    List<Long> annotated();
+                    void jdbc() { jdbc.update("DELETE FROM /* rows of a person */ " + "conversation_entry WHERE id = ?", 1); }
                     String block = \"""
                             SELECT 1 FROM result r, relationship x -- a comment
                             JOIN conversation_entry e ON true
@@ -115,26 +117,30 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                     // Prose that names a table from relationship is no SQL.
                 }
                 """;
-        assertThat(counted(reads("practices", "Fixture", SourceSql.statements(source), owners)))
+        assertThat(counted(reads(
+                        "practices",
+                        "Fixture",
+                        SourceSql.statements(SourceSql.withoutQueryAnnotations(source)),
+                        owners)))
+                .as("the annotation is read from the compiled class, not from the source")
                 .containsExactly(
-                        "practices Fixture reads conversation_entry of conversation x3",
-                        "practices Fixture reads relationship of relationship !mentoring x2");
-        var constants = classesWithTests.get(ConstantQueries.class);
-        assertThat(counted(reads("practices", "ConstantQueries", annotationSql(constants), owners)))
-                .containsExactly("practices ConstantQueries reads relationship of relationship !mentoring x1");
+                        "practices Fixture reads conversation_entry of conversation x2",
+                        "practices Fixture reads relationship of relationship !mentoring x1");
+        var compiled = annotationSql(classesWithTests.get(ConstantQueries.class));
+        assertThat(counted(reads("practices", "ConstantQueries", compiled, owners)))
+                .as("constant-assembled SQL with a comment, a quoted count query, and two annotations with one text")
+                .containsExactly(
+                        "practices ConstantQueries reads conversation_entry of conversation x2",
+                        "practices ConstantQueries reads relationship of relationship !mentoring x2");
     }
 
     @Test
-    void shouldCountAnAnnotationOnceAndEveryOtherSiteOnItsOwn() {
-        String annotation = "SELECT * FROM conversation_entry WHERE id = 1";
-        String assembled = "SELECT * FROM conversation_entry WHERE id = 2";
-        String jdbc = "DELETE FROM conversation_entry";
+    void shouldCountEachCompiledAnnotationAndEachOtherSiteOnItsOwn() {
+        String sql = "SELECT * FROM conversation_entry WHERE id = 1";
         var owners = Map.of("conversation_entry", "conversation");
-        assertThat(counted(reads(
-                        "practices", "T", sites(List.of(annotation, jdbc), List.of(annotation, assembled)), owners)))
+        assertThat(counted(reads("practices", "T", sites(List.of(sql), List.of(sql, sql)), owners)))
+                .as("a JDBC literal and two annotations with the same text are three sites")
                 .containsExactly("practices T reads conversation_entry of conversation x3");
-        assertThat(counted(reads("practices", "T", sites(List.of(annotation), List.of(annotation)), owners)))
-                .containsExactly("practices T reads conversation_entry of conversation x1");
     }
 
     @Test
@@ -146,11 +152,30 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                         .getFailureReport()
                         .getDetails())
                 .anySatisfy(detail -> assertThat(detail).contains("RunsJdbcSql"))
-                .noneSatisfy(detail -> assertThat(detail).contains("QueriesThroughARepository"));
+                .anySatisfy(detail -> assertThat(detail).contains("RunsNamedSql"))
+                .anySatisfy(detail -> assertThat(detail).contains("RunsClientSql"))
+                .anySatisfy(detail -> assertThat(detail).contains("RunsTypedNativeQuery"))
+                .anySatisfy(detail -> assertThat(detail).contains("RefersToNativeQuery"))
+                .noneSatisfy(detail -> assertThat(detail).contains("QueriesThroughARepository"))
+                .noneSatisfy(detail -> assertThat(detail).contains("ConstantQueries"));
         checkedSqlOnly(DescribedPredicate.describe(
                         "mentoring classes", type -> MentoringModules.holds(type.getPackageName())))
                 .check(classes);
     }
+
+    /** A call of, or a method reference to, an entity manager's native query, whichever overload. */
+    private static final ArchCondition<JavaClass> CREATE_NATIVE_QUERY =
+            new ArchCondition<>("create a native query of an entity manager") {
+                @Override
+                public void check(JavaClass type, ConditionEvents events) {
+                    for (JavaCodeUnitAccess<?> access : type.getCodeUnitAccessesFromSelf()) {
+                        if (access.getTargetOwner().isAssignableTo(EntityManager.class)
+                                && access.getName().equals("createNativeQuery"))
+                            // noClasses() inverts the condition: each access that meets it is a violation.
+                            events.add(SimpleConditionEvent.satisfied(type, access.getDescription()));
+                    }
+                }
+            };
 
     /**
      * A mentoring module runs SQL only in query annotations, whose values this test reads whole. SQL that a
@@ -168,26 +193,15 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                 .orShould()
                 .dependOnClassesThat()
                 .areAssignableTo(JdbcClient.class)
-                .orShould()
-                .callMethodWhere(DescribedPredicate.describe(
-                        "create a native query",
-                        call -> call.getTargetOwner().isAssignableTo(EntityManager.class)
-                                && call.getName().equals("createNativeQuery")))
+                .orShould(CREATE_NATIVE_QUERY)
                 .because("a query annotation is SQL that the table ownership test can read whole")
                 .allowEmptyShould(true);
     }
 
-    /**
-     * The SQL sites of one class: its source statements and its compiled query annotations, with an annotation that the
-     * source also shows counted once.
-     */
+    /** The SQL sites of one class: the source statements outside query annotations, and each compiled annotation. */
     private static List<String> sites(List<String> inSource, List<String> compiled) {
         var sites = new ArrayList<>(inSource);
-        for (String annotation : compiled) {
-            String query = SourceSql.normalized(annotation);
-            sites.remove(query);
-            sites.add(query);
-        }
+        compiled.stream().map(SourceSql::normalized).forEach(sites::add);
         return sites;
     }
 
@@ -230,6 +244,18 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
     private interface ConstantQueries extends Repository<Object, Long> {
         @Query(value = "SELECT * FROM /* rows */ " + TABLE, nativeQuery = true)
         List<Long> rows();
+
+        @Query(
+                value = "SELECT * FROM result r",
+                countQuery = "SELECT count(*) FROM \"public\".\"" + TABLE + "\" x",
+                nativeQuery = true)
+        List<Long> page();
+
+        @Query(value = "SELECT * FROM conversation_entry", nativeQuery = true)
+        List<Long> entries();
+
+        @Query(value = "SELECT * FROM conversation_entry", nativeQuery = true)
+        List<Long> sameEntries();
     }
 
     @SuppressWarnings("unused") // Read by ArchUnit only.
@@ -251,6 +277,13 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
     private static final class RunsTypedNativeQuery {
         Object one(EntityManager entities) {
             return entities.createNativeQuery("SELECT 1", Long.class).getSingleResult();
+        }
+    }
+
+    @SuppressWarnings("unused") // Read by ArchUnit only.
+    private static final class RefersToNativeQuery {
+        Function<String, jakarta.persistence.Query> query(EntityManager entities) {
+            return entities::createNativeQuery;
         }
     }
 
