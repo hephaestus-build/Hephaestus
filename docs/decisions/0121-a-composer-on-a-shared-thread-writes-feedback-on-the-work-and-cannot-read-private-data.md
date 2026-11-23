@@ -86,9 +86,9 @@ Option 4.
     - In it, a fixed renderer writes every copy on the work from the eligible set.
     - The same guardrails and send checks apply.
     - ADR 0149 (proposed in #4868) decision 5 decides how graded work and a delivery experiment exclude each other.
-11. **The practice-page copy.** The composer writes it for results in the eligible set for the work. The conversation agent writes it for private-only results. Until a copy exists, the page renders the admitted results from rows.
-    - The composer's copy has one reader, the author. The author also reads the work, and the copy uses only shared inputs.
-    - So it fits one output route for each turn ([ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 8).
+11. **The practice-page copy.** For results in the eligible set, the practice-page copy is a server projection of the composed copy on the work. It is not a second route of the work-place turn ([ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 8).
+    - The conversation agent writes the practice-page copy for private-only results.
+    - Until a copy exists, the page renders the admitted results from rows.
 12. **No model-based disclosure check.** The composer has no private input, so isolation tests prove the boundary. They assert workspace, place and audience together, with row-level fixtures. They run on the packaged server as a release gate.
 13. **Cutover.** Outside the rollout, main's `REVIEW_COMPOSE` stays the producer until the cutover, with its own lease check.
 14. **Our work is a private page.** It shows the person's relationship with Hephaestus, organized around goals: the goals, the check-ins and where help stepped back.

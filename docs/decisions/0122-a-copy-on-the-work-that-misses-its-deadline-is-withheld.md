@@ -54,10 +54,10 @@ Option 4.
 1. **The seal starts the clock.** The seal inserts the feedback row for the work in state `PENDING`, with `deadline_at` 2 hours after the seal.
 2. **A staged copy must meet its create predicate.** The composer's commit stages the copy only if the database time is before `deadline_at`. The item must be open, the head must be the reviewed version, and the generation must be current.
 3. **Earlier withholding.** A merge or a close withholds every open proposal of the item as `ITEM_CLOSED`. A newer version or a newer eligible seal ends it as `REPLACED`.
-4. **The sweep withholds a late copy.** It settles each unstarted Automatic proposal past `deadline_at` as `WITHHELD` with `DEADLINE_PASSED`.
+4. **The sweep withholds a late copy.** At `deadline_at`, it settles every unstaged `PENDING` proposal as `WITHHELD` with `DEADLINE_PASSED`, in both modes. It also settles each Automatic `READY` proposal whose write did not start.
    - This also happens while the executor is stopped. Its actions end `CANCELLED`.
-   - The first-write transaction of [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) checks the predicate again, so a queued send cannot post late.
-5. **Approve first keeps its own clock.** Staging must happen before `deadline_at`. After that, main's approval expiry of one day applies to the approved text ([ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md)).
+   - For an Automatic `READY` copy, the first-write transaction of [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) checks the predicate again. A queued send cannot post late.
+5. **Approve first keeps its own clock after staging.** Staging must happen before `deadline_at`. A staged Approve-first copy then expires after main's approval expiry of one day ([ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md)).
 6. **No template and no late post.** Hephaestus posts no template comment, no "review failed" comment and no automatic late copy. The fixed renderer for graded work ([ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) decision 10) is a workspace mode, not a fallback.
 7. **The review stays Complete.** `DEADLINE_PASSED` is a delivery reason on the destination. Nothing is reported as missing evidence.
 8. **The withholding is always recorded. A message about it is optional.**
@@ -68,6 +68,7 @@ Option 4.
    - `ITEM_CLOSED`, `REPLACED` and a withholding by feedback mode or destination never produce a message.
    - The message is unprompted contact. The contact policy of ADR 0139 (proposed in #4865) can block it, for example after a pause.
    - Without a message, the start policy starts no turn. The sweep ends the inbox event with its fixed disposition.
+   - The deadline of the `DELIVERY_WITHHELD` event is 24 hours after its insert. Its fixed disposition sends no message, because the item card already shows the withheld copy.
    - The message can carry the card controls of decision 9.
    - A copy that a silent draw withholds is the one exception. ADR 0149 (proposed in #4868) decision 7 decides its disposition, `STUDY_SILENCE`.
 9. **Two direct controls on the item card.** Both need no conversation turn and use the preview and confirmation of ADR 0121.

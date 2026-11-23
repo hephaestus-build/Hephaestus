@@ -50,14 +50,18 @@ Option 4.
    - A Slack delete of the person's message redacts the entry and stops its turn.
 3. **The route is fixed when a turn is claimed.** Each turn has one route ([ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 8).
    - A message pins the route of its surface: the app or the Slack direct message.
-   - A requested result follows the route where the person asked.
+   - A requested result follows the route where the person asked. A task kind can limit its result to the app ([ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 16).
    - For other background input, the contact policy chooses the app or Slack at the claim.
    - The contact policy is the server rule that decides whether and where Hephaestus may reach a person now. ADR 0139 (proposed in #4865) decides it.
+   - A Slack direct message that Hephaestus starts is an interruption. ADR 0139 (proposed in #4865) owns its rules.
    - Input that only the app may show waits for an app turn.
 4. **A Slack turn reads the entries that Slack may show.**
    - It never uses, mentions or paraphrases an app-only entry.
-   - A server-rendered line can count the omitted app replies: "2 replies in the app since your last message here".
-5. **The Slack detail level.** The person chooses **Full** or **Notice**. Every Slack render uses the current level.
+   - No Slack render holds a count, a timing or a presence hint derived from app-only entries. A fixed "Open in app" link is the only pointer.
+5. **The Slack detail level.** The person chooses **Full** or **Notice**.
+   - Every Slack render, card update, notice and action response is rebuilt at send. It uses the current level. It reads only sources that all readers of the route may read, or that a current Full grant covers.
+   - A change of the level bumps the Slack level epoch. The epoch fences queued Slack effects and runs that read under Full. The server checks it before the model call, the commit and the send.
+   - Slack messages that were already posted stay.
    - Full carries the message summary and the card blocks.
    - Notice carries a fixed notice line and an Open button.
    - The default is Notice. Full needs the export notice first. "Keep my context out of Slack" selects Notice.
@@ -67,13 +71,13 @@ Option 4.
    - It never reads an app-only entry, a summary, a kept-in-mind item, a private check outcome or another workspace's record.
    - At Notice, a Slack turn reads no personal record beyond language and answer length.
 6. **Cards go to Slack one way, by revision.**
-   - An update renders the card's current revision at send time. It goes only to posts with a lower posted revision.
+   - An update goes only to posts with a lower posted revision. Decision 5 rebuilds its blocks at send.
    - Each post has at most one pending update. A card update notifies nobody.
    - Only the 3 newest posts of a card within 14 days update. Older posts stay frozen with their "as of" time.
    - A card action in Slack, such as Mark card done, writes the record in PostgreSQL.
 7. **Slack delivery keys** follow [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) decision 1.
    - An answer or a message keys on the direct message and the source keys that it covers, at most 10.
-   - So a Slack turn claims at most 10 source keys. The rest stays pending for the next turn.
+   - So a Slack turn takes at most 10 source keys, at the claim and by steering. The rest stays pending for the next turn.
    - The Slack message metadata carries that set. Readback and restore read it.
    - A card update keys on the post and its update generation.
 8. **Recovery.** A scan of the active direct messages runs at startup and every hour.
@@ -82,14 +86,18 @@ Option 4.
 9. **A mention in a Slack channel opens a channel thread.** A channel thread is a shared thread of the workspace. Its key is the Slack team, the channel and the thread `ts`.
    - The composer of [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) runs its turns.
    - Each mention is one inbox item. One turn takes the mentions of one person only.
-   - The turn reads the Slack thread, public repository data and catalog entries marked channel-readable. Nothing else.
-   - It never reads practice-page copies, conversation feedback, private check outcomes, cards or a person's standing.
+   - The channel reader set is every member of the channel, guests, Slack Connect people and the export reader included.
+   - The turn reads the Slack thread, public repository data and the channel-readable catalog entries that every reader may read. Nothing else.
+   - The channel-readable mark only restricts an entry that every reader may already read. It authorizes no reader.
+   - When the server cannot prove that coverage, the answer uses public repository data only.
+   - The server checks the reader set at read and again at send.
+   - The turn never reads practice-page copies, conversation feedback, private check outcomes, cards or a person's standing.
    - Its one tool posts one complete answer in the mention's thread, through the outbox.
    - Each answer has **Continue privately**. It opens a message thread in the clicker's own conversation, with a link to the channel thread. Nothing moves back to the channel.
 10. **Who may ask in a channel.** A linked, active member whose AI choice allows a model. Others get one ephemeral reply. The workspace's model budget pays.
 11. **Channel threads have no memory and post nothing first.** A channel thread is erased 30 days after its last turn, or with its channel or connection.
 12. **Admin controls, each with its reverse.** A workspace admin turns channel answers on or off, for the workspace and for each channel. Each catalog entry is channel-readable only when an admin marks it. The default is off.
-13. **One Slack team for each workspace.** Slack guests and Slack Connect people are never answered. Organization-wide installation is a later decision.
+13. **One Slack team for each workspace.** Slack guests and Slack Connect people are never answered, but they count as channel readers (decision 9). Organization-wide installation is a later decision.
 
 ### What this changes in other ADRs
 
@@ -102,11 +110,12 @@ Option 4.
 - Good: no entry that the person typed in the app reaches a place that the employer can export.
 - Good: a team asks about the work in its channel, and private data stays out of it.
 - Good: a Slack post is never duplicated after Slack retries, a recovery scan or a restore.
-- Bad: a person who reads only Slack misses app-only entries. The count line says that they exist.
+- Bad: a person who reads only Slack misses app-only entries. Slack shows only a fixed "Open in app" link.
 - Bad: at Notice, Slack shows less, and the person must open the app for content.
-- Bad: at Full, the person's goals, noted records and help settings can shape text that a Slack export holds. The export notice says so first.
+- Bad: at Full, the person's goals, noted records and help settings can shape text that a Slack export holds. The export notice says so first. A later change to Notice does not remove posted messages.
 - Bad: old card posts in Slack stay frozen and can show an old state, with their "as of" time.
 - Bad: a channel answer cannot use private repository content. The asker must continue privately.
+- Bad: in a channel with a guest or a Slack Connect person, answers use public repository data only.
 
 ## Confirmation
 
@@ -116,7 +125,7 @@ Not enforced yet. The implementation adds these tests:
 - `AppCheckInNotInSlackTurnTest` and `AppSummaryNotInSlackTurnTest` fail when app-only context reaches a Slack turn.
 - `RestoreBatchedSlackAnswerTest` fails when a restore gives a second answer to a covered message.
 - `SlackClaimCoverageBoundTest` fails when a Slack turn claims more than 10 source keys.
-- `SlackGrantReadsTest` fails when a Slack turn reads a personal record at Notice, or one outside the closed list at Full.
+- `SlackGrantReadsTest` fails when a Slack turn reads more than language and answer length at Notice. It also fails on a record outside the closed list at Full.
 - `SlackCardUpdateKeyTest` fails when a card update and a delete of one post share a key.
 - `InterleavedMentionsTest` fails when one channel turn holds another person's pending mention.
 - `ChannelMessageDeletedBeforeClaimTest` fails when a mention that Slack deleted before its claim gets an answer.

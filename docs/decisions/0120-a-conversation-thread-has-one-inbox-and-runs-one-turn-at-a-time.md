@@ -68,9 +68,12 @@ Option 6.
    - A workspace or a person can make the policy quieter, never louder.
 5. **One live turn for each thread.** A turn is an `agent_run` of kind `TURN` on the subject `conversation:<thread id>`. Threads run in parallel.
 6. **One kind of turn.** A turn that holds a message is interactive. Else it is background. The band follows that class.
+   - The class decides priority, not streaming. Only an answer to the owner in the app streams.
+   - A Slack answer and a channel answer post as one complete message.
 7. **The claim freezes a batch.** A message is due 500 ms after the last message of its burst. It is due at most 2 s after the first.
    - One turn takes every waiting compatible item, up to the bound of its route.
-   - A Slack turn takes at most 10 source keys ([ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md) decision 7). The rest stays pending for the next turn.
+   - A Slack turn takes at most 10 source keys ([ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md) decision 7). This bound applies to the claim and to steering.
+   - A message past the bound stays pending for the next turn.
 8. **A turn has exactly one output route.** It selects only items whose reader set and pinned route fit that route. Other items wait for their own turn. [ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md) decides the Slack routes.
 9. **Collisions follow one table.**
 
@@ -78,7 +81,7 @@ Option 6.
    | --- | --- |
    | A message arrives while a background turn is queued or leased. | Admission ends that turn `CANCELLED` and inserts an interactive turn, in one transaction. The LLM proxy cancels the call in flight. No attempt is charged. |
    | A compatible message arrives during an interactive turn. | It steers. After each tool batch, the runner takes it before the next model call. |
-   | A message arrives while the final answer is written, or it does not fit the turn's route or actor. | It waits and starts the next turn. |
+   | A message arrives while the final answer is written, or it does not fit the turn's route, actor or bound. | It waits and starts the next turn. |
    | An inbox event arrives during any turn. | It waits. Inbox events never interrupt and never join a turn in progress. |
    | The person selects Stop. | The run gets a short settlement deadline. The holder can store only complete text. It stores no effect and no task. |
    | The holder does not settle in time. | The reaper ends the run and stores no entry. Injected messages end `STOPPED` and stay visible as questions. |
@@ -87,13 +90,13 @@ Option 6.
    Nothing cancels a turn on a shared thread, because no person's private message reaches it.
 10. **The commit rule.** One transaction writes the turn's entries, consumes its items, and inserts its effects and tasks. Else the turn writes nothing.
     - The commit holds the current lease epoch and an unexpired lease, as main's `lockCurrent` checks.
-    - Commit, Stop settlement and reap are exact complements under the same locks. Exactly one of them wins.
+    - Commit, Stop settlement, reap and the deadline sweep are exact complements under the same locks. Exactly one of them wins, also for a claimed item.
     - No tool call writes outside this transaction. A tool that proposes a write returns a staged draft.
 11. **One lock order.** Every transaction takes source locks, then the sandbox row, then threads by key, then runs, then effects. No lock is held across a long-poll wait or a provider call.
 12. **Custody.** Every ended attempt releases its claims on items that stay pending.
     - A message is never a required item. Required items come only from obligations that the system tracks with a deadline.
     - A required item ends only with its disposition, in the same transaction.
-    - Each required kind has a deadline. At that deadline, the sweep applies a fixed disposition with no model call.
+    - Each producer of a required item sets its deadline and its fixed disposition. At that deadline, the sweep applies the disposition with no model call, also to a claimed item.
     - A required item ends `CONSUMED`, `SUPERSEDED` or `DROPPED`. It never ends `EXPIRED` or `STOPPED`.
     - A newer item of the same source ends it `SUPERSEDED`. The newer item takes over the disposition, with the earlier deadline.
     - An authorization loss or a deleted source ends it `DROPPED`. The disposition records that reason and writes no message.
@@ -104,19 +107,19 @@ Option 6.
 15. **A background turn commits one message or none.** `NO_REPLY` is a normal end for optional items. A background turn has at most 12 model calls and 3 minutes.
 16. **A task is background work with its own run.**
     - Only a turn's commit inserts a task (decision 10). Nothing else inserts one.
-    - A task runs as its own `agent_run` in a sandbox. It reads only what every reader of its requesting route may read.
+    - A task runs as its own `agent_run` in a sandbox. It reads only what every reader of its result route may read.
     - A task is `QUEUED`, then `RUNNING`. It ends exactly once: `DONE`, `FAILED` or `CANCELLED`.
-    - `DONE` or `FAILED` inserts one inbox event into the requesting thread, in the same transaction.
+    - `DONE` or `FAILED` inserts one inbox event into the requesting thread, in the same transaction. `CANCELLED` inserts no inbox event.
     - The person can cancel a queued or running task from its task status card.
     - Cancel and end are complements under the same lock. Exactly one wins.
     - Times on a task status card, such as "about 2 minutes", are targets, not promises.
 
-    The two task kinds in 1.0:
+    The two task kinds in 1.0. Each kind names the routes that may request it and the routes that may show its result.
 
-    | Task | What it reads | What it returns |
-    | --- | --- | --- |
-    | Private check | The person's own draft and the practices that it checks | A private check outcome with one reader, the person. No observation and no copy on the work. |
-    | Research task | Read-only archives of items that the person can read | A report for the person. It takes no action. |
+    | Task | What it reads | What it returns | Routes |
+    | --- | --- | --- | --- |
+    | Private check | The person's own draft and the practices that it checks | A private check outcome with one reader, the person. No observation and no copy on the work. | The app or Slack may request it. The result shows only in the app. A Slack request gets a fixed acknowledgement with an app link. |
+    | Research task | Read-only archives of items that the person can read | A report for the person. It takes no action. | The app or Slack may request it. The result follows the requesting route. |
 
 ### What this changes in other ADRs
 
@@ -149,7 +152,7 @@ Not enforced yet. The implementation adds these tests:
 - `GateHoldsOnlyItsItemsTest` fails when a gate on one item delays another item's due time.
 - `RequiredItemEndsWithDispositionTest` fails when a required item ends `EXPIRED` or `STOPPED`, or ends without its disposition.
 - `TaskCancelAgainstEndTest` fails when a cancel and a task end both win, or an end commits without its inbox event.
-- `TaskReadsRouteScopeTest` fails when a task reads a source that a reader of its requesting route may not read.
+- `TaskReadsRouteScopeTest` fails when a task reads a source that a reader of its result route may not read.
 
 ## Revisit trigger
 

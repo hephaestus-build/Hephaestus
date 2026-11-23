@@ -55,7 +55,7 @@ Option 3.
    - An ordering key moves past an uncertain write only after proof of presence or proof of non-acceptance.
    - An explicit reconciliation by the person or an operator also moves it. A refusal, such as a rate-limit answer, proves non-acceptance.
    - A timeout, an incomplete page or a missing marker proves nothing.
-3. **Readback depends on the transport.**
+3. **Readback depends on the operation and the transport.** Each operation names its readback proof. A create proves its marker, an edit its expected revision and a delete an authorized absence. A result that readback cannot prove ends in reconciliation, never in a retry.
 
    | Transport | Marker readback | An uncertain write |
    | --- | --- | --- |

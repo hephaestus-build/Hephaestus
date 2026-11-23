@@ -59,14 +59,15 @@ Option 4.
 
    Inbox items, one turn at a time, cancel, steering and Stop are [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decisions 2 to 9. This ADR does not restate them.
 
-7. **An answer is a streamed response.** It streams token by token while the turn runs. A sentence that holds a citation token streams with a placeholder until its check passes ([ADR 0150](0150-an-outcome-renders-from-rows-as-an-item-card-or-a-citation-token.md)).
+7. **An answer to the owner in the app is a streamed response.** It streams token by token while the turn runs. No verdict text streams before admission ([ADR 0150](0150-an-outcome-renders-from-rows-as-an-item-card-or-a-citation-token.md) decision 4).
+   - A Slack answer posts as one complete message ([ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 6).
 8. **A message from Hephaestus is written complete.** A background turn commits it whole, at its commit, and never streams it. It has a message summary, a reason line, and at most three more lines.
 9. **An entry that Hephaestus wrote never changes.** A wrong message gets a correction below it, with a reference to the wrong message.
    - An entry that the person wrote in Slack follows Slack ([ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md)). A Slack edit stores a new revision and keeps the earlier one. A Slack delete redacts the text.
    - An entry that the person wrote in the app never changes.
 10. **The client groups consecutive messages from Hephaestus,** such as "3 reviews". The stored messages do not change.
 11. **The view never jumps.** If the person has scrolled up or types, a "New" marker shows where unread messages start.
-12. **A requested result appears where it was requested,** on the route of the thread that asked ([ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 8).
+12. **A requested result appears where it was requested,** on the route of the thread that asked ([ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 8). A task kind can limit its result to the app (ADR 0120 decision 16).
 13. **The ledger is the memory of the conversation.** Each turn rebuilds its request from rows. The ledger, the personal records of ADR 0132 and the summaries are the only memory.
 14. **Commit, then show.** The server commits a row before a client shows it. No row stores a partial answer. The stream travels in `NOTIFY` frames below 8000 bytes.
 15. **Compaction** covers only the committed prefix. A pending message is never in a summary. An entry of inbox events keeps its provenance mark.
