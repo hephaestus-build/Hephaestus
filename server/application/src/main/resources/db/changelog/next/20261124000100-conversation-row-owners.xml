@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795478460000-1" author="hephaestus">
+        <comment>Store the parent conversation's account on each entry and turn. Backfill in primary key order before requiring the account on every row.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE public.conversation_entry ADD COLUMN account_id bigint;
+ALTER TABLE public.conversation_turn ADD COLUMN account_id bigint;
+
+DO $$
+DECLARE
+    child regclass;
+    last_id uuid;
+    missing_owner boolean;
+BEGIN
+    FOREACH child IN ARRAY ARRAY['public.conversation_entry'::regclass, 'public.conversation_turn'::regclass]
+    LOOP
+        last_id := NULL;
+        LOOP
+            EXECUTE format($batch$
+                WITH batch AS (
+                    SELECT r.id, c.account_id
+                    FROM %1$s r JOIN public.conversation c
+                        ON c.id = r.conversation_id AND c.workspace_id = r.workspace_id
+                    WHERE r.account_id IS NULL AND ($1 IS NULL OR r.id > $1)
+                    ORDER BY r.id LIMIT 10000
+                ), changed AS (
+                    UPDATE %1$s r SET account_id = batch.account_id FROM batch
+                    WHERE r.id = batch.id RETURNING r.id
+                )
+                SELECT id FROM changed ORDER BY id DESC LIMIT 1
+                $batch$, child) INTO last_id USING last_id;
+            EXIT WHEN last_id IS NULL;
+        END LOOP;
+        EXECUTE format('SELECT EXISTS (SELECT FROM %s WHERE account_id IS NULL)', child) INTO missing_owner;
+        IF missing_owner THEN
+            RAISE EXCEPTION 'The migration could not find an account for each row of %.', child;
+        END IF;
+        EXECUTE format('ALTER TABLE %s ALTER COLUMN account_id SET NOT NULL', child);
+    END LOOP;
+END
+$$;
+
+CREATE INDEX idx_conversation_entry_account ON public.conversation_entry(account_id);
+CREATE INDEX idx_conversation_turn_account ON public.conversation_turn(account_id);
+
+CREATE FUNCTION public.check_conversation_row_owner() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+DECLARE
+    parent_account bigint;
+BEGIN
+    SELECT account_id INTO parent_account FROM public.conversation
+    WHERE id = NEW.conversation_id AND workspace_id = NEW.workspace_id;
+    IF parent_account IS NULL THEN
+        RAISE EXCEPTION 'Conversation not found' USING ERRCODE = '23503';
+    END IF;
+    IF TG_OP = 'UPDATE' THEN
+        IF (NEW.conversation_id, NEW.workspace_id) = (OLD.conversation_id, OLD.workspace_id)
+           AND NEW.account_id IS DISTINCT FROM parent_account THEN
+            RAISE EXCEPTION 'Conversation not found' USING ERRCODE = '23503';
+        END IF;
+    END IF;
+    NEW.account_id := parent_account;
+    RETURN NEW;
+END
+$$;
+
+CREATE TRIGGER conversation_entry_owner_on_insert BEFORE INSERT ON public.conversation_entry
+    FOR EACH ROW EXECUTE FUNCTION public.check_conversation_row_owner();
+CREATE TRIGGER conversation_turn_owner_on_insert BEFORE INSERT ON public.conversation_turn
+    FOR EACH ROW EXECUTE FUNCTION public.check_conversation_row_owner();
+CREATE TRIGGER conversation_entry_owner_on_move BEFORE UPDATE OF conversation_id, workspace_id, account_id
+    ON public.conversation_entry FOR EACH ROW EXECUTE FUNCTION public.check_conversation_row_owner();
+CREATE TRIGGER conversation_turn_owner_on_move BEFORE UPDATE OF conversation_id, workspace_id, account_id
+    ON public.conversation_turn FOR EACH ROW EXECUTE FUNCTION public.check_conversation_row_owner();
+
+CREATE FUNCTION public.move_conversation_row_owners() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+    UPDATE public.conversation_entry SET account_id = NEW.account_id
+    WHERE conversation_id = NEW.id AND workspace_id = NEW.workspace_id;
+    UPDATE public.conversation_turn SET account_id = NEW.account_id
+    WHERE conversation_id = NEW.id AND workspace_id = NEW.workspace_id;
+    RETURN NULL;
+END
+$$;
+CREATE TRIGGER conversation_moves_row_owners AFTER UPDATE OF account_id ON public.conversation
+    FOR EACH ROW WHEN (OLD.account_id IS DISTINCT FROM NEW.account_id)
+    EXECUTE FUNCTION public.move_conversation_row_owners();
+        ]]></sql>
+        <rollback>
+            <sql>
+DROP TRIGGER conversation_moves_row_owners ON public.conversation;
+DROP TRIGGER conversation_entry_owner_on_move ON public.conversation_entry;
+DROP TRIGGER conversation_turn_owner_on_move ON public.conversation_turn;
+DROP TRIGGER conversation_entry_owner_on_insert ON public.conversation_entry;
+DROP TRIGGER conversation_turn_owner_on_insert ON public.conversation_turn;
+DROP FUNCTION public.move_conversation_row_owners();
+DROP FUNCTION public.check_conversation_row_owner();
+ALTER TABLE public.conversation_entry DROP COLUMN account_id;
+ALTER TABLE public.conversation_turn DROP COLUMN account_id;
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

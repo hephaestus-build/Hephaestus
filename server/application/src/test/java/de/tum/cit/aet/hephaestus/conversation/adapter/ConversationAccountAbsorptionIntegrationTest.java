@@ -167,6 +167,15 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                         null,
                         null));
         Conversation elsewhere = conversations.findOrCreateMain(onlyAbsorbed.getId(), unclaimed);
+        var elsewhereTurn = turns.submit(
+                onlyAbsorbed.getId(),
+                elsewhere.getId(),
+                new ConversationTurnService.Question(
+                        ConversationTurn.Surface.APP,
+                        "Move with the conversation",
+                        UUID.randomUUID().toString(),
+                        null,
+                        null));
 
         contributor.absorb(claimed, unclaimed);
         contributor.finish(claimed, unclaimed);
@@ -202,6 +211,24 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                         UUID.class,
                         asked.turn().getId()))
                 .isEqualTo(kept.getId());
+        assertThat(jdbc.queryForObject(
+                        "SELECT account_id FROM conversation_turn WHERE id = ?",
+                        Long.class,
+                        asked.turn().getId()))
+                .isEqualTo(claimed);
+        assertThat(jdbc.queryForList(
+                        "SELECT DISTINCT account_id FROM conversation_entry WHERE conversation_id IN (?, ?, ?)",
+                        Long.class,
+                        kept.getId(),
+                        thread.getId(),
+                        elsewhere.getId()))
+                .containsExactly(claimed);
+        assertThat(jdbc.queryForObject(
+                        "SELECT account_id FROM conversation_turn WHERE id = ?",
+                        Long.class,
+                        elsewhereTurn.turn().getId()))
+                .as("a turn without a clash follows its parent account")
+                .isEqualTo(claimed);
         assertThat(jdbc.queryForObject(
                         "SELECT r.concurrency_key FROM conversation_turn t JOIN agent_run r ON r.id = t.run_id WHERE t.id = ?",
                         String.class,

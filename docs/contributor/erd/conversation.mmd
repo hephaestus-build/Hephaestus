@@ -40,6 +40,7 @@ erDiagram
         UUID turn_id FK
         VARCHAR(16) vote
         BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT account_id "NOT NULL"
     }
 
     ConversationTurn {
@@ -62,6 +63,7 @@ erDiagram
         TIMESTAMPTZ queued_at "NOT NULL"
         INTEGER tools_loads "NOT NULL"
         UUID run_id FK,UK "NOT NULL"
+        BIGINT account_id "NOT NULL"
     }
 
     Account["Account · Core"]

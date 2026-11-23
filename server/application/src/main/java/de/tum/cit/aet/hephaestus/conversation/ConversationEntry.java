@@ -49,6 +49,7 @@ import tools.jackson.databind.JsonNode;
                     columnNames = {"id", "workspace_id"}),
         },
         indexes = {
+            @Index(name = "idx_conversation_entry_account", columnList = "account_id"),
             @Index(name = "idx_conversation_entry_turn", columnList = "turn_id"),
             @Index(name = "idx_conversation_entry_workspace_surface", columnList = "workspace_id, surface"),
         })
@@ -104,6 +105,9 @@ public class ConversationEntry implements Persistable<UUID> {
 
     @Column(name = "workspace_id", nullable = false)
     private Long workspaceId;
+
+    @Column(name = "account_id", nullable = false, updatable = false)
+    private long accountId;
 
     @Column(name = "conversation_id", nullable = false)
     private UUID conversationId;
@@ -170,6 +174,7 @@ public class ConversationEntry implements Persistable<UUID> {
     ConversationEntry(Conversation conversation, long seq, ConversationEntryDraft draft, Instant now) {
         this.id = TimeOrderedIds.next();
         this.workspaceId = conversation.getWorkspaceId();
+        this.accountId = conversation.getAccountId();
         this.conversationId = conversation.getId();
         this.seq = seq;
         this.turnId = draft.turnId();

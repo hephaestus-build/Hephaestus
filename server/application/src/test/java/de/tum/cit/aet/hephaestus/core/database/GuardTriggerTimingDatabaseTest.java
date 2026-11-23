@@ -34,6 +34,10 @@ class GuardTriggerTimingDatabaseTest {
             "llm_model.llm_model_own_call_pool", "gives the model its own call pool by setting NEW.call_pool_id",
             "workspace_llm_model.workspace_llm_model_own_call_pool",
                     "gives the model its own call pool by setting NEW.call_pool_id",
+            "conversation_entry.conversation_entry_owner_on_move",
+                    "sets the stored account from the parent when the entry moves",
+            "conversation_turn.conversation_turn_owner_on_move",
+                    "sets the stored account from the parent when the turn moves",
             "auth_event.trg_auth_event_block_mutation", "no foreign key references the table",
             "config_audit_event.trg_config_audit_event_block_mutation", "no foreign key references the table");
 
