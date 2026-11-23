@@ -6,11 +6,11 @@
 
 **Supersedes:** [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md)
 
-**Amends:** [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rules 19 and 21. [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16. [ADR 0047](0047-the-practice-profile-has-one-reader.md), its View as user exception. [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), its smallest count.
+**Amends:** [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rules 4, 19 and 21. [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16. [ADR 0047](0047-the-practice-profile-has-one-reader.md), its View as user exception. [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), its smallest count.
 
 **Builds on:** ADR 0124 (proposed in #4866)
 
-**Relates to:** ADR 0141 and ADR 0149 (proposed in #4868), research datasets and delivery experiments. ADR 0139 (proposed in #4865), the decision record
+**Relates to:** ADR 0141 and ADR 0149 (proposed in #4868), research datasets and delivery experiments. ADR 0139 (proposed in #4865), delivery decisions
 
 ## Context
 
@@ -72,19 +72,21 @@ Option 4.
 10. **The operator statement.** Settings show **Who runs this server**, with the operator's name and a link to its statement.
     - The first screen promises only what Hephaestus enforces: "Acme's admins and managers cannot see this in Hephaestus."
     - "Your employer sees nothing about you" appears only where the operator declares that it is not the employer.
-11. **Nothing ranks people by practice feedback or by any assessment of a person.**
-    - Activity stays as [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) decides it. Its sorted people table counts provider work that members already see.
+11. **Nothing ranks people.**
+    - Activity shows people unordered, by name, with no positions, or as team aggregates.
+    - A ranking of people is a differencing surface, and it contradicts feedback on work. So [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rule 4 changes.
     - Activity never shows data from conversations, personal records or practice feedback.
 12. **The copy on the work names its developer,** as the work itself does. The admin guide tells the operator that this copy is public to the employer.
 13. **Research is the one carve-out.** Sequences for each person exist only in research datasets of people who allowed research use.
     - Who may receive a dataset, and when it needs the floor of 20: ADR 0141 (proposed in #4868) decision 2.
     - Who runs a delivery experiment and who holds its stop switch: ADR 0149 (proposed in #4868).
-    - No staff role and no product surface sees the sequences or the decision record.
+    - No staff role and no product surface sees the sequences or the delivery decisions.
 
 ### What this changes in other ADRs
 
 - [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md) is superseded. Decision 6 keeps its mechanism and raises the threshold. Its open question gets the answer of decision 3: admins see work items only inside an approval or a correction.
-- [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rule 19 changes. Admins no longer read the observations of the review and delivery pages, except inside an approval or a correction. Rule 21 goes, because no read-only user view exists. Rule 4 stays: Activity sorts people by counts of provider work, which assess no practice.
+- [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rule 4 changes. People no longer sort by a count and show no positions. The code change is a separate issue.
+- ADR 0093 rule 19 changes. Admins no longer read the observations of the review and delivery pages, except inside an approval or a correction. Rule 21 goes, because no read-only user view exists. Rule 4 stays: Activity sorts people by counts of provider work, which assess no practice.
 - [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16 keeps "Nobody acts as another account". The read-only user views go.
 - ADR 0131 (proposed in #4862) supersedes ADR 0082. Its decision 5 keeps the conversation for its owner only, without View as user.
 - [ADR 0047](0047-the-practice-profile-has-one-reader.md) loses its View as user exception. The Practice profile has one reader with no exception.
