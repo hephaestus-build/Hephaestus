@@ -514,34 +514,54 @@ Both rest on each person's consent, and no staff role or product surface sees th
 ### Delivery experiments
 
 A delivery experiment compares a delivery rule by random assignment, for each person and each decision.
-A person enrolls in one experiment, apart from **Allow research use of my data**, and can withdraw at once.
+A person enrolls in each experiment on purpose, apart from **Allow research use of my data**.
+**Enroll** and **Withdraw** have the same size and style, and **Withdraw** ends the person's draws at once.
+Hephaestus never asks a person to enroll.
 
-| Drawn | Never drawn |
-| --- | --- |
-| The copy on the work | A Critical problem. It always goes out. |
-| An unprompted message | Answers, requested results and private checks |
-|  | Agreed check-ins and stepping-back messages |
+| Drawn | Recorded, never drawn | No record |
+| --- | --- | --- |
+| The copy on the work | Agreed check-ins | Answers to the person's messages |
+| An unprompted message | Requested results, such as a private check | |
+| | Stepping-back messages | |
 
-- A silent draw refuses the whole copy with its own reason. A copy never goes out without its required Critical and Major problems.
-- A research steward holds a stop switch for each practice. The steward sees no outcomes and is never the experiment's author.
+A decision is drawn only when all of these conditions hold. Otherwise the policy alone decides, and the record says why.
+
+- The workspace runs an experiment that holds every practice of the decision, and no practice is stopped.
+- The person is enrolled and not paused, and the practice is not On request for them.
+- No problem of the decision is Critical. A Critical problem always speaks.
+- The policy would speak. A silence of the policy is never drawn.
+
+A silent draw on a copy on the work settles the copy as withheld, with the reason `STUDY_SILENCE`, in the transaction of the seal.
+No composer turn starts, so the composer never has to drop a required problem.
+No `DELIVERY_WITHHELD` item is written, so the person's thread hears nothing of it.
+A silent draw on an unprompted message drops its inbox item with the same reason.
+
+- A research steward holds the stop switch of each practice in an experiment. The account that created the experiment cannot be its steward.
+- The steward sees counts of disagreements and correction requests, each over at least 5 people. The steward never sees a person or an outcome.
+- **Stop** ends new draws and holds on that practice at once. **Resume** reverses it.
 - Run fingerprints and period locks keep the treatment of a period fixed.
+- Ending an experiment destroys its pseudonym key for good. The admin confirms with the experiment's name, and a restore never brings the key back.
 - An experiment workspace reviews provider records only. Slack stays a conversation channel there.
 - An experiment workspace does not use the deterministic renderer for graded work, because it would change the treatment.
 
 ### The decision record
 
-Each unprompted decision writes one decision record, at the moment of the decision.
-The record holds the practice, the item and its version, the outcome and severity, and whether the policy would speak.
-It also holds the draw, the action that followed, and the exposure: a card open, a notification open or a seen message.
-Code writes it, and no model reads it.
+Code writes one decision record at each decision to contact a person who did not ask, before any model runs.
+The record holds the practices, the item and its version, the outcome and severity, the availability and whether the policy would speak.
+It also holds the probability, the draw, and the action: spoke, silent by the study, or silent by the policy.
+The first card open, notification open and seen message each fill their column once.
+The table belongs to the workspace and is append-only. Account erasure deletes the person's rows.
+
 Each change of a help mode is recorded with its time.
 
 ### Held results
 
 A silent draw holds its result.
-A held result stays on the item card, so the person can still find it.
-It stays out of the weekly reflection, the Monday focus and goal follow-ups.
-It is released when the next piece of work of the same practice and author is reviewed, or when the person asks.
+The item card and the practice page show a held result as any result, with no label. The draw decides only whether Hephaestus speaks first.
+Turns that a schedule starts skip it: the weekly reflection, the Monday focus and goal follow-ups.
+
+The hold ends at the seal of the next piece of work of the same person and practice, or when the person asks.
+A withdrawal, a stop of the practice, or the end of the experiment also ends it.
 
 ### The pilot and its operator
 
