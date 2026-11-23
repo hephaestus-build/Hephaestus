@@ -54,7 +54,7 @@ Option 5.
 6. **The recheck runs at three boundaries.**
    - Context read: before a run reads a source.
    - Model request: before the LLM proxy sends a call.
-   - Any send to someone other than the owner. Sends are a provider write through the adapter's `beginWrite`, a Slack reply, an email and a push.
+   - Any send outside the app: a provider write through the adapter's `beginWrite`, a Slack reply, an email and a push.
 7. **The owner's own stream is not a recheck boundary.** A session end closes it. A narrowing changes the scope epoch, and the epoch fences the stream:
    - Every stream frame carries the scope epoch that it was produced under.
    - The sandbox gateway drops an answer delta whose scope epoch is older than the current one. So the output of a model call that started before the narrowing reaches no client.

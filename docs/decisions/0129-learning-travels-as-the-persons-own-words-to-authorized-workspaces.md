@@ -47,7 +47,7 @@ Option 5.
    - Text that the person wrote.
    - Model text that the person confirmed word for word on a screen. The hash of the shown text proves it.
    - Closed fields: practice identity, outcome, period and counts.
-3. **What never travels.** Model prose, noted records and evidence never travel. "Keep and take along" is the person's act that turns a noted record into a person-authored record.
+3. **What never travels.** Model prose, noted records and evidence never travel. The person's **Keep** turns a noted record into a person-authored record (ADR 0132, proposed in #4865). Then **Take along** can transfer it.
 4. **The copy keeps its source in its own columns.** No transfer table exists.
 5. **The source decides.** The export policy of each team workspace is Open (the default), Personal only or Closed.
    - Closed blocks even the person's confirmed words.
@@ -82,7 +82,7 @@ Option 5.
 - Good: no model text and no evidence crosses a workspace boundary. The proof is a hash, not a classifier.
 - Good: a team with client work sets Closed once, and nothing leaves.
 - Bad: a lesson that the model wrote and the person did not confirm does not travel. The person must confirm it word for word first.
-- Bad: a noted record never travels by itself. The person must select "Keep and take along".
+- Bad: a noted record never travels by itself. The person must select **Keep**, then **Take along**.
 - Bad: a recall can move a record that the person relies on to review, without the person's act.
 
 ## Confirmation
@@ -93,7 +93,7 @@ Not enforced yet. The implementation adds these tests:
 - An integration test fails when a plain local save creates a copy in the personal space.
 - A route test fails when a record whose text changed after it was shown transfers.
 - A fixture test fails when a record that names a non-member transfers.
-- A fixture test fails when a noted record transfers without "Keep and take along".
+- A fixture test fails when a noted record transfers without **Keep** and **Take along**.
 - Integration tests fail when Undo leaves the copy, or a recall leaves a copy outside `NEEDS_REVIEW`.
 
 ## Revisit trigger

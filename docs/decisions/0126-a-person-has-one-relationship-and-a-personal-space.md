@@ -46,7 +46,7 @@ Option 4.
 4. **The personal space exists from the first need.** The first personal record, transfer or grant creates it, in one idempotent transaction. Sign-up creates nothing.
 5. **Runs in the personal space are on by default.**
    - They follow the same model readiness and the same model budget for each payer as team workspaces.
-   - The payer is the budget that a run spends. The instance pays for personal spaces (ADR 0147, proposed in #4867).
+   - The payer is the budget that a run spends. The instance pays for personal spaces, from the instance-funded cap of [ADR 0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md).
    - An operator can turn them off with one instance switch.
    - Turning runs off never removes storage or access.
 6. **Leaving keeps the learning.**
