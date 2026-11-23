@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0-rc.14
+
+### Patch Changes
+
+- An MCP client's "last used" time in workspace settings now changes only when the client signs in, refreshes its access, or makes a tool call that succeeds. A call that the passkey policy, the client's role, or the tool refuses no longer counts as use, so it no longer keeps an unused client's access alive.
+- Practice reviews and conversations with Hephaestus run on Pi 1.6.0, up from 1.4.0.
+  Reviews and conversations with Hephaestus now find files by name in subfolders: a search for `*.ts` also finds `src/app.ts`.
+  A model call whose connection drops, such as a reset or closed connection, is now retried like other short provider failures.
+  No configuration changes.
+- Hephaestus starts to answer a follow-up question up to two seconds sooner. A conversation's sandbox now waits on the server for its next question, and the server hands the question over as soon as it is queued. Before, the sandbox asked again every two seconds. At most half of `sandbox.gateway.maxConnections` wait at once on each server.
+
 ## 1.0.0-rc.13
 
 ### Minor Changes
@@ -111,6 +122,7 @@
   **API clients:** The `stopReason` filter of the practice review feedback lists (`/practices/reviews/feedback`, `/feedback/locations`, `/feedback/reasons`) no longer accepts `APPROVAL_NO_LONGER_ELIGIBLE`. Filter by `ITEM_NOT_VISIBLE` or `CONSENT_WITHHELD` instead.
 
   **Operators:** Install this change in the stopped window before the 1.0.0 cut. Stop every runtime role before the migration, then start only the upgraded roles. Use the stopped upgrade procedure. Do not run old and new servers together during this change.
+
 - The new `HephaestusMetaspaceNearLimit` alert warns when a server's Metaspace stays above 80 % of its maximum for 10 minutes, so you can act before a slow growth stops the server with `OutOfMemoryError: Metaspace`. The heap and container memory alerts do not see Metaspace. A server that runs out of Metaspace soon after each start fires `HephaestusServerRestarting` instead, and its runbook row now points to this alert. No operator action is needed: a Prometheus that already loads the chart's rule file picks it up.
 - Erasure recovery after a database restore now also erases the old words of Slack messages that their authors edited or deleted in Slack after the recovery point. Before, a restore brought those words back. A deleted message is deleted again. An edited message has no words until the next history read of its channel stores the words that Slack shows then.
 
