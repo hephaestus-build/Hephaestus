@@ -114,8 +114,8 @@ class ConversationLiveHubTest extends BaseUnitTest {
 
         UUID queued = UUID.randomUUID();
         UUID overflowing = UUID.randomUUID();
-        hub.entryChanged(
-                new ConversationLedgerEvents.EntryChanged(WORKSPACE, UUID.randomUUID(), List.of(queued, overflowing)));
+        hub.entryChanged(new ConversationLedgerEvents.EntryChanged(
+                WORKSPACE, UUID.randomUUID(), ACCOUNT, List.of(queued, overflowing)));
         verify(timeline, timeout(WAIT.toMillis()).times(2)).conversation(anyLong(), anyLong());
         emitter.release();
 
@@ -128,8 +128,8 @@ class ConversationLiveHubTest extends BaseUnitTest {
     void shouldSendAnEntryCommittedWhileTheSnapshotIsReadAfterTheSnapshotWhenAStreamOpens() {
         UUID committed = UUID.randomUUID();
         when(timeline.conversation(anyLong(), anyLong())).thenAnswer(call -> {
-            hub.entryChanged(
-                    new ConversationLedgerEvents.EntryChanged(WORKSPACE, UUID.randomUUID(), List.of(committed)));
+            hub.entryChanged(new ConversationLedgerEvents.EntryChanged(
+                    WORKSPACE, UUID.randomUUID(), ACCOUNT, List.of(committed)));
             return new ConversationDTO(null, 0, List.of(), List.of(), null, null);
         });
 
@@ -145,8 +145,8 @@ class ConversationLiveHubTest extends BaseUnitTest {
         await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot"));
 
         member.set(false);
-        hub.entryChanged(
-                new ConversationLedgerEvents.EntryChanged(WORKSPACE, UUID.randomUUID(), List.of(UUID.randomUUID())));
+        hub.entryChanged(new ConversationLedgerEvents.EntryChanged(
+                WORKSPACE, UUID.randomUUID(), ACCOUNT, List.of(UUID.randomUUID())));
         hub.heartbeat();
 
         await().atMost(WAIT).untilTrue(emitter.completed);

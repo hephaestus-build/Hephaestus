@@ -319,6 +319,7 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
                         ConversationLedgerEvents.EntryChanged.class,
                         ConversationLedgerEvents.EntryChanged::conversationId,
                         main.getId()))
+                .allSatisfy(change -> assertThat(change.accountId()).isEqualTo(main.getAccountId()))
                 .extracting(change -> change.entryIds().size())
                 .containsExactlyInAnyOrder(
                         ConversationLedgerEvents.EntryChanged.MAX_IDS,
@@ -327,8 +328,33 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
                         ConversationLedgerEvents.EntryChanged.class,
                         ConversationLedgerEvents.EntryChanged::conversationId,
                         thread.getId()))
+                .allSatisfy(change -> assertThat(change.accountId()).isEqualTo(main.getAccountId()))
                 .extracting(change -> change.entryIds().size())
                 .containsExactly(1);
+    }
+
+    @Test
+    void shouldPublishTheOwnerOfEachConversationWhenOneBatchRedactsTwoAccounts() {
+        long secondOwner = accountId(persistUser("ask-entries-second-owner"));
+        long workspaceId = workspace.getId();
+        Conversation second = conversations.findOrCreateMain(workspaceId, secondOwner);
+        var firstMessage =
+                entries.append(workspaceId, main.getId(), ConversationLedgerFixtures.hephaestus("First account"));
+        var secondMessage =
+                entries.append(workspaceId, second.getId(), ConversationLedgerFixtures.hephaestus("Second account"));
+        events.clear();
+
+        redaction.redact(List.of(firstMessage.getId(), secondMessage.getId()));
+
+        assertThat(events.stream(
+                        ConversationLedgerEvents.EntryChanged.class,
+                        ConversationLedgerEvents.EntryChanged::workspaceId,
+                        workspaceId))
+                .containsExactlyInAnyOrder(
+                        new ConversationLedgerEvents.EntryChanged(
+                                workspaceId, main.getId(), developerAccountId, List.of(firstMessage.getId())),
+                        new ConversationLedgerEvents.EntryChanged(
+                                workspaceId, second.getId(), secondOwner, List.of(secondMessage.getId())));
     }
 
     @Test

@@ -53,18 +53,20 @@ public final class ConversationLedgerEvents {
     public record ContextChanged(long workspaceId) implements LedgerChanged {}
 
     /** Entries of one conversation were appended, or their text, vote or redaction changed. */
-    public record EntryChanged(long workspaceId, UUID conversationId, List<UUID> entryIds) implements LedgerChanged {
+    public record EntryChanged(long workspaceId, UUID conversationId, long accountId, List<UUID> entryIds)
+            implements LedgerChanged {
 
         /** A notification payload stays below PostgreSQL's 8000-byte limit with this many entry ids. */
         static final int MAX_IDS = 100;
 
         /** The events for these entries of one conversation, as many as the notification limit needs. */
-        static List<EntryChanged> of(long workspaceId, UUID conversationId, List<UUID> entryIds) {
+        static List<EntryChanged> of(long workspaceId, UUID conversationId, long accountId, List<UUID> entryIds) {
             List<EntryChanged> changes = new ArrayList<>();
             for (int from = 0; from < entryIds.size(); from += MAX_IDS) {
                 changes.add(new EntryChanged(
                         workspaceId,
                         conversationId,
+                        accountId,
                         List.copyOf(entryIds.subList(from, Math.min(entryIds.size(), from + MAX_IDS)))));
             }
             return changes;
