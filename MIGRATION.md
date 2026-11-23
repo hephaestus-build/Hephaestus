@@ -52,6 +52,137 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
+### v1.0.0-rc.13
+
+#### 🔴 List the disconnects whose provider cleanup was never confirmed
+
+- **When:** before the window
+- **Action:** Only if this instance ever ran 1.0.0-rc.3, rc.4 or rc.5: list the connections that still show "Check … for what Hephaestus left", and have their workspace admins remove what they left at the provider.
+
+Releases 1.0.0-rc.3 to rc.5 showed this warning on a disconnected integration when they could not confirm that the provider removed the app, token or webhook. Since rc.8, **Instance administration → Provider removals** records such a removal instead. The old warning stayed on the connection until it was reconnected. This upgrade removes the warning and clears it from the database.
+
+Before the upgrade, list the connections that still carry it, with read-only `psql` access to the application database:
+
+```sql
+SELECT w.slug, c.kind, c.display_name, c.instance_key, c.updated_at
+FROM connection c JOIN workspace w ON w.id = c.workspace_id
+WHERE c.attention_problem = 'PROVIDER_CLEANUP_UNCONFIRMED';
+```
+
+Send each row to the admins of that workspace, who have access to the provider. They remove what Hephaestus set up there: the Hephaestus app installation in GitHub, the webhook in the GitLab group or its projects, the Hephaestus app in Slack, or the webhook in Outline. Then they revoke the token or key that the workspace gave Hephaestus.
+
+**Operators:** An instance that never ran rc.3, rc.4 or rc.5 has no such rows, and needs no action. From the release before this one, old and new servers can run together during this upgrade. An upgrade from rc.3, rc.4 or rc.5 skips releases, so it stops every role first. To bring the cleared warnings back, restore the backup from before the migration.
+
+#### 🔴 Correct stored values that the server cannot read, if the upgrade stops at them
+
+- **When:** in the window
+- **Action:** If the upgrade stops at a table's stored rows, correct or delete those rows. Then start the upgrade again.
+
+This upgrade adds a check to each column that stores a fixed set of values, such as a status, a kind or a role.
+Writes to a table are checked as soon as the upgrade reaches that table.
+Earlier upgrades corrected each such value that a release stored, so a stop most likely means that a row was changed by hand.
+
+Before it checks the stored rows of a table, the upgrade counts the rows that hold an unknown value.
+If there are any, it stops and names each column with its number of rows.
+The tables before it are complete. The check of a table's stored rows is all or nothing.
+
+List the rows that the stop names. In `psql`, with access to the application database, run:
+
+```sql
+SELECT format('SELECT %L AS check_name, t.* FROM %s t WHERE NOT %s', conname, conrelid::regclass,
+              regexp_replace(pg_get_constraintdef(oid), '^CHECK (.*) NOT VALID$', '\1'))
+FROM pg_constraint
+WHERE contype = 'c' AND conname LIKE 'ck\_%' AND NOT convalidated
+\gexec
+```
+
+Each result names the check and shows the rows that it refuses.
+`SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = '<check_name>'` shows the values that the check accepts.
+Set each row's column to one of them, or delete the row.
+Then start the upgrade again. It continues at the table where it stopped, and can stop at a later table in the same way.
+
+#### 🔴 Correct stored JSON values that the server cannot read, if the upgrade stops at them
+
+- **When:** in the window
+- **Action:** If the upgrade stops at a table's stored JSON values, correct or delete those rows. Then start the upgrade again.
+
+This upgrade adds a check to each JSON column that had none. The check accepts only the JSON type that the server writes there: an object, or an array where the server stores a list.
+Writes to a table are checked as soon as the upgrade reaches that table.
+The server has always written these types, so a stop most likely means that a row was changed by hand.
+
+Before it checks the stored rows of a table, the upgrade counts the rows that hold another JSON type.
+If there are any, it stops and names each column with its number of rows.
+The tables before it are complete. The check of a table's stored rows is all or nothing.
+
+List the rows that the stop names. In `psql`, with access to the application database, run:
+
+```sql
+SELECT format('SELECT %L AS check_name, t.* FROM %s t WHERE NOT %s', conname, conrelid::regclass,
+              regexp_replace(pg_get_constraintdef(oid), '^CHECK (.*) NOT VALID$', '\1'))
+FROM pg_constraint
+WHERE contype = 'c' AND conname LIKE 'ck\_%' AND NOT convalidated
+\gexec
+```
+
+Each result names the check and shows the rows that it refuses.
+Set each row's column to a JSON value of the type that the check names. Where the column allows it, set it to NULL instead.
+
+A trigger refuses most changes to the JSON columns of `agent_action`, so delete such an `agent_action` row instead.
+Do not delete a `connection` row: that also deletes the rows that belong to the connection. Correct its `config` instead.
+Then start the upgrade again. It continues at the table where it stopped, and can stop at a later table in the same way.
+
+#### 🔴 Make room for the bundled PostgreSQL's derived memory
+
+- **When:** before the window
+- **Action:** Render the target chart with your values, and check that one node has room for the PostgreSQL memory request that it shows.
+
+The chart now derives the memory of the bundled PostgreSQL from its memory settings and `max_connections` ([PostgreSQL memory](https://docs.hephaestus.build/admin/sizing#postgresql-memory)). The request and the limit are equal. `small` and `dev` now request 4020 MiB, and `cluster` requests 9251 MiB for its 300 connections.
+
+The upgrade replaces the PostgreSQL Pod. If no node has room for the new request, the new Pod stays `Pending` and the database is down until you free room. Before the window, compare the rendered request with the allocatable memory of your nodes, less the requests already on them. A lower `max_connections` or a smaller pool lowers the request.
+
+If the render fails with `postgresql.resources.limits.memory (…) needs at least …`, remove `postgresql.resources.requests.memory` and `postgresql.resources.limits.memory` from your values, or set them to `auto`. A larger explicit limit is accepted. A request above the limit is refused.
+
+If your values set `sandbox.budget` for a node that also runs workloads outside the release, such as the cluster's DNS and Gateway, state their requests in `sandbox.budget.outsideRelease` ([Node reserve](https://docs.hephaestus.build/admin/sizing#node-reserve)).
+
+The chart starts PostgreSQL with `jit = off`, which takes precedence over a `jit` setting made with `ALTER SYSTEM`. If you made one, you can remove it after the upgrade as the database superuser: `ALTER SYSTEM RESET jit; SELECT pg_reload_conf();`.
+
+#### 🔴 State the Kubernetes API endpoint for backups without sandboxes
+
+- **When:** before the window
+- **Action:** With `postgresql.backup.enabled` and without `sandbox.enabled`, set `networkPolicy.kubernetesApi.cidr` and `networkPolicy.kubernetesApi.port`.
+
+The server now reads the two backup CronJobs for `HephaestusBackupStale` ([Backup metrics](https://docs.hephaestus.build/admin/metrics#backup-metrics)). It reaches the Kubernetes API only at `networkPolicy.kubernetesApi`, so the chart refuses to render with backups on and no endpoint. Installations with sandboxes already state it.
+
+Set the address and port that the network plugin sees after address translation, as [Write the values file](https://docs.hephaestus.build/admin/kubernetes#write-the-values-file) describes.
+
+If your own Prometheus loads the rule group `hephaestus-kubernetes` and its kube-state-metrics exports CronJob labels only for this rule, you can drop `cronjobs=[…]` from `--metric-labels-allowlist`.
+
+#### 🔴 Move the web app's values to the server
+
+- **When:** before the window
+- **Action:** In your own values, move `webapp.securityContact` and `webapp.legalOverrides` under `server`, and remove the other `webapp` and `images.webapp` keys.
+
+The server serves the web app ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)).
+The release has no `webapp` image, no `webapp` Deployment and no `webapp` values.
+The chart refuses a values file that still names one of them, so change your values before the upgrade.
+
+The route sends every path to the server, and the server sends the security headers, HSTS included.
+The public addresses stay the same: the sign-in callbacks, `/api/**`, `/.well-known/hephaestus.json`, `/.well-known/security.txt` and the legal pages.
+
+The route moves every path to the server when the upgrade starts, but a server of the previous release does not serve the web app.
+Until the rollout replaces the last old server, some page loads fail; the API is not affected.
+
+| Where | Before | After |
+| --- | --- | --- |
+| Chart value | `webapp.securityContact` | `server.securityContact` |
+| Chart value | `webapp.legalOverrides` | `server.legalOverrides` |
+| Chart value | `webapp.replicas` | Removed: the server replicas serve the web app |
+| Chart value | `webapp.resources` | Removed: size `server.resources` |
+| Chart value | `images.webapp` | Removed |
+| Image | `ghcr.io/hephaestus-build/webapp` | Removed: the server image serves the web app |
+
+The web app's old configuration script, `env-config.<hash>.js`, is gone. A monitor that read the running version from it can read `version` from `/.well-known/hephaestus.json`.
+
 ### v1.0.0-rc.12
 
 #### 🔴 Stop every role before the provider-ref columns are dropped
@@ -86,8 +217,6 @@ Feedback that cannot reach the work now records whether the work was removed, is
 **Operators:** Apply this change in the stopped window before the 1.0.0 cut. Use [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades). Stop every runtime role before the migration and start only the upgraded roles afterward. An old server cannot read the new stop reasons, so do not run old and new servers together during this change.
 
 To roll back, stop every role and restore the verified backup from before the migration before starting the previous version.
-
-### v1.0.0-rc.11
 
 #### 🔴 Stop every role before practices stay current on their own sources
 
