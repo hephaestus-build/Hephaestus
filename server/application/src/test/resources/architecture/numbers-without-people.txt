@@ -1,0 +1,442 @@
+# Numbers that a route returns and that count no people: work items, reviews, results, tokens, money,
+# positions, limits, identifiers and the reader's own figures, and shapes whose content the walk cannot see.
+# ResponsePeopleCountTest reads this list. A count of people is a ShownCount or carries @PeopleCount instead.
+# A comment after # says what an unclear entry is.
+
+ActivityActionDTO.count
+ActivityBreakdownDTO.approvals
+ActivityBreakdownDTO.changeRequests
+ActivityBreakdownDTO.codeComments
+ActivityBreakdownDTO.commentReviews
+ActivityBreakdownDTO.discussionComments
+ActivityBreakdownDTO.issuesClosed
+ActivityBreakdownDTO.pullRequestsClosed
+ActivityCountsDTO.activeWeeks
+ActivityCountsDTO.comments
+ActivityCountsDTO.contributions
+ActivityCountsDTO.issuesOpened
+ActivityCountsDTO.pullRequestsMerged
+ActivityCountsDTO.pullRequestsOpened
+ActivityCountsDTO.pullRequestsReviewed
+ActivityCoverageDTO.completeRepositories
+ActivityCoverageDTO.totalRepositories
+ActivityHighlightsDTO.firstContributors  # identifiers of the first contributors, each named on the page
+ActivityRepositoryDTO.id  # identifier
+ActivitySparklineWeekDTO.contributions
+ActivityTeamDTO.id  # identifier
+ActivityTeamDTO.parentId  # identifier
+AdminAccountViewDTO.id  # identifier
+AdminWorkspaceLlmUsageDTO.events
+AdminWorkspaceLlmUsageDTO.instanceMonthlyBudgetUsd
+AdminWorkspaceLlmUsageDTO.instanceTotalCostUsd
+AdminWorkspaceLlmUsageDTO.ownProviderMonthlyBudgetUsd
+AdminWorkspaceLlmUsageDTO.ownProviderTotalCostUsd
+AdminWorkspaceViewDTO.id  # identifier
+AdmissionResponseDTO.attempt
+AdmissionResponseDTO.contractVersion
+AdmittedProblemDTO.position
+AdmittedResultDTO.evidence  # opaque: the evidence of one observation
+AdmittedResultDTO.example  # opaque: an example from one observation
+AgentRunController.context()  # opaque: a sandbox run reads its own context
+Assignment.epoch
+AuthAuditAccountDTO.id  # identifier
+AuthEventViewDTO.accountId  # identifier
+AuthEventViewDTO.actingAccountId  # identifier
+AuthEventViewDTO.id  # identifier
+AuthEventViewDTO.viewedAccountId  # identifier
+AuthEventViewDTO.viewedActorId  # identifier
+AuthEventViewDTO.workspaceId  # identifier
+AvailableLlmModelDTO.id  # identifier
+AvailableLlmModelDTO.per1mCacheReadUsd
+AvailableLlmModelDTO.per1mCacheWriteUsd
+AvailableLlmModelDTO.per1mInputUsd
+AvailableLlmModelDTO.per1mOutputUsd
+BackfillSummaryDTO.percent
+Basis.practiceVersionId  # identifier
+Capabilities.protocolVersion
+Capabilities.resultByteBudget
+Capabilities.workspaceByteBudget
+CatalogGroupDTO.position
+CatalogPracticeDTO.position
+ConfigAuditActorRefDTO.id  # identifier
+ConfigAuditEntryViewDTO.actingAccountId  # identifier
+ConfigAuditEntryViewDTO.actorAccountId  # identifier
+ConfigAuditEntryViewDTO.id  # identifier
+ConfigAuditEntryViewDTO.workspaceId  # identifier
+ConnectionDetailDTO.config  # opaque: a connection configuration
+ConnectionDetailDTO.id  # identifier
+ConnectionSummaryDTO.id  # identifier
+ConnectionSyncStatusDTO.connectionId  # identifier
+ConnectionSyncStatusDTO.syncIntervalSeconds
+ConsumerDeadLetterDTO.id  # identifier
+ConsumerDeadLetterDTO.replayedBy  # the account that replayed it, an identifier
+ContributorDTO.contributions  # contributions of one named project contributor
+ContributorDTO.id  # identifier
+ConversationDTO.latestSeq
+ConversationEntryDTO.seq
+ConversationLinkDTO.itemId  # identifier
+ConversationThreadSummaryDTO.latestSeq
+ConversationThreadSummaryDTO.replyCount  # replies
+ConversationTurnDTO.attempt
+ConversationTurnDTO.maxAttempts
+Coverage.maxEntries
+Coverage.omittedWithoutCopyAuthority  # feedback entries
+CoverageOmission.count
+CurrentUserViewDTO.accessTokenExpiresAt
+CurrentUserViewDTO.id  # identifier
+DeliveredWorkFeedbackCopyDTO.endLine
+DeliveredWorkFeedbackCopyDTO.startLine
+DutyBasis.event
+EvidenceCitationDTO.endLine
+EvidenceCitationDTO.startLine
+ExportCreatedDTO.id  # identifier
+ExportStatusDTO.id  # identifier
+ExternalDeliveryDTO.workspaceId  # identifier
+FeedbackAccountRefDTO.id  # identifier
+FeedbackBasisDTO.ordinal
+FeedbackCopyCountsDTO.failed
+FeedbackCopyCountsDTO.planned
+FeedbackCopyCountsDTO.posted
+FeedbackCopyCountsDTO.retracted
+FeedbackCopyCountsDTO.withheld
+FeedbackCopyCountsDTO.writeStarted
+FeedbackCopyDTO.endLine
+FeedbackCopyDTO.position
+FeedbackCopyDTO.startLine
+FeedbackItemDTO.issueNumber
+FeedbackModeRollupDTO.approveFirst  # practices
+FeedbackModeRollupDTO.automatic  # practices
+FeedbackModeRollupDTO.off  # practices
+FeedbackSendDTO.attemptCount
+FeedbackSourceCountDTO.count
+FeedbackWorkspaceRefDTO.id  # identifier
+FrozenModelDTO.options  # opaque: model options
+FxRateInfoDTO.ratePerUsd
+GitHubInstallationRequestDTO.installationId  # identifier
+GitLabConnectionWebhookController.ingest()  # opaque: a webhook acknowledgement
+GitLabGroupDTO.id  # identifier
+GitLabPreflightResponseDTO.userId  # identifier
+GitLabProjectDTO.id  # identifier
+HostCoverage.failedReads
+HostCoverage.reads
+HostCoverage.truncatedReads
+IdentityDTO.providerId  # identifier
+IdentityViewDTO.id  # identifier
+InitiateConnectionResponseDTO.connectionId  # identifier
+InstanceSettingsDTO.silentModeChangedByAccountId  # identifier
+IntegrationCatalogEntryDTO.connectionId  # identifier
+IntroducedBasis.head
+JudgedScanReportItemDTO.problemCount
+LabelInfoDTO.id  # identifier
+LlmCallPoolDTO.baselineFirstTokenMs
+LlmCallPoolDTO.conversationReserve
+LlmCallPoolDTO.effectiveLimit
+LlmCallPoolDTO.id  # identifier
+LlmCallPoolDTO.inputTokensPerMinute
+LlmCallPoolDTO.learnedLimit
+LlmCallPoolDTO.maxConcurrentCalls
+LlmCallPoolDTO.outputTokensPerMinute
+LlmCallPoolDTO.requestsPerMinute
+LlmCallPoolDTO.tokensPerCall
+LlmCallPoolDTO.tokensPerMinute
+LlmCallPoolMembershipDTO.id  # identifier
+LlmCallPoolMembershipDTO.maxConcurrentCalls
+LlmCallPoolModelDTO.callPoolId  # identifier
+LlmCallPoolModelDTO.modelId  # identifier
+LlmConnectionDTO.id  # identifier
+LlmModelDTO.callPoolId  # identifier
+LlmModelDTO.connectionId  # identifier
+LlmModelDTO.contextWindow
+LlmModelDTO.grantedWorkspaceIds  # identifier
+LlmModelDTO.id  # identifier
+LlmModelDTO.maxOutputTokens
+LlmModelLimitsDTO.contextWindow
+LlmModelLimitsDTO.maxOutputTokens
+LlmModelPriceDTO.id  # identifier
+LlmModelPriceDTO.per1mCacheReadUsd
+LlmModelPriceDTO.per1mCacheWriteUsd
+LlmModelPriceDTO.per1mInputUsd
+LlmModelPriceDTO.per1mOutputUsd
+LlmProbeResultDTO.statusCode
+LlmProxyController.proxy()  # opaque: a model response passed through to a sandbox
+LlmUnmeasuredUsageDTO.calls
+LlmUnmeasuredUsageDTO.upperBoundUsd
+LlmUsageByDayDTO.events
+LlmUsageByDayDTO.instanceTotalCostUsd
+LlmUsageByDayDTO.ownProviderTotalCostUsd
+LlmUsageByDayDTO.unpricedEventCount
+LlmUsageByJobTypeDTO.cacheReadTokens
+LlmUsageByJobTypeDTO.cacheWriteTokens
+LlmUsageByJobTypeDTO.events
+LlmUsageByJobTypeDTO.inputTokens
+LlmUsageByJobTypeDTO.instanceTotalCostUsd
+LlmUsageByJobTypeDTO.outputTokens
+LlmUsageByJobTypeDTO.ownProviderTotalCostUsd
+LlmUsageByJobTypeDTO.totalCalls
+LlmUsageByJobTypeDTO.unpricedEventCount
+McpAuthorizationController.token()  # opaque: an OAuth token response
+McpMetadataController.authorizationServer()  # opaque: OAuth metadata
+McpMetadataController.protectedResource()  # opaque: OAuth metadata
+Model.maxOutputTokens
+Model.temperature
+ModelAssignmentDTO.instanceModelId  # identifier
+ModelAssignmentDTO.timeoutSeconds
+ModelAssignmentDTO.workspaceModelId  # identifier
+MyProductFeedbackDTO.issueNumber
+OAuthCallbackController.callbackGet()  # opaque: an OAuth redirect
+OAuthCallbackController.callbackPost()  # opaque: an OAuth redirect
+OffsetPageDTO.page
+OffsetPageDTO.size
+OffsetPageDTO.totalPages
+OutcomeVectorDTO.couldNotDetermine
+OutcomeVectorDTO.doesNotApply
+OutcomeVectorDTO.met
+OutcomeVectorDTO.notMet
+OutlineCollectionDTO.documentCount
+OutlineCollectionDTO.documentsUpstream
+OutlineCollectionDTO.exportsSkippedForBudget
+OutlineWebhookController.ingest()  # opaque: a webhook acknowledgement
+OwnerDTO.connectionId  # identifier
+PersonDataProviderDTO.id  # identifier
+PersonDataRequestDTO.completed
+PersonDataRequestDTO.counts  # rows of one named person, for their data request
+PersonDataScopeDTO.accountId  # identifier
+PracticeDTO.position
+PracticeDraftDTO.versionNumber
+PracticeFileProblemDTO.column
+PracticeFileProblemDTO.line
+PracticeGroupDTO.position
+PracticeGroupStandingDTO.feedbackSpanDays
+PracticePageFeedbackDTO.cleanNeeded
+PracticeReviewScopeSummaryDTO.estimateWindowDays
+PracticeReviewScopeSummaryDTO.monitoredRepositories
+PracticeReviewScopeSummaryDTO.recentReviewVolume
+PracticeReviewScopeSummaryDTO.selectedRepositories
+PracticeReviewSettingsDTO.cooldownMinutes
+PracticeReviewSettingsDTO.cooldownMinutesOverride
+PracticeScriptRunDTO.attempt
+PracticeScriptRunDTO.durationMs
+PracticeScriptRunDTO.reviewModelCalls
+PracticeVersionDTO.number
+PracticesAcrossWorkspaceTilesDTO.yourPractices  # the reader's own practices
+PrivateProgressDTO.conversationDeliveries  # the reader's own deliveries
+PrivateProgressDTO.practicePageDeliveries  # the reader's own deliveries
+ProblemChangesDTO.absent
+ProblemChangesDTO.added
+ProblemChangesDTO.unchanged
+ProblemChangesDTO.updated
+ProblemDTO.position
+ProductFeedbackCleanupActionDTO.issueNumber
+ProductFeedbackDestinationsDTO.dailyDraftLimit
+ProductFeedbackDestinationsDTO.draftsToday
+ProductFeedbackDestinationsDTO.llmModelId  # identifier
+ProductFeedbackDestinationsDTO.needsAction
+ProductFeedbackDestinationsDTO.noticeVersion
+ProductFeedbackDestinationsDTO.reportsToMove
+ProductFeedbackMoveDTO.moved
+ProfileChangeDTO.cleanNeeded
+ProfileReviewDTO.positionOnWork
+ProfileReviewDTO.totalOnWork
+ProjectedCitationDTO.endLine
+ProjectedCitationDTO.index
+ProjectedCitationDTO.startLine
+ProvenanceKeysController.keys()  # opaque: public signing keys
+PublicActivityCountsDTO.activeWeeks
+PublicActivityCountsDTO.contributions
+PublicActivityCountsDTO.issuesOpened
+PublicActivityCountsDTO.pullRequestsMerged
+PublicActivityCountsDTO.pullRequestsOpened
+PublicActivityCountsDTO.pullRequestsReviewed
+PublicActivityReviewBreakdownDTO.approvals
+PublicActivityReviewBreakdownDTO.changeRequests
+PublicActivityReviewBreakdownDTO.commentReviews
+PublicActivityWorkSummaryDTO.number
+RateLimitSnapshotDTO.limit
+RateLimitSnapshotDTO.remaining
+ReadReceipt.endLine
+ReadReceipt.matches
+ReadReceipt.startLine
+ReasonCountDTO.count
+RemovalGuardDTO.previousFiles
+RemovalGuardDTO.wouldRemove
+RepositoryInfoDTO.id  # identifier
+ResourceCountsDTO.errored
+ResourceCountsDTO.pending
+ResourceCountsDTO.stale
+ResourceCountsDTO.total
+ResultDetailDTO.practiceVersionNumber
+ReusedScanReportItemDTO.problemCount
+ReviewBatchDTO.estimatedItems
+ReviewBatchDTO.failedCount
+ReviewBatchDTO.skippedCount
+ReviewBatchDTO.submittedCount
+ReviewBucketDTO.feedback
+ReviewBucketDTO.results
+ReviewBucketDTO.reviews
+ReviewDTO.activeJobCount
+ReviewDTO.jobCount
+ReviewDetailDTO.activeJobCount
+ReviewDetailDTO.jobCount
+ReviewFeedbackCountsDTO.awaitingApproval
+ReviewFeedbackCountsDTO.delivered
+ReviewFeedbackCountsDTO.failed
+ReviewFeedbackCountsDTO.ready
+ReviewFeedbackCountsDTO.rejected
+ReviewFeedbackCountsDTO.replaced
+ReviewFeedbackCountsDTO.unconfirmed
+ReviewFeedbackCountsDTO.withheld
+ReviewFeedbackDTO.resultCount
+ReviewFeedbackDetailDTO.resultCount
+ReviewItemCountsDTO.listed
+ReviewItemCountsDTO.notReviewed
+ReviewItemCountsDTO.reused
+ReviewItemCountsDTO.reviewed
+ReviewItemCountsDTO.withheld
+ReviewJobDTO.attempt
+ReviewJobDTO.exitCode
+ReviewMethodDTO.epoch
+ReviewOverviewDTO.resultsMarkedIncorrect  # results
+ReviewPracticeCountsDTO.resultsMarkedIncorrect  # results
+ReviewPracticeDTO.number
+ReviewProblemDTO.endLine
+ReviewProblemDTO.startLine
+ReviewProblemDetailDTO.endLine
+ReviewProblemDetailDTO.startLine
+ReviewProgressDTO.practicesEnded
+ReviewProgressDTO.practicesTotal
+ReviewQueueDTO.finishedLastDay
+ReviewQueueDTO.finishedLastHour
+ReviewQueueDTO.finishedPerHourLastDay
+ReviewQueueDTO.heldForBudget
+ReviewQueueDTO.running
+ReviewQueueDTO.waiting
+ReviewResultCountsDTO.couldNotDetermine
+ReviewResultCountsDTO.doesNotApply
+ReviewResultCountsDTO.met
+ReviewResultCountsDTO.notMet
+ReviewResultDTO.problemCount
+ReviewResultDetailDTO.evidenceVersion
+ReviewResultDetailDTO.practiceVersionNumber
+ReviewScheduleDTO.lookbackDays
+ReviewStatusCountsDTO.cancelled
+ReviewStatusCountsDTO.complete
+ReviewStatusCountsDTO.failed
+ReviewStatusCountsDTO.partial
+ReviewStatusCountsDTO.queued
+ReviewStatusCountsDTO.running
+ReviewSummaryDTO.activeJobCount
+ReviewSummaryDTO.jobCount
+ReviewTimeSharesDTO.asked
+ReviewTimeSharesDTO.model
+ReviewTimeSharesDTO.posted
+ReviewTimeSharesDTO.preparation
+ReviewTimeSharesDTO.queue
+ReviewTimeSharesDTO.runUnsplit
+ReviewTimingDTO.feedbackWithheldAsMerged
+ReviewTimingDTO.finishedAfterMerge
+ReviewTimingDTO.finishedAfterMergeStartedByMerge
+ReviewTimingDTO.waitingLong
+ReviewTimingStageDTO.count
+ReviewTimingStageDTO.medianSeconds
+ReviewTimingStageDTO.p90Seconds
+ReviewUsageAttemptDTO.attempt
+ReviewUsageAttemptDTO.cacheReadTokens
+ReviewUsageAttemptDTO.cacheWriteTokens
+ReviewUsageAttemptDTO.calls
+ReviewUsageAttemptDTO.inputTokens
+ReviewUsageAttemptDTO.outputTokens
+ReviewUsageAttemptDTO.reasoningTokens
+ReviewUsageDTO.calls
+ReviewUsageDTO.inputTokens
+ReviewUsageDTO.outputTokens
+RevokeSessionsResultDTO.revoked  # the caller's own sessions
+ScanAvailabilityDTO.expiredProofPairs
+ScanAvailabilityDTO.withheldProofPairs
+ScanCountsDTO.couldNotDetermine
+ScanCountsDTO.doesNotApply
+ScanCountsDTO.files
+ScanCountsDTO.met
+ScanCountsDTO.notMet
+ScanCountsDTO.notReviewed
+ScanCountsDTO.openProblems
+ScanCountsDTO.practiceItemPairs
+ScanCountsDTO.problems
+ScanCountsDTO.reused
+ScanCountsDTO.reviewed
+ScanCountsDTO.withheld
+ScanExcludedFileDTO.sizeBytes
+ScanPracticeRefDTO.number
+ScanPracticeReportDTO.number
+ScanProgressDTO.activeJobs
+ScanProgressDTO.listedPairs
+ScanProgressDTO.queuedJobs
+ScanProgressDTO.terminalPairs
+ScanSummaryDTO.practiceCount
+Session.calls
+SlackUserWorkspacePreferencesDTO.activeMonitoredChannelCount  # channels
+SupportOccurrenceDTO.evidence  # opaque: the evidence of one observation
+SyncJobDTO.id  # identifier
+SyncJobDTO.itemsProcessed
+SyncJobDTO.itemsTotal
+SyncJobDTO.progress  # opaque: progress of a sync job in work items
+SyncJobDTO.triggeredByAccountId  # identifier
+SyncResourceCountDTO.count  # mirrored work items
+SyncResourceStateDTO.backfillPercent
+SyncResourceStateDTO.id  # identifier
+SyncResourceStateDTO.itemCount  # mirrored work items; Slack withholds it
+SyncResourceStateDTO.upstreamCount
+TeamInfoDTO.id  # identifier
+TeamInfoDTO.parentId  # identifier
+TeamInfoDTO.repoPermissionCount  # repositories
+TeamRefDTO.id  # identifier
+TeamSummaryDTO.id  # identifier
+TeamSummaryDTO.parentId  # identifier
+Tool.parameters  # opaque: a tool parameter schema
+TrendSupportDTO.bundleSize
+TrendSupportDTO.calendarSpanDays
+TrendSupportDTO.comparablePractices
+TrendSupportDTO.credibilityThreshold
+TrendSupportDTO.currentOpportunities
+TrendSupportDTO.eligiblePractices
+TrendSupportDTO.opportunities
+TrendSupportDTO.opportunitiesUntilComparable
+TrendSupportDTO.previousOpportunities
+TrendSupportDTO.reviewedWork
+TrendSupportDTO.ropeHalfWidth
+TrendSupportDTO.standingWork
+TrialCitationDTO.endLine
+TrialCitationDTO.startLine
+TrialDTO.practiceVersionNumber
+UserInfoDTO.id  # identifier
+UserTeamsDTO.id  # identifier
+WebhookController.ingest()  # opaque: a webhook acknowledgement
+WeeklyDigestDTO.waiting  # the reader's own items
+WellKnownController.jwks()  # opaque: public signing keys
+WorkItemDTO.id  # identifier
+WorkItemDTO.number
+WorkspaceDTO.id  # identifier
+WorkspaceDTO.installationId  # identifier
+WorkspaceDTO.slackConnectionId  # identifier
+WorkspaceListItemDTO.id  # identifier
+WorkspaceLlmConnectionDTO.id  # identifier
+WorkspaceLlmModelDTO.connectionId  # identifier
+WorkspaceLlmModelDTO.contextWindow
+WorkspaceLlmModelDTO.id  # identifier
+WorkspaceLlmModelDTO.maxOutputTokens
+WorkspaceLlmModelDTO.per1mCacheReadUsd
+WorkspaceLlmModelDTO.per1mCacheWriteUsd
+WorkspaceLlmModelDTO.per1mInputUsd
+WorkspaceLlmModelDTO.per1mOutputUsd
+WorkspaceLlmProbeResultDTO.modelCount
+WorkspaceLlmProbeResultDTO.statusCode
+WorkspaceLlmUsageReportDTO.instanceMonthlyBudgetUsd
+WorkspaceLlmUsageReportDTO.instanceTotalCostUsd
+WorkspaceLlmUsageReportDTO.ownProviderMonthlyBudgetUsd
+WorkspaceLlmUsageReportDTO.ownProviderTotalCostUsd
+WorkspaceLlmUsageReportDTO.unpricedEventCount
+WorkspaceOnboardingLinkDTO.connectionId  # identifier
+WorkspaceOnboardingSettingsDTO.requiredConnectionIds  # identifier
+WorkspaceOnboardingSettingsDTO.revision
+WorkspaceTileDTO.yours  # the reader's own figure
+WorsenedBasis.base
+WorsenedBasis.head

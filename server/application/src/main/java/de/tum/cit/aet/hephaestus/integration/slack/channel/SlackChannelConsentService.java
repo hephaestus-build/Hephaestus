@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEve
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
-import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
@@ -41,7 +40,6 @@ public class SlackChannelConsentService {
 
     private final SlackMonitoredChannelRepository monitoredChannelRepository;
     private final SlackChannelConsentEventRepository consentEventRepository;
-    private final SlackParticipantConsentRepository participantConsentRepository;
     private final SlackIngestService ingestService;
     private final SlackMessageService slackMessageService;
     private final ConnectionService connectionService;
@@ -61,7 +59,6 @@ public class SlackChannelConsentService {
     public SlackChannelConsentService(
             SlackMonitoredChannelRepository monitoredChannelRepository,
             SlackChannelConsentEventRepository consentEventRepository,
-            SlackParticipantConsentRepository participantConsentRepository,
             SlackIngestService ingestService,
             SlackMessageService slackMessageService,
             ConnectionService connectionService,
@@ -72,7 +69,6 @@ public class SlackChannelConsentService {
             SlackWorkspaceResolver workspaceResolver) {
         this.monitoredChannelRepository = monitoredChannelRepository;
         this.consentEventRepository = consentEventRepository;
-        this.participantConsentRepository = participantConsentRepository;
         this.ingestService = ingestService;
         this.slackMessageService = slackMessageService;
         this.connectionService = connectionService;
@@ -83,12 +79,11 @@ public class SlackChannelConsentService {
         this.workspaceResolver = workspaceResolver;
     }
 
-    /** All allow-listed channels for the workspace with their consent state + the workspace-wide opt-out count. */
+    /** All allow-listed channels for the workspace with their consent state. */
     @Transactional(readOnly = true)
     public List<SlackMonitoredChannelDTO> listChannels(long workspaceId) {
-        long optedOutMemberCount = participantConsentRepository.countByWorkspaceIdAndIngestionOptedOutTrue(workspaceId);
         return monitoredChannelRepository.findByWorkspaceIdOrderByCreatedAtDesc(workspaceId).stream()
-                .map(channel -> SlackMonitoredChannelDTO.from(channel, optedOutMemberCount))
+                .map(SlackMonitoredChannelDTO::from)
                 .toList();
     }
 
@@ -150,12 +145,9 @@ public class SlackChannelConsentService {
             }
             if (!DeliveryInbox.claim("slack.channel.register." + workspaceId + "." + slackChannelId)) {
                 return new RegistrationOutcome(
-                        toDTO(
-                                workspaceId,
-                                monitoredChannelRepository
-                                        .findByWorkspaceIdAndSlackChannelId(workspaceId, slackChannelId)
-                                        .orElseThrow(
-                                                () -> new EntityNotFoundException("Slack channel", slackChannelId))),
+                        SlackMonitoredChannelDTO.from(monitoredChannelRepository
+                                .findByWorkspaceIdAndSlackChannelId(workspaceId, slackChannelId)
+                                .orElseThrow(() -> new EntityNotFoundException("Slack channel", slackChannelId))),
                         false);
             }
             SlackMonitoredChannel channel = new SlackMonitoredChannel();
@@ -167,7 +159,7 @@ public class SlackChannelConsentService {
             SlackMonitoredChannel saved = monitoredChannelRepository.save(channel);
             var registered = recordAudit(workspaceId, slackChannelId, null, ConsentState.PENDING, null);
             if (needsJoin) joins.enqueue(saved, Objects.requireNonNull(registered.getId()));
-            return new RegistrationOutcome(toDTO(workspaceId, saved), true);
+            return new RegistrationOutcome(SlackMonitoredChannelDTO.from(saved), true);
         });
     }
 
@@ -178,7 +170,7 @@ public class SlackChannelConsentService {
                 .findForUpdate(workspaceId, slackChannelId)
                 .orElseThrow(() -> new EntityNotFoundException("Slack channel", slackChannelId));
         if (!DeliveryInbox.claim("slack.channel.register." + workspaceId + "." + slackChannelId)) {
-            return new RegistrationOutcome(toDTO(workspaceId, channel), false);
+            return new RegistrationOutcome(SlackMonitoredChannelDTO.from(channel), false);
         }
         boolean changed = updateChannelName(channel, resolvedName);
         if (channel.getConsentState() == ConsentState.REVOKED) {
@@ -193,12 +185,12 @@ public class SlackChannelConsentService {
             var registered = recordAudit(
                     workspaceId, channel.getSlackChannelId(), from, ConsentState.PENDING, "channel re-added");
             joins.enqueue(channel, Objects.requireNonNull(registered.getId()));
-            return new RegistrationOutcome(toDTO(workspaceId, channel), false);
+            return new RegistrationOutcome(SlackMonitoredChannelDTO.from(channel), false);
         }
         if (changed) {
             monitoredChannelRepository.save(channel);
         }
-        return new RegistrationOutcome(toDTO(workspaceId, channel), false);
+        return new RegistrationOutcome(SlackMonitoredChannelDTO.from(channel), false);
     }
 
     /**
@@ -227,7 +219,7 @@ public class SlackChannelConsentService {
                 .orElseThrow(() -> new EntityNotFoundException("Slack channel", channelId));
         var from = channel.getConsentState();
         if (from == target || (from == ConsentState.ACTIVATING && target == ConsentState.ACTIVE))
-            return toDTO(workspaceId, channel);
+            return SlackMonitoredChannelDTO.from(channel);
         boolean firstActivation =
                 target == ConsentState.ACTIVE && (from == ConsentState.PENDING || from == ConsentState.FAILED);
         ConsentState next = firstActivation ? ConsentState.ACTIVATING : target;
@@ -239,7 +231,7 @@ public class SlackChannelConsentService {
             var request = recordAudit(workspaceId, channelId, from, ConsentState.ACTIVATING, reason);
             if (from == ConsentState.PENDING) joins.enqueue(channel, Objects.requireNonNull(request.getId()));
             announcements.enqueue(channel, request, from == ConsentState.FAILED);
-            return toDTO(workspaceId, channel);
+            return SlackMonitoredChannelDTO.from(channel);
         }
         switch (target) {
             case ACTIVE -> {
@@ -263,7 +255,7 @@ public class SlackChannelConsentService {
             case PENDING, ACTIVATING, FAILED -> throw new IllegalStateException("Not a requested consent state");
         }
         recordAudit(workspaceId, channelId, from, target, reason);
-        return toDTO(workspaceId, channel);
+        return SlackMonitoredChannelDTO.from(channel);
     }
 
     private <T> T connected(long workspaceId, String teamId, Supplier<T> work) {
@@ -347,11 +339,6 @@ public class SlackChannelConsentService {
         }
         channel.setChannelName(channelName);
         return true;
-    }
-
-    private SlackMonitoredChannelDTO toDTO(long workspaceId, SlackMonitoredChannel channel) {
-        long optedOutMemberCount = participantConsentRepository.countByWorkspaceIdAndIngestionOptedOutTrue(workspaceId);
-        return SlackMonitoredChannelDTO.from(channel, optedOutMemberCount);
     }
 
     /** Whether {@link #register} created a new allow-list row (201) or returned an existing one (200). */

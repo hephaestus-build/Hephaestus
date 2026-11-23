@@ -682,7 +682,8 @@ export const AdminWorkspaceViewSchema = {
 		},
 		memberCount: {
 			type: "integer",
-			format: "int64",
+			format: "int32",
+			description: "Members the workspace's member list shows. Absent for 1 to 4",
 		},
 		ownerLogin: {
 			type: "string",
@@ -697,15 +698,7 @@ export const AdminWorkspaceViewSchema = {
 			type: "string",
 		},
 	},
-	required: [
-		"accountLogin",
-		"createdAt",
-		"displayName",
-		"id",
-		"memberCount",
-		"status",
-		"workspaceSlug",
-	],
+	required: ["accountLogin", "createdAt", "displayName", "id", "status", "workspaceSlug"],
 } as const;
 
 export const AiChoiceSchema = {
@@ -9849,12 +9842,12 @@ export const PracticesAcrossWorkspaceSchema = {
 		includesEarlierReviews: {
 			type: "boolean",
 			description:
-				"Whether a counted standing was read only from earlier reviews, which carry no current proof",
+				"Whether at least 5 counted developers have a standing read only from earlier reviews, which carry no current proof",
 		},
 		openFeedback: {
 			$ref: "#/components/schemas/WorkspaceTile",
 			description:
-				"The reader's open feedback, counted by the rule the practice profile shows it open by, beside the middle half of the developers the page counts: both open now",
+				"The reader's open feedback, open now, counted by the rule the practice profile shows it open by. It has no middle half: whether another person's card is open follows a delivery rule that staff can change for one person",
 		},
 	},
 	required: ["groups", "includesEarlierReviews", "openFeedback"],
@@ -9869,11 +9862,12 @@ export const PracticesAcrossWorkspaceTilesSchema = {
 			type: ["null", "integer"],
 			format: "int32",
 			description:
-				"Developers with a standing in a practice group shown in the window, the developers the tiles compare. Null for fewer than 5",
+				"Developers with a standing in the window, the developers the tiles compare. Null for 1 to 4",
 		},
 		includesEarlierReviews: {
 			type: "boolean",
-			description: "Whether a counted standing in the window was read only from earlier reviews",
+			description:
+				"Whether at least 5 developers counted in the window have a standing read only from earlier reviews",
 		},
 		practicesGoingWell: {
 			$ref: "#/components/schemas/WorkspaceTile",
@@ -10776,12 +10770,6 @@ export const PublicActivitySchema = {
 			type: "string",
 			format: "date-time",
 		},
-		unlistedContributors: {
-			type: "integer",
-			format: "int32",
-			description:
-				"Contributors in the period who are counted but not named, because they have no account that chose to show and the workspace does not list such contributors",
-		},
 		workspaceName: {
 			type: "string",
 		},
@@ -10794,7 +10782,6 @@ export const PublicActivitySchema = {
 		"people",
 		"repositories",
 		"to",
-		"unlistedContributors",
 		"workspaceName",
 	],
 } as const;
@@ -10850,17 +10837,6 @@ export const PublicActivityCountsSchema = {
 		"pullRequestsOpened",
 		"pullRequestsReviewed",
 	],
-} as const;
-
-export const PublicActivityHiddenCountSchema = {
-	type: "object",
-	properties: {
-		hiddenPeople: {
-			type: "integer",
-			format: "int64",
-		},
-	},
-	required: ["hiddenPeople"],
 } as const;
 
 export const PublicActivityHighlightsSchema = {
@@ -16175,7 +16151,7 @@ export const SlackChannelConsentTargetSchema = {
 
 export const SlackMonitoredChannelSchema = {
 	type: "object",
-	description: "An allow-listed Slack channel with its consent state and person opt-out count",
+	description: "An allow-listed Slack channel with its consent state",
 	properties: {
 		channelName: {
 			type: ["string", "null"],
@@ -16201,12 +16177,6 @@ export const SlackMonitoredChannelSchema = {
 			description: "Internal allow-list row id",
 			pattern: "^[1-9][0-9]*$",
 		},
-		optedOutMemberCount: {
-			type: ["null", "integer"],
-			format: "int64",
-			description:
-				"Number of workspace members who have opted out of ingestion (workspace-wide). Null for fewer than 5",
-		},
 		slackChannelId: {
 			type: "string",
 			description: "Slack channel id (stable C…/G… id; the natural key)",
@@ -16222,7 +16192,6 @@ export const SlackMonitoredChannelSchema = {
 		"consentState",
 		"createdAt",
 		"id",
-		"optedOutMemberCount",
 		"slackChannelId",
 		"slackTeamId",
 	],
@@ -16543,7 +16512,7 @@ export const SyncResourceStateSchema = {
 		counts: {
 			type: "array",
 			description:
-				"Per-entity-class breakdown behind itemCount. One entry per class the integration actually mirrors — 6 for an SCM repository, 1 for a Slack channel or Outline collection. Never null; empty when the resource has never synced.",
+				"Per-entity-class breakdown behind itemCount. One entry per class the integration actually mirrors — 6 for an SCM repository, 1 for an Outline collection, none for a Slack channel. Never null; empty when the resource has never synced or the integration withholds its counts.",
 			items: {
 				$ref: "#/components/schemas/SyncResourceCount",
 			},
@@ -16635,7 +16604,8 @@ export const TeamInfoSchema = {
 		membershipCount: {
 			type: "integer",
 			format: "int32",
-			description: "Total count of team memberships",
+			description:
+				"Members listed in `members`. Hidden members and bots are neither listed nor counted, so the count gives no unnamed person back by subtraction",
 		},
 		name: {
 			type: "string",
@@ -19235,13 +19205,13 @@ export const WorkspaceSplitSchema = {
 			type: ["null", "integer"],
 			format: "int32",
 			description:
-				"Every developer the split counts, the parts and none yet together, the reader included when counted. Null for fewer than 5",
+				"Every developer the split counts, the parts and none yet together, the reader included when counted. Null for 1 to 4",
 		},
 		noneYet: {
 			type: ["null", "integer"],
 			format: "int32",
 			description:
-				"Developers with a standing in a group shown but none here. Null when the split shows only its total",
+				"Developers the page counts who have no verdict here. Null when the split shows only its total",
 		},
 		parts: {
 			type: "array",

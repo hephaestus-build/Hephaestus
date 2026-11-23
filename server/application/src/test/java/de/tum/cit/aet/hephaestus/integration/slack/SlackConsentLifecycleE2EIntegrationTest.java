@@ -256,7 +256,6 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         consentService = new SlackChannelConsentService(
                 monitoredChannelRepository,
                 consentEventRepository,
-                participantConsentRepository,
                 ingestService,
                 slackMessageService,
                 connectionService,

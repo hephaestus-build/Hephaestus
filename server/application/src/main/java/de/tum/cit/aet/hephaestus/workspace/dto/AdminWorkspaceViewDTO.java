@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace.dto;
 
+import de.tum.cit.aet.hephaestus.core.ShownCount;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -21,5 +22,11 @@ public record AdminWorkspaceViewDTO(
         @NonNull String accountLogin,
         @Nullable IdentityProviderType providerType,
         @Nullable String ownerLogin,
-        @NonNull Long memberCount,
+
+        @Schema(
+                implementation = Integer.class,
+                description = "Members the workspace's member list shows. Absent for 1 to 4")
+        @Nullable
+        ShownCount memberCount,
+
         @NonNull Instant createdAt) {}

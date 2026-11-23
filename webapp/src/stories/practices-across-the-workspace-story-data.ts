@@ -132,7 +132,7 @@ export const PACKAGING_GROUP: WorkspaceGroupSplit = group(
 
 /** 28 developers with a standing, the reader among them, each counted once. */
 export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
-	openFeedback: { yours: 3, middle: { low: 1, high: 4 } },
+	openFeedback: { yours: 3, middle: null },
 	includesEarlierReviews: false,
 	groups: [
 		group(

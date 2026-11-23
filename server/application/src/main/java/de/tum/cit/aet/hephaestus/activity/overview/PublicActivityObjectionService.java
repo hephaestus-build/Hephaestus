@@ -15,14 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 class PublicActivityObjectionService {
     private final WorkspaceMemberships memberships;
     private final ActivityPeopleQueryRepository people;
-    private final PublicRepositoryVisibility visibility;
     private final PersonDataCopyFence copyFence;
     private final PersonDataWriteFence writeFence;
-
-    @Transactional(readOnly = true)
-    public long hiddenPeople(long workspaceId) {
-        return people.countPublicHiddenPeople(workspaceId, visibility.confirmedAfter());
-    }
 
     /** The people an admin hid who have no membership: the only ones no other screen can show again. */
     @Transactional(readOnly = true)

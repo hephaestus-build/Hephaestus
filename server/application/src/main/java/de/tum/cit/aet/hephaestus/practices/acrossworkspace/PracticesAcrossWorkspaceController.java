@@ -30,8 +30,8 @@ public class PracticesAcrossWorkspaceController {
             operationId = "getPracticeWorkspaceOverview",
             summary = "How the workspace's developers split across practice groups and practices, the reader marked",
             description = "Counts developers, never names them. A split shows all its parts or only its total, and a"
-                    + " count of fewer than "
-                    + SmallCounts.MINIMUM
+                    + " count of 1 to "
+                    + (SmallCounts.MINIMUM - 1)
                     + " developers shows as null. The splits count every developer's current standing once and take"
                     + " no window.")
     public PracticesAcrossWorkspaceDTO overview(WorkspaceContext ws) {

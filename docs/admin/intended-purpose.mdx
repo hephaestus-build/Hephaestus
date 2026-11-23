@@ -39,19 +39,45 @@ The floor is fixed. No setting changes it.
   If one part holds 1 to 4 people, or everyone is in one part, only the total shows.
   The view does not say which of the two applies.
 - A figure from a group of people, such as a typical range, needs at least 5 of them.
+- **Practices across the workspace** counts each developer with reviewed work in the period and a standing in a practice.
+  Hiding a member does not change who it counts.
+  The review scope, an ended membership and the groups that the page shows do not change it either.
+  An erasure or a restriction of processing, which the person asks for, removes them.
+  Bots are not counted, because their work is not reviewed.
+- The page says that standings rest on earlier reviews only when at least 5 developers have such standings.
+- **Open feedback** shows only the reader's own figure.
+  Another person's open feedback depends on their membership and the review scope.
+  So the page shows no range for it.
 
-Some counts stay exact, because the same reader already sees the people by name:
+Some counts stay exact.
+The reader already sees the same people by name, so the count tells them nothing more:
 
-- The members of a workspace or a team.
+- The members of a workspace or a team, as their member lists show them.
 - The people in the practice review scope.
-- The people that an admin hid from the public activity page, and the people that the page leaves out.
+- The authors of the pull requests that a named person reviewed.
 
-The floor limits what one view tells.
-It does not stop a reader who compares counts.
-A reader can compare the same count in two periods, or before and after a person joins or leaves.
-The difference can tell the reader about the people who changed.
-Each count in each period still needs 5 people.
-Do not combine counts from several periods to learn about one person.
+Some counts are not shown at all:
+
+- The people that the public activity page leaves out, and the contributors that it does not name.
+- The members who opted out of Slack message use, and the messages stored for each Slack channel.
+
+### What the floor does not stop
+
+The floor limits what one view tells. A reader who compares two views can still learn something about one person.
+
+- **Drift between reviews.** A new review changes a person's standing, so the same count before and after it can differ by one person.
+- **Suspension.** A suspended account stops the processing of that person's data, so their standings leave the counts.
+- **Repository monitoring.** When a repository that only one person works in stops being monitored, that person's observations from it stop counting.
+- **Practice settings.** A practice's reviewer and criteria decide which observations count, so a change can change who is counted.
+  The group that a practice sits in decides how a group standing reads.
+  Sometimes only one person has a standing in that practice.
+  Then a comparison before and after the change can tell something about that person.
+- **Feedback mode.** Observations that a review records while a practice's feedback mode is **Off** do not count toward a standing.
+- **Corrections.** A corrected observation changes the standing of the person whose work it is about.
+
+A release record will close these cases.
+It will compare each new figure with the previous one, and release a change only when it concerns at least 5 people.
+Until it ships, do not compare views over time or across these settings to learn about one person.
 
 Research exports keep their own rules. See [Research program](./research-program.mdx).
 

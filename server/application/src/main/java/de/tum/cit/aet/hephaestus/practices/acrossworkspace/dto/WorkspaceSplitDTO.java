@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import de.tum.cit.aet.hephaestus.core.ShownCount;
 import de.tum.cit.aet.hephaestus.core.SmallCounts;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
@@ -20,20 +21,21 @@ public record WorkspaceSplitDTO(
         List<WorkspaceSplitPartDTO> parts,
 
         @Schema(
+                implementation = Integer.class,
                 requiredMode = Schema.RequiredMode.REQUIRED,
-                description =
-                        "Developers with a standing in a group shown but none here. Null when the split shows only"
-                                + " its total")
+                description = "Developers the page counts who have no verdict here. Null when the split shows only its"
+                        + " total")
         @Nullable
-        Integer noneYet,
+        ShownCount noneYet,
 
         @Schema(
+                implementation = Integer.class,
                 requiredMode = Schema.RequiredMode.REQUIRED,
                 description = "Every developer the split counts, the parts and none yet together, the reader included"
-                        + " when counted. Null for fewer than "
-                        + SmallCounts.MINIMUM)
+                        + " when counted. Null for 1 to "
+                        + (SmallCounts.MINIMUM - 1))
         @Nullable
-        Integer developers) {
+        ShownCount developers) {
     public WorkspaceSplitDTO {
         parts = List.copyOf(parts);
     }

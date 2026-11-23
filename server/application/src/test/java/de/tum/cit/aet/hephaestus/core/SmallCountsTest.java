@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -14,6 +15,7 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 
 @Tag("unit")
 class SmallCountsTest {
@@ -36,8 +38,26 @@ class SmallCountsTest {
         assertThat(SmallCounts.shown(4)).isNull();
         assertThat(SmallCounts.shown(5)).isEqualTo(5);
         assertThat(SmallCounts.shown(6)).isEqualTo(6);
-        assertThat(SmallCounts.shown(4L)).isNull();
-        assertThat(SmallCounts.shown(6L)).isEqualTo(6L);
+    }
+
+    /** A response field of this type, as Jackson writes it. */
+    record Sent(@Nullable ShownCount people) {}
+
+    @Test
+    void shouldSendACountFromFivePeopleAsABareNumberAndWithholdOneToFour() {
+        var json = new JsonMapper();
+
+        assertThat(json.writeValueAsString(new Sent(SmallCounts.count(1)))).isEqualTo("{\"people\":null}");
+        assertThat(json.writeValueAsString(new Sent(SmallCounts.count(4)))).isEqualTo("{\"people\":null}");
+        assertThat(json.writeValueAsString(new Sent(SmallCounts.count(5)))).isEqualTo("{\"people\":5}");
+        assertThat(json.writeValueAsString(new Sent(SmallCounts.count(0)))).isEqualTo("{\"people\":0}");
+    }
+
+    @Test
+    void shouldRefuseToBuildAShownCountOfOneToFour() {
+        assertThatThrownBy(() -> ShownCount.of(2)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ShownCount.of(4)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(ShownCount.of(5)).hasToString("5");
     }
 
     @Test

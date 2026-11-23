@@ -65,11 +65,12 @@ public class ActivityPeopleService {
         return new ActivityFacetsDTO(queries.repositories(workspace), queries.teams(workspace));
     }
 
-    /** The public people, and how many contributors without an account the page counts instead of naming. */
-    public record PublicPeople(ActivityPeopleDTO people, int unlistedContributors) {}
-
+    /**
+     * The public people. Contributors the page does not name are not counted either: a reader can narrow a count by
+     * repository and period, and comparing two counts can single out one author they know.
+     */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
-    public PublicPeople publicPeople(
+    public ActivityPeopleDTO publicPeople(
             long workspace,
             ActivityPeopleRangeParams params,
             Set<String> repositoryKeys,
@@ -78,14 +79,7 @@ public class ActivityPeopleService {
         var selected = select(workspace, null, repositoryKeys, List.of(), repositories);
         var scope = ActivityScope.published(
                 workspace, selected.repositoryIds(), withoutAccount(contributorsWithoutAccount));
-        var people = aggregate(scope, params, List.of(), repositories);
-        if (contributorsWithoutAccount) return new PublicPeople(people, 0);
-        long unlisted = queries.countPublicContributors(
-                scope.withoutAccount(ActivityScope.WithoutAccount.ONLY),
-                new TimeRange(people.from(), people.to()),
-                0,
-                false);
-        return new PublicPeople(people, Math.toIntExact(unlisted));
+        return aggregate(scope, params, List.of(), repositories);
     }
 
     private static ActivityScope.WithoutAccount withoutAccount(boolean shown) {

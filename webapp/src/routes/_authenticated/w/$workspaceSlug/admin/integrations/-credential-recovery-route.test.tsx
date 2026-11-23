@@ -2274,7 +2274,6 @@ const standupChannel: Wire<SlackMonitoredChannel> = {
 	slackTeamId: "T0000000000",
 	channelName: "team-standup",
 	consentState: "ACTIVE",
-	optedOutMemberCount: 0,
 	consentAnnouncedAt: "2026-10-01T09:00:00Z",
 	createdAt: "2026-09-30T09:00:00Z",
 };
@@ -2650,10 +2649,9 @@ describe("Slack connection reads", () => {
 						externalId: "C06ARCHIVE6",
 						name: "team-archive",
 						type: "CHANNEL",
-						counts: [{ key: "messages", label: "Messages", count: 4242, lastSyncedAt: syncedAt }],
+						counts: [],
 						state: "SYNCED",
 						lastSyncedAt: syncedAt,
-						itemCount: 4242,
 					},
 				],
 				jobs: [

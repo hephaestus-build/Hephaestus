@@ -549,9 +549,6 @@ import type {
 	GetPublicActivityChoiceResponses,
 	GetPublicActivityData,
 	GetPublicActivityErrors,
-	GetPublicActivityHiddenCountData,
-	GetPublicActivityHiddenCountErrors,
-	GetPublicActivityHiddenCountResponses,
 	GetPublicActivityOnboardingData,
 	GetPublicActivityOnboardingErrors,
 	GetPublicActivityOnboardingResponses,
@@ -4260,26 +4257,6 @@ export const getActivityPersonWork = <ThrowOnError extends boolean = false>(
 	});
 
 /**
- * Count hidden public contributors without identifying them
- */
-export const getPublicActivityHiddenCount = <ThrowOnError extends boolean = false>(
-	options: Options<GetPublicActivityHiddenCountData, ThrowOnError>,
-): RequestResult<
-	GetPublicActivityHiddenCountResponses,
-	GetPublicActivityHiddenCountErrors,
-	ThrowOnError
-> =>
-	(options.client ?? client).get<
-		GetPublicActivityHiddenCountResponses,
-		GetPublicActivityHiddenCountErrors,
-		ThrowOnError
-	>({
-		security: [{ scheme: "bearer", type: "http" }],
-		url: "/workspaces/{workspaceSlug}/activity/public-hidden-count",
-		...options,
-	});
-
-/**
  * List activity by the pull request or issue it happened on, one page at a time
  *
  * One member's activity when login is given, otherwise everyone's in the workspace or the team. With both, the member's activity within the team's scope. Each pull request or issue is listed once, by its latest activity in the range, newest first.
@@ -7054,7 +7031,7 @@ export const getPracticeWorkspaceTiles = <ThrowOnError extends boolean = false>(
 /**
  * How the workspace's developers split across practice groups and practices, the reader marked
  *
- * Counts developers, never names them. A split shows all its parts or only its total, and a count of fewer than 5 developers shows as null. The splits count every developer's current standing once and take no window.
+ * Counts developers, never names them. A split shows all its parts or only its total, and a count of 1 to 4 developers shows as null. The splits count every developer's current standing once and take no window.
  */
 export const getPracticeWorkspaceOverview = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeWorkspaceOverviewData, ThrowOnError>,

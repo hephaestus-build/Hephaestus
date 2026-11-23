@@ -18,8 +18,6 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FEWER_THAN_SMALLEST, SHOWN_FROM_SMALLEST } from "@/lib/small-counts";
 
 import { ConsentStateBadge } from "./consent-terms";
 
@@ -39,16 +37,8 @@ export interface SlackChannelRowProps {
 	onViewHistory: (channel: SlackMonitoredChannel) => void;
 }
 
-/** The tooltip of the opt-out count. The server sends null for 1 to 4, so nobody is singled out. */
-function optedOutText(count: number | null): string {
-	if (count === null) {
-		return `${FEWER_THAN_SMALLEST} workspace members opted out (App Home). ${SHOWN_FROM_SMALLEST}.`;
-	}
-	return `${count} workspace member${count === 1 ? "" : "s"} opted out (App Home)`;
-}
-
 /**
- * One allow-listed Slack channel: name/id, status badge, opted-out signal, announcement
+ * One allow-listed Slack channel: name/id, status badge, announcement
  * time and a state-gated row action menu. Pure — every transition is delegated upward.
  */
 export function SlackChannelRow({
@@ -72,21 +62,6 @@ export function SlackChannelRow({
 
 			<TableCell>
 				<ConsentStateBadge state={channel.consentState} />
-			</TableCell>
-
-			<TableCell numeric className="text-right">
-				{channel.optedOutMemberCount === 0 ? (
-					<span className="text-muted-foreground">0</span>
-				) : (
-					<Tooltip>
-						{/* Default TooltipTrigger renders a real <button>, so it's reachable by keyboard
-						and screen-reader users — a bare <span> trigger has no focus stop. */}
-						<TooltipTrigger className="cursor-help underline decoration-dotted underline-offset-2">
-							{channel.optedOutMemberCount ?? FEWER_THAN_SMALLEST}
-						</TooltipTrigger>
-						<TooltipContent>{optedOutText(channel.optedOutMemberCount)}</TooltipContent>
-					</Tooltip>
-				)}
 			</TableCell>
 
 			<TableCell className="text-sm text-muted-foreground">

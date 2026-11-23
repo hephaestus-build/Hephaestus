@@ -1,3 +1,4 @@
-# A count of fewer than 5 people is not shown to staff. The Slack opt-out count is null for 1 to 4.
+# NP-04 (to be filed): no view shows a count of fewer than 5 people.
+# The instance list withholds a member count of 1 to 4 in a workspace that is not active.
 # .changeset/counts-of-people-from-five.md tells API clients.
-in API GET /workspaces/{workspaceSlug}/slack/channels the response property `items/optedOutMemberCount` became nullable for the status `200`
+in API GET /admin/workspaces the response property `items/memberCount` became optional for the status `200`

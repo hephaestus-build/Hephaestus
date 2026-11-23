@@ -49,12 +49,13 @@ public final class WorkspaceSplits {
         boolean spread = SmallCounts.spread(cells);
         Verdict[] verdicts = Verdict.values();
         List<WorkspaceSplitPartDTO> parts = IntStream.range(0, verdicts.length)
-                .mapToObj(cell -> new WorkspaceSplitPartDTO(verdicts[cell], spread ? cells[cell] : null))
+                .mapToObj(cell ->
+                        new WorkspaceSplitPartDTO(verdicts[cell], spread ? SmallCounts.count(cells[cell]) : null))
                 .toList();
         return new WorkspaceSplitDTO(
                 parts,
-                spread ? split.noneYet() : null,
-                SmallCounts.shown(IntStream.of(cells).sum()));
+                spread ? SmallCounts.count(split.noneYet()) : null,
+                SmallCounts.count(IntStream.of(cells).sum()));
     }
 
     private static int count(Collection<PracticeStanding> standings, Verdict verdict) {

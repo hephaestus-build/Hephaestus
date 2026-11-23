@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.research;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.PeopleCount;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
@@ -90,6 +91,7 @@ public class ResearchDisclosureController {
             @NonNull List<ResearchRemovalObligationDTO> removals) {}
 
     public record ResearchRemovalReceiptDTO(
+            @PeopleCount(exactBecause = "Participant keys that the caller just submitted")
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
             int recorded) {}
 

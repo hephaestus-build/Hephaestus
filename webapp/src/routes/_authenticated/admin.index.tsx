@@ -77,7 +77,10 @@ function AdminOverviewPage() {
 
 	const workspaces = workspacesQuery.data ?? [];
 	const activeWorkspaces = workspaces.filter((ws) => ws.status === "ACTIVE").length;
-	const memberships = workspaces.reduce((sum, ws) => sum + ws.memberCount, 0);
+	// A withheld count (a workspace of 1 to 4 members) adds nothing, so no sum gives it back. The total
+	// then says that it leaves those workspaces out.
+	const memberships = workspaces.reduce((sum, ws) => sum + (ws.memberCount ?? 0), 0);
+	const leavesSomeOut = workspaces.some((ws) => ws.memberCount === undefined);
 
 	const retryRelease = () => {
 		void releaseQuery.refetch();
@@ -147,7 +150,11 @@ function AdminOverviewPage() {
 				<OverviewStatCard
 					label="Workspace memberships"
 					value={memberships}
-					hint="Counts a person once per workspace"
+					hint={
+						leavesSomeOut
+							? "At least this many: workspaces of 1 to 4 members are not counted"
+							: "Counts a person once per workspace"
+					}
 					icon={Users}
 					to="/admin/workspaces"
 					isLoading={workspacesQuery.isLoading}

@@ -2,6 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-11-18
+**Amended:** 2026-11-23 by NP-04 (to be filed). The threshold is 5, and **Open feedback** has no typical range. ADR 0051 records the population change.
 **Authors:** Hephaestus maintainers
 
 **Amends:** [ADR 0051](0051-practices-across-the-workspace-counts-developers.md) (its choice of no smallest count), and replaces rule 23 of [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) ("No count is too small to show")

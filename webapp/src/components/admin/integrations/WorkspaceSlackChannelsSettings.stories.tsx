@@ -36,7 +36,6 @@ const pending: SlackMonitoredChannel = {
 	slackTeamId: "T0000000000",
 	channelName: "team-intro",
 	consentState: "PENDING",
-	optedOutMemberCount: 0,
 	consentAnnouncedAt: null,
 	createdAt: daysBefore(3),
 };
@@ -47,7 +46,6 @@ const active: SlackMonitoredChannel = {
 	slackTeamId: "T0000000000",
 	channelName: "team-standup",
 	consentState: "ACTIVE",
-	optedOutMemberCount: 6,
 	consentAnnouncedAt: daysBefore(2),
 	createdAt: daysBefore(5),
 };
@@ -58,7 +56,6 @@ const paused: SlackMonitoredChannel = {
 	slackTeamId: "T0000000000",
 	channelName: "team-random",
 	consentState: "PAUSED",
-	optedOutMemberCount: 0,
 	consentAnnouncedAt: daysBefore(4),
 	createdAt: daysBefore(6),
 };
@@ -69,7 +66,6 @@ const revoked: SlackMonitoredChannel = {
 	slackTeamId: "T0000000000",
 	channelName: "team-legacy",
 	consentState: "REVOKED",
-	optedOutMemberCount: 0,
 	consentAnnouncedAt: daysBefore(9),
 	createdAt: daysBefore(10),
 };
@@ -80,7 +76,6 @@ const activating: SlackMonitoredChannel = {
 	slackTeamId: "T0000000000",
 	channelName: "team-announcements",
 	consentState: "ACTIVATING",
-	optedOutMemberCount: 0,
 	consentAnnouncedAt: null,
 	createdAt: daysBefore(1),
 };
@@ -91,7 +86,6 @@ const failed: SlackMonitoredChannel = {
 	slackTeamId: "T0000000000",
 	channelName: "team-alerts",
 	consentState: "FAILED",
-	optedOutMemberCount: 0,
 	consentAnnouncedAt: null,
 	createdAt: daysBefore(1),
 };
@@ -179,21 +173,14 @@ export const ActivationFailedChannel: Story = {
 	},
 };
 
-/** Opted-out members are surfaced as a count per channel — including a visible 0. */
-export const WithOptOuts: Story = {
+/**
+ * No count of people who opted out: an admin could change their own choice in App Home and compare
+ * the count before and after.
+ */
+export const NoOptOutCount: Story = {
 	args: { channels: [pending, active] },
 	play: async ({ canvas }) => {
-		// Scope each count to its own row (via the deterministic action-button label): a bare
-		// getByText("6") would be satisfied by a stray "6" rendered anywhere in the table.
-		const rowFor = (channel: string) => {
-			const row = canvas.getByRole("button", { name: `Actions for ${channel}` }).closest("tr");
-			if (!row) {
-				throw new Error(`The actions button for ${channel} is not inside a row.`);
-			}
-			return row;
-		};
-		within(rowFor("team-standup")).getByText("6");
-		within(rowFor("team-intro")).getByText("0");
+		await expect(canvas.queryByRole("columnheader", { name: /opted out/iu })).toBeNull();
 	},
 };
 
@@ -207,7 +194,6 @@ export const NoChannelName: Story = {
 				slackTeamId: "T0000000000",
 				channelName: null,
 				consentState: "ACTIVE",
-				optedOutMemberCount: 0,
 				consentAnnouncedAt: daysBefore(1),
 				createdAt: daysBefore(2),
 			},

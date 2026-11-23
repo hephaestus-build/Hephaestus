@@ -304,11 +304,12 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .contains(shown.getLogin())
                     .doesNotContain(hidden.getLogin(), unanswered.getLogin());
             assertThat(page.highlights().firstContributors()).doesNotContain(hidden.getLogin(), unanswered.getLogin());
-            // The review stays the reviewer's work, but a person who has not answered is nobody they helped.
+            // The review stays the reviewer's work, and its author counts as helped whatever their choice: the
+            // provider shows who wrote the pull request, and a count that skipped them would tell their choice.
             var shownDetail = person(shown);
             assertThat(shownDetail.person().login()).isEqualTo(shown.getLogin());
             assertThat(shownDetail.counts().pullRequestsReviewed()).isEqualTo(1);
-            assertThat(shownDetail.counts().peopleHelped()).isZero();
+            assertThat(shownDetail.counts().peopleHelped()).isEqualTo(1);
             assertThat(personWork(shown, uri -> uri).content()).isNotEmpty();
             for (User person : List.of(hidden, unanswered)) {
                 for (String suffix : List.of("", "/work")) {
@@ -371,7 +372,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                                 + " u.native_id::text=i.provider_user_key WHERE u.id=? AND i.team_key='')",
                         workspace.getId(),
                         ada.getId());
-                assertThat(publicObjections.hiddenPeople(workspace.getId())).isZero();
                 jdbc.update(
                         "UPDATE membership SET hidden=false WHERE workspace_id=? AND account_id=(SELECT i.account_id"
                                 + " FROM identity i JOIN \"user\" u ON u.provider_id=i.provider_id AND"
@@ -569,7 +569,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                             identity.getProviderId(), identity.getProviderUserKey(), null))
                     .isEmpty();
             assertThat(page().people()).isEmpty();
-            assertThat(publicObjections.hiddenPeople(workspace.getId())).isEqualTo(1);
             accountService.softDelete(accountId);
             accountPurger.purge(accountId);
             assertThat(publicIdentities.findActiveByAccountId(accountId)).isEmpty();
@@ -607,7 +606,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
             record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -2, DAY);
             publicationChoice.setVisible(accountId, false);
-            assertThat(publicObjections.hiddenPeople(workspace.getId())).isEqualTo(1);
             assertThat(publicObjections.hiddenContributors(workspace.getId())).isEmpty();
             var outside = persistUser("hidden-by-admin");
             record(outside, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -3, DAY);
@@ -733,7 +731,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     ada.getNativeId().toString());
             var after = page();
             assertThat(after.people()).extracting(p -> p.login()).containsExactly(zoe.getLogin());
-            assertThat(after.people().getFirst().counts().peopleHelped()).isZero();
+            // Hiding the author does not change who the reviewer helped, so the count tells nothing of the choice.
+            assertThat(after.people().getFirst().counts().peopleHelped()).isEqualTo(1);
             assertThat(after.people().getFirst().firstContributionAt()).isEqualTo(DAY);
         }
 
@@ -751,7 +750,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                             + " u.native_id::text=i.provider_user_key WHERE u.id=? AND i.team_key='')",
                     workspace.getId(),
                     ada.getId());
-            assertThat(publicObjections.hiddenPeople(workspace.getId())).isZero();
         }
 
         @Test
@@ -779,13 +777,11 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .jsonPath("$.content[0].newValue")
                     .isEqualTo("{\"contributorHidden\":true}");
             assertThat(page().people()).isEmpty();
-            assertThat(publicObjections.hiddenPeople(workspace.getId())).isEqualTo(1);
             assertThat(publicObjections.hiddenContributors(workspace.getId()))
                     .extracting(person -> person.login())
                     .containsExactly(outside.getLogin());
             var other = createWorkspace(
                     "objection-other", "Other", "other-objection-org", AccountType.ORG, persistUser("objection-owner"));
-            assertThat(publicObjections.hiddenPeople(other.getId())).isZero();
             assertThatThrownBy(() -> publicObjections.hide(other.getId(), outside.getId(), true))
                     .isInstanceOf(EntityNotFoundException.class);
             assertThat(publicObjections.hiddenContributors(other.getId())).isEmpty();
@@ -803,18 +799,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectStatus()
                     .isNoContent()
                     .expectBody(Void.class);
-            webTestClient
-                    .get()
-                    .uri("/workspaces/{slug}/activity/public-hidden-count", workspace.getWorkspaceSlug())
-                    .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
-                    .exchange()
-                    .expectStatus()
-                    .isOk()
-                    .expectBody()
-                    .jsonPath("$.hiddenPeople")
-                    .isEqualTo(1)
-                    .jsonPath("$.length()")
-                    .isEqualTo(1);
             webTestClient
                     .get()
                     .uri("/workspaces/{slug}/activity/hidden-contributors", workspace.getWorkspaceSlug())
@@ -841,14 +825,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                             "/workspaces/{slug}/activity/people/{id}/public-visibility?hidden=true",
                             workspace.getWorkspaceSlug(),
                             outside.getId())
-                    .headers(TestAuthUtils.withCurrentUser())
-                    .exchange()
-                    .expectStatus()
-                    .isForbidden()
-                    .expectBody(Void.class);
-            webTestClient
-                    .get()
-                    .uri("/workspaces/{slug}/activity/public-hidden-count", workspace.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
@@ -1148,7 +1124,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
-        void shouldCountButNotNameContributorsWithoutAnAccountUntilTheWorkspaceListsThem() {
+        void shouldNotNameContributorsWithoutAnAccountUntilTheWorkspaceListsThem() {
             ensureAdminMembership(workspace);
             var guest = persistUser("public-guest");
             var pull = pullRequest(guest, monitored, work -> work);
@@ -1157,20 +1133,15 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             patchPublicActivity(true, false, true);
             var listed = page();
             assertThat(listed.people()).extracting(p -> p.login()).contains(guest.getLogin());
-            assertThat(listed.unlistedContributors()).isZero();
 
             patchPublicActivity(true, false, false);
             var unnamed = page();
             assertThat(unnamed.people()).extracting(p -> p.login()).doesNotContain(guest.getLogin());
-            // Each contributor is either named or counted, never both and never neither.
-            assertThat(unnamed.people().size() + unnamed.unlistedContributors())
-                    .isEqualTo(listed.people().size());
-            assertThat(unnamed.unlistedContributors()).isPositive();
             for (String suffix : List.of("", "/work")) {
                 personRead(guest, suffix, uri -> uri).isNotFound().expectBody(Void.class);
             }
 
-            // With nobody named, the whole period still counts, so the page does not read as empty.
+            // With nobody named, the page keeps the whole period.
             publicationChoice.setVisible(accountId(ada), false);
             publicationChoice.setVisible(accountId(zoe), false);
             patchPublicActivity(true, false, true);
@@ -1178,14 +1149,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             patchPublicActivity(true, false, false);
             var nobodyNamed = page();
             assertThat(nobodyNamed.people()).isEmpty();
-            assertThat(nobodyNamed.unlistedContributors())
-                    .isEqualTo(everyone.people().size());
             assertThat(nobodyNamed.from()).isEqualTo(everyone.from());
-
-            // A page that is turned off forgets the choice, so publishing again counts them again.
-            patchPublicActivity(false, false, true);
-            patchPublicActivity(true, false, false);
-            assertThat(page().unlistedContributors()).isEqualTo(nobodyNamed.unlistedContributors());
         }
 
         @Test
@@ -1231,7 +1195,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
-        void shouldCountUnnamedContributorsOnlyWithinTheSelectedRepositoryAndPeriod() {
+        void shouldNameOnlyListedContributorsWithinTheSelectedRepositoryAndPeriod() {
             ensureAdminMembership(workspace);
             var guest = persistUser("filtered-guest");
             var elsewhere = persistUser("elsewhere-guest");
@@ -1251,23 +1215,48 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -3, DAY);
 
             patchPublicActivity(true, false, false);
-            assertThat(page().unlistedContributors()).isEqualTo(2);
             var selected = page(uri -> uri.queryParam("repo", monitored.getNameWithOwner()));
-            assertThat(selected.unlistedContributors()).isEqualTo(1);
             assertThat(selected.people()).extracting(person -> person.login()).containsExactly(ada.getLogin());
             var earlier = page(uri -> uri.replaceQueryParam("range", "custom")
                     .queryParam("from", FROM)
                     .replaceQueryParam("to", DAY));
-            assertThat(earlier.unlistedContributors()).isZero();
             assertThat(earlier.people()).isEmpty();
 
             patchPublicActivity(true, false, true);
             var named = page(uri -> uri.queryParam("repo", monitored.getNameWithOwner()));
-            assertThat(named.people().size()).isEqualTo(selected.people().size() + selected.unlistedContributors());
+            assertThat(named.people())
+                    .extracting(person -> person.login())
+                    .containsExactlyInAnyOrder(ada.getLogin(), guest.getLogin());
+        }
+
+        /**
+         * The only contributor of a public repository objects: the page's period and coverage stay as they were, so
+         * comparing the two pages does not tell whether that author is shown, hidden or unnamed.
+         */
+        @Test
+        void shouldKeepThePeriodAndCoverageWhenTheOnlyContributorObjects() {
+            ensureAdminMembership(workspace);
+            var only = persistUser("only-guest");
+            record(only, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            // A repository whose history is complete, so the page reports since when it covers it.
+            jdbc.update(
+                    "UPDATE repository_to_monitor SET issue_backfill_high_water_mark = 0,"
+                            + " pull_request_backfill_high_water_mark = 0 WHERE workspace_id = ?",
+                    workspace.getId());
+            patchPublicActivity(true, false, false);
+            var before = page(uri -> uri.queryParam("repo", monitored.getNameWithOwner()));
+            assertThat(before.coverage().since()).isNotNull();
+
+            publicObjections.hide(workspace.getId(), only.getId(), true);
+            var after = page(uri -> uri.queryParam("repo", monitored.getNameWithOwner()));
+
+            assertThat(after.from()).isEqualTo(before.from());
+            assertThat(after.to()).isEqualTo(before.to());
+            assertThat(after.coverage()).isEqualTo(before.coverage());
         }
 
         @Test
-        void shouldNeitherNameNorCountHiddenPeopleWhenContributorsWithoutAnAccountAreNotListed() {
+        void shouldNotNameHiddenPeopleWhenContributorsWithoutAnAccountAreNotListed() {
             ensureAdminMembership(workspace);
             var objected = persistUser("objected-guest");
             var counted = persistUser("counted-guest");
@@ -1281,7 +1270,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
             var result = page();
             assertThat(result.people()).isEmpty();
-            assertThat(result.unlistedContributors()).isEqualTo(1);
             for (var person : List.of(ada, zoe, objected)) {
                 for (String suffix : List.of("", "/work")) {
                     personRead(person, suffix, uri -> uri).isNotFound().expectBody(Void.class);
@@ -1477,6 +1465,23 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
+        void shouldKeepThePublicPeopleHelpedWhenTheWorkspaceMarksTheAuthorAsAutomation() {
+            TestUserFactory.ensureAccountForUser(accountRepository, publicIdentities, ada);
+            var pull = pullRequest(ada, monitored, work -> work);
+            var approval = review(pull, zoe, PullRequestReview.State.APPROVED);
+            record(ada, ActivityEventType.PULL_REQUEST_OPENED, ActivityTargetType.PULL_REQUEST, pull.getId(), DAY);
+            record(zoe, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, approval.getId(), DAY);
+            assertThat(person(zoe).counts().peopleHelped()).isEqualTo(1);
+            assertThat(helpedInTheList(zoe)).isEqualTo(1);
+
+            // The automation mark is a staff choice: a public count that followed it would tell a reader the mark.
+            automationService.classify(workspace.getId(), ada.getId(), true);
+
+            assertThat(person(zoe).counts().peopleHelped()).isEqualTo(1);
+            assertThat(helpedInTheList(zoe)).isEqualTo(1);
+        }
+
+        @Test
         void shouldKeepAVisibleReviewWhenItsAuthorObjectsButRefuseTheHiddenReviewer() {
             TestUserFactory.ensureAccountForUser(accountRepository, publicIdentities, ada);
             var pull = pullRequest(ada, monitored, work -> work);
@@ -1491,7 +1496,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     ada.getNativeId().toString());
             var visible = person(zoe);
             assertThat(visible.counts().pullRequestsReviewed()).isEqualTo(1);
-            assertThat(visible.counts().peopleHelped()).isZero();
+            assertThat(visible.counts().peopleHelped()).isEqualTo(1);
             personRead(zoe, "/work", uri -> uri)
                     .isOk()
                     .expectBody()
@@ -1778,7 +1783,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         private void assertErasedActivityHidden(User actor) {
             assertThat(page().people()).isEmpty();
-            assertThat(publicObjections.hiddenPeople(workspace.getId())).isZero();
             assertThat(jdbc.queryForObject(
                             "SELECT EXISTS(SELECT 1 FROM identity_restriction WHERE provider_id=? AND"
                                     + " provider_user_key=? AND team_key='' AND kind='ERASED')",
@@ -1808,6 +1812,15 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         private PublicActivityDTO page() {
             return page(uri -> uri);
+        }
+
+        private long helpedInTheList(User person) {
+            return page().people().stream()
+                    .filter(row -> row.login().equals(person.getLogin()))
+                    .findFirst()
+                    .orElseThrow()
+                    .counts()
+                    .peopleHelped();
         }
 
         private PublicActivityDTO page(Function<UriBuilder, UriBuilder> query) {

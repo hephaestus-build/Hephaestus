@@ -28,9 +28,9 @@ public final class SmallCounts {
         return people == 0 || enough(people) ? people : null;
     }
 
-    /** A count of people as a view may show it: null for one to four. */
-    public static @Nullable Long shown(long people) {
-        return people == 0 || enough(people) ? people : null;
+    /** A count of people for a response: null for one to four. The only way to build a {@link ShownCount}. */
+    public static @Nullable ShownCount count(int people) {
+        return people == 0 || enough(people) ? ShownCount.of(people) : null;
     }
 
     /**

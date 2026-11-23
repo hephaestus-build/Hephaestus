@@ -297,7 +297,10 @@ export type AdminWorkspaceView = {
 	createdAt: Date;
 	displayName: string;
 	id: number;
-	memberCount: number;
+	/**
+	 * Members the workspace's member list shows. Absent for 1 to 4
+	 */
+	memberCount?: number;
 	ownerLogin?: string;
 	providerType?: IdentityProviderType;
 	status: WorkspaceStatus;
@@ -4880,11 +4883,11 @@ export type PracticesAcrossWorkspace = {
 	 */
 	groups: Array<WorkspaceGroupSplit>;
 	/**
-	 * Whether a counted standing was read only from earlier reviews, which carry no current proof
+	 * Whether at least 5 counted developers have a standing read only from earlier reviews, which carry no current proof
 	 */
 	includesEarlierReviews: boolean;
 	/**
-	 * The reader's open feedback, counted by the rule the practice profile shows it open by, beside the middle half of the developers the page counts: both open now
+	 * The reader's open feedback, open now, counted by the rule the practice profile shows it open by. It has no middle half: whether another person's card is open follows a delivery rule that staff can change for one person
 	 */
 	openFeedback: WorkspaceTile;
 };
@@ -4894,11 +4897,11 @@ export type PracticesAcrossWorkspace = {
  */
 export type PracticesAcrossWorkspaceTiles = {
 	/**
-	 * Developers with a standing in a practice group shown in the window, the developers the tiles compare. Null for fewer than 5
+	 * Developers with a standing in the window, the developers the tiles compare. Null for 1 to 4
 	 */
 	developersWithAStandingInWindow: null | number;
 	/**
-	 * Whether a counted standing in the window was read only from earlier reviews
+	 * Whether at least 5 developers counted in the window have a standing read only from earlier reviews
 	 */
 	includesEarlierReviews: boolean;
 	/**
@@ -5271,10 +5274,6 @@ export type PublicActivity = {
 	providerType?: IdentityProviderType;
 	repositories: Array<PublicActivityRepository>;
 	to: Date;
-	/**
-	 * Contributors in the period who are counted but not named, because they have no account that chose to show and the workspace does not list such contributors
-	 */
-	unlistedContributors: number;
 	workspaceName: string;
 };
 
@@ -5290,10 +5289,6 @@ export type PublicActivityCounts = {
 	pullRequestsMerged: number;
 	pullRequestsOpened: number;
 	pullRequestsReviewed: number;
-};
-
-export type PublicActivityHiddenCount = {
-	hiddenPeople: number;
 };
 
 export type PublicActivityHighlights = {
@@ -6935,7 +6930,7 @@ export type SlackChannelConsentEvent = {
 export type SlackChannelConsentTarget = "ACTIVE" | "PAUSED" | "REVOKED";
 
 /**
- * An allow-listed Slack channel with its consent state and person opt-out count
+ * An allow-listed Slack channel with its consent state
  */
 export type SlackMonitoredChannel = {
 	/**
@@ -6958,10 +6953,6 @@ export type SlackMonitoredChannel = {
 	 * Internal allow-list row id
 	 */
 	id: string;
-	/**
-	 * Number of workspace members who have opted out of ingestion (workspace-wide). Null for fewer than 5
-	 */
-	optedOutMemberCount: null | number;
 	/**
 	 * Slack channel id (stable C…/G… id; the natural key)
 	 */
@@ -7164,7 +7155,7 @@ export type SyncResourceState = {
 	 */
 	backfillPercent?: number;
 	/**
-	 * Per-entity-class breakdown behind itemCount. One entry per class the integration actually mirrors — 6 for an SCM repository, 1 for a Slack channel or Outline collection. Never null; empty when the resource has never synced.
+	 * Per-entity-class breakdown behind itemCount. One entry per class the integration actually mirrors — 6 for an SCM repository, 1 for an Outline collection, none for a Slack channel. Never null; empty when the resource has never synced or the integration withholds its counts.
 	 */
 	counts: Array<SyncResourceCount>;
 	/**
@@ -7236,7 +7227,7 @@ export type TeamInfo = {
 	 */
 	members: Array<UserInfo>;
 	/**
-	 * Total count of team memberships
+	 * Members listed in `members`. Hidden members and bots are neither listed nor counted, so the count gives no unnamed person back by subtraction
 	 */
 	membershipCount: number;
 	/**
@@ -8827,11 +8818,11 @@ export type WorkspaceReviewScope = {
  */
 export type WorkspaceSplit = {
 	/**
-	 * Every developer the split counts, the parts and none yet together, the reader included when counted. Null for fewer than 5
+	 * Every developer the split counts, the parts and none yet together, the reader included when counted. Null for 1 to 4
 	 */
 	developers: null | number;
 	/**
-	 * Developers with a standing in a group shown but none here. Null when the split shows only its total
+	 * Developers the page counts who have no verdict here. Null when the split shows only its total
 	 */
 	noneYet: null | number;
 	/**
@@ -15063,54 +15054,6 @@ export type GetActivityPersonWorkResponses = {
 
 export type GetActivityPersonWorkResponse =
 	GetActivityPersonWorkResponses[keyof GetActivityPersonWorkResponses];
-
-export type GetPublicActivityHiddenCountData = {
-	body?: never;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-	};
-	query?: never;
-	url: "/workspaces/{workspaceSlug}/activity/public-hidden-count";
-};
-
-export type GetPublicActivityHiddenCountErrors = {
-	/**
-	 * A request parameter is not valid
-	 */
-	400: ProblemDetail;
-	/**
-	 * The caller is not a member of the workspace
-	 */
-	403: ProblemDetail;
-	/**
-	 * Workspace, contributor, team or repository not found
-	 */
-	404: ProblemDetail;
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"4XX": ProblemDetail;
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"5XX": ProblemDetail;
-};
-
-export type GetPublicActivityHiddenCountError =
-	GetPublicActivityHiddenCountErrors[keyof GetPublicActivityHiddenCountErrors];
-
-export type GetPublicActivityHiddenCountResponses = {
-	/**
-	 * Hidden contributors counted
-	 */
-	200: PublicActivityHiddenCount;
-};
-
-export type GetPublicActivityHiddenCountResponse =
-	GetPublicActivityHiddenCountResponses[keyof GetPublicActivityHiddenCountResponses];
 
 export type GetActivityWorkData = {
 	body?: never;

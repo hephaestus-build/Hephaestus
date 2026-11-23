@@ -40,7 +40,6 @@ function ChannelsTableHeader() {
 			<TableRow>
 				<TableHead>Channel</TableHead>
 				<TableHead>Status</TableHead>
-				<TableHead className="text-right">Opted out</TableHead>
 				<TableHead>Announced</TableHead>
 				<TableHead className="w-0 text-right">
 					<span className="sr-only">Actions</span>

@@ -21,14 +21,12 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEve
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
-import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -73,9 +71,6 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
     private SlackChannelConsentEventRepository consentEventRepository;
 
     @Mock
-    private SlackParticipantConsentRepository participantConsentRepository;
-
-    @Mock
     private SlackIngestService ingestService;
 
     @Mock
@@ -109,7 +104,6 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
         return new SlackChannelConsentService(
                 monitoredChannelRepository,
                 consentEventRepository,
-                participantConsentRepository,
                 ingestService,
                 slackMessageService,
                 connectionService,
@@ -172,21 +166,6 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
     @AfterEach
     void clearAuthentication() {
         SecurityContextHolder.clearContext();
-    }
-
-    @Test
-    void shouldLeaveOutTheOptOutCountWhenFewerThanFiveMembersOptedOut() {
-        when(monitoredChannelRepository.findByWorkspaceIdOrderByCreatedAtDesc(WS))
-                .thenReturn(List.of(channel(ConsentState.ACTIVE, null)));
-        when(participantConsentRepository.countByWorkspaceIdAndIngestionOptedOutTrue(WS))
-                .thenReturn(4L, 6L);
-
-        assertThat(service().listChannels(WS))
-                .extracting(SlackMonitoredChannelDTO::optedOutMemberCount)
-                .containsOnlyNulls();
-        assertThat(service().listChannels(WS))
-                .extracting(SlackMonitoredChannelDTO::optedOutMemberCount)
-                .containsExactly(6L);
     }
 
     @Test
