@@ -1,4 +1,3 @@
-import deepEqual from "fast-deep-equal";
 import { AlertCircle, ChevronDownIcon } from "lucide-react";
 import { useId, useState } from "react";
 import type {
@@ -40,6 +39,7 @@ import {
 } from "@/components/ui/item";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { equalDraftValues } from "@/lib/equal-draft-values";
 import { isComposing } from "@/lib/keyboard-shortcuts";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 
@@ -114,15 +114,15 @@ export function WorkspacePracticeReviewScopeSettings({
 		baseEtag: settings.etag,
 		scope: settings.reviewScope,
 	});
-	const storedDraftChanged = !deepEqual(storedDraft.scope, storedDraft.baseScope);
-	const persistedScopeChanged = !deepEqual(storedDraft.baseScope, settings.reviewScope);
+	const storedDraftChanged = !equalDraftValues(storedDraft.scope, storedDraft.baseScope);
+	const persistedScopeChanged = !equalDraftValues(storedDraft.baseScope, settings.reviewScope);
 	const draft =
 		persistedScopeChanged && !storedDraftChanged ? settings.reviewScope : storedDraft.scope;
 	const setDraft = (scope: WorkspaceReviewScope) =>
 		setStoredDraft((current) => {
 			const hasUnmergedChanges =
-				!deepEqual(current.scope, current.baseScope) &&
-				!deepEqual(current.scope, settings.reviewScope);
+				!equalDraftValues(current.scope, current.baseScope) &&
+				!equalDraftValues(current.scope, settings.reviewScope);
 			return {
 				baseScope: hasUnmergedChanges ? current.baseScope : settings.reviewScope,
 				baseEtag: hasUnmergedChanges ? current.baseEtag : settings.etag,
@@ -131,7 +131,7 @@ export function WorkspacePracticeReviewScopeSettings({
 		});
 	const [workflow, setWorkflow] = useState<Workflow>({ status: "editing" });
 	const persisted = settings.reviewScope;
-	const dirty = !deepEqual(draft, persisted);
+	const dirty = !equalDraftValues(draft, persisted);
 	const conflicted = storedDraftChanged && persistedScopeChanged;
 	const sourceEtag = persistedScopeChanged ? storedDraft.baseEtag : settings.etag;
 	const busy = workflow.status === "checking" || workflow.status === "saving";
