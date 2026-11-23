@@ -64,6 +64,9 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(() -> jdbc.queryForObject(
                         "SELECT public.person_row_sweep('UNKNOWN', clock_timestamp())", Integer.class))
                 .isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(() -> jdbc.queryForObject(
+                        "SELECT public.person_row_sweep('EXPIRED_EXPORTS', NULL::timestamptz)", Integer.class))
+                .isInstanceOf(DataAccessException.class);
         jdbc.queryForObject(
                 "SELECT public.person_row_sweep('EXPIRED_EXPORTS', 'infinity'::timestamptz)", Integer.class);
 

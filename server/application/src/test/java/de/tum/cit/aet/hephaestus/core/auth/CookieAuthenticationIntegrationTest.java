@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -13,6 +14,8 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.auth.web.AccountExportController;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
@@ -26,10 +29,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
  * Verifies the cookie-session bearer-token resolution wired on the resource-server chain (ADR 0017).
@@ -70,11 +76,7 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
     void shouldDownloadTheSignedInAccountsReadyExport() {
         IssuedAccount owner = issueRealTokenForNewAccount("Export download");
         String payload = "{\"export\":\"ready\"}";
-        long id = Objects.requireNonNull(PostgreSQLTestContainer.ownerJdbc()
-                .queryForObject("""
-                INSERT INTO account_export(account_id, status, expires_at, payload)
-                VALUES (?, 'READY', now() + interval '1 day', ?) RETURNING id
-                """, Long.class, owner.accountId(), payload.getBytes(UTF_8)));
+        long id = readyExport(owner, payload);
 
         webTestClient
                 .get()
@@ -118,6 +120,60 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
                 .expectBody(ExportStatusDTO.class)
                 .value(status -> assertEquals(created.id(), status.id()));
     }
+
+    @Test
+    void shouldReturnTheSameProblemForMissingAndForeignExportIds() {
+        var owner = issueRealTokenForNewAccount("Export owner");
+        var other = issueRealTokenForNewAccount("Other account");
+        long id = readyExport(owner, "{\"export\":\"ready\"}");
+
+        var routes = context
+                .getBean("requestMappingHandlerMapping", RequestMappingHandlerMapping.class)
+                .getHandlerMethods()
+                .entrySet()
+                .stream()
+                .filter(entry -> entry.getValue().getBeanType().equals(AccountExportController.class))
+                .flatMap(entry -> entry.getKey().getPatternValues().stream()
+                        .filter(path -> path.contains("{"))
+                        .flatMap(path -> entry.getKey().getMethodsCondition().getMethods().stream()
+                                .map(method -> new ExportRoute(path, HttpMethod.valueOf(method.name())))))
+                .toList();
+        assertThat(routes).isNotEmpty();
+        for (ExportRoute route : routes) {
+            getExport(owner, route, id).expectStatus().isOk().expectBody(Void.class);
+            assertThat(exportProblem(other, route, id))
+                    .usingRecursiveComparison()
+                    .ignoringFields("instance", "properties.requestId")
+                    .isEqualTo(exportProblem(other, route, Long.MAX_VALUE));
+        }
+    }
+
+    private long readyExport(IssuedAccount owner, String payload) {
+        return Objects.requireNonNull(PostgreSQLTestContainer.ownerJdbc()
+                .queryForObject("""
+                INSERT INTO account_export(account_id, status, expires_at, payload)
+                VALUES (?, 'READY', now() + interval '1 day', ?) RETURNING id
+                """, Long.class, owner.accountId(), payload.getBytes(UTF_8)));
+    }
+
+    private WebTestClient.ResponseSpec getExport(IssuedAccount account, ExportRoute route, long id) {
+        return webTestClient
+                .method(route.method())
+                .uri(Objects.requireNonNull(ApiPath.relative(route.path())), id)
+                .headers(headers -> headers.setBearerAuth(account.token()))
+                .exchange();
+    }
+
+    private ProblemDetail exportProblem(IssuedAccount account, ExportRoute route, long id) {
+        return Objects.requireNonNull(getExport(account, route, id)
+                .expectStatus()
+                .isNotFound()
+                .expectBody(ProblemDetail.class)
+                .returnResult()
+                .getResponseBody());
+    }
+
+    private record ExportRoute(String path, HttpMethod method) {}
 
     @Test
     void cookieOnlyRequestAuthenticatesAndGetUserReturnsAccount() {
