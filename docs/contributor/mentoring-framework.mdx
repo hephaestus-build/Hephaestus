@@ -4,7 +4,16 @@ description: The design of Hephaestus as an AI mentor, from the person's first w
 page_type: explanation
 ---
 
+> **Code decides when Hephaestus speaks and who may read it. A model only chooses the words.**
+
+That is the thesis of the design.
 Hephaestus is an AI mentor: it gives each developer practice feedback on their real work, and a private conversation about that work.
+
+Code decides when Hephaestus speaks. It decides whether a result, a check-in or a withheld copy becomes a message, and when a notification may interrupt.
+Code also decides who may read it. A turn reads only what every reader of its output may read, so private context never reaches the work or a channel.
+
+The model writes the words inside those decisions. It never states a result that the rows do not hold.
+
 This page explains the design of that mentor from end to end.
 Read it first if you review the design or build a part of it.
 It gives the product rules, the experience, and the reasons for each decision.
@@ -12,7 +21,7 @@ It gives the product rules, the experience, and the reasons for each decision.
 [Mentoring behavior](./mentoring-behaviour.mdx) and [mentoring evaluation](./mentoring-evaluation.mdx) give the detail of contact, tone and quality.
 
 :::note
-Most of this page describes a design that the maintainers accepted for the build. The current release does not do it.
+Most of this page describes a proposed design. Its decisions are proposed ADRs, and the current release does not do it.
 Each table that mixes the two has a Status column. **Exists** is in the current release. **Planned** is designed for 1.0. **Later** comes after 1.0.
 :::
 

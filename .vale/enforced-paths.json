@@ -258,6 +258,7 @@
 	"docs/decisions/0111-the-docs-site-is-a-static-fumadocs-build-on-astro.md",
 	"docs/decisions/0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md",
 	"docs/decisions/0119-a-workload-trained-aot-cache-needs-a-build-design-before-the-server-image-ships-it.md",
+	"docs/decisions/0124-hephaestus-gives-practice-feedback-with-a-conversation-and-practices-are-the-unit.md",
 	"docs/user/accessibility.mdx",
 	"docs/user/activity.mdx",
 	"docs/user/ai-code-review.mdx",
