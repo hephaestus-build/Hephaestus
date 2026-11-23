@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers.conversation;
 
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptHistory;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
@@ -44,7 +44,7 @@ public class ReviewAttemptsContentSource implements ContentSource {
 
     static final int LOOKBACK_DAYS = 90;
     static final int MAX_ATTEMPTS = 20;
-    private final ReviewJobRepository jobs;
+    private final ReviewAttemptHistory jobs;
     private final ReviewAssignmentQuery assignments;
     private final AssessmentPort assessments;
     private final List<ItemSourceAccess> sources;
@@ -114,15 +114,14 @@ public class ReviewAttemptsContentSource implements ContentSource {
                 .put("scope", "RETAINED_REVIEW_JOBS_ABOUT_DEVELOPER")
                 .put("lookbackDays", LOOKBACK_DAYS)
                 .put("maxEntries", MAX_ATTEMPTS);
-        var candidates = jobs.findAttemptsByWorkspaceIdAndAvailableAtGreaterThanEqualOrderByAvailableAtDesc(
-                workspaceId, now.minus(LOOKBACK_DAYS, ChronoUnit.DAYS), PageRequest.of(0, 201));
+        var candidates = jobs.recent(workspaceId, now.minus(LOOKBACK_DAYS, ChronoUnit.DAYS), PageRequest.of(0, 201));
         var read = candidates.stream().limit(200).toList();
         // Every run's assignments in one read; each work item's conversation permission once, however many runs it had.
         var retainedByJob = assignments.retained(
                 workspaceId,
                 read.stream()
                         .map(job -> new ReviewAssignmentQuery.RetainedRun(
-                                job.getReviewId(), job.getId(), job.getInput().assignments()))
+                                job.reviewId(), job.id(), job.input().assignments()))
                         .toList());
         Map<ItemRef, Boolean> permitted = new HashMap<>();
         coverage.put("listingComplete", candidates.size() <= 200);
@@ -134,8 +133,8 @@ public class ReviewAttemptsContentSource implements ContentSource {
         // says so, so another developer's runs are not counted here.
         boolean attributionComplete = true;
         for (var job : read) {
-            var asked = job.getInput().assignments();
-            var retained = retainedByJob.getOrDefault(job.getId(), List.of());
+            var asked = job.input().assignments();
+            var retained = retainedByJob.getOrDefault(job.id(), List.of());
             if (retained.isEmpty() || (!asked.isEmpty() && retained.size() != asked.size())) {
                 attributionComplete = false;
                 continue;
@@ -155,24 +154,23 @@ public class ReviewAttemptsContentSource implements ContentSource {
             }
             var item = pinned.get().item();
             var row = rows.addObject()
-                    .put("reviewId", job.getReviewId().toString())
-                    .put("jobId", job.getId().toString())
-                    .put("status", job.getStatus().name())
-                    .put("attempt", job.getAttempt())
-                    .put("processingStatus", job.getProcessingStatus().name())
+                    .put("reviewId", job.reviewId().toString())
+                    .put("jobId", job.id().toString())
+                    .put("status", job.status().name())
+                    .put("attempt", job.attempt())
+                    .put("processingStatus", job.processingStatus().name())
                     .put("itemId", Long.toString(item.itemId()))
                     .put("itemKind", item.kind().value())
-                    .put("availableAt", job.getAvailableAt().toString());
+                    .put("availableAt", job.availableAt().toString());
             Long sourceId = item.sourceId();
             Optional<String> segment = segmentOf(item.kind());
             if (sourceId != null && segment.isPresent()) {
                 row.put("reviewsResource", ConversationContextPaths.reviewAttempts(segment.get(), sourceId));
             }
-            if (job.getStartedAt() != null)
-                row.put("startedAt", job.getStartedAt().toString());
-            if (job.getCompletedAt() != null)
-                row.put("completedAt", job.getCompletedAt().toString());
-            listed.add(new Listed(row, item, new AssessmentPort.ReviewedItem(job.getReviewId(), item.itemId())));
+            if (job.startedAt() != null) row.put("startedAt", job.startedAt().toString());
+            if (job.completedAt() != null)
+                row.put("completedAt", job.completedAt().toString());
+            listed.add(new Listed(row, item, new AssessmentPort.ReviewedItem(job.reviewId(), item.itemId())));
         }
         coverage.put("attributionComplete", attributionComplete);
         if (!attributionComplete)

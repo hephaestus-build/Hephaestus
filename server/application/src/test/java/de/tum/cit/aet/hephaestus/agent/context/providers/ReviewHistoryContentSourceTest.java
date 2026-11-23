@@ -45,8 +45,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         var actual = new HistoryCopy(true, List.of(), List.of(), List.of());
         var incomplete = new HistoryCopy(false, List.of(), List.of(), List.of());
         when(results.forAssignment(1, assignment.id(), 20)).thenReturn(List.of(vouched, unknown));
-        when(copies.of(vouched)).thenReturn(actual);
-        when(copies.of(unknown)).thenReturn(incomplete);
+        when(vouched.copyAuthorityComplete()).thenReturn(true);
         when(copies.record(actual)).thenReturn(true);
         var source = new ReviewHistoryContentSource(
                 results, mock(FeedbackHistoryQuery.class), copies, mock(RegisteredItemLabels.class), new JsonMapper());

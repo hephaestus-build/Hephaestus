@@ -11,10 +11,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptHistory;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptHistory.RetainedAttempt;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobInput;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository.RetainedAttempt;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
@@ -23,7 +23,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSourceAccess;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeAssessments;
 import de.tum.cit.aet.hephaestus.practices.spi.DeveloperPracticeStandings;
-import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
@@ -32,7 +31,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.ReviewJobFixtures;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -49,7 +47,7 @@ import tools.jackson.databind.json.JsonMapper;
 class ReviewAttemptsContentSourceTest extends BaseUnitTest {
     private static final ReviewAssignmentId ASSIGNMENT = new ReviewAssignmentId(RuntimeReviewTestData.REVIEW, 31, 2);
 
-    private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
+    private final ReviewAttemptHistory jobs = mock(ReviewAttemptHistory.class);
     private final ReviewAssignmentQuery assignments = mock(ReviewAssignmentQuery.class);
     private final ItemSourceAccess source = mock(ItemSourceAccess.class);
     private final RegisteredItemLabels labels = mock(RegisteredItemLabels.class);
@@ -68,10 +66,9 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
     private final Map<UUID, List<ReviewAssignmentQuery.Retained>> attribution = new HashMap<>();
 
     private void listed(ReviewJob... retained) {
-        when(jobs.findAttemptsByWorkspaceIdAndAvailableAtGreaterThanEqualOrderByAvailableAtDesc(eq(1L), any(), any()))
+        when(jobs.recent(eq(1L), any(), any()))
                 .thenReturn(Arrays.stream(retained)
-                        .map(Attempt::new)
-                        .map(attempt -> (RetainedAttempt) attempt)
+                        .map(ReviewAttemptsContentSourceTest::attempt)
                         .toList());
     }
 
@@ -86,52 +83,17 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         });
     }
 
-    /** A run as the attempts list reads it. */
-    private record Attempt(ReviewJob job) implements RetainedAttempt {
-        @Override
-        public UUID getId() {
-            return job.getId();
-        }
-
-        @Override
-        public UUID getReviewId() {
-            return job.getReviewId();
-        }
-
-        @Override
-        public ReviewJobStatus getStatus() {
-            return job.getStatus();
-        }
-
-        @Override
-        public int getAttempt() {
-            return job.getAttempt();
-        }
-
-        @Override
-        public ProcessingStatus getProcessingStatus() {
-            return job.getProcessingStatus();
-        }
-
-        @Override
-        public Instant getAvailableAt() {
-            return job.getAvailableAt();
-        }
-
-        @Override
-        public @Nullable Instant getStartedAt() {
-            return job.getStartedAt();
-        }
-
-        @Override
-        public @Nullable Instant getCompletedAt() {
-            return job.getCompletedAt();
-        }
-
-        @Override
-        public ReviewJobInput getInput() {
-            return job.getInput();
-        }
+    private static RetainedAttempt attempt(ReviewJob job) {
+        return new RetainedAttempt(
+                job.getId(),
+                job.getReviewId(),
+                job.getStatus(),
+                job.getAttempt(),
+                job.getProcessingStatus(),
+                job.getAvailableAt(),
+                job.getStartedAt(),
+                job.getCompletedAt(),
+                job.getInput());
     }
 
     private static ReviewAssignmentQuery.Retained about(@Nullable Long developer) {
@@ -365,8 +327,7 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
 
     @Test
     void shouldAnswerOnlyItsOwnItemPathsAndSayNotFoundForWorkWithoutAttempts() {
-        when(jobs.findAttemptsByWorkspaceIdAndAvailableAtGreaterThanEqualOrderByAvailableAtDesc(eq(1L), any(), any()))
-                .thenReturn(List.of());
+        when(jobs.recent(eq(1L), any(), any())).thenReturn(List.of());
         var attempts =
                 new ReviewAttemptsContentSource(jobs, assignments, assessments, List.of(), labels, new JsonMapper());
 

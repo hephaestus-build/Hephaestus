@@ -257,8 +257,7 @@ public class ResultAdmissionService {
             owned.setCapture(retained);
             owned.setAdmissionDigest(digest);
             owned.setAdmissionAttempt(identity.attempt());
-            staging.retainSealBasis(identity, owned, digest, staged);
-            jobs.saveAndFlush(owned);
+            staging.finishSeal(identity, owned, digest, staged);
             return new Sealed(owned, tookStaged);
         }));
     }

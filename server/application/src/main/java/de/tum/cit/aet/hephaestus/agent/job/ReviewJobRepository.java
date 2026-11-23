@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptHistory.RetainedAttempt;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
@@ -24,35 +24,16 @@ import tools.jackson.databind.JsonNode;
 
 @Repository
 public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptHistory$RetainedAttempt(
+            j.id, j.reviewId, j.status, j.attempt, j.processingStatus, j.availableAt, j.startedAt, j.completedAt, j.input)
+        FROM ReviewJob j WHERE j.workspaceId = :workspaceId AND j.availableAt >= :since
+        ORDER BY j.availableAt DESC
+        """)
+    List<RetainedAttempt> findRecentAttempts(long workspaceId, Instant since, Pageable page);
+
     List<ReviewJob> findByWorkspaceIdAndStatusInOrderByAvailableAtAscIdAsc(
             long workspaceId, Collection<ReviewJobStatus> statuses, Limit limit);
-
-    /** The newest runs of the workspace since {@code since}, with only the columns a run's history shows. */
-    List<RetainedAttempt> findAttemptsByWorkspaceIdAndAvailableAtGreaterThanEqualOrderByAvailableAtDesc(
-            long workspaceId, Instant since, Pageable page);
-
-    /** A run as its history shows it, without the configuration, capture and output it stored. */
-    interface RetainedAttempt {
-        UUID getId();
-
-        UUID getReviewId();
-
-        ReviewJobStatus getStatus();
-
-        int getAttempt();
-
-        ProcessingStatus getProcessingStatus();
-
-        Instant getAvailableAt();
-
-        @Nullable
-        Instant getStartedAt();
-
-        @Nullable
-        Instant getCompletedAt();
-
-        ReviewJobInput getInput();
-    }
 
     List<ReviewJob> findByReviewIdAndWorkspaceIdOrderByAvailableAtAsc(UUID reviewId, long workspaceId);
 

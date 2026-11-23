@@ -73,9 +73,19 @@ public class PracticePageFeedbackBasis {
         return visible;
     }
 
+    public Map<UUID, Long> visiblePracticeIds(long workspaceId, Collection<UUID> feedbackIds) {
+        return visibleEvidence(workspaceId, feedbackIds).entrySet().stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        Map.Entry::getKey, entry -> entry.getValue().getFirst().getPracticeId()));
+    }
+
     public Map<Long, Practice> practices(long workspaceId, Collection<Result> results) {
-        var ids = results.stream().map(Result::getPracticeId).collect(Collectors.toSet());
-        return practices.findByWorkspaceIdAndIdIn(workspaceId, ids).stream()
+        return practicesById(
+                workspaceId, results.stream().map(Result::getPracticeId).collect(Collectors.toSet()));
+    }
+
+    public Map<Long, Practice> practicesById(long workspaceId, Collection<Long> practiceIds) {
+        return practices.findByWorkspaceIdAndIdIn(workspaceId, practiceIds).stream()
                 .collect(Collectors.toMap(Practice::getId, Function.identity()));
     }
 

@@ -1,12 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopies;
-import de.tum.cit.aet.hephaestus.agent.context.HistoryCopy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
@@ -61,7 +62,7 @@ class FeedbackCompositionSupportTest extends BaseUnitTest {
             mock(FeedbackRepair.class),
             references);
     private final ReviewJob job = RuntimeReviewTestData.job();
-    private final ResultHistoryEntry current = result(42), earlier = result(84);
+    private final ResultHistoryEntry current = result(42), earlier = spy(result(84));
     private final List<AdmittedResultSnapshot> admitted = List.of(new AdmittedResultSnapshot(
             current.resultId(),
             new ResultCandidate(
@@ -99,7 +100,6 @@ class FeedbackCompositionSupportTest extends BaseUnitTest {
         for (var row : List.of(current, earlier)) {
             when(history.find(1, row.resultId(), 5, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                     .thenReturn(Optional.of(row));
-            when(copies.of(row)).thenReturn(new HistoryCopy(true, List.of(), List.of(), List.of()));
         }
     }
 
@@ -139,7 +139,7 @@ class FeedbackCompositionSupportTest extends BaseUnitTest {
 
     @Test
     void shouldNotReadWorkLabelsWhenHistoricalCopyAuthorityFails() {
-        when(copies.of(earlier)).thenReturn(new HistoryCopy(false, List.of(), List.of(), List.of()));
+        doReturn(false).when(earlier).copyAuthorityComplete();
 
         var read = composition.read(job, admitted);
         assertThat(Objects.requireNonNull(read.context().practicePageSupport()).state())

@@ -70,6 +70,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSealed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
@@ -90,13 +91,17 @@ import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import tools.jackson.databind.json.JsonMapper;
 
 class ResultAdmissionServiceTest extends BaseUnitTest {
+    private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final AgentRuns runs = mock(AgentRuns.class);
     private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
 
@@ -166,7 +171,9 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         receipts,
                         bases,
                         mapper,
-                        new PracticeCatalogInjector(mapper)),
+                        new PracticeCatalogInjector(mapper),
+                        jobs,
+                        events),
                 runs);
         lenient().when(jobs.databaseClock()).thenAnswer(call -> Instant.now());
         lenient().when(members.endedPractices(anyLong(), any(), any())).thenReturn(Set.of(31L));
@@ -622,6 +629,10 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         assertThat(service.sealUnmeasured(identity(), sealRequest())).isTrue();
 
         verify(output).seal(any(), any());
+        var seal = inOrder(jobs, events);
+        seal.verify(jobs).saveAndFlush(job);
+        seal.verify(events).publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId()));
+        verify(events).publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId()));
         // The first seal reads the staged copies before and after it refuses any; the repeated seal reads none.
         verify(stagingStore, times(2)).staged(1, job.getReviewId(), job.getId());
     }
@@ -635,6 +646,27 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         assertThat(service.sealUnmeasured(identity(), sealRequest())).isFalse();
 
         verify(output).seal(any(), any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ITEM, TRIAL", "SCAN, REQUEST"})
+    void shouldPublishNoItemSealForATrialOrScan(ReviewKind kind, ReviewOrigin origin) {
+        var assignment = sealable();
+        when(assignments.review(job))
+                .thenReturn(new ReviewSnapshot(
+                        job.getReviewId(),
+                        job.getWorkspaceId(),
+                        assignment.item(),
+                        kind,
+                        assignment.version(),
+                        origin,
+                        1,
+                        List.of(assignment.practice())));
+        when(output.seal(job, List.of())).thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        assertThat(service.sealUnmeasured(identity(), sealRequest())).isFalse();
+
+        verifyNoInteractions(events);
     }
 
     @Test
