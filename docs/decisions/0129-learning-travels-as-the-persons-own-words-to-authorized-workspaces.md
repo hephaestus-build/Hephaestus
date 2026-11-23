@@ -48,7 +48,7 @@ Option 5.
    - Model text that the person confirmed word for word on a screen. The hash of the shown text proves it.
    - Closed fields: practice identity, outcome, period and counts.
 3. **What never travels.** Model prose, noted records and evidence never travel. The person's **Keep** turns a noted record into a person-authored record (ADR 0132, proposed in #4865). Then **Take along** can transfer it.
-4. **The copy keeps its source in its own columns.** No transfer table exists.
+4. **The copy keeps its source and the source's restriction in its own columns.** No transfer table exists.
 5. **The source decides.** The export policy of each team workspace is Open (the default), Personal only or Closed.
    - Closed blocks even the person's confirmed words.
    - Personal only lets a record reach the personal space, never another team workspace.
@@ -61,16 +61,19 @@ Option 5.
    - After the save, the entry offers **Take along**. Its card shows the exact words and the destinations, and the person confirms it.
    - Under Closed, the entry offers no **Take along** and says why.
 9. **Learning arrives without its origin.** A run in the destination does not learn which team the record came from.
-10. **Checks at transfer.**
-    - The authorship check passes only confirmed text that matches the shown hash.
-    - The identifier check refuses a record that names a person who is not a member of the destination.
+10. **Source restrictions travel with the record.** The server checks them at export and at each use in a destination.
+    - At transfer, the authorship check passes only confirmed text that matches the shown hash.
+    - At each use, the identifier check refuses a record that names a non-member of that destination.
+    - Automatic context in another team workspace holds only closed fields and the person's confirmed words.
 11. **Every move has a reverse.**
     - Undo removes the copy.
     - A recall by the source workspace moves its copies to `NEEDS_REVIEW`, with reason `RECALLED`.
 12. **Providers.** The person sees the AI provider when they set up the personal space. A provider change notifies the person and pauses transfer until they confirm.
     - Local turns continue.
     - Imported context that the new provider may not read is withheld from it.
-13. **Across instances, the person downloads their learning.** A portable download carries the same records and fields. An import goes only to the personal space, with no permissions and no evidence.
+13. **Across instances, the person downloads their learning.** An import goes only to the personal space, with no permissions and no evidence.
+    - The portable download carries only records whose source restriction lets them leave the instance. A Personal only record never crosses employers, so the download omits it.
+    - The personal data access export stays a separate file ([ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md)). No import reads it.
 
 ### What this changes in other ADRs
 
@@ -84,6 +87,7 @@ Option 5.
 - Bad: a lesson that the model wrote and the person did not confirm does not travel. The person must confirm it word for word first.
 - Bad: a noted record never travels by itself. The person must select **Keep**, then **Take along**.
 - Bad: a recall can move a record that the person relies on to review, without the person's act.
+- Bad: a Personal only record stays on its instance, also when the person changes employer.
 
 ## Confirmation
 
@@ -92,7 +96,9 @@ Not enforced yet. The implementation adds these tests:
 - An integration test fails when a record of a Closed workspace reaches another workspace, or its entry offers **Take along**.
 - An integration test fails when a plain local save creates a copy in the personal space.
 - A route test fails when a record whose text changed after it was shown transfers.
-- A fixture test fails when a record that names a non-member transfers.
+- A fixture test fails when a destination uses a record that names a person who is not its member.
+- A fixture test fails when a portable download carries a Personal only record.
+- A fixture test fails when a destination uses a record that its source restriction forbids.
 - A fixture test fails when a noted record transfers without **Keep** and **Take along**.
 - Integration tests fail when Undo leaves the copy, or a recall leaves a copy outside `NEEDS_REVIEW`.
 

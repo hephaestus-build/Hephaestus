@@ -45,8 +45,8 @@ Option 4.
    - A guard runs before any controller. Staff routes accept only team workspaces.
 4. **The personal space exists from the first need.** The first personal record, transfer or grant creates it, in one idempotent transaction. Sign-up creates nothing.
 5. **Runs in the personal space are on by default.**
-   - They follow the same model readiness and the same model budget for each payer as team workspaces.
-   - The payer is the budget that a run spends. The instance pays for personal spaces, from the instance-funded cap of [ADR 0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md).
+   - Every personal-space run uses the instance's binding for its purpose and one instance payer key. A personal space has no binding of its own.
+   - All personal spaces share the instance-funded cap that the instance admin sets. The three gates of [ADR 0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) enforce it.
    - An operator can turn them off with one instance switch.
    - Turning runs off never removes storage or access.
 6. **Leaving keeps the learning.**
@@ -56,7 +56,7 @@ Option 4.
    - A person whose identity is removed gets a verified portability address.
 7. **Absorption and erasure suspend the space.** They run while the workspace is `SUSPENDED`. Main's filter already hides a space that is not active. No new status exists.
 8. **Personal-space records enter Slack one at a time, by the person's act.** No turn takes them to Slack on its own.
-   - The Slack detail level **Full** is the person's grant for records of the Slack-connected workspace only. ADR 0123 (proposed in #4862) decision 5 owns that list.
+   - The Slack detail level **Full** is the person's grant for records of the Slack-connected workspace only. ADR 0123 (proposed in #4862) owns that list.
    - Full never reads a personal-space record.
    - This decision owns the rule. Check-ins and other Slack turns point here.
 
@@ -64,6 +64,7 @@ Option 4.
 
 - [ADR 0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) stays. The personal space is a workspace, so every rule of it applies.
 - [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) stays. The relationship adds account-level rows beside the account. It adds no second account.
+- [ADR 0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) stays. Its submission, claim and proxy gates read one payer key for all personal spaces.
 
 ## Consequences
 
@@ -71,7 +72,7 @@ Option 4.
 - Good: a person who leaves a team keeps their learning.
 - Good: no empty personal spaces exist for people who never need one.
 - Bad: every admin and staff route needs the team-only guard. A route that forgets it can show a personal space to staff. A test covers each route.
-- Bad: personal-space runs cost the operator model calls that no team pays for. The instance switch is the only control in 1.0.
+- Bad: personal-space runs cost the operator model calls that no team pays for. The instance switch and the one cap are the only controls in 1.0.
 - Bad: the leaving window keeps a scoped session alive for 30 days after the team removed the person.
 
 ## Confirmation
@@ -83,6 +84,7 @@ Not enforced yet. The implementation adds these tests:
 - A slug test fails when a team workspace can take a slug of the form `me--`.
 - A leaving test fails when a removed member cannot use the scoped session within 30 days. It also fails when they can after it.
 - A switch test fails when turning personal-space runs off removes a record or access.
+- A budget test fails when two personal spaces together pass the one instance-funded cap.
 - A Slack route test fails when a Slack turn reads a personal-space record without the person's act. The test runs at Full and at Notice.
 
 ## Revisit trigger

@@ -6,7 +6,7 @@
 
 **Supersedes:** [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md)
 
-**Amends:** [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rules 4, 19 and 21. [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16. [ADR 0047](0047-the-practice-profile-has-one-reader.md), its View as user exception. [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), its smallest count.
+**Amends:** [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rules 1, 4, 19 and 21. [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16. [ADR 0047](0047-the-practice-profile-has-one-reader.md), its View as user exception. [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), its smallest count.
 
 **Builds on:** ADR 0124 (proposed in #4866)
 
@@ -53,16 +53,15 @@ Option 4.
 1. **Staff get no per-person path.** Staff are instance admins, workspace admins and workspace owners. They get no conversation or feedback detail, no usage counts, no impersonation, and no person-level export or preview.
 2. **View as user and Per-person results for admins are deleted.** Their routes, settings and audit rows go at the cutover.
 3. **Staff see items only inside an approval or a correction.** Each such view shows exact fields and expires.
-   - An approval under Approve first shows the copy, the item link and the practice for 14 days.
+   - An approval under Approve first acts only while ADR 0122 (proposed in #4862) lets the copy stage and post. Its copy, item link and practice then stay readable for 14 days, as history that approves nothing.
    - A correction shows the observation and the person's explanation for 30 days.
    - No other staff view lists observations.
 4. **No staff route returns an account ID beside an outcome.** A generated test sweeps every staff route.
 5. **One monthly practice outcome for each practice.** Workspace admins see one value for each practice and month. An example is "verification steps present in 62 % of reviewed pull requests".
    - It counts only observations on the work.
-   - It needs at least 5 people, the floor of every staff-visible aggregate. `SmallCounts` holds that floor.
-   - Suppression hides a value that a total would give back.
+   - It follows the disclosure rule of decision 14.
    - It never shows use of Hephaestus or any person.
-6. **Practices across the workspace hides counts of fewer than 5 people.** This replaces the 3 of ADR 0112. The other rules of ADR 0112 stay, with 5 in place of 3:
+6. **Practices across the workspace follows the disclosure rule of decision 14.** Its floor of 5 people replaces the 3 of ADR 0112. The other rules of ADR 0112 stay, with 5 in place of 3:
    - A split shows all its cells or only its total. The reader is not told why.
    - A typical range is read from at least 5 other developers.
    - `SmallCounts` on the server is the one home of the threshold.
@@ -72,23 +71,33 @@ Option 4.
 10. **The operator statement.** Settings show **Who runs this server**, with the operator's name and a link to its statement.
     - The first screen promises only what Hephaestus enforces: "Acme's admins and managers cannot see this in Hephaestus."
     - "Your employer sees nothing about you" appears only where the operator declares that it is not the employer.
-11. **Nothing ranks people.**
+11. **Nothing ranks people, and Activity shows each reader only what that reader may read.**
     - Activity shows people unordered, by name, with no positions, or as team aggregates.
     - A ranking of people is a differencing surface, and it contradicts feedback on work. So [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rule 4 changes.
-    - Activity never shows data from conversations, personal records or practice feedback.
+    - A member-visible Activity projection follows the provider reader rules of [ADR 0127](0127-every-record-and-route-resolves-to-concrete-readers.md). Or it shows only sources that every member may read. So ADR 0093 rule 1 changes.
+    - No member-visible projection shows conversations, personal records or practice feedback.
+    - The owner's item cards live on a separate owner-only route with its own cache (ADR 0150, proposed in #4862).
 12. **The copy on the work names its developer,** as the work itself does. The admin guide tells the operator that this copy is public to the employer.
 13. **Research is the one carve-out.** Sequences for each person exist only in research datasets of people who allowed research use.
-    - Who may receive a dataset, and when it needs the floor of 20: ADR 0141 (proposed in #4868) decision 2.
+    - Who may receive a dataset, and when it needs the floor of 20: ADR 0141 (proposed in #4868).
     - Who runs a delivery experiment and who holds its stop switch: ADR 0149 (proposed in #4868).
     - No staff role and no product surface sees the sequences or the delivery decisions.
+14. **One disclosure rule covers every figure that staff, the steward or a research recipient sees.** The server enforces it before any figure or dataset leaves.
+    - Each cell counts at least 5 people. `SmallCounts` holds that floor.
+    - A unanimous cell, in which every person has the same outcome, is suppressed.
+    - A release whose difference with an earlier release isolates fewer than 5 people does not go out. A release ledger records each release for this check.
+    - Linkable fields, such as exact timings and version sequences, are suppressed or coarsened.
+    - Text that quotes a private message or names a bystander is omitted.
+    - ADR 0141 (proposed in #4868) applies this rule to research datasets and owns their floor of 20.
 
 ### What this changes in other ADRs
 
 - [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md) is superseded. Decision 6 keeps its mechanism and raises the threshold. Its open question gets the answer of decision 3: admins see work items only inside an approval or a correction.
 - [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rule 4 changes. People no longer sort by a count and show no positions. The code change is a separate issue.
-- ADR 0093 rule 19 changes. Admins no longer read the observations of the review and delivery pages, except inside an approval or a correction. Rule 21 goes, because no read-only user view exists. Rule 4 stays: Activity sorts people by counts of provider work, which assess no practice.
+- ADR 0093 rule 1 changes. Member-visible Activity no longer reads repositories that a member cannot read on the provider (decision 11).
+- ADR 0093 rule 19 changes. Admins no longer read the observations of the review and delivery pages, except inside an approval or a correction. Rule 21 goes, because no read-only user view exists.
 - [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16 keeps "Nobody acts as another account". The read-only user views go.
-- ADR 0131 (proposed in #4862) supersedes ADR 0082. Its decision 5 keeps the conversation for its owner only, without View as user.
+- ADR 0131 (proposed in #4862) supersedes ADR 0082. It keeps the conversation for its owner only, without View as user.
 - [ADR 0047](0047-the-practice-profile-has-one-reader.md) loses its View as user exception. The Practice profile has one reader with no exception.
 
 ## Consequences
@@ -100,6 +109,7 @@ Option 4.
 - Bad: workspace admins lose the observation lists that they use to find wrong results. They see a result only when a person asks for a correction.
 - Bad: with 5 in place of 3, Practices across the workspace shows more total-only splits. A workspace of 30 to 40 developers sees this often. ADR 0112 priced this cost and declined it. We now accept it, because the page is part of the promise that no one learns about one person.
 - Bad: teams of fewer than 5 people see no monthly practice outcome. The page says why.
+- Bad: a unanimous figure shows no value, even when the news is good. A practice that every developer meets shows no monthly practice outcome.
 
 ## Confirmation
 
@@ -107,8 +117,9 @@ Not enforced yet. The implementation adds these tests:
 
 - A generated staff route test fails when a staff route returns an account ID beside an outcome.
 - `SmallCountsTest` fails when a count of 1 to 4 people shows, or a split with such a cell shows a cell.
-- A practice outcome test fails when a figure from fewer than 5 people shows a value.
+- A disclosure test fails when a figure from fewer than 5 people or a unanimous cell leaves the server. It also fails for a release that isolates fewer than 5 people against an earlier release.
 - A route test fails when any route reads another account's conversation, records or Practice profile.
+- An Activity route test fails when a member sees work from a repository that the member cannot read. It also fails when a member sees another person's item cards.
 - `ArchitectureTest` fails when a class named for View as user or Per-person results for admins exists.
 
 ## Revisit trigger

@@ -49,6 +49,8 @@ Option 5.
    - A session revoke closes that session's streams at once.
    - A support snapshot revoke is checked at every read.
    - A research consent withdrawal is checked again before release.
+   - A change of the Slack detail level bumps the Slack level epoch, which fences the Slack route. ADR 0123 (proposed in #4862) owns it.
+   - A replayed request re-authorizes and renders current data, as ADR 0135 (proposed in #4867) decides.
 4. **Instance switches bump nothing.** Dispatch and send read the current instance settings. Silent mode is also checked at send.
 5. **Contact changes are not authority changes.** Pause, quiet hours, Not now, Less often, mute and stop never bump a generation. They never stop an answer or reset a cache. The contact policy checks them at send.
 6. **The recheck runs at three boundaries.**
@@ -58,12 +60,13 @@ Option 5.
 7. **The owner's own stream is not a recheck boundary.** A session end closes it. A narrowing changes the scope epoch, and the epoch fences the stream:
    - Every stream frame carries the scope epoch that it was produced under.
    - The sandbox gateway drops an answer delta whose scope epoch is older than the current one. So the output of a model call that started before the narrowing reaches no client.
-   - The eviction frame goes out before any frame of the new epoch. ADR 0135 (proposed in #4867) decision 5 binds the frames.
+   - The eviction frame goes out before any frame of the new epoch. ADR 0135 (proposed in #4867) binds the frames.
 8. **A run and an action carry an authorization stamp.** `agent_run` and `agent_action` store the generations that they started with. A stale stamp refuses with its reason. A false cancellation is safe.
-9. **A write that may have started is never replayed blindly.** ADR 0151 (proposed in #4862) decision 3 gives the rule for each transport. Provider and Slack writes are read back. Email and push have no readback and stay at most once.
+9. **A write that may have started is never replayed blindly.** ADR 0151 (proposed in #4862) gives the rule for each transport. Provider and Slack writes are read back. Email and push have no readback and stay at most once.
 10. **A person's pause never blocks the copy on the work.** That copy follows the work's own settings.
 11. **One order at each boundary.** The authorization recheck runs first, then routing and limits, then the contact policy.
 12. **Each setting that carries authority is registered.** It has one owning row, one owning command and one generation. It registers one test case for each boundary.
+13. **A source change fences every turn that read the source.** Forget, a correction and a source revocation bump the scope epoch of each such turn. The server checks it before a model call and before an app frame, a commit or a send.
 
 ### What this changes in other ADRs
 
@@ -90,6 +93,7 @@ Not enforced yet. The implementation adds these tests:
 - `AuthorityBearingRegistryTest` fails when a setting that carries authority has no case for each boundary.
 - An integration test changes a contact setting during a stream. It fails when the turn stops or the scope epoch changes.
 - An integration test fails when a narrowing does not evict on the next feed frame and close the stream. It also fails when an answer delta of the old scope epoch reaches the client after the eviction.
+- An integration test runs Forget during a streaming answer that read the forgotten record. It fails when a later frame, commit or send of that turn uses the record.
 
 ## Revisit trigger
 

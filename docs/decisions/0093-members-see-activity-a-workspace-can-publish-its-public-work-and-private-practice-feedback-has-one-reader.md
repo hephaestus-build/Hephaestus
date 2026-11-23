@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-10
 **Authors:** Felix T.J. Dietrich
-**Amended by:** [ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md) (rule 4: Activity ranks no one)
+**Amended by:** [ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md) (rules 1, 4, 19 and 21)
 
 **Supersedes:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md), [ADR 0047](0047-the-practice-profile-has-one-reader.md), [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), [ADR 0052](0052-activity-sorts-by-contributions-and-can-be-public.md)
 

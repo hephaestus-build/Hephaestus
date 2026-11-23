@@ -42,6 +42,8 @@ Option 4.
 1. **Refer, never copy, inside a workspace.** A derived record cites its sources through one table of provenance references, `basis_edge`. Its source kinds are an entry, a record and a suggestion.
 2. **A revocation bumps a generation.** Every consumer of the revoked source becomes stale in that transaction.
    - Validity is checked when a record is read. A stale record never shapes an answer.
+   - Staleness is transitive. A record derived from a stale record is stale too.
+   - A turn that already read the source is fenced by [ADR 0134](0134-the-authorization-recheck-runs-at-three-boundaries-with-two-authorization-generations.md) decision 13.
    - Cleanup is a durable server job on the existing job mechanism.
 3. **One cascade table.** For each cause and each dependent kind, it names one action.
    - Causes are a removal, an authority narrowing and an erasure.
@@ -57,9 +59,7 @@ Option 4.
    - An erased source removes the provenance references of other people that cite it.
    - An erased Slack channel redacts that channel's entries in every person's conversation.
 8. **Every new row and every remote copy has a person-data catalog entry with its cascade.** A generated test fails without it.
-9. **Erasures and revocations survive a database restore.** A privacy journal records them, and the erasure recovery replays them. ADR 0140 (proposed in #4867) decides the journal.
-   - The guarantee needs the journal's copy in object storage. Without it, an instance cannot enable delivery experiments or research datasets (ADR 0140 decision 9).
-   - Without that copy, the operator recovers by hand, from a manifest that covers every journal kind (ADR 0140 decision 10).
+9. **Erasures and revocations survive a database restore.** A deny intent is durable in the off-database journal before it takes effect. A restore reapplies every journaled fact before it serves data. ADR 0140 (proposed in #4867) owns both rules, the journal bucket and the manual path.
 
 ### What this changes in other ADRs
 

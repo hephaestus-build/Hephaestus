@@ -40,6 +40,7 @@ Option 4.
 1. **Every record and every route resolves to concrete readers.** `Readers` is a sealed value type.
    - The kinds are the owner, workspace members, the readers of a provider resource and a Slack identity.
    - A support recipient and anyone, for public work, are kinds too.
+   - A Slack channel resolves to every reader of that channel, as ADR 0123 (proposed in #4862) decides.
    - A check that one set covers another never widens a set.
    - Unknown readers refuse.
    - A guessed ID returns 404.
@@ -54,13 +55,13 @@ Option 4.
    - `public.person_row_sweep` deletes for retention and erasure by one closed rule.
    - `public.support_share_mark_read` changes only the read count and the last read time.
    - `public.research_export_rows(release)` reads the rows of one research release. It is the research module's function.
-   - `public.person_row_counts(kind, workspace, period)` returns counts only, and only counts of at least 5 people. The floor of 5 is from [ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md).
+   - `public.person_row_counts(kind, workspace, period)` returns counts only, under the disclosure rule of [ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md).
    - Each is `SECURITY DEFINER`, owned by `hephaestus_owner`, with a fixed `search_path` and `REVOKE ALL … FROM PUBLIC`.
 9. **The research export function has one caller.**
    - Only the research export job calls it, and only for an approved release. An architecture test enforces the one caller.
-   - The function refuses a release that is not approved. It checks consent and redaction for each row.
+   - The function refuses a release that is not approved. It checks consent, redaction and the disclosure rule of [ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md).
    - ADR 0141 (proposed in #4868) names who approves a release and the checks.
-   - No staff role and no staff route reaches it.
+   - It serves only the recipient's grant that ADR 0141 defines. No staff role, no staff route and no admin download reaches it.
 10. **Workspace tenancy stays.** The workspace statement inspector of [ADR 0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) runs beside row-level security.
 11. **Provider access is fresh.**
     - A cache of provider access lists has a bounded lifetime for each adapter, one hour by default.

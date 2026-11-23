@@ -56,22 +56,25 @@ Option 5.
 4. **It never appears in a message that Hephaestus starts.** The contact policy removes it. A check-in pre-check never reads its outcome.
 5. **The person asks for it.** The practice page shows "Ask Hephaestus about this practice". A request is naming the practice in the conversation or selecting that control.
    - Before a request, no projection holds an On request result. The item card, the practice page and the change feed leave it out.
-   - A request releases the results sealed up to then, in all three projections and in the conversation. A later seal waits for the next request.
-   - The mode at the seal decides for each result. A mode change emits no feed change. A result held under On request was never sent, so no client holds it. A result sent before the change stays.
+   - A request releases the results sealed up to then, where decision 13 allows them. A later seal waits for the next request.
+   - The mode at the seal decides whether a result is an On request result.
 6. **A conversation summary never names it.** The summary validator drops an item that names an On request or Off practice.
 7. **An On request seal writes no growth point.** Help on request never fades.
 8. **"Where feedback may appear" is set for each practice:** on the work, on the practice page, in conversation. The workspace holds a default (`default_feedback_destinations`). A practice entry overrides it.
    - **Remove override** is the reverse, in both admin consoles. It deletes the practice's destinations, and the practice uses the workspace default again.
 9. **Modes and destinations bound every copy.** They feed the eligible set of each place. The composer's first guardrail and the delivery gate enforce them. A copy that puts a problem outside the allowed destinations is refused.
-10. **Exclusion of a Critical or Major problem** follows the workspace policy `allowSevereExclusion` of ADR 0121 (proposed in #4862) decision 8.
+10. **Exclusion of a Critical or Major problem** follows the workspace policy `allowSevereExclusion` of ADR 0121 (proposed in #4862).
 11. **Practice file format version 2** carries the mode and the destinations. Version 1 files still load, with the workspace default.
 12. **On request is not "Reviews here start only on request".** That setting decides when a review starts. This mode decides where its feedback goes. The glossary keeps them apart.
+13. **One visibility rule.** A person sees an On request result only where request coverage, current authority and the destination policy all allow it. This holds for every read, projection and feed change.
+    - A narrowing of any of the three evicts the app data that it no longer allows.
+    - A copy posted on the work before the narrowing stays.
 
 ### What this changes in other ADRs
 
 - [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) stays. Its stages run for an On request practice. Delivery stops at the mode, with its own recorded reason. Its update of 2026-11-21 on pushes keeps Off's narrower selection for Off only. On request feedback reaches the person who asks, so a push measures it.
-- ADR 0135 (proposed in #4867) streams item cards as typed changes. Decision 5 of this ADR decides which changes carry an On request result.
-- ADR 0121 (proposed in #4862) decision 7, guardrail 1, reads this mode and these destinations.
+- ADR 0135 (proposed in #4867) streams item cards as typed changes. Decisions 5 and 13 of this ADR decide which changes carry an On request result.
+- ADR 0121 (proposed in #4862), its first guardrail, reads this mode and these destinations.
 - [ADR 0130](0130-a-practice-has-a-portable-identity-and-growth-counts-independent-pieces-of-work.md) owns growth points. This ADR adds that an On request seal writes none.
 - The review glossary's Feedback mode row gains On request on acceptance.
 
@@ -94,7 +97,7 @@ Not enforced yet. The implementation adds these tests:
 - `DestinationGuardrailTest` fails when a copy that puts a problem outside the allowed destinations is admitted.
 - `OnRequestNoGrowthTest` fails when an On request seal writes a growth point.
 - `PracticeFileVersionOneTest` fails when a version 1 practice file no longer loads.
-- `OnRequestProjectionTest` fails when an item card, a practice page or a feed change carries an On request result before a request.
+- `OnRequestProjectionTest` fails when an item card, a practice page or a feed change carries an On request result before a request. It also fails outside the current destinations and authority.
 - `RemoveOverrideTest` fails when **Remove override** leaves the practice's own destinations, in either console.
 - `OnRequestSelectionTest` fails when a push leaves out an On request practice, or withholds it with `FEEDBACK_MODE_OFF`.
 - Stories in both admin consoles show the mode and the destinations, with their empty, loading and error states.
