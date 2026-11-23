@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { compare, countLockfile, render } from "./check-dependency-baseline.ts";
+import {
+	compare,
+	countLockfile,
+	LOCKFILES,
+	lockedNames,
+	render,
+	retiredInLockfiles,
+} from "./check-dependency-baseline.ts";
 
 const LOCKFILE = `---
 lockfileVersion: '9.0'
@@ -167,4 +174,41 @@ await test("a lockfile the baseline does not name rises; one the lockfiles no lo
 		rises: [],
 		falls: ["a.yaml › envPackages: 0 → undefined", "a.yaml › packages: 1 → undefined"],
 	});
+});
+
+await test("the names a lockfile installs come from both documents, scoped and aliased ones resolved", () => {
+	assert.deepEqual([...lockedNames(LOCKFILE, "fixture")].toSorted(), [
+		"@voidzero-dev/vite-plus-core",
+		"fsevents",
+		"left-pad",
+		"pnpm",
+		"react",
+		"react-dom",
+		"scheduler",
+		"tool",
+	]);
+});
+
+await test("a lockfile that installs a retired package fails, whatever the counts", () => {
+	const read = () => LOCKFILE;
+	assert.deepEqual(retiredInLockfiles({ "is-even": "Owned." }, read), []);
+	assert.deepEqual(
+		retiredInLockfiles({ "left-pad": "String.prototype.padStart." }, read),
+		LOCKFILES.map(
+			(file) => `${file} installs left-pad, which is retired: String.prototype.padStart.`,
+		),
+	);
+	// The root importer declares `vite` as an alias of Vite+ core: the installed name is what counts.
+	assert.equal(
+		retiredInLockfiles({ "@voidzero-dev/vite-plus-core": "Aliased." }, read).length,
+		LOCKFILES.length,
+	);
+	assert.deepEqual(retiredInLockfiles({ vite: "Only an alias here." }, read), []);
+	// The env document's config dependencies run during an install, so they count too.
+	assert.equal(retiredInLockfiles({ pnpm: "Env." }, read).length, LOCKFILES.length);
+});
+
+await test("a retired entry without a reason is refused", () => {
+	assert.throws(() => retiredInLockfiles({ "left-pad": " " }, () => LOCKFILE), /needs the reason/u);
+	assert.throws(() => retiredInLockfiles([], () => LOCKFILE), TypeError);
 });

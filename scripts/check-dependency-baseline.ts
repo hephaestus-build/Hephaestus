@@ -7,6 +7,10 @@
  * baseline. An exact match would serialize every pull request that changes a count.
  * `docs/contributor/dependencies.mdx` gives the bar for an addition.
  *
+ * A package that the repository removed on purpose stays out: a lockfile that holds a name from
+ * `security/retired-dependencies.json` fails, whatever the counts, so a removal cannot come back at
+ * the same or a lower count.
+ *
  * Usage: `node scripts/check-dependency-baseline.ts [--write]`.
  */
 import { readFileSync, writeFileSync } from "node:fs";
@@ -17,6 +21,7 @@ import { parseAllDocuments } from "yaml";
 import { asRecord, isRecord, parseJson } from "./lib/json.ts";
 
 export const BASELINE_FILE = "security/dependency-baseline.json";
+export const RETIRED_FILE = "security/retired-dependencies.json";
 
 // Each lockfile that the repository installs from. The agent images resolve on their own.
 export const LOCKFILES = [
@@ -142,6 +147,47 @@ export function countLockfile(text: string, file: string): LockfileCounts {
 	return { envPackages, packages: Object.keys(packages).length, importers: counts };
 }
 
+// A package key is `name@version` or `@scope/name@version`; the version can hold `@` (a tarball URL).
+const packageName = (key: string): string => {
+	const id = packageId(key);
+	const at = id.indexOf("@", id.startsWith("@") ? 1 : 0);
+	return at === -1 ? id : id.slice(0, at);
+};
+
+/**
+ * Every package name a lockfile installs: its env document's and its project's, by resolved name.
+ * An npm alias (`foo: npm:bar@1`) resolves to `bar@1` there, so it cannot hide a retired name.
+ */
+export function lockedNames(text: string, file: string): Set<string> {
+	const { env, lock } = lockDocuments(text, file);
+	return new Set(
+		[env?.packages, lock.packages]
+			.flatMap((packages) => (isRecord(packages) ? Object.keys(packages) : []))
+			.map(packageName),
+	);
+}
+
+/** The retired packages that a lockfile installs again, each with the reason it was retired. */
+export function retiredInLockfiles(
+	retired: unknown,
+	read: (file: string) => string = (file) => readFileSync(file, "utf8"),
+): string[] {
+	const reasons = asRecord(retired, RETIRED_FILE);
+	const found: string[] = [];
+	for (const file of LOCKFILES) {
+		const names = lockedNames(read(file), file);
+		for (const [name, reason] of Object.entries(reasons)) {
+			if (typeof reason !== "string" || reason.trim() === "") {
+				throw new TypeError(`${RETIRED_FILE}: ${name} needs the reason it was retired`);
+			}
+			if (names.has(name)) {
+				found.push(`${file} installs ${name}, which is retired: ${reason}`);
+			}
+		}
+	}
+	return found;
+}
+
 export function measure(read: (file: string) => string = (file) => readFileSync(file, "utf8")) {
 	return Object.fromEntries(
 		LOCKFILES.map((file) => [file, countLockfile(read(file), file)]),
@@ -191,6 +237,19 @@ export function compare(
 export const render = (counts: Baseline): string => `${JSON.stringify(counts, null, "\t")}\n`;
 
 if (import.meta.main) {
+	const returned = retiredInLockfiles(parseJson(readFileSync(RETIRED_FILE, "utf8")));
+	if (returned.length > 0) {
+		console.error(
+			[
+				`A lockfile installs a package from ${RETIRED_FILE}:`,
+				...returned.map((line) => `  ${line}`),
+				"",
+				"Use the replacement. To take a retired package back, remove its entry and meet the bar in",
+				"docs/contributor/dependencies.mdx in the same pull request.",
+			].join("\n"),
+		);
+		process.exitCode = 1;
+	}
 	const measured = measure();
 	if (process.argv.includes("--write")) {
 		writeFileSync(BASELINE_FILE, render(measured));

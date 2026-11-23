@@ -1,0 +1,5 @@
+{
+	"@gitlab/svgs": "The web app owns the path data of the GitLab icons it draws (webapp/src/components/icons/gitlab-icons.tsx).",
+	"usehooks-ts": "The web app reads media queries and element width with matchMedia and ResizeObserver (webapp/src/hooks/use-media-query.ts, use-content-width.ts).",
+	"vite-plugin-terminal": "Vite's own server.forwardConsole forwards browser logs to the dev server's terminal."
+}

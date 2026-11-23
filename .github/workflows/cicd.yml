@@ -412,6 +412,7 @@ jobs:
               - 'scripts/**'
               - 'security/semgrep/**'
               - 'security/dependency-baseline.json'
+              - 'security/retired-dependencies.json'
               - 'docker/agents/**'
               # test:agents runs on this leg, and these files are what it tests.
               - 'server/application/src/main/resources/agent/**'
