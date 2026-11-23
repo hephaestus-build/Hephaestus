@@ -769,4 +769,4 @@ Old active reviews have no checkpoint. Their first upgrade requires the one-time
 
 ## Update — 2026-11-23: the product feedback draft has no model loop in the JVM
 
-`ModelSession` is removed. The product feedback draft stays the outbox action `DRAFT_REPORT`. Its one tool-free call is written and read by the model proxy's draft gateway (`ProductFeedbackModelGateway`), so no server code outside the proxy speaks a model protocol. Every HTTP client that server code builds refuses a model request that the proxy did not send (`ModelEgressGuard`). This replaces the last sentence of the update "the JVM composer is gone" of 2026-11-10.
+`ModelSession` is removed. The product feedback draft stays the outbox action `DRAFT_REPORT`. Its one tool-free call is written and read by the model proxy's draft gateway (`ProductFeedbackModelGateway`), so no server code outside the proxy speaks a model protocol. Every HTTP client that server code builds from the application's Spring builders refuses a POST to an inference path that the proxy did not send (`ModelEgressConfig`). This replaces the last sentence of the update "the JVM composer is gone" of 2026-11-10.

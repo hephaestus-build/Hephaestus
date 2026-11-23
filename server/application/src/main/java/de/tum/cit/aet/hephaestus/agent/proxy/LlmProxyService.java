@@ -876,7 +876,7 @@ class LlmProxyService {
         var request = webClient
                 .method(HttpMethod.POST)
                 .uri(exchange.uri())
-                .attribute(ModelEgressGuard.PROXY_CALL, true)
+                .attribute(ModelEgressConfig.PROXY_CALL, ModelEgressConfig.PROXY_MARK)
                 .headers(headers -> {
                     headers.clear();
                     headers.addAll(exchange.headers());

@@ -387,20 +387,23 @@ The factory adds nothing that the descriptor does not name:
 - Cache warming is off.
 
 `pi-session.spec.ts` fails when an agent source other than `pi-session.ts` imports a session builder of the SDK as a value.
-It also finds a builder under another name, through a namespace import or through a dynamic import.
-It reads the sources and does not run each run kind.
+It also finds a builder under another name, through a namespace import or through a dynamic import. A builder reached by a computed member name escapes it.
 It also fails when a run kind in `driver-kinds.ts` does not name how it opens its sessions.
+
+`pi-session-dispatch.spec.ts` runs the registry's `TURN` and `DIGEST` runners with a recording factory, and each must open its session through it.
+`REVIEW` runs as a separate process that the server stages, so only the source scan covers it.
 `REVIEW_COMPOSE` keeps its own model client until the publication cutover.
 The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
 
 The server makes its own model calls only through the proxy's gateways, such as `ProductFeedbackModelGateway` for a report draft.
-`ModelEgressGuard` refuses a model request on every HTTP client that server code builds, unless the proxy sent it.
+`ModelEgressConfig` refuses a POST to a known inference path on every client built from the application's Spring builders, unless the proxy sent it.
+The proxy marks its own request with an object that no other package can reach.
 Server code builds every client from the application's Spring builders. A vendor SDK's own transport, such as Slack's, is outside the guard.
 A model request is a POST to an inference path, such as a chat completion, a message or an embedding.
 
-`ModelEgressGuardTest` sends such a request to a local model endpoint with the application's client builder, and the guard refuses it.
+`ModelEgressConfigTest` sends such a request to a local model endpoint with the application's client builder, and the guard refuses it.
 The proxy's integration tests send through the guarded client, so a proxy request without its mark fails them.
-`ModelCallBoundaryArchTest` fails when server code builds an OkHttp client of its own.
+`ModelCallBoundaryArchTest` fails when server code builds an OkHttp client of its own or sends a request with Reactor Netty's client directly.
 It also fails when a class outside the proxy reads the provider key of a resolved model (`ProxyCredential`).
 
 ### Isolation

@@ -14,19 +14,23 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
+import org.springframework.boot.restclient.autoconfigure.RestTemplateAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.webclient.autoconfigure.WebClientAutoConfiguration;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /** The server's own clients, as the application builds them, cannot reach a model past the proxy. */
-class ModelEgressGuardTest extends BaseUnitTest {
+class ModelEgressConfigTest extends BaseUnitTest {
 
     private final ApplicationContextRunner context = new ApplicationContextRunner()
-            .withConfiguration(
-                    AutoConfigurations.of(RestClientAutoConfiguration.class, WebClientAutoConfiguration.class))
-            .withUserConfiguration(ModelEgressGuard.class);
+            .withConfiguration(AutoConfigurations.of(
+                    RestClientAutoConfiguration.class,
+                    RestTemplateAutoConfiguration.class,
+                    WebClientAutoConfiguration.class))
+            .withUserConfiguration(ModelEgressConfig.class);
 
     private MockWebServer model;
 
@@ -70,6 +74,37 @@ class ModelEgressGuardTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRefuseAModelRequestThatARestTemplateSendsPastTheProxy() {
+        model.enqueue(new MockResponse.Builder().body("{}").build());
+        context.run(app -> {
+            var template = app.getBean(RestTemplateBuilder.class).build();
+
+            assertThatThrownBy(() ->
+                            template.postForObject(model.url("/v1/messages").uri(), "{}", String.class))
+                    .hasMessageContaining("A model request must go through the model proxy");
+            assertThat(model.getRequestCount()).isZero();
+        });
+    }
+
+    @Test
+    void shouldRefuseAModelRequestThatClaimsTheProxysMarkWithAnotherValue() {
+        model.enqueue(new MockResponse.Builder().body("{}").build());
+        context.run(app -> {
+            var client = app.getBean(WebClient.Builder.class).build();
+
+            assertThatThrownBy(() -> client.post()
+                            .uri(model.url("/chat/completions").uri())
+                            .attribute(ModelEgressConfig.PROXY_CALL, true)
+                            .bodyValue("{}")
+                            .retrieve()
+                            .bodyToMono(String.class)
+                            .block())
+                    .hasMessageContaining("A model request must go through the model proxy");
+            assertThat(model.getRequestCount()).isZero();
+        });
+    }
+
+    @Test
     void shouldRefuseAModelRequestThatAReactiveClientSendsWithoutTheProxysMark() {
         model.enqueue(new MockResponse.Builder().body("{}").build());
         context.run(app -> {
@@ -101,7 +136,7 @@ class ModelEgressGuardTest extends BaseUnitTest {
                     .build()
                     .post()
                     .uri(model.url("/chat/completions").uri())
-                    .attribute(ModelEgressGuard.PROXY_CALL, true)
+                    .attribute(ModelEgressConfig.PROXY_CALL, ModelEgressConfig.PROXY_MARK)
                     .bodyValue("{}")
                     .retrieve()
                     .bodyToMono(String.class)

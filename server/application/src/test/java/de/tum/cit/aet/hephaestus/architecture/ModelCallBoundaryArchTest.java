@@ -9,11 +9,13 @@ import com.tngtech.archunit.core.domain.JavaCodeUnitAccess;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import java.util.Set;
 import java.util.function.Function;
 import okhttp3.OkHttpClient;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import reactor.netty.http.client.HttpClient;
 
 /**
  * The server sends a model request only through the model proxy, which fences, bills and bounds it. Every agent loop
@@ -45,6 +47,22 @@ class ModelCallBoundaryArchTest extends HephaestusArchitectureTest {
             .callConstructor(OkHttpClient.Builder.class)
             .because("the model egress guard sees only clients built from the application's Spring builders");
 
+    private static final Set<String> REACTOR_SENDS =
+            Set.of("get", "post", "put", "patch", "delete", "head", "options", "request", "websocket");
+
+    /**
+     * Reactor Netty's client sends a request with no Spring builder, so the egress guard never sees it. Server code may
+     * configure one as a connector for a WebClient, but not send with it.
+     */
+    static final ArchRule NO_DIRECT_REACTOR_NETTY_REQUEST = noClasses()
+            .should()
+            .accessTargetWhere(DescribedPredicate.<JavaAccess<?>>describe(
+                    "a request sent with Reactor Netty's client",
+                    access -> access instanceof JavaCodeUnitAccess<?>
+                            && access.getTargetOwner().isAssignableTo(HttpClient.class)
+                            && REACTOR_SENDS.contains(access.getName())))
+            .because("the model egress guard sees only requests sent through the application's Spring clients");
+
     @Test
     @DisplayName("only the model proxy reads a model's provider key")
     void onlyTheProxyCallsAModel() {
@@ -55,6 +73,50 @@ class ModelCallBoundaryArchTest extends HephaestusArchitectureTest {
     @DisplayName("server code builds no OkHttp client of its own")
     void noServerCodeBuildsAnOkHttpClient() {
         NO_OWN_OKHTTP_CLIENT.check(classes);
+    }
+
+    @Test
+    @DisplayName("server code sends no request with Reactor Netty's client directly")
+    void noServerCodeSendsWithReactorNettyDirectly() {
+        NO_DIRECT_REACTOR_NETTY_REQUEST.check(classes);
+    }
+
+    /** Classes that send a model request with a client the egress guard never sees. */
+    static final class OwnOkHttpClient {
+        OkHttpClient client() {
+            return new OkHttpClient.Builder().build();
+        }
+    }
+
+    static final class OwnReactorNettyRequest {
+        Object ask() {
+            return HttpClient.create().post().uri("http://model.invalid/v1/chat/completions");
+        }
+    }
+
+    static final class OwnReactorNettyRequestByReference {
+        Function<HttpClient, ?> ask() {
+            return HttpClient::post;
+        }
+    }
+
+    @Test
+    @DisplayName("a client outside the egress guard fails its rule")
+    void aClientOutsideTheEgressGuardFails() {
+        var importer = new ClassFileImporter();
+
+        assertThat(NO_OWN_OKHTTP_CLIENT
+                        .evaluate(importer.importClasses(OwnOkHttpClient.class))
+                        .hasViolation())
+                .isTrue();
+        assertThat(NO_DIRECT_REACTOR_NETTY_REQUEST
+                        .evaluate(importer.importClasses(OwnReactorNettyRequest.class))
+                        .hasViolation())
+                .isTrue();
+        assertThat(NO_DIRECT_REACTOR_NETTY_REQUEST
+                        .evaluate(importer.importClasses(OwnReactorNettyRequestByReference.class))
+                        .hasViolation())
+                .isTrue();
     }
 
     /** Classes that call a model with their own client, past the proxy. */

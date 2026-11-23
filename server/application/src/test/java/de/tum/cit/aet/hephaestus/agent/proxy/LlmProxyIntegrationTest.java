@@ -1898,7 +1898,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     /** A client as the application builds it, with the model egress guard, so each test also proves the proxy's mark. */
     private static WebClient guardedClient() {
         return WebClient.builder()
-                .filter(ExchangeFilterFunction.ofRequestProcessor(ModelEgressGuard::admit))
+                .filter(ExchangeFilterFunction.ofRequestProcessor(ModelEgressConfig::admit))
                 .build();
     }
 }

@@ -24,10 +24,16 @@ import reactor.core.publisher.Mono;
  * listings and limits, which are no inference.
  */
 @Configuration(proxyBeanMethods = false)
-public class ModelEgressGuard {
+public class ModelEgressConfig {
 
-    /** The request attribute that marks a model request as the proxy's own. */
-    static final String PROXY_CALL = ModelEgressGuard.class.getName() + ".proxyCall";
+    /** The request attribute that carries the proxy's mark. */
+    static final String PROXY_CALL = ModelEgressConfig.class.getName() + ".proxyCall";
+
+    /**
+     * The proxy's mark: an object that no class outside this package can reach. A caller elsewhere can set the
+     * attribute, but not to this object, so it cannot claim the proxy's right to send a model request.
+     */
+    static final Object PROXY_MARK = new Object();
 
     /**
      * The paths that ask a model for an answer: those of the chat protocols that the proxy serves, and the other
@@ -69,11 +75,11 @@ public class ModelEgressGuard {
 
     @Bean
     WebClientCustomizer modelEgressWebClient() {
-        return builder -> builder.filter(ExchangeFilterFunction.ofRequestProcessor(ModelEgressGuard::admit));
+        return builder -> builder.filter(ExchangeFilterFunction.ofRequestProcessor(ModelEgressConfig::admit));
     }
 
     static Mono<ClientRequest> admit(ClientRequest request) {
-        boolean proxy = Boolean.TRUE.equals(request.attribute(PROXY_CALL).orElse(null));
+        boolean proxy = request.attribute(PROXY_CALL).orElse(null) == PROXY_MARK;
         return proxy || !isModelRequest(request.method(), request.url())
                 ? Mono.just(request)
                 : Mono.error(refused(request.url()));
