@@ -19,6 +19,7 @@ A problem has the RFC 9457 members `type`, `title`, `status` and `detail`.
   The `type` is `https://docs.hephaestus.build/contributor/api-error-handling#<slug>`, which points to the slug in [Problem types](#problem-types).
   It is an identifier, so it is the same in every build. Other docs links of the server follow the docs of the running build (`DocsSite`).
 - A problem without a distinct kind keeps `type: about:blank`. Its status is then its kind.
+- Use `label.code` to select display text when a problem has a `label`. Its `text` is the fallback.
 - Other members carry named data, such as `maxAgeSeconds`, `errors` or `withholdingReason`.
   Do not add a second code member such as `code`, `reason`, `kind`, `reasonCode` or `error`.
 - Build a typed problem with `ProblemType.X.problem(status, title, detail)`.
@@ -174,11 +175,27 @@ The turn attempt must stop and end: the developer stopped it, or its deadline pa
 
 ### conversation-refused
 
-Hephaestus does not reply to this member. The `detail` names the setting that changes it.
+Hephaestus does not reply to this member. The `label` gives the reason code and fallback text.
 
 ### conversation-rejected
 
-The conversation refused a write that conflicts with its state.
+The conversation refused a write that conflicts with its state. The `label` gives the reason code and fallback text.
+
+### changed-since-shown
+
+The person saw an earlier version. `what` names the part that changed.
+
+### turned-off
+
+A setting prevents the action. `what` names the feature. `by` names the scope that turned it off.
+
+### no-model
+
+The workspace has no model that can do this work.
+
+### check-in-invalid
+
+A check-in setting is invalid. `field` is the JSON pointer to the setting.
 
 ### oauth-callback-failed
 

@@ -35,6 +35,7 @@ import {
 	type TurnApi,
 	WorkerStatusError,
 } from "../../../main/resources/agent/turn.ts";
+import english from "../../../main/resources/copy/mentoring.en.json" with { type: "json" };
 import {
 	AGENT_DIR,
 	contextOf,
@@ -1827,12 +1828,12 @@ void test("a read in flight names the stage of what it reads, in the developer's
 
 	assert.equal(end.outcome, "DONE");
 	const tool = worker.partials.find((partial) => partial.activity === "tool");
-	assert.equal(tool?.stage, "Reading your pull requests and issues…");
+	assert.equal(tool?.stage, "conversation.stage.work");
 });
 
 void test("a fast read's stage reaches the worker though Hephaestus thinks again within the same window", async () => {
 	// The read returns at once and the model's next answer streams slowly: without holding the tool's stage, the
-	// window's snapshot would carry only "Thinking…".
+	// window's snapshot would carry only "conversation.stage.thinking".
 	const worker = fakeWorker(contextOf([], "what did the review say?"));
 
 	const end = await runTurn(
@@ -1857,7 +1858,7 @@ void test("a fast read's stage reaches the worker though Hephaestus thinks again
 
 	assert.equal(end.outcome, "DONE");
 	assert.ok(
-		worker.partials.some((partial) => partial.stage === "Reading your practice feedback…"),
+		worker.partials.some((partial) => partial.stage === "conversation.stage.practice"),
 		JSON.stringify(worker.partials.map((partial) => partial.stage)),
 	);
 });
@@ -1884,54 +1885,45 @@ const DOCUMENT_NAMES = [
 ];
 
 void test("every context document and tool has one stage label, and anything else is thinking", () => {
-	assert.equal(
-		fetching("inputs/context/recent_authored_work.json"),
-		"Reading your pull requests and issues…",
-	);
-	assert.equal(fetching("inputs/context/issue/77.json"), "Reading your pull requests and issues…");
-	assert.equal(fetching("inputs/context/activity.json"), "Reading your pull requests and issues…");
+	assert.equal(fetching("inputs/context/recent_authored_work.json"), "conversation.stage.work");
+	assert.equal(fetching("inputs/context/issue/77.json"), "conversation.stage.work");
+	assert.equal(fetching("inputs/context/activity.json"), "conversation.stage.work");
 	assert.equal(
 		fetching("inputs/context/results_history/0b6c1f0e-8d3a-4c51-9a4e-2f7d5c9e1a33.json"),
-		"Reading your practice feedback…",
+		"conversation.stage.practice",
 	);
 	assert.equal(
 		fetching("inputs/context/review_attempts/issue/21.json"),
-		"Reading your practice feedback…",
+		"conversation.stage.practice",
 	);
-	assert.equal(fetching("inputs/context/practice_profile.json"), "Reading your practice feedback…");
-	assert.equal(fetching("inputs/context/weekly_digest.json"), "Reading your practice feedback…");
-	assert.equal(fetching("inputs/context/slack_conversations.json"), "Reading your team's Slack…");
-	assert.equal(fetching("inputs/context/outline_docs.json"), "Reading your team's docs…");
-	assert.equal(
-		turnStage("search_conversation", { query: "x" }),
-		"Looking back through this conversation…",
-	);
+	assert.equal(fetching("inputs/context/practice_profile.json"), "conversation.stage.practice");
+	assert.equal(fetching("inputs/context/weekly_digest.json"), "conversation.stage.practice");
+	assert.equal(fetching("inputs/context/slack_conversations.json"), "conversation.stage.slack");
+	assert.equal(fetching("inputs/context/outline_docs.json"), "conversation.stage.docs");
+	assert.equal(turnStage("search_conversation", { query: "x" }), "conversation.stage.search");
 	assert.equal(turnStage("link_result", {}), THINKING_STAGE);
 	assert.equal(turnStage("link_problem", {}), THINKING_STAGE);
 	assert.equal(turnStage("show_feedback", {}), THINKING_STAGE);
 	assert.equal(fetching("../etc/passwd"), THINKING_STAGE);
 	assert.equal(fetching("INDEX.md"), THINKING_STAGE);
-	assert.equal(
-		fetching("/workspace/inputs/context/activity.json"),
-		"Reading your pull requests and issues…",
-	);
-	assert.equal(fetching("repos/github.com/acme/api/README.md"), "Reading the repository…");
+	assert.equal(fetching("/workspace/inputs/context/activity.json"), "conversation.stage.work");
+	assert.equal(fetching("repos/github.com/acme/api/README.md"), "conversation.stage.repository");
 	assert.equal(
 		turnStage("bash", { command: "jq '.pullRequests[0]' inputs/context/merge_readiness.json" }),
-		"Reading your pull requests and issues…",
+		"conversation.stage.work",
 	);
 	assert.equal(
 		turnStage("bash", { command: "rg -n Money repos/github.com/acme/api" }),
-		"Reading the repository…",
+		"conversation.stage.repository",
 	);
 	assert.equal(
 		turnStage("bash", { command: "cd repos && git log -n 5" }),
-		"Reading the repository…",
+		"conversation.stage.repository",
 	);
 	assert.equal(turnStage("bash", { command: "ls" }), THINKING_STAGE);
 	assert.equal(
 		turnStage("load_context", { path: "repos/github.com/acme/api" }),
-		"Loading the repository…",
+		"conversation.stage.load-repository",
 	);
 	for (const document of DOCUMENT_NAMES) {
 		assert.notEqual(fetching(`inputs/context/${document}.json`), THINKING_STAGE, document);
@@ -2457,4 +2449,11 @@ void test("a turn's call that its worker took but never answered ends with its r
 		silent.close();
 		await once(silent, "close");
 	}
+});
+
+void test("excludes a progress stage absent from the English catalog", () => {
+	const unregistered = "conversation.stage.unregistered";
+	const excluded: typeof unregistered extends PartialSnapshot["stage"] ? never : true = true;
+	assert.equal(Object.hasOwn(english, unregistered), false);
+	assert.ok(excluded);
 });

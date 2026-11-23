@@ -647,16 +647,6 @@ export const zConversationTurnFailureReason = z.string();
 export const zConversationTurnPartialActivity = z.string();
 
 /**
- * What Hephaestus is doing in a running turn
- */
-export const zConversationTurnPartial = z.object({
-	activity: zConversationTurnPartialActivity,
-	stage: z.string(),
-	text: z.string(),
-	tool: z.string().optional(),
-});
-
-/**
  * Extensible enum: a client accepts a value that the examples do not name.
  */
 export const zConversationTurnPhase = z.string();
@@ -692,45 +682,6 @@ export const zConversationTurnSurface = z.string();
  * Extensible enum: a client accepts a value that the examples do not name.
  */
 export const zConversationTurnWaitingFor = z.string();
-
-/**
- * One conversation turn: a requested answer or an opted-in proactive digest
- */
-export const zConversationTurn = z.object({
-	attempt: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	conversationId: z.uuid(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	error: z.string().optional(),
-	failureReason: zConversationTurnFailureReason.optional(),
-	finishedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	id: z.uuid(),
-	maxAttempts: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	parentEntryId: z.uuid().optional(),
-	partial: zConversationTurnPartial.optional(),
-	phase: zConversationTurnPhase.optional(),
-	requestId: z.string(),
-	status: zConversationTurnStatus,
-	surface: zConversationTurnSurface,
-	waitingFor: zConversationTurnWaitingFor.optional(),
-});
-
-/**
- * The developer's Hephaestus conversation in a workspace at one moment
- */
-export const zConversation = z.object({
-	activeTurns: z.array(zConversationTurn),
-	id: z.uuid().optional(),
-	lastAnswerAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	lastReadAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	latestSeq: z.int(),
-	threads: z.array(zConversationThreadSummary),
-});
 
 /**
  * The developer's vote on one of Hephaestus's messages
@@ -1561,7 +1512,10 @@ export const zIntegrationAttentionChangedEventProblem = z.enum([
 	"WEBHOOK_UNAVAILABLE",
 ]);
 
-export const zIntegrationFamily = z.enum(["SCM", "MESSAGING", "DOCUMENTATION"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zIntegrationFamily = z.string();
 
 /**
  * Extensible enum: a client accepts a value that the examples do not name.
@@ -1703,6 +1657,80 @@ export const zDeliveredWorkFeedback = z.object({
 export const zItemFacts = z.object({
 	facts: z.array(zItemFact),
 	item: zItemRef,
+});
+
+/**
+ * One named value for a label template
+ */
+export const zLabelParam = z.object({
+	count: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	instant: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	ownWords: z.string().optional(),
+	type: z.string(),
+	value: z.string().optional(),
+});
+
+/**
+ * Text that a client can render from a message catalog
+ */
+export const zLabel = z.object({
+	code: z.string(),
+	params: z.record(z.string(), zLabelParam).optional(),
+	text: z.string(),
+});
+
+/**
+ * What Hephaestus is doing in a running turn
+ */
+export const zConversationTurnPartial = z.object({
+	activity: zConversationTurnPartialActivity,
+	stage: z.string(),
+	stageLabel: zLabel.optional(),
+	text: z.string(),
+	tool: z.string().optional(),
+});
+
+/**
+ * One conversation turn: a requested answer or an opted-in proactive digest
+ */
+export const zConversationTurn = z.object({
+	attempt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	conversationId: z.uuid(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	error: z.string().optional(),
+	failureReason: zConversationTurnFailureReason.optional(),
+	finishedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	id: z.uuid(),
+	maxAttempts: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	parentEntryId: z.uuid().optional(),
+	partial: zConversationTurnPartial.optional(),
+	phase: zConversationTurnPhase.optional(),
+	requestId: z.string(),
+	status: zConversationTurnStatus,
+	surface: zConversationTurnSurface,
+	waitingFor: zConversationTurnWaitingFor.optional(),
+});
+
+/**
+ * The developer's Hephaestus conversation in a workspace at one moment
+ */
+export const zConversation = z.object({
+	activeTurns: z.array(zConversationTurn),
+	id: z.uuid().optional(),
+	lastAnswerAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	lastReadAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	latestSeq: z.int(),
+	threads: z.array(zConversationThreadSummary),
 });
 
 /**
@@ -2722,6 +2750,7 @@ export const zProblemType = z.string();
 
 export const zProblemDetail = z.object({
 	activeScanId: z.uuid().optional(),
+	by: z.string().optional(),
 	callbackError: z.string().optional(),
 	connectionId: z.int().optional(),
 	currentVersion: z.string().optional(),
@@ -2729,8 +2758,10 @@ export const zProblemDetail = z.object({
 	declaredTier: z.string().optional(),
 	detail: z.string().optional(),
 	errors: z.record(z.string(), z.array(z.string())).optional(),
+	field: z.string().optional(),
 	instance: z.string().optional(),
 	jobId: z.int().optional(),
+	label: zLabel.optional(),
 	maxAgeSeconds: z.int().optional(),
 	problems: z.array(zPracticeFileProblem).optional(),
 	requestId: z
@@ -2749,6 +2780,7 @@ export const zProblemDetail = z.object({
 	supportedRef: z.string().optional(),
 	title: z.string(),
 	type: zProblemType.optional(),
+	what: z.string().optional(),
 	withholdingReason: z.string().optional(),
 	workspaceByteBudget: z.int().optional(),
 	workspaceBytes: z.int().optional(),

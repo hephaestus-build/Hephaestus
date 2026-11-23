@@ -2645,6 +2645,9 @@ export const ConversationTurnPartialSchema = {
 			description:
 				'What Hephaestus is doing, in the developer\'s words, for example "Reading your practice feedback…"',
 		},
+		stageLabel: {
+			$ref: "#/components/schemas/Label",
+		},
 		text: {
 			type: "string",
 			description: "The text Hephaestus has written in this turn so far",
@@ -5399,7 +5402,8 @@ export const IntegrationCatalogEntrySchema = {
 
 export const IntegrationFamilySchema = {
 	type: "string",
-	enum: ["SCM", "MESSAGING", "DOCUMENTATION"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["SCM", "MESSAGING", "DOCUMENTATION"],
 } as const;
 
 export const IntegrationKindSchema = {
@@ -5709,6 +5713,28 @@ export const JudgedScanReportItemSchema = {
 	],
 } as const;
 
+export const LabelSchema = {
+	type: "object",
+	description: "Text that a client can render from a message catalog",
+	properties: {
+		code: {
+			type: "string",
+			description: "Extensible enum: a catalog key. Accept keys that the client does not know.",
+		},
+		params: {
+			type: "object",
+			additionalProperties: {
+				$ref: "#/components/schemas/LabelParam",
+			},
+		},
+		text: {
+			type: "string",
+			description: "English fallback text. Use it when the client has no copy for this key.",
+		},
+	},
+	required: ["code", "text"],
+} as const;
+
 export const LabelInfoSchema = {
 	type: "object",
 	description: "Information about a label from a repository",
@@ -5733,6 +5759,32 @@ export const LabelInfoSchema = {
 		},
 	},
 	required: ["color", "id", "name"],
+} as const;
+
+export const LabelParamSchema = {
+	type: "object",
+	description: "One named value for a label template",
+	properties: {
+		count: {
+			type: "integer",
+			format: "int32",
+		},
+		instant: {
+			type: "string",
+			format: "date-time",
+		},
+		ownWords: {
+			type: "string",
+		},
+		type: {
+			type: "string",
+			description: "Extensible enum: value, instant, count or ownWords. Accept other kinds.",
+		},
+		value: {
+			type: "string",
+		},
+	},
+	required: ["type"],
 } as const;
 
 export const LatestReleaseSchema = {
@@ -10068,6 +10120,9 @@ export const ProblemDetailSchema = {
 			type: "string",
 			format: "uuid",
 		},
+		by: {
+			type: "string",
+		},
 		callbackError: {
 			type: "string",
 		},
@@ -10097,6 +10152,9 @@ export const ProblemDetailSchema = {
 			},
 			description: "Validation messages for each field that needs a change",
 		},
+		field: {
+			type: "string",
+		},
 		instance: {
 			type: "string",
 			format: "uri-reference",
@@ -10104,6 +10162,9 @@ export const ProblemDetailSchema = {
 		jobId: {
 			type: "integer",
 			format: "int64",
+		},
+		label: {
+			$ref: "#/components/schemas/Label",
 		},
 		maxAgeSeconds: {
 			type: "integer",
@@ -10151,6 +10212,9 @@ export const ProblemDetailSchema = {
 		},
 		type: {
 			$ref: "#/components/schemas/ProblemType",
+		},
+		what: {
+			type: "string",
 		},
 		withholdingReason: {
 			type: "string",
@@ -10207,6 +10271,10 @@ export const ProblemTypeSchema = {
 		"https://docs.hephaestus.build/contributor/api-error-handling#conversation-turn-stopped",
 		"https://docs.hephaestus.build/contributor/api-error-handling#conversation-refused",
 		"https://docs.hephaestus.build/contributor/api-error-handling#conversation-rejected",
+		"https://docs.hephaestus.build/contributor/api-error-handling#changed-since-shown",
+		"https://docs.hephaestus.build/contributor/api-error-handling#turned-off",
+		"https://docs.hephaestus.build/contributor/api-error-handling#no-model",
+		"https://docs.hephaestus.build/contributor/api-error-handling#check-in-invalid",
 		"https://docs.hephaestus.build/contributor/api-error-handling#oauth-callback-failed",
 		"https://docs.hephaestus.build/contributor/api-error-handling#outline-rate-limited",
 		"https://docs.hephaestus.build/contributor/api-error-handling#outline-unreachable",

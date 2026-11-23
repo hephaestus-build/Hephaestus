@@ -29,10 +29,12 @@ class OpenWireEnumTest {
         for (String name : CLOSED_PUBLIC_ENUMS) {
             assertThat(schemas.path(name).path("enum").size()).as(name).isPositive();
         }
-        var role = schemas.path("AboutRole");
-        assertThat(role.path("type").asString()).isEqualTo("string");
-        assertThat(role.has("enum")).isFalse();
-        assertThat(role.path("examples").size()).isPositive();
+        for (String name : Set.of("AboutRole", "IntegrationFamily")) {
+            var schema = schemas.path(name);
+            assertThat(schema.path("type").asString()).as(name).isEqualTo("string");
+            assertThat(schema.has("enum")).as(name).isFalse();
+            assertThat(schema.path("examples").size()).as(name).isPositive();
+        }
     }
 
     @Test

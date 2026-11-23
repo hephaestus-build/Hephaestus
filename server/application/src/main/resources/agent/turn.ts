@@ -102,14 +102,14 @@ const RETRY_DELAYS_MS = [1000, 2000, 4000];
 const SITUATION_TYPE = "turn-situation";
 
 /** The stage label when no tool runs, and for a tool no label names. */
-export const THINKING_STAGE = "Thinking…";
+export const THINKING_STAGE = "conversation.stage.thinking";
 
-const WORK_STAGE = "Reading your pull requests and issues…";
-const PRACTICE_STAGE = "Reading your practice feedback…";
-const REPOSITORY_STAGE = "Reading the repository…";
+const WORK_STAGE = "conversation.stage.work";
+const PRACTICE_STAGE = "conversation.stage.practice";
+const REPOSITORY_STAGE = "conversation.stage.repository";
 
 /** The stage of each context document, by the first segment of its path under `inputs/context/`. */
-const DOCUMENT_STAGES: Readonly<Record<string, string>> = {
+const DOCUMENT_STAGES: Readonly<Record<string, PartialSnapshot["stage"]>> = {
 	user: WORK_STAGE,
 	workspace: WORK_STAGE,
 	recent_authored_work: WORK_STAGE,
@@ -123,12 +123,12 @@ const DOCUMENT_STAGES: Readonly<Record<string, string>> = {
 	practice_catalog: PRACTICE_STAGE,
 	review_attempts: PRACTICE_STAGE,
 	weekly_digest: PRACTICE_STAGE,
-	slack_conversations: "Reading your team's Slack…",
-	outline_docs: "Reading your team's docs…",
+	slack_conversations: "conversation.stage.slack",
+	outline_docs: "conversation.stage.docs",
 };
 
 /** The stage of the first context document a path or a command names, if any. */
-function documentStage(text: string): string | undefined {
+function documentStage(text: string): PartialSnapshot["stage"] | undefined {
 	const document = /(?:^|[\s'"/])inputs\/context\/(?<document>[a-z_]+)/u.exec(text)?.groups
 		?.document;
 	return document === undefined ? undefined : DOCUMENT_STAGES[document];
@@ -143,12 +143,12 @@ function namesRepository(text: string): boolean {
 const STAGED_ARGUMENT: Readonly<Record<string, string>> = { read: "path", bash: "command" };
 
 /** The stage label of a tool call in flight: what it reads, never its arguments. */
-export function turnStage(toolName: string, args: unknown): string {
+export function turnStage(toolName: string, args: unknown): PartialSnapshot["stage"] {
 	if (toolName === "search_conversation") {
-		return "Looking back through this conversation…";
+		return "conversation.stage.search";
 	}
 	if (toolName === "load_context") {
-		return "Loading the repository…";
+		return "conversation.stage.load-repository";
 	}
 	const key = STAGED_ARGUMENT[toolName];
 	const text = key === undefined || !isRecord(args) ? undefined : args[key];
@@ -1393,7 +1393,7 @@ export function partialStream(
 	let latest: PartialSnapshot | null = null;
 	let published: PartialSnapshot | null = null;
 	/** The stage of a tool that started in the window not yet sent. */
-	let heldStage: string | null = null;
+	let heldStage: PartialSnapshot["stage"] | null = null;
 	/** `latest` was not sent yet. */
 	let dirty = false;
 	let timer: NodeJS.Timeout | undefined;
@@ -1464,7 +1464,7 @@ export function partialStream(
 	}
 
 	function set(snapshot: PartialSnapshot) {
-		// A tool's stage wins the window it started in: a fast read is followed at once by "Thinking…", and the
+		// A tool's stage wins the window it started in: a fast read is followed at once by "conversation.stage.thinking", and the
 		// developer would never see what Hephaestus read.
 		if (snapshot.activity === "tool") {
 			heldStage = snapshot.stage;

@@ -670,7 +670,11 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo(409)
                 .expectBody()
                 .jsonPath("$.detail")
-                .isEqualTo(ConversationRejectedException.Reason.NOT_DELETABLE.userMessage());
+                .isEqualTo(ConversationRejectedException.Reason.NOT_DELETABLE.userMessage())
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.CONVERSATION_REJECTED.uri().toString())
+                .jsonPath("$.label.code")
+                .isEqualTo("conversation.rejected.not-deletable");
     }
 
     @Test
@@ -686,6 +690,10 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .jsonPath("$.type")
                 .isEqualTo(ProblemType.CONVERSATION_REFUSED.uri().toString())
                 .jsonPath("$.detail")
+                .isEqualTo(ConversationRefusal.UNAVAILABLE.userMessage())
+                .jsonPath("$.label.code")
+                .isEqualTo("conversation.refused.unavailable")
+                .jsonPath("$.label.text")
                 .isEqualTo(ConversationRefusal.UNAVAILABLE.userMessage());
 
         assertThat(turnRepository.findByWorkspaceIdAndRequestId(workspace.getId(), requestId.toString()))

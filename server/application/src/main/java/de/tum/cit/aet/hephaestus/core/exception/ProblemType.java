@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.exception;
 
 import de.tum.cit.aet.hephaestus.core.web.DocsSite;
+import de.tum.cit.aet.hephaestus.core.web.LabelDTO;
 import java.net.URI;
 import java.util.Locale;
 import org.jspecify.annotations.Nullable;
@@ -9,7 +10,7 @@ import org.springframework.http.ProblemDetail;
 
 /**
  * Every RFC 9457 problem {@code type} that a client can branch on. The slug is the machine-readable
- * code. Other problem members carry named data, never a second code. A problem without a distinct kind
+ * code for handling the problem. A label carries a display code. A problem without a distinct kind
  * keeps {@code about:blank}, so its status is its kind. Renaming a slug breaks clients.
  */
 public enum ProblemType {
@@ -29,6 +30,10 @@ public enum ProblemType {
     CONVERSATION_TURN_STOPPED,
     CONVERSATION_REFUSED,
     CONVERSATION_REJECTED,
+    CHANGED_SINCE_SHOWN,
+    TURNED_OFF,
+    NO_MODEL,
+    CHECK_IN_INVALID,
     OAUTH_CALLBACK_FAILED,
     OUTLINE_RATE_LIMITED,
     OUTLINE_UNREACHABLE,
@@ -57,6 +62,13 @@ public enum ProblemType {
 
     public URI uri() {
         return uri;
+    }
+
+    /** A problem with an open reason code and a fallback for clients that only read detail. */
+    public ProblemDetail labelledProblem(HttpStatusCode status, String title, LabelDTO label) {
+        var problem = problem(status, title, label.text());
+        problem.setProperty("label", label);
+        return problem;
     }
 
     /** A problem of this type with the given status, title and detail. */

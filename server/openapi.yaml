@@ -19320,6 +19320,8 @@ components:
           type: string
           description: "What Hephaestus is doing, in the developer's words, for example\
             \ \"Reading your practice feedback…\""
+        stageLabel:
+          $ref: "#/components/schemas/Label"
         text:
           type: string
           description: The text Hephaestus has written in this turn so far
@@ -21682,7 +21684,9 @@ components:
       - kind
     IntegrationFamily:
       type: string
-      enum:
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
       - SCM
       - MESSAGING
       - DOCUMENTATION
@@ -21934,6 +21938,25 @@ components:
       - sourceReviewId
       - status
       - summary
+    Label:
+      type: object
+      description: Text that a client can render from a message catalog
+      properties:
+        code:
+          type: string
+          description: "Extensible enum: a catalog key. Accept keys that the client\
+            \ does not know."
+        params:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/LabelParam"
+        text:
+          type: string
+          description: English fallback text. Use it when the client has no copy for
+            this key.
+      required:
+      - code
+      - text
     LabelInfo:
       type: object
       description: Information about a label from a repository
@@ -21956,6 +21979,26 @@ components:
       - color
       - id
       - name
+    LabelParam:
+      type: object
+      description: One named value for a label template
+      properties:
+        count:
+          type: integer
+          format: int32
+        instant:
+          type: string
+          format: date-time
+        ownWords:
+          type: string
+        type:
+          type: string
+          description: "Extensible enum: value, instant, count or ownWords. Accept\
+            \ other kinds."
+        value:
+          type: string
+      required:
+      - type
     LatestRelease:
       type: object
       description: |-
@@ -25489,6 +25532,8 @@ components:
         activeScanId:
           type: string
           format: uuid
+        by:
+          type: string
         callbackError:
           type: string
         connectionId:
@@ -25509,12 +25554,16 @@ components:
             items:
               type: string
           description: Validation messages for each field that needs a change
+        field:
+          type: string
         instance:
           type: string
           format: uri-reference
         jobId:
           type: integer
           format: int64
+        label:
+          $ref: "#/components/schemas/Label"
         maxAgeSeconds:
           type: integer
           format: int64
@@ -25549,6 +25598,8 @@ components:
           type: string
         type:
           $ref: "#/components/schemas/ProblemType"
+        what:
+          type: string
         withholdingReason:
           type: string
         workspaceByteBudget:
@@ -25599,6 +25650,10 @@ components:
       - https://docs.hephaestus.build/contributor/api-error-handling#conversation-turn-stopped
       - https://docs.hephaestus.build/contributor/api-error-handling#conversation-refused
       - https://docs.hephaestus.build/contributor/api-error-handling#conversation-rejected
+      - https://docs.hephaestus.build/contributor/api-error-handling#changed-since-shown
+      - https://docs.hephaestus.build/contributor/api-error-handling#turned-off
+      - https://docs.hephaestus.build/contributor/api-error-handling#no-model
+      - https://docs.hephaestus.build/contributor/api-error-handling#check-in-invalid
       - https://docs.hephaestus.build/contributor/api-error-handling#oauth-callback-failed
       - https://docs.hephaestus.build/contributor/api-error-handling#outline-rate-limited
       - https://docs.hephaestus.build/contributor/api-error-handling#outline-unreachable
