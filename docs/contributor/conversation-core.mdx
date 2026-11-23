@@ -82,6 +82,21 @@ Each turn has one output route, and the route has a reader set:
 The Slack grant is the person's choice of the **Full** Slack detail level, after the export notice. It is the one stated exception to the audience rule (ADR 0123 decision 5).
 At **Notice**, a Slack turn reads no personal record. At either level, a Slack turn never reads an app-only entry.
 
+### Runs
+
+The run table is the proof table of the audience rule.
+Each kind of run declares its untrusted input, its personal records and its external effect.
+The full matrix of run kind, target and client comes from the run descriptors, and a missing cell refuses the run.
+
+| Run | Untrusted input | Personal records | External effect | Structural break |
+| --- | --- | --- | --- | --- |
+| Review | Captured work, a repository checkout | None | None: candidate observations | Admission and the seal on the server |
+| Private check | The person's own draft | None | None: a private check outcome | The outcome has one reader, the owner |
+| Research task | Read-only archives of items that the person can read | None | None: a report | No allowed actions |
+| Conversation agent | Messages, quoted work, results | The account's own, filtered by the [route](#routes) | Entries, tasks, personal records | No write on the work. A shared place changes only by a typed command. |
+| Composer on a work place | Captured work, its own provider thread | None | The copy on the work, and replies in Automatic mode | Scoped reads, the composer's guardrails, the action outbox, isolation tests |
+| Composer on a channel thread | Other people's Slack messages | None | One answer in that Slack thread | One person per batch. Its only tool answers in that thread. |
+
 ### Start policy
 
 The start policy is a table in code (ADR 0120 decision 4). For each kind of inbox item, it names the thread, the custody and the route.
