@@ -1387,6 +1387,7 @@ void describe("ci-contract: merge-queue", () => {
 			queueUpgrade = false,
 			queueServerImage = false,
 			renameOnly = false,
+			releaseChecks: Record<string, string> = {},
 		) => {
 			const run = await runStep(
 				render(
@@ -1397,11 +1398,17 @@ void describe("ci-contract: merge-queue", () => {
 						"queue-upgrade": String(queueUpgrade),
 						"queue-server-image": String(queueServerImage),
 						"rename-only": String(renameOnly),
+						"release-preflight": String(onVersionBranch),
+						"chart-upgrade": "false",
+						"sandbox-qualification": "false",
+						publishable: "true",
+						should_skip: "false",
+						...releaseChecks,
 					},
 				),
 				{
 					NEEDS: needs,
-					MERGE_GROUP: "false",
+					MERGE_GROUP: releaseChecks.MERGE_GROUP ?? "false",
 					...(summary === undefined ? {} : { GITHUB_STEP_SUMMARY: summary }),
 				},
 			);
@@ -1542,7 +1549,7 @@ void describe("ci-contract: merge-queue", () => {
 		const complete = String(workflow.getIn([...detection, "outputs", "all-images"]));
 		assert.match(
 			complete,
-			/^\$\{\{ steps\.alias_base\.outputs\.commit == '' \|\| steps\.release_candidate\.outputs\.release-candidate == 'true' \|\| \(github\.event_name == 'merge_group' && steps\.filter\.outputs\.kubernetes == 'true'\) \}\}$/u,
+			/^\$\{\{ steps\.alias_base\.outputs\.commit == '' \|\| steps\.release_candidate\.outputs\.release-candidate == 'true' \|\| \(github\.event_name == 'merge_group' && \(steps\.filter\.outputs\.kubernetes == 'true' \|\| steps\.filter\.outputs\.chart-upgrade == 'true' \|\| steps\.filter\.outputs\.sandbox-qualification == 'true' \|\| steps\.filter\.outputs\.release-evidence == 'true'\)\) \}\}$/u,
 		);
 		// A run builds every image when it resolved no commit to alias from, so which events can
 		// resolve one is read from the resolver's own condition rather than restated here.
@@ -1635,10 +1642,24 @@ void describe("ci-contract: merge-queue", () => {
 			String(workflow.getIn(["jobs", "Kubernetes", "if"])),
 			/needs\.detect-changes\.outputs\.kubernetes == 'true'/u,
 		);
-		assert.match(
+		// So does every other job that installs the run's images by its commit: the chart upgrade, the
+		// sandbox qualification and the release evidence.
+		const queued = /\(github\.event_name == 'merge_group' && \((?<filters>[^()]*)\)\)/u.exec(
 			complete,
-			/\(github\.event_name == 'merge_group' && steps\.filter\.outputs\.kubernetes == 'true'\)/u,
 		);
+		const listed = queued?.groups?.filters;
+		assert.ok(listed !== undefined, `this test cannot evaluate \`${complete}\``);
+		for (const filter of [
+			"kubernetes",
+			"chart-upgrade",
+			"sandbox-qualification",
+			"release-evidence",
+		]) {
+			assert.ok(
+				listed.includes(`steps.filter.outputs.${filter} == 'true'`),
+				`a merge group that selects ${filter} builds every image`,
+			);
+		}
 	});
 });
 
@@ -2416,6 +2437,10 @@ void test("a superseded PR cancels its native gate while live failures still get
 		"feedback-eval": { result: "skipped" },
 		// The server image startup check is newer too, and a pull request never runs it.
 		"Server-image": { result: "skipped" },
+		// The release checks on the change are newer too. Their path filters select no change of that
+		// run, so both would have been skipped.
+		"Chart-upgrade": { result: "skipped" },
+		"Sandbox-qualification": { result: "skipped" },
 	};
 	assert.equal(
 		"feedback-eval" in observed,

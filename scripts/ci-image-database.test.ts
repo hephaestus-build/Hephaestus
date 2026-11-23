@@ -49,6 +49,13 @@ function evaluates(
 				// A pull request's merge-group Security scan skips.
 				Security: { result: results.Security ?? "skipped" },
 				"detect-changes": { result: results["detect-changes"] ?? "success", outputs },
+				// A successful image job published the server image it built.
+				Docker: {
+					result: results.Docker ?? "success",
+					outputs: {
+						"server-digest": (results.Docker ?? "success") === "success" ? "sha256:image" : "",
+					},
+				},
 			},
 		}),
 		data.reviver,

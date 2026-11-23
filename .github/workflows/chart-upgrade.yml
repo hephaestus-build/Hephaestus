@@ -10,12 +10,7 @@ on:
         description: The candidate commit whose images the Docker jobs published under its tag
         type: string
         required: true
-  # A change to the drill runs it on its pull request, with the images of the base commit, a main build.
-  pull_request:
-    paths:
-      - scripts/chart-upgrade-drill.ts
-      - scripts/kubernetes-cluster.ts
-      - .github/workflows/chart-upgrade.yml
+  # CI/CD calls it for a change to the chart or the drill (ci-cd.mdx § Release checks on the change).
   workflow_dispatch:
     inputs:
       commit:
@@ -37,8 +32,8 @@ jobs:
       contents: read
       packages: read
     env:
-      # The candidate's images; a pull request's own images may not exist yet, so it uses its base commit's.
-      COMMIT: ${{ inputs.commit || github.event.pull_request.base.sha || github.sha }}
+      # The candidate's images, which the caller's Docker job published under its commit.
+      COMMIT: ${{ inputs.commit || github.sha }}
       # The candidate's chart and scripts.
       CHECKOUT: ${{ inputs.commit || github.sha }}
       NODE_IMAGE: docker.io/rancher/k3s:v1.37.2-k3s1@sha256:21ea6e0fac4e3930c2ce8aa40ddd41a8b18cb3e9a0222c030dc005e7e88c4332

@@ -29,7 +29,7 @@ const REPORTS = [
 	`ci-tests.yml: Retain raw test reports (server-\${{ env.TEST_TIER }}-reports-\${{ github.run_attempt }})`,
 	`ci-tests.yml: Retain raw test reports (server-integration-\${{ env.INTEGRATION_SHARD }}-reports-\${{ github.run_attempt }})`,
 	"cicd.yml: Keep the gate result (feedback-eval-gate)",
-	"cicd.yml: Retain sandbox qualification summary (sandbox-security-preflight-summary)",
+	"cicd.yml: Retain sandbox qualification summary (sandbox-security-summary)",
 	"extension-provider-slots.yml: Keep each provider result (extension-provider-slots)",
 	"feedback-eval-panel.yml: Keep the panel result (feedback-eval-panel)",
 	"kubernetes-nightly.yml: Keep the report, the logs and the samples (sandbox-footprint)",

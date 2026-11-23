@@ -807,6 +807,8 @@ export const HEAVY_LEGS = [
 	"Docker",
 	"Kubernetes",
 	"Release-preflight",
+	"Chart-upgrade",
+	"Sandbox-qualification",
 ];
 
 /** The jobs that `cicd.yml` runs before the gate, in an order where each follows what it needs. */
@@ -822,6 +824,8 @@ export const RUN_ORDER = [
 	"Docker",
 	"Kubernetes",
 	"Release-preflight",
+	"Chart-upgrade",
+	"Sandbox-qualification",
 ];
 
 /**
@@ -857,7 +861,7 @@ export function simulateRun(
 			result = name === "Security" ? security : "success";
 		}
 		const digest = name === "Docker" && result === "success" ? "sha256:image" : "";
-		completions[name] = { result, outputs: { "server-digest": digest } };
+		completions[name] = { result, outputs: { "server-digest": digest, "agent-digest": digest } };
 	}
 	return Object.fromEntries(
 		Object.entries(completions).map(([name, completion]) => [name, completion.result] as const),

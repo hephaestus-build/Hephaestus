@@ -126,6 +126,10 @@ const PATHS = [
 	".changeset/example.md",
 	"docs/user/index.mdx",
 	".github/workflows/cicd.yml",
+	// What only the release checks on the change select: the drill, the agent runtime and the SBOM check.
+	"scripts/chart-upgrade-drill.ts",
+	"server/application/src/main/resources/agent/turn.ts",
+	"scripts/check-release-sbom.ts",
 ];
 
 const VERSION_FILES = ["package.json", "CHANGELOG.md", ".changeset/example.md"];
@@ -288,7 +292,7 @@ function* cases(): Generator<Case> {
 	}
 }
 
-const CONSUMERS = ["Kubernetes", "Release-preflight"];
+const CONSUMERS = ["Kubernetes", "Release-preflight", "Chart-upgrade", "Sandbox-qualification"];
 
 // The detect-changes outputs that these jobs read; evaluating only those keeps the test fast.
 const READ = new Set(
@@ -313,9 +317,13 @@ function needed(entry: Case): Record<string, boolean | undefined> {
 	const fails = entry.skip === "docker-fails";
 	const builtAtAll =
 		!fails && entry.skip !== "draft" && entry.skip !== "fork" && entry.skip !== "should-skip";
+	// A merge group that changes what the evidence reads generates it too (ci-cd.mdx § Release checks on
+	// the change).
 	const evidence =
 		entry.releaseCandidate === "true" ||
-		(entry.event === "workflow_dispatch" && entry.preflight === "true");
+		(entry.event === "workflow_dispatch" && entry.preflight === "true") ||
+		(entry.event === "merge_group" && entry.filters["release-evidence"] === "true");
+	const selects = (filter: string) => entry.event !== "push" && entry.filters[filter] === "true";
 	return {
 		// A push that a merge group tested runs none: the group tested the same commit. A push with no
 		// merge-group run runs them all.
@@ -326,6 +334,8 @@ function needed(entry: Case): Record<string, boolean | undefined> {
 				: entry.filters.kubernetes === "true" ||
 					(entry.event === "workflow_dispatch" && entry.eviction === true)),
 		"Release-preflight": !fails && evidence,
+		"Chart-upgrade": builtAtAll && selects("chart-upgrade"),
+		"Sandbox-qualification": builtAtAll && (selects("sandbox-qualification") || evidence),
 	};
 }
 
@@ -568,6 +578,9 @@ void test("a job that installs every image runs exactly when its event needs it 
 	}
 	// Each consumer is reached on every event it serves, or the test proves nothing about it.
 	assert.deepEqual([...reached].toSorted(), [
+		"Chart-upgrade on merge_group",
+		"Chart-upgrade on pull_request",
+		"Chart-upgrade on workflow_dispatch",
 		"Kubernetes on merge_group",
 		"Kubernetes on pull_request",
 		"Kubernetes on push",
@@ -575,6 +588,9 @@ void test("a job that installs every image runs exactly when its event needs it 
 		"Release-preflight on merge_group",
 		"Release-preflight on pull_request",
 		"Release-preflight on workflow_dispatch",
+		"Sandbox-qualification on merge_group",
+		"Sandbox-qualification on pull_request",
+		"Sandbox-qualification on workflow_dispatch",
 	]);
 });
 
