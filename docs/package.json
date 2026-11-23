@@ -13,7 +13,7 @@
 		"@astrojs/markdown-satteri": "0.4.10",
 		"@astrojs/react": "7.1.9",
 		"@fumadocs/astro": "0.3.0",
-		"@fumadocs/satteri": "0.8.0",
+		"@fumadocs/satteri": "0.8.4",
 		"astro": "7.4.13",
 		"fumadocs-core": "16.18.4",
 		"fumadocs-ui": "npm:@fumadocs/base-ui@16.18.4",
