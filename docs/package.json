@@ -10,7 +10,7 @@
 		"serve": "node ../scripts/docs-astro.ts preview"
 	},
 	"dependencies": {
-		"@astrojs/markdown-satteri": "0.4.9",
+		"@astrojs/markdown-satteri": "0.4.10",
 		"@astrojs/react": "7.1.9",
 		"@fumadocs/astro": "0.3.0",
 		"@fumadocs/satteri": "0.8.0",
