@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+@RawObservationAccess
 public interface ResultProofAccess {
     /** Whether {@code purpose} may read retained history at all: operator review and practice feedback delivery. */
     static boolean readsHistory(SourceUsePurpose purpose) {

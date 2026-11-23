@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasis;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository.ReadRow;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackVisibilityService;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackBasis;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackService;
@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.profile.OverviewWindow;
 import de.tum.cit.aet.hephaestus.practices.profile.ProfileChangeQuery;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileChangeDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationThreadLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
@@ -72,6 +73,7 @@ public class WeeklyDigestFacts {
             .thenComparing(Row::deliveredAt);
 
     private final WeeklyDigestRepository repository;
+    private final AssessmentPort assessments;
     private final FeedbackBasisRepository basisRepository;
     private final PracticePageFeedbackBasis basis;
     private final PracticePageFeedbackService practicePage;
@@ -97,7 +99,8 @@ public class WeeklyDigestFacts {
      */
     @Transactional(readOnly = true)
     public boolean anythingIn(long workspaceId, long accountId, WeeklyDigestWindow window) {
-        return repository.anythingBetween(workspaceId, accountId, window.start(), window.end());
+        return repository.feedbackBetween(workspaceId, accountId, window.start(), window.end())
+                || assessments.hasRecordedObservations(workspaceId, accountId, window.start(), window.end());
     }
 
     /**
@@ -150,16 +153,16 @@ public class WeeklyDigestFacts {
         Map<UUID, UUID> entries = conversationEntries(workspaceId, standing);
         Map<UUID, ConversationThreadLookup.Place> places =
                 entries.isEmpty() ? Map.of() : conversationThreads.places(workspaceId, Set.copyOf(entries.values()));
-        Map<UUID, List<FeedbackBasis>> basisByFeedback = standing.isEmpty()
+        Map<UUID, List<ReadRow>> basisByFeedback = standing.isEmpty()
                 ? Map.of()
                 : basisRepository
-                        .findByWorkspaceIdAndFeedbackIdInOrderByOrdinalAsc(
+                        .findReadRows(
                                 workspaceId,
                                 standing.stream()
                                         .map(row -> row.feedback().getId())
                                         .toList())
                         .stream()
-                        .collect(Collectors.groupingBy(FeedbackBasis::getFeedbackId));
+                        .collect(Collectors.groupingBy(ReadRow::feedbackId));
         List<Rendered> rendered = new ArrayList<>(payloads.size());
         for (WeeklyDigestPayload payload : payloads) {
             Set<UUID> listed = Set.copyOf(payload.feedbackIds());
@@ -189,7 +192,7 @@ public class WeeklyDigestFacts {
             Map<Long, ItemRefDTO> items,
             Map<UUID, UUID> entries,
             Map<UUID, ConversationThreadLookup.Place> places,
-            Map<UUID, List<FeedbackBasis>> basisByFeedback) {
+            Map<UUID, List<ReadRow>> basisByFeedback) {
         WeeklyDigestWindow window = payload.window();
         Set<WeeklyDigestChangeKey> held = new HashSet<>(payload.changeKeys());
         List<ProfileChangeDTO> changes = weekChanges.stream()
@@ -199,18 +202,15 @@ public class WeeklyDigestFacts {
         Map<UUID, List<UUID>> problemIds = new LinkedHashMap<>();
         for (Row row : rows) {
             UUID feedbackId = row.feedback().getId();
-            List<FeedbackBasis> edges = basisByFeedback.get(feedbackId);
+            List<ReadRow> edges = basisByFeedback.get(feedbackId);
             if (row.withdrawnAt() == null && edges != null) {
                 resultIds.put(
                         feedbackId,
-                        edges.stream()
-                                .map(FeedbackBasis::getResultId)
-                                .distinct()
-                                .toList());
+                        edges.stream().map(ReadRow::resultId).distinct().toList());
                 problemIds.put(
                         feedbackId,
                         edges.stream()
-                                .map(FeedbackBasis::getProblemId)
+                                .map(ReadRow::problemId)
                                 .filter(Objects::nonNull)
                                 .distinct()
                                 .toList());

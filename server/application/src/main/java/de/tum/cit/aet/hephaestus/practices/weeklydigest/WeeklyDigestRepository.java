@@ -34,17 +34,14 @@ interface WeeklyDigestRepository extends Repository<Feedback, UUID> {
     List<Feedback> findReached(long workspaceId, long accountId, Collection<UUID> ids);
 
     /**
-     * Whether anything that a digest can list happened in the window: feedback reached the developer, Practice page
-     * feedback was prepared for them, or a review recorded a result about them.
+     * Whether feedback reached the developer or was prepared for their Practice page in the window.
      */
     @Query(value = """
         SELECT EXISTS(SELECT 1 FROM feedback f WHERE f.workspace_id=:workspaceId AND f.person_account_id=:accountId
             AND ((f.delivered_at>:since AND f.delivered_at<=:until AND\s""" + REACHED + """
               ) OR (f.destination='PRACTICE_PAGE' AND f.state='READY' AND f.created_at>:since AND f.created_at<=:until)))
-          OR EXISTS(SELECT 1 FROM result r WHERE r.workspace_id=:workspaceId AND r.person_account_id=:accountId
-            AND r.recorded_at>:since AND r.recorded_at<=:until)
         """, nativeQuery = true)
-    boolean anythingBetween(long workspaceId, long accountId, Instant since, Instant until);
+    boolean feedbackBetween(long workspaceId, long accountId, Instant since, Instant until);
 
     /** The Hephaestus message each conversation feedback copy was shown in, once its receipt settled. */
     @Query(value = """

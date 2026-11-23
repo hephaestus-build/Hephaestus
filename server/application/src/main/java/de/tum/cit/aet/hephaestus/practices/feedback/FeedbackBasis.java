@@ -39,24 +39,30 @@ import org.jspecify.annotations.Nullable;
 public class FeedbackBasis {
 
     @Id
+    @RawObservationAccess.Metadata
     @Column(name = "id", nullable = false, columnDefinition = "UUID")
     private UUID id;
 
+    @RawObservationAccess.Metadata
     @Column(name = "workspace_id", nullable = false)
     private long workspaceId;
 
+    @RawObservationAccess.Metadata
     @Column(name = "feedback_id", nullable = false, columnDefinition = "UUID")
     private UUID feedbackId;
 
+    @RawObservationAccess.Metadata
     @Column(name = "result_id", nullable = false, columnDefinition = "UUID")
     private UUID resultId;
 
+    @RawObservationAccess.Metadata
     @Column(name = "problem_id", nullable = true, columnDefinition = "UUID")
     private @Nullable UUID problemId;
 
     @Column(name = "person_account_id", nullable = false)
     private long developerId;
 
+    @RawObservationAccess.Metadata
     @Column(name = "ordinal", nullable = false)
     private int ordinal;
 }

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.model;
 
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
@@ -16,6 +17,7 @@ import tools.jackson.databind.JsonNode;
  * @param sourceKinds the {@linkplain Result#sourceKinds(JsonNode, JsonNode) source kinds that the result rests on};
  *     null withholds the result, because one of them is not named
  */
+@RawObservationAccess
 public record ResultFacts(
         UUID id,
         long workspaceId,

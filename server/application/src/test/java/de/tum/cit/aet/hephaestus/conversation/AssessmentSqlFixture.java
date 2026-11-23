@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryEntry;
 import jakarta.persistence.NamedNativeQueries;
 import jakarta.persistence.NamedNativeQuery;
 import java.util.List;
@@ -76,16 +77,17 @@ public interface AssessmentSqlFixture extends Repository<Conversation, UUID> {
     @NativeQuery("SELECT 1 AS position, * FROM review_job j WHERE j.workspace_id = :workspaceId")
     List<Object[]> mixedWholeJob(long workspaceId);
 
-    @NativeQuery("SELECT count(*) FROM result r WHERE r.workspace_id = :workspaceId AND r.developer_id = :accountId")
+    @NativeQuery(
+            "SELECT count(*) FROM result r WHERE r.workspace_id = :workspaceId AND r.person_account_id = :accountId")
     long countObservations(long workspaceId, long accountId);
 
-    @NativeQuery("SELECT count(*) FROM (SELECT 1 FROM result r WHERE r.developer_id = :accountId) results")
+    @NativeQuery("SELECT count(*) FROM (SELECT 1 FROM result r WHERE r.person_account_id = :accountId) results")
     long countNestedObservations(long accountId);
 
-    @NativeQuery("SELECT EXISTS(SELECT 1 FROM result r WHERE r.developer_id = :accountId)")
+    @NativeQuery("SELECT EXISTS(SELECT 1 FROM result r WHERE r.person_account_id = :accountId)")
     boolean observationExists(long accountId);
 
-    @NativeQuery("SELECT r.practice_id FROM result r WHERE r.developer_id = :accountId")
+    @NativeQuery("SELECT r.practice_id FROM result r WHERE r.person_account_id = :accountId")
     List<Long> observationPractice(long accountId);
 
     @NativeQuery("SELECT j.status, j.exit_code FROM review_job j WHERE j.review_id = :reviewId")
@@ -184,6 +186,12 @@ public interface AssessmentSqlFixture extends Repository<Conversation, UUID> {
 
     @NamedNativeQueries(@NamedNativeQuery(name = "assessmentFixture", query = "SELECT j.output FROM review_job j"))
     final class NestedQueries {}
+
+    final class PublicHistoryReader {
+        public void read(FeedbackHistoryEntry delivered) {
+            delivered.publicHistory();
+        }
+    }
 
     final class RuntimeQuery {
         public void read(NamedParameterJdbcOperations jdbc, String relation) {

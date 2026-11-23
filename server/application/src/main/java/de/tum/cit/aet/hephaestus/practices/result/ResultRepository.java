@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
@@ -15,7 +16,11 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+@RawObservationAccess
 public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQueries {
+    boolean existsByWorkspaceIdAndDeveloperIdAndRecordedAtGreaterThanAndRecordedAtLessThanEqual(
+            long workspaceId, long developerId, Instant after, Instant through);
+
     // Partly delivered feedback counts: the developer saw the copy that appeared, as their own pages show it.
     @Query(value = """
         SELECT DISTINCT ON (b.result_id) b.result_id AS resultId,f.body FROM feedback_basis b JOIN feedback f
