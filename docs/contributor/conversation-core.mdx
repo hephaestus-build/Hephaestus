@@ -80,7 +80,7 @@ Each turn has one output route, and the route has a reader set:
 | `CHANNEL` | Every member of the Slack channel | The Slack thread, public repository data and the practice catalog entries that a workspace admin marks as channel-readable |
 
 The Slack grant is the person's choice of the **Full** Slack detail level, after the export notice. It is the one stated exception to the audience rule (ADR 0123 decision 5).
-At **Notice**, a Slack turn reads no personal record. At either level, a Slack turn never reads an app-only entry.
+At **Notice**, a Slack turn reads only the person's language and answer length, which shape the form of an answer. At either level, a Slack turn never reads an app-only entry.
 
 ### Runs
 
@@ -350,6 +350,7 @@ An inbox item holds IDs only, never text. A shared thread has inbox items and tu
 ### An inbox item
 
 This state machine shows how an inbox item ends. Look at the custody: a required item ends only with its disposition, and only an optional item can expire or stop.
+A message is always optional. Only an obligation with a deadline is required (ADR 0120 decision 12).
 
 ```mermaid
 stateDiagram-v2
@@ -365,7 +366,7 @@ stateDiagram-v2
     Unclaimed --> SUPERSEDED : newer item of the same source / the newer item takes the disposition
     Unclaimed --> DROPPED : authorization recheck fails, or source deleted / disposition records the reason
     Unclaimed --> EXPIRED : time passes [OPTIONAL, no outcome]
-    Unclaimed --> STOPPED : Stop of a queued turn [OPTIONAL or message]
+    Unclaimed --> STOPPED : Stop of a queued turn [OPTIONAL]
     Claimed --> STOPPED : Stop [injected message]
     CONSUMED --> [*]
     SUPERSEDED --> [*]
@@ -818,7 +819,7 @@ The review finds p301, a Major problem on the retry policy. The workspace uses A
 
 | Time | What happens | Work place of #412 | Sam's main thread |
 | --- | --- | --- | --- |
-| 10:00 | The review seals. The seal writes the copy and one decision record row. | Copy `PENDING`, generation 1, deadline 12:00. Item A, `REVIEW_FINISHED`, required, `PENDING`. | Item B, `REVIEW_FINISHED`, optional, `PENDING`. |
+| 10:00 | The review seals. The seal writes the copy and one delivery decision row. | Copy `PENDING`, generation 1, deadline 12:00. Item A, `REVIEW_FINISHED`, required, `PENDING`. | Item B, `REVIEW_FINISHED`, optional, `PENDING`. |
 | 10:01 | A composer turn claims A. The LLM proxy answers that the provider is down. | The attempt ends. A is `PENDING` and unclaimed again. | — |
 | 12:00 | The sweep withholds the copy. | Copy `WITHHELD`, `DEADLINE_PASSED`. A is `CONSUMED` by `SWEEP`. | Item C, `DELIVERY_WITHHELD`, required, `PENDING`. |
 | 12:10 | The model is back. One background turn takes B and C. Its message cites p301 and carries the control "Request a new copy". | — | B and C are `CONSUMED` by `TURN`. One entry. |
@@ -838,7 +839,7 @@ inbox_item  thread_id     work place of PR #412
             state         PENDING, unclaimed
 ```
 
-**The decision record at 10:00.** Code writes one row before any model runs (ADR 0139 decision 18, proposed in #4865):
+**The delivery decision at 10:00.** Code writes one row before any model runs (ADR 0139 decision 18, proposed in #4865):
 
 ```text
 decision_point  kind           COPY_ON_THE_WORK

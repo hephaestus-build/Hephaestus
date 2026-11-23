@@ -78,7 +78,7 @@ umlDiagram(showComponentKeyword = false) {
     }
     scm --> hephaestus with {
         over = start(0.5625).line(end(0.921875))
-        label("work events, replies", 0.5, -20)
+        label("events, shared replies", 0.5, -20)
     }
     hephaestus --> scm with {
         over = start(0.984375).line(end(0.4375))
