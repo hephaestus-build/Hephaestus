@@ -96,6 +96,8 @@ After 10 minutes, it stops and restarts.
    A `failed` Helm status does not prove that the Job stopped.
 4. For `evidence.spool.cleanup.failed` or `person_data.recovery.failed`, do the action of `HephaestusMetricsUnavailable`.
    [Respond to an alert](./production-operations-runbook#alert-response) gives it.
+5. If the log says that the server must use the restricted `hephaestus_app` role, check the database login and its role grants.
+   Apply the role setup before starting the server. See [Database roles](./helm-chart#database-roles).
 
 **Check:** The migration Job completes, and the server Pod becomes ready.
 

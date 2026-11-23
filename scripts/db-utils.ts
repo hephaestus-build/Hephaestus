@@ -73,6 +73,7 @@ async function startPostgres(value: Config): Promise<void> {
 		return waitForPostgres(value);
 	}
 	await run("docker", ["compose", "up", "-d", "--wait", "postgres"], { cwd: server });
+	await run("docker", ["compose", "run", "--rm", "-T", "postgres-roles"], { cwd: server });
 }
 
 async function stopPostgres(value: Config): Promise<void> {
@@ -92,7 +93,15 @@ async function migrate(value: Config, diff = false, signal?: AbortSignal): Promi
 			`-PpostgresPort=${value.port}`,
 			...(value.ci ? ["-PpackagedServer=true"] : []),
 		],
-		{ cwd: server, env: { ...value.env, SPRING_PROFILES_ACTIVE: "local" }, signal },
+		{
+			cwd: server,
+			env: {
+				...value.env,
+				POSTGRES_USER: "hephaestus_owner",
+				SPRING_PROFILES_ACTIVE: "local",
+			},
+			signal,
+		},
 	);
 }
 
@@ -104,7 +113,7 @@ async function generateErd(value: Config): Promise<void> {
 			"--jdbc-url",
 			`jdbc:postgresql://${value.host}:${value.port}/${value.env.POSTGRES_DB ?? "hephaestus"}`,
 			"--username",
-			value.env.POSTGRES_USER ?? "root",
+			"hephaestus_owner",
 			"--output-dir",
 			"../docs/contributor/erd",
 			"--sources",
@@ -112,7 +121,7 @@ async function generateErd(value: Config): Promise<void> {
 		],
 		{
 			cwd: import.meta.dirname,
-			env: value.env,
+			env: { ...value.env, POSTGRES_PASSWORD: value.env.SPRING_LIQUIBASE_PASSWORD },
 		},
 	);
 }

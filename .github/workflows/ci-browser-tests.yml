@@ -82,6 +82,11 @@ jobs:
           POSTGRES_PASSWORD="$(openssl rand -hex 24)"
           echo "::add-mask::${POSTGRES_PASSWORD}"
           export POSTGRES_PASSWORD
+          SPRING_LIQUIBASE_PASSWORD="$(openssl rand -hex 24)"
+          SPRING_DATASOURCE_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::${SPRING_LIQUIBASE_PASSWORD}"
+          echo "::add-mask::${SPRING_DATASOURCE_PASSWORD}"
+          export SPRING_LIQUIBASE_PASSWORD SPRING_DATASOURCE_PASSWORD
           docker compose -f server/compose.yaml up -d --wait --no-build postgres
           cleanup() {
             if [[ -n "${SERVER_PID:-}" ]]; then
@@ -99,6 +104,7 @@ jobs:
             docker compose -f server/compose.yaml down -v
           }
           trap cleanup EXIT
+          docker compose -f server/compose.yaml run --rm -T postgres-roles
           mapfile -t SERVER_JARS < <(find server/application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
           (( ${#SERVER_JARS[@]} == 1 ))
           SERVER_JAR=${SERVER_JARS[0]}
@@ -188,6 +194,11 @@ jobs:
           POSTGRES_PASSWORD="$(openssl rand -hex 24)"
           echo "::add-mask::${POSTGRES_PASSWORD}"
           export POSTGRES_PASSWORD
+          SPRING_LIQUIBASE_PASSWORD="$(openssl rand -hex 24)"
+          SPRING_DATASOURCE_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::${SPRING_LIQUIBASE_PASSWORD}"
+          echo "::add-mask::${SPRING_DATASOURCE_PASSWORD}"
+          export SPRING_LIQUIBASE_PASSWORD SPRING_DATASOURCE_PASSWORD
           docker compose -f server/compose.yaml up -d --wait --no-build postgres
           cleanup() {
             if [[ -n "${SERVER_PID:-}" ]]; then
@@ -205,6 +216,7 @@ jobs:
             docker compose -f server/compose.yaml down -v
           }
           trap cleanup EXIT
+          docker compose -f server/compose.yaml run --rm -T postgres-roles
           mapfile -t SERVER_JARS < <(find server/application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
           (( ${#SERVER_JARS[@]} == 1 ))
           SERVER_JAR=${SERVER_JARS[0]}

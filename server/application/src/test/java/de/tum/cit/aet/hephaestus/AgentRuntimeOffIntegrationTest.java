@@ -30,10 +30,11 @@ import org.springframework.test.context.DynamicPropertySource;
 @Tag("integration")
 class AgentRuntimeOffIntegrationTest {
     private static final PostgreSQLTestContainer.TestDatabase DATABASE =
-            PostgreSQLTestContainer.createMigratedDatabase("agent_runtime_off");
+            PostgreSQLTestContainer.createApplicationDatabase("agent_runtime_off");
 
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
+        registry.add("spring.liquibase.enabled", () -> false);
         registry.add("spring.datasource.url", DATABASE::jdbcUrl);
         registry.add("spring.datasource.username", DATABASE::username);
         registry.add("spring.datasource.password", DATABASE::password);

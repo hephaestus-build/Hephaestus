@@ -5,6 +5,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { databaseMigration } from "./lib/database-migration.ts";
+import { applyDatabaseRoles, databaseRolePasswords } from "./lib/database-roles.ts";
 import { conversationBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
 
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
@@ -12,6 +13,7 @@ const targetImage = values["target-image"];
 if (targetImage !== undefined && targetImage.trim() === "") {
 	throw new Error("--target-image must name an existing local PostgreSQL image");
 }
+const credentials = databaseRolePasswords();
 const migrate = databaseMigration();
 // The throwaway database lives for this run only.
 const password = randomBytes(16).toString("hex");
@@ -33,13 +35,13 @@ function docker(...args: string[]): string {
 	return run("docker", args);
 }
 
-function sql(container: string, query: string): string {
+function sql(container: string, query: string, user = "root"): string {
 	return docker(
 		"exec",
 		container,
 		"psql",
 		"-U",
-		"root",
+		user,
 		"-d",
 		"hephaestus",
 		"-v",
@@ -123,7 +125,8 @@ try {
 		throw new Error(`source is not sized from its 2 GiB limit: ${sized}`);
 	}
 
-	migrate(sourcePort, password);
+	await applyDatabaseRoles(source, "hephaestus", credentials);
+	migrate(sourcePort, credentials.DATABASE_OWNER_PASSWORD);
 	if (sql(source, "SELECT extversion FROM pg_extension WHERE extname='pg_partman'") !== "5.5.0") {
 		throw new Error("source pg_partman is not 5.5.0");
 	}
@@ -171,6 +174,7 @@ try {
 	start(target, volume, "/var/lib/postgresql", targetImage ?? `${id}:18`);
 	docker("exec", target, "dropdb", "-U", "root", "hephaestus");
 	docker("exec", target, "createdb", "-U", "root", "hephaestus");
+	await applyDatabaseRoles(target, "hephaestus", credentials);
 	const restore = spawnSync(
 		"docker",
 		[
@@ -179,7 +183,7 @@ try {
 			target,
 			"pg_restore",
 			"-U",
-			"root",
+			"hephaestus_owner",
 			"-d",
 			"hephaestus",
 			"--no-owner",
@@ -198,7 +202,13 @@ try {
 	if (sql(target, "SELECT extversion FROM pg_extension WHERE extname='pg_partman'") !== "5.5.0") {
 		throw new Error("target pg_partman is not 5.5.0");
 	}
-	if (sql(target, "SELECT value FROM restore_qualification WHERE id=1") !== "preserved") {
+	if (
+		sql(
+			target,
+			"SELECT current_user || ':' || value FROM restore_qualification WHERE id=1",
+			"hephaestus_app",
+		) !== "hephaestus_app:preserved"
+	) {
 		throw new Error("qualification row was not restored");
 	}
 	if (fingerprint(target) !== sourceFingerprint) {
