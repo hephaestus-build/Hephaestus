@@ -103,7 +103,7 @@ ADR 0082 is superseded. Each of its decisions lives here now:
 | 18. Turn accounting | Decision 20 |
 | 19. The weekly digest is opt-in | Decision 21 and ADR 0133 |
 | 20. A note points to the digest | Stays in substance |
-| 21. A model writes the digest and nudges | [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 4. A digest, a nudge and each check-in are scheduled inbox items on the main thread. The `DIGEST` run kind goes. |
+| 21. A model writes the digest and nudges | [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 4. A digest and each check-in are scheduled inbox items on the main thread. A check-in of ADR 0133 replaces the nudge. The `DIGEST` run kind goes. |
 
 [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rule 18 stays. The conversation has the same one reader.
 

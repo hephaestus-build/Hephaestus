@@ -57,7 +57,7 @@ Option 4.
 4. **The sweep withholds a late copy.** It settles each unstarted Automatic proposal past `deadline_at` as `WITHHELD` with `DEADLINE_PASSED`.
    - This also happens while the executor is stopped. Its actions end `CANCELLED`.
    - The first-write transaction of [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) checks the predicate again, so a queued send cannot post late.
-5. **Approve first keeps its own clock.** Staging must happen before `deadline_at`. After that, main's approval expiry applies to the approved text.
+5. **Approve first keeps its own clock.** Staging must happen before `deadline_at`. After that, main's approval expiry of one day applies to the approved text ([ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md)).
 6. **No template and no late post.** Hephaestus posts no template comment, no "review failed" comment and no automatic late copy. The fixed renderer for graded work ([ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) decision 10) is a workspace mode, not a fallback.
 7. **The review stays Complete.** `DEADLINE_PASSED` is a delivery reason on the destination. Nothing is reported as missing evidence.
 8. **The withholding is always recorded. A message about it is optional.**

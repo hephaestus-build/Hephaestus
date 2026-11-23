@@ -52,7 +52,7 @@ Option 4.
    - A message pins the route of its surface: the app or the Slack direct message.
    - A requested result follows the route where the person asked.
    - For other background input, the contact policy chooses the app or Slack at the claim.
-   - The contact policy is the server rule that decides whether and where Hephaestus may reach a person now. Its own ADR follows.
+   - The contact policy is the server rule that decides whether and where Hephaestus may reach a person now. ADR 0139 (proposed in #4865) decides it.
    - Input that only the app may show waits for an app turn.
 4. **A Slack turn reads the entries that Slack may show.**
    - It never uses, mentions or paraphrases an app-only entry.

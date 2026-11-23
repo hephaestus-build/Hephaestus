@@ -8,7 +8,7 @@
 
 **Builds on:** [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) (runs, leases and the outbox), [ADR 0079](0079-one-agent-system.md) (one sandbox for each subject)
 
-**Relates to:** [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) (the audience rule and shared threads), [ADR 0122](0122-a-copy-on-the-work-that-misses-its-deadline-is-withheld.md) (the copy deadline and delivery identity), [ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md) (the Slack route)
+**Relates to:** [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) (the audience rule and shared threads), [ADR 0122](0122-a-copy-on-the-work-that-misses-its-deadline-is-withheld.md) (the copy deadline), [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) (delivery identity), [ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md) (the Slack route)
 
 ## Context
 
