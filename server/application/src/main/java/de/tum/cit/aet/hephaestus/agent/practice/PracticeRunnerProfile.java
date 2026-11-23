@@ -50,6 +50,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-admitted-results.js",
             "pi-session-lifecycle.js",
             "pi-session-reads.js",
+            "pi-session.js",
             "pi-bash-reads.js",
             SandboxLayout.PROVIDER_HELPER_FILENAME);
 

@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.productfeedback;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
-import de.tum.cit.aet.hephaestus.agent.composer.ModelSession;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProductFeedbackModelGateway;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.core.action.ActionAdapter;
@@ -18,16 +17,15 @@ import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
 /**
  * Drafts a product-feedback report ({@link ActionKind#DRAFT_REPORT}): one call to the operator's instance model
- * through the LLM proxy, in the lowest model-call class. The call offers the model no tools, so a report's text can
- * make the model answer, never act (OWASP LLM06). It writes nothing outside, so it needs no fence and no readback: a
- * repeated call costs tokens only. Product feedback validates and routes the answer; this adapter only carries it.
+ * through the LLM proxy ({@link ProductFeedbackModelGateway}), in the lowest model-call class. It writes nothing
+ * outside, so it needs no fence and no readback: a repeated call costs tokens only. Product feedback validates and
+ * routes the answer; this adapter only carries it.
  */
 @Component
 @ConditionalOnServerRole
@@ -85,21 +83,10 @@ class DraftReportAdapter implements ActionAdapter {
         LlmModelResolver.InstanceModel model = models.resolveInstanceModel(call.llmModelId());
         if (model == null) return new ActionResult.Failed(ActionStopReason.NOT_CONFIGURED);
         if (!drafts.claimed(attempt, payload.feedbackId(), payload.generation())) return new ActionResult.Abandoned();
-        var settings = new ModelSession.Settings(
-                model.protocol(),
-                model.credential().upstreamModelId(),
-                model.reasoningEffort(),
-                call.maxOutputTokens(),
-                null);
-        ModelSession.Transport transport = body -> {
-            var answer =
-                    gateway.orElseThrow().draft(attempt.id(), payload, model, deadline, call.maxOutputTokens(), body);
-            return new ModelSession.Answer(answer.status(), answer.body(), answer.owned(), answer.refusal());
-        };
-        ModelSession.Reply reply =
-                new ModelSession(transport, mapper, settings, call.system(), List.of()).send(call.user());
+        ProductFeedbackModelGateway.Draft reply = gateway.orElseThrow()
+                .draft(attempt.id(), payload, model, deadline, call.maxOutputTokens(), call.system(), call.user());
         String text = reply.text();
-        ModelSession.Failure failure = reply.failure();
+        ProductFeedbackModelGateway.Failure failure = reply.failure();
         if (failure == null && text != null)
             return drafts.answered(attempt, payload.feedbackId(), payload.generation(), text)
                     ? new ActionResult.Done(null)
@@ -115,7 +102,7 @@ class DraftReportAdapter implements ActionAdapter {
             // The destination names another model now.
             case AI_CHOICE, BUDGET -> new ActionResult.Failed(ActionStopReason.NOT_CONFIGURED);
             // The report no longer waits for this draft.
-            case OWNERSHIP_LOST -> new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
+            case ATTEMPT_ENDED -> new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
             // The provider refused this request, and it would refuse it again.
             case REFUSED -> new ActionResult.Failed(ActionStopReason.REJECTED);
         };

@@ -200,14 +200,12 @@ final class ComposerReplay {
      * Runs the Node composer loop of a {@code review_compose} run on the case, in its own process, against the same
      * server side over a loopback gateway, with each model call answered by {@code model}.
      */
-    static Outcome node(JsonNode replay, Function<byte[], ModelSession.Answer> model)
-            throws IOException, InterruptedException {
+    static Outcome node(JsonNode replay, Function<byte[], ModelAnswer> model) throws IOException, InterruptedException {
         return node(basis(replay), model);
     }
 
     /** Runs the Node composer loop on a sealed basis, with each model call answered by {@code model}. */
-    static Outcome node(Basis basis, Function<byte[], ModelSession.Answer> model)
-            throws IOException, InterruptedException {
+    static Outcome node(Basis basis, Function<byte[], ModelAnswer> model) throws IOException, InterruptedException {
         return node(basis, model, true);
     }
 
@@ -215,14 +213,14 @@ final class ComposerReplay {
      * Runs the Node composer loop on a sealed basis. With {@code retryProviderFailures} false, as the production
      * gateway option sets it, a provider failure ends the session after its one call instead of being sent again.
      */
-    static Outcome node(Basis basis, Function<byte[], ModelSession.Answer> model, boolean retryProviderFailures)
+    static Outcome node(Basis basis, Function<byte[], ModelAnswer> model, boolean retryProviderFailures)
             throws IOException, InterruptedException {
         var state = new Server(basis);
         var sessions = state.sessions();
         var closing = state.closing();
         var calls = JSON.arrayNode();
         var previous = new ArrayList<JsonNode>();
-        Function<byte[], ModelSession.Answer> recorded = body -> {
+        Function<byte[], ModelAnswer> recorded = body -> {
             calls.add(delta(MAPPER.readTree(body), previous));
             return model.apply(body);
         };
@@ -255,7 +253,7 @@ final class ComposerReplay {
     }
 
     /** Answers each call with the case's next answer. */
-    static Function<byte[], ModelSession.Answer> replayed(JsonNode replay) {
+    static Function<byte[], ModelAnswer> replayed(JsonNode replay) {
         var answers = new ArrayList<JsonNode>();
         replay.path("responses").forEach(answers::add);
         var next = new int[] {0};
@@ -266,9 +264,8 @@ final class ComposerReplay {
         };
     }
 
-    private static ModelSession.Answer answer(JsonNode answer, @Nullable String draftId) {
-        if (answer.has("status"))
-            return new ModelSession.Answer(answer.path("status").asInt(), new byte[0], true, null);
+    private static ModelAnswer answer(JsonNode answer, @Nullable String draftId) {
+        if (answer.has("status")) return new ModelAnswer(answer.path("status").asInt(), new byte[0], null);
         if (answer.has("body")) return completion(answer.path("body"));
         if (answer.has("text")) return completion(text(answer.path("text").asString()));
         String arguments = answer.path("arguments").toString();
@@ -297,8 +294,8 @@ final class ComposerReplay {
         return body;
     }
 
-    private static ModelSession.Answer completion(JsonNode body) {
-        return new ModelSession.Answer(200, body.toString().getBytes(StandardCharsets.UTF_8), true, null);
+    private static ModelAnswer completion(JsonNode body) {
+        return new ModelAnswer(200, body.toString().getBytes(StandardCharsets.UTF_8), null);
     }
 
     /** The draft ID the latest tool result in the request returned, if any. */
@@ -569,7 +566,7 @@ final class ComposerReplay {
      * only what the composer reads, its message's role, text and tool calls. The endpoint's own fields, such as its model
      * name and metrics, stay out, and so do its tool call IDs, which the case numbers in order.
      */
-    static ArrayNode recorded(List<ModelSession.Answer> sent) {
+    static ArrayNode recorded(List<ModelAnswer> sent) {
         var answers = JSON.arrayNode();
         int callNumber = 0;
         for (var answer : sent) {

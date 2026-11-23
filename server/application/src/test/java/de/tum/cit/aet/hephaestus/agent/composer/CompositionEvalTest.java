@@ -301,7 +301,7 @@ class CompositionEvalTest {
                 scenario::fromModel,
                 body -> {
                     requests[0]++;
-                    return new ModelSession.Answer(503, new byte[0], true, null);
+                    return new ModelAnswer(503, new byte[0], null);
                 });
 
         assertThat(requests[0]).isEqualTo(1);

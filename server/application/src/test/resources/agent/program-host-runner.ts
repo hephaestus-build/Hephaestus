@@ -138,7 +138,7 @@ export function codingAgentExports(
 				await this.loaded;
 			}
 		},
-		SettingsManager: { create: () => ({}) },
+		SettingsManager: { create: () => ({ getSettings: () => ({}) }), inMemory: () => ({}) },
 		SessionManager: { create: () => manager, inMemory: () => manager, open: () => manager },
 		ModelRuntime: {
 			async create() {

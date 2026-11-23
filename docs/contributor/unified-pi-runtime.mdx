@@ -373,6 +373,29 @@ The image's `driver.ts` pulls its next run from `POST /internal/agent/next` and 
 A run reconstructs its Pi session from the conversation ledger.
 [ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) owns the sandbox, claim and lease rules.
 
+### The session factory
+
+`openRunSession` in `pi-session.ts` builds every Pi session: the turns of `turn.ts` and the practice sessions of `pi-runner.ts`.
+The run gives it a run descriptor.
+The descriptor holds the model and its runtime, the system prompt, the tools and the run kind's extensions.
+It also holds the settings and the session manager.
+The factory adds nothing that the descriptor does not name:
+
+- It discovers no context file, skill, prompt template, theme or extension.
+- It reads no settings file. The review runner gives it the settings that the server staged.
+- The system prompt is the descriptor's alone.
+- Cache warming is off.
+
+`pi-session.spec.ts` fails when a file other than `pi-session.ts` creates a session.
+It also fails when a run kind in `driver-kinds.ts` does not name how it opens its sessions.
+`REVIEW_COMPOSE` keeps its own model client until the publication cutover.
+The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
+
+The server makes its own model calls only through the proxy's gateways, such as `ProductFeedbackModelGateway` for a report draft.
+`ModelCallBoundaryArchTest` fails when a class outside the proxy reads a model's provider key.
+
+### Isolation
+
 The model loop and its tools run in the same container.
 The SandboxTemplate and its NetworkPolicy provide the isolation boundary.
 The server keeps provider credentials and resolves each model call through the gateway.

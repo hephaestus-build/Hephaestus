@@ -36,7 +36,7 @@ final class ComposerReplayGateway implements AutoCloseable {
     private final ReviewJob job;
     private final ResultAdmissionService.AdmissionIdentity identity;
     private final Instant deadline;
-    private final Function<byte[], ModelSession.Answer> model;
+    private final Function<byte[], ModelAnswer> model;
 
     ComposerReplayGateway(
             JsonMapper mapper,
@@ -45,7 +45,7 @@ final class ComposerReplayGateway implements AutoCloseable {
             ReviewJob job,
             ResultAdmissionService.AdmissionIdentity identity,
             Instant deadline,
-            Function<byte[], ModelSession.Answer> model)
+            Function<byte[], ModelAnswer> model)
             throws IOException {
         // The server leaves null fields out of its JSON (application.yml), and so does this gateway.
         this.mapper = mapper.rebuild()

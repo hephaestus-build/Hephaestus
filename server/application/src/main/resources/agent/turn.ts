@@ -10,13 +10,11 @@ import {
 	type AgentSessionEvent,
 	type AgentToolResult,
 	type ContextEditEntryDraft,
-	createAgentSession,
 	createBashToolDefinition,
 	createReadToolDefinition,
 	DEFAULT_COMPACTION_SETTINGS,
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
-	DefaultResourceLoader,
 	defineTool,
 	estimateTokens,
 	type ExtensionFactory,
@@ -25,7 +23,7 @@ import {
 	type SessionEntry,
 	SessionManager,
 	type SessionMessageEntry,
-	SettingsManager,
+	type SettingsManager,
 	shouldCompact,
 } from "@earendil-works/pi-coding-agent";
 
@@ -51,13 +49,7 @@ import {
 } from "./conversation-host-protocol.ts";
 import type { KindRunner, RunContext } from "./driver.ts";
 import { untilGatewayTakes } from "./gateway-connection.ts";
-import {
-	SANDBOX_RESOURCE_LOADER_OPTIONS,
-	outsideWorkspace,
-	redactCredentials,
-	SANDBOX_SETTINGS_MANAGER_OPTIONS,
-	TOOL_SPAWN_HOOK,
-} from "./pi-agent-sandbox.ts";
+import { outsideWorkspace, redactCredentials, TOOL_SPAWN_HOOK } from "./pi-agent-sandbox.ts";
 import { errorText } from "./pi-error-text.ts";
 import {
 	asReasoningEffort,
@@ -66,6 +58,7 @@ import {
 	registerHephaestusProvider,
 	registerRunProvider,
 } from "./pi-provider.ts";
+import { openRunSession } from "./pi-session.ts";
 import { AGENT_DIR, WORKSPACE } from "./sandbox-paths.ts";
 
 type PiMessage = SessionMessageEntry["message"];
@@ -1628,17 +1621,6 @@ export async function runTurn(
 		const entries = asFileEntries(context.entries);
 		const stored = entries.length;
 		const sessionManager = SessionManager.inMemory(options.cwd, { id: context.sessionId }, entries);
-		const settingsManager = SettingsManager.inMemory(
-			{
-				compaction: { enabled: true, ...conversationCompaction(model.contextWindow) },
-				// As a practice review repeats (PiRuntimeFactory); the turn's deadline still bounds them.
-				retry: { enabled: true, maxRetries: 5, baseDelayMs: 4000 },
-				// Pi warms a prompt cache only for a model with a cache lifetime and a price, which this one does not
-				// declare. Off keeps a later model setting from starting model calls that no developer asked for.
-				cacheWarming: "off",
-			},
-			SANDBOX_SETTINGS_MANAGER_OPTIONS,
-		);
 		const turnExtension: ExtensionFactory = (pi) => {
 			pi.on("context", (event) => ({
 				messages: [...event.messages, situationMessage(context.situation)],
@@ -1656,39 +1638,33 @@ export async function runTurn(
 					: undefined,
 			);
 		};
-		const resourceLoader = new DefaultResourceLoader({
-			cwd: options.cwd,
-			agentDir: options.agentDir,
-			settingsManager,
-			...SANDBOX_RESOURCE_LOADER_OPTIONS,
-			noSkills: true,
-			noPromptTemplates: true,
-			noThemes: true,
-			extensionFactories: [turnExtension],
-			systemPromptOverride: () => context.systemPrompt,
-		});
-		await resourceLoader.reload();
-		const { session: agent } = await createAgentSession({
-			cwd: options.cwd,
-			agentDir: options.agentDir,
-			modelRuntime,
-			model,
-			thinkingLevel: reasoningSetting(asReasoningEffort(context.model.reasoningEffort))
-				.thinkingLevel,
-			resourceLoader,
-			sessionManager,
-			settingsManager,
-			customTools: turnTools(
-				api,
-				state.controller.signal,
-				context.contextFolder ? options.cwd : null,
-				context.documents,
-			),
-			tools: [
-				...(context.contextFolder ? CONTEXT_FOLDER_TOOL_NAMES : []),
-				...CONVERSATION_TOOL_NAMES,
-			],
-		});
+		const { session: agent } = await openRunSession(
+			{ cwd: options.cwd, agentDir: options.agentDir },
+			{
+				modelRuntime,
+				model,
+				thinkingLevel: reasoningSetting(asReasoningEffort(context.model.reasoningEffort))
+					.thinkingLevel,
+				systemPrompt: context.systemPrompt,
+				tools: [
+					...(context.contextFolder ? CONTEXT_FOLDER_TOOL_NAMES : []),
+					...CONVERSATION_TOOL_NAMES,
+				],
+				customTools: turnTools(
+					api,
+					state.controller.signal,
+					context.contextFolder ? options.cwd : null,
+					context.documents,
+				),
+				extensions: [turnExtension],
+				settings: {
+					compaction: { enabled: true, ...conversationCompaction(model.contextWindow) },
+					// As a practice review repeats (PiRuntimeFactory); the turn's deadline still bounds them.
+					retry: { enabled: true, maxRetries: 5, baseDelayMs: 4000 },
+				},
+				sessionManager,
+			},
+		);
 		state.session = agent;
 		appended = { manager: sessionManager, stored };
 		partials = partialStream(api, options.partialIntervalMs ?? PARTIAL_INTERVAL_MS);
@@ -1714,7 +1690,7 @@ export async function runTurn(
 		});
 		try {
 			if (!stopped(state)) {
-				await compactBeforePrompt(agent, settingsManager, () => stopped(state));
+				await compactBeforePrompt(agent, agent.settingsManager, () => stopped(state));
 			}
 			if (!stopped(state)) {
 				await agent.prompt(context.prompt);

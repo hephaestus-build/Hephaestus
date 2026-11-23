@@ -26,11 +26,9 @@ import {
 	type AgentSession,
 	type AgentSessionEvent,
 	type AgentToolResult,
-	createAgentSession,
 	createCodemodeExtension,
 	createBashToolDefinition,
 	createGrepToolDefinition,
-	DefaultResourceLoader,
 	defineTool,
 	ModelRuntime,
 	SessionManager,
@@ -39,7 +37,6 @@ import {
 
 import { GatewayUnavailableError } from "./gateway-connection.ts";
 import {
-	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	redactCredentials,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
 	TOOL_SPAWN_HOOK,
@@ -137,6 +134,7 @@ import {
 	insideRoot,
 	unreadCheckoutClaim,
 } from "./pi-session-reads.ts";
+import { openRunSession } from "./pi-session.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 import { hasText, isBlank } from "./pi-text.ts";
 import { proveSearches } from "./pi-verified-search.ts";
@@ -2408,13 +2406,12 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			ceiling_ms: AGENT_BUDGET_MS,
 		});
 
-		// pi-agent-sandbox.ts has the rationale for running untrusted; both Pi runners in this image
-		// share it.
-		const settingsManager = SettingsManager.create(
+		// The settings that the server staged (PiRuntimeFactory), as the SDK reads them; each session gets a copy.
+		const settings = SettingsManager.create(
 			CWD,
 			AGENT_DIR,
 			SANDBOX_SETTINGS_MANAGER_OPTIONS,
-		);
+		).getSettings();
 		// Disable instruction discovery; load only the server-staged orchestrator (see pi-agent-sandbox.ts).
 		const orchestratorPath = `${AGENT_DIR}/AGENTS.md`;
 		const orchestrator = orchestratorWithPaths(readFileSync(orchestratorPath, "utf8"));
@@ -2667,7 +2664,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		}
 
 		const cacheConfig = providerConfig;
-		async function assessmentLoader() {
+		function assessmentExtensions() {
 			const scope = sessionState();
 			const practice = scope.activePractice;
 			const cacheExtension = assessmentCacheExtension(
@@ -2685,31 +2682,21 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					? undefined
 					: practiceIndex.find((entry) => entry.slug === practice)?.practiceId;
 			// Extension bindings belong to the native session that uses them.
-			const resourceLoader = new DefaultResourceLoader({
-				cwd: CWD,
-				agentDir: AGENT_DIR,
-				settingsManager,
-				...SANDBOX_RESOURCE_LOADER_OPTIONS,
-				systemPrompt: orchestrator,
-				agentsFilesOverride: () => ({ agentsFiles: [] }),
+			return [
 				// "on" keeps every tool callable directly as well; scripts get no model catalog to call.
-				extensionFactories: [
-					createCodemodeExtension({ mode: "on", models: false }),
-					cacheExtension,
-					// A session with no practice reads only what every session reads.
-					declaredSourcesExtension(declaredSourcesOf(practice), CWD),
-					submissionExtension(
-						providerConfig ?? {},
-						() => scope.activeReview?.requireSubmission === true,
-					),
-					...(practiceId === undefined ? [] : [practiceHeaderExtension(practiceId)]),
-				],
-			});
-			await resourceLoader.reload();
-			return resourceLoader;
+				createCodemodeExtension({ mode: "on", models: false }),
+				cacheExtension,
+				// A session with no practice reads only what every session reads.
+				declaredSourcesExtension(declaredSourcesOf(practice), CWD),
+				submissionExtension(
+					providerConfig ?? {},
+					() => scope.activeReview?.requireSubmission === true,
+				),
+				...(practiceId === undefined ? [] : [practiceHeaderExtension(practiceId)]),
+			];
 		}
 
-		type SessionOptions = NonNullable<Parameters<typeof createAgentSession>[0]>;
+		type SessionOptions = Partial<Parameters<typeof openRunSession>[1]>;
 		/** The tools that a session offers. A diagnostic names only these: a model can call a tool by any name. */
 		const registeredTools = new Set<string>();
 		const toolOf = (name: string) => (registeredTools.has(name) ? name : "other");
@@ -2739,23 +2726,25 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			for (const name of [...tools, ...sessionTools.map((tool) => tool.name)]) {
 				registeredTools.add(name);
 			}
-			const { session: fresh, extensionsResult } = await createAgentSession({
-				cwd: CWD,
-				agentDir: AGENT_DIR,
-				tools,
-				customTools: sessionTools.map((tool) => ({
-					...tool,
-					execute: AsyncLocalStorage.bind(async (...args: Parameters<typeof tool.execute>) =>
-						tool.execute(...args),
-					),
-				})),
-				sessionManager: nativeSessionManager(sessionState().activePractice),
-				settingsManager,
-				resourceLoader: await assessmentLoader(),
-				modelRuntime,
-				model,
-				thinkingLevel,
-			});
+			const { session: fresh, extensionsResult } = await openRunSession(
+				{ cwd: CWD, agentDir: AGENT_DIR },
+				{
+					modelRuntime,
+					model,
+					thinkingLevel,
+					systemPrompt: orchestrator,
+					tools,
+					customTools: sessionTools.map((tool) => ({
+						...tool,
+						execute: AsyncLocalStorage.bind(async (...args: Parameters<typeof tool.execute>) =>
+							tool.execute(...args),
+						),
+					})),
+					extensions: assessmentExtensions(),
+					settings,
+					sessionManager: nativeSessionManager(sessionState().activePractice),
+				},
+			);
 			const scope = sessionState();
 			fresh.agent.streamFunction = waitForGateway(fresh.agent.streamFunction, gatewayPatienceEnd, {
 				waiting: () => {

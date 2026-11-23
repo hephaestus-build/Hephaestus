@@ -62,7 +62,7 @@ class ComposerReplayLiveTest {
             basis.remove("expected");
             var structures = new ArrayList<JsonNode>();
             for (int run = 0; run < runs; run++) {
-                var answers = new ArrayList<ModelSession.Answer>();
+                var answers = new ArrayList<ModelAnswer>();
                 var outcome = ComposerReplay.node(basis, transport.answering(creds.model(), answers));
                 structures.add(structure(outcome.packages(), outcome.handedOn()));
                 if (run > 0) continue;
