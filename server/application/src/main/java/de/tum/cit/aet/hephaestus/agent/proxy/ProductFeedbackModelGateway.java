@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -59,10 +60,9 @@ public class ProductFeedbackModelGateway {
             ProductFeedbackDrafts.Payload draft,
             LlmModelResolver.InstanceModel model,
             Instant deadline,
-            int maxOutputTokens,
-            String system,
-            String user) {
-        byte[] body = mapper.writeValueAsBytes(request(model, maxOutputTokens, system, user));
+            ProductFeedbackDraftCalls.DraftCall call) {
+        int maxOutputTokens = call.maxOutputTokens();
+        byte[] body = mapper.writeValueAsBytes(request(model, maxOutputTokens, call.system(), call.user()));
         var ref = model.ref();
         Long modelLimit = ProxyRouting.outputLimitOf(model.contextWindow(), model.maxOutputTokens());
         long outputLimit = modelLimit == null ? maxOutputTokens : Math.min(modelLimit, maxOutputTokens);
@@ -147,7 +147,10 @@ public class ProductFeedbackModelGateway {
                 body.putArray("input").add(turn);
                 body.put("store", false);
                 body.put("max_output_tokens", Math.max(16, maxOutputTokens));
-                if (effort != null) body.putObject("reasoning").put("effort", effort);
+                if (effort != null) {
+                    body.putObject("reasoning").put("effort", effort);
+                    body.putArray("include").add("reasoning.encrypted_content");
+                }
             }
         }
         return body;

@@ -83,8 +83,8 @@ class DraftReportAdapter implements ActionAdapter {
         LlmModelResolver.InstanceModel model = models.resolveInstanceModel(call.llmModelId());
         if (model == null) return new ActionResult.Failed(ActionStopReason.NOT_CONFIGURED);
         if (!drafts.claimed(attempt, payload.feedbackId(), payload.generation())) return new ActionResult.Abandoned();
-        ProductFeedbackModelGateway.Draft reply = gateway.orElseThrow()
-                .draft(attempt.id(), payload, model, deadline, call.maxOutputTokens(), call.system(), call.user());
+        ProductFeedbackModelGateway.Draft reply =
+                gateway.orElseThrow().draft(attempt.id(), payload, model, deadline, call);
         String text = reply.text();
         ProductFeedbackModelGateway.Failure failure = reply.failure();
         if (failure == null && text != null)

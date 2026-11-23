@@ -392,7 +392,7 @@ It also fails when a run kind in `driver-kinds.ts` does not name how it opens it
 The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
 
 The server makes its own model calls only through the proxy's gateways, such as `ProductFeedbackModelGateway` for a report draft.
-`ModelCallBoundaryArchTest` fails when a class outside the proxy reads a model's provider key.
+`ModelCallBoundaryArchTest` fails when a class outside the proxy reads the provider key of a resolved model (`ProxyCredential`).
 
 ### Isolation
 

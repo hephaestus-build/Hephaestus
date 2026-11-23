@@ -91,14 +91,7 @@ class DraftReportAdapterTest extends BaseUnitTest {
 
     @Test
     void shouldKeepTheAnswerWhenTheCallIsServed() {
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any(),
-                        any()))
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
                 .thenReturn(served("{\"disposition\":\"ISSUE\"}"));
         when(drafts.answered(attempt, REPORT, 2, "{\"disposition\":\"ISSUE\"}")).thenReturn(true);
 
@@ -115,14 +108,7 @@ class DraftReportAdapterTest extends BaseUnitTest {
             now.set(started.plusSeconds(30));
             return Optional.of(new ProductFeedbackDraftCalls.DraftCall(8L, "Draft it.", "The report.", 100));
         });
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any(),
-                        any()))
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
                 .thenReturn(served("{}"));
         when(drafts.answered(attempt, REPORT, 2, "{}")).thenReturn(true);
         var bounded = new DraftReportAdapter(drafts, calls, models, Optional.of(gateway), MAPPER, delayed, usage);
@@ -134,22 +120,13 @@ class DraftReportAdapterTest extends BaseUnitTest {
                         eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
                         eq(MODEL),
                         deadline.capture(),
-                        anyInt(),
-                        any(),
                         any());
         assertThat(deadline.getValue()).isEqualTo(started.plus(DraftReportAdapter.CALL_TIME));
     }
 
     @Test
     void shouldDeferCapacityWithoutSpendingAnAttempt() {
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any(),
-                        any()))
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
                 .thenReturn(failed(ProductFeedbackModelGateway.Failure.NO_CAPACITY));
         when(drafts.deferred(attempt, REPORT, 2)).thenReturn(true);
         assertThat(adapter.execute(attempt)).isInstanceOf(ActionResult.Defer.class);
@@ -164,15 +141,13 @@ class DraftReportAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldAskWithTheWaitingCallsPromptAndOutputBound() {
+    void shouldAskWithTheWaitingCall() {
         when(gateway.draft(
                         eq(attempt.id()),
                         eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
                         eq(MODEL),
                         any(),
-                        eq(100),
-                        eq("Draft it."),
-                        eq("The report.")))
+                        eq(new ProductFeedbackDraftCalls.DraftCall(8L, "Draft it.", "The report.", 100))))
                 .thenReturn(served("{}"));
         when(drafts.answered(attempt, REPORT, 2, "{}")).thenReturn(true);
 
@@ -181,14 +156,7 @@ class DraftReportAdapterTest extends BaseUnitTest {
 
     @Test
     void shouldGiveUpTheAttemptWhenItLostItsActionBeforeTheAnswerWasKept() {
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any(),
-                        any()))
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
                 .thenReturn(served("{}"));
         when(drafts.answered(attempt, REPORT, 2, "{}")).thenReturn(false);
 
@@ -197,14 +165,7 @@ class DraftReportAdapterTest extends BaseUnitTest {
 
     @Test
     void shouldRetryWhenTheProviderFails() {
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any(),
-                        any()))
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
                 .thenReturn(failed(ProductFeedbackModelGateway.Failure.PROVIDER));
 
         assertThat(adapter.execute(attempt)).isInstanceOf(ActionResult.Retry.class);
@@ -213,14 +174,7 @@ class DraftReportAdapterTest extends BaseUnitTest {
 
     @Test
     void shouldCancelWhenTheActionEndedWhileTheCallWaited() {
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any(),
-                        any()))
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
                 .thenReturn(failed(ProductFeedbackModelGateway.Failure.ATTEMPT_ENDED));
 
         assertThat(adapter.execute(attempt)).isEqualTo(new ActionResult.Cancelled(ActionStopReason.WITHDRAWN));
@@ -228,14 +182,7 @@ class DraftReportAdapterTest extends BaseUnitTest {
 
     @Test
     void shouldFailWhenTheProxyRefusesTheModel() {
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any(),
-                        any()))
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
                 .thenReturn(failed(ProductFeedbackModelGateway.Failure.AI_CHOICE));
 
         assertThat(adapter.execute(attempt)).isEqualTo(new ActionResult.Failed(ActionStopReason.NOT_CONFIGURED));
@@ -246,7 +193,7 @@ class DraftReportAdapterTest extends BaseUnitTest {
         when(models.resolveInstanceModel(8L)).thenReturn(null);
 
         assertThat(adapter.execute(attempt)).isEqualTo(new ActionResult.Failed(ActionStopReason.NOT_CONFIGURED));
-        verify(gateway, never()).draft(any(), any(), any(), any(), anyInt(), any(), any());
+        verify(gateway, never()).draft(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -254,7 +201,7 @@ class DraftReportAdapterTest extends BaseUnitTest {
         when(calls.waiting(REPORT, 2)).thenReturn(Optional.empty());
 
         assertThat(adapter.execute(attempt)).isEqualTo(new ActionResult.Cancelled(ActionStopReason.WITHDRAWN));
-        verify(gateway, never()).draft(any(), any(), any(), any(), anyInt(), any(), any());
+        verify(gateway, never()).draft(any(), any(), any(), any(), any());
     }
 
     private static ProductFeedbackModelGateway.Draft served(String text) {

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
@@ -44,9 +45,7 @@ class ProductFeedbackModelGatewayTest extends BaseUnitTest {
                 new ProductFeedbackDrafts.Payload(report, 3),
                 model(LlmApiProtocol.OPENAI_COMPLETIONS, null),
                 Instant.now().plusSeconds(30),
-                900,
-                "Draft it.",
-                "The report.");
+                new ProductFeedbackDraftCalls.DraftCall(8L, "Draft it.", "The report.", 900));
         assertThat(draft.failure()).isEqualTo(ProductFeedbackModelGateway.Failure.NO_CAPACITY);
         var route = ArgumentCaptor.forClass(ProxyRouting.class);
         verify(proxy).serve(route.capture(), any(), isNull(), any(), any(), isNull());
@@ -69,7 +68,22 @@ class ProductFeedbackModelGatewayTest extends BaseUnitTest {
         assertThat(request.has("tools")).isFalse();
         assertThat(request.has("tool_choice")).isFalse();
         assertThat(request.path("model").asString()).isEqualTo("draft-upstream");
-        assertThat(request.toString()).contains("Draft it.", "The report.");
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "ANTHROPIC_MESSAGES | {\"model\":\"draft-upstream\",\"system\":\"Draft it.\",\"messages\":[{\"role\":\"user\",\"content\":\"The report.\"}],\"max_tokens\":900}",
+                "OPENAI_COMPLETIONS | {\"model\":\"draft-upstream\",\"messages\":[{\"role\":\"system\",\"content\":\"Draft it.\"},{\"role\":\"user\",\"content\":\"The report.\"}],\"store\":false,\"max_completion_tokens\":900,\"reasoning_effort\":\"low\"}",
+                "OPENAI_RESPONSES | {\"model\":\"draft-upstream\",\"instructions\":\"Draft it.\",\"input\":[{\"role\":\"user\",\"content\":\"The report.\"}],\"store\":false,\"max_output_tokens\":900,\"reasoning\":{\"effort\":\"low\"},\"include\":[\"reasoning.encrypted_content\"]}",
+            })
+    void shouldWriteThePromptAndReasoningWhereEachProtocolReadsThem(LlmApiProtocol protocol, String expected) {
+        answer(ResponseEntity.ok(served(protocol, "{}")));
+
+        draft(model(protocol, ReasoningEffort.LOW));
+
+        assertThat(sent()).isEqualTo(MAPPER.readTree(expected));
     }
 
     @Test
@@ -133,9 +147,7 @@ class ProductFeedbackModelGatewayTest extends BaseUnitTest {
                 new ProductFeedbackDrafts.Payload(UUID.randomUUID(), 1),
                 model,
                 Instant.now().plusSeconds(30),
-                900,
-                "Draft it.",
-                "The report.");
+                new ProductFeedbackDraftCalls.DraftCall(8L, "Draft it.", "The report.", 900));
     }
 
     private JsonNode sent() {

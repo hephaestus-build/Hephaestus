@@ -36,7 +36,7 @@ export interface RunDescriptor {
 	extensions: ExtensionFactory[];
 	/** Compaction, retry and transport. The factory keeps them in memory and turns cache warming off. */
 	settings: NonNullable<Parameters<typeof SettingsManager.inMemory>[0]>;
-	/** Where the session's entries go: the server keeps them as the run's session event log. */
+	/** Where the session's entries go. The run kind sends them to the server. */
 	sessionManager: SessionManager;
 }
 
@@ -61,10 +61,6 @@ export async function openRunSession(
 		...place,
 		settingsManager,
 		...SANDBOX_RESOURCE_LOADER_OPTIONS,
-		noExtensions: true,
-		noSkills: true,
-		noPromptTemplates: true,
-		noThemes: true,
 		agentsFilesOverride: () => ({ agentsFiles: [] }),
 		systemPrompt: descriptor.systemPrompt,
 		systemPromptOverride: () => descriptor.systemPrompt,

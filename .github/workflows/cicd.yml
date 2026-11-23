@@ -635,6 +635,7 @@ jobs:
               - 'server/application/src/main/resources/agent/conversation-host-protocol.ts'
               - 'server/application/src/main/resources/agent/context-folder.ts'
               - 'server/application/src/main/resources/agent/pi-agent-sandbox.ts'
+              - 'server/application/src/main/resources/agent/pi-session.ts'
               - 'server/application/src/main/resources/agent/pi-diagnostics.*'
               - 'server/application/src/main/resources/agent/pi-error-text.ts'
               - 'server/application/src/main/resources/agent/pi-provider.ts'

@@ -28,6 +28,10 @@ function source(file: string): string {
 	return readFileSync(path.join(AGENT_SOURCES, file), "utf8");
 }
 
+/** Every way the Pi SDK builds a session or loads a session's resources. */
+const SESSION_BUILDERS =
+	/\b(?:createAgentSession|createAgentSessionFromServices|createAgentSessionRuntime)\(|\bnew (?:AgentSession|DefaultResourceLoader)\(/u;
+
 void test("every run kind opens its Pi sessions through openRunSession", () => {
 	assert.deepEqual(Object.keys(SESSION_MODULES).toSorted(), Object.keys(KINDS).toSorted());
 	for (const [kind, module] of Object.entries(SESSION_MODULES)) {
@@ -42,9 +46,9 @@ void test("every run kind opens its Pi sessions through openRunSession", () => {
 });
 
 void test("only the session factory creates a Pi session or loads its resources", () => {
-	const builders = readdirSync(AGENT_SOURCES)
+	const builders = readdirSync(AGENT_SOURCES, { recursive: true, encoding: "utf8" })
 		.filter((file) => file.endsWith(".ts"))
-		.filter((file) => /\bcreateAgentSession\(|new DefaultResourceLoader\(/u.test(source(file)));
+		.filter((file) => SESSION_BUILDERS.test(source(file)));
 	assert.deepEqual(builders, ["pi-session.ts"]);
 });
 
@@ -70,6 +74,10 @@ void test("a run session holds only what its descriptor names", async () => {
 			path.join(agentDir, "skills", "decoy", "SKILL.md"),
 			"---\nname: decoy\ndescription: DECOY skill\n---\nDECOY",
 		);
+		writeFileSync(
+			path.join(cwd, ".pi", "skills", "decoy", "SKILL.md"),
+			"---\nname: decoy\ndescription: DECOY skill\n---\nDECOY",
+		);
 		writeFileSync(path.join(agentDir, "prompts", "decoy.md"), "DECOY template");
 		writeFileSync(
 			path.join(agentDir, "extensions", "decoy.ts"),
@@ -77,7 +85,7 @@ void test("a run session holds only what its descriptor names", async () => {
 		);
 		writeFileSync(
 			path.join(agentDir, "settings.json"),
-			JSON.stringify({ cacheWarming: "streaming" }),
+			JSON.stringify({ compaction: { enabled: true }, retry: { maxRetries: 99 } }),
 		);
 		const modelRuntime = await ModelRuntime.create({
 			authPath: path.join(agentDir, "auth.json"),
@@ -111,7 +119,9 @@ void test("a run session holds only what its descriptor names", async () => {
 			assert.ok(session.systemPrompt.startsWith(systemPrompt));
 			assert.doesNotMatch(session.systemPrompt, /DECOY/u);
 			assert.deepEqual(session.getActiveToolNames(), ["read"]);
+			assert.deepEqual(session.promptTemplates, []);
 			assert.equal(session.settingsManager.getCompactionSettings().enabled, false);
+			assert.notEqual(session.settingsManager.getRetrySettings().maxRetries, 99);
 			assert.equal(session.settingsManager.getSettings().cacheWarming, "off");
 		} finally {
 			session.dispose();
