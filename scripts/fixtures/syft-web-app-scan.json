@@ -1,0 +1,396 @@
+{
+	"_recorded": "`syft dir:` of the web app in ghcr.io/hephaestus-build/server:1.0.0-rc.13@sha256:8182a0a918a339f39dcfe10b3f91f9625d73f64e9a87e100a049457062e5fa5d, with the arguments of webAppSyftArguments and the Syft of .github/ci-tools/syft.json. Trimmed to four packages and to the descriptor's name and version (its configuration lists every cataloger); every kept value is unedited. Record it again with each Syft update: check-release-sbom.test.ts compares descriptor.version with the pin.",
+	"descriptor": {
+		"name": "syft",
+		"version": "1.57.2"
+	},
+	"schema": {
+		"version": "16.1.13",
+		"url": "https://raw.githubusercontent.com/anchore/syft/main/schema/json/schema-16.1.13.json"
+	},
+	"source": {
+		"id": "62b8f7e6ecd930d7b52d86eaa1065e81aa180f6fcabba30ab2040c0bd62feaf8",
+		"name": "ghcr.io/hephaestus-build/server:1.0.0-rc.13@sha256:8182a0a918a339f39dcfe10b3f91f9625d73f64e9a87e100a049457062e5fa5d/web-app",
+		"version": "",
+		"type": "directory",
+		"metadata": {
+			"path": "ghcr.io/hephaestus-build/server:1.0.0-rc.13@sha256:8182a0a918a339f39dcfe10b3f91f9625d73f64e9a87e100a049457062e5fa5d/web-app"
+		}
+	},
+	"files": [
+		{
+			"id": "5567c94c988a1a09",
+			"location": {
+				"path": ""
+			},
+			"metadata": {
+				"mode": 20000000755,
+				"type": "Directory",
+				"userID": 0,
+				"groupID": 0,
+				"mimeType": "",
+				"size": 4096
+			}
+		},
+		{
+			"id": "d327c6b38252a5fb",
+			"location": {
+				"path": "/.vite"
+			},
+			"metadata": {
+				"mode": 20000000755,
+				"type": "Directory",
+				"userID": 0,
+				"groupID": 0,
+				"mimeType": "",
+				"size": 4096
+			}
+		},
+		{
+			"id": "b39cf516ed55ad4b",
+			"location": {
+				"path": "/.vite/packages/%40base-ui%2Freact%401.8.0/package.json"
+			},
+			"metadata": {
+				"mode": 644,
+				"type": "RegularFile",
+				"userID": 0,
+				"groupID": 0,
+				"mimeType": "application/json",
+				"size": 60
+			},
+			"digests": [
+				{
+					"algorithm": "sha256",
+					"value": "e3ab1a19bbd46621d42c871a35d59ade31e99b0ea23cd52a1bf424baf8d87b8b"
+				}
+			]
+		},
+		{
+			"id": "9f60e58f3ed19088",
+			"location": {
+				"path": "/.vite/packages/%40date-fns%2Ftz%401.5.0/package.json"
+			},
+			"metadata": {
+				"mode": 644,
+				"type": "RegularFile",
+				"userID": 0,
+				"groupID": 0,
+				"mimeType": "application/json",
+				"size": 58
+			},
+			"digests": [
+				{
+					"algorithm": "sha256",
+					"value": "8224c4815bab97ba7097823904dc461f943d2df66d1828c12b5b5f151af19e87"
+				}
+			]
+		},
+		{
+			"id": "075717a57c6a58d3",
+			"location": {
+				"path": "/.vite/packages/react%4019.2.8/package.json"
+			},
+			"metadata": {
+				"mode": 644,
+				"type": "RegularFile",
+				"userID": 0,
+				"groupID": 0,
+				"mimeType": "application/json",
+				"size": 52
+			},
+			"digests": [
+				{
+					"algorithm": "sha256",
+					"value": "ad41fd6be7d6bc2633e5d4461884cc57734181e478851bafe4b8159d13f976f4"
+				}
+			]
+		},
+		{
+			"id": "8a38674834ed0897",
+			"location": {
+				"path": "/.vite/packages/react-dom%4019.2.8/package.json"
+			},
+			"metadata": {
+				"mode": 644,
+				"type": "RegularFile",
+				"userID": 0,
+				"groupID": 0,
+				"mimeType": "application/json",
+				"size": 56
+			},
+			"digests": [
+				{
+					"algorithm": "sha256",
+					"value": "d692e675cf6d6105112a3ddd223505eddd0694d029e7ccb5acb8626731d5ea57"
+				}
+			]
+		}
+	],
+	"artifacts": [
+		{
+			"id": "eeeb632709ffb991",
+			"name": "@base-ui/react",
+			"version": "1.8.0",
+			"type": "npm",
+			"foundBy": "javascript-package-cataloger",
+			"locations": [
+				{
+					"path": "/.vite/packages/%40base-ui%2Freact%401.8.0/package.json",
+					"accessPath": "/.vite/packages/%40base-ui%2Freact%401.8.0/package.json",
+					"annotations": {
+						"evidence": "primary"
+					}
+				}
+			],
+			"licenses": [
+				{
+					"value": "MIT",
+					"spdxExpression": "MIT",
+					"type": "declared",
+					"urls": [],
+					"locations": [
+						{
+							"path": "/.vite/packages/%40base-ui%2Freact%401.8.0/package.json",
+							"accessPath": "/.vite/packages/%40base-ui%2Freact%401.8.0/package.json",
+							"annotations": {
+								"evidence": "primary"
+							}
+						}
+					]
+				}
+			],
+			"language": "javascript",
+			"cpes": [
+				{
+					"cpe": "cpe:2.3:a:\\@base-ui\\/react:\\@base-ui\\/react:1.8.0:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:\\@base-ui\\/react:\\@base_ui\\/react:1.8.0:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:\\@base_ui\\/react:\\@base-ui\\/react:1.8.0:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:\\@base_ui\\/react:\\@base_ui\\/react:1.8.0:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:\\@base:\\@base-ui\\/react:1.8.0:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:\\@base:\\@base_ui\\/react:1.8.0:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				}
+			],
+			"purl": "pkg:npm/%40base-ui/react@1.8.0",
+			"metadataType": "javascript-npm-package",
+			"metadata": {
+				"name": "@base-ui/react",
+				"version": "1.8.0",
+				"author": "",
+				"homepage": "",
+				"description": "",
+				"url": "",
+				"private": false
+			}
+		},
+		{
+			"id": "4472d606cc532710",
+			"name": "@date-fns/tz",
+			"version": "1.5.0",
+			"type": "npm",
+			"foundBy": "javascript-package-cataloger",
+			"locations": [
+				{
+					"path": "/.vite/packages/%40date-fns%2Ftz%401.5.0/package.json",
+					"accessPath": "/.vite/packages/%40date-fns%2Ftz%401.5.0/package.json",
+					"annotations": {
+						"evidence": "primary"
+					}
+				}
+			],
+			"licenses": [
+				{
+					"value": "MIT",
+					"spdxExpression": "MIT",
+					"type": "declared",
+					"urls": [],
+					"locations": [
+						{
+							"path": "/.vite/packages/%40date-fns%2Ftz%401.5.0/package.json",
+							"accessPath": "/.vite/packages/%40date-fns%2Ftz%401.5.0/package.json",
+							"annotations": {
+								"evidence": "primary"
+							}
+						}
+					]
+				}
+			],
+			"language": "javascript",
+			"cpes": [
+				{
+					"cpe": "cpe:2.3:a:\\@date-fns\\/tz:\\@date-fns\\/tz:1.5.0:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:\\@date-fns\\/tz:\\@date_fns\\/tz:1.5.0:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:\\@date_fns\\/tz:\\@date-fns\\/tz:1.5.0:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:\\@date_fns\\/tz:\\@date_fns\\/tz:1.5.0:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:\\@date:\\@date-fns\\/tz:1.5.0:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:\\@date:\\@date_fns\\/tz:1.5.0:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				}
+			],
+			"purl": "pkg:npm/%40date-fns/tz@1.5.0",
+			"metadataType": "javascript-npm-package",
+			"metadata": {
+				"name": "@date-fns/tz",
+				"version": "1.5.0",
+				"author": "",
+				"homepage": "",
+				"description": "",
+				"url": "",
+				"private": false
+			}
+		},
+		{
+			"id": "389a83587a7d2923",
+			"name": "react",
+			"version": "19.2.8",
+			"type": "npm",
+			"foundBy": "javascript-package-cataloger",
+			"locations": [
+				{
+					"path": "/.vite/packages/react%4019.2.8/package.json",
+					"accessPath": "/.vite/packages/react%4019.2.8/package.json",
+					"annotations": {
+						"evidence": "primary"
+					}
+				}
+			],
+			"licenses": [
+				{
+					"value": "MIT",
+					"spdxExpression": "MIT",
+					"type": "declared",
+					"urls": [],
+					"locations": [
+						{
+							"path": "/.vite/packages/react%4019.2.8/package.json",
+							"accessPath": "/.vite/packages/react%4019.2.8/package.json",
+							"annotations": {
+								"evidence": "primary"
+							}
+						}
+					]
+				}
+			],
+			"language": "javascript",
+			"cpes": [
+				{
+					"cpe": "cpe:2.3:a:react:react:19.2.8:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				}
+			],
+			"purl": "pkg:npm/react@19.2.8",
+			"metadataType": "javascript-npm-package",
+			"metadata": {
+				"name": "react",
+				"version": "19.2.8",
+				"author": "",
+				"homepage": "",
+				"description": "",
+				"url": "",
+				"private": false
+			}
+		},
+		{
+			"id": "2f8a1a7ec0408562",
+			"name": "react-dom",
+			"version": "19.2.8",
+			"type": "npm",
+			"foundBy": "javascript-package-cataloger",
+			"locations": [
+				{
+					"path": "/.vite/packages/react-dom%4019.2.8/package.json",
+					"accessPath": "/.vite/packages/react-dom%4019.2.8/package.json",
+					"annotations": {
+						"evidence": "primary"
+					}
+				}
+			],
+			"licenses": [
+				{
+					"value": "MIT",
+					"spdxExpression": "MIT",
+					"type": "declared",
+					"urls": [],
+					"locations": [
+						{
+							"path": "/.vite/packages/react-dom%4019.2.8/package.json",
+							"accessPath": "/.vite/packages/react-dom%4019.2.8/package.json",
+							"annotations": {
+								"evidence": "primary"
+							}
+						}
+					]
+				}
+			],
+			"language": "javascript",
+			"cpes": [
+				{
+					"cpe": "cpe:2.3:a:react-dom:react-dom:19.2.8:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:react-dom:react_dom:19.2.8:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:react_dom:react-dom:19.2.8:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:react_dom:react_dom:19.2.8:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:react:react-dom:19.2.8:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				},
+				{
+					"cpe": "cpe:2.3:a:react:react_dom:19.2.8:*:*:*:*:*:*:*",
+					"source": "syft-generated"
+				}
+			],
+			"purl": "pkg:npm/react-dom@19.2.8",
+			"metadataType": "javascript-npm-package",
+			"metadata": {
+				"name": "react-dom",
+				"version": "19.2.8",
+				"author": "",
+				"homepage": "",
+				"description": "",
+				"url": "",
+				"private": false
+			}
+		}
+	]
+}

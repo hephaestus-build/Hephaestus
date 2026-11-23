@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
 	assertBundledNpmInventory,
@@ -10,6 +11,8 @@ import {
 	imagePath,
 	validateReleaseSbom,
 } from "./check-release-sbom.ts";
+import { ciToolPin } from "./lib/ci-tool-catalog.ts";
+import { asArray, asRecord } from "./lib/json.ts";
 
 const repository = "ghcr.io/hephaestus-build/webapp";
 const digest = "sha256:1102d43b320b1b9c06bdfc7f9e616c068abadace9b6874dedfcf41e1f35da3f5";
@@ -475,47 +478,62 @@ await test("Trivy must retain every emitted npm identity at its image path", () 
 });
 
 /** The web app that the server image carries, as Syft lists it from the jar's extracted `web-app/` (ADR 0100). */
-const webAppManifest = (identity: string) =>
-	`/.vite/packages/${encodeURIComponent(identity)}/package.json`;
-const webAppScan = (identities: readonly string[]) => ({
+// A real `syft dir:` scan of a released server image's web app, by the pinned Syft, trimmed to four packages with
+// every kept entry unedited. A fixture written by hand missed the empty-path root entry that `dir:` lists (#4848).
+const recordedWebAppScan = asRecord(
+	JSON.parse(await readFile("scripts/fixtures/syft-web-app-scan.json", "utf8")),
+	"recorded web app scan",
+);
+const recorded = () => structuredClone(recordedWebAppScan);
+const withoutPackage = (name: string) => {
+	const trimmed = recorded();
+	const artifacts = asArray(trimmed.artifacts, "artifacts").filter(
+		(entry) => asRecord(entry, "artifact").name !== name,
+	);
+	const kept = new Set(
+		artifacts.flatMap((entry) =>
+			asArray(asRecord(entry, "artifact").locations, "locations").map(
+				(location) => asRecord(location, "location").path,
+			),
+		),
+	);
+	const files = asArray(trimmed.files, "files").filter((file) => {
+		const filePath = asRecord(asRecord(file, "file").location, "location").path;
+		return (
+			typeof filePath !== "string" || !filePath.endsWith("/package.json") || kept.has(filePath)
+		);
+	});
+	return { ...trimmed, artifacts, files };
+};
+
+await test("the recorded web app scan comes from the pinned Syft", async () => {
+	// A Syft update changes what a scan contains, so it records this fixture again.
+	const pin = await ciToolPin("syft", "linux-x64");
+	assert.equal(asRecord(recordedWebAppScan.descriptor, "descriptor").version, pin.version);
 	// `syft dir:` lists the scan root first, with the empty path.
-	files: [
-		{ location: { path: "" } },
-		...identities.map((identity) => ({ location: { path: webAppManifest(identity) } })),
-	],
-	artifacts: identities.map((identity) => ({
-		type: "npm",
-		foundBy: "javascript-package-cataloger",
-		name: identity.replace(/@[^@]+$/u, ""),
-		version: identity.slice(identity.lastIndexOf("@") + 1),
-		locations: [{ path: webAppManifest(identity) }],
-	})),
+	const first = asRecord(asArray(recordedWebAppScan.files, "files")[0], "first file");
+	assert.equal(asRecord(first.location, "location").path, "");
 });
 
 await test("the server's web app inventory fails when a package every build bundles is missing", () => {
-	const complete = ["react@19.2.0", "react-dom@19.2.0", "@tanstack/react-query@5.90.0"];
-	assert.doesNotThrow(() => assertBundledNpmInventory(webAppScan(complete), SERVER_WEB_APP_BUNDLE));
+	assert.doesNotThrow(() => assertBundledNpmInventory(recorded(), SERVER_WEB_APP_BUNDLE));
 	// The silent drop: a scan that still lists packages, but not the web app's own.
 	assert.throws(
-		() =>
-			assertBundledNpmInventory(
-				webAppScan(complete.filter((identity) => !identity.startsWith("react-dom@"))),
-				SERVER_WEB_APP_BUNDLE,
-			),
+		() => assertBundledNpmInventory(withoutPackage("react-dom"), SERVER_WEB_APP_BUNDLE),
 		/no bundled react-dom/u,
 	);
 	// The scan root alone is no manifest: an inventory of only the root still has lost the bundle.
+	const onlyRoot = recorded();
+	onlyRoot.files = asArray(onlyRoot.files, "files").slice(0, 1);
+	onlyRoot.artifacts = [];
 	assert.throws(
-		() => assertBundledNpmInventory(webAppScan([]), SERVER_WEB_APP_BUNDLE),
+		() => assertBundledNpmInventory(onlyRoot, SERVER_WEB_APP_BUNDLE),
 		/no bundled npm package manifests/u,
 	);
-	const withoutRoot = webAppScan(complete);
-	withoutRoot.files.shift();
-	assert.doesNotThrow(() => assertBundledNpmInventory(withoutRoot, SERVER_WEB_APP_BUNDLE));
 	assert.throws(
 		() =>
 			assertBundledNpmInventory(
-				{ ...webAppScan(complete), files: [{ location: { path: 7 } }] },
+				{ ...recorded(), files: [{ location: { path: 7 } }] },
 				SERVER_WEB_APP_BUNDLE,
 			),
 		/file path must be a string/u,
