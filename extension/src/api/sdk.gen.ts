@@ -3352,7 +3352,7 @@ export const makeMyProductFeedbackPrivate = <ThrowOnError extends boolean = fals
 	});
 
 /**
- * Read human contributions to public repositories
+ * List contributors to public repositories by name
  */
 export const getPublicActivity = <ThrowOnError extends boolean = false>(
 	options: Options<GetPublicActivityData, ThrowOnError>,
@@ -4180,7 +4180,7 @@ export const getOpenWork = <ThrowOnError extends boolean = false>(
 	});
 
 /**
- * Count each contributor and automation account in one response
+ * List contributors and automation accounts by name
  */
 export const getActivityPeople = <ThrowOnError extends boolean = false>(
 	options: Options<GetActivityPeopleData, ThrowOnError>,

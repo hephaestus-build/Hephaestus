@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.activity.overview.dto;
 
+import de.tum.cit.aet.hephaestus.activity.overview.ActivityNameOrder;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
@@ -7,8 +9,13 @@ import org.jspecify.annotations.NonNull;
 public record ActivityPeopleDTO(
         @NonNull Instant from,
         @NonNull Instant to,
-        @NonNull List<ActivityPersonDTO> people,
-        @NonNull List<ActivityPersonDTO> automation,
+
+        @ActivityNameOrder @Schema(description = "Contributors in name order") @NonNull
+        List<ActivityPersonDTO> people,
+
+        @ActivityNameOrder @Schema(description = "Automation accounts in name order") @NonNull
+        List<ActivityPersonDTO> automation,
+
         @NonNull ActivityCoverageDTO coverage,
         @NonNull ActivityHighlightsDTO highlights,
         @NonNull List<ActivityRepositoryDTO> repositories,

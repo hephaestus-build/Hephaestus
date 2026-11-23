@@ -34,7 +34,7 @@ public class PublicActivityController {
 
     @GetMapping("/public/workspaces/{slug}/activity")
     @SecurityRequirements
-    @Operation(operationId = "getPublicActivity", summary = "Read human contributions to public repositories")
+    @Operation(operationId = "getPublicActivity", summary = "List contributors to public repositories by name")
     @ApiResponse(responseCode = "200", description = "Public contributions counted")
     public ResponseEntity<PublicActivityDTO> getPublicActivity(
             @PathVariable String slug,

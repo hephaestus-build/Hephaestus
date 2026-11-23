@@ -15,7 +15,7 @@ export const getPublicActivityQueryKey = (options: Options<GetPublicActivityData
 	createQueryKey("getPublicActivity", options, false, ["public-activity"]);
 
 /**
- * Read human contributions to public repositories
+ * List contributors to public repositories by name
  */
 export const getPublicActivityOptions = (options: Options<GetPublicActivityData>) =>
 	queryOptions<

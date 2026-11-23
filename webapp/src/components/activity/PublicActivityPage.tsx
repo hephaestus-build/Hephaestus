@@ -16,11 +16,7 @@ import { coverageNote } from "./activity-coverage";
 import { contributionsNote } from "./activity-people-rows";
 import type { ActivityPeriod } from "./activity-period";
 import type { ActivityStackEntry } from "./activity-search";
-import {
-	ActivityPeopleTable,
-	type PeopleOrder,
-	type PeopleTableState,
-} from "./ActivityPeopleTable";
+import { ActivityPeopleTable, type PeopleTableState } from "./ActivityPeopleTable";
 import { ActivityPeriodPicker } from "./ActivityPeriodPicker";
 import { personLevelLink } from "./people-links";
 import { PublicPersonDrawer, type PublicPersonDrawerProps } from "./PublicPersonDrawer";
@@ -33,8 +29,6 @@ export interface PublicActivityPageProps {
 	viewer: { status: "signed-out"; onSignIn: () => void } | { status: "signed-in" };
 	period: ActivityPeriod;
 	onPeriodChange: (period: ActivityPeriod) => void;
-	order: PeopleOrder;
-	onOrderChange: (order: PeopleOrder) => void;
 	repo: readonly string[];
 	onRepoChange: (repo: string[]) => void;
 	/** The public repositories to pick from. */
@@ -60,8 +54,6 @@ export function PublicActivityPage({
 	viewer,
 	period,
 	onPeriodChange,
-	order,
-	onOrderChange,
 	repo,
 	onRepoChange,
 	repositories,
@@ -137,8 +129,6 @@ export function PublicActivityPage({
 						people.status === "ready" ? { ...people, stale: people.stale || updating } : people
 					}
 					providerType={providerType}
-					order={order}
-					onOrderChange={onOrderChange}
 					repo={repo}
 					personLink={personLevelLink}
 				/>

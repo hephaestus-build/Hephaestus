@@ -185,7 +185,7 @@ describe("the address of a workspace", () => {
 		const { router } = renderRouteAtWithRouter("/w/acme");
 
 		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
-		expect(names()).toStrictEqual(["Bob Brenner", "Ada Lovelace"]);
+		expect(names()).toStrictEqual(["Ada Lovelace", "Bob Brenner"]);
 		within(screen.getByRole("main")).getByRole("button", { name: "Sign in" });
 		expect(router.state.location.pathname).toBe("/w/acme");
 	});
@@ -196,7 +196,7 @@ describe("the address of a workspace", () => {
 		renderRouteAtWithRouter("/w/acme");
 
 		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
-		expect(names()).toStrictEqual(["Bob Brenner", "Ada Lovelace"]);
+		expect(names()).toStrictEqual(["Ada Lovelace", "Bob Brenner"]);
 		screen.getByText("and 1,204 more contributors");
 	});
 
@@ -235,30 +235,41 @@ describe("the address of a workspace", () => {
 				{ once: true },
 			),
 		);
-		const { router } = renderRouteAtWithRouter("/w/acme?repo=acme/gone&sort=reviews");
+		const { router } = renderRouteAtWithRouter("/w/acme?repo=acme/gone");
 
 		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
-		expect(router.state.location.href).toBe("/w/acme?sort=reviews");
+		expect(router.state.location.href).toBe("/w/acme");
 	});
 
-	it("reads the period, repositories and order from the address, and writes them back readable", async () => {
+	it("reads the period and repositories from the address, and writes them back readable", async () => {
 		const user = userEvent.setup();
 		const reads: URL[] = [];
 		server.use(unauthenticatedUser);
 		publish(publicActivity(), reads);
-		const { router } = renderRouteAtWithRouter("/w/acme?range=1y&repo=acme/api&sort=name");
+		const { router } = renderRouteAtWithRouter("/w/acme?range=1y&repo=acme/api");
 
 		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
 		expect(names()).toStrictEqual(["Ada Lovelace", "Bob Brenner"]);
 		expect(reads.at(-1)?.searchParams.get("range")).toBe("1y");
 		expect(reads.at(-1)?.searchParams.getAll("repo")).toStrictEqual(["acme/api"]);
 
-		await user.click(screen.getByRole("button", { name: /contributions/iu }));
-		await waitFor(() => expect(router.state.location.search.sort).toBeUndefined());
 		await user.click(screen.getByRole("button", { name: "30 days" }));
 		await waitFor(() => expect(router.state.location.search.range).toBe("30d"));
 		expect(router.state.location.href).toBe("/w/acme?range=30d&repo=acme/api");
 		await waitFor(() => expect(reads.at(-1)?.searchParams.get("range")).toBe("30d"));
+	});
+
+	it("ignores ranking options in a shared public activity link", async () => {
+		const reads: URL[] = [];
+		server.use(unauthenticatedUser);
+		publish(publicActivity(), reads);
+		renderRouteAtWithRouter("/w/acme?sort=reviews&dir=desc");
+
+		const table = await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
+		expect(names()).toStrictEqual(["Ada Lovelace", "Bob Brenner"]);
+		expect(within(table).queryByRole("columnheader", { name: "Position" })).toBeNull();
+		expect(within(table).queryByRole("button", { name: /^Reviews/u })).toBeNull();
+		expect(reads.at(-1)?.search).toBe("?range=90d");
 	});
 
 	it("offers a retry when the page could not be read", async () => {
@@ -302,7 +313,7 @@ describe("the address of a workspace", () => {
 				return parentRetry.promise;
 			}),
 		);
-		const address = "/w/acme?range=30d&repo=acme/api&sort=name&detail=person:ada";
+		const address = "/w/acme?range=30d&repo=acme/api&detail=person:ada";
 		const { router } = renderRouteAtWithRouter(address);
 		try {
 			const panel = await screen.findByRole("dialog", { name: "ada" }, ROUTE_RENDER_WAIT);
@@ -429,7 +440,7 @@ describe("the address of a workspace", () => {
 
 		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
 		expect(screen.queryByText("Loading public activity")).toBeNull();
-		expect(names()).toStrictEqual(["Bob Brenner", "Ada Lovelace"]);
+		expect(names()).toStrictEqual(["Ada Lovelace", "Bob Brenner"]);
 	});
 
 	it("shows a page that reads quickly without the loading shape in between", async () => {
@@ -455,7 +466,7 @@ describe("the address of a workspace", () => {
 		publishPerson(detailReads, workReads);
 		server.use(unauthenticatedUser);
 		publish(publicActivity(), reads);
-		const address = "/w/acme?range=30d&repo=acme/api&sort=name";
+		const address = "/w/acme?range=30d&repo=acme/api";
 		const { router } = renderRouteAtWithRouter(address);
 		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
 
@@ -658,7 +669,7 @@ describe("refreshing public activity", () => {
 	it("keeps the active range through a failed refresh and disables Retry while it reloads", async () => {
 		server.use(unauthenticatedUser);
 		publish();
-		const { router } = renderRouteAtWithRouter("/w/acme?sort=name");
+		const { router } = renderRouteAtWithRouter("/w/acme");
 		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
 		server.use(http.get("*/public/workspaces/:slug/activity", () => HttpResponse.error()));
 		await act(async () => {
@@ -690,7 +701,7 @@ describe("refreshing public activity", () => {
 	it.each([429, 503])("retains the active figures on a retryable %s refresh", async (status) => {
 		server.use(unauthenticatedUser);
 		publish();
-		const { router } = renderRouteAtWithRouter("/w/acme?sort=name");
+		const { router } = renderRouteAtWithRouter("/w/acme");
 		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
 		server.use(
 			http.get("*/public/workspaces/:slug/activity", () =>

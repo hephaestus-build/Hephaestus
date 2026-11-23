@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.activity.overview.dto;
 
+import de.tum.cit.aet.hephaestus.activity.overview.ActivityNameOrder;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
@@ -21,7 +22,10 @@ public record PublicActivityDTO(
         @Schema(requiredMode = RequiredMode.REQUIRED) boolean allowSearchEngines,
         @NonNull Instant from,
         @NonNull Instant to,
-        @NonNull List<PublicActivityPersonDTO> people,
+
+        @ActivityNameOrder @Schema(description = "Contributors in name order") @NonNull
+        List<PublicActivityPersonDTO> people,
+
         @NonNull ActivityCoverageDTO coverage,
         @NonNull PublicActivityHighlightsDTO highlights,
         @NonNull List<PublicActivityRepositoryDTO> repositories,
@@ -62,7 +66,8 @@ public record PublicActivityDTO(
                 .toList();
     }
 
-    public record PublicActivityHighlightsDTO(@NonNull List<String> firstContributors) {}
+    public record PublicActivityHighlightsDTO(
+            @ActivityNameOrder @NonNull List<String> firstContributors) {}
 
     public record PublicActivityRepositoryDTO(
             @NonNull String key, @NonNull String name) {}
@@ -74,7 +79,18 @@ public record PublicActivityDTO(
             @NonNull String profileUrl,
             @NonNull PublicActivityCountsDTO counts,
             @Nullable Instant firstContributionAt,
-            @NonNull List<ActivitySparklineWeekDTO> weeks) {
+            @NonNull List<ActivitySparklineWeekDTO> weeks)
+            implements ActivityPersonRow {
+        @Override
+        public String activityName() {
+            return name;
+        }
+
+        @Override
+        public String activityLogin() {
+            return login;
+        }
+
         static PublicActivityPersonDTO from(ActivityPersonDTO row) {
             var person = row.person();
             var counts = row.counts();

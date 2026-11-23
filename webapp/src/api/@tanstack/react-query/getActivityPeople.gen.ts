@@ -15,7 +15,7 @@ export const getActivityPeopleQueryKey = (options: Options<GetActivityPeopleData
 	createQueryKey("getActivityPeople", options, false, ["Activity"]);
 
 /**
- * Count each contributor and automation account in one response
+ * List contributors and automation accounts by name
  */
 export const getActivityPeopleOptions = (options: Options<GetActivityPeopleData>) =>
 	queryOptions<

@@ -4648,7 +4648,7 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
           description: A problem. Its type names the kind.
       security: []
-      summary: Read human contributions to public repositories
+      summary: List contributors to public repositories by name
       tags:
       - public-activity
   /public/workspaces/{slug}/activity/people/{login}:
@@ -6583,7 +6583,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: A problem. Its type names the kind.
-      summary: Count each contributor and automation account in one response
+      summary: List contributors and automation accounts by name
       tags:
       - Activity
   /workspaces/{workspaceSlug}/activity/people/{userId}:
@@ -17320,6 +17320,7 @@ components:
       properties:
         automation:
           type: array
+          description: Automation accounts in name order
           items:
             $ref: "#/components/schemas/ActivityPerson"
         coverage:
@@ -17331,6 +17332,7 @@ components:
           $ref: "#/components/schemas/ActivityHighlights"
         people:
           type: array
+          description: Contributors in name order
           items:
             $ref: "#/components/schemas/ActivityPerson"
         repositories:
@@ -26077,6 +26079,7 @@ components:
           $ref: "#/components/schemas/PublicActivityHighlights"
         people:
           type: array
+          description: Contributors in name order
           items:
             $ref: "#/components/schemas/PublicActivityPerson"
         providerType:

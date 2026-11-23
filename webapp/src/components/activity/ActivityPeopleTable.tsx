@@ -3,7 +3,6 @@ import {
 	FlexRender,
 	functionalUpdate,
 	type Row,
-	type SortingState,
 	useTable,
 } from "@tanstack/react-table";
 import { SearchIcon } from "lucide-react";
@@ -30,13 +29,11 @@ import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
 import { NoneMark } from "./ActionChip";
 import type { PeopleRow, PeopleRows } from "./activity-people-rows";
-import { type PeopleSort, PEOPLE_SORTS } from "./activity-search";
 import { STALE } from "./activity-tones";
 import { ActivityCountCell, ActivityCountHeader, type CountedCategory } from "./ActivityCountCell";
 import { ActivityEmpty, PEOPLE_EMPTY_ICON } from "./ActivityEmpty";
 import { ActivitySparkline } from "./ActivitySparkline";
 import { MemberAvatar } from "./MemberAvatar";
-import { competitionPositions, PEOPLE_COUNTS } from "./people-positions";
 import { PeopleSkeletonRows } from "./PeopleSkeletonRows";
 
 /**
@@ -56,16 +53,9 @@ export type ActivityPeopleState = PanelState<{
 	refreshFailure?: RefreshFailure;
 }>;
 
-export interface PeopleOrder {
-	sort: PeopleSort;
-	desc: boolean;
-}
-
 export interface ActivityPeopleTableProps {
 	state: PeopleTableState;
 	providerType: ProviderType;
-	order: PeopleOrder;
-	onOrderChange: (order: PeopleOrder) => void;
 	/** The repositories the table counts, by full path; none is every repository. */
 	repo: readonly string[];
 	/**
@@ -89,29 +79,13 @@ const fold = (text: string): string =>
 
 const columnHelper = createColumnHelper<DataTableFeatures, PeopleRow>();
 
-/**
- * The person stays in place while the figures scroll; above `sm`, the position stays too. Above
- * the `z-10` chips and lines, so a figure scrolling under never paints over a name.
- */
-const PINNED = "sticky z-20 bg-card";
-
-/** Above `sm`, the position column's width is where the pinned person column starts. */
-const POSITION_WIDTH = "w-12 min-w-12";
-
 /** A number column fits its figures and leaves the rest of the row to the person. */
 const NUMBER_COLUMN = { numeric: true, className: "w-px" };
 
-/**
- * Everyone who contributed in the scope, one row per person, sorted in the browser by any count.
- * Sorted by a count, each row shows its position: two people with the same count share it, and the
- * next position skips (1, 2, 2, 4). A search hides rows but keeps their positions. The rows render a
- * step at a time as the end scrolls into view.
- */
+/** Contributors in name order. The table renders more rows as readers scroll. */
 export function ActivityPeopleTable({
 	state,
 	providerType,
-	order,
-	onOrderChange,
 	repo,
 	personLink,
 	syncing = false,
@@ -125,23 +99,14 @@ export function ActivityPeopleTable({
 		state.status === "ready" ? state.people.highlights.firstContributors : undefined;
 	const unlisted = state.status === "ready" ? (state.people.unlisted ?? 0) : 0;
 
-	// The table's `data`, in name order: the sorted row model keeps the data's order on a tie, so
-	// people with the same count stay in name order in either direction.
 	const data = useMemo(
 		() => [...(people ?? [])].sort((a, b) => nameOrder.compare(a.person.name, b.person.name)),
 		[people],
 	);
-	// Over every row, before the search: a search must not renumber what it leaves.
-	const positions = useMemo(() => competitionPositions(data, order.sort), [data, order.sort]);
-	const sorting = useMemo<SortingState>(
-		() => [{ id: order.sort, desc: order.desc }],
-		[order.sort, order.desc],
-	);
 	const columns = useMemo(() => {
 		const firstContributors = new Set(firstContributorIds);
-		const positioned = order.sort !== "name";
 		const countColumn = (category: CountedCategory) =>
-			columnHelper.accessor(PEOPLE_COUNTS[category], {
+			columnHelper.display({
 				id: category,
 				header: () => <ActivityCountHeader category={category} providerType={providerType} />,
 				meta: NUMBER_COLUMN,
@@ -154,31 +119,12 @@ export function ActivityPeopleTable({
 				),
 			});
 		return columnHelper.columns([
-			columnHelper.display({
-				id: "position",
-				header: () => (
-					<>
-						<span aria-hidden>#</span>
-						<span className="sr-only">Position</span>
-					</>
-				),
-				// Below `sm` the position gives its room to the figures; the order and its ties stay.
-				meta: {
-					numeric: true,
-					className: cn(POSITION_WIDTH, "left-0 pl-3", PINNED, "hidden sm:table-cell"),
-				},
-				cell: ({ row }) => (
-					<span className="text-muted-foreground">{positions.get(row.original.person.id)}</span>
-				),
-			}),
 			columnHelper.accessor((row) => row.person.name, {
-				id: "name" satisfies PeopleSort,
+				id: "name",
 				header: "Person",
-				sortDescFirst: false,
-				sortFn: (a, b) => nameOrder.compare(a.original.person.name, b.original.person.name),
 				meta: {
-					// The edge marks where the figures pass under the pinned columns.
-					className: cn("left-0 border-r", PINNED, positioned && "sm:left-12"),
+					// The edge marks where the figures pass under the pinned name.
+					className: "sticky left-0 z-20 border-r bg-card",
 				},
 				cell: ({ row }) => (
 					<PersonCell
@@ -188,8 +134,8 @@ export function ActivityPeopleTable({
 					/>
 				),
 			}),
-			columnHelper.accessor(PEOPLE_COUNTS.contributions, {
-				id: "contributions" satisfies PeopleSort,
+			columnHelper.display({
+				id: "contributions",
 				header: () => (
 					<>
 						<span className="sm:hidden">
@@ -199,13 +145,13 @@ export function ActivityPeopleTable({
 					</>
 				),
 				meta: NUMBER_COLUMN,
-				cell: ({ getValue }) => <Figure count={getValue()} strong />,
+				cell: ({ row }) => <Figure count={row.original.counts.contributions} strong />,
 			}),
 			countColumn("pull-requests"),
 			countColumn("reviews"),
 			countColumn("issues"),
-			columnHelper.accessor(PEOPLE_COUNTS["active-weeks"], {
-				id: "active-weeks" satisfies PeopleSort,
+			columnHelper.display({
+				id: "active-weeks",
 				header: () => (
 					<>
 						<span aria-hidden>Weeks</span>
@@ -213,7 +159,7 @@ export function ActivityPeopleTable({
 					</>
 				),
 				meta: NUMBER_COLUMN,
-				cell: ({ getValue }) => <Figure count={getValue()} />,
+				cell: ({ row }) => <Figure count={row.original.counts.activeWeeks} />,
 			}),
 			columnHelper.display({
 				id: "trend",
@@ -228,20 +174,13 @@ export function ActivityPeopleTable({
 					from && to && <ActivitySparkline weeks={row.original.weeks} span={{ from, to }} />,
 			}),
 		]);
-	}, [positions, providerType, from, to, firstContributorIds, order.sort, personLink]);
+	}, [providerType, from, to, firstContributorIds, personLink]);
 
 	const table = useTable({
 		features: dataTableFeatures,
 		data,
 		columns,
-		enableSortingRemoval: false,
-		onSortingChange: (updater) => {
-			const [next] = functionalUpdate(updater, sorting);
-			const sort = PEOPLE_SORTS.find((candidate) => candidate === next?.id);
-			if (next && sort) {
-				onOrderChange({ sort, desc: next.desc });
-			}
-		},
+		enableSorting: false,
 		onGlobalFilterChange: (updater) => {
 			const next: unknown = functionalUpdate(updater, search);
 			setSearch(typeof next === "string" ? next : "");
@@ -255,9 +194,7 @@ export function ActivityPeopleTable({
 			);
 		},
 		state: {
-			sorting,
 			globalFilter: search,
-			columnVisibility: { position: order.sort !== "name" },
 			pagination: { pageIndex: 0, pageSize: shown },
 		},
 	});
@@ -323,23 +260,6 @@ export function ActivityPeopleTable({
 						aria-label="People"
 						aria-busy={state.status === "loading" || stale || undefined}
 						className={cn("sm:min-w-200", stale && STALE)}
-						// Reserve the pinned identity columns in the browser's logical scroll region.
-						containerClassName={cn(
-							"scroll-ps-41",
-							order.sort === "name" ? "sm:scroll-ps-61" : "sm:scroll-ps-73",
-						)}
-						// Native focus skips a button already inside the scrollport, even when a pinned cell covers it.
-						onFocusCapture={(event) => {
-							const { target } = event;
-							if (!(target instanceof HTMLButtonElement)) {
-								return;
-							}
-							const head = target.closest("th");
-							if (head === null || getComputedStyle(head).position === "sticky") {
-								return;
-							}
-							target.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
-						}}
 					>
 						<DataTableHeader table={table} />
 						<TableBody>
@@ -393,7 +313,7 @@ export function ActivityPeopleTable({
  * the pointer target. A person whose first contribution to the workspace is in the range is new here.
  *
  * The identity has a set width, so a long name wraps to two lines and is then cut, instead of widening
- * the pinned columns; the New marker sits on the login line, so it never takes room from the name.
+ * the pinned column; the New marker sits on the login line, so it never takes room from the name.
  */
 function PersonCell({
 	person,

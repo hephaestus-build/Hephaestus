@@ -11,12 +11,9 @@ import {
 	PUBLIC_ACTIVITY_SEARCH_DEFAULTS,
 	type PeopleSearch,
 	type PublicActivitySearch,
-	peopleDir,
-	peopleOrder,
 	publicActivitySearchSchema,
 	PERIOD_SEARCH_KEYS,
 } from "@/components/activity/activity-search";
-import type { PeopleOrder } from "@/components/activity/ActivityPeopleTable";
 import {
 	publicCategoryKinds,
 	type PublicPersonActivityState,
@@ -229,8 +226,6 @@ function PublicActivityRoute() {
 			}
 			period={periodFromSearch(search)}
 			onPeriodChange={(period) => setView(periodSearch(period))}
-			order={peopleOrder(search.sort, search.dir)}
-			onOrderChange={({ sort, desc }: PeopleOrder) => setView({ sort, dir: peopleDir(sort, desc) })}
 			repo={search.repo ?? []}
 			onRepoChange={(repo) => setView({ repo: nonEmpty(repo) })}
 			repositories={page?.repositories ?? []}

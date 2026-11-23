@@ -116,27 +116,8 @@ export const activitySearchSchema = periodSearchSchema.extend(
 
 export type ActivitySearch = z.infer<typeof activitySearchSchema>;
 
-/** The columns the people table sorts by, as the URL names them. */
-export const PEOPLE_SORTS = [
-	"contributions",
-	"pull-requests",
-	"reviews",
-	"issues",
-	"active-weeks",
-	"name",
-] as const;
-
-export type PeopleSort = (typeof PEOPLE_SORTS)[number];
-
-/**
- * The people table's period, order and repositories, by the names a reader can read: each
- * repository by its full path, `?repo=acme/api&sort=reviews`.
- */
 export const peopleSearchSchema = periodSearchSchema.extend({
 	repo: multiValue,
-	sort: z.enum(PEOPLE_SORTS).default("contributions").catch("contributions"),
-	// Absent is the column's own first direction: most first for a count, A to Z for a name.
-	dir: z.enum(["asc", "desc"]).optional().catch(undefined),
 });
 
 export type PeopleSearch = z.infer<typeof peopleSearchSchema>;
@@ -160,7 +141,7 @@ export const PUBLIC_ACTIVITY_SEARCH_DEFAULTS = publicActivitySearchSchema.parse(
 
 export type PublicActivitySearch = z.infer<typeof publicActivitySearchSchema>;
 
-/** Workspace activity adds a team, by its slug: `?team=core&repo=acme/api&sort=reviews`. */
+/** Workspace activity adds a team, by its slug: `?team=core&repo=acme/api`. */
 const workspaceActivityFilterSchema = peopleSearchSchema.extend({
 	view: z.enum(["people", "timeline"]).default("people").catch("people"),
 	// The default parser reads `team=2024` as a number; a slug is text either way.
@@ -175,21 +156,3 @@ export const workspaceActivitySearchSchema = workspaceActivityFilterSchema.exten
 
 export type WorkspaceActivitySearch = z.infer<typeof workspaceActivitySearchSchema>;
 export type WorkspaceActivityView = WorkspaceActivitySearch["view"];
-
-/** Whether a column first lists most first: every count does, and a name runs A to Z. */
-function sortsDescFirst(sort: PeopleSort): boolean {
-	return sort !== "name";
-}
-
-/** The order the URL's sort and direction name; an absent direction is the column's first one. */
-export function peopleOrder(sort: PeopleSort, dir: "asc" | "desc" | undefined) {
-	return { sort, desc: dir === undefined ? sortsDescFirst(sort) : dir === "desc" };
-}
-
-/** The direction to write for an order, none when it is the column's first one. */
-export function peopleDir(sort: PeopleSort, desc: boolean): "asc" | "desc" | undefined {
-	if (desc === sortsDescFirst(sort)) {
-		return undefined;
-	}
-	return desc ? "desc" : "asc";
-}

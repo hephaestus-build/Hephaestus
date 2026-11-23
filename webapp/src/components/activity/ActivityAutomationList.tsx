@@ -13,10 +13,7 @@ export interface ActivityAutomationListProps {
 	automation: readonly ActivityPerson[];
 }
 
-/**
- * Accounts whose work is automation: never a person, never in a position, and in name order, so the
- * list compares no one. Each opens its activity like a person does.
- */
+/** Automation accounts in name order, with links to their activity. */
 export function ActivityAutomationList({ automation }: ActivityAutomationListProps) {
 	const sorted = [...automation].sort((a, b) => nameOrder.compare(a.person.name, b.person.name));
 	return (

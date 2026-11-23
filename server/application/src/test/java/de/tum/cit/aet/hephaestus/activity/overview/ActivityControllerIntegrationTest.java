@@ -268,6 +268,20 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
+        void shouldListPeopleByNameWhenTheirContributionCountsDiffer() {
+            record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -2, DAY);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -3, DAY);
+
+            assertThat(page().people())
+                    .extracting(person -> person.login())
+                    .containsExactly(ada.getLogin(), zoe.getLogin());
+            assertThat(members(uri -> uri))
+                    .extracting(person -> person.person().login())
+                    .containsExactly(ada.getLogin(), zoe.getLogin());
+        }
+
+        @Test
         void shouldShowOnlyTheMemberWhoAnsweredShowOnEveryPublicSurface() {
             var shown = userRepository
                     .findByLoginAndProviderId(

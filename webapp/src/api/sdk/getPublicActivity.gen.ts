@@ -11,7 +11,7 @@ import type {
 } from "../types.gen.js";
 
 /**
- * Read human contributions to public repositories
+ * List contributors to public repositories by name
  */
 export const getPublicActivity = <ThrowOnError extends boolean = false>(
 	options: Options<GetPublicActivityData, ThrowOnError>,

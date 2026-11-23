@@ -127,9 +127,7 @@ public class ActivityController {
     }
 
     @GetMapping("/people")
-    @Operation(
-            operationId = "getActivityPeople",
-            summary = "Count each contributor and automation account in one response")
+    @Operation(operationId = "getActivityPeople", summary = "List contributors and automation accounts by name")
     @ApiResponse(responseCode = "200", description = "Contributors counted")
     public ResponseEntity<ActivityPeopleDTO> getActivityPeople(
             WorkspaceContext workspaceContext,

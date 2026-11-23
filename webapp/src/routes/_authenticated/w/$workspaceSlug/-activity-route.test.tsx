@@ -938,17 +938,6 @@ describe("Activity", () => {
 	});
 });
 
-/** Each row's position and name, in the order the table shows them. */
-function positions(): (string | null | undefined)[][] {
-	return within(screen.getByRole("table", { name: "People" }))
-		.getAllByRole("row")
-		.slice(1)
-		.map((row) => [
-			within(row).getAllByRole("cell")[0]?.textContent,
-			within(row).getByRole("link").textContent,
-		]);
-}
-
 /** The people at once for the first read; every later read waits until `held` settles. */
 function firstAtOnce(held: Promise<void>) {
 	let answered = false;
@@ -1259,10 +1248,10 @@ describe("Workspace activity", () => {
 		});
 	});
 
-	it("opens the timeline independently and retains the scope and sort when switching views", async () => {
+	it("opens the timeline independently and retains the scope when switching views", async () => {
 		const user = userEvent.setup();
 		const { router } = renderRouteAtWithRouter(
-			"/w/acme/workspace-activity?range=30d&team=core&repo=acme/api&sort=reviews&dir=asc",
+			"/w/acme/workspace-activity?range=30d&team=core&repo=acme/api",
 		);
 		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
 		await user.click(screen.getByRole("tab", { name: "Timeline" }));
@@ -1277,11 +1266,8 @@ describe("Workspace activity", () => {
 		await user.click(screen.getByRole("tab", { name: "People" }));
 		await waitFor(() =>
 			expect(router.state.location.href).toBe(
-				"/w/acme/workspace-activity?range=30d&team=core&repo=acme/api&sort=reviews&dir=asc",
+				"/w/acme/workspace-activity?range=30d&team=core&repo=acme/api",
 			),
-		);
-		expect(screen.getByRole("columnheader", { name: /^Reviews/u }).getAttribute("aria-sort")).toBe(
-			"ascending",
 		);
 	});
 
@@ -1537,8 +1523,7 @@ describe("Workspace activity", () => {
 	});
 
 	it("reads the scope a readable address names, by slug and path", async () => {
-		const address =
-			"/w/acme/workspace-activity?range=1y&team=core&repo=acme/api&repo=acme/web&sort=reviews&dir=asc";
+		const address = "/w/acme/workspace-activity?range=1y&team=core&repo=acme/api&repo=acme/web";
 		const { router } = renderRouteAtWithRouter(address);
 
 		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
@@ -1548,56 +1533,30 @@ describe("Workspace activity", () => {
 		expect(first?.searchParams.get("team")).toBe("core");
 		expect(first?.searchParams.getAll("repo")).toStrictEqual(["acme/api", "acme/web"]);
 		expect(router.state.location.href).toBe(address);
-		expect(screen.getByRole("columnheader", { name: /^Reviews/u }).getAttribute("aria-sort")).toBe(
-			"ascending",
-		);
 	});
 
 	it("falls back to the defaults for values it does not know", async () => {
-		renderRouteAtWithRouter(
-			"/w/acme/workspace-activity?range=5y&sort=score&dir=up&from=2026-13-01",
-		);
+		renderRouteAtWithRouter("/w/acme/workspace-activity?range=5y&from=2026-13-01");
 
 		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
 		await waitFor(() => expect(readsOf("/activity/people").length).toBeGreaterThan(0));
 		expect(readsOf("/activity/people")[0]?.search).toBe("?range=90d");
-		expect(
-			screen.getByRole("columnheader", { name: /contributions/iu }).getAttribute("aria-sort"),
-		).toBe("descending");
 	});
 
-	it("writes a sort to the address and drops it again at the default", async () => {
-		const user = userEvent.setup();
-		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity");
+	it("ignores ranking options in a saved link", async () => {
+		renderRouteAtWithRouter("/w/acme/workspace-activity?sort=reviews&dir=desc");
 
-		await user.click(await screen.findByRole("button", { name: /^Reviews/u }, ROUTE_RENDER_WAIT));
-		await waitFor(() => expect(router.state.location.searchStr).toBe("?sort=reviews"));
-		// Sorted by Reviews, Bob comes first, at position 1.
-		expect(positions()).toStrictEqual([
-			["1", "Bob"],
-			["2", "Ada"],
-		]);
-		await user.click(screen.getByRole("button", { name: /contributions/iu }));
-		await waitFor(() => expect(router.state.location.href).toBe("/w/acme/workspace-activity"));
-		// The same count is the same position, and a tie stays in name order.
-		expect(positions()).toStrictEqual([
-			["1", "Ada"],
-			["1", "Bob"],
-		]);
-	});
-
-	it("flips a sort to the fewest first, with the positions running backwards", async () => {
-		const user = userEvent.setup();
-		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity");
-
-		await user.click(await screen.findByRole("button", { name: /^Reviews/u }, ROUTE_RENDER_WAIT));
-		await user.click(screen.getByRole("button", { name: /^Reviews/u }));
-
-		await waitFor(() => expect(router.state.location.searchStr).toBe("?sort=reviews&dir=asc"));
-		expect(positions()).toStrictEqual([
-			["2", "Ada"],
-			["1", "Bob"],
-		]);
+		const table = await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
+		await waitFor(() =>
+			expect(
+				within(table)
+					.getAllByRole("link")
+					.map((link) => link.textContent),
+			).toStrictEqual(["Ada", "Bob"]),
+		);
+		expect(within(table).queryByRole("columnheader", { name: "Position" })).toBeNull();
+		expect(within(table).queryByRole("button", { name: /^Reviews/u })).toBeNull();
+		expect(readsOf("/activity/people")[0]?.search).toBe("?range=90d");
 	});
 
 	it("writes each repository as its own key, and Reset clears them", async () => {

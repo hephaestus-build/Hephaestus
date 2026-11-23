@@ -30,9 +30,8 @@ export interface ActivityCountCellProps {
 const PEOPLE_ICON = providerIcon(PeopleIcon, GitLabUsersIcon);
 
 /**
- * One category's figures in a table row, in the provider's icons and colours: what the column sorts
- * by first, then what it holds — pull requests opened and merged, pull requests reviewed and whose
- * work, issues opened. Each part has a slot of its own width, right-aligned, so a column of rows
+ * One category's figures in a table row, in the provider's icons and colours. Each part has a
+ * slot of its own width, right-aligned, so a column of rows
  * lines up part by part. A part with nothing in it leaves its slot empty, and a cell with nothing
  * at all is one dash. Below `sm` the parts stack, so a column is as wide as one part, and an empty
  * part leaves no slot.
@@ -97,7 +96,7 @@ export function ActivityCountHeader({
 	);
 }
 
-/** Each column's icon is that of what it sorts by: a pull request opened, not a merge. */
+/** The pull request column uses the icon for an opened pull request. */
 const HEADER_ICONS: Record<CountedCategory, (provider: ProviderType) => IconComponent> = {
 	"pull-requests": ACTIVITY_KIND_DEFS.PULL_REQUEST_OPENED.icon,
 	reviews: ACTIVITY_CATEGORY_DEFS.reviews.icon,

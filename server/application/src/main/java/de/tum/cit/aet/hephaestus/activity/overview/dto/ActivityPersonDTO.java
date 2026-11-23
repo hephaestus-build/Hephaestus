@@ -11,4 +11,20 @@ public record ActivityPersonDTO(
         @NonNull ActivityContributorKind kind,
         @NonNull ActivityCountsDTO counts,
         @Nullable Instant firstContributionAt,
-        @NonNull List<ActivitySparklineWeekDTO> weeks) {}
+        @NonNull List<ActivitySparklineWeekDTO> weeks)
+        implements ActivityPersonRow {
+    @Override
+    public String activityName() {
+        return person.name();
+    }
+
+    @Override
+    public String activityLogin() {
+        return person.login();
+    }
+
+    @Override
+    public String activityIdentity() {
+        return Long.toString(person.id());
+    }
+}

@@ -38,8 +38,6 @@ const meta = {
 		onTeamChange: fn(),
 		repo: [],
 		onRepoChange: fn(),
-		order: { sort: "contributions", desc: true },
-		onOrderChange: fn(),
 		people: readyPeople(peopleOf(PEOPLE, { automation: AUTOMATION })),
 		facets: { teams: TEAMS, repositories: REPOSITORIES },
 		timeline: {
@@ -91,7 +89,7 @@ export const Default: Story = {
 	},
 };
 
-/** Automation stays out of the people and their positions. */
+/** The Automation section lists bots separately from people. */
 export const AutomationApart: Story = {
 	play: async ({ canvas }) => {
 		const people = canvas.getByRole("table", { name: "People" });

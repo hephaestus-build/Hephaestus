@@ -283,6 +283,7 @@ export const ActivityPeopleSchema = {
 	properties: {
 		automation: {
 			type: "array",
+			description: "Automation accounts in name order",
 			items: {
 				$ref: "#/components/schemas/ActivityPerson",
 			},
@@ -299,6 +300,7 @@ export const ActivityPeopleSchema = {
 		},
 		people: {
 			type: "array",
+			description: "Contributors in name order",
 			items: {
 				$ref: "#/components/schemas/ActivityPerson",
 			},
@@ -10758,6 +10760,7 @@ export const PublicActivitySchema = {
 		},
 		people: {
 			type: "array",
+			description: "Contributors in name order",
 			items: {
 				$ref: "#/components/schemas/PublicActivityPerson",
 			},

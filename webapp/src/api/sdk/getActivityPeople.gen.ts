@@ -11,7 +11,7 @@ import type {
 } from "../types.gen.js";
 
 /**
- * Count each contributor and automation account in one response
+ * List contributors and automation accounts by name
  */
 export const getActivityPeople = <ThrowOnError extends boolean = false>(
 	options: Options<GetActivityPeopleData, ThrowOnError>,

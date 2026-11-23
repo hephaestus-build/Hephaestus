@@ -17,11 +17,7 @@ import type { ActivityPeriod } from "./activity-period";
 import type { WorkspaceActivityView } from "./activity-search";
 import { STALE } from "./activity-tones";
 import { ActivityAutomationList } from "./ActivityAutomationList";
-import {
-	type ActivityPeopleState,
-	ActivityPeopleTable,
-	type PeopleOrder,
-} from "./ActivityPeopleTable";
+import { type ActivityPeopleState, ActivityPeopleTable } from "./ActivityPeopleTable";
 import { ActivityPeriodPicker } from "./ActivityPeriodPicker";
 import { ActivityTeamPicker } from "./ActivityTeamPicker";
 import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
@@ -45,8 +41,6 @@ export interface WorkspaceActivityPageProps {
 	/** Repositories by full path; none is every repository. */
 	repo: readonly string[];
 	onRepoChange: (repo: string[]) => void;
-	order: PeopleOrder;
-	onOrderChange: (order: PeopleOrder) => void;
 	people: ActivityPeopleState;
 	/** The picker options, from cached people or the separate timeline read. */
 	facets: ActivityFacets | undefined;
@@ -55,9 +49,7 @@ export interface WorkspaceActivityPageProps {
 }
 
 /**
- * Who contributed to the workspace, or to one team, in a period: everyone in one table that sorts
- * by any count, what is worth a thank-you, the automation apart from the people, and the timeline
- * of the work.
+ * Contributors in name order, automation accounts, and a timeline for the selected scope.
  */
 export function WorkspaceActivityPage({
 	syncing,
@@ -70,8 +62,6 @@ export function WorkspaceActivityPage({
 	onTeamChange,
 	repo,
 	onRepoChange,
-	order,
-	onOrderChange,
 	people,
 	facets,
 	facetsError,
@@ -133,8 +123,6 @@ export function WorkspaceActivityPage({
 							<ActivityPeopleTable
 								state={people}
 								providerType={providerType}
-								order={order}
-								onOrderChange={onOrderChange}
 								repo={repo}
 								personLink={personLevelLink}
 								syncing={syncing}

@@ -162,8 +162,6 @@ const meta = {
 		viewer: { status: "signed-out", onSignIn: fn() },
 		period: { kind: "preset", preset: "90d" },
 		onPeriodChange: fn(),
-		order: { sort: "contributions", desc: true },
-		onOrderChange: fn(),
 		repo: [],
 		onRepoChange: fn(),
 		repositories: activity.repositories,
@@ -193,7 +191,10 @@ export const SignedOut: Story = {
 		await expect(
 			args.viewer.status === "signed-out" ? args.viewer.onSignIn : undefined,
 		).toHaveBeenCalledOnce();
-		await expect(canvas.getByRole("table", { name: "People" })).toBeVisible();
+		const people = canvas.getByRole("table", { name: "People" });
+		await expect(people).toBeVisible();
+		await expect(within(people).queryByRole("columnheader", { name: "Position" })).toBeNull();
+		await expect(within(people).queryByRole("button", { name: /^Contributions/u })).toBeNull();
 	},
 };
 

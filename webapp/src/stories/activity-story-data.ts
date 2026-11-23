@@ -623,8 +623,7 @@ function personOf(
 }
 
 /**
- * A small team in name order. Bob and Dana tie on Contributions, so they share a position, and Ada,
- * the most active, comes first only once the table sorts by a count.
+ * A small team in name order with different contribution counts.
  */
 export const PEOPLE: ActivityPerson[] = [
 	personOf(ada, { ...TALLY, peopleHelped: 9 }),

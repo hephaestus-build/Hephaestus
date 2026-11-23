@@ -115,10 +115,16 @@ export type ActivityKind =
 	| "ISSUE_CLOSED";
 
 export type ActivityPeople = {
+	/**
+	 * Automation accounts in name order
+	 */
 	automation: Array<ActivityPerson>;
 	coverage: ActivityCoverage;
 	from: Date;
 	highlights: ActivityHighlights;
+	/**
+	 * Contributors in name order
+	 */
 	people: Array<ActivityPerson>;
 	repositories: Array<ActivityRepository>;
 	teams: Array<ActivityTeam>;
@@ -5264,6 +5270,9 @@ export type PublicActivity = {
 	coverage: ActivityCoverage;
 	from: Date;
 	highlights: PublicActivityHighlights;
+	/**
+	 * Contributors in name order
+	 */
 	people: Array<PublicActivityPerson>;
 	/**
 	 * The source-control provider the repositories and people belong to

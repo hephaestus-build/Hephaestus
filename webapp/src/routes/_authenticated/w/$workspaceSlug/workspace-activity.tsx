@@ -23,15 +23,12 @@ import {
 import {
 	PERIOD_SEARCH_KEYS,
 	parseActivityStack,
-	peopleDir,
-	peopleOrder,
 	WORKSPACE_ACTIVITY_LEVEL_KINDS,
 	WORKSPACE_ACTIVITY_SEARCH_DEFAULTS,
 	type WorkspaceActivitySearch,
 	workspaceActivitySearchSchema,
 } from "@/components/activity/activity-search";
 import { ActivityDetailDrawer } from "@/components/activity/ActivityDetailDrawer";
-import type { PeopleOrder } from "@/components/activity/ActivityPeopleTable";
 import { HidePersonAction } from "@/components/activity/HidePersonAction";
 import { teamPaths } from "@/components/activity/team-paths";
 import { workLogTitle } from "@/components/activity/work-log-markdown";
@@ -302,10 +299,6 @@ function WorkspaceActivity() {
 				onTeamChange={(team) => setView({ team })}
 				repo={search.repo ?? []}
 				onRepoChange={(repo) => setView({ repo: nonEmpty(repo) })}
-				order={peopleOrder(search.sort, search.dir)}
-				onOrderChange={({ sort, desc }: PeopleOrder) =>
-					setView({ sort, dir: peopleDir(sort, desc) })
-				}
 				people={people}
 				facets={facets.data}
 				facetsError={facets.error}
