@@ -51,11 +51,16 @@ Option 5.
    - The occurrence identity is the slot key. For `EVERY`, it is the local date without the zone.
    - A zone change applies from the next slot. One local date never fires twice.
    - Wall time follows the person's time zone through daylight-saving changes, by the `java.time` rules.
-5. **An occurrence fires once.** It is a required `SCHEDULE_DUE` inbox item with a hard due time (ADR 0120 decisions 2 and 12). Its key is the check-in and the slot.
-6. **No model runs before an occurrence is due and allowed.** The scheduler evaluates the contact policy and a deterministic pre-check first. A failing pre-check skips the slot. A pre-check error skips it too.
+5. **An occurrence fires once.** It is a required `SCHEDULE_DUE` inbox item with a hard due time. Its key is the check-in and the slot.
+   - Its deadline is the end of its grace (decision 8). Its fixed disposition is decision 9.
+   - ADR 0120 (proposed in #4862) owns required items and how the sweep settles one, also a claimed one.
+6. **No model runs before an occurrence is due and allowed.** The scheduler evaluates the contact policy and a deterministic pre-check first.
+   - A valid empty result, Pause, lost authority and could not check are four separate dispositions.
+   - A pre-check error or a failed capture is could not check. It is never a claim about the work.
+   - If the contact policy allows it, such an occurrence shows a fixed "Could not check" app entry. The entry has the check-in's title and no notification.
 7. **A check-in that writes words is shown by a background turn on the main thread.** The turn runs on the route of the check-in's place.
 8. **The grace is 30 minutes after the due time.** Inside it, an occurrence runs as usual. A message that comes late says "This was due at 09:00".
-9. **An occurrence with no disposition at the end of its grace becomes an app entry** with the check-in's title. No model runs, and no notification goes.
+9. **An occurrence with no disposition at the end of its grace ends as could not check** (decision 6). No model runs, and no notification goes.
    - The same holds for a slot that the scheduler finds after its grace, for example after an outage.
    - If one check-in missed several slots, only the latest gets the entry. Each earlier slot is recorded as skipped. Missed slots never fire in a burst.
 10. **An event condition is pinned to a named item and condition,** such as "CI on #61". Its registration reads the current state first, so a condition that already held is not missed.
@@ -64,7 +69,7 @@ Option 5.
     | Template | What it does | Offered |
     | --- | --- | --- |
     | Monday focus | Names what waits on the person this week. A pre-check skips the week when nothing waits. | At first sign-in, in the rhythm choice |
-    | Check my drafts before review | An `ON_EVENT` check-in. Its turn requests the private check as a task (ADR 0120 decision 16). It is the only way that automatic draft checks start. | After a useful first check |
+    | Check my drafts before review | An `ON_EVENT` check-in. Its turn requests the private check as a task. It is the only way that automatic draft checks start. | After a useful first check |
     | Weekly reflection | Names one change in the week's work and asks one question. It sends only when it has something useful to say. | Once, after the person's first useful interaction. Never at first sign-in. |
     | Goal follow-up | One next step about a named goal, when the active work changes materially. At most once a day for each goal. | Beside a goal |
     | Periodic review | Looks back over a quarter or a course term and asks what comes next. | Once, after the first month |
@@ -78,6 +83,7 @@ Option 5.
 17. **The purpose follows its record.** A closed goal ends its check-ins. A record in review sends them to `NEEDS_REVIEW`. Leaving a workspace ends its check-ins.
 18. **A Slack place.** A check-in in a team workspace can take that team's Slack direct message as its place. It uses the Slack route and detail level of ADR 0123 (proposed in #4862). If the binding narrows, the place falls back to the app, with one notice.
     - It never takes a personal-space record to Slack. ADR 0126 (proposed in #4863) decision 8 owns that rule.
+    - A draft-check check-in in a Slack place returns its result in the app. Slack gets only a fixed notice with an app link. ADR 0120 (proposed in #4862) owns the task routes.
 19. **A delivery experiment never draws a check-in, and a scheduled turn never reads a held result.** ADR 0149 (proposed in #4868) decisions 8 and 9 own the hold and when it ends. The item card and the practice page still show a held result.
 
 ### What this changes in other ADRs

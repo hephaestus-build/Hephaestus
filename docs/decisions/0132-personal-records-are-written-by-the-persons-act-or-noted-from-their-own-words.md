@@ -60,6 +60,7 @@ Option 5.
 5. **One list shows every kind.** It holds the help settings and, for each workspace, the noted records and the kept-in-mind items, with their sources.
 6. **Each line has up to three actions.**
    - **Forget** redacts the item and leaves a tombstone. Hephaestus does not note it again until the person says it again.
+   - A Forget or a Not right also fences every running turn that read the item. ADR 0134 (proposed in #4863) owns that fence.
    - **Not right** records a correction request. The item stops shaping answers until new evidence supports it.
    - **Keep** turns a kept-in-mind item into a person-authored record, under record retention.
 7. **Freshness.** A noted `CONTEXT` record expires 120 days after its last use or confirmation. Help settings and noted preferences do not expire.

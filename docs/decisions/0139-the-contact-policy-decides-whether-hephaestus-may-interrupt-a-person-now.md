@@ -10,7 +10,7 @@
 
 - ADR 0122 (proposed in #4862): the withheld copy on the work.
 - ADR 0134 (proposed in #4863): the order at each boundary.
-- ADR 0142 (proposed in #4868): the agreement floor for unprompted guidance.
+- ADR 0142 (proposed in #4868): the qualification for unprompted guidance.
 - ADR 0149 (proposed in #4868): delivery experiments.
 
 **Builds on:** ADR 0131 (proposed in #4862, messages from Hephaestus), [ADR 0133](0133-a-check-in-is-an-agreed-contact-with-a-scope.md) (agreed contact), [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) (push)
@@ -76,7 +76,8 @@ Option 6.
 6. **In the app, Hephaestus is present.** A result is available at once on its item card. The start policy of ADR 0120 decides in code whether an event starts a turn.
 7. **An unprompted message needs a reason in code.** Else no message is written.
    - The reasons are a new admitted problem, a material change on an agreed goal, or an awaited result.
-   - A new admitted problem counts only when its practice reaches the agreement floor of ADR 0142 decision 13.
+   - A new admitted problem counts only when its practice version and model hold a current qualification. ADR 0142 (proposed in #4868) owns it.
+   - The policy checks the qualification before any draw. A missing or stale qualification keeps the message silent.
    - A further reason is a withheld copy on the work with a Critical or Major problem. ADR 0122 (proposed in #4862) decision 8 names the withholding reasons.
    - ADR 0122 always records the withholding as a `DELIVERY_WITHHELD` inbox event, except for a silent draw. Only the message is contact, so a pause or a mute stops it.
    - An unprompted message never cites a result that a delivery experiment holds. ADR 0149 (proposed in #4868) decision 8 owns the hold.
@@ -91,6 +92,11 @@ Option 6.
     - The fetch never refreshes a credential.
     - "Hide content in notifications" keeps the fixed text.
 12. **The channel.** For an unpinned background batch, the policy chooses `APP` or `SLACK_DM` at the claim. It chooses among the routes that every item of the batch may take. An item that only the app may show gets `APP`.
+    - A Slack direct message that Hephaestus starts is its one interrupting effect. No push or email goes for the same message.
+    - At its send, that Slack message follows its kind's notification rules: Pause, mute, quiet hours and the daily limit.
+    - Its entry in the conversation commits either way. A held or skipped Slack message never holds or removes the entry.
+    - An answer to the person's own Slack message is not started by Hephaestus. It posts at once.
+    - Some task kinds keep their result in the app. Such a result reaches Slack only as a fixed notice with an app link. ADR 0120 (proposed in #4862) owns the task routes.
     - No escalation. A message that is unseen on one channel never goes out again on another channel.
 13. **The person stays in control.**
     - A one-step pause stops every message and notification that Hephaestus starts. Rule 3 gives its effect on each kind.
@@ -102,16 +108,17 @@ Option 6.
 16. **Silence is never read as dislike.** No rule lowers contact because messages went unanswered. [ADR 0133](0133-a-check-in-is-an-agreed-contact-with-a-scope.md) owns the one question that Hephaestus asks instead.
 17. **The policy runs at dispatch, at the effect commit and again at send.** A pause or a Not now stops a queued contact. A notification inside quiet hours waits. At send, a notification whose message the person already saw is not sent.
     ADR 0134 (proposed in #4863) owns the order at each boundary. It also decides that a contact change is not an authority change.
-18. **Every decision to reach a person is recorded as a delivery decision.** Code writes one `decision_point` row at each such decision, before any model runs.
+18. **Every decision to reach a person is recorded as a delivery decision.** Code writes one `delivery_decision` row at each such decision, before any model runs.
     - A copy on the work: at the seal, in its transaction.
     - An unprompted message: at the start policy, when the inbox item is inserted.
     - An agreed check-in, a requested result and a stepping-back message: recorded too.
     - An answer to a message is not a decision to contact. It writes no row.
     - A row holds its kind: `COPY_ON_THE_WORK` or a contact kind of decision 3.
       It holds the practices, the item, the version and the severity.
-      It also holds the policy's result, the action and the delivery. The action is `SPOKE`, `POLICY_SILENCE` or `STUDY_SILENCE`.
-    - The table is workspace-scoped and append-only. An update may only fill an empty delivery column. Account erasure deletes the person's rows, and every row expires after 400 days.
-    - The record exists so that every silence has a reason that code wrote. No product or staff surface shows a person's rows.
+      It also holds the policy's result and the assignment: `SPOKE`, `POLICY_SILENCE` or `STUDY_SILENCE`.
+    - The realized action, the provider delivery and the exposure are separate columns. ADR 0149 (proposed in #4868) owns them and their final states.
+    - The table is workspace-scoped and append-only. An update may only fill an empty outcome column. Account erasure deletes the person's rows, and every row expires after 400 days.
+    - The table exists so that every silence has a reason that code wrote. No product or staff surface shows a person's rows.
     - A person who is not enrolled in a delivery experiment has rows with no probability, no draw and no exposure.
       No dataset exports such a row. ADR 0149 adds those columns for an enrolled person, and decides which datasets they enter.
 19. **A delivery experiment can draw only on unprompted contact,** as ADR 0149 decision 2 decides. A decision that this policy keeps silent is recorded and never drawn.
@@ -131,6 +138,7 @@ Option 6.
 - Good: one pause and one set of quiet hours hold on every channel.
 - Good: the policy is a pure function, so a table test covers each kind and rule.
 - Bad: a person who works at night must move quiet hours, or unprompted notifications wait until morning.
+- Bad: a Slack message that Hephaestus starts can wait for quiet hours, while its entry is already in the app.
 - Bad: the notice-line fetch is one more request on each push. A failed fetch shows only the fixed text.
 - Bad: the reason check can miss an update that the person would want. "More like this" tunes it only within its three reasons.
 - Bad: Hephaestus ignores device Focus settings it cannot read. A device rule can still hide what the server sends.
@@ -147,8 +155,8 @@ Not enforced yet. The implementation adds these tests:
 - `SendRecheckTest` fails when a contact queued before a pause is sent after it.
 - `AppOnlyItemRouteTest` fails when an item that only the app may show is routed to Slack.
 - `HeldResultNotCitedTest` fails when an unprompted message cites a result that a delivery experiment holds.
-- `DecisionRecordTest` fails when an unprompted decision has no record, or a model call starts before it.
-- `DecisionRecordWithoutDrawTest` fails when the row of a person who is not enrolled holds a probability, a draw or an exposure.
+- `DeliveryDecisionTest` fails when an unprompted decision has no row, or a model call starts before it.
+- `DeliveryDecisionWithoutDrawTest` fails when the row of a person who is not enrolled holds a probability, a draw or an exposure.
 
 ## Revisit trigger
 
