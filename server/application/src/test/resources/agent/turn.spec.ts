@@ -1149,6 +1149,28 @@ void test("a tool whose id the worker refuses fails, and nothing is shown", asyn
 	]);
 });
 
+void test("a tool that shows feedback refuses a text that is not a string, and nothing is shown", async () => {
+	const worker = fakeWorker(contextOf([], "what did the review say?"));
+	const [name, args] = LINK_CALLS[2];
+
+	const end = await runTurn(
+		worker,
+		fauxModels([
+			() =>
+				faux.fauxAssistantMessage([faux.fauxToolCall(name, { ...args, text: null })], {
+					stopReason: "toolUse",
+				}),
+			() => faux.fauxAssistantMessage("What do you make of it?"),
+		]),
+	);
+
+	assert.equal(end.outcome, "DONE");
+	assert.deepEqual(worker.linked, []);
+	assert.deepEqual(toolResults(worker), [
+		{ name, text: "show_feedback: feedbackId and text must be strings", isError: true },
+	]);
+});
+
 void test("a tool that shows feedback in a stopped turn says nothing was shown", async () => {
 	const linking = Promise.withResolvers<undefined>();
 	const admit = Promise.withResolvers<LinkAnswer>();

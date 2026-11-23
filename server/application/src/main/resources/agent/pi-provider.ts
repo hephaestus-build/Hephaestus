@@ -304,10 +304,11 @@ export function registerHephaestusProvider(
 					},
 				}
 			: {}),
-		// Pi decides from the base URL whether an OpenAI-compatible endpoint takes reasoning_effort, and
-		// ours is the LLM proxy's; the effort was configured for this model, so it is sent.
+		// Pi decides from the base URL whether an OpenAI-compatible endpoint takes reasoning_effort and the
+		// developer role, and ours is the LLM proxy's; the effort was configured for this model, so it is
+		// sent, and the system prompt keeps the role that reasoning models take.
 		...(setting.reasoning && config.apiProtocol === "openai-completions"
-			? { compat: { supportsReasoningEffort: true } }
+			? { compat: { supportsReasoningEffort: true, supportsDeveloperRole: true } }
 			: {}),
 		input: ["text"],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },

@@ -1,7 +1,7 @@
 {
 	"pnpm-lock.yaml": {
 		"envPackages": 15,
-		"packages": 1940,
+		"packages": 1941,
 		"importers": {
 			".": {
 				"direct": {
@@ -10,7 +10,7 @@
 				},
 				"transitive": {
 					"prod": 0,
-					"all": 871
+					"all": 872
 				}
 			},
 			"docs": {
@@ -57,7 +57,7 @@
 	},
 	"docker/agents/pi/pnpm-lock.yaml": {
 		"envPackages": 0,
-		"packages": 141,
+		"packages": 142,
 		"importers": {
 			".": {
 				"direct": {
@@ -65,8 +65,8 @@
 					"dev": 1
 				},
 				"transitive": {
-					"prod": 120,
-					"all": 141
+					"prod": 121,
+					"all": 142
 				}
 			}
 		}

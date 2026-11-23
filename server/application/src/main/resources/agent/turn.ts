@@ -963,6 +963,14 @@ function turnTools(
 					text: { type: "string", minLength: 1 },
 				},
 			},
+			// The SDK coerces arguments to their declared types before it validates them, and a null becomes the
+			// text "null". The developer is shown only text that the model wrote.
+			prepareArguments: (args) => {
+				if (!isRecord(args) || typeof args[idKey] !== "string" || typeof args.text !== "string") {
+					throw new Error(`${name}: ${idKey} and text must be strings`);
+				}
+				return args;
+			},
 			execute: async (
 				_toolCallId,
 				params,
@@ -1625,6 +1633,9 @@ export async function runTurn(
 				compaction: { enabled: true, ...conversationCompaction(model.contextWindow) },
 				// As a practice review repeats (PiRuntimeFactory); the turn's deadline still bounds them.
 				retry: { enabled: true, maxRetries: 5, baseDelayMs: 4000 },
+				// Pi warms a prompt cache only for a model with a cache lifetime and a price, which this one does not
+				// declare. Off keeps a later model setting from starting model calls that no developer asked for.
+				cacheWarming: "off",
 			},
 			SANDBOX_SETTINGS_MANAGER_OPTIONS,
 		);
@@ -1708,8 +1719,8 @@ export async function runTurn(
 			if (!stopped(state)) {
 				await agent.prompt(context.prompt);
 			}
-			// A tool call that a stop left without its result needs nothing here: Pi's transformMessages
-			// answers it in this attempt, and later turns read the answer without it
+			// A tool call that a stop skipped needs nothing here: Pi stores an error result for it. A cut-off answer's
+			// own calls never ran, and later turns read the answer without them
 			// (ConversationContextPathBuilder.keepCutOffAnswer).
 			await agent.waitForIdle();
 			partials.stop();

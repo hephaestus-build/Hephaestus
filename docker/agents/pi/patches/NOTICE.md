@@ -1,13 +1,13 @@
-# Owned fork of `@earendil-works/pi-ai` 1.4.0
+# Owned fork of `@earendil-works/pi-ai` 1.6.0
 
-`@earendil-works__pi-ai@1.4.0.patch` changes the compiled adapters of `@earendil-works/pi-ai` 1.4.0, which the Pi SDK installs in the agent image.
+`@earendil-works__pi-ai@1.6.0.patch` changes the compiled adapters of `@earendil-works/pi-ai` 1.6.0, which the Pi SDK installs in the agent image.
 It is owned code: the upstream release does not contain these changes, and no Renovate update carries them.
 
-Owned from: https://github.com/earendil-works/pi/tree/4a080252f06caf63a525d7873c5d94d3c23887e0/packages/ai
-Package: pkg:npm/%40earendil-works/pi-ai@1.4.0
+Owned from: https://github.com/earendil-works/pi/tree/faac585884ae2c013a6b1400f3e9e77f10b34bac/packages/ai
+Package: pkg:npm/%40earendil-works/pi-ai@1.6.0
 License: MIT
 Changes: Adds closed failure facts, call timing and validated OpenAI-compatible token usage to the provider adapters.
-Files: ["@earendil-works__pi-ai@1.4.0.patch"]
+Files: ["@earendil-works__pi-ai@1.6.0.patch"]
 
 ## What changes and why
 

@@ -3178,11 +3178,16 @@ const { stream } = await import(import.meta.resolve("@earendil-works/pi-ai/api/o
 const { stream: responsesStream } = await import(import.meta.resolve("@earendil-works/pi-ai/api/openai-responses", import.meta.resolve("@earendil-works/pi-coding-agent")));
 const { convertResponsesTools } = await import(import.meta.resolve("@earendil-works/pi-ai/api/openai-responses-shared", import.meta.resolve("@earendil-works/pi-coding-agent")));
 const { prepareResultArguments, validateResultEvidence } = await import(process.argv[2]);
+const { toolArgumentValidator } = await import(process.argv[3]);
 const captured = JSON.parse(readFileSync(process.argv[1], "utf8"));
 const tool = { name: "submit_result", parameters: captured.parameters };
+// As submit_result prepares a call: the advertised schema is checked before the SDK coerces the arguments,
+// which turns a null into the text "null".
+const advertised = toolArgumentValidator(captured.parameters);
 const validate = (args) => {
   const prepared = prepareResultArguments(args);
   validateResultEvidence(prepared, ["scm.pull-request.core", "scm.pull-request.diff"]);
+  advertised(prepared);
   return validateToolArguments(tool, { name: tool.name, arguments: prepared });
 };
 assert.deepEqual(validate(captured.arguments), prepareResultArguments(captured.arguments));
@@ -3192,8 +3197,8 @@ const encoded = JSON.stringify(base);
 for (const sent of [encoded, encoded + '"', [base], { results: [base] }]) {
   assert.throws(() => validate(sent), JSON.stringify(sent).slice(0, 160));
 }
-// The result reaches the SDK whole: nested shapes, required fields and vocabularies refuse the call, and the
-// keys the host binds are not the session's to send.
+// Nested shapes, required fields and vocabularies refuse the call before it reaches the tool, and the keys the
+// host binds are not the session's to send.
 const [problem] = base.problems;
 const [citation] = problem.citations;
 const without = (record, key) => Object.fromEntries(Object.entries(record).filter(([name]) => name !== key));
@@ -3315,6 +3320,8 @@ for (const item of nullableCases) {
 }`,
 									nodePath.join(cwd, "result-call.json"),
 									new URL("../../../main/resources/agent/pi-tool-arguments.ts", import.meta.url)
+										.href,
+									new URL("../../../main/resources/agent/pi-tool-validation.ts", import.meta.url)
 										.href,
 								],
 								{ encoding: "utf8", cwd: process.cwd() },

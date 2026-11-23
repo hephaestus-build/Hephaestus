@@ -27,6 +27,7 @@ async function capturedBody(
 	apiProtocol: "openai-completions" | "openai-responses" | "anthropic-messages",
 	effort: ReasoningEffort | undefined,
 	modelId = "gpt-5",
+	systemPrompt?: string,
 ): Promise<Record<string, unknown>> {
 	const captured: { body: Record<string, unknown> | null } = { body: null };
 	const server = createServer((request: IncomingMessage, response: ServerResponse) => {
@@ -78,7 +79,10 @@ async function capturedBody(
 		process.env.LLM_PROXY_TOKEN = "t";
 		await runtime.completeSimple(
 			model,
-			{ messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
+			{
+				...(systemPrompt === undefined ? {} : { systemPrompt }),
+				messages: [{ role: "user", content: "hi", timestamp: Date.now() }],
+			},
 			level === "off" ? {} : { reasoning: level },
 		);
 	} finally {
@@ -118,6 +122,20 @@ void test("the provider default sends no reasoning parameter on either protocol"
 	assert.equal("reasoning_effort" in completions, false);
 	const responses = await capturedBody("openai-responses", undefined);
 	assert.equal("reasoning" in responses, false);
+});
+
+const firstRole = (body: Record<string, unknown>) =>
+	Array.isArray(body.messages) && isRecord(body.messages[0]) ? body.messages[0].role : undefined;
+
+void test("chat completions sends a reasoning model's system prompt as developer, others' as system", async () => {
+	assert.equal(
+		firstRole(await capturedBody("openai-completions", "HIGH", "gpt-5", "Review.")),
+		"developer",
+	);
+	assert.equal(
+		firstRole(await capturedBody("openai-completions", undefined, "gpt-5", "Review.")),
+		"system",
+	);
 });
 
 void test("an effort registers a reasoning model, and the provider default a model that does not reason", () => {

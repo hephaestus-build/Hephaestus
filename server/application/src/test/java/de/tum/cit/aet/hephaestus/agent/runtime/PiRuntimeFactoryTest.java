@@ -116,6 +116,14 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
         }
 
         @Test
+        @DisplayName("a review sends no model call to warm a prompt cache")
+        void turnsOffCacheWarming() throws Exception {
+            byte[] json = factory.buildPiSettingsJson(null);
+            JsonNode root = objectMapper.readTree(new String(json, StandardCharsets.UTF_8));
+            assertThat(root.path("cacheWarming").asString()).isEqualTo("off");
+        }
+
+        @Test
         void omitsModelAndIncludesCompaction() throws Exception {
             byte[] json = factory.buildPiSettingsJson(null);
             JsonNode root = objectMapper.readTree(new String(json, StandardCharsets.UTF_8));
