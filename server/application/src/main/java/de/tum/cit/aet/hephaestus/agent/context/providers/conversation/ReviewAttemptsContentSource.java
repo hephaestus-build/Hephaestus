@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSourceAccess;
+import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -45,6 +46,7 @@ public class ReviewAttemptsContentSource implements ContentSource {
     static final int MAX_ATTEMPTS = 20;
     private final ReviewJobRepository jobs;
     private final ReviewAssignmentQuery assignments;
+    private final AssessmentPort assessments;
     private final List<ItemSourceAccess> sources;
     private final RegisteredItemLabels labels;
     private final ObjectMapper objectMapper;
@@ -107,7 +109,7 @@ public class ReviewAttemptsContentSource implements ContentSource {
                 "Runs of Hephaestus's automated practice review on the developer's own work, with their results in "
                         + "results_history.json. They are not reviews by people: the reviews the developer gave are "
                         + "in activity.json, and the latest review of each reviewer on their pull request is in its "
-                        + "merge_readiness detail.");
+                        + "merge_readiness detail. COULD_NOT_CHECK means capture failed before the review measured a practice.");
         var coverage = root.putObject("coverage")
                 .put("scope", "RETAINED_REVIEW_JOBS_ABOUT_DEVELOPER")
                 .put("lookbackDays", LOOKBACK_DAYS)
@@ -170,7 +172,7 @@ public class ReviewAttemptsContentSource implements ContentSource {
                 row.put("startedAt", job.getStartedAt().toString());
             if (job.getCompletedAt() != null)
                 row.put("completedAt", job.getCompletedAt().toString());
-            listed.add(new Listed(row, item, new ReviewAssignmentQuery.ReviewedItem(job.getReviewId(), item.itemId())));
+            listed.add(new Listed(row, item, new AssessmentPort.ReviewedItem(job.getReviewId(), item.itemId())));
         }
         coverage.put("attributionComplete", attributionComplete);
         if (!attributionComplete)
@@ -184,9 +186,9 @@ public class ReviewAttemptsContentSource implements ContentSource {
         listed.forEach(entry -> ResultHistoryContentSource.putWork(
                 entry.row(), named.get(entry.item().itemId())));
         // Asked only for reviewed work the source still permits, once per review and item however many runs it had.
-        Map<ReviewAssignmentQuery.ReviewedItem, ReviewAssignmentQuery.Recorded> recorded = listed.isEmpty()
+        Map<AssessmentPort.ReviewedItem, AssessmentPort.ReviewCheck> recorded = listed.isEmpty()
                 ? Map.of()
-                : assignments.recorded(
+                : assessments.reviewChecks(
                         workspaceId,
                         developerId,
                         listed.stream().map(Listed::reviewed).collect(Collectors.toSet()));
@@ -203,18 +205,20 @@ public class ReviewAttemptsContentSource implements ContentSource {
                 .anyMatch(source -> source.permits(item, SourceUsePurpose.CONVERSATIONAL_MENTORING));
     }
 
-    private record Listed(ObjectNode row, ItemRef item, ReviewAssignmentQuery.ReviewedItem reviewed) {}
+    private record Listed(ObjectNode row, ItemRef item, AssessmentPort.ReviewedItem reviewed) {}
 
     /**
      * The review's recorded state and assignments for the developer on this work, beside the run's own state. Left
      * out when the review cannot be read; the counts alone are left out when they cannot be complete.
      */
-    private static void state(ObjectNode row, ReviewAssignmentQuery.@Nullable Recorded recorded) {
-        if (recorded == null) return;
-        row.put("reviewStatus", recorded.status().name());
-        var stopReason = recorded.stopReason();
-        if (stopReason != null) row.put("reviewStopReason", stopReason.name());
-        var counts = recorded.counts();
+    private static void state(ObjectNode row, AssessmentPort.@Nullable ReviewCheck check) {
+        if (check == null) return;
+        var checkStatus = check.checkStatus();
+        if (checkStatus != null) row.put("checkStatus", checkStatus.name());
+        row.put("reviewStatus", check.reviewStatus());
+        var stopReason = check.stopReason();
+        if (stopReason != null) row.put("reviewStopReason", stopReason);
+        var counts = check.counts();
         if (counts == null) return;
         row.putObject("assignmentCounts")
                 .put("scope", "REVIEWED_ITEM")

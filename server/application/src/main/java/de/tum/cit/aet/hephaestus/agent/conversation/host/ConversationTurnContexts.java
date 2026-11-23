@@ -16,11 +16,9 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
-import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
+import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -56,7 +54,7 @@ public class ConversationTurnContexts {
     private final ConversationEntryService entries;
     private final ConversationService conversations;
     private final WorkspaceContextBuilder contextBuilder;
-    private final ResultHistoryQuery results;
+    private final AssessmentPort assessments;
     private final ConversationClaims feedback;
     private final AccountDirectory accounts;
     private final ObjectMapper mapper;
@@ -70,7 +68,7 @@ public class ConversationTurnContexts {
             ConversationEntryService entries,
             ConversationService conversations,
             WorkspaceContextBuilder contextBuilder,
-            ResultHistoryQuery results,
+            AssessmentPort assessments,
             ConversationClaims feedback,
             AccountDirectory accounts,
             ObjectMapper mapper,
@@ -82,7 +80,7 @@ public class ConversationTurnContexts {
         this.entries = entries;
         this.conversations = conversations;
         this.contextBuilder = contextBuilder;
-        this.results = results;
+        this.assessments = assessments;
         this.feedback = feedback;
         this.accounts = accounts;
         this.mapper = mapper;
@@ -193,20 +191,21 @@ public class ConversationTurnContexts {
 
     /** Whether the turn may link this result: one of the developer's own, readable in a conversation. */
     public boolean admitsResult(TurnAttempt turn, UUID resultId) {
-        return results.find(turn.workspaceId(), resultId, turn.accountId(), SourceUsePurpose.CONVERSATIONAL_MENTORING)
-                .filter(entry -> Long.valueOf(turn.accountId()).equals(entry.developerAccountId()))
+        return assessments
+                .observation(turn.workspaceId(), turn.accountId(), resultId)
                 .isPresent();
     }
 
     /** Whether the turn may link this problem. A problem is shown under its result, which decides for both. */
     public boolean admitsProblem(TurnAttempt turn, UUID problemId) {
-        return results
-                .forDeveloper(
+        return assessments
+                .observations(
                         turn.workspaceId(), turn.accountId(), clock.instant().minus(PROBLEM_LOOKBACK), PROBLEM_RESULTS)
+                .entries()
                 .stream()
                 .filter(entry -> entry.problems().stream()
                         .anyMatch(problem -> problem.problemId().equals(problemId)))
-                .map(ResultHistoryEntry::resultId)
+                .map(AssessmentPort.Observation::resultId)
                 .findFirst()
                 .filter(resultId -> admitsResult(turn, resultId))
                 .isPresent();

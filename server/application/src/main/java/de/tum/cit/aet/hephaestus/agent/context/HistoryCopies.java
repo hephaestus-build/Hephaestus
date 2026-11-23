@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryEntry;
+import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -27,5 +28,11 @@ public class HistoryCopies {
         copy.repositories().forEach(recorder::recordRepository);
         copy.sourceJobs().forEach(recorder::recordCopiedJob);
         return true;
+    }
+
+    public void record(HistoryCustody custody) {
+        if (!record(new HistoryCopy(
+                custody.complete(), custody.copiedIdentities(), custody.repositoryIds(), custody.sourceJobIds())))
+            throw new IllegalArgumentException("An observation copy requires custody.");
     }
 }

@@ -3,11 +3,9 @@ package de.tum.cit.aet.hephaestus.conversation;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.action.LaneAction;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryQuery;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestDTO;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestFacts;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
@@ -42,7 +40,7 @@ class ConversationEntryViews {
     private final ConversationEntryRepository entries;
     private final ConversationTurnRepository turns;
     private final WeeklyDigestFacts weeklyDigests;
-    private final ResultHistoryQuery results;
+    private final AssessmentPort assessments;
     private final FeedbackHistoryQuery feedback;
     private final ObjectMapper objectMapper;
     private final AgentActions actions;
@@ -133,7 +131,7 @@ class ConversationEntryViews {
     private Map<UUID, List<ConversationLinkDTO>> links(
             Conversation conversation, List<ConversationEntry> rows, Set<ConversationPiEntries.ShownCall> shownCalls) {
         Map<UUID, List<ConversationLinkDTO>> shown = new HashMap<>();
-        Map<UUID, Optional<ResultHistoryEntry>> read = new HashMap<>();
+        Map<UUID, Optional<AssessmentPort.Observation>> read = new HashMap<>();
         for (ConversationEntry row : rows) {
             UUID turnId = row.getTurnId();
             if (row.getKind() != ConversationEntry.Kind.ANSWER || row.isRedacted() || turnId == null) {
@@ -151,7 +149,9 @@ class ConversationEntryViews {
     }
 
     private ConversationLinkDTO link(
-            Conversation conversation, ConversationPiEntries.Link link, Map<UUID, Optional<ResultHistoryEntry>> read) {
+            Conversation conversation,
+            ConversationPiEntries.Link link,
+            Map<UUID, Optional<AssessmentPort.Observation>> read) {
         long workspaceId = conversation.getWorkspaceId();
         long accountId = conversation.getAccountId();
         return switch (link.kind()) {
@@ -161,18 +161,17 @@ class ConversationEntryViews {
                         ConversationLinkDTO.Kind.RESULT,
                         link.id(),
                         link.text(),
-                        result.map(ResultHistoryEntry::practiceSlug).orElse(null),
-                        result.map(ResultHistoryEntry::itemId).orElse(null));
+                        result.map(AssessmentPort.Observation::practiceSlug).orElse(null),
+                        result.map(AssessmentPort.Observation::itemId).orElse(null));
             }
             case PROBLEM -> {
-                var result = results.findOfProblem(
-                        workspaceId, link.id(), accountId, SourceUsePurpose.CONVERSATIONAL_MENTORING);
+                var result = assessments.observationOfProblem(workspaceId, accountId, link.id());
                 yield new ConversationLinkDTO(
                         ConversationLinkDTO.Kind.PROBLEM,
                         link.id(),
                         link.text(),
-                        result.map(ResultHistoryEntry::practiceSlug).orElse(null),
-                        result.map(ResultHistoryEntry::itemId).orElse(null));
+                        result.map(AssessmentPort.Observation::practiceSlug).orElse(null),
+                        result.map(AssessmentPort.Observation::itemId).orElse(null));
             }
             case FEEDBACK -> {
                 var shown = feedback.find(workspaceId, link.id(), accountId);
@@ -189,12 +188,8 @@ class ConversationEntryViews {
         };
     }
 
-    private Optional<ResultHistoryEntry> readable(Conversation conversation, UUID resultId) {
-        return results.find(
-                conversation.getWorkspaceId(),
-                resultId,
-                conversation.getAccountId(),
-                SourceUsePurpose.CONVERSATIONAL_MENTORING);
+    private Optional<AssessmentPort.Observation> readable(Conversation conversation, UUID resultId) {
+        return assessments.observation(conversation.getWorkspaceId(), conversation.getAccountId(), resultId);
     }
 
     /** The weekly digests among {@code rows} as they read now, rendered together, by entry id. */

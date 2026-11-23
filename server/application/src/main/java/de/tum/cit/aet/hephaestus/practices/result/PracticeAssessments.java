@@ -81,19 +81,7 @@ public class PracticeAssessments implements AssessmentPort {
 
     @Override
     public List<Standing> standings(long workspaceId, long accountId) {
-        return standings.standings(workspaceId, accountId).stream()
-                .map(value -> new Standing(
-                        value.slug(),
-                        value.name(),
-                        value.group(),
-                        value.standing(),
-                        value.verdict(),
-                        value.decidedWork(),
-                        value.direction(),
-                        value.toWorkOn(),
-                        value.strengths(),
-                        value.holding()))
-                .toList();
+        return standings.standings(workspaceId, accountId);
     }
 
     @Override
