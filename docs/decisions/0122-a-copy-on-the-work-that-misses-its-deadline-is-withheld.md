@@ -62,6 +62,8 @@ Option 5.
 8. **The person learns it privately.** The withholding transaction inserts a `DELIVERY_WITHHELD` item into the author's main thread.
    - If a Critical or Major problem was in the eligible set, a background turn tells the author.
    - The message can carry the card controls of decision 9.
+   - Exception: a copy that a study draw withholds, as proposed ADR 0149 decides. It is `WITHHELD` with `STUDY_SILENCE`.
+   - That copy writes no `DELIVERY_WITHHELD` item and starts no turn, so the author is not told.
 9. **Two direct controls on the item card.** Both need no conversation turn and use the preview and confirmation of ADR 0121.
    - **Request a new copy.** The proposal row returns to `PENDING`, with the next generation and a new deadline. The composer writes a fresh copy.
    - **Post these exact words.** Only in Automatic mode, and only for a composed body that was withheld before its write started. The preview shows the body. The confirmation takes the place of the deadline in the create predicate.
@@ -106,6 +108,7 @@ Example: a review waits 20 minutes for capacity and seals 25 minutes after submi
 - Bad: during an outage of more than 2 hours, the team sees no copy unless the author acts.
 - Bad: an uncertain write blocks newer writes to the same target until readback or reconciliation.
 - Bad: the 2-hour value is a choice, not a measurement.
+- Bad: a study silence is the only withheld copy that the person is not told about. A study never draws a Critical problem.
 
 ## Confirmation
 
