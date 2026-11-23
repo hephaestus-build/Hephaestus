@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.Arrival;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.Claimed;
@@ -64,6 +65,31 @@ class ProviderEventStoreIntegrationTest extends BaseIntegrationTest {
         assertThat(store.claim(LEASE))
                 .map(ProviderEventStoreIntegrationTest::delivery)
                 .contains("barrier");
+    }
+
+    @Test
+    void shouldRefuseANewEventLeaseOfAnyStatementShapeWhileAMigrationRuns() throws Exception {
+        store.store(List.of(arrival("github.?.?.installation", "shape")));
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThatThrownBy(
+                            () -> jdbc.update("UPDATE provider_event e SET state = 'LEASED', attempt = e.attempt + 1,"
+                                    + " lease_epoch = (e.lease_epoch + 1),"
+                                    + " leased_until = clock_timestamp() + interval '1 minute'"
+                                    + " WHERE e.delivery_key = 'shape'"))
+                    .hasMessageContaining("takes no new lease");
+            // A lease at the same epoch is still a new lease.
+            assertThatThrownBy(() -> jdbc.update("UPDATE provider_event SET state = 'LEASED',"
+                            + " leased_until = clock_timestamp() + interval '1 minute'"
+                            + " WHERE delivery_key = 'shape' AND state = 'QUEUED'"))
+                    .hasMessageContaining("takes no new lease");
+            assertThat(jdbc.queryForObject(
+                            "SELECT state FROM provider_event WHERE delivery_key = 'shape'", String.class))
+                    .isEqualTo("QUEUED");
+        }
+        assertThat(store.claim(LEASE))
+                .map(ProviderEventStoreIntegrationTest::delivery)
+                .contains("shape");
     }
 
     @Test

@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
-import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -34,10 +34,8 @@ import org.slf4j.MDC;
 import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.SmartLifecycle;
-import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -267,15 +265,10 @@ public class ActionExecutor implements SmartLifecycle {
      * Adds the action already claimed and carries it out on the caller's thread, for a caller that shows the result
      * at once. Empty when its idempotency key was already enqueued.
      *
-     * @throws ResponseStatusException {@code 503} while a database migration runs: no claim takes a new lease then
-     *     ({@link MaintenanceBarrier}), and the caller asks again later
+     * @throws MaintenanceInProgressException while a database migration runs ({@link ActionStore#start})
      */
     public Optional<ActionResult> runNow(ActionRequest request) {
-        var claim = store.start(request, LEASE);
-        if (claim.isEmpty() && !store.exists(request.idempotencyKey()))
-            throw new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE, "Hephaestus is updating. Try again in a few minutes.");
-        return claim.map(this::run);
+        return store.start(request, LEASE).map(this::run);
     }
 
     /** Carries out an admitted lane head now with its registered adapter. */

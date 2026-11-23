@@ -17,6 +17,7 @@ import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.stereotype.Component;
@@ -32,7 +33,9 @@ import org.springframework.stereotype.Component;
  * at the same time as this one. The run mode also moves a database on 1.0.0-rc.1 to the 1.0 baseline under this lock
  * ({@link BaselineSynchronization}).
  *
- * <p>While the lock is held, no claim takes a new lease ({@link MaintenanceBarrier}).
+ * <p>The lock is also the maintenance barrier ({@link MaintenanceBarrier}): while it is held, no server starts new
+ * work. The baseline synchronization and Liquibase therefore run on the session that holds it, never on a session of
+ * their own. If that session ends, the migration ends with it, and no change set runs after the barrier dropped.
  */
 @Component
 @ConditionalOnBooleanProperty(name = "spring.liquibase.enabled", matchIfMissing = true)
@@ -40,10 +43,20 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(MigrationLock.class);
 
-    /** The lock is also the maintenance barrier: no claim takes a new lease while a migration holds it. */
+    /** Only migrations take this key: it lets one migration at a time wait for the barrier. */
+    private static final String MIGRATOR =
+            "SELECT pg_try_advisory_lock(hashtext('hephaestus'), hashtext('database-migrator'))";
+
     private static final String LOCK = "SELECT pg_try_advisory_lock(" + MaintenanceBarrier.MIGRATION_LOCK + ")";
 
-    private static final String UNLOCK = "SELECT pg_advisory_unlock(" + MaintenanceBarrier.MIGRATION_LOCK + ")";
+    /**
+     * Waits in PostgreSQL's lock queue. While an exclusive request waits there, every new shared request conflicts
+     * with it, so no server starts new work, and the starts in flight end before the lock is granted.
+     */
+    private static final String LOCK_IN_TURN = "SELECT pg_advisory_lock(" + MaintenanceBarrier.MIGRATION_LOCK + ")";
+
+    /** Both keys of this session, also when only the first was taken. */
+    private static final String UNLOCK = "SELECT pg_advisory_unlock_all()";
 
     /**
      * How often a waiting process tries the lock again. It polls rather than blocks in {@code pg_advisory_lock}: a
@@ -70,11 +83,19 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
     @Override
     public Object postProcessBeforeInitialization(Object bean, String beanName) {
         if (bean instanceof SpringLiquibase liquibase) {
+            Connection session;
             try {
-                held.put(beanName, take(liquibase));
+                session = take(liquibase);
             } catch (SQLException e) {
                 throw new IllegalStateException("Could not take the database migration lock", e);
             }
+            held.put(beanName, session);
+            log.atInfo()
+                    .addKeyValue("event.name", "database.migration.barrier_raised")
+                    .log("Database migration started; no server starts new work until it ends");
+            // Every statement of the migration runs on the session that holds the barrier. Liquibase's own close of
+            // the connection is suppressed: the lock ends only in release().
+            liquibase.setDataSource(new SingleConnectionDataSource(session, true));
             if (migrateRunMode) {
                 BaselineSynchronization.run(liquibase);
             }
@@ -86,20 +107,20 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
     public Object postProcessAfterInitialization(Object bean, String beanName) {
         Connection connection = held.remove(beanName);
         if (connection != null) {
-            release(connection);
+            release(connection, true);
         }
         return bean;
     }
 
     /**
-     * A failed migration never reaches {@link #postProcessAfterInitialization}. Its context closes the pool before
-     * this, which ends the session and so the lock, and the unlock then has nothing left to release.
+     * A failed migration never reaches {@link #postProcessAfterInitialization}, so the release here ends its session
+     * and its locks. A session that already ended has nothing left to release.
      */
     @Override
     public void destroy() {
         held.values().forEach(connection -> {
             try {
-                release(connection);
+                release(connection, true);
             } catch (IllegalStateException e) {
                 log.debug("The database migration lock ended with its connection", e);
             }
@@ -120,15 +141,13 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
             var jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
             long start = System.nanoTime();
             boolean reported = false;
-            while (!Boolean.TRUE.equals(jdbc.queryForObject(LOCK, Boolean.class))) {
+            while (!Boolean.TRUE.equals(jdbc.queryForObject(MIGRATOR, Boolean.class))) {
                 if (System.nanoTime() - start >= timeout.toNanos()) {
                     throw new IllegalStateException("Another database migration still ran after " + timeout
                             + ". Wait until it ends, then start this process again. "
                             + migrationGuide);
                 }
-                // A claim holds the lock shared for milliseconds (MaintenanceBarrier): only a second miss is a
-                // migration.
-                if (!reported && System.nanoTime() - start >= RETRY.toNanos()) {
+                if (!reported) {
                     log.atWarn()
                             .addKeyValue("event.name", "database.migration.lock_awaited")
                             .log("Waiting up to {} for another database migration to end", timeout);
@@ -137,6 +156,33 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
                 Thread.sleep(RETRY);
             }
             locked = true;
+            if (!Boolean.TRUE.equals(jdbc.queryForObject(LOCK, Boolean.class))) {
+                // Servers hold the barrier's lock shared while they start work, and a migration of a release before
+                // the migrator key holds it alone. This process is the only migration of this release that waits,
+                // so its open wait cannot hold up a concurrent CREATE INDEX CONCURRENTLY of this release.
+                long left = Math.max(
+                        1,
+                        timeout.toMillis()
+                                - Duration.ofNanos(System.nanoTime() - start).toMillis());
+                log.atWarn()
+                        .addKeyValue("event.name", "database.migration.lock_awaited")
+                        .log(
+                                "Waiting up to {} ms for another database migration, or for work that servers"
+                                        + " started, to end",
+                                left);
+                jdbc.queryForObject("SELECT set_config('lock_timeout', ?, false)", String.class, left + "ms");
+                try {
+                    jdbc.execute(LOCK_IN_TURN);
+                } catch (DataAccessException e) {
+                    throw new IllegalStateException(
+                            "Another database migration, or work that servers started, still ran after " + timeout
+                                    + ". Find the holder as the guide says, then start this process again. "
+                                    + migrationGuide,
+                            e);
+                } finally {
+                    jdbc.execute("RESET lock_timeout");
+                }
+            }
             if (migrateRunMode
                     && Boolean.TRUE.equals(
                             jdbc.queryForObject("SELECT to_regclass(?) IS NOT NULL", Boolean.class, table))) {
@@ -159,7 +205,7 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
         } catch (SQLException | RuntimeException e) {
             if (locked) {
                 try {
-                    release(connection);
+                    release(connection, false);
                 } catch (IllegalStateException released) {
                     e.addSuppressed(released);
                 }
@@ -174,12 +220,21 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
      * Unlocks before the connection goes back to its pool, where the session, and so the lock, would live on. A
      * connection that cannot unlock is aborted, which ends the session.
      */
-    private static void release(Connection connection) {
+    private static void release(Connection connection, boolean raised) {
         try {
+            // Liquibase ran on this session: a transaction that a failed change set left open ends first.
+            if (!connection.getAutoCommit()) {
+                connection.rollback();
+                connection.setAutoCommit(true);
+            }
             try (var statement = connection.createStatement()) {
                 statement.execute(UNLOCK);
             }
             connection.close();
+            if (raised)
+                log.atInfo()
+                        .addKeyValue("event.name", "database.migration.barrier_lifted")
+                        .log("Database migration ended; servers start new work again");
         } catch (SQLException e) {
             try {
                 connection.abort(Runnable::run);

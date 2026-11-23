@@ -4,6 +4,7 @@ import static de.tum.cit.aet.hephaestus.integration.core.connection.repair.Provi
 import static de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs.ref;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMaintenanceQueries;
@@ -164,6 +165,8 @@ public class ProviderResourceRegistrations {
         if (registration.type() != ProviderResourceAdapter.ResourceType.REGISTRATION) {
             throw new IllegalArgumentException("A registration requires an ownership marker");
         }
+        // A registration writes to the provider across transactions, so none starts during a migration.
+        if (!repairs.maintenanceBarrierLifted()) throw new MaintenanceInProgressException();
         Connection owner =
                 connections.findByIdAndWorkspaceId(connectionId, workspaceId).orElseThrow();
         Long expectedVersion = owner.getVersion();

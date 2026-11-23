@@ -157,16 +157,21 @@ Each line links the section of ADR 0070 that priced the option.
 A migration that runs while a run or an action holds a lease can convert a row that the holder still writes.
 Rule 1 stops every role, but nothing in the database refused a role that still ran.
 
-- **The maintenance barrier.** The migration sets the barrier before Liquibase reads its history.
-  It clears the barrier when it ends, also when it fails.
-  The barrier is the advisory lock that each migration holds already.
-  PostgreSQL drops it with the session of the migration, so a killed migration cannot leave it set.
-  Every claim path takes the same lock shared for its transaction, without waiting.
-  While the barrier is set, no claim leases a run, an action or a provider event.
-  No sandbox starts for a due run.
+- **The maintenance barrier.** The barrier is the advisory lock that each migration holds already.
+  The migration takes it before Liquibase reads its history, and runs every change set on the session that holds it.
+  The barrier thus lasts exactly as long as the migration's session. If that session ends, the migration ends with it.
+  The migration logs when the barrier goes up and when it comes down. Each server shows it in a gauge.
+  While the barrier is up, no server starts new work.
+  A start takes the lock shared for the transaction that records it, without waiting, before it writes.
+  A sandbox whose row committed before the migration can still start during it. It leases nothing until the migration ends.
+  While the barrier is up, a database trigger refuses every new lease that a statement takes.
+  It guards runs, actions, provider events, syncs, product feedback lookups and provider resource registrations and removals.
+  The migration's own session passes it.
   A holder still renews, requeues and ends its lease, so the work in flight finishes.
-  Only the migrator passes the barrier.
-  Enforced by: `MaintenanceBarrierArchTest`, which requires the barrier in every query that takes a new lease, and the barrier tests of `AgentRunsIntegrationTest`, `ActionStoreIntegrationTest`, `ProviderEventStoreIntegrationTest` and `AgentNextWaitsIntegrationTest`.
+  The barrier applies to every migration, not only to the cutover.
+  Enforced by: `MaintenanceBarrierDatabaseTest`, which finds each lease table by its columns and requires the triggers.
+  Also by `DatabaseMigrationTest#shouldRunEachChangeSetOnTheSessionThatHoldsTheBarrierAndEndWithIt`.
+  The barrier tests of the run, action, provider-event, sync, sandbox dispatch and `next` paths cover each start.
   The barrier does not stop enqueues, scheduled jobs or the lease reaper. A server of 1.0.0-rc.14 or earlier does not check it at all.
   Thus, rule 1 still applies.
 - **The lease precondition.** The barrier refuses new leases only. A lease that a stopped role left can still be live when the migration starts.

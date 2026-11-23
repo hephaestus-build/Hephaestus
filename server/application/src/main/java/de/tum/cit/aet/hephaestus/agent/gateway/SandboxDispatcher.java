@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
@@ -93,6 +94,9 @@ public class SandboxDispatcher implements DisposableBean {
                 Integer limit = limits.get(entry.getKey());
                 if (limit != null) dispatch(entry.getKey(), entry.getValue(), limit);
             }
+        } catch (MaintenanceInProgressException migrating) {
+            // A migration began after this pass read its runs: the next pass after the migration requests the rest.
+            log.debug("Sandbox dispatch stopped for a database migration");
         } catch (RuntimeException e) {
             meters.counter(AgentMetrics.AGENT_SANDBOX_DISPATCH_FAILURE).increment();
             log.atWarn()

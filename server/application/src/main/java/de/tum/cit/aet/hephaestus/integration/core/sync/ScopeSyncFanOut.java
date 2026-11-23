@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.sync;
 
+import de.tum.cit.aet.hephaestus.core.TransientFailures;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import java.util.ArrayList;
 import java.util.List;
@@ -74,7 +75,13 @@ public final class ScopeSyncFanOut {
                 }
                 started.add(workspaceSync.whenComplete((ignored, error) -> {
                     SLOTS.release();
-                    if (error != null) {
+                    if (error != null && TransientFailures.isTransient(error)) {
+                        // A database migration or an outage: the next scheduled pass syncs the workspace.
+                        log.warn(
+                                "Scheduled workspace sync deferred: scopeId={}, errorType={}",
+                                session.scopeId(),
+                                error.getClass().getName());
+                    } else if (error != null) {
                         log.error("Scheduled workspace sync failed: scopeId={}", session.scopeId(), error);
                     }
                 }));

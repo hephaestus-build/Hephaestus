@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.sync;
 
+import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.Collection;
 import java.util.List;
@@ -18,6 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public interface SyncJobRepository extends JpaRepository<SyncJob, Long> {
+
+    /**
+     * A PENDING job that no runner claimed within two minutes: its runner did not start it, as when its claim and its
+     * outcome could not be written and its replica then stopped. The slot frees then, not at the heartbeat expiry.
+     */
+    String UNCLAIMED = "OR (status = 'PENDING' AND created_at < now() - interval '2 minutes')";
+
     Optional<SyncJob> findByIdAndWorkspace_Id(Long id, long workspaceId);
 
     /** Job history page. Callers supply the sort (see {@code SyncStatusService}, {@code createdAt} desc). */
@@ -46,7 +54,8 @@ public interface SyncJobRepository extends JpaRepository<SyncJob, Long> {
     @WorkspaceAgnostic("Cross-workspace zombie sweep; caller is the @ConditionalOnServerRole sweeper")
     @Query(
             value = "SELECT * FROM sync_job WHERE status IN ('PENDING', 'RUNNING') "
-                    + "AND COALESCE(heartbeat_at, created_at) < now() - make_interval(secs => :leaseTtlSeconds)",
+                    + "AND (COALESCE(heartbeat_at, created_at) < now() - make_interval(secs => :leaseTtlSeconds) "
+                    + UNCLAIMED + ")",
             nativeQuery = true)
     List<SyncJob> findAbandoned(@Param("leaseTtlSeconds") long leaseTtlSeconds);
 
@@ -59,7 +68,8 @@ public interface SyncJobRepository extends JpaRepository<SyncJob, Long> {
     @Query(
             value = "SELECT * FROM sync_job WHERE connection_id = :connectionId "
                     + "AND status IN ('PENDING', 'RUNNING') "
-                    + "AND COALESCE(heartbeat_at, created_at) < now() - make_interval(secs => :leaseTtlSeconds)",
+                    + "AND (COALESCE(heartbeat_at, created_at) < now() - make_interval(secs => :leaseTtlSeconds) "
+                    + UNCLAIMED + ")",
             nativeQuery = true)
     List<SyncJob> findAbandonedForConnection(
             @Param("connectionId") long connectionId, @Param("leaseTtlSeconds") long leaseTtlSeconds);
@@ -76,16 +86,23 @@ public interface SyncJobRepository extends JpaRepository<SyncJob, Long> {
     @Query(
             value = "UPDATE sync_job SET status = 'FAILED', finished_at = now(), error_summary = :reason "
                     + "WHERE id = :id AND status IN ('PENDING', 'RUNNING') "
-                    + "AND COALESCE(heartbeat_at, created_at) < now() - make_interval(secs => :leaseTtlSeconds)",
+                    + "AND (COALESCE(heartbeat_at, created_at) < now() - make_interval(secs => :leaseTtlSeconds) "
+                    + UNCLAIMED + ")",
             nativeQuery = true)
     int markAbandoned(
             @Param("id") long id, @Param("reason") String reason, @Param("leaseTtlSeconds") long leaseTtlSeconds);
 
+    /** Takes the maintenance barrier for the transaction; false while a migration runs or waits. Reads no table. */
+    @WorkspaceAgnostic("Reads a database-wide advisory lock and no table")
+    @Query(value = "SELECT " + MaintenanceBarrier.LIFTED, nativeQuery = true)
+    boolean maintenanceBarrierLifted();
+
+    /** Takes nothing while a database migration runs ({@link MaintenanceBarrier}): the job then stays PENDING. */
     @WorkspaceAgnostic("ID-based PENDING claim; jobId comes from the job created by the caller")
     @Modifying(clearAutomatically = true)
     @Query(
             value = "UPDATE sync_job SET status = 'RUNNING', started_at = now(), heartbeat_at = now() "
-                    + "WHERE id = :id AND status = 'PENDING'",
+                    + "WHERE id = :id AND status = 'PENDING' AND " + MaintenanceBarrier.LIFTED,
             nativeQuery = true)
     int markRunning(@Param("id") long id);
 

@@ -1173,6 +1173,27 @@ tests:
         alertname: HephaestusInteractiveRunWaiting
         exp_alerts: []
 
+  - name: a barrier that a migration raises and drops is silent, one that stays up for 30 minutes fires
+    interval: 1m
+    input_series:
+      - series: 'maintenance_barrier_raised{job="hephaestus",instance="server:9090",runtime_role="server"}'
+        values: "0 1x20 0x5 1x40"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HephaestusMaintenanceBarrierStuck
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: HephaestusMaintenanceBarrierStuck
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: HephaestusMaintenanceBarrierStuck
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: A database migration has held or waited for the maintenance barrier for 30 minutes, so no server starts new work
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: an archive that keeps failing fires, a recovered or unread archive does not
     interval: 1m
     input_series:

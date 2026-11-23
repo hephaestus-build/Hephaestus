@@ -77,6 +77,7 @@ class SyncJobServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         // Run the TransactionTemplate callback inline (execute + executeWithoutResult).
+        lenient().when(syncJobRepository.maintenanceBarrierLifted()).thenReturn(true);
         lenient().when(transactionTemplate.execute(any())).thenAnswer(inv -> {
             TransactionCallback<?> callback = inv.getArgument(0);
             return callback.doInTransaction(mock(TransactionStatus.class));

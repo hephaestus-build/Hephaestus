@@ -149,6 +149,11 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
     Optional<ClaimRow> claimById(
             @Param("id") UUID id, @Param("lease") long leaseSeconds, @Param("decodable") String decodable);
 
+    /** Takes the maintenance barrier for the transaction; false while a migration runs or waits. Reads no table. */
+    @WorkspaceAgnostic("Reads a database-wide advisory lock and no table")
+    @Query(value = "SELECT " + MaintenanceBarrier.LIFTED, nativeQuery = true)
+    boolean maintenanceBarrierLifted();
+
     @WorkspaceAgnostic("The idempotency key is unique across the instance and names one action")
     @Query(value = "SELECT id FROM agent_action WHERE idempotency_key = :key", nativeQuery = true)
     Optional<UUID> findIdByIdempotencyKey(@Param("key") String idempotencyKey);

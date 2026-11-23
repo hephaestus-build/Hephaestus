@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import java.time.Duration;
 import java.util.Arrays;
@@ -125,11 +127,16 @@ class ActionStore {
 
     /**
      * Adds the action already claimed by the caller, for an effect whose answer the caller waits for. Empty when the
-     * key exists, because that effect belongs to its first caller, or while a database migration runs ({@link
-     * #exists} tells the two apart).
+     * key exists: that effect belongs to its first caller.
+     *
+     * <p>Its first statement takes the maintenance barrier for the transaction and reads no table, so a migration that
+     * holds the outbox table cannot keep the refusal waiting. The insert then holds the same lock.
+     *
+     * @throws MaintenanceInProgressException while a database migration runs or waits ({@link MaintenanceBarrier})
      */
     @Transactional
     public Optional<Claim> start(ActionRequest request, Duration lease) {
+        if (!actions.maintenanceBarrierLifted()) throw new MaintenanceInProgressException();
         return actions.insertExecuting(
                         TimeOrderedIds.next(),
                         request.workspaceId(),
@@ -143,12 +150,6 @@ class ActionStore {
                         request.expiresAt(),
                         lease.toSeconds())
                 .map(ActionStore::claim);
-    }
-
-    /** Whether an action holds this idempotency key. */
-    @Transactional(readOnly = true)
-    public boolean exists(String idempotencyKey) {
-        return actions.findIdByIdempotencyKey(idempotencyKey).isPresent();
     }
 
     /** Takes up to {@code limit} due lane heads under a new lease ({@link AgentActionRepository#claim}). */

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionBusyException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -13,10 +14,14 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +32,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +60,9 @@ class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private DataSource dataSource;
+
     private Workspace workspace;
     private Connection connection;
 
@@ -72,6 +82,163 @@ class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest
                 new ConnectionConfig.GitHubAppConfig(200L, "sync-index-org", null, Set.of())));
         ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection = connectionRepository.save(connection);
+    }
+
+    private SyncJobRequest reconciliation() {
+        return new SyncJobRequest(
+                workspace.getId(),
+                connection.getId(),
+                IntegrationKind.GITHUB,
+                SyncJobType.RECONCILIATION,
+                SyncJobTrigger.MANUAL,
+                null);
+    }
+
+    private SyncJobStatus status(SyncJobService.Started started) {
+        return syncJobRepository.findById(started.job().getId()).orElseThrow().getStatus();
+    }
+
+    @Test
+    void shouldReserveNoSyncSlotWhileAMigrationRunsAndCancelOneReservedBeforeIt() throws Exception {
+        var reserved = syncJobService.beginJob(reconciliation());
+        var ran = new AtomicBoolean();
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            syncJobService.executeBody(reserved, handle -> ran.set(true));
+            SyncJob job = syncJobRepository.findById(reserved.job().getId()).orElseThrow();
+            assertThat(job.getStatus())
+                    .as("a sync reserved before the migration is not left PENDING")
+                    .isEqualTo(SyncJobStatus.CANCELLED);
+            assertThat(job.getErrorSummary()).isEqualTo(SyncJobService.MIGRATION_RAN);
+
+            assertThatThrownBy(() -> syncJobService.beginJob(reconciliation()))
+                    .isInstanceOf(MaintenanceInProgressException.class);
+            assertThat(syncJobRepository.findFirstByConnection_IdAndStatusInOrderByCreatedAtDesc(
+                            connection.getId(), SyncJobStatus.ACTIVE))
+                    .as("no slot is reserved during the migration")
+                    .isEmpty();
+        }
+        assertThat(ran).isFalse();
+
+        syncJobService.run(reconciliation(), handle -> ran.set(true));
+        assertThat(ran).isTrue();
+    }
+
+    @Test
+    void shouldCancelASyncWhoseClaimATableLockRefusedAndRecordItAtTheNextHeartbeat() throws Exception {
+        var started = syncJobService.beginJob(reconciliation());
+        var ran = new AtomicBoolean();
+
+        try (java.sql.Connection ddl = dataSource.getConnection();
+                var statement = ddl.createStatement()) {
+            ddl.setAutoCommit(false);
+            statement.execute("LOCK TABLE sync_job IN ACCESS EXCLUSIVE MODE");
+            try {
+                syncJobService.executeBody(started, handle -> ran.set(true));
+            } finally {
+                ddl.rollback();
+            }
+        }
+        assertThat(ran).isFalse();
+        assertThat(status(started)).isEqualTo(SyncJobStatus.PENDING);
+
+        syncJobService.refreshLeases();
+
+        SyncJob job = syncJobRepository.findById(started.job().getId()).orElseThrow();
+        assertThat(job.getStatus()).isEqualTo(SyncJobStatus.CANCELLED);
+        assertThat(job.getErrorSummary()).isEqualTo(SyncJobService.DATABASE_BUSY);
+    }
+
+    /** A sync that ran keeps its success when its progress and its outcome had to wait for a table lock. */
+    @Test
+    void shouldRecordASuccessThatATableLockKeptFromBeingWrittenAsASuccess() throws Exception {
+        var started = syncJobService.beginJob(reconciliation());
+
+        try (java.sql.Connection ddl = dataSource.getConnection();
+                var statement = ddl.createStatement()) {
+            ddl.setAutoCommit(false);
+            try {
+                syncJobService.executeBody(started, handle -> {
+                    try {
+                        statement.execute("LOCK TABLE sync_job IN ACCESS EXCLUSIVE MODE");
+                    } catch (SQLException e) {
+                        throw new IllegalStateException(e);
+                    }
+                    // A progress report that the table lock refuses must not stop the sync, and it stays pending.
+                    handle.progress(1, 2, SyncProgress.of(SyncPhase.ISSUES, "Issues"));
+                    try {
+                        ddl.rollback();
+                    } catch (SQLException e) {
+                        throw new IllegalStateException(e);
+                    }
+                    syncJobService.flushBufferedProgress();
+                    assertThat(jdbcTemplate.queryForObject(
+                                    "SELECT items_processed FROM sync_job WHERE id = ?",
+                                    Integer.class,
+                                    started.job().getId()))
+                            .as("the flush writes the progress that the lock refused")
+                            .isEqualTo(1);
+                    try {
+                        statement.execute("LOCK TABLE sync_job IN ACCESS EXCLUSIVE MODE");
+                    } catch (SQLException e) {
+                        throw new IllegalStateException(e);
+                    }
+                });
+            } finally {
+                ddl.rollback();
+            }
+        }
+        assertThat(status(started)).isEqualTo(SyncJobStatus.RUNNING);
+
+        syncJobService.refreshLeases();
+
+        assertThat(status(started)).isEqualTo(SyncJobStatus.SUCCEEDED);
+    }
+
+    /** A PENDING job that no runner claimed, such as on a replica that stopped, frees the slot after two minutes. */
+    @Test
+    void shouldLetTheNextSyncTakeTheSlotOfAnUnclaimedJobAfterTwoMinutes() {
+        var stranded = syncJobService.beginJob(reconciliation());
+        jdbcTemplate.update(
+                "UPDATE sync_job SET created_at = now() - interval '3 minutes' WHERE id = ?",
+                stranded.job().getId());
+        var ran = new AtomicBoolean();
+
+        syncJobService.run(reconciliation(), handle -> ran.set(true));
+
+        assertThat(ran).isTrue();
+        assertThat(status(stranded)).isEqualTo(SyncJobStatus.FAILED);
+    }
+
+    @Test
+    void shouldRefuseToStartASyncInAnyStatementShapeWhileAMigrationRuns() throws Exception {
+        SyncJob job = syncJobRepository.saveAndFlush(new SyncJob(
+                workspace, connection, IntegrationKind.GITHUB, SyncJobType.INITIAL, SyncJobTrigger.MANUAL, null));
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThatThrownBy(() -> jdbcTemplate.update(
+                            "UPDATE sync_job SET status = 'RUNNING', heartbeat_at = now() WHERE id = ?", job.getId()))
+                    .hasMessageContaining("takes no new lease");
+            jdbcTemplate.update("UPDATE sync_job SET status = 'FAILED', finished_at = now() WHERE id = ?", job.getId());
+            assertThatThrownBy(() -> jdbcTemplate.update(
+                            "UPDATE sync_job SET status = 'RUNNING', finished_at = NULL, heartbeat_at = now() WHERE id = ?",
+                            job.getId()))
+                    .as("a sync that ended takes no new lease either")
+                    .hasMessageContaining("takes no new lease");
+            assertThatThrownBy(() -> jdbcTemplate.update(
+                            "UPDATE sync_job SET status = 'PENDING', finished_at = NULL WHERE id = ?", job.getId()))
+                    .as("nor does it reserve the slot again")
+                    .hasMessageContaining("takes no new lease");
+            assertThatThrownBy(() -> syncJobRepository.saveAndFlush(new SyncJob(
+                            workspace,
+                            connection,
+                            IntegrationKind.GITHUB,
+                            SyncJobType.RECONCILIATION,
+                            SyncJobTrigger.MANUAL,
+                            null)))
+                    .as("a new PENDING row reserves no slot")
+                    .hasMessageContaining("takes no new lease");
+        }
     }
 
     @Test

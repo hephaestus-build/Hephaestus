@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
+import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
@@ -20,6 +21,10 @@ import org.springframework.data.repository.query.Param;
 @WorkspaceAgnostic("Product feedback filings belong to instance-level reports, not to a workspace")
 interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackFiling, UUID> {
 
+    /** Takes the maintenance barrier for the transaction; false while a migration runs or waits. Reads no table. */
+    @Query(value = "SELECT " + MaintenanceBarrier.LIFTED, nativeQuery = true)
+    boolean maintenanceBarrierLifted();
+
     /** One filer for the whole instance at a time; released when the transaction ends. */
     @Query(value = "SELECT pg_try_advisory_xact_lock(:key)", nativeQuery = true)
     boolean tryPaceLock(@Param("key") long key);
@@ -28,13 +33,16 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
     @Query("SELECT f FROM ProductFeedbackFiling f WHERE f.feedbackId = :id")
     Optional<ProductFeedbackFiling> lock(@Param("id") UUID id);
 
+    // The three claims below take a lookup lease: the next attempt moves out by the lookup, and the attempt is the
+    // generation that the hand-over checks. They carry the maintenance barrier, so none starts during a migration.
+
     /**
      * A report whose draft answer, or lack of one, waits for the server to route it. Its {@code draft_report} action's
      * end put it there, whether the action drafted it, failed or expired.
      */
     @Query(value = """
                     SELECT feedback_id FROM product_feedback_filing
-                    WHERE state = 'ANSWERED' AND next_attempt_at <= :now
+                    WHERE state = 'ANSWERED' AND next_attempt_at <= :now AND""" + MaintenanceBarrier.LIFTED + """
                     ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED
                     """, nativeQuery = true)
     Optional<UUID> claimableAnswer(@Param("now") Instant now);
@@ -43,6 +51,7 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
     @Query(value = """
                     SELECT feedback_id FROM product_feedback_filing
                     WHERE state = 'QUEUED' AND route = 'ADMINS' AND next_attempt_at <= :now
+                      AND""" + MaintenanceBarrier.LIFTED + """
                     ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED
                     """, nativeQuery = true)
     Optional<UUID> claimableForAdmins(@Param("now") Instant now);
@@ -50,8 +59,9 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
     /** A routed report due for filing, or a held one whose hold ended. */
     @Query(value = """
                     SELECT feedback_id FROM product_feedback_filing
-                    WHERE (state = 'QUEUED' AND next_attempt_at <= :now)
-                       OR (state = 'HELD' AND filed_after <= :now AND next_attempt_at <= :now)
+                    WHERE ((state = 'QUEUED' AND next_attempt_at <= :now)
+                       OR (state = 'HELD' AND filed_after <= :now AND next_attempt_at <= :now))
+                      AND""" + MaintenanceBarrier.LIFTED + """
                     ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED
                     """, nativeQuery = true)
     Optional<UUID> claimableFiling(@Param("now") Instant now);

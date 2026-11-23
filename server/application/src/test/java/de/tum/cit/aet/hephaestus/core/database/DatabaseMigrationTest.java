@@ -124,7 +124,7 @@ class DatabaseMigrationTest {
 
             waiting = CompletableFuture.supplyAsync(() -> DatabaseMigration.run(arguments(database)));
             await().atMost(Duration.ofMinutes(1))
-                    .until(() -> output.getOut().contains("for another database migration to end"));
+                    .until(() -> output.getOut().contains("database.migration.lock_awaited"));
 
             assertThat(jdbc.queryForObject("SELECT locked FROM databasechangeloglock WHERE id = 1", Boolean.class))
                     .isTrue();
@@ -136,6 +136,112 @@ class DatabaseMigrationTest {
                 .isFalse();
     }
 
+    /**
+     * The maintenance barrier is the migration lock, so it must end only when the migration ends. A change set that
+     * ran on a session of its own would go on after the lock's session ended, and servers would start work during it.
+     */
+    @Test
+    void shouldRunEachChangeSetOnTheSessionThatHoldsTheBarrierAndEndWithIt() throws Exception {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_barrier_session");
+        var jdbc = jdbc(database);
+        CompletableFuture<Integer> migration;
+        try (Connection test = dataSource(database).getConnection();
+                var statement = test.createStatement()) {
+            statement.execute("SELECT pg_advisory_lock(4242)");
+            migration = CompletableFuture.supplyAsync(() -> DatabaseMigration.run(Stream.concat(
+                            Arrays.stream(arguments(database)),
+                            Stream.of(
+                                    "--spring.liquibase.change-log=classpath:db/migration-fixture/stalled-change-set.xml"))
+                    .toArray(String[]::new)));
+            Integer stalled = await().atMost(Duration.ofMinutes(1))
+                    .until(
+                            () -> jdbc
+                                    .queryForList(
+                                            "SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND objid = 4242"
+                                                    + " AND NOT granted",
+                                            Integer.class)
+                                    .stream()
+                                    .findFirst()
+                                    .orElse(null),
+                            pid -> pid != null);
+            Integer barrier = jdbc.queryForObject(
+                    "SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND granted AND objsubid = 2"
+                            + " AND classid = hashtext('hephaestus')::oid AND objid = hashtext('database-migration')::oid",
+                    Integer.class);
+            assertThat(barrier)
+                    .as("the session that holds the barrier runs the change set")
+                    .isEqualTo(stalled);
+
+            // The barrier's session ends while the change set runs, as a terminated or timed-out session does.
+            assertThat(jdbc.queryForObject("SELECT pg_terminate_backend(?)", Boolean.class, barrier))
+                    .isTrue();
+        }
+
+        assertThatThrownBy(() -> migration.get(2, TimeUnit.MINUTES))
+                .as("the migration ends with the barrier's session")
+                .hasCauseInstanceOf(RuntimeException.class);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM databasechangelog WHERE id = 'stalled'", Integer.class))
+                .isZero();
+    }
+
+    /**
+     * A migration waits in PostgreSQL's queue for the work that servers started, and no server starts new work while
+     * it waits. A migration that only polled would let new starts slip in ahead of it until its wait ended.
+     */
+    @Test
+    void shouldKeepNewWorkOutWhileTheMigrationWaitsForWorkThatServersStarted() throws Exception {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_barrier_queue");
+        var jdbc = jdbc(database);
+        CompletableFuture<Integer> migration;
+        try (Connection start = dataSource(database).getConnection();
+                var statement = start.createStatement()) {
+            // A server that starts work holds the barrier's lock shared for the start's steps.
+            statement.execute("SELECT pg_advisory_lock_shared(hashtext('hephaestus'), hashtext('database-migration'))");
+            migration = CompletableFuture.supplyAsync(() -> DatabaseMigration.run(Stream.concat(
+                            Arrays.stream(arguments(database)),
+                            Stream.of(
+                                    "--spring.liquibase.change-log=classpath:db/migration-fixture/quick-change-set.xml"))
+                    .toArray(String[]::new)));
+            // In PostgreSQL's queue: the exclusive request waits, which the log line only announces.
+            await().atMost(Duration.ofMinutes(1))
+                    .until(() -> Boolean.TRUE.equals(jdbc.queryForObject(
+                            "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
+                                    + " AND mode = 'ExclusiveLock' AND objsubid = 2"
+                                    + " AND objid = hashtext('database-migration')::oid)",
+                            Boolean.class)));
+
+            assertThat(jdbc.queryForObject(
+                            "SELECT pg_try_advisory_xact_lock_shared(hashtext('hephaestus'),"
+                                    + " hashtext('database-migration'))",
+                            Boolean.class))
+                    .as("a new start is refused while the migration waits")
+                    .isFalse();
+            assertThat(migration).isNotDone();
+        }
+
+        assertThat(migration.get(2, TimeUnit.MINUTES)).isZero();
+    }
+
+    @Test
+    void shouldLiftTheBarrierWhenAChangeSetFailsOnALiveSession() {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_barrier_failure");
+
+        assertThatThrownBy(() -> DatabaseMigration.run(Stream.concat(
+                                Arrays.stream(arguments(database)),
+                                Stream.of(
+                                        "--spring.liquibase.change-log=classpath:db/migration-fixture/failing-change-set.xml"))
+                        .toArray(String[]::new)))
+                .isInstanceOf(RuntimeException.class);
+
+        assertThat(jdbc(database)
+                        .queryForObject(
+                                "SELECT pg_try_advisory_xact_lock_shared(hashtext('hephaestus'),"
+                                        + " hashtext('database-migration'))",
+                                Boolean.class))
+                .as("servers start work again")
+                .isTrue();
+    }
+
     @Test
     void shouldStopAProcessThatMigratesAtStartWhenAnotherMigrationHoldsTheLock() throws Exception {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_lock_held");
@@ -144,8 +250,7 @@ class DatabaseMigrationTest {
             statement.execute("SELECT pg_advisory_lock(hashtext('hephaestus'), hashtext('database-migration'))");
 
             assertThatThrownBy(() -> migrateAtStart(database, "--hephaestus.database.migration-wait=1s"))
-                    .rootCause()
-                    .hasMessageContaining("Another database migration still ran after PT1S");
+                    .hasStackTraceContaining("still ran after PT1S");
         }
         assertThat(jdbc(database).queryForObject("SELECT to_regclass('databasechangelog') IS NULL", Boolean.class))
                 .isTrue();

@@ -44,4 +44,12 @@ public final class RunningMigration implements AutoCloseable {
             session.close();
         }
     }
+
+    /** Runs a statement on the migration's own session, as a change set does: the barrier lets it pass. */
+    public int update(String sql, Object... arguments) throws SQLException {
+        try (var statement = session.prepareStatement(sql)) {
+            for (int i = 0; i < arguments.length; i++) statement.setObject(i + 1, arguments[i]);
+            return statement.executeUpdate();
+        }
+    }
 }

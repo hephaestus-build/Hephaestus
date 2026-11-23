@@ -749,6 +749,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: A problem. Its type names the kind.
+        "503":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "A database migration runs, so nothing was sent. Retry after\
+            \ the Retry-After seconds."
         "5XX":
           content:
             application/problem+json:
@@ -4571,13 +4578,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MyProductFeedback"
-          description: OK
+          description: The issue moved to the private repository
         "4XX":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: A problem. Its type names the kind.
+        "503":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "A database migration runs, so the issue did not move. Retry\
+            \ after the Retry-After seconds, or GitHub did not confirm the move and\
+            \ Hephaestus checks it again."
         "5XX":
           content:
             application/problem+json:
