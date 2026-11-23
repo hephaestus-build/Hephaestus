@@ -6,7 +6,7 @@
 
 **Builds on:** [ADR 0126](0126-a-person-has-one-relationship-and-a-personal-space.md) (the personal space), [ADR 0128](0128-a-derived-record-keeps-its-basis-and-revocation-travels-by-generation.md) (provenance and revocation), [ADR 0130](0130-a-practice-has-a-portable-identity-and-growth-counts-independent-pieces-of-work.md) (portable practice identity)
 
-**Relates to:** [ADR 0134](0134-the-authorization-recheck-runs-at-three-boundaries-with-two-authorization-generations.md) (an authority narrowing bumps a generation)
+**Relates to:** ADR 0132 (proposed in #4865, the plain local save), [ADR 0134](0134-the-authorization-recheck-runs-at-three-boundaries-with-two-authorization-generations.md) (an authority narrowing bumps a generation)
 
 ## Context
 
@@ -56,7 +56,10 @@ Option 5.
 7. **The person decides for each workspace.**
    - Each team workspace has one toggle, "Use what travels with me here". It is on by default when the destination allows learning.
    - Each record has "Keep out of this space".
-8. **One card, one visible toggle.** A save card in a team workspace shows the exact words, the destinations and "travels with you". The toggle is on by default under Open, and off and locked under Closed.
+8. **A transfer is a separate, confirmed act.**
+   - A save in a team workspace is the plain local save of ADR 0132 (proposed in #4865). It never transfers.
+   - After the save, the entry offers **Take along**. Its card shows the exact words and the destinations, and the person confirms it.
+   - Under Closed, the entry offers no **Take along** and says why.
 9. **Learning arrives without its origin.** A run in the destination does not learn which team the record came from.
 10. **Checks at transfer.**
     - The authorship check passes only confirmed text that matches the shown hash.
@@ -86,7 +89,8 @@ Option 5.
 
 Not enforced yet. The implementation adds these tests:
 
-- An integration test fails when a record of a Closed workspace reaches another workspace, or the toggle is not locked.
+- An integration test fails when a record of a Closed workspace reaches another workspace, or its entry offers **Take along**.
+- An integration test fails when a plain local save creates a copy in the personal space.
 - A route test fails when a record whose text changed after it was shown transfers.
 - A fixture test fails when a record that names a non-member transfers.
 - A fixture test fails when a noted record transfers without "Keep and take along".

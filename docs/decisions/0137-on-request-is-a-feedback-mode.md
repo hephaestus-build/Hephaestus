@@ -13,8 +13,10 @@
 ## Context
 
 On main, a practice's feedback mode is Off, Approve first or Automatic.
-Off records observations, and no feedback goes out.
 Approve first and Automatic deliver feedback to every destination that the practice allows, the work included.
+Off delivers no feedback, and it also narrows measurement ([ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md), update of 2026-11-21 on pushes).
+A push, an edit and a follow-up leave out an Off practice. It is measured only at a milestone or an outcome of its item.
+When every practice that a push selects is Off, the push is withheld with `FEEDBACK_MODE_OFF`, before measurement.
 
 Some practices fit a person who asks, not a comment that the team reads.
 A course can want students to keep feedback to themselves.
@@ -46,25 +48,30 @@ The real constraint is a mode that keeps a practice's results with the person un
 Option 5.
 
 1. **`ON_REQUEST` joins `FeedbackMode`.** The modes are Off, On request, Approve first and Automatic. Both admin consoles show it.
-2. **A review measures an On request practice as usual,** at each milestone, and seals its observations.
+2. **A review selects and measures an On request practice as it does an Automatic one.**
+   - A push, an edit and a follow-up measure it. Off's narrower selection does not apply, so a person who asks gets the result for the newest head.
+   - A push that selects an On request practice is never withheld with `FEEDBACK_MODE_OFF`.
+   - On request differs from Automatic only after the seal, in where its results may go.
 3. **An On request practice never appears on the work.** This holds also after Request review. The composer's guardrails and the delivery gate refuse it.
 4. **It never appears in a message that Hephaestus starts.** The contact policy removes it. A check-in pre-check never reads its outcome.
-5. **The person asks for it.** The practice page shows "Ask Hephaestus about this practice". The conversation shows its outcomes only when the person names or selects the practice.
+5. **The person asks for it.** The practice page shows "Ask Hephaestus about this practice". A request is naming the practice in the conversation or selecting that control.
+   - Before a request, no projection holds an On request result. The item card, the practice page and the change feed leave it out.
+   - A request releases the results sealed up to then, in all three projections and in the conversation. A later seal waits for the next request.
+   - The mode at the seal decides for each result. A mode change emits no feed change. A result held under On request was never sent, so no client holds it. A result sent before the change stays.
 6. **A conversation summary never names it.** The summary validator drops an item that names an On request or Off practice.
 7. **An On request seal writes no growth point.** Help on request never fades.
 8. **"Where feedback may appear" is set for each practice:** on the work, on the practice page, in conversation. The workspace holds a default (`default_feedback_destinations`). A practice entry overrides it.
+   - **Remove override** is the reverse, in both admin consoles. It deletes the practice's destinations, and the practice uses the workspace default again.
 9. **Modes and destinations bound every copy.** They feed the eligible set of each place. The composer's first guardrail and the delivery gate enforce them. A copy that puts a problem outside the allowed destinations is refused.
-10. **`allowSevereExclusion`** is a workspace policy, off by default.
-    - It decides whether a person may leave a Critical or Major problem out of the copy on the work.
-    - When it is off, the preview refuses that selection and says why.
-    - A workspace admin turns it on or off in either console. Turning it off is the reverse.
+10. **Exclusion of a Critical or Major problem** follows the workspace policy `allowSevereExclusion` of ADR 0121 (proposed in #4862) decision 8.
 11. **Practice file format version 2** carries the mode and the destinations. Version 1 files still load, with the workspace default.
 12. **On request is not "Reviews here start only on request".** That setting decides when a review starts. This mode decides where its feedback goes. The glossary keeps them apart.
 
 ### What this changes in other ADRs
 
-- [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) stays. Its stages run for an On request practice. Delivery stops at the mode, with its own recorded reason.
-- ADR 0121 (proposed in #4862) decision 7, guardrail 1, reads this mode and these destinations. Its guardrail 3 runs on the eligible set after an exclusion that `allowSevereExclusion` permits.
+- [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) stays. Its stages run for an On request practice. Delivery stops at the mode, with its own recorded reason. Its update of 2026-11-21 on pushes keeps Off's narrower selection for Off only. On request feedback reaches the person who asks, so a push measures it.
+- ADR 0135 (proposed in #4867) streams item cards as typed changes. Decision 5 of this ADR decides which changes carry an On request result.
+- ADR 0121 (proposed in #4862) decision 7, guardrail 1, reads this mode and these destinations.
 - [ADR 0130](0130-a-practice-has-a-portable-identity-and-growth-counts-independent-pieces-of-work.md) owns growth points. This ADR adds that an On request seal writes none.
 - The review glossary's Feedback mode row gains On request on acceptance.
 
@@ -73,7 +80,7 @@ Option 5.
 - Good: a course can keep a practice's feedback with the student, and the practice still teaches.
 - Good: one mode, read by every writer, keeps an On request result off the work and out of unasked messages.
 - Good: per-practice destinations replace a workspace-wide choice.
-- Bad: the model budget pays for reviews whose results nobody may read until they ask.
+- Bad: the model budget pays for reviews whose results nobody may read until they ask. A push measures an On request practice, as it does an Automatic one.
 - Bad: a person who never asks never learns from an On request practice.
 - Bad: two settings with "on request" in their names exist. The glossary and the consoles must keep them apart.
 - Bad: the practice file format changes. The loader reads two versions.
@@ -87,8 +94,10 @@ Not enforced yet. The implementation adds these tests:
 - `DestinationGuardrailTest` fails when a copy that puts a problem outside the allowed destinations is admitted.
 - `OnRequestNoGrowthTest` fails when an On request seal writes a growth point.
 - `PracticeFileVersionOneTest` fails when a version 1 practice file no longer loads.
-- `ExclusionRefusedInPreviewTest` fails when the preview allows a Major exclusion while `allowSevereExclusion` is off.
-- Stories in both admin consoles show the mode, the destinations and the policy, with their empty, loading and error states.
+- `OnRequestProjectionTest` fails when an item card, a practice page or a feed change carries an On request result before a request.
+- `RemoveOverrideTest` fails when **Remove override** leaves the practice's own destinations, in either console.
+- `OnRequestSelectionTest` fails when a push leaves out an On request practice, or withholds it with `FEEDBACK_MODE_OFF`.
+- Stories in both admin consoles show the mode and the destinations, with their empty, loading and error states.
 
 ## Revisit trigger
 

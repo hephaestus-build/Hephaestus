@@ -46,6 +46,7 @@ Option 4.
 4. **The personal space exists from the first need.** The first personal record, transfer or grant creates it, in one idempotent transaction. Sign-up creates nothing.
 5. **Runs in the personal space are on by default.**
    - They follow the same model readiness and the same model budget for each payer as team workspaces.
+   - The payer is the budget that a run spends. The instance pays for personal spaces (ADR 0147, proposed in #4867).
    - An operator can turn them off with one instance switch.
    - Turning runs off never removes storage or access.
 6. **Leaving keeps the learning.**
@@ -55,6 +56,9 @@ Option 4.
    - A person whose identity is removed gets a verified portability address.
 7. **Absorption and erasure suspend the space.** They run while the workspace is `SUSPENDED`. Main's filter already hides a space that is not active. No new status exists.
 8. **Personal-space records enter Slack one at a time, by the person's act.** No turn takes them to Slack on its own.
+   - The Slack detail level **Full** is the person's grant for records of the Slack-connected workspace only. ADR 0123 (proposed in #4862) decision 5 owns that list.
+   - Full never reads a personal-space record.
+   - This decision owns the rule. Check-ins and other Slack turns point here.
 
 ### What this changes in other ADRs
 
@@ -79,6 +83,7 @@ Not enforced yet. The implementation adds these tests:
 - A slug test fails when a team workspace can take a slug of the form `me--`.
 - A leaving test fails when a removed member cannot use the scoped session within 30 days. It also fails when they can after it.
 - A switch test fails when turning personal-space runs off removes a record or access.
+- A Slack route test fails when a Slack turn reads a personal-space record without the person's act. The test runs at Full and at Notice.
 
 ## Revisit trigger
 

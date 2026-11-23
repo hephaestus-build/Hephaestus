@@ -8,7 +8,7 @@
 
 **Builds on:** [ADR 0127](0127-every-record-and-route-resolves-to-concrete-readers.md) (concrete readers), [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) (the outbox and its write fence), [ADR 0126](0126-a-person-has-one-relationship-and-a-personal-space.md) (the relationship)
 
-**Relates to:** ADR 0120 and ADR 0122 (proposed in #4862), [ADR 0129](0129-learning-travels-as-the-persons-own-words-to-authorized-workspaces.md) (the narrowings of transfer)
+**Relates to:** ADR 0120 and ADR 0151 (proposed in #4862), ADR 0135 (proposed in #4867, the change feed), [ADR 0129](0129-learning-travels-as-the-persons-own-words-to-authorized-workspaces.md) (the narrowings of transfer)
 
 ## Context
 
@@ -16,7 +16,7 @@ A turn can run for minutes, and a queued write can wait longer.
 In that time, the person can leave the team, turn off "Use what travels with me here", or keep a record out of a space.
 A check at the start of the run then allows a read or a write that the person already withdrew.
 
-On main, the model proxy rechecks the person's AI choice on each model request ([ADR 0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) decision 11).
+On main, the LLM proxy rechecks the person's AI choice on each model request ([ADR 0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) decision 11).
 Nothing rechecks the other kinds of authority.
 The real constraint is to find the boundaries where stale authority does harm, and to check there only.
 
@@ -53,12 +53,15 @@ Option 5.
 5. **Contact changes are not authority changes.** Pause, quiet hours, Not now, Less often, mute and stop never bump a generation. They never stop an answer or reset a cache. The contact policy checks them at send.
 6. **The recheck runs at three boundaries.**
    - Context read: before a run reads a source.
-   - Model request: before the model proxy sends a call.
+   - Model request: before the LLM proxy sends a call.
    - Any send to someone other than the owner. Sends are a provider write through the adapter's `beginWrite`, a Slack reply, an email and a push.
-7. **The owner's own stream is not a boundary.** A session end closes it. A narrowing changes the scope epoch, and the next feed frame evicts what the client holds.
+7. **The owner's own stream is not a recheck boundary.** A session end closes it. A narrowing changes the scope epoch, and the epoch fences the stream:
+   - Every stream frame carries the scope epoch that it was produced under.
+   - The sandbox gateway drops an answer delta whose scope epoch is older than the current one. So the output of a model call that started before the narrowing reaches no client.
+   - The eviction frame goes out before any frame of the new epoch. ADR 0135 (proposed in #4867) decision 5 binds the frames.
 8. **A run and an action carry an authorization stamp.** `agent_run` and `agent_action` store the generations that they started with. A stale stamp refuses with its reason. A false cancellation is safe.
-9. **A write that may have started is read back, never replayed.** ADR 0122 (proposed in #4862) decides this for every external write.
-10. **A person's pause never blocks feedback on the work.** That feedback follows the work's own settings.
+9. **A write that may have started is never replayed blindly.** ADR 0151 (proposed in #4862) decision 3 gives the rule for each transport. Provider and Slack writes are read back. Email and push have no readback and stay at most once.
+10. **A person's pause never blocks the copy on the work.** That copy follows the work's own settings.
 11. **One order at each boundary.** The authorization recheck runs first, then routing and limits, then the contact policy.
 12. **Each setting that carries authority is registered.** It has one owning row, one owning command and one generation. It registers one test case for each boundary.
 
@@ -67,6 +70,7 @@ Option 5.
 - [ADR 0079](0079-one-agent-system.md) § Data model: `agent_run` and `agent_action` gain `authorization_stamp`.
 - [ADR 0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) decision 11 stays and grows. The model request also compares the run's stamp with the current generations.
 - [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) stays. The send boundary extends the adapter's `beginWrite` fence. It adds no second outbox.
+- ADR 0139 (proposed in #4865), the contact policy, points to decisions 5 and 11. They own the two rules: a contact change is not an authority change, and one order at each boundary.
 
 ## Consequences
 
@@ -85,7 +89,7 @@ Not enforced yet. The implementation adds these tests:
 - A test with a recording adapter fails when a write whose authority ended after it was queued reaches the provider.
 - `AuthorityBearingRegistryTest` fails when a setting that carries authority has no case for each boundary.
 - An integration test changes a contact setting during a stream. It fails when the turn stops or the scope epoch changes.
-- An integration test fails when a narrowing does not evict on the next feed frame and close the stream.
+- An integration test fails when a narrowing does not evict on the next feed frame and close the stream. It also fails when an answer delta of the old scope epoch reaches the client after the eviction.
 
 ## Revisit trigger
 
