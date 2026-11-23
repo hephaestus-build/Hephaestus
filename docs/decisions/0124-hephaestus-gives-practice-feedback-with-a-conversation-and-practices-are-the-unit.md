@@ -22,6 +22,9 @@ Software engineering is the first domain.
 Courses, research labs and leadership work have the same shape: a person does work, and the work shows a practice or not.
 A frame that hard-wires pull requests breaks when a second domain ships after the 1.0 freeze.
 
+The research that Hephaestus supports also needs more than one kind of reviewed work.
+Its questions compare feedback on pull requests and on issues, so issues need review in 1.0.
+
 The language guide now forbids "AI mentor" for Hephaestus.
 The maintainer decided that "AI mentor" is the product category, and that the word "mentor" alone stays reserved for people.
 
@@ -54,12 +57,16 @@ Option 4.
    - Each item kind declares what it counts as: `WORK`, `ACCOUNT` (the person's own account of work elsewhere) or `CONTEXT` (never reviewed).
    - A calendar is context only. Hephaestus never treats the time of someone's work as evidence.
    - The adapter declares the roles that a person can hold for an item. An observation concerns the holder of a practice role.
-6. **Code decides, and a model judges.** Deterministic code does every step that it can. A model runs only where judgement is necessary.
-7. **The category is "AI mentor".**
+6. **Issues are a reviewed item kind in 1.0,** on GitHub and GitLab, beside pull requests and merge requests.
+   - Issues are excluded by default. A workspace admin includes them and can exclude them again.
+   - Slack and Outline add no reviewed item kind. Their adapters stay as they are.
+   - This rule can move back to 1.x. If the research scope narrows to pull requests, issue review returns to 1.x.
+7. **Code decides, and a model judges.** Deterministic code does every step that it can. A model runs only where judgement is necessary.
+8. **The category is "AI mentor".**
    - "AI mentor" is the product category in product text, onboarding and docs. It is always written with "AI".
    - "Mentor" alone means a person who guides another person.
    - Hephaestus is the name. "Conversation agent" and "composer" are system terms. Hephaestus is not an agent.
-8. **What Hephaestus is not.**
+9. **What Hephaestus is not.**
    - It shows no score, rank, streak, badge or level.
    - It never writes what a person submits as their own work.
    - It is not a friend, a therapist or a channel to human resources.
@@ -79,6 +86,7 @@ Option 4.
 - Bad: "AI mentor" raises expectations. People can read it as a human mentor service. The product text must say that Hephaestus is software.
 - Bad: "person" in the API and "developer" in practice feedback live side by side. This ends when the vocabulary stages finish.
 - Bad: domain-neutral names cost more thought now, for a second domain that is not built yet.
+- Bad: issue review adds a second reviewed item kind to 1.0. Practices must say which item kinds they read.
 
 ## Confirmation
 
@@ -87,11 +95,13 @@ Not enforced yet. The implementation adds these checks:
 - `gate:prose` fails when product text uses "mentor" alone for Hephaestus, or "AI mentor" for a person.
 - A review gateway test fails when a review run calls a tool that writes outside its observations.
 - A fixture test with an item kind of class `CONTEXT` fails when such an item produces an observation.
+- An integration test fails when an issue of a workspace that did not include issues gets a review.
 
 ## Revisit trigger
 
 - A second domain needs an item kind that `WORK`, `ACCOUNT` and `CONTEXT` cannot describe.
 - Support requests or study interviews show that people read "AI mentor" as a human service.
+- The research scope narrows to pull requests. Then issue review moves back to 1.x (decision 6).
 
 ## Sources
 

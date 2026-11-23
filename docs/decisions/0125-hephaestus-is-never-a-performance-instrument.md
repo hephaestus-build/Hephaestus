@@ -10,6 +10,8 @@
 
 **Builds on:** [ADR 0124](0124-hephaestus-gives-practice-feedback-with-a-conversation-and-practices-are-the-unit.md), [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md)
 
+**Relates to:** ADR 0141 and ADR 0149 (proposed in #4867), research datasets and delivery experiments
+
 ## Context
 
 A person speaks honestly about their work only when what they say cannot reach their employer.
@@ -26,12 +28,16 @@ Under the EU AI Act, a system that evaluates the performance of workers is high-
 The person who approves Hephaestus for a team still needs to see that it works.
 The real constraint is that no staff route can tell anything about one person.
 
+Research on Hephaestus needs sequences of events for each person.
+A researcher can also be course staff, and so the employer or teacher of the people in the study.
+
 ## Decision drivers
 
 - No staff member can learn what one person said, received or did in Hephaestus.
 - The approver sees that practices improve, without a view of people.
 - Support can still help a person who asks for it.
 - Text promises only what Hephaestus enforces. The operator can read its own servers.
+- Research gets data for each person only by that person's consent, and never through a staff role.
 
 ## Considered options
 
@@ -67,6 +73,15 @@ Option 4.
     - "Your employer sees nothing about you" appears only where the operator declares that it is not the employer.
 11. **Activity stays.** The views of [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) show provider work that members already see. They never show data from conversations, personal records or practice feedback.
 12. **Feedback on the work names its developer,** as the work itself does. The admin guide tells the operator that this feedback is public to the employer.
+13. **Research is the one carve-out.** Sequences for each person exist only in research datasets.
+    - Each person in a dataset allowed research use of their data.
+    - A dataset is released only to the named research organization, under ADR 0141 (proposed in #4867).
+    - No staff role and no product surface sees them.
+    - Uptake of Hephaestus is a research outcome, not a product goal.
+14. **The author of a study is not its operator.**
+    - When the researcher is also course staff, a colleague operates the study instance or holds the steward role.
+    - The steward is never the author of a delivery experiment. The steward holds the stop switch and sees no outcomes.
+    - Operator access is logged.
 
 ### What this changes in other ADRs
 
@@ -85,6 +100,7 @@ Option 4.
 - Bad: workspace admins lose the observation lists that they use to find wrong results. They see a result only when a person asks for a correction.
 - Bad: with 5 in place of 3, Practices across the workspace shows more total-only splits. A workspace of 30 to 40 developers sees this often. ADR 0112 priced this cost and declined it. We now accept it, because the page is part of the promise that no one learns about one person.
 - Bad: teams of fewer than 10 people see no monthly practice outcome. The page says why.
+- Bad: a researcher who is also course staff needs a colleague to operate the study. Without a second person, the study cannot run.
 
 ## Confirmation
 
@@ -95,6 +111,7 @@ Not enforced yet. The implementation adds these tests:
 - A practice outcome test fails when a figure from fewer than 10 people shows a value.
 - A route test fails when any route reads another account's conversation, records or Practice profile.
 - `ArchitectureTest` fails when a class named for View as user or Per-person results for admins exists.
+- A role test fails when the steward of a delivery experiment is its author. It also fails when a steward route returns an outcome.
 
 ## Revisit trigger
 

@@ -57,7 +57,7 @@ Option 4.
    - An erased source removes the provenance references of other people that cite it.
    - An erased Slack channel redacts that channel's entries in every person's conversation.
 8. **Every new row and every remote copy has a person-data catalog entry with its cascade.** A generated test fails without it.
-9. **Erasures and revocations survive a database restore.** A privacy journal records them, and the erasure recovery replays them. Its own ADR follows in the platform pull request.
+9. **Erasures and revocations survive a database restore.** A privacy journal records them, and the erasure recovery replays them. ADR 0140 (proposed in #4867) decides the journal.
 
 ### What this changes in other ADRs
 
