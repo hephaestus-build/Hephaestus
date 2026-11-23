@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionErasures;
@@ -35,11 +36,15 @@ public class SlackUninstallService {
     private final SlackConnectionStrategy connectionStrategy;
     private final IntegrationAttentionService attention;
 
+    private final PrivacyJournal journal;
+
     public SlackUninstallService(
             SlackWorkspaceResolver workspaceResolver,
             ConnectionService connectionService,
             SlackConnectionStrategy connectionStrategy,
-            IntegrationAttentionService attention) {
+            IntegrationAttentionService attention,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.workspaceResolver = workspaceResolver;
         this.connectionService = connectionService;
         this.connectionStrategy = connectionStrategy;
@@ -68,7 +73,7 @@ public class SlackUninstallService {
                             uninstallCorrelationId(teamId, eventType, eventId),
                             "Slack " + eventType + " received"));
             // The erase below removes what the connection mirrored, as a disconnect does.
-            ConnectionErasures.record(Objects.requireNonNull(changed.getId()), workspaceId);
+            ConnectionErasures.record(journal, Objects.requireNonNull(changed.getId()), workspaceId);
             if ("tokens_revoked".equalsIgnoreCase(eventType)) {
                 attention.report(
                         changed.getId(),

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
@@ -18,6 +19,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackConnectionStrategy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.RecordingPrivacyJournal;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
@@ -50,11 +53,17 @@ class SlackUninstallServiceTest extends BaseUnitTest {
     @Mock
     private Connection connection;
 
+    private final RecordingPrivacyJournal journal = new RecordingPrivacyJournal();
+
     private SlackUninstallService service() {
         // A connection that a transition returns is persisted, so it has its id.
         lenient().when(connection.getId()).thenReturn(7L);
         return new SlackUninstallService(
-                workspaceResolver, connectionService, connectionStrategy, mock(IntegrationAttentionService.class));
+                workspaceResolver,
+                connectionService,
+                connectionStrategy,
+                mock(IntegrationAttentionService.class),
+                journal);
     }
 
     private static Stream<Arguments> eventTypeMapping() {
@@ -90,6 +99,9 @@ class SlackUninstallServiceTest extends BaseUnitTest {
         service().onUninstall(TEAM, "app_uninstalled", "Ev1");
 
         verify(connectionStrategy).eraseLocalData(new IntegrationRef(IntegrationKind.SLACK, WORKSPACE, TEAM));
+        assertThat(journal.facts())
+                .containsExactly(new RecordingPrivacyJournal.Fact(
+                        PrivacyJournalKind.CONNECTION_ERASED, Map.of("workspaceId", WORKSPACE, "connectionId", 7L)));
     }
 
     @Test

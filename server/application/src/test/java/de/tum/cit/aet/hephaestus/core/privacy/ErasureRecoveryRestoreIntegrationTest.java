@@ -47,6 +47,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -242,18 +243,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
 
     @Test
     void shouldDeleteAgainAMessageThatARestoreBroughtBack() throws Exception {
-        var main = conversations.findOrCreateMain(workspace.getId(), ownerAccount);
-        UUID message = turns.submit(
-                        workspace.getId(),
-                        main.getId(),
-                        new ConversationTurnService.Question(
-                                ConversationTurn.Surface.APP,
-                                "Words to take back",
-                                UUID.randomUUID().toString(),
-                                null,
-                                null))
-                .question()
-                .getId();
+        UUID message = question("Words to take back");
         var backup = Backup.of(jdbc, workspace.getId());
         entries.deleteMessage(workspace.getId(), message);
         assertThat(words(message)).doesNotContain("Words to take back");
@@ -400,14 +390,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
 
     @Test
     void shouldEraseAgainAnOutlineCollectionThatARestoreBroughtBack() throws Exception {
-        var outline = new Connection(
-                workspace,
-                IntegrationKind.OUTLINE,
-                "team-" + workspace.getId(),
-                new ConnectionConfig.OutlineConfig("https://outline.example.test", null, null, Set.of()));
-        outline.setCredentials(new BearerToken("outline-token", null), credentials);
-        ConnectionFixtures.reachState(outline, IntegrationState.ACTIVE);
-        long outlineId = Objects.requireNonNull(connections.save(outline).getId());
+        long outlineId = outlineConnection();
         String collectionId = UUID.randomUUID().toString();
         // A sibling collection of the same connection, which the erase leaves alone.
         String siblingId = UUID.randomUUID().toString();
@@ -449,6 +432,93 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         // The same manifest is safe after a restart.
         recover(manifest);
         assertThat(mirrored(collectionId)).isZero();
+    }
+
+    @Test
+    void shouldLeaveTheSameRowsWhenTheSameManifestIsAppliedTwice() throws Exception {
+        // The rows that a restore brought back, of every kind but a workspace purge, which would erase the rest.
+        UUID message = question("Words to take back");
+        long edited = slackMessage("1700000001.000100", "Words before the edit");
+        long deleted = slackMessage("1700000002.000200", "Words before the delete");
+        jdbc.update(
+                "INSERT INTO slack_monitored_channel (workspace_id, slack_team_id, slack_channel_id, consent_state)"
+                        + " VALUES (?, 'T-restore', 'C-erased', 'ACTIVE')",
+                workspace.getId());
+        long inChannel = slackMessage("1700000003.000300", "Words in a channel that is later erased");
+        jdbc.update("UPDATE slack_message SET slack_channel_id = 'C-erased' WHERE id = ?", inChannel);
+        new SlackThreadTestSupport(jdbc)
+                .seedThread(workspace.getId(), "C-erased", "1700000003.000300", "1700000003.000300", 1, "{}");
+        long outlineId = outlineConnection();
+        String collectionId = UUID.randomUUID().toString();
+        mirror(outlineId, collectionId, "decision-record");
+        // A fact whose erasure finds nothing: the channel was never stored.
+        String manifest =
+                """
+                {"version":4,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
+                 "workspacePurges":[],"disconnects":[{"workspaceId":%1$d,"connectionId":%2$d}],
+                 "collectionErasures":[{"workspaceId":%1$d,"connectionId":%3$d,"collectionId":"%4$s"}],
+                 "messageDeletions":[{"workspaceId":%1$d,"entryId":"%5$s"}],
+                 "slackMessageChanges":[{"workspaceId":%1$d,"messageId":%6$d,"change":"EDITED"},
+                                        {"workspaceId":%1$d,"messageId":%7$d,"change":"DELETED"}],
+                 "slackChannelErasures":[{"workspaceId":%1$d,"channelId":"C-erased"},
+                                         {"workspaceId":%1$d,"channelId":"C-never-stored"}]}
+                """.formatted(workspace.getId(), connection.getId(), outlineId, collectionId, message, edited, deleted);
+
+        recover(manifest);
+        var once = erasedRows(message);
+        assertThat(state()).isEqualTo(IntegrationState.UNINSTALLED);
+        assertThat(words(message)).doesNotContain("Words to take back");
+        assertThat(slackText(edited)).isNull();
+        assertThat(slackRows("C-erased")).isZero();
+        assertThat(mirrored(collectionId)).isZero();
+
+        // A duplicate fact replays the same manifest: each step finds its target erased and changes nothing.
+        recover(manifest);
+        assertThat(erasedRows(message)).isEqualTo(once);
+    }
+
+    /** The rows of the workspace that the manifest's erasures touch, each as JSON text. */
+    private List<@Nullable String> erasedRows(UUID message) {
+        var rows = new ArrayList<@Nullable String>();
+        for (String table : List.of(
+                "connection",
+                "outline_collection",
+                "outline_document",
+                "slack_message",
+                "slack_thread",
+                "slack_monitored_channel")) {
+            String query = "SELECT to_jsonb(t)::text FROM " + table + " t WHERE t.workspace_id = ? ORDER BY 1";
+            rows.addAll(jdbc.queryForList(query, String.class, workspace.getId()));
+        }
+        String entry = "SELECT to_jsonb(t)::text FROM conversation_entry t WHERE t.id = ?";
+        rows.addAll(jdbc.queryForList(entry, String.class, message));
+        return rows;
+    }
+
+    private UUID question(String words) {
+        var main = conversations.findOrCreateMain(workspace.getId(), ownerAccount);
+        return turns.submit(
+                        workspace.getId(),
+                        main.getId(),
+                        new ConversationTurnService.Question(
+                                ConversationTurn.Surface.APP,
+                                words,
+                                UUID.randomUUID().toString(),
+                                null,
+                                null))
+                .question()
+                .getId();
+    }
+
+    private long outlineConnection() {
+        var outline = new Connection(
+                workspace,
+                IntegrationKind.OUTLINE,
+                "team-" + workspace.getId(),
+                new ConnectionConfig.OutlineConfig("https://outline.example.test", null, null, Set.of()));
+        outline.setCredentials(new BearerToken("outline-token", null), credentials);
+        ConnectionFixtures.reachState(outline, IntegrationState.ACTIVE);
+        return Objects.requireNonNull(connections.save(outline).getId());
     }
 
     /** A registered collection of the Outline connection with one mirrored document. */

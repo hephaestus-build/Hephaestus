@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProviderInstanceRegistered;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import java.util.Collection;
 import java.util.HashSet;
@@ -35,9 +37,13 @@ public class IdentityRestrictionService implements PersonProcessingSuppression {
     private final JdbcTemplate jdbc;
     private final PersonDataCopyFence copies;
     private final List<PersonSourceIdentityContributor> sourceOwners;
+    private final PrivacyJournal journal;
 
     public IdentityRestrictionService(
-            JdbcTemplate jdbc, List<PersonSourceIdentityContributor> sourceOwners, PersonDataCopyFence copies) {
+            JdbcTemplate jdbc,
+            List<PersonSourceIdentityContributor> sourceOwners,
+            PersonDataCopyFence copies,
+            PrivacyJournal journal) {
         var kinds = sourceOwners.stream()
                 .flatMap(owner -> owner.itemKinds().stream())
                 .toList();
@@ -47,6 +53,7 @@ public class IdentityRestrictionService implements PersonProcessingSuppression {
         this.jdbc = jdbc;
         this.copies = copies;
         this.sourceOwners = List.copyOf(sourceOwners);
+        this.journal = journal;
     }
 
     @EventListener
@@ -122,6 +129,14 @@ public class IdentityRestrictionService implements PersonProcessingSuppression {
                     i.providerId(),
                     i.subject(),
                     Objects.requireNonNullElse(i.teamId(), ""));
+        }
+        // The permanent restriction is the erasure decision, so its fact commits with it.
+        Long accountId = scope.accountId();
+        if (accountId != null) {
+            journal.record(
+                    PrivacyJournalKind.PERSON_ERASED, Map.of("identities", scope.identities(), "accountId", accountId));
+        } else if (!scope.identities().isEmpty()) {
+            journal.record(PrivacyJournalKind.PERSON_ERASED, Map.of("identities", scope.identities()));
         }
     }
 

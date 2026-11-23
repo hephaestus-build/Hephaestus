@@ -12,9 +12,12 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionRequestedEvent;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.util.List;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -38,6 +41,8 @@ public class AccountService {
     private final Clock clock;
     private final GitProviderRegistry providers;
 
+    private final PrivacyJournal journal;
+
     public AccountService(
             AccountRepository accountRepository,
             IdentityRepository identityRepository,
@@ -45,7 +50,9 @@ public class AccountService {
             AuthEventLogger authEventLogger,
             ApplicationEventPublisher eventPublisher,
             Clock clock,
-            GitProviderRegistry providers) {
+            GitProviderRegistry providers,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.accountRepository = accountRepository;
         this.identityRepository = identityRepository;
         this.sessionRevocation = sessionRevocation;
@@ -89,6 +96,7 @@ public class AccountService {
                 .event(AuthEvent.EventType.ACCOUNT_DELETED, AuthEvent.Result.SUCCESS)
                 .account(accountId)
                 .record();
+        journal.record(PrivacyJournalKind.ACCOUNT_ERASED, Map.of("accountId", accountId));
         // Same transaction as the status flip: the purge runs only once the deletion committed.
         eventPublisher.publishEvent(new AccountDeletionRequestedEvent(accountId));
     }

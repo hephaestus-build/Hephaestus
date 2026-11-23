@@ -113,9 +113,16 @@ class SlackHistoryReconcilerIntegrationTest extends BaseIntegrationTest {
                 messages,
                 threads,
                 mock(SlackRosterIdentityResolver.class),
-                new SlackChannelErasure(mock(ProviderEventStore.class), threads, channels, feedbackErasure, messages),
+                new SlackChannelErasure(
+                        mock(ProviderEventStore.class),
+                        threads,
+                        channels,
+                        feedbackErasure,
+                        messages,
+                        (kind, refs) -> {}),
                 true,
-                new TransactionTemplate(transactionManager));
+                new TransactionTemplate(transactionManager),
+                (kind, refs) -> {});
         var properties = new SlackSyncProperties("0 0 4 * * *", 10, 15, Duration.ZERO, true, 5, true, 10);
         reconciler = new SlackHistoryReconciler(
                 messages, channels, slack, ingest, properties, Clock.fixed(NOW, ZoneOffset.UTC));

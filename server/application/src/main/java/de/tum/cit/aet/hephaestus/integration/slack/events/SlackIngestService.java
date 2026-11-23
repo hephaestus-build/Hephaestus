@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
@@ -9,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.identity.SlackRosterIdentityResolver;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -47,6 +50,8 @@ public class SlackIngestService {
 
     private final TransactionTemplate transactionTemplate;
 
+    private final PrivacyJournal journal;
+
     public SlackIngestService(
             SlackWorkspaceResolver workspaceResolver,
             SlackMonitoredChannelRepository monitoredChannelRepository,
@@ -58,7 +63,9 @@ public class SlackIngestService {
             SlackChannelErasure channelErasure,
             @Value("${hephaestus.integration.slack.conversation-ingest.enabled:true}")
                     boolean conversationIngestEnabled,
-            TransactionTemplate transactionTemplate) {
+            TransactionTemplate transactionTemplate,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.workspaceResolver = workspaceResolver;
         this.monitoredChannelRepository = monitoredChannelRepository;
         this.consentGate = consentGate;
@@ -208,7 +215,7 @@ public class SlackIngestService {
         }
         if (DeliveryInbox.claim("slack.message.delete")) {
             messageRepository.tombstone(workspaceId, teamId, channelId, deletedTs, Instant.now());
-            logChange(workspaceId, channelId, deletedTs, "DELETED");
+            logChange(workspaceId, channelId, deletedTs, MessageChange.DELETED);
         }
     }
 
@@ -216,15 +223,24 @@ public class SlackIngestService {
      * An erasure recovery manifest lists each edit and deletion after its recovery point, by the stored row: a restore
      * brings back the old words. Logged only after commit, by ids alone.
      */
-    private void logChange(long workspaceId, String channelId, String ts, String change) {
-        messageRepository
-                .findIdOf(workspaceId, channelId, ts)
-                .ifPresent(id -> TransactionCallbacks.afterCommit(() -> log.atInfo()
-                        .addKeyValue("event.name", "slack.message_changed")
-                        .addKeyValue("workspace.id", workspaceId)
-                        .addKeyValue("slack.message.id", id)
-                        .addKeyValue("slack.message.change", change)
-                        .log("A Slack message was changed in Slack")));
+    private void logChange(long workspaceId, String channelId, String ts, MessageChange change) {
+        messageRepository.findIdOf(workspaceId, channelId, ts).ifPresent(id -> {
+            journal.record(
+                    PrivacyJournalKind.SLACK_MESSAGE_CHANGED,
+                    Map.of("workspaceId", workspaceId, "messageId", id, "change", change));
+            TransactionCallbacks.afterCommit(() -> log.atInfo()
+                    .addKeyValue("event.name", "slack.message_changed")
+                    .addKeyValue("workspace.id", workspaceId)
+                    .addKeyValue("slack.message.id", id)
+                    .addKeyValue("slack.message.change", change.name())
+                    .log("A Slack message was changed in Slack"));
+        });
+    }
+
+    /** How the author changed a stored message in Slack, as the erasure recovery manifest names it. */
+    enum MessageChange {
+        EDITED,
+        DELETED
     }
 
     /** One edit of a message: the message's own fields as edited, and {@code editedTs}, Slack's time of the edit. */
@@ -272,7 +288,7 @@ public class SlackIngestService {
             if (present
                     && DeliveryInbox.claim(step)
                     && messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt) > 0) {
-                logChange(workspaceId, channelId, ts, "EDITED");
+                logChange(workspaceId, channelId, ts, MessageChange.EDITED);
             }
             return !present;
         }));
@@ -288,7 +304,7 @@ public class SlackIngestService {
             // A base insert that won the race stored the old words, which this edit replaces.
             if (DeliveryInbox.claim(step)
                     && messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt) > 0)
-                logChange(workspaceId, channelId, ts, "EDITED");
+                logChange(workspaceId, channelId, ts, MessageChange.EDITED);
         });
     }
 
@@ -303,7 +319,7 @@ public class SlackIngestService {
                 && editedAt != null
                 && DeliveryInbox.claim("slack.message.refresh")
                 && messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt) > 0) {
-            logChange(workspaceId, channelId, ts, "EDITED");
+            logChange(workspaceId, channelId, ts, MessageChange.EDITED);
         }
     }
 

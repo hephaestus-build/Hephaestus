@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.NativeId;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -27,7 +29,9 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRep
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.RecordingPrivacyJournal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -73,6 +77,8 @@ class OutlineCollectionAdminServiceTest extends BaseUnitTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    private final RecordingPrivacyJournal journal = new RecordingPrivacyJournal();
+
     private OutlineCollectionAdminService service() {
         lenient().when(connection.getId()).thenReturn(CONNECTION_ID);
         lenient()
@@ -96,7 +102,8 @@ class OutlineCollectionAdminServiceTest extends BaseUnitTest {
                 outlineApiClient,
                 syncScheduler,
                 new TaskExecutorAdapter(Runnable::run),
-                eventPublisher);
+                eventPublisher,
+                journal);
     }
 
     private OutlineCollection registeredRow(MirrorState state, SyncStatus syncStatus) {
@@ -292,6 +299,16 @@ class OutlineCollectionAdminServiceTest extends BaseUnitTest {
         verify(collectionRepository).delete(row);
         // Running Hephaestus turns drop the erased documents from their context folders.
         verify(eventPublisher).publishEvent(new AgentContextChangedEvent(WS));
+        assertThat(journal.facts())
+                .containsExactly(new RecordingPrivacyJournal.Fact(
+                        PrivacyJournalKind.COLLECTION_ERASED,
+                        Map.of(
+                                "workspaceId",
+                                WS,
+                                "connectionId",
+                                CONNECTION_ID,
+                                "collectionId",
+                                new NativeId(COLLECTION_ID))));
     }
 
     @Test

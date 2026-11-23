@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
@@ -61,6 +62,8 @@ public class ConnectionService {
     private final ProviderResourceRepairs resourceRepairs;
     private final ProviderResourceRegistrations resourceRegistrations;
 
+    private final PrivacyJournal journal;
+
     public ConnectionService(
             ConnectionRepository connectionRepository,
             ConnectionAuditRepository auditRepository,
@@ -72,7 +75,9 @@ public class ConnectionService {
             Clock clock,
             ProviderResourceRepairs resourceRepairs,
             ProviderResourceRegistrations resourceRegistrations,
-            ActiveScmConnections activeScm) {
+            ActiveScmConnections activeScm,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.connectionRepository = connectionRepository;
         this.activeScm = activeScm;
         this.clock = clock;
@@ -712,7 +717,9 @@ public class ConnectionService {
         lifecycleEffects.publishLifecycleEvent(saved, current, req.next());
         if (req.next() == IntegrationState.UNINSTALLED && beforeLocalTransition != null)
             ConnectionErasures.record(
-                    Objects.requireNonNull(saved.getId()), saved.getWorkspace().getId());
+                    journal,
+                    Objects.requireNonNull(saved.getId()),
+                    saved.getWorkspace().getId());
         return saved;
     }
 

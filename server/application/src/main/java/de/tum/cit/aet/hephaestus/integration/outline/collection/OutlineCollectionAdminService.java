@@ -4,6 +4,9 @@ import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.NativeId;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -73,6 +76,8 @@ public class OutlineCollectionAdminService {
     private final AsyncTaskExecutor taskExecutor;
     private final ApplicationEventPublisher eventPublisher;
 
+    private final PrivacyJournal journal;
+
     public OutlineCollectionAdminService(
             ConnectionService connectionService,
             OutlineCollectionRepository collectionRepository,
@@ -80,7 +85,9 @@ public class OutlineCollectionAdminService {
             OutlineContentClient outlineApiClient,
             OutlineDocumentSyncScheduler syncScheduler,
             @Qualifier("applicationTaskExecutor") AsyncTaskExecutor taskExecutor,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.connectionService = connectionService;
         this.collectionRepository = collectionRepository;
         this.documentRepository = documentRepository;
@@ -223,6 +230,15 @@ public class OutlineCollectionAdminService {
         long erased = documentRepository.deleteByWorkspaceIdAndConnectionIdAndCollectionId(
                 workspaceId, install.connectionId(), collectionId);
         collectionRepository.delete(row);
+        journal.record(
+                PrivacyJournalKind.COLLECTION_ERASED,
+                Map.of(
+                        "workspaceId",
+                        workspaceId,
+                        "connectionId",
+                        install.connectionId(),
+                        "collectionId",
+                        new NativeId(collectionId)));
         eventPublisher.publishEvent(new AgentContextChangedEvent(workspaceId));
         String actor =
                 SecurityUtils.getCurrentAccountId().map(id -> "account " + id).orElse("system");

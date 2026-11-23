@@ -223,10 +223,23 @@ The harness delivers each event twice, and both events in swapped order. The lis
 A producer of a privacy fact calls the `PrivacyJournal` port in the transaction of the fact's cause.
 `PrivacyJournalKind` lists the kinds. Each kind removes data or ends a grant.
 
-A developer's deletion of their own message records `ENTRY_DELETED`.
-The other erasures that the [erasure recovery manifest](../admin/erasure-recovery) lists have no producer yet.
-The server's journal stores no fact yet, so an operator still writes the manifest by hand.
+Each erasure that the [erasure recovery manifest](../admin/erasure-recovery) lists records its kind where it happens.
+This includes an admin's erasure of a person by exact native identities alone, without an account.
+That erasure records `PERSON_ERASED` with the identities.
+The server records the fact when it admits the erasure request, with each identity's permanent erasure restriction.
+
+Facts are delivered at least once.
+A replay of a fact is idempotent.
+Each recovery step erases again only what is still there.
+Thus a duplicate fact, or a fact whose erasure found nothing, is harmless.
+For example, an account deletion records `ACCOUNT_ERASED` at the self-deletion and again at the purge.
+
+A ref holds an identifier or a state, never text.
+Use a number, a boolean, a UUID, an enum constant, a `NativeId`, a `PersonIdentity`, or a collection of these.
 Tests read the facts that a producer records from `RecordingPrivacyJournal`.
+It refuses a ref that is text.
+
+The server's journal stores no fact yet, so an operator still writes the manifest by hand.
 
 ### Context map
 

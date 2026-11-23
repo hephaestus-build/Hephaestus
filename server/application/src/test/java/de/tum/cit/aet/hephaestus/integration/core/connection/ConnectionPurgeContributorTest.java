@@ -80,7 +80,8 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
                 Clock.systemUTC(),
                 resourceRepairs,
                 resourceRegistrations,
-                new ActiveScmConnections(connectionRepository, mock(CredentialReader.class)));
+                new ActiveScmConnections(connectionRepository, mock(CredentialReader.class)),
+                (kind, refs) -> {});
         lenient().when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         lenient().when(connectionStrategy.kind()).thenReturn(IntegrationKind.GITHUB);
