@@ -137,6 +137,23 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("limit") int limit,
             @Param("agingSeconds") long agingSeconds);
 
+    /**
+     * The queued runs of these kinds and subjects that a claim would offer now, in no order: a replica wakes the
+     * {@code next} requests of these subjects that wait.
+     */
+    @WorkspaceAgnostic(
+            "A replica holds the waiting requests of every workspace; each woken request claims its own subject")
+    @Query(value = """
+            SELECT r.id AS id, r.workspace_id AS "workspaceId", r.kind AS kind,
+                   r.concurrency_key AS "concurrencyKey"
+            """ + CLAIMABLE + NOT_DEFERRED + """
+                AND r.kind IN (:kinds) AND r.workspace_id IN (:workspaceIds) AND r.concurrency_key IN (:subjectKeys)
+            """, nativeQuery = true)
+    List<DueRow> findDueOfSubjects(
+            @Param("kinds") Collection<String> kinds,
+            @Param("workspaceIds") Collection<Long> workspaceIds,
+            @Param("subjectKeys") Collection<String> subjectKeys);
+
     String LEASE = """
             UPDATE agent_run r SET state = 'LEASED', lease_epoch = r.lease_epoch + 1, hold_reason = NULL, deferred_until = NULL,
                    leased_until = clock_timestamp() + make_interval(secs =>""" + LEASE_SECONDS + """

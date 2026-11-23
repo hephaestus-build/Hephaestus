@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.DigestAdmission
 import de.tum.cit.aet.hephaestus.agent.gateway.AgentNextController;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
+import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentNextWaitsFixtures;
 import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentReviewDrainFixtures;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
@@ -314,8 +315,11 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 clock,
                 beans.getBean(ObjectMapper.class),
                 failures);
-        var controller =
-                new AgentNextController(sandboxes, List.of(failingKind), AgentReviewDrainFixtures.started(beans));
+        var controller = new AgentNextController(
+                sandboxes,
+                List.of(failingKind),
+                AgentReviewDrainFixtures.started(beans),
+                AgentNextWaitsFixtures.immediate(beans));
         var keys = AttemptKeyFixtures.keyring(AttemptSigningKey.generate());
         var issuer = new AttemptTokenIssuer(keys);
         var verifier = new AttemptTokenVerifier(keys, failures);

@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
+import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentNextWaitsFixtures;
 import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentReviewDrainFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
@@ -176,7 +177,10 @@ public final class ComposeRunGateway implements AutoCloseable {
         application.addInitializers(gatewayContext -> {
             var factory = gatewayContext.getBeanFactory();
             factory.registerSingleton("reviewComposeSandboxKind", kind);
-            factory.registerSingleton("agentNextController", new AgentNextController(sandboxes, List.of(kind), drain));
+            factory.registerSingleton(
+                    "agentNextController",
+                    new AgentNextController(
+                            sandboxes, List.of(kind), drain, AgentNextWaitsFixtures.immediate(context)));
             factory.registerSingleton(
                     "agentRunController", new AgentRunController(runs, sandboxes, transactions, List.of(kind)));
             factory.registerSingleton(

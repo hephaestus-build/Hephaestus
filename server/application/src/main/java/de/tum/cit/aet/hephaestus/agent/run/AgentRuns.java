@@ -311,6 +311,23 @@ public class AgentRuns {
                 .toList();
     }
 
+    /**
+     * The queued runs of these kinds and subjects that a claim would offer now, in no order. A run of a subject key in
+     * another of these workspaces may come back too; the caller matches each run to its own subject.
+     */
+    @Transactional(readOnly = true)
+    public List<DueRun> dueOf(Set<AgentRunKind> kinds, Collection<Long> workspaceIds, Collection<String> subjectKeys) {
+        if (kinds.isEmpty() || workspaceIds.isEmpty() || subjectKeys.isEmpty()) return List.of();
+        return runs
+                .findDueOfSubjects(kinds.stream().map(AgentRunKind::name).toList(), workspaceIds, subjectKeys)
+                .stream()
+                .map(row -> new DueRun(
+                        new AgentRunRef(row.getId(), row.getWorkspaceId()),
+                        AgentRunKind.valueOf(row.getKind()),
+                        row.getConcurrencyKey()))
+                .toList();
+    }
+
     /** The run of a workspace, in whatever state; locks nothing. */
     @Transactional(readOnly = true)
     public Optional<AgentRun> find(AgentRunRef run) {

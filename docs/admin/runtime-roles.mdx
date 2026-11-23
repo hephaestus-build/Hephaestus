@@ -66,6 +66,7 @@ No route of the Gateway reaches this port.
 | Requests from one connection address | 12,000 per minute | `429` with `Retry-After`, before the gateway reads a credential |
 | Requests of one sandbox | 680 per minute | `429` with `Retry-After` |
 | Open connections, `sandbox.gateway.maxConnections` | 4096 by default | Up to 100 more connections wait in the operating system's queue. The rest fail. |
+| Sandboxes that wait for their next run | Half of `sandbox.gateway.maxConnections` | The sandbox asks again after 2 seconds. |
 
 The gateway also answers `429` when the request bodies in flight would pass a quarter of the server's heap.
 If the gateway cannot read its rate-limit counts, it serves the call without a limit and counts `sandbox.gateway.limiter.errors`.
