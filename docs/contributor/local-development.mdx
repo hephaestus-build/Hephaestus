@@ -88,6 +88,11 @@ formatter with a different style would undo Spotless's Palantir formatting.
 
 ## Application server
 
+The local database uses the same roles as the Helm chart.
+`vp run dev:compose` sets up the roles with separate passwords from `server/.env`.
+Liquibase connects as `hephaestus_owner`.
+The running server connects as `hephaestus_app`.
+
 ### Spring profiles and local configuration
 
 For development stick to the `local` profile, which is the default. The other shipped profiles each
@@ -184,7 +189,9 @@ It is safe to run again: it never replaces a value that is set.
    | Value | Added | Why |
    |---|---|---|
    | `COMPOSE_PROJECT_NAME` | For a new database | The checkout's folder name and a hash of its path. A command in one checkout never acts on the containers of another. |
-   | `POSTGRES_PASSWORD` | For a new database | Compose creates the database with it. Spring Boot and the database scripts read it. |
+   | `POSTGRES_PASSWORD` | For a new database | Compose uses it to create the database administrator. |
+   | `SPRING_LIQUIBASE_PASSWORD` | Always | Liquibase uses it to connect as the database owner. |
+   | `SPRING_DATASOURCE_PASSWORD` | Always | The server uses it to connect as the application role. |
    | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`, `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` | For a new database | The server encrypts stored secrets with them and does not start without them. |
    | `WEBHOOK_SECRET` | Always | GitHub signs its webhooks with it ([Webhook receiver](#webhook-receiver)). |
 

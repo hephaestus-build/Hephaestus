@@ -84,12 +84,17 @@ await describe("the generated values of a checkout", async () => {
 			await writeFile(paths.envFile, "POSTGRES_PORT=15432");
 			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment: {} }), [
 				"POSTGRES_PASSWORD",
+				"SPRING_LIQUIBASE_PASSWORD",
+				"SPRING_DATASOURCE_PASSWORD",
 				...keyNames,
 				"WEBHOOK_SECRET",
 				"HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET",
 			]);
 			const values = await readEnvFile(paths.envFile);
 			assert.match(values.POSTGRES_PASSWORD ?? "", /^[0-9a-f]{48}$/u);
+			assert.match(values.SPRING_LIQUIBASE_PASSWORD ?? "", /^[0-9a-f]{48}$/u);
+			assert.match(values.SPRING_DATASOURCE_PASSWORD ?? "", /^[0-9a-f]{48}$/u);
+			assert.notEqual(values.SPRING_LIQUIBASE_PASSWORD, values.SPRING_DATASOURCE_PASSWORD);
 			for (const key of keyNames) {
 				assert.equal(Buffer.byteLength(values[key] ?? "", "utf8"), 32);
 			}
@@ -148,6 +153,8 @@ await describe("the generated values of a checkout", async () => {
 		await checkout(async (paths) => {
 			const environment = {
 				POSTGRES_PASSWORD: "from-shell",
+				SPRING_LIQUIBASE_PASSWORD: "owner-from-shell",
+				SPRING_DATASOURCE_PASSWORD: "app-from-shell",
 				HEPHAESTUS_SECURITY_ENCRYPTION_KEY: "from-shell",
 				HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: "from-shell",
 				WEBHOOK_SECRET: "from-shell",
@@ -185,7 +192,7 @@ await describe("the generated values of a checkout", async () => {
 		});
 	});
 
-	await test("existing data with its keys gets only the missing secrets", async () => {
+	await test("existing data with its keys gets separate database role passwords and missing secrets", async () => {
 		await checkout(async (paths) => {
 			await mkdir(paths.dataDirectory);
 			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
@@ -194,6 +201,8 @@ await describe("the generated values of a checkout", async () => {
 				`POSTGRES_PORT=15432\nPOSTGRES_PASSWORD=chosen\n${keyNames.map((key) => `${key}=${"k".repeat(32)}`).join("\n")}\n`,
 			);
 			assert.deepEqual(await ensureGeneratedValues({ ...paths, environment: {} }), [
+				"SPRING_LIQUIBASE_PASSWORD",
+				"SPRING_DATASOURCE_PASSWORD",
 				"WEBHOOK_SECRET",
 				"HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET",
 			]);

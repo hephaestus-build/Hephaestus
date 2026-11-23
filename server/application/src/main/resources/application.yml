@@ -74,7 +74,7 @@ spring:
 
     datasource:
         url: jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/hephaestus
-        username: ${DB_USERNAME:root}
+        username: hephaestus_app
         password: ${POSTGRES_PASSWORD}
         hikari:
             # pgJDBC then leaves PostgreSQL's DETAIL line, which quotes the rejected row values, out of every
@@ -938,6 +938,11 @@ spring:
     config:
         activate:
             on-profile: local
+    datasource:
+        password: ${SPRING_DATASOURCE_PASSWORD}
+    liquibase:
+        user: hephaestus_owner
+        password: ${SPRING_LIQUIBASE_PASSWORD}
     docker:
         compose:
             enabled: true
@@ -965,3 +970,14 @@ hephaestus:
         # The development extension key's id, so an unpacked dev build of extension/ can sign in locally.
         # A literal on purpose: the variable's fallback is the empty list everywhere it is forwarded.
         browser-extension-ids: ijkajblcbajjpjbknfgdiiiljipafiko
+
+---
+spring:
+    config:
+        activate:
+            on-profile: e2e
+    datasource:
+        password: ${SPRING_DATASOURCE_PASSWORD}
+    liquibase:
+        user: hephaestus_owner
+        password: ${SPRING_LIQUIBASE_PASSWORD}

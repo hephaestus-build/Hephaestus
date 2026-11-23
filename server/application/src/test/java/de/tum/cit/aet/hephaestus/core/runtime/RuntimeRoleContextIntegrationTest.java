@@ -111,7 +111,7 @@ class RuntimeRoleContextIntegrationTest {
     @EnumSource(Deployment.class)
     void shouldResolveEveryApplicationBeanForEachDeployment(Deployment process) {
         boolean agents = process.agents;
-        var database = PostgreSQLTestContainer.createMigratedDatabase(
+        var database = PostgreSQLTestContainer.createApplicationDatabase(
                 "runtime_role_" + process.name().toLowerCase(Locale.ROOT));
         int maximum = 16;
         var configuration = BootstrapUtils.resolveTestContextBootstrapper(
@@ -143,6 +143,7 @@ class RuntimeRoleContextIntegrationTest {
                         "spring.config.import=classpath:application-test.yml",
                         "spring.main.allow-bean-definition-overriding=false",
                         "spring.main.lazy-initialization=false",
+                        "spring.liquibase.enabled=false",
                         "spring.datasource.url=" + database.jdbcUrl(),
                         "spring.datasource.username=" + database.username(),
                         "spring.datasource.password=" + database.password(),

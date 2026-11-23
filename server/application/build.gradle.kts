@@ -710,8 +710,8 @@ val databasePort =
         .orElse(providers.environmentVariable("POSTGRES_PORT"))
         .orElse("5432")
 val databaseName = providers.environmentVariable("POSTGRES_DB").orElse("hephaestus")
-val databaseUser = providers.environmentVariable("POSTGRES_USER").orElse("root")
-val databasePassword = providers.environmentVariable("POSTGRES_PASSWORD")
+val databaseUser = providers.environmentVariable("POSTGRES_USER").orElse("hephaestus_owner")
+val databasePassword = providers.environmentVariable("SPRING_LIQUIBASE_PASSWORD")
 
 for ((taskName, command) in
     mapOf("liquibaseUpdate" to "update", "liquibaseDiff" to "diff-changelog")) {
@@ -735,7 +735,7 @@ for ((taskName, command) in
                 "LIQUIBASE_COMMAND_PASSWORD",
                 password.orNull
                     ?: throw GradleException(
-                        "POSTGRES_PASSWORD is not set. Start the local stack with `vp run dev:compose`, or export it."
+                        "Set SPRING_LIQUIBASE_PASSWORD to the password of the database migration role."
                     ),
             )
         }

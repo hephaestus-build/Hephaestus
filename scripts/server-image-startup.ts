@@ -24,6 +24,7 @@ import {
 	workload,
 } from "./kubernetes-chart-render-support.ts";
 import { serverBuildEnvironment } from "./lib/buildpack-descriptor.ts";
+import { applyDatabaseRoles, databaseRolePasswords } from "./lib/database-roles.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { sample } from "./lib/prometheus-text.ts";
 
@@ -58,6 +59,7 @@ const network = runId;
 // network of its own, and the runner reaches it there.
 const subnet = `10.231.${String(randomInt(256))}`;
 const postgres = `${runId}-postgres`;
+const credentials = databaseRolePasswords();
 /** Every container that this run started, removed at its end. */
 const started = [postgres];
 
@@ -135,16 +137,19 @@ interface Subject {
 	readonly database: string;
 }
 
-function databaseEnvironment(database: string): string[] {
+function databaseEnvironment(database: string, migrationMode = false): string[] {
 	return [
 		"--env",
 		"SPRING_LIQUIBASE_CONTEXTS=prod",
 		"--env",
 		`SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${database}`,
 		"--env",
-		"SPRING_DATASOURCE_USERNAME=root",
+		`SPRING_DATASOURCE_USERNAME=${migrationMode ? "hephaestus_owner" : "hephaestus_app"}`,
 		"--env",
-		"SPRING_DATASOURCE_PASSWORD=root",
+		`SPRING_DATASOURCE_PASSWORD=${migrationMode ? credentials.DATABASE_OWNER_PASSWORD : credentials.DATABASE_APP_PASSWORD}`,
+		...(migrationMode
+			? ["--env", `SPRING_LIQUIBASE_PASSWORD=${credentials.DATABASE_OWNER_PASSWORD}`]
+			: []),
 		"--env",
 		`HEPHAESTUS_SECURITY_ENCRYPTION_KEY=${SYSTEM_KEY}`,
 		"--env",
@@ -173,7 +178,7 @@ function migrate(chart: Chart, subject: Subject, label: string): void {
 			"SPRING_PROFILES_ACTIVE=e2e,migrate",
 			"--env",
 			"JAVA_TOOL_OPTIONS=-XX:AOTMode=on",
-			...databaseEnvironment(subject.database),
+			...databaseEnvironment(subject.database, true),
 			subject.image,
 		],
 		{ encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES, timeout: 600_000 },
@@ -362,6 +367,8 @@ async function main(): Promise<void> {
 		// The base image migrates a database of its own: this image's schema may have renamed what the base reads.
 		const base: Subject = { image: baseImage, database: "hephaestus_base" };
 		docker("exec", postgres, "createdb", "--username=root", base.database);
+		await applyDatabaseRoles(postgres, image.database, credentials);
+		await applyDatabaseRoles(postgres, base.database, credentials);
 		migrate(chart, image, "migrate");
 		migrate(chart, base, "migrate-base");
 

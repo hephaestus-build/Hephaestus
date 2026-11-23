@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -48,7 +48,14 @@ export function databaseMigration(localTimeout?: number): (port: number, passwor
 					`-PpostgresPort=${port}`,
 					"--quiet",
 				],
-				{ env: { ...process.env, POSTGRES_PASSWORD: password }, timeout: localTimeout },
+				{
+					env: {
+						...process.env,
+						POSTGRES_USER: "hephaestus_owner",
+						SPRING_LIQUIBASE_PASSWORD: password,
+					},
+					timeout: localTimeout,
+				},
 			);
 		};
 	}
@@ -63,6 +70,9 @@ export function databaseMigration(localTimeout?: number): (port: number, passwor
 	return (port, password) => {
 		const home = mkdtempSync(path.join(tmpdir(), "hephaestus-migration-"));
 		try {
+			writeFileSync(path.join(home, "liquibase.properties"), `password=${password}\n`, {
+				mode: 0o600,
+			});
 			// Liquibase lists `includeAll` directories, and it cannot list one inside the nested JAR:
 			// master.xml's `next/` include then applies nothing, without an error. So run from the
 			// archive's own classes and libraries, unpacked.
@@ -78,13 +88,17 @@ export function databaseMigration(localTimeout?: number): (port: number, passwor
 					"-cp",
 					["BOOT-INF/classes", "BOOT-INF/lib/*"].join(path.delimiter),
 					"liquibase.integration.commandline.Main",
+					"--defaultsFile=liquibase.properties",
 					"--changeLogFile=db/master.xml",
 					`--url=jdbc:postgresql://127.0.0.1:${port}/hephaestus`,
-					"--username=root",
-					`--password=${password}`,
+					"--username=hephaestus_owner",
 					"update",
 				],
-				{ cwd: home, env: { PATH: process.env.PATH }, timeout: MIGRATION_DEADLINE_MS },
+				{
+					cwd: home,
+					env: { PATH: process.env.PATH },
+					timeout: MIGRATION_DEADLINE_MS,
+				},
 			);
 		} finally {
 			rmSync(home, { recursive: true, force: true });

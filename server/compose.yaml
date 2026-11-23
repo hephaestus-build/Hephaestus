@@ -1,4 +1,5 @@
-# Local development stack. From the repo root: `vp run dev` completes server/.env (`vp run dev:env`), runs `docker compose up -d --wait`, then starts the server + webapp. Postgres is a bind mount (./postgres-data), so
+# Run `vp run dev` from the repository root. It fills server/.env, starts PostgreSQL and Mailpit,
+# sets up the database roles, and starts the server and webapp. PostgreSQL uses a bind mount, so
 # `docker compose down -v` won't clear it — use `vp run dev:reset` to reset the DB.
 #
 # Authentication is Hephaestus-native (no Keycloak — ADR 0017). For local login, register a
@@ -11,10 +12,12 @@ services:
     build:
       context: ../docker/postgres
     image: 'ghcr.io/hephaestus-build/postgres:dev'
+    labels:
+      org.springframework.boot.ignore: 'true'
     environment:
       POSTGRES_DB: hephaestus
       # PostgreSQL reads it only when it creates the database. `vp run dev` writes a random value to
-      # server/.env on first use, and Spring Boot reads the same file.
+      # server/.env on first use. The role setup uses it to connect as the local database administrator.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run `vp run dev:env` once, or set POSTGRES_PASSWORD in server/.env}
       POSTGRES_USER: root
     ports:
@@ -29,6 +32,23 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  postgres-roles:
+    image: 'ghcr.io/hephaestus-build/postgres:dev'
+    profiles: ['database-setup']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_OWNER_PASSWORD: ${SPRING_LIQUIBASE_PASSWORD:-}
+      DATABASE_APP_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-}
+    entrypoint: ['sh', '/roles/database-roles.sh', '-U', 'root', '-d', 'hephaestus']
+    networks:
+      - app-network
+    volumes:
+      - ../deploy/chart/hephaestus/files:/roles:ro
 
   # Catches every email the local server sends; nothing leaves the machine. UI on MAILPIT_UI_PORT.
   mailpit:

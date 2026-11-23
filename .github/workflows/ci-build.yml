@@ -117,11 +117,17 @@ jobs:
           POSTGRES_PASSWORD="$(openssl rand -hex 24)"
           echo "::add-mask::${POSTGRES_PASSWORD}"
           export POSTGRES_PASSWORD
+          SPRING_LIQUIBASE_PASSWORD="$(openssl rand -hex 24)"
+          SPRING_DATASOURCE_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::${SPRING_LIQUIBASE_PASSWORD}"
+          echo "::add-mask::${SPRING_DATASOURCE_PASSWORD}"
+          export SPRING_LIQUIBASE_PASSWORD SPRING_DATASOURCE_PASSWORD
           docker run -d --name postgres-db \
             -e POSTGRES_DB=hephaestus -e POSTGRES_PASSWORD -e POSTGRES_USER=root \
             -p 5432:5432 hephaestus-postgres:ci
           trap 'docker stop postgres-db 2>/dev/null; docker rm postgres-db 2>/dev/null' EXIT
           until docker exec postgres-db pg_isready -U root -d hephaestus; do sleep 2; done
+          node scripts/setup-database-roles.ts postgres-db hephaestus
 
           ISSUES_FOUND=()
 
@@ -196,15 +202,20 @@ jobs:
           POSTGRES_PASSWORD="$(openssl rand -hex 24)"
           echo "::add-mask::${POSTGRES_PASSWORD}"
           export POSTGRES_PASSWORD
+          SPRING_LIQUIBASE_PASSWORD="$(openssl rand -hex 24)"
+          SPRING_DATASOURCE_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::${SPRING_LIQUIBASE_PASSWORD}"
+          echo "::add-mask::${SPRING_DATASOURCE_PASSWORD}"
+          export SPRING_LIQUIBASE_PASSWORD SPRING_DATASOURCE_PASSWORD
           docker run -d --name postgres-db \
             -e POSTGRES_DB=hephaestus -e POSTGRES_PASSWORD -e POSTGRES_USER=root \
             -p 5432:5432 hephaestus-postgres:ci
           trap 'docker stop postgres-db 2>/dev/null; docker rm postgres-db 2>/dev/null' EXIT
           until docker exec postgres-db pg_isready -U root -d hephaestus; do sleep 2; done
+          node scripts/setup-database-roles.ts postgres-db hephaestus
 
           export SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/hephaestus"
-          export SPRING_DATASOURCE_USERNAME="root"
-          export SPRING_DATASOURCE_PASSWORD="${POSTGRES_PASSWORD}"
+          export SPRING_DATASOURCE_USERNAME="hephaestus_app"
           (cd server && ./gradlew :application:databaseTest -PpackagedServer=true)
 
       - name: Upload test results

@@ -28,7 +28,7 @@ class StartupBudgetIntegrationTest {
 
     // The bean budget starts after schema preparation.
     private static final PostgreSQLTestContainer.TestDatabase DATABASE =
-            PostgreSQLTestContainer.createMigratedDatabase("startup_budget");
+            PostgreSQLTestContainer.createApplicationDatabase("startup_budget");
 
     private static final String BEAN_INSTANTIATE = "spring.beans.instantiate";
 
@@ -39,6 +39,7 @@ class StartupBudgetIntegrationTest {
 
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
+        registry.add("spring.liquibase.enabled", () -> false);
         registry.add("spring.datasource.url", DATABASE::jdbcUrl);
         registry.add("spring.datasource.username", DATABASE::username);
         registry.add("spring.datasource.password", DATABASE::password);

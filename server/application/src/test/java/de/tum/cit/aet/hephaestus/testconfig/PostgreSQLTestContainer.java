@@ -167,6 +167,12 @@ public final class PostgreSQLTestContainer {
         return cloneDatabase(name, MIGRATED_TEMPLATE_DATABASE);
     }
 
+    public static synchronized TestDatabase createApplicationDatabase(String name) {
+        var database = createMigratedDatabase(name);
+        applyDatabaseRoles(name);
+        return asApplication(database);
+    }
+
     public static synchronized TestDatabase copyDatabase(String name, TestDatabase source) {
         validateDatabaseName(name);
         String templateName = source.jdbcUrl().substring(source.jdbcUrl().lastIndexOf('/') + 1);
