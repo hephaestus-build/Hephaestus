@@ -9,6 +9,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ResultHistoryQuery {
+    int MAX_LIMIT = 1000;
+
     List<ResultHistoryEntry> forDeveloper(long workspaceId, long developerAccountId, Instant since, int limit);
 
     List<ResultHistoryEntry> forItem(long workspaceId, long itemId, long practiceId, int limit);

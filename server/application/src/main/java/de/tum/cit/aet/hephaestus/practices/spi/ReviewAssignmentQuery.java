@@ -64,4 +64,8 @@ public interface ReviewAssignmentQuery {
      * item. A pair whose review is not in the workspace has no entry.
      */
     Map<ReviewedItem, Recorded> recorded(long workspaceId, long developerId, Collection<ReviewedItem> reviewed);
+
+    /** Recorded status of the account's own item reviews on work permitted for conversational use. */
+    Map<ReviewedItem, Recorded> recordedForDeveloper(
+            long workspaceId, long developerId, Collection<ReviewedItem> reviewed);
 }

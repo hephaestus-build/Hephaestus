@@ -1,11 +1,14 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
+import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
@@ -15,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -46,6 +50,8 @@ public class ReviewAssignmentQueryService implements ReviewAssignmentQuery {
     private final ProductItemQuery itemQuery;
     private final JsonMapper json;
     private final FeedbackModeQuery feedbackModes;
+    private final AccountMembershipQuery memberships;
+    private final ResultSourceAuthorization sourceAccess;
 
     @Override
     public List<ReviewAssignmentId> executable(long workspaceId, UUID reviewId, long itemId) {
@@ -220,6 +226,18 @@ public class ReviewAssignmentQueryService implements ReviewAssignmentQuery {
      */
     @Override
     public Map<ReviewedItem, Recorded> recorded(long workspaceId, long developerId, Collection<ReviewedItem> reviewed) {
+        return recorded(workspaceId, developerId, reviewed, false);
+    }
+
+    @Override
+    public Map<ReviewedItem, Recorded> recordedForDeveloper(
+            long workspaceId, long developerId, Collection<ReviewedItem> reviewed) {
+        if (reviewed.isEmpty() || !memberships.isActiveVisibleMember(workspaceId, developerId)) return Map.of();
+        return recorded(workspaceId, developerId, reviewed, true);
+    }
+
+    private Map<ReviewedItem, Recorded> recorded(
+            long workspaceId, long developerId, Collection<ReviewedItem> reviewed, boolean requireReadableOwner) {
         if (reviewed.isEmpty()) return Map.of();
         var asked = List.copyOf(Set.copyOf(reviewed));
         Map<UUID, Review> parents = reviews
@@ -235,10 +253,19 @@ public class ReviewAssignmentQueryService implements ReviewAssignmentQuery {
                 .stream()
                 .collect(Collectors.groupingBy(row -> new ReviewedItem(row.getReviewId(), row.getItemId())));
         var recorded = new HashMap<ReviewedItem, Recorded>();
+        var permitted = new HashMap<Long, Boolean>();
         for (var key : asked) {
             var review = parents.get(key.reviewId());
             var members = rows.get(key);
             if (review == null || members == null) continue;
+            if (requireReadableOwner
+                    && (review.getKind() != ReviewKind.ITEM
+                            || review.getOrigin() == ReviewOrigin.TRIAL
+                            || members.stream().noneMatch(row -> about(row, developerId))
+                            || !permitted.computeIfAbsent(
+                                    key.itemId(),
+                                    id -> sourceAccess.permitsItem(
+                                            workspaceId, id, SourceUsePurpose.CONVERSATIONAL_MENTORING)))) continue;
             recorded.put(
                     key,
                     new Recorded(
@@ -247,6 +274,12 @@ public class ReviewAssignmentQueryService implements ReviewAssignmentQuery {
                             review.getKind() == ReviewKind.ITEM ? counts(members, developerId) : null));
         }
         return Map.copyOf(recorded);
+    }
+
+    private static boolean about(ReviewItem row, long developerId) {
+        return attribution(row.getDetail())
+                .filter(named -> Long.valueOf(developerId).equals(named.developerId()))
+                .isPresent();
     }
 
     /**
