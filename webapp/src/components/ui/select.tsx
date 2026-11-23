@@ -50,7 +50,7 @@ function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
 
 /**
  * `pending` diverges from the registry: a `<Spinner />` shows before the value once the change has
- * taken `spin-delay`'s second, as `Button`'s `pending` does and for the reason `webapp/DESIGN.md`
+ * taken `usePendingSpinner`'s second, as `Button`'s `pending` does and for the reason `webapp/DESIGN.md`
  * § Loading and errors gives. It shows progress only and does not block a new choice: the `Select`
  * root owns `disabled`.
  */
