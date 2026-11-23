@@ -11,7 +11,7 @@ Read it if you add a test case, run a release, or review how Hephaestus measures
 [Feedback quality evals](./feedback-quality-evals.mdx) covers the quality of practice reviews. This page covers the conversation and the contact.
 
 :::note
-This page describes a proposed design. The planned repository tasks `eval:golden` and `eval:simulate` do not exist in the current release.
+This page describes a proposed design. The planned repository tasks `eval:golden` and `eval:simulate`, the scenario driver and the provider fakes do not exist in the current release.
 The research program and its datasets exist. The design adds the rules that the last section marks as planned.
 :::
 
@@ -24,13 +24,21 @@ Nothing runs continuously, and nothing needs a paid rating budget.
 Two rules hold for every layer:
 
 - **No engagement metric is a target.** Reply rates and **Not now** rates are never goals.
-- **No staff or product surface measures a person.** An aggregate that staff see needs at least 5 people. Per-person sequences exist only in research datasets that each person allowed.
+- **No staff or product surface measures a person.** Each figure that people outside the person see has a floor:
+
+  | Figure | Who sees it | Floor | Owner |
+  | --- | --- | --- | --- |
+  | A staff-visible aggregate | Workspace staff | 5 people | [Mentoring framework](./mentoring-framework.mdx) |
+  | An instance-level online quality signal | The maintainers and the operator | 20 people | ADR 0142 |
+  | A research dataset release | A named research recipient | 20 participants, with the delivery experiment exception | ADR 0141 |
+
+  Per-person sequences exist only in research datasets that each person allowed.
 
 ## Four layers
 
 | Layer | What it checks | When it runs |
 | --- | --- | --- |
-| Deterministic CI | Unit, integration and architecture tests. The 20 must-pass scenarios with a scripted model. Exact canary detectors for leaks across people. | On every pull request |
+| Deterministic CI | Unit, integration and architecture tests. The 20 must-pass scenarios on the packaged server with every integration faked and a scripted model. Exact detectors for leaks across people. | On every pull request without a sandbox. In the merge queue with a sandbox. |
 | Release evaluation cases | 20 to 50 cases from real failures, on the reference local model | By hand, before each release |
 | Shared conversations | Conversations that people chose to share with the maintainers | By hand, as they arrive |
 | The contact simulation | Contact timing and frequency over simulated weeks | By hand, before each release |
@@ -38,11 +46,30 @@ Two rules hold for every layer:
 Scenario replay is a research tool beside these layers. It is not a layer and not a release gate.
 ADR 0142 (proposed in #4868) owns the layers.
 
+## How evaluation is built
+
+Hephaestus evaluates itself with [Ichnaea](https://github.com/hephaestus-build/ichnaea), our evaluation framework, and with a scenario driver of its own.
+
+| Part | Owner | What it does |
+| --- | --- | --- |
+| Scenario | Hephaestus, inside an Ichnaea case | The people, workspaces and records, and a timeline of provider events, messages and changes |
+| System under test | Hephaestus | The packaged server, with fakes for GitHub, GitLab, Slack, Outline, web push and the model, on a controlled clock |
+| Settle barrier | Hephaestus | Ends a step only when the scenario's work is done |
+| Observation stream | Hephaestus | The ordered events that the server emitted, and what reached each fake |
+| Detectors and rubric | Hephaestus | Exact checks for leaks, reads and sends, and the one rubric |
+| Plans, decisions and reports | Ichnaea | Arms, replicates, pass^k, paired decisions and reports |
+
+One scenario format serves the must-pass scenarios, the release cases, the contact simulation and scenario replay.
+A pull request runs the scenarios as tests. Every other run hands the same measure values to Ichnaea.
+[Feedback quality evaluation](./feedback-quality-evals.mdx) describes the composer decision, which already runs on Ichnaea.
+
 ### Deterministic CI
 
-A scenario harness runs two people in two team workspaces and a personal space.
-The provider events and the model are scripted, so each run gives the same result.
-Exact canary detectors plant a unique string in one person's record and fail the suite if it appears anywhere for another person.
+Each scenario runs on the packaged server with every integration faked.
+The provider events and the model are scripted. Each step waits until the server has finished its work, so each run gives the same result.
+Exact detectors plant a unique string in each person's records and fail the scenario if it reaches anyone who may not read it.
+
+Scenarios without a sandbox run on each pull request. Scenarios with a conversation turn or a review need a sandbox on Kubernetes. They run in the merge queue.
 
 The same CI suites hold the boundaries of the composer:
 
@@ -62,12 +89,12 @@ The release evaluation cases can. Each case comes from a real failure.
 | --- | --- |
 | Size | 20 to 50 cases, single turn and short multi-turn |
 | Source | Each case records its source failure: a shared conversation, a bug report or a failed scenario. A case with no source fails the set check. |
-| First cases | Failures of the existing conversation, failed harness scenarios, and the maintainers' own use |
+| First cases | Failures of the existing conversation, failed scenarios, and the maintainers' own use |
 | Model | The reference local model that the release plan pins |
 | Rubric | The one shared rubric (below) |
-| Judge | A rubric judge from a different model family grades each run. A person checks a sample of the grades. |
-| Pass rule | Each case runs k times and passes only when all k runs pass (pass^k). |
-| Configuration | The release plan pins the reference model, k, the judge and the spot-check rule before any grading (ADR 0142). |
+| Judge | A rubric judge from a different model family grades each run. The release owner checks a sample of the grades. A judged hard fail is evidence for review. |
+| Pass rule | Each case registers its pass rule and k first. It passes only when all k runs pass (pass^k). Ichnaea reports pass^k and pass@k. |
+| Configuration | The release plan pins the reference model, the judge and the spot-check rule before any grading (ADR 0142). |
 | Required cases | A sycophancy case with memory, and a case for the required Critical and Major problems |
 
 ### One shared rubric
@@ -97,18 +124,18 @@ Before the next release, the planned `eval:golden` task runs it k times on the r
 ## Scenario replay
 
 Scenario replay is a research tool for the usefulness of guidance. It is not an evaluation layer and not a release gate.
-It runs on the controlled clock and the fake providers of the deterministic harness.
+It runs the packaged server on the controlled clock with every integration faked, as the must-pass scenarios do.
 
 | Part | What it does |
 | --- | --- |
-| Importer | Turns a pseudonymized slice of a past GitHub or GitLab project into events in time order. No step reads an event that is later than its own time. |
-| Frozen reactions | A simulated developer supplies only the replies that the records lack. Each reaction is written once, then frozen as a scripted input. |
-| Switches | Turn goals, memory and history off for one run, so a run can show what each one adds. |
-| Output bundle | Records every copy, message, card state and record write. It also records every silence, with its reason. |
-| Run fingerprint | The configuration digest of the run (practice versions, modes, destinations, help defaults, model assignment and prompt digest) with the runtime fingerprint. A recording of the model calls is kept apart, for an exact rerun. |
+| Importer | Turns a pseudonymized slice of a past GitHub or GitLab project into events in time order. No read path shows an event before its time. |
+| Reactions | Recorded from the archive where it has them, otherwise generated once and frozen. Each says which it is. |
+| Switches | Arm settings that turn goals, memory and history off. The stream shows that each took effect. |
+| Output | The ordered observation stream: every copy, message, card state and record write, and every silence with its reason |
+| Where it runs | In the approved research environment, with a local model by default. Experts review blinded transcripts there. |
 
-The rubric above grades the output bundle.
-A failed replay scenario becomes a release evaluation case.
+The rubric above grades the output.
+A failure found in replay becomes a release evaluation case only as a synthetic reproduction.
 Replay results show the quality of guidance, not that a person learned.
 
 ## Shared conversations
@@ -152,7 +179,7 @@ The report and its docs never call the simulation calibrated, because it is not.
 
 A maintainer runs the release check by hand on the packaged artifact of the candidate, and signs it in the release plan.
 
-1. The deterministic CI suites are green. They include the harness, the canary detectors and the 20 scenarios. They also include the composer's isolation, required-problem and fairness tests.
+1. The deterministic CI suites are green, including the scenarios with a sandbox from the merge queue. They include the composer's isolation, required-problem and fairness tests.
 2. The release evaluation cases pass on the reference local model. A person checked a sample of the judge's grades.
 3. One contact simulation run shows zero hard-rule breaches, and no regression in its other counts.
 4. The restore drill, the migration drill, the external-effect drill and the Slack recovery check pass on the candidate.
@@ -170,29 +197,30 @@ When the check ships, this list moves to `release-management.mdx`, its one home 
 Twenty scenarios define the behavior that must hold.
 Each one becomes a test with a scripted model on the packaged artifact, and all 20 pass before release.
 The building work adds each test and its owner to this map.
+The **Tier** column says what a scenario needs: the packaged server alone (`packaged`), a sandbox on Kubernetes (`sandbox`), or one test of each (`both`).
 
-| Scenario | What must hold | Decided in |
-| --- | --- | --- |
-| First contact | Answer first. Workspace name, privacy line and AI label. No card before the answer. | ADR 0131 |
-| Setting a goal in own words | One save with **Undo**, and the follow-up offer beside it | ADR 0132 |
-| A result: available, shown or notified | The card at once. At most one message for each background turn. | ADR 0150, ADR 0120 |
-| The check before review | A private check on request or by agreement, with one result panel | ADR 0120, ADR 0133 |
-| The agreed follow-up | An explicit scope for each agreement, and its own notification kind | ADR 0133 |
-| Disagreement with feedback | Hold or yield on evidence. Required problems stay on the work. | ADR 0121 |
-| A wrong observation | **Disagree** with a reason, acknowledged at once | Current release |
-| A stressed person, and stop | A fixed reply with support resources. Pause applies at once. | ADR 0139 |
-| A manager asks about a person | The same refusal whether or not data exists | ADR 0125 |
-| Two employers and a personal project | Row-level security, tenancy, and only own words or closed fields travel | ADR 0126, ADR 0127, ADR 0129 |
-| Leaving a job | A leaving window, **Take along**, and the portable download | ADR 0126, ADR 0129 |
-| A closed client workspace | **Closed** blocks all transfer | ADR 0129 |
-| A notification and a quick reply | Web push with the fetched notice line, and a reply on the web | ADR 0139 |
-| A Slack direct message | That workspace's Slack-visible entries. Personal records only at the **Full** detail level, after the export notice. | ADR 0123 |
-| An admin turns off memory | Workspace policy narrows what the person's records reach | ADR 0132 |
-| Restore from backup | Erasures and revocations are applied again from the journal | ADR 0140 |
-| Erasure of an account | The cascade, and the journal write before the acknowledgement | ADR 0128, ADR 0140 |
-| Migration from the release candidate | A stopped cutover that keeps the visibility of existing content | Not decided yet |
-| Prompt injection in repository content | Content has no authority. The composer has nothing private to disclose. | ADR 0121 |
-| Extracting another person's data | Row-level security, 404 for guessed IDs, canary detectors | ADR 0127 |
+| Scenario | What must hold | Decided in | Tier |
+| --- | --- | --- | --- |
+| First contact | Answer first. Workspace name, privacy line and AI label. No card before the answer. | ADR 0131 | sandbox |
+| Setting a goal in own words | One save with **Undo**, and the follow-up offer beside it | ADR 0132 | sandbox |
+| A result: available, shown or notified | The card at once. At most one message for each background turn. | ADR 0150, ADR 0120 | sandbox |
+| The check before review | A private check on request or by agreement, with one result panel | ADR 0120, ADR 0133 | sandbox |
+| The agreed follow-up | An explicit scope for each agreement, and its own notification kind | ADR 0133 | sandbox |
+| Disagreement with feedback | Hold or yield on evidence. Required problems stay on the work. | ADR 0121 | sandbox |
+| A wrong observation | **Disagree** with a reason, acknowledged at once | Current release | packaged |
+| A stressed person, and stop | A fixed reply with support resources. Pause applies at once. | ADR 0139 | sandbox |
+| A manager asks about a person | The same refusal whether or not data exists | ADR 0125 | both |
+| Two employers and a personal project | Row-level security, tenancy, and only own words or closed fields travel | ADR 0126, ADR 0127, ADR 0129 | packaged |
+| Leaving a job | A leaving window, **Take along**, and the portable download | ADR 0126, ADR 0129 | packaged |
+| A closed client workspace | **Closed** blocks all transfer | ADR 0129 | packaged |
+| A notification and a quick reply | Web push with the fetched notice line, and a reply on the web | ADR 0139 | sandbox |
+| A Slack direct message | That workspace's Slack-visible entries. Personal records only at the **Full** detail level, after the export notice. | ADR 0123 | sandbox |
+| An admin turns off memory | Workspace policy narrows what the person's records reach | ADR 0132 | sandbox |
+| Restore from backup | Erasures and revocations are applied again from the journal | ADR 0140 | packaged |
+| Erasure of an account | The cascade, and the journal write before the acknowledgement | ADR 0128, ADR 0140 | packaged |
+| Migration from the release candidate | A stopped cutover that keeps the visibility of existing content | Not decided yet | packaged |
+| Prompt injection in repository content | Content has no authority. The composer has nothing private to disclose. | ADR 0121 | sandbox |
+| Extracting another person's data | Row-level security, 404 for guessed IDs, canary detectors | ADR 0127 | both |
 
 ### Freeze gates
 

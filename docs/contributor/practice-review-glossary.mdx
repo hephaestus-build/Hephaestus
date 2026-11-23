@@ -394,7 +394,10 @@ The conversation agent, the composer and the review agent are agents. Hephaestus
 | **Release evaluation cases** | 20 to 50 cases from real failures that run on the reference local model before each release, scored pass^k. | ADR 0142 (#4868) |
 | **Contact simulation** | The offline run of simulated people over weeks that counts breaches of the contact rules. It checks timing and frequency only. | ADR 0142 (#4868) |
 | **Release check** | The manual checklist that a maintainer runs and signs on the packaged artifact of a release candidate. | ADR 0142 (#4868) |
-| **Scenario replay** | A research tool that replays a pseudonymized past project in time order, with frozen reactions and switches for goals, memory and history. It is not an evaluation layer and not a release gate. | ADR 0142 (#4868) |
+| **Scenario replay** | A research tool that replays a pseudonymized past project in time order, with recorded or frozen reactions and switches for goals, memory and history. It is not an evaluation layer and not a release gate. | ADR 0142 (#4868) |
+| **Scenario** | One Ichnaea case that holds a world and a timeline for the packaged server. The must-pass scenarios, the release cases, the contact simulation and scenario replay share its format. | ADR 0142 (#4868) |
+| **Settle barrier** | The server's signal that a scenario step is done: no run, inbox event, due item or outbox action of the scenario is pending. | ADR 0142 (#4868) |
+| **Observation stream** | The ordered events that the server emitted during a scenario, and what reached each fake. Scorers read only this stream. | ADR 0142 (#4868) |
 
 [Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx) owns the mechanics of threads, inbox items and turns.
 The planned **Turn** widens the runtime **Turn**: a turn can run without a person's question, and a thread is the unit of order.
