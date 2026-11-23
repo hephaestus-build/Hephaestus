@@ -1,0 +1,2 @@
+# PR #5035 opens AboutRole under ADR 0103. Generated clients accept new role codes.
+in API GET /workspaces/{workspaceSlug}/practices/definition-options removed the enum constraint from the `itemTypes/items/aboutRoles/items/` response property for the response status `200`
