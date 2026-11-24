@@ -87,8 +87,7 @@ public class ModelEgressConfig {
     @Bean
     RestClientCustomizer modelEgressRestClient() {
         return builder -> builder.requestInterceptor((request, body, execution) -> {
-            if (isModelRequest(request.getMethod(), body))
-                throw refused(request.getURI());
+            if (isModelRequest(request.getMethod(), body)) throw refused(request.getURI());
             return execution.execute(request, body);
         });
     }
@@ -96,8 +95,7 @@ public class ModelEgressConfig {
     @Bean
     RestTemplateCustomizer modelEgressRestTemplate() {
         return template -> template.getInterceptors().add((request, body, execution) -> {
-            if (isModelRequest(request.getMethod(), body))
-                throw refused(request.getURI());
+            if (isModelRequest(request.getMethod(), body)) throw refused(request.getURI());
             return execution.execute(request, body);
         });
     }
@@ -137,8 +135,7 @@ public class ModelEgressConfig {
                 byte[] bytes = new byte[joined.readableByteCount()];
                 joined.read(bytes);
                 DataBufferUtils.release(joined);
-                if (isModelRequest(HttpMethod.POST, bytes))
-                    return Mono.error(refused(url));
+                if (isModelRequest(HttpMethod.POST, bytes)) return Mono.error(refused(url));
                 return super.writeWith(Mono.just(bufferFactory().wrap(bytes)));
             });
         }
