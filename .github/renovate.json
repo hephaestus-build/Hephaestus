@@ -310,6 +310,11 @@
 			"enabled": false
 		},
 		{
+			"description": "The Scorecard action and the image it runs move in their own pull request, where scripts/check-scorecard-image.ts proves the new image pulls for linux/amd64 before it can merge",
+			"matchPackageNames": ["ossf/scorecard-action", "ghcr.io/ossf/scorecard-action"],
+			"groupName": "OpenSSF Scorecard"
+		},
+		{
 			"description": "Lock file maintenance spans every package file, so the practice-runtime approval would hold it. It refreshes locked versions within the declared ranges, so it runs on the weekly schedule. Last, so no earlier approval rule overrides it",
 			"matchUpdateTypes": ["lockFileMaintenance"],
 			"dependencyDashboardApproval": false
@@ -403,6 +408,15 @@
 			"managerFilePatterns": ["/^\\.github/workflows/semgrep\\.yml$/"],
 			"matchStrings": [
 				"SEMGREP_IMAGE: (?<depName>semgrep/semgrep):(?<currentValue>[0-9.]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+			],
+			"datasourceTemplate": "docker"
+		},
+		{
+			"description": "Track the image that the pinned Scorecard action runs",
+			"customType": "regex",
+			"managerFilePatterns": ["/^\\.github/workflows/scorecard\\.yml$/"],
+			"matchStrings": [
+				"SCORECARD_IMAGE: (?<depName>ghcr\\.io/ossf/scorecard-action):(?<currentValue>v[0-9.]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
 			],
 			"datasourceTemplate": "docker"
 		},
