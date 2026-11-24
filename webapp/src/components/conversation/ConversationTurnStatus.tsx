@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { useSpinDelay } from "spin-delay";
 
 import type { ConversationTurn } from "@/api/types.gen";
 import { HephaestusMark } from "@/components/brand/HephaestusMark";
 import { Button } from "@/components/ui/button";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { hasText } from "@/lib/text";
+import { useSpinDelay } from "@/lib/use-spin-delay";
 
 import { ConversationMessage } from "./ConversationMessage";
 

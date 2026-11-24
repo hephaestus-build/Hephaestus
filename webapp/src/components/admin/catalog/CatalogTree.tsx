@@ -1,5 +1,4 @@
 import { GripVertical, MoreHorizontal } from "lucide-react";
-import { useSpinDelay } from "spin-delay";
 
 import type { CatalogGroup, CatalogPractice } from "@/api/types.gen";
 import {
@@ -29,6 +28,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { itemKindLabel } from "@/lib/item-kinds";
 import { hasText } from "@/lib/text";
+import { useSpinDelay } from "@/lib/use-spin-delay";
 
 import { catalogGroupLevel, catalogPracticeLevel } from "./catalog-search";
 import { CatalogEntryBadges } from "./CatalogEntryBadges";

@@ -19,8 +19,8 @@ import {
 } from "lucide-react";
 // oxlint-disable-next-line no-restricted-imports -- TanStack Table keys its caches on identity, which the compiler memoises as an optimisation rather than promises; each `useMemo` below says what breaks without it.
 import { type ComponentProps, type ReactElement, useMemo, useRef, useState } from "react";
-import { useSpinDelay } from "spin-delay";
 import { TableRowsSkeleton } from "@/components/common/TableRowsSkeleton";
+import { useSpinDelay } from "@/lib/use-spin-delay";
 
 import type { TeamInfo } from "@/api/types.gen";
 import { ACCOUNT_STATUS_LABELS, accountStatusLabel } from "@/components/admin/users/account-labels";
