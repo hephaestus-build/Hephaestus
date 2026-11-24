@@ -19,8 +19,12 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSourceAccess;
+import de.tum.cit.aet.hephaestus.practices.result.PracticeAssessments;
+import de.tum.cit.aet.hephaestus.practices.spi.DeveloperPracticeStandings;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -50,11 +54,15 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
     private final ItemSourceAccess source = mock(ItemSourceAccess.class);
     private final RegisteredItemLabels labels = mock(RegisteredItemLabels.class);
 
+    private final PracticeAssessments assessments = new PracticeAssessments(
+            mock(ResultHistoryQuery.class), assignments, labels, mock(DeveloperPracticeStandings.class));
+
     private ReviewAttemptsContentSource attempts() {
         when(source.kinds()).thenReturn(Set.of(RuntimeReviewTestData.ITEM.kind()));
         when(source.permits(RuntimeReviewTestData.ITEM, SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(true);
-        return new ReviewAttemptsContentSource(jobs, assignments, List.of(source), labels, new JsonMapper());
+        return new ReviewAttemptsContentSource(
+                jobs, assignments, assessments, List.of(source), labels, new JsonMapper());
     }
 
     private final Map<UUID, List<ReviewAssignmentQuery.Retained>> attribution = new HashMap<>();
@@ -187,13 +195,63 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         listed(waiting);
         when(labels.labels(eq(1L), any())).thenReturn(Map.of());
         var reviewed = new ReviewAssignmentQuery.ReviewedItem(RuntimeReviewTestData.REVIEW, ASSIGNMENT.itemId());
-        when(assignments.recorded(1L, 5L, Set.of(reviewed)))
+        when(assignments.recordedForDeveloper(1L, 5L, Set.of(reviewed)))
                 .thenReturn(Map.of(reviewed, new ReviewAssignmentQuery.Recorded(status, null, null)));
 
         var row = attempts().overview(1, 5).path("attempts").path(0);
 
         assertThat(row.path("status").asString()).isEqualTo(waiting.getStatus().name());
         assertThat(row.path("reviewStatus").asString()).isEqualTo(status.name());
+    }
+
+    @Test
+    void shouldShowCouldNotCheckWithoutAnOutcomeWhenCaptureFails() {
+        var ref = new ItemRef(1, ASSIGNMENT.itemId(), new ItemKind("scm.pull_request"), 42L, null, null);
+        var run = RuntimeReviewTestData.job();
+        ReviewJobFixtures.withStatus(run, ReviewJobStatus.FAILED);
+        attributed(run, List.of(new ReviewAssignmentQuery.Retained(ASSIGNMENT, ref, 5L)));
+        listed(run);
+        when(source.kinds()).thenReturn(Set.of(ref.kind()));
+        when(source.permits(ref, SourceUsePurpose.CONVERSATIONAL_MENTORING)).thenReturn(true);
+        var reviewed = new ReviewAssignmentQuery.ReviewedItem(run.getReviewId(), ASSIGNMENT.itemId());
+        when(assignments.recordedForDeveloper(1L, 5L, Set.of(reviewed)))
+                .thenReturn(Map.of(
+                        reviewed,
+                        new ReviewAssignmentQuery.Recorded(
+                                ReviewStatus.FAILED,
+                                ReviewStopReason.PREPARATION_FAILED,
+                                new ReviewAssignmentQuery.AssignmentCounts(1, 0, 0, 1, 0))));
+        var reader = new ReviewAttemptsContentSource(
+                jobs, assignments, assessments, List.of(source), labels, new JsonMapper());
+        var detail = reader.read(1, 5, "inputs/context/review_attempts/pull_request/42.json")
+                .orElseThrow();
+
+        for (var payload : List.of(reader.overview(1, 5), detail)) {
+            var row = payload.path("attempts").path(0);
+            assertThat(row.path("checkStatus").asString()).isEqualTo("COULD_NOT_CHECK");
+            assertThat(row.has("outcome")).isFalse();
+            assertThat(row.has("problems")).isFalse();
+        }
+    }
+
+    @Test
+    void shouldKeepACompletedPracticeWhenAnotherPracticeCouldNotRun() {
+        var run = RuntimeReviewTestData.job();
+        ReviewJobFixtures.withStatus(run, ReviewJobStatus.COMPLETED);
+        attributed(run, List.of(about(5L)));
+        listed(run);
+        var reviewed = new ReviewAssignmentQuery.ReviewedItem(run.getReviewId(), ASSIGNMENT.itemId());
+        when(assignments.recordedForDeveloper(1L, 5L, Set.of(reviewed)))
+                .thenReturn(Map.of(
+                        reviewed,
+                        new ReviewAssignmentQuery.Recorded(
+                                ReviewStatus.PARTIAL,
+                                ReviewStopReason.READINESS_REFUSED,
+                                new ReviewAssignmentQuery.AssignmentCounts(2, 1, 0, 1, 0))));
+
+        var row = attempts().overview(1, 5).path("attempts").path(0);
+        assertThat(row.path("assignmentCounts").path("judged").asInt()).isEqualTo(1);
+        assertThat(row.has("checkStatus")).isFalse();
     }
 
     @Test
@@ -209,7 +267,7 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         listed(first, retry, unreadable);
         when(labels.labels(eq(1L), any())).thenReturn(Map.of());
         var reviewed = new ReviewAssignmentQuery.ReviewedItem(RuntimeReviewTestData.REVIEW, ASSIGNMENT.itemId());
-        when(assignments.recorded(
+        when(assignments.recordedForDeveloper(
                         1L,
                         5L,
                         Set.of(
@@ -237,7 +295,7 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         assertThat(rows.path(2).has("reviewStatus"))
                 .as("the run stays listed; its review's end is not guessed from its own state")
                 .isFalse();
-        verify(assignments, times(1)).recorded(anyLong(), anyLong(), any());
+        verify(assignments, times(1)).recordedForDeveloper(anyLong(), anyLong(), any());
     }
 
     @Test
@@ -275,7 +333,8 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         attributed(nobody, List.of(about(null)));
 
         // No source is consulted: the developer filter comes first.
-        var payload = new ReviewAttemptsContentSource(jobs, assignments, List.of(source), labels, new JsonMapper())
+        var payload = new ReviewAttemptsContentSource(
+                        jobs, assignments, assessments, List.of(source), labels, new JsonMapper())
                 .overview(1, 5);
 
         assertThat(payload.path("attempts")).isEmpty();
@@ -290,7 +349,8 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         var unknown = RuntimeReviewTestData.job();
         listed(unknown);
         attributed(unknown, List.of());
-        var attempts = new ReviewAttemptsContentSource(jobs, assignments, List.of(source), labels, new JsonMapper());
+        var attempts = new ReviewAttemptsContentSource(
+                jobs, assignments, assessments, List.of(source), labels, new JsonMapper());
 
         var answer = attempts.read(1, 5, "inputs/context/review_attempts/pull_request/42.json");
 
@@ -307,8 +367,8 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
     void shouldAnswerOnlyItsOwnItemPathsAndSayNotFoundForWorkWithoutAttempts() {
         when(jobs.findAttemptsByWorkspaceIdAndAvailableAtGreaterThanEqualOrderByAvailableAtDesc(eq(1L), any(), any()))
                 .thenReturn(List.of());
-        var attempts = new ReviewAttemptsContentSource(
-                jobs, mock(ReviewAssignmentQuery.class), List.of(), mock(RegisteredItemLabels.class), new JsonMapper());
+        var attempts =
+                new ReviewAttemptsContentSource(jobs, assignments, assessments, List.of(), labels, new JsonMapper());
 
         assertThat(attempts.read(1, 5, "inputs/context/review_attempts/pull_request/42.json"))
                 .hasValueSatisfying(

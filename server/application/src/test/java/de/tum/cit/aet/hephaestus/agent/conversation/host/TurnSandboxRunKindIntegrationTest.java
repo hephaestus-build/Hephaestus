@@ -55,8 +55,8 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
+import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -252,7 +252,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(held.held(run, false).turnId()).isEqualTo(digest.getId());
         assertThat(digestKind.attempt(run)).isPresent();
         var copies = mock(ConversationClaims.class);
-        var contexts = ConversationTurnFixtures.contexts(beans, mock(ResultHistoryQuery.class), copies);
+        var contexts = ConversationTurnFixtures.contexts(beans, mock(AssessmentPort.class), copies);
         assertThat(contexts.showFeedback(held.held(run, false), UUID.randomUUID()))
                 .isFalse();
         verifyNoInteractions(copies);

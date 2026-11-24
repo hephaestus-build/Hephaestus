@@ -3,8 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.conversation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.practices.spi.DeveloperPracticeStandings;
-import de.tum.cit.aet.hephaestus.practices.spi.DeveloperPracticeStandings.Standing;
+import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
+import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort.Standing;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -18,7 +18,7 @@ import tools.jackson.databind.ObjectMapper;
 class PracticeProfileContentSourceTest extends BaseUnitTest {
 
     @Mock
-    DeveloperPracticeStandings standings;
+    AssessmentPort standings;
 
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();

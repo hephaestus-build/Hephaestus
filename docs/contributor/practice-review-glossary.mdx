@@ -137,6 +137,20 @@ Changing a setting does not approve an older proposal.
 Delivery pause and the developer's external-feedback preference remain separate checks.
 The [user guide](/user/practice-reviews) owns their scope and controls.
 
+## Assessment records
+
+An assessment record is an [observation](./practice-feedback-language.mdx#observations), a private check outcome, or a self-report.
+The conversation agent reads assessment records through `AssessmentPort`.
+The port omits observations when it cannot establish who can read them.
+The conversation context reports a capture failure as **Could not check**.
+
+A **private check outcome** records what a requested check found for its requester on one version of the work.
+A **self-report** records what a person says about their own work.
+These two record kinds are planned.
+
+The planned composer's **guardrails** check the destination, the observation references, the required problems and the Markdown in each copy on the work.
+**Required Critical and Major problems** are the eligible problems of those severities that must appear first in the copy.
+
 ## Admission reasons
 
 `ABSENCE_NOT_SEARCHED` (`absence_not_searched`) marks a withheld candidate that says the repository lacks something, whose searches of the whole checkout do not name that thing.

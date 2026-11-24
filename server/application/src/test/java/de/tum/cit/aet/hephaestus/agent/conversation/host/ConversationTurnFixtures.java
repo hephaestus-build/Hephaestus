@@ -15,8 +15,8 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
+import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import java.time.Clock;
 import org.springframework.context.ApplicationContext;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -53,11 +53,11 @@ final class ConversationTurnFixtures {
     }
 
     static ConversationTurnContexts contexts(ApplicationContext beans) {
-        return contexts(beans, beans.getBean(ResultHistoryQuery.class), beans.getBean(ConversationClaims.class));
+        return contexts(beans, beans.getBean(AssessmentPort.class), beans.getBean(ConversationClaims.class));
     }
 
     static ConversationTurnContexts contexts(
-            ApplicationContext beans, ResultHistoryQuery results, ConversationClaims feedback) {
+            ApplicationContext beans, AssessmentPort results, ConversationClaims feedback) {
         TurnContextLoads folder = folder(beans);
         return new ConversationTurnContexts(
                 beans.getBean(ConversationContextPathBuilder.class),

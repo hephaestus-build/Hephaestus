@@ -2,14 +2,11 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.conversation;
 
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopies;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
-import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
+import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -40,11 +37,10 @@ public class ResultHistoryContentSource implements ContentSource {
     static final int OVERVIEW_MAX_CHARS = 48_000;
     static final int DETAIL_MAX_CHARS = 32_000;
     private static final int LIMIT = 90;
-    private final ResultHistoryQuery results;
+    private final AssessmentPort assessments;
     private final ObjectMapper objectMapper;
     private final HistoryCopies copies;
     private final ConversationConsentGate consentGate;
-    private final RegisteredItemLabels labels;
 
     @Override
     public boolean supports(ConversationContextRequest request) {
@@ -81,41 +77,43 @@ public class ResultHistoryContentSource implements ContentSource {
 
     public ObjectNode buildPayload(Long workspaceId, Long developerId) {
         Instant now = Instant.now();
-        var selected = results.forDeveloper(workspaceId, developerId, now.minus(90, ChronoUnit.DAYS), LIMIT + 1);
+        var selected = assessments.observations(workspaceId, developerId, now.minus(90, ChronoUnit.DAYS), LIMIT);
         var root = objectMapper.createObjectNode().put("readAt", now.toString());
+        root.put(
+                "about",
+                "This is a bounded history. When coverage.omittedForSource is above zero, the review recorded "
+                        + "observations that the conversation cannot show.");
         root.putObject("coverage")
                 .put("scope", "AUTHORIZED_RESULTS_ABOUT_DEVELOPER")
                 .put("lookbackDays", 90)
                 .put("maxEntries", LIMIT)
-                .put("hasMore", selected.size() > LIMIT);
+                .put("hasMore", selected.hasMore())
+                .put("omittedForSource", selected.withheld());
         consentGate.writeUntrustedEnvelope(root);
         var rows = root.putArray("results");
-        int omitted = Math.max(0, selected.size() - LIMIT);
-        var listed = selected.stream().limit(LIMIT).toList();
-        var named = labels.labels(
-                workspaceId, listed.stream().map(ResultHistoryEntry::item).toList());
-        for (var entry : listed) {
-            var row = describe(entry, named.get(entry.itemId()), false);
+        int omittedForSize = 0;
+        for (var entry : selected.entries()) {
+            copies.record(entry.custody());
+            var row = describe(entry, false);
             rows.add(row);
             if (objectMapper.writeValueAsString(root).length() > OVERVIEW_MAX_CHARS) {
                 rows.remove(rows.size() - 1);
-                omitted++;
+                omittedForSize++;
             }
         }
-        root.put("omittedForSize", omitted);
+        root.put("omittedForSize", omittedForSize);
         return root;
     }
 
     ObjectNode inspect(long workspaceId, long developerId, UUID resultId) {
         var root = objectMapper.createObjectNode().put("readAt", Instant.now().toString());
-        var selected = results.find(workspaceId, resultId, developerId, SourceUsePurpose.CONVERSATIONAL_MENTORING)
-                .filter(entry -> Long.valueOf(developerId).equals(entry.developerAccountId()));
+        var selected = assessments.observation(workspaceId, developerId, resultId);
         if (selected.isEmpty()) return root.put("status", "NOT_FOUND");
+        var entry = selected.get();
+        copies.record(entry.custody());
         consentGate.writeUntrustedEnvelope(root);
         root.put("status", "FOUND");
-        var entry = selected.get();
-        var row = describe(
-                entry, labels.labels(workspaceId, List.of(entry.item())).get(entry.itemId()), true);
+        var row = describe(entry, true);
         root.set("result", row);
         if (objectMapper.writeValueAsString(root).length() > DETAIL_MAX_CHARS) {
             row.remove(List.of("evidence", "example", "explanation", "criteria", "problems", "openQuestions"));
@@ -128,13 +126,16 @@ public class ResultHistoryContentSource implements ContentSource {
     /** The reviewed work as its source names it now, under one key in every list; absent when it no longer can. */
     static void putWork(ObjectNode row, @Nullable ItemLabel work) {
         if (work == null) return;
-        var named = row.putObject("work").put("title", work.title());
-        if (work.number() != null) named.put("number", work.number());
-        if (work.url() != null) named.put("url", work.url());
+        putWork(row, work.title(), work.number(), work.url());
     }
 
-    /** @param work how the work's source names it now; {@code null} when it no longer can */
-    private ObjectNode describe(ResultHistoryEntry entry, @Nullable ItemLabel work, boolean detail) {
+    private static void putWork(ObjectNode row, String title, @Nullable Integer number, @Nullable String url) {
+        var named = row.putObject("work").put("title", title);
+        if (number != null) named.put("number", number);
+        if (url != null) named.put("url", url);
+    }
+
+    private ObjectNode describe(AssessmentPort.Observation entry, boolean detail) {
         var row = objectMapper
                 .createObjectNode()
                 .put("resultId", entry.resultId().toString())
@@ -152,11 +153,9 @@ public class ResultHistoryContentSource implements ContentSource {
         if (endedAt != null) row.put("endedAt", endedAt.toString());
         ResultEndReason endReason = entry.endReason();
         if (endReason != null) row.put("endReason", endReason.name());
-        putWork(row, work);
+        var work = entry.work();
+        if (work != null) putWork(row, work.title(), work.number(), work.url());
         row.set("activeMarks", objectMapper.valueToTree(entry.activeMarks()));
-        if (!copies.record(copies.of(entry)))
-            return row.put("storedWorkVersion", ResultHistoryEntry.StoredWorkVersion.UNKNOWN.name())
-                    .put("wordsUnavailable", "COPY_AUTHORITY_UNAVAILABLE");
         Instant capturedAt = entry.capturedAt();
         if (capturedAt != null) row.put("capturedAt", capturedAt.toString());
         row.put("storedWorkVersion", entry.storedWorkVersion().name());

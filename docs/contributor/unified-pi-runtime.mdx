@@ -751,6 +751,8 @@ Each document obeys these rules:
   Hephaestus does not calculate a weekday.
 - Each item whose web page Hephaestus stores carries that whole `url`: work, reviews, comments, commits and documents. Hephaestus copies a link and never builds one. Slack messages and delivered feedback have no stored page.
 - It fits its own size limit. When it leaves something out, it says so (`truncated`, `omittedThreads`, `omittedPractices`, `omittedForSize`).
+- In result history, `coverage.omittedForSource` counts the developer's observations whose source the conversation cannot read.
+- In review attempts, `checkStatus` is `COULD_NOT_CHECK` if capture fails before the review measures any practice.
 - It keeps Hephaestus practice reviews apart from reviews by people.
 - It lists practice standings by practice group and name, never by standing.
 - It never contains the diff of a pull request. It gives the files, their line counts, and `filesCoverage` when file changes were not captured.

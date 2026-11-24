@@ -3,8 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.conversation;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
 import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
-import de.tum.cit.aet.hephaestus.practices.spi.DeveloperPracticeStandings;
-import de.tum.cit.aet.hephaestus.practices.spi.DeveloperPracticeStandings.Standing;
+import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
+import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort.Standing;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -32,7 +32,7 @@ public class PracticeProfileContentSource implements ContentSource {
     /** Fewer decided pieces of work than this make a standing an early read. */
     static final int EARLY_READ_BELOW = 3;
 
-    private final DeveloperPracticeStandings standings;
+    private final AssessmentPort assessments;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -66,7 +66,7 @@ public class PracticeProfileContentSource implements ContentSource {
                         + "Not scores: never rank practices or people with them.");
         Map<String, ArrayNode> groups = new LinkedHashMap<>();
         ArrayNode groupArray = root.putArray("groups");
-        standings.standings(workspaceId, accountId).stream()
+        assessments.standings(workspaceId, accountId).stream()
                 .sorted(Comparator.comparing(Standing::group, Comparator.nullsLast(String::compareTo))
                         .thenComparing(Standing::name)
                         .thenComparing(Standing::slug))

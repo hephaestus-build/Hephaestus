@@ -22,6 +22,8 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MirroredThreadStateQuery;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
@@ -46,6 +48,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -502,8 +505,14 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
         authorize(proof);
         UUID problemId = UUID.randomUUID();
         var result = mock(ResultHistoryEntry.class);
+        var item = new ItemRef(workspace.getId(), itemId, new ItemKind("scm.pull_request"), 42L, null, null);
+        when(result.copyAuthorityComplete()).thenReturn(true);
+        when(result.developerAccountId()).thenReturn(developerId);
+        when(result.item()).thenReturn(item);
+        when(result.origin()).thenReturn(ReviewOrigin.REQUEST);
         when(result.practiceSlug()).thenReturn("describe-why");
         when(result.itemId()).thenReturn(itemId);
+        when(result.storedWorkVersion()).thenReturn(ResultHistoryEntry.StoredWorkVersion.UNKNOWN);
         when(permission.findOfProblem(
                         workspace.getId(), problemId, developerId, SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(Optional.of(result));

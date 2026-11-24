@@ -57,16 +57,13 @@ import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
-import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.spi.AssessmentPort;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.CopyWriteFence;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
-import de.tum.cit.aet.hephaestus.practices.spi.ProblemHistoryEntry;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -484,14 +481,13 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
         assertThat(reloaded().getStatus()).isEqualTo(ConversationTurn.Status.RUNNING);
     }
 
-    /** One result in the developer's history, about {@code developerAccountId}, carrying {@code problems}. */
-    private static ResultHistoryEntry result(UUID resultId, long developerAccountId, UUID... problems) {
-        ResultHistoryEntry entry = mock(ResultHistoryEntry.class);
+    /** One readable observation with its problems. */
+    private static AssessmentPort.Observation result(UUID resultId, UUID... problems) {
+        AssessmentPort.Observation entry = mock(AssessmentPort.Observation.class);
         when(entry.resultId()).thenReturn(resultId);
-        when(entry.developerAccountId()).thenReturn(developerAccountId);
-        List<ProblemHistoryEntry> carried = new ArrayList<>();
+        List<AssessmentPort.Problem> carried = new ArrayList<>();
         for (UUID problemId : problems) {
-            ProblemHistoryEntry problem = mock(ProblemHistoryEntry.class);
+            AssessmentPort.Problem problem = mock(AssessmentPort.Problem.class);
             when(problem.problemId()).thenReturn(problemId);
             carried.add(problem);
         }
@@ -500,7 +496,7 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     /** The gateway in front of a controller whose turn contexts read these results and claim through this store. */
-    private MockMvc gatewayWith(ResultHistoryQuery results, ConversationClaims feedback) throws Exception {
+    private MockMvc gatewayWith(AssessmentPort results, ConversationClaims feedback) throws Exception {
         gateway = gateway(controller(ConversationTurnFixtures.contexts(beans, results, feedback)));
         return gateway;
     }
@@ -509,17 +505,9 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
     void shouldLinkTheDevelopersOwnResultAndRefuseAnyOtherWhenTheTurnLinksAResult() throws Exception {
         UUID theirs = UUID.randomUUID();
         UUID colleaguesResult = UUID.randomUUID();
-        ResultHistoryEntry own = result(theirs, developerAccount);
-        ResultHistoryEntry colleagues = result(colleaguesResult, developerAccount + 1);
-        ResultHistoryQuery results = mock(ResultHistoryQuery.class);
-        when(results.find(workspace.getId(), theirs, developerAccount, SourceUsePurpose.CONVERSATIONAL_MENTORING))
-                .thenReturn(Optional.of(own));
-        when(results.find(
-                        workspace.getId(),
-                        colleaguesResult,
-                        developerAccount,
-                        SourceUsePurpose.CONVERSATIONAL_MENTORING))
-                .thenReturn(Optional.of(colleagues));
+        AssessmentPort.Observation own = mock(AssessmentPort.Observation.class);
+        AssessmentPort results = mock(AssessmentPort.class);
+        when(results.observation(workspace.getId(), developerAccount, theirs)).thenReturn(Optional.of(own));
         gatewayWith(results, mock(ConversationClaims.class));
 
         call(
@@ -542,12 +530,11 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
     void shouldLinkAProblemThroughTheDevelopersResultThatCarriesItWhenTheTurnLinksAProblem() throws Exception {
         UUID resultId = UUID.randomUUID();
         UUID problemId = UUID.randomUUID();
-        ResultHistoryQuery results = mock(ResultHistoryQuery.class);
-        ResultHistoryEntry carrier = result(resultId, developerAccount, problemId);
-        when(results.forDeveloper(eq(workspace.getId()), eq(developerAccount), any(), anyInt()))
-                .thenReturn(List.of(carrier));
-        when(results.find(workspace.getId(), resultId, developerAccount, SourceUsePurpose.CONVERSATIONAL_MENTORING))
-                .thenReturn(Optional.of(carrier));
+        AssessmentPort results = mock(AssessmentPort.class);
+        AssessmentPort.Observation carrier = result(resultId, problemId);
+        when(results.observations(eq(workspace.getId()), eq(developerAccount), any(), anyInt()))
+                .thenReturn(new AssessmentPort.ObservationHistory(List.of(carrier), 0, false));
+        when(results.observation(workspace.getId(), developerAccount, resultId)).thenReturn(Optional.of(carrier));
         gatewayWith(results, mock(ConversationClaims.class));
 
         call("POST", "link-problem", turn.getAttempt(), """
@@ -568,7 +555,7 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .thenReturn(Optional.of(new CopyWriteFence(ready, UUID.randomUUID(), turn.getId(), Instant.now())));
         when(store.claimConversationCopy(workspace.getId(), taken, turn.getId(), turn.getAttempt()))
                 .thenReturn(Optional.empty());
-        gatewayWith(mock(ResultHistoryQuery.class), store);
+        gatewayWith(mock(AssessmentPort.class), store);
 
         call("POST", "show-feedback", turn.getAttempt(), """
                         {"feedbackId":"%s"}""".formatted(ready))
