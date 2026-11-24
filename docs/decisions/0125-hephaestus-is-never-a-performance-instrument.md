@@ -61,7 +61,7 @@ Option 4.
    - It counts only observations on the work.
    - It follows the disclosure rule of decision 14.
    - It never shows use of Hephaestus or any person.
-6. **Practices across the workspace follows the disclosure rule of decision 14.** Its floor of 5 people replaces the 3 of ADR 0112. The other rules of ADR 0112 stay, with 5 in place of 3:
+6. **Practices across the workspace follows the disclosure rule of decision 14.** Its floor of 5 people replaces the 3 of ADR 0112. The following mechanisms of ADR 0112 stay. Decision 14 replaces its live and overlapping windows.
    - A split shows all its cells or only its total. The reader is not told why.
    - A typical range is read from at least 5 other developers.
    - `SmallCounts` on the server is the one home of the threshold.
@@ -84,7 +84,7 @@ Option 4.
     - Each cell counts at least 5 people. `SmallCounts` holds that floor.
     - A unanimous cell, in which every person has the same outcome, is suppressed.
     - Figures are released only for fixed, non-overlapping calendar periods. A period's figure is released once and never recomputed.
-    - A correction can only suppress a released figure, never release it again. Without overlapping populations, no combination of releases isolates a person.
+    - A correction can only suppress a released figure. For comparable figures in one period, use one fixed partition of contributors across all routes and refuse overlapping cuts.
     - Linkable fields, such as exact timings and version sequences, are suppressed or coarsened.
     - Text that quotes a private message or names a bystander is omitted.
     - Sorting by a value that the floor withholds must not reveal it, so withheld cells sort as one group.
@@ -116,7 +116,8 @@ Not enforced yet. The implementation adds these tests:
 
 - A generated staff route test fails when a staff route returns an account ID beside an outcome.
 - `SmallCountsTest` fails when a count of 1 to 4 people shows, or a split with such a cell shows a cell.
-- A disclosure test fails when a figure from fewer than 5 people or a unanimous cell leaves the server. It also fails when a period's figure is recomputed or released twice, or when two released periods overlap. A three-release fixture in which every pair passes the floor isolates no person.
+- A disclosure test fails when a figure from fewer than 5 people or a unanimous cell leaves the server. It also fails when a period's figure is recomputed or released twice, or when two released periods overlap. The fixture publishes two disjoint cohorts. It refuses a third figure over both cohorts plus one person in the same period.
+  It refuses it even when every proposed figure passes the floor.
 - A route test fails when any route reads another account's conversation, records or Practice profile.
 - An Activity route test fails when a member sees work from a repository that the member cannot read. It also fails when a member sees another person's item cards.
 - `ArchitectureTest` fails when a class named for View as user or Per-person results for admins exists.
