@@ -71,10 +71,12 @@ function changed(change: (descriptor: RunDescriptor) => RunDescriptor): RunLoop 
 	return async (place, descriptor) => pi(place, change(descriptor));
 }
 
-/** Pi, with its session's events and abort seen through a rewrite. */
-function rewired(change: (session: RunSession) => Partial<RunSession>): RunLoop {
+function rewired(
+	change: (session: RunSession) => Partial<RunSession>,
+	loop: RunLoop = pi,
+): RunLoop {
 	return async (place, descriptor) => {
-		const session = await pi(place, descriptor);
+		const session = await loop(place, descriptor);
 		return {
 			prompt: async (text) => session.prompt(text),
 			waitForIdle: async () => session.waitForIdle(),
@@ -86,6 +88,33 @@ function rewired(change: (session: RunSession) => Partial<RunSession>): RunLoop 
 			...change(session),
 		};
 	};
+}
+
+function withCallId(id: string): RunLoop {
+	const replace: ExtensionFactory = (api) => {
+		api.on("context", (event) => ({
+			messages: event.messages.map((message) => {
+				if (message.role === "toolResult") {
+					return { ...message, toolCallId: id };
+				}
+				if (message.role === "assistant") {
+					const content = message.content.map((block) =>
+						block.type === "toolCall" ? { ...block, id } : block,
+					);
+					return { ...message, content };
+				}
+				return message;
+			}),
+		}));
+	};
+	return rewired(
+		(session) => ({
+			subscribe: relayed(session, (event, emit) => {
+				emit(event.type.startsWith("tool_execution_") ? { ...event, toolCallId: id } : event);
+			}),
+		}),
+		changed((descriptor) => ({ ...descriptor, extensions: [...descriptor.extensions, replace] })),
+	);
 }
 
 function relayed(
@@ -125,6 +154,16 @@ const BROKEN: [ContractCase, string, RunLoop][] = [
 				);
 			}),
 		})),
+	],
+	[
+		TOOL_ROUND_TRIP,
+		"the model's call, its result and the tool events all lose their call ID",
+		withCallId(""),
+	],
+	[
+		TOOL_ROUND_TRIP,
+		"every call, result and tool event carries the first call's ID",
+		withCallId("echo-hi"),
 	],
 	[
 		TOOL_ROUND_TRIP,

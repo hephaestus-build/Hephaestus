@@ -182,8 +182,8 @@ async function start(loop: RunLoop, options: RunOptions): Promise<Run> {
 		label: "Echo",
 		description: "Says the text back.",
 		parameters: structuredClone(ECHO_PARAMETERS),
-		execute: async (_toolCallId, params) => {
-			executed.push(params);
+		execute: async (toolCallId, params) => {
+			executed.push([toolCallId, params]);
 			hooks.push("execute");
 			return {
 				content: [{ type: "text", text: `echo: ${String(params.text)}` }],
@@ -244,8 +244,37 @@ async function ask(run: Run, question: string): Promise<void> {
 	await run.session.waitForIdle();
 }
 
+/** The scripted call ID: an observed ID must equal it, since two missing or reused IDs compare equal. */
+const callIdFor = (text: string): string => `echo-${text}`;
+
 const toolCall = (text: string): AssistantMessage =>
-	fauxAssistantMessage(fauxToolCall("echo", { text }), { stopReason: "toolUse" });
+	fauxAssistantMessage(fauxToolCall("echo", { text }, { id: callIdFor(text) }), {
+		stopReason: "toolUse",
+	});
+
+/** Two calls in turn, so that a result paired with the wrong call shows. */
+const TWO_CALLS = ["hi", "bye"];
+
+function exchange(messages: readonly Message[]): string[][] {
+	return messages.flatMap((message) => {
+		if (message.role === "assistant") {
+			return message.content.flatMap((block) =>
+				block.type === "toolCall"
+					? [["call", block.id, block.name, JSON.stringify(block.arguments)]]
+					: [],
+			);
+		}
+		return message.role === "toolResult"
+			? [["result", message.toolCallId, message.toolName, textOf(message)]]
+			: [];
+	});
+}
+
+const echoExchange = (texts: readonly string[]): string[][] =>
+	texts.flatMap((text) => [
+		["call", callIdFor(text), "echo", JSON.stringify({ text })],
+		["result", callIdFor(text), "echo", `echo: ${text}`],
+	]);
 
 /** The events that the run kinds read, by type and role. */
 function trace(events: readonly RunEvent[]): string[] {
@@ -299,27 +328,43 @@ export const SYSTEM_AND_TOOLS: ContractCase = {
 export const TOOL_ROUND_TRIP: ContractCase = {
 	name: "a tool call runs the tool, its result reaches the next request, and the run settles once",
 	run: async (loop) => {
-		const run = await start(loop, { steps: [toolCall("hi"), fauxAssistantMessage("done")] });
+		const run = await start(loop, {
+			steps: [...TWO_CALLS.map(toolCall), fauxAssistantMessage("done")],
+		});
 		try {
 			await ask(run, "question");
-			assert.deepEqual(run.executed, [{ text: "hi" }]);
-			const last = run.requests[1]?.messages.at(-1);
-			assert.ok(last?.role === "toolResult");
-			assert.equal(textOf(last), "echo: hi");
-			// The review's read observer pairs a call with its result by these fields.
-			const started = run.events.find((event) => event.type === "tool_execution_start");
-			const ended = run.events.find((event) => event.type === "tool_execution_end");
-			assert.equal(started?.toolName, "echo");
-			assert.equal(started.toolCallId, last.toolCallId);
-			assert.deepEqual(started.args, { text: "hi" });
-			assert.equal(ended?.toolName, "echo");
-			assert.equal(ended.toolCallId, last.toolCallId);
-			assert.equal(ended.isError, false);
+			// A tool, the model and the review's read observer each tell calls apart by the call ID.
+			assert.deepEqual(
+				run.executed,
+				TWO_CALLS.map((text) => [callIdFor(text), { text }]),
+			);
+			assert.deepEqual(
+				run.requests.slice(1).map((request) => exchange(request.messages)),
+				TWO_CALLS.map((_, sent) => echoExchange(TWO_CALLS.slice(0, sent + 1))),
+			);
+			assert.deepEqual(
+				run.events
+					.filter((event) => event.type === "tool_execution_start")
+					.map((event) => [event.toolName, event.toolCallId, event.args]),
+				TWO_CALLS.map((text) => ["echo", callIdFor(text), { text }]),
+			);
 			// The read observer qualifies evidence by the result's content and details.
-			const { result } = ended;
-			assert.ok(isRecord(result));
-			assert.deepEqual(result.content, [{ type: "text", text: "echo: hi" }]);
-			assert.deepEqual(result.details, { source: "echo" });
+			assert.deepEqual(
+				run.events
+					.filter((event) => event.type === "tool_execution_end")
+					.map(({ toolName, toolCallId, isError, result }) => [
+						toolName,
+						toolCallId,
+						isError,
+						isRecord(result) ? [result.content, result.details] : result,
+					]),
+				TWO_CALLS.map((text) => [
+					"echo",
+					callIdFor(text),
+					false,
+					[[{ type: "text", text: `echo: ${text}` }], { source: "echo" }],
+				]),
+			);
 			assert.deepEqual(
 				settled(run.events).map((event) => event.aborted),
 				[false],
@@ -333,7 +378,9 @@ export const TOOL_ROUND_TRIP: ContractCase = {
 export const SESSION_LOG: ContractCase = {
 	name: "the session log keeps the run's messages in order",
 	run: async (loop) => {
-		const run = await start(loop, { steps: [toolCall("hi"), fauxAssistantMessage("done")] });
+		const run = await start(loop, {
+			steps: [...TWO_CALLS.map(toolCall), fauxAssistantMessage("done")],
+		});
 		try {
 			await ask(run, "question");
 			const messages = loggedMessages(run.log);
@@ -341,19 +388,14 @@ export const SESSION_LOG: ContractCase = {
 				messages.map((message) => [message.role, textOf(message)]),
 				[
 					["user", "question"],
-					["assistant", ""],
-					["toolResult", "echo: hi"],
+					...TWO_CALLS.flatMap((text) => [
+						["assistant", ""],
+						["toolResult", `echo: ${text}`],
+					]),
 					["assistant", "done"],
 				],
 			);
-			const [, call, result] = messages;
-			assert.ok(call?.role === "assistant" && result?.role === "toolResult");
-			const calls = call.content.flatMap((block) => (block.type === "toolCall" ? [block] : []));
-			assert.deepEqual(
-				calls.map((block) => [block.name, block.arguments]),
-				[["echo", { text: "hi" }]],
-			);
-			assert.deepEqual([result.toolCallId, result.toolName], [calls[0]?.id, "echo"]);
+			assert.deepEqual(exchange(messages), echoExchange(TWO_CALLS));
 		} finally {
 			run.close();
 		}
@@ -415,6 +457,27 @@ export const BLOCKED_TOOL: ContractCase = {
 			const last = run.requests[1]?.messages.at(-1);
 			assert.ok(last?.role === "toolResult" && last.isError);
 			assert.match(textOf(last), /outside the declared sources/u);
+			// A conversation tells a refused call apart by its ID, in the model's request and in the log.
+			const blocked = [
+				["call", callIdFor("hi"), "echo"],
+				["result", callIdFor("hi"), "echo"],
+			];
+			for (const messages of [run.requests[1]?.messages ?? [], loggedMessages(run.log)]) {
+				assert.deepEqual(
+					exchange(messages).map((entry) => entry.slice(0, 3)),
+					blocked,
+				);
+			}
+			// The review's read observer pairs a failed read with its call by the end event's ID.
+			assert.deepEqual(
+				run.events
+					.filter((event) => event.type.startsWith("tool_execution_"))
+					.map((event) => [event.type, event.toolName, event.toolCallId, event.isError === true]),
+				[
+					["tool_execution_start", "echo", callIdFor("hi"), false],
+					["tool_execution_end", "echo", callIdFor("hi"), true],
+				],
+			);
 		} finally {
 			run.close();
 		}
