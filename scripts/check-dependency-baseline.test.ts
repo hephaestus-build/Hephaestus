@@ -13,6 +13,7 @@ import {
 	render,
 	retiredInLockfiles,
 } from "./check-dependency-baseline.ts";
+import { environmentForGitFixture } from "./lib/git-environment.ts";
 
 const LOCKFILE = `---
 lockfileVersion: '9.0'
@@ -233,7 +234,7 @@ await test("a retired package bundled inside another one, or linked from the wor
 await test("every pnpm lockfile in the checkout is found, a new nested one included", () => {
 	const root = mkdtempSync(path.join(tmpdir(), "dependency-lockfiles-"));
 	try {
-		execFileSync("git", ["init", "--quiet"], { cwd: root });
+		execFileSync("git", ["init", "--quiet"], { cwd: root, env: environmentForGitFixture() });
 		mkdirSync(path.join(root, "tools/café"), { recursive: true });
 		writeFileSync(path.join(root, "pnpm-lock.yaml"), "");
 		writeFileSync(path.join(root, "tools/café/pnpm-lock.yaml"), "");

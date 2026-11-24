@@ -19,6 +19,7 @@ import path from "node:path";
 
 import { parseAllDocuments } from "yaml";
 
+import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asRecord, isRecord, parseJson } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
@@ -41,7 +42,13 @@ export function lockfiles(cwd = process.cwd()): string[] {
 			"--",
 			":(glob)**/pnpm-lock.yaml",
 		],
-		{ cwd, encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES },
+		{
+			cwd,
+			encoding: "utf8",
+			maxBuffer: CAPTURE_LIMIT_BYTES,
+			// Under a hook, git exports GIT_DIR and friends, which would outrank `cwd`.
+			env: environmentWithoutGitRepository(),
+		},
 	)
 		.split("\0")
 		.filter(Boolean)
