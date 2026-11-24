@@ -66,8 +66,9 @@ await test("a freeze alerts after 24 h, and an undated freeze only warns", () =>
 	assert.equal(freezeVerdict(following, undefined, now).alert, false);
 });
 
+const none = () => undefined;
+
 await test("a check notifies once when it starts failing and closes its issue when it passes", () => {
-	const none = () => undefined;
 	assert.deepEqual(issueActions({ api: "failure", freeze: "success" }, none), [
 		{ check: "api", kind: "open" },
 	]);

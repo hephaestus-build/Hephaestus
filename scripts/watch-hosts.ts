@@ -112,24 +112,28 @@ export const hostWatchIssues = {
  * pass. A failure with the issue open notifies no one again, and a cancelled or skipped check
  * changes nothing.
  */
+type IssueAction =
+	| { check: HostWatchCheck; kind: "open" }
+	| { check: HostWatchCheck; kind: "close"; number: number };
+
 export function issueActions(
 	results: Record<HostWatchCheck, string>,
 	openIssue: (check: HostWatchCheck) => number | undefined,
-): (
-	| { check: HostWatchCheck; kind: "open" }
-	| { check: HostWatchCheck; kind: "close"; number: number }
-)[] {
-	return (["api", "freeze"] as const).flatMap((check) => {
+): IssueAction[] {
+	return (["api", "freeze"] as const).flatMap((check): IssueAction[] => {
 		const number = openIssue(check);
 		if (results[check] === "failure" && number === undefined) {
-			return [{ check, kind: "open" as const }];
+			return [{ check, kind: "open" }];
 		}
 		if (results[check] === "success" && number !== undefined) {
-			return [{ check, kind: "close" as const, number }];
+			return [{ check, kind: "close", number }];
 		}
 		return [];
 	});
 }
+
+/** One GitHub CLI call, bounded so that a stalled request cannot hold the run until its timeout. */
+const gh = async (args: string[]) => output("gh", args, { signal: AbortSignal.timeout(60_000) });
 
 if (import.meta.main) {
 	const check = process.argv[2];
@@ -171,8 +175,6 @@ if (import.meta.main) {
 	} else if (check === "report") {
 		const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
 		const runUrl = requiredEnv(process.env, "RUN_URL");
-		const gh = async (args: string[]) =>
-			output("gh", args, { signal: AbortSignal.timeout(60_000) });
 		const listed = await gh([
 			"api",
 			"--paginate",
@@ -189,10 +191,10 @@ if (import.meta.main) {
 				api: requiredEnv(process.env, "API_RESULT"),
 				freeze: requiredEnv(process.env, "FREEZE_RESULT"),
 			},
-			(check) => {
+			(name) => {
 				const found = open.find(
 					(issue) =>
-						typeof issue.body === "string" && issue.body.startsWith(hostWatchIssues[check].marker),
+						typeof issue.body === "string" && issue.body.startsWith(hostWatchIssues[name].marker),
 				);
 				return typeof found?.number === "number" ? found.number : undefined;
 			},
