@@ -180,6 +180,15 @@ public final class PostgreSQLTestContainer {
         return cloneDatabase(name, templateName);
     }
 
+    static void dropDatabase(String name) throws SQLException {
+        validateDatabaseName(name);
+        TestDatabase admin = administrator();
+        try (Connection connection = DriverManager.getConnection(admin.jdbcUrl(), admin.username(), admin.password());
+                Statement statement = connection.createStatement()) {
+            statement.execute("DROP DATABASE \"" + name + "\"");
+        }
+    }
+
     private static TestDatabase cloneDatabase(String name, String templateName) {
         PostgreSQLContainer postgres = getInstance();
         try (Connection connection = DriverManager.getConnection(
