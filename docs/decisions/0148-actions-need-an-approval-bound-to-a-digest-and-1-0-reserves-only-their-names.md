@@ -47,7 +47,7 @@ The installation token has wider rights than the person, so an action with that 
 
 Option 6. Decision 1 applies in 1.0. Decisions 2 to 11 bind the 1.x design.
 
-1. **1.0 reserves the action kind names:** `PUSH_CHANGE`, `OPEN_PULL_REQUEST`, `CREATE_ISSUE`, `UPDATE_DOC`, `REQUEST_REVIEW`, `REVIEW_REMINDER` and `COMMENT`. No other concept uses them. The enums that will carry them are open, so 1.x adds them without a break.
+1. **1.0 reserves the action kind names:** `PUSH_CHANGE`, `OPEN_PULL_REQUEST`, `CREATE_ISSUE`, `UPDATE_DOC`, `REQUEST_REVIEW`, `REVIEW_REMINDER` and `COMMENT`. No other action kind uses them. The enums that will carry them are open, so 1.x adds them without a break.
 2. **The principal is the requesting person.** The server checks the person's own provider permission on the target at execution. The installation token stays in the server.
 3. **An action proposal shows the exact payload, the target and the expected version.** It has **Discard** and an approve button that names the action:
    - `PUSH_CHANGE`: **Push commit**
@@ -84,7 +84,13 @@ No ADR changes in 1.0. In 1.x, each action is an outbox action under [ADR 0081](
 Not enforced. 1.0 has no approval-bound action flow.
 The outbox of `agent_action` and `ActionExecutor` stays as it is. Email, feedback and Slack writes use it.
 
-Review catches a 1.0 change that adds a reserved action kind, an approval table, an approval operation or an approval task state.
+Review catches a 1.0 change that adds one of these:
+
+- a reserved action kind
+- an approval table
+- an approval operation
+- an approval task state.
+
 When actions ship, a test fails when an execution's digest differs from the approved digest. Another test fails when an action runs with rights that the person does not have.
 
 ## Revisit trigger
