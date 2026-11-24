@@ -92,7 +92,7 @@ class PersonTableRlsTest extends BaseIntegrationTest {
         var transaction = new TransactionTemplate(transactions);
         transaction.executeWithoutResult(status -> {
             owners.ofJob(second);
-            assertThat(insertReceipt(jdbc, workspace, second, key, false)).isEqualTo(1);
+            assertThat(insertReceipt(jdbc, workspace, second, key, 0)).isEqualTo(1);
         });
 
         assertThat(jdbc.queryForList("SELECT idem_key FROM client_input WHERE idem_key = ?", UUID.class, key))
@@ -103,11 +103,11 @@ class PersonTableRlsTest extends BaseIntegrationTest {
                     .isEmpty();
             assertThat(jdbc.update("DELETE FROM client_input WHERE idem_key = ?", key))
                     .isZero();
-            assertThat(insertReceipt(jdbc, workspace, first, key, false)).isEqualTo(1);
+            assertThat(insertReceipt(jdbc, workspace, first, key, 0)).isEqualTo(1);
         });
         assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
                     owners.ofJob(first);
-                    insertReceipt(jdbc, workspace, second, UUID.randomUUID(), false);
+                    insertReceipt(jdbc, workspace, second, UUID.randomUUID(), 0);
                 }))
                 .isInstanceOf(DataAccessException.class)
                 .rootCause()
@@ -123,16 +123,18 @@ class PersonTableRlsTest extends BaseIntegrationTest {
         long second = account();
         long workspace = receiptWorkspace("receipt-expiration");
         UUID expired = UUID.randomUUID();
+        UUID retained = UUID.randomUUID();
         UUID fresh = UUID.randomUUID();
         var owner = PostgreSQLTestContainer.ownerJdbc();
-        insertReceipt(owner, workspace, first, expired, true);
-        insertReceipt(owner, workspace, second, fresh, false);
+        insertReceipt(owner, workspace, first, expired, 9);
+        insertReceipt(owner, workspace, first, retained, 4);
+        insertReceipt(owner, workspace, second, fresh, 0);
 
         assertThat(jdbc.queryForObject("SELECT public.prune_client_inputs()", Integer.class))
                 .isPositive();
         assertThat(owner.queryForList(
                         "SELECT idem_key FROM client_input WHERE workspace_id = ?", UUID.class, workspace))
-                .containsExactly(fresh);
+                .containsExactlyInAnyOrder(retained, fresh);
     }
 
     private long receiptWorkspace(String slug) {
@@ -142,11 +144,11 @@ class PersonTableRlsTest extends BaseIntegrationTest {
             """, Long.class, slug, slug, slug));
     }
 
-    private static int insertReceipt(JdbcTemplate rows, long workspace, long account, UUID key, boolean expired) {
+    private static int insertReceipt(JdbcTemplate rows, long workspace, long account, UUID key, int daysAgo) {
         return rows.update("""
             INSERT INTO client_input(workspace_id,account_id,idem_key,fingerprint,result_id,related_id,created_at)
             VALUES(?,?,?,sha256('fixture'::bytea),uuidv7(),uuidv7(),now() - (? * interval '1 day'))
-            """, workspace, account, key, expired ? 9 : 0);
+            """, workspace, account, key, daysAgo);
     }
 
     private long account() {
