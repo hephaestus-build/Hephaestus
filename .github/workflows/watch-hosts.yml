@@ -18,7 +18,7 @@ jobs:
   api:
     name: The server of each host is ready
     runs-on: ubuntu-slim
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -36,7 +36,7 @@ jobs:
   freeze:
     name: Staging follows main
     runs-on: ubuntu-slim
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:

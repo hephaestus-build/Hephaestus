@@ -3,6 +3,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs } from "node:util";
 
+import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
+
 // PostgreSQL 18's postmaster restarts every backend when a child it did not start exits non-zero.
 // As PID 1 it inherits such children from exec sessions, for example the pg_isready of a probe
 // that timed out. This drill shows that the image's init reaps them, that an unclean stop restarts,
@@ -22,7 +24,7 @@ const password = randomBytes(16).toString("hex");
 const user = "999:999";
 
 function docker(...args: string[]): string {
-	const result = spawnSync("docker", args, { encoding: "utf8" });
+	const result = spawnSync("docker", args, { encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES });
 	if (result.status !== 0) {
 		throw new Error(`docker ${args.join(" ")} failed:\n${result.stdout}${result.stderr}`);
 	}
@@ -30,7 +32,9 @@ function docker(...args: string[]): string {
 }
 
 function ready(): boolean {
-	const probe = spawnSync("docker", ["exec", container, "pg_isready", "-q", "-h", "127.0.0.1"]);
+	const probe = spawnSync("docker", ["exec", container, "pg_isready", "-q", "-h", "127.0.0.1"], {
+		stdio: "ignore",
+	});
 	return probe.status === 0;
 }
 
@@ -45,7 +49,10 @@ async function waitReady(step: string): Promise<void> {
 }
 
 function logs(): string {
-	const result = spawnSync("docker", ["logs", container], { encoding: "utf8" });
+	const result = spawnSync("docker", ["logs", container], {
+		encoding: "utf8",
+		maxBuffer: CAPTURE_LIMIT_BYTES,
+	});
 	return `${result.stdout}${result.stderr}`;
 }
 
@@ -122,9 +129,9 @@ try {
 	await waitReady("the restart after an unclean stop");
 	console.log("PostgreSQL init drill passed");
 } finally {
-	spawnSync("docker", ["rm", "-f", container]);
-	spawnSync("docker", ["volume", "rm", "-f", volume]);
+	spawnSync("docker", ["rm", "-f", container], { stdio: "ignore" });
+	spawnSync("docker", ["volume", "rm", "-f", volume], { stdio: "ignore" });
 	if (targetImage === undefined) {
-		spawnSync("docker", ["rmi", "-f", image]);
+		spawnSync("docker", ["rmi", "-f", image], { stdio: "ignore" });
 	}
 }
