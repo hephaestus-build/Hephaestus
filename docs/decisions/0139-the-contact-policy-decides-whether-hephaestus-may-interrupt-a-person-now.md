@@ -87,7 +87,7 @@ Option 6.
    - A requested result and an agreed check-in are never held.
 9. **Quiet hours are kept by the server,** 22:00 to 08:00 by default. They delay only the notification. The message in the conversation never waits.
 10. **At most one notification for each committed message.** A background turn that takes several results writes one message, so they become one notification. Code decides the notification at commit, as an effect.
-    - On a private thread, a background batch holds items of one contact kind. ADR 0120 decision 7 takes every compatible item, and items of another kind are not compatible.
+    - On a private thread, a background batch holds items of one contact kind. ADR 0120 decision 7 takes compatible items up to the bound of the route. Items of another kind are not compatible.
       A composer turn on a shared thread has no contact kind (decision 5). This rule does not apply to it.
       So rule 3 applies to each message as a whole, at the commit and at send, on every channel.
     - Example: a Pause before the commit stops an unprompted batch. Code writes no message, and each item gets its disposition.
@@ -141,7 +141,7 @@ Option 6.
 - [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) rule 6 keeps its payload: ids only, no text. Only what the client shows changes: it may fetch the notice line, and else shows the fixed text.
 - ADR 0116 rule 7 changes. The server keeps quiet hours for unrequested notifications. New kinds join under rule 7: the requested result, the agreed check-in and the unprompted update.
 - ADR 0120 decision 7 changes for background items on a private thread only. A compatible item also has the same contact kind.
-  A claim takes requested results first, and the next claim starts when a turn ends.
+  A claim takes requested results first. When a turn ends, an item that is due and that no gate holds starts the next claim.
 - ADR 0116 rule 7 keeps `CONVERSATION_ANSWER` and its trigger: 30 seconds after the turn ends, if the answer is unread.
 - ADR 0116 rule 8 stays. The send check now also runs the contact policy.
 - ADR 0120 (proposed in #4862) decision 4 stays. Its gates are the gates of rule 8 above.

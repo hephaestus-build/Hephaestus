@@ -17,12 +17,12 @@
 ## Context
 
 A person may want Hephaestus to act on the work: push a fix, open a pull request, create an issue or update a doc.
-Each such action is a write that other people read, in the person's name.
+Each such action is a write that other people read, made with the person's own rights.
 
 In 1.0, typed commands already exist.
 ADR 0121 decision 8 defines the commands that post or withdraw a copy on the work, as the Hephaestus app.
 ADR 0150 decision 7 defines the card commands, such as Mark card done.
-An action is different. It writes to a provider in the person's name, and it can be hard to undo.
+An action is different. It writes to a provider with the person's own rights, and it can be hard to undo.
 
 Two risks are real.
 The approved text can differ from the written text, if anything changes between approval and execution.

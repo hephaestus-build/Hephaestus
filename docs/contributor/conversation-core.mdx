@@ -532,7 +532,7 @@ The collision table has six cases (ADR 0120 decision 9):
 | --- | --- |
 | A message arrives while a background turn is queued or leased. | Admission ends that turn `CANCELLED` and inserts an interactive turn, in one transaction. The LLM proxy cancels the call in flight. No attempt is charged. |
 | A compatible message arrives during an interactive turn. | It steers. After each tool batch, the runner takes it before the next model call. |
-| A message arrives while the turn writes its final answer, or it does not fit the turn's route, actor or bound. | It waits and starts the next turn. |
+| A message arrives while the turn writes its final answer, or it does not fit the turn. | It waits and starts the next turn. |
 | An inbox event arrives during any turn. | It waits. Inbox events never interrupt and never join a turn in progress. |
 | The person selects Stop. | The run gets a short settlement deadline. The holder can store only complete text. It stores no effect and no task. |
 | The holder does not settle in time. | The reaper ends the run and stores no entry. Injected messages end `STOPPED` and stay visible as questions. |
@@ -949,7 +949,7 @@ These rules always hold. Each one has the ADR decision that states it and the te
 | A task ends once, and it reads only what the readers of its result route may read. | ADR 0120 decision 16 | `TaskCancelAgainstEndTest`, `TaskReadsRouteScopeTest` |
 | A composer turn reads no private row, and a foreign ID resolves to nothing. | ADR 0121 decisions 4 and 5 | The composer isolation tests, `PackagedIsolationTest` |
 | A stale or repeated confirmation writes nothing. | ADR 0121 decision 8 | `PreviewDriftTest`, `RepeatedConfirmationTest` |
-| At its deadline, the sweep withholds every unstaged `PENDING` copy and every Automatic `READY` copy whose write did not start, also while the executor is stopped. A staged Approve-first copy keeps its own clock. | ADR 0122 decisions 4 and 5 | `ExpiredReadyWithStoppedExecutorTest` |
+| At its deadline, the sweep withholds every unstaged `PENDING` copy and every Automatic `READY` copy whose write did not start. This also holds while the executor is stopped. A staged Approve-first copy keeps its own clock. | ADR 0122 decisions 4 and 5 | `ExpiredReadyWithStoppedExecutorTest` |
 | Every withheld copy, except a silent draw, inserts a `DELIVERY_WITHHELD` inbox event. | ADR 0122 decision 8 | `WithheldDispositionTest` |
 | A Slack turn never uses an app-only entry. At every level it reads language and answer length. It reads other personal records only under the Slack grant, from a closed list. | ADR 0123 decisions 4 and 5 | `AppCanaryNotInSlackTest`, `SlackGrantReadsTest` |
 | Only readback decides a started write. Its ordering key moves past an uncertain write after a proof or an explicit reconciliation. A proof shows presence or non-acceptance. | ADR 0151 decision 2 | `UncertainLaneWaitsForProofTest`, `CrashBetweenStartAndCopyFenceTest` |
@@ -962,7 +962,7 @@ ADRs 0128 and 0134 are in #4863, and ADRs 0135 and 0140 are in #4867.
 
 | Counter | Owner | What bumps it | What it fences |
 | --- | --- | --- | --- |
-| Lease epoch | `agent_run` ([Agent runs](./agent-runs.mdx)) | Each lease of the run | The commit of an attempt that lost its lease (ADR 0120 decision 10). Also its model calls, renewal, requeue and end ([Agent runs](./agent-runs.mdx)). |
+| Lease epoch | `agent_run` ([Agent runs](./agent-runs.mdx)) | Each lease of the run | Each write and each model call of an attempt that lost its lease. ADR 0120 decision 10 fences the commit, and [Agent runs](./agent-runs.mdx) fences the rest. |
 | Copy generation | The copy on the work of one target | Request a new copy (ADR 0122 decision 9) | A preview receipt, a staged copy or a delivery key of an older generation. ADR 0121 decision 8, ADR 0122 decision 2 and ADR 0151 decision 1 state these fences. |
 | Person authorization generation | The person's relationship (ADR 0134 decision 1) | An authority narrowing of the person, such as "Keep out of this space" on a record | A context read, a model request or a send of a run or action with an older stamp |
 | Workspace authorization generation | The workspace (ADR 0134 decision 1) | A membership change, or a change of the Slack binding | The same three boundaries, for every run and action of the workspace |
