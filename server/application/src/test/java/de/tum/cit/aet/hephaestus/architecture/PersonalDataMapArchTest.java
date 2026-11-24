@@ -398,7 +398,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                         + " ELSE t.reviewer_account_id IS NOT NULL END",
                 "t.account_id = :account OR CASE WHEN t.reviewer_account_id = :account THEN true ELSE false END",
                 "CASE WHEN t.closed_at IS NOT NULL THEN t.account_id = :account OR t.reviewer_account_id = :account"
-                        + " OR t.account_id = :users ELSE false END")) {
+                        + " OR t.account_id = :users ELSE false END",
+                "CASE WHEN t.\"end\" IS NULL THEN t.account_id = :account OR t.reviewer_account_id = :account"
+                        + " ELSE false END")) {
             assertThat(unerasedColumns(
                             columns,
                             Set.of("conversation"),
@@ -409,6 +411,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         PersonDataContributor anyOfThem =
                 store("(t.reviewer_account_id = ANY(:users)) OR t.account_id IN (:account)", "");
         assertThat(scopedColumns("t.author_id = :account")).containsExactly("author_id");
+        assertThat(scopedColumns("t.\"case\" = 2 OR t.reviewer_account_id = :account"))
+                .as("a quoted identifier is a name, not a keyword")
+                .containsExactly("reviewer_account_id");
         assertThat(
                         scopedColumns(
                                 "t.vendor_id = :account OR (CASE WHEN t.ended THEN true END) OR t.reviewer_account_id = :account"))
@@ -546,6 +551,12 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         var caseEnd = END.matcher(whole).useTransparentBounds(true);
         for (int index = 0; index < whole.length(); index++) {
             char next = whole.charAt(index);
+            if (next == '"') {
+                // A quoted identifier such as "end" or "or" is a name, never a keyword. "" escapes a quote.
+                index = whole.indexOf('"', index + 1);
+                if (index < 0) break;
+                continue;
+            }
             // A CASE expression nests like a parenthesis: an OR in one of its branches separates no disjunct.
             if (next == '(' || caseStart.region(index, whole.length()).lookingAt()) depth++;
             if (next == ')' || caseEnd.region(index, whole.length()).lookingAt()) depth--;
