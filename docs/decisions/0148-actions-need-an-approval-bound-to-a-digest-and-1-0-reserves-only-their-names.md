@@ -17,7 +17,7 @@
 ## Context
 
 A person may want Hephaestus to act on the work: push a fix, open a pull request, create an issue or update a doc.
-Each such action is a write that other people read, made with the person's own rights.
+Each such action is a write that other people read. Hephaestus makes it with the person's own rights.
 
 In 1.0, typed commands already exist.
 ADR 0121 decision 8 defines the commands that post or withdraw a copy on the work, as the Hephaestus app.

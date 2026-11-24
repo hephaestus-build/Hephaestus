@@ -96,9 +96,8 @@ Option 6.
       1. `REQUESTED_RESULT`
       2. `AGREED`
       3. `UNPROMPTED`
-    - When a turn ends, an item that is due and that no gate holds starts the next claim at once.
-      It does not wait for a new event. An item that is due later waits for its due time.
-      The start policy of ADR 0120 decision 4 decides when an item is due.
+    - The start policy of ADR 0120 decision 4 decides if a waiting item can start a turn now.
+      When a turn ends and such an item waits, the next claim starts at once. It does not wait for a new event.
 11. **The notification text is the notice line, never the message summary.** The push payload stays ids only. On arrival, the service worker fetches the notice line with the person's session. On any failure it shows the kind's fixed text.
     - The notice line is registry copy with parameters, such as "Check ready: 1 problem on PR #42". It is never model text.
     - The fetch never refreshes a credential.
@@ -141,7 +140,7 @@ Option 6.
 - [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) rule 6 keeps its payload: ids only, no text. Only what the client shows changes: it may fetch the notice line, and else shows the fixed text.
 - ADR 0116 rule 7 changes. The server keeps quiet hours for unrequested notifications. New kinds join under rule 7: the requested result, the agreed check-in and the unprompted update.
 - ADR 0120 decision 7 changes for background items on a private thread only. A compatible item also has the same contact kind.
-  A claim takes requested results first. When a turn ends, an item that is due and that no gate holds starts the next claim.
+  A claim takes requested results first. When a turn ends, the next claim starts at once if the start policy allows a turn now.
 - ADR 0116 rule 7 keeps `CONVERSATION_ANSWER` and its trigger: 30 seconds after the turn ends, if the answer is unread.
 - ADR 0116 rule 8 stays. The send check now also runs the contact policy.
 - ADR 0120 (proposed in #4862) decision 4 stays. Its gates are the gates of rule 8 above.
@@ -170,7 +169,7 @@ Not enforced. The implementing issues add the checks below, and review of each i
 - SendRecheckTest fails when a contact queued before a pause is sent after it.
 - OneKindBatchTest fails when a background batch holds items of two contact kinds.
   It also fails when a claim takes another kind while a requested result is in the inbox.
-  It also fails when a due item that no gate holds waits for a new event after a turn.
+  It also fails when the start policy allows a turn but the next claim waits for a new event.
 - AppOnlyItemRouteTest fails when an item that only the app may show is routed to Slack.
 - HeldResultNotCitedTest fails when an unprompted message cites a result that a delivery experiment holds.
 - DeliveryDecisionTest fails when an unprompted decision has no row, or a model call starts before it.
