@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795498315602-1" author="hephaestus">
+        <addColumn tableName="outline_collection">
+            <column name="readers_synced_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795498315602-2" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column name="readers_synced_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795498315602-3" author="hephaestus">
+        <addColumn tableName="slack_monitored_channel">
+            <column name="readers_synced_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795498315602-4" author="hephaestus">
+        <addColumn tableName="outline_collection">
+            <column defaultValue="UNPROVEN" name="visibility_class" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795498315602-5" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column defaultValue="UNPROVEN" name="visibility_class" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795498315602-6" author="hephaestus">
+        <addColumn tableName="slack_monitored_channel">
+            <column defaultValue="UNPROVEN" name="visibility_class" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795498315602-7" author="hephaestus">
+        <comment>A monitored resource stores only the visibility classes that the server reads.</comment>
+        <sql>ALTER TABLE repository_to_monitor ADD CONSTRAINT ck_repository_to_monitor_visibility_class CHECK (visibility_class IN ('WORKSPACE', 'RESTRICTED', 'UNPROVEN'))</sql>
+        <sql>ALTER TABLE outline_collection ADD CONSTRAINT ck_outline_collection_visibility_class CHECK (visibility_class IN ('WORKSPACE', 'RESTRICTED', 'UNPROVEN'))</sql>
+        <sql>ALTER TABLE slack_monitored_channel ADD CONSTRAINT ck_slack_monitored_channel_visibility_class CHECK (visibility_class IN ('WORKSPACE', 'RESTRICTED', 'UNPROVEN'))</sql>
+        <rollback>
+            <sql>ALTER TABLE slack_monitored_channel DROP CONSTRAINT ck_slack_monitored_channel_visibility_class</sql>
+            <sql>ALTER TABLE outline_collection DROP CONSTRAINT ck_outline_collection_visibility_class</sql>
+            <sql>ALTER TABLE repository_to_monitor DROP CONSTRAINT ck_repository_to_monitor_visibility_class</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795498315602-8" author="hephaestus">
+        <comment>Cutover: a monitored repository that its provider confirmed public in the last 48 hours, as public activity requires, is visible to the whole workspace. Every other resource stays UNPROVEN until its readers are proven.</comment>
+        <sql splitStatements="false"><![CDATA[
+UPDATE repository_to_monitor rtm SET visibility_class = 'WORKSPACE'
+WHERE rtm.unavailable_since IS NULL AND rtm.repository_visibility_confirmed_at > now() - interval '48 hours'
+  AND EXISTS (
+      SELECT 1 FROM repository r
+      WHERE rtm.native_id = r.native_id
+        AND EXISTS (SELECT 1 FROM connection monitor_connection
+                    JOIN identity_provider monitor_provider ON monitor_provider.type = monitor_connection.kind
+                         AND monitor_provider.server_url = monitor_connection.config ->> 'serverUrl'
+                    WHERE monitor_connection.kind IN ('GITHUB', 'GITLAB')
+                      AND monitor_connection.state IN ('ACTIVE', 'SUSPENDED')
+                      AND monitor_connection.workspace_id = rtm.workspace_id
+                      AND monitor_provider.id = r.provider_id)
+        AND r.visibility = 'PUBLIC' AND NOT r.is_private)
+        ]]></sql>
+        <rollback>
+            <sql>UPDATE repository_to_monitor SET visibility_class = 'UNPROVEN'</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
