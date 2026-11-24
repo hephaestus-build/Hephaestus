@@ -66,19 +66,23 @@ function differences(left: unknown, right: unknown, at: string): string[] {
  * What the new chart changes in PostgreSQL's Pod template: a container's image or arguments, which restart PostgreSQL
  * as the release intends, or a container's memory request or limit. The chart derives the memory from the PostgreSQL
  * settings (max_connections and the per-connection figure), so a release that changes that derivation changes it once,
- * and its upgrade notes announce the restart. Any other change fails, because a template that changes on every release
- * would cut the database on each upgrade.
+ * and its upgrade notes announce the restart. A probe's timeout is a fixed chart constant that a release changes only
+ * on purpose. Any other change fails, because a template that changes on every release would cut the database on each
+ * upgrade.
  */
 export function changedPostgresql(previous: string, next: string): string[] {
 	const changed = differences(postgresqlTemplate(previous), postgresqlTemplate(next), "");
 	const unexpected = changed.filter(
 		(path) =>
 			!/^\.spec\.(?:initContainers|containers)\[[^\]]+\]\.(?:image|args)$/u.test(path) &&
-			!/^\.spec\.containers\[[^\]]+\]\.resources\.(?:requests|limits)\.memory$/u.test(path),
+			!/^\.spec\.containers\[[^\]]+\]\.resources\.(?:requests|limits)\.memory$/u.test(path) &&
+			!/^\.spec\.containers\[[^\]]+\]\.(?:startup|liveness|readiness)Probe\.timeoutSeconds$/u.test(
+				path,
+			),
 	);
 	if (unexpected.length > 0) {
 		throw new Error(
-			`The new chart changes PostgreSQL's Pod template beyond its image, arguments and memory: ${unexpected.join(", ")}`,
+			`The new chart changes PostgreSQL's Pod template beyond its image, arguments, memory and probe timeouts: ${unexpected.join(", ")}`,
 		);
 	}
 	return changed;
