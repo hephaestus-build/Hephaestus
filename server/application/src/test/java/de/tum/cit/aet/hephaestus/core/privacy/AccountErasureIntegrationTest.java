@@ -90,6 +90,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -1321,6 +1322,14 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 "INSERT INTO membership (workspace_id, account_id, role, role_source) VALUES (?, ?, 'MEMBER', 'PERSON')",
                 personalSpace,
                 targetAccount.getId());
+        // A create receipt of the person, which only the owner role may write past its row security.
+        assertThat(PostgreSQLTestContainer.ownerJdbc()
+                        .update(
+                                "INSERT INTO client_input(workspace_id,account_id,idem_key,fingerprint,result_id,related_id)"
+                                        + " VALUES(?,?,gen_random_uuid(),sha256('all-stores'::bytea),uuidv7(),uuidv7())",
+                                firstWorkspace,
+                                targetAccount.getId()))
+                .isOne();
         long administratorId = Objects.requireNonNull(administrator.getId());
         long targetId = Objects.requireNonNull(targetAccount.getId());
         long recoveryWorkspaceId = Objects.requireNonNull(nonceWorkspace.getId());
