@@ -169,7 +169,6 @@ export function AppSidebar({
 					workspaceSlug={activeWorkspace.workspaceSlug}
 					practicesEnabled={activeWorkspace.practicesEnabled}
 					showConversation={showConversation}
-					readOnly={readOnly}
 				/>
 				<SidebarSeparator className="hidden group-data-[collapsible=icon]:block" />
 				<NavWorkspace

@@ -21,16 +21,6 @@ export const Default: Story = {
 		await expect(mark).toHaveAttribute("aria-hidden", "true");
 	},
 };
-export const ReadOnly: Story = {
-	args: { readOnly: true },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("link", { name: "Conversation" })).toHaveAttribute(
-			"href",
-			"/w/aet/conversation",
-		);
-		await expect(canvas.queryByRole("link", { name: "Ask Hephaestus" })).not.toBeInTheDocument();
-	},
-};
 export const PracticesOff: Story = {
 	args: { practicesEnabled: false },
 	play: async ({ canvas }) => {

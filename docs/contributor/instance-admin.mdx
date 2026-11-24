@@ -191,7 +191,7 @@ settings or create an account, so it cannot reproduce the member's first-login e
 
 A successful `USER_VIEW` row records authorization to attempt a read, not proof that the handler returned content.
 A missing result can still produce a 404 after the row commits.
-Conversation routes return 404 during a user view. Only the signed-in owner can read their conversation.
+Conversation routes return 403 during a user view. Only the signed-in owner can read their conversation.
 The row carries these fields:
 
 - `acting_account_id` = the instance administrator.

@@ -28,6 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -730,10 +731,10 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .expectStatus()
                 .isNotFound()
                 .expectBody(Void.class);
-        ask(UUID.randomUUID(), "Reply to them", answer.getId())
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
+        assertThat(parentEntryProblem(answer.getId()))
+                .usingRecursiveComparison()
+                .ignoringFields("instance", "properties.requestId")
+                .isEqualTo(parentEntryProblem(UUID.randomUUID()));
 
         ConversationEntry untouched = entryRepository.findById(answer.getId()).orElseThrow();
         assertThat(untouched.getVote()).isNull();
@@ -747,5 +748,16 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
                         .orElseThrow()
                         .getStatus())
                 .isEqualTo(ConversationTurn.Status.QUEUED);
+    }
+
+    private ProblemDetail parentEntryProblem(UUID entryId) {
+        ProblemDetail problem = Objects.requireNonNull(ask(UUID.randomUUID(), "Reply in a thread", entryId)
+                .expectStatus()
+                .isNotFound()
+                .expectBody(ProblemDetail.class)
+                .returnResult()
+                .getResponseBody());
+        problem.setDetail(Objects.requireNonNull(problem.getDetail()).replace(entryId.toString(), "{id}"));
+        return problem;
     }
 }

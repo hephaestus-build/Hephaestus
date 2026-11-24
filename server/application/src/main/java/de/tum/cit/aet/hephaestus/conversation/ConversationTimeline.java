@@ -147,17 +147,24 @@ public class ConversationTimeline {
         return views.dtos(owner(entry), List.of(entry)).getFirst();
     }
 
-    /** The account's entry, for a write that the account may make only to its own conversation. */
+    /** Checks ownership before a writer locks and loads the entry. */
     @Transactional(readOnly = true)
-    public ConversationEntry requireOwnedEntry(long workspaceId, long accountId, UUID entryId) {
-        return ownedEntry(workspaceId, accountId, entryId)
-                .orElseThrow(() -> new EntityNotFoundException("ConversationEntry", entryId.toString()));
+    public void requireOwnedEntry(long workspaceId, long accountId, UUID entryId) {
+        if (entries.findAccountIdByIdAndWorkspaceId(entryId, workspaceId)
+                .filter(owner -> owner == accountId)
+                .isEmpty()) {
+            throw new EntityNotFoundException("ConversationEntry", entryId.toString());
+        }
     }
 
-    /** The account's turn, for a write that the account may make only to its own conversation. */
+    /** Checks ownership before a writer locks and loads the turn. */
     @Transactional(readOnly = true)
-    public ConversationTurn requireOwnedTurn(long workspaceId, long accountId, UUID turnId) {
-        return ownedTurn(workspaceId, accountId, turnId);
+    public void requireOwnedTurn(long workspaceId, long accountId, UUID turnId) {
+        if (turns.findAccountIdByIdAndWorkspaceId(turnId, workspaceId)
+                .filter(owner -> owner == accountId)
+                .isEmpty()) {
+            throw new EntityNotFoundException("ConversationTurn", turnId.toString());
+        }
     }
 
     private ConversationTurn ownedTurn(long workspaceId, long accountId, UUID turnId) {

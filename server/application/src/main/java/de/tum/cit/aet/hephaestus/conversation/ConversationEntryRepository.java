@@ -18,6 +18,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ConversationEntryRepository extends JpaRepository<ConversationEntry, UUID> {
 
+    @Query("SELECT e.accountId FROM ConversationEntry e WHERE e.id = :id AND e.workspaceId = :workspaceId")
+    Optional<Long> findAccountIdByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
+
     /** One entry without its payload: what the context path orders, selects and marks. */
     interface Head {
         UUID getId();

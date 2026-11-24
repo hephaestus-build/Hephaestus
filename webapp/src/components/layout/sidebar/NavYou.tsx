@@ -14,15 +14,12 @@ export function NavYou({
 	workspaceSlug,
 	practicesEnabled,
 	showConversation,
-	readOnly = false,
 }: {
 	workspaceSlug: string;
 	practicesEnabled: boolean;
 	showConversation: boolean;
-	readOnly?: boolean;
 }) {
 	const matchRoute = useMatchRoute();
-	const conversationLabel = readOnly ? "Conversation" : ASK_HEPHAESTUS_LABEL;
 	return (
 		<SidebarGroup>
 			<SidebarGroupLabel>You</SidebarGroupLabel>
@@ -54,12 +51,12 @@ export function NavYou({
 				{showConversation && (
 					<SidebarMenuItem>
 						<SidebarMenuButton
-							tooltip={conversationLabel}
+							tooltip={ASK_HEPHAESTUS_LABEL}
 							isActive={Boolean(matchRoute({ to: "/w/$workspaceSlug/conversation", fuzzy: true }))}
 							render={<Link to="/w/$workspaceSlug/conversation" params={{ workspaceSlug }} />}
 						>
 							<HephaestusMark size={16} />
-							<span>{conversationLabel}</span>
+							<span>{ASK_HEPHAESTUS_LABEL}</span>
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 				)}

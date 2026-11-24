@@ -12,7 +12,7 @@ import type {
 import type { Wire } from "@/lib/dates";
 import { problemType } from "@/lib/problem-detail";
 import { currentUser } from "@/mocks/fixtures/auth";
-import { ownMembership } from "@/mocks/fixtures/workspaces";
+import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import {
 	applyUserViewHeaders,
@@ -21,6 +21,7 @@ import {
 } from "@/runtime/user-view/session";
 import { OVERVIEW_FIXTURE } from "@/stories/practice-profile-story-mock-data";
 import { deferred } from "@/test/async";
+import { ConversationFake } from "@/test/conversation-server";
 import { captureNavigation, restoreNavigation } from "@/test/navigation";
 import {
 	ROUTE_RENDER_WAIT,
@@ -30,12 +31,10 @@ import {
 } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
 
-const workspace = {
-	id: 1,
-	workspaceSlug: "engineering",
+const workspace = workspaceListItem("engineering", {
 	displayName: "Engineering",
 	practicesEnabled: true,
-};
+});
 const sam: Wire<UserViewAccount> = {
 	accountId: "11",
 	providerLogin: "never-signed-in",
@@ -236,7 +235,11 @@ describe("view as user entry", () => {
 describe("user view guard", () => {
 	beforeAll(async () => {
 		client.interceptors.request.use(applyUserViewHeaders);
-		await loadRouteCode("/w/engineering/practice-profile", "/w/engineering/workspace-activity");
+		await loadRouteCode(
+			"/w/engineering/practice-profile",
+			"/w/engineering/workspace-activity",
+			"/w/engineering/conversation",
+		);
 	}, ROUTE_RENDER_WAIT.timeout);
 	beforeEach(() => {
 		storeUserView();
@@ -263,7 +266,10 @@ describe("user view guard", () => {
 
 	it("drops a view another account left in the tab before any request carries it", async () => {
 		storeUserView({ operatorAccountId: 7 });
-		server.use(http.get("*/user", () => HttpResponse.json({ ...currentUser, id: 8 })));
+		server.use(
+			http.get("*/user", () => HttpResponse.json({ ...currentUser, id: 8 })),
+			...new ConversationFake("engineering").handlers(),
+		);
 		const requests: { path: string; viewedAccount: string | null }[] = [];
 		const record = ({ request }: { request: Request }) => {
 			requests.push({
@@ -296,4 +302,37 @@ describe("user view guard", () => {
 			ROUTE_RENDER_WAIT,
 		);
 	});
+
+	it(
+		"leaves the conversation route in a user view without requesting its data",
+		async () => {
+			const paths: string[] = [];
+			const record = ({ request }: { request: Request }) => {
+				paths.push(new URL(request.url).pathname);
+			};
+			server.events.on("request:start", record);
+			try {
+				const { router } = renderRouteAtWithRouter("/w/engineering/conversation");
+				await waitFor(
+					() =>
+						expect(router.state.resolvedLocation?.pathname).toBe("/w/engineering/practice-profile"),
+					ROUTE_RENDER_WAIT,
+				);
+				await screen.findByRole(
+					"heading",
+					{ level: 1, name: "Practice profile" },
+					ROUTE_RENDER_WAIT,
+				);
+				expect(paths.filter((path) => /\/conversation(?:\/|$)/u.test(path))).toHaveLength(0);
+				const navigation = within(screen.getByRole("list", { name: "You" }));
+				expect(navigation.queryByRole("link", { name: "Practice profile" })).not.toBeNull();
+				expect(
+					navigation.queryByRole("link", { name: /^(?:Conversation|Ask Hephaestus)$/u }),
+				).toBeNull();
+			} finally {
+				server.events.removeListener("request:start", record);
+			}
+		},
+		ROUTE_RENDER_WAIT.timeout,
+	);
 });
