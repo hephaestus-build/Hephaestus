@@ -13,6 +13,8 @@ These include Slack ephemeral replies and App Home views published in response t
 Slash-command acknowledgements must meet Slack's three-second limit.
 
 `SlackInteractiveReplyAdapter` owns the direct Slack write calls for these replies.
+The Slack DM membership refusal uses this path. The delivery receipt commits before the ephemeral reply, so a replay cannot send it again.
+If the server stops in between, the reply may be lost.
 The outbox action adapters own durable Slack writes, and only `ActionExecutor` can execute an action adapter.
 The architecture tests enforce this boundary.
 

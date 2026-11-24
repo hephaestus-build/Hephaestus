@@ -17,6 +17,8 @@ import com.slack.api.model.Message;
 import com.slack.api.model.ResponseMetadata;
 import com.slack.api.model.block.LayoutBlock;
 import com.slack.api.model.view.View;
+import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
+import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGateway;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppressedException;
@@ -26,6 +28,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
+import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics;
+import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics.MembershipStatus;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
@@ -36,6 +40,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Predicate;
+import okhttp3.FormBody;
 import okhttp3.Response;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -43,6 +48,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.BooleanNode;
 
 /**
  * Per-workspace Slack messaging. Bot token resolved at send time via
@@ -52,9 +61,20 @@ import org.springframework.stereotype.Service;
 @Service
 @OutboundEgressGateway
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true", matchIfMissing = false)
-public class SlackMessageService {
+public class SlackMessageService implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(SlackMessageService.class);
+    private static final JsonMapper MEMBERSHIP_JSON = JsonMapper.builder().build();
+    private static final List<String> REQUIRED_NON_MEMBER_FLAGS =
+            List.of("deleted", "is_restricted", "is_ultra_restricted", "is_bot", "is_app_user");
+    private static final List<String> OPTIONAL_NON_MEMBER_FLAGS = List.of(
+            "is_stranger",
+            "is_external",
+            "is_invited_user",
+            "is_profile_only_user",
+            "is_forgotten",
+            "is_connector_bot",
+            "is_workflow_bot");
 
     private static final int CONVERSATIONS_LIST_PAGE_SIZE = 200;
     private static final int CONVERSATIONS_LIST_MAX_PAGES = 20;
@@ -77,6 +97,7 @@ public class SlackMessageService {
     private final SlackCredentialProvider credentialProvider;
     private final SlackRateLimitTracker rateLimitTracker;
     private final OutboundEgressGuard egressGuard;
+    private final SlackMetrics metrics;
     private final SlackTime time;
     private final ConcurrentMap<Long, BotIdentity> botCache = new ConcurrentHashMap<>();
 
@@ -85,12 +106,14 @@ public class SlackMessageService {
             SlackCredentialProvider credentialProvider,
             SlackRateLimitTracker rateLimitTracker,
             OutboundEgressGuard egressGuard,
+            SlackMetrics metrics,
             SlackProperties properties) {
         this(
                 Slack.getInstance(nativeConfig(properties)),
                 credentialProvider,
                 rateLimitTracker,
                 egressGuard,
+                metrics,
                 SlackTime.SYSTEM);
     }
 
@@ -103,11 +126,13 @@ public class SlackMessageService {
             SlackCredentialProvider credentialProvider,
             SlackRateLimitTracker rateLimitTracker,
             OutboundEgressGuard egressGuard,
+            SlackMetrics metrics,
             SlackTime time) {
         this.slack = slack;
         this.credentialProvider = credentialProvider;
         this.rateLimitTracker = rateLimitTracker;
         this.egressGuard = egressGuard;
+        this.metrics = metrics;
         this.time = time;
     }
 
@@ -125,7 +150,8 @@ public class SlackMessageService {
 
     /** Closes this gateway's own Slack client: its HTTP client and the executors of its configuration. */
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         try {
             slack.close();
         } catch (Exception e) {
@@ -401,6 +427,75 @@ public class SlackMessageService {
             if (!"silent_mode_engaged".equals(e.slackError())) {
                 throw e;
             }
+        }
+    }
+
+    /**
+     * Confirms full membership from Slack for this admission. Positive results are never cached: a workspace member
+     * can leave or become a guest between two deliveries, even if no membership event reached us.
+     */
+    public boolean isCurrentFullMember(long workspaceId, String teamId, String subject) {
+        var status = lookupMembership(workspaceId, teamId, subject);
+        metrics.recordMembershipLookup(status);
+        if (status.unconfirmed()) {
+            log.warn("Slack DM membership lookup failed: workspace={} reason={}", workspaceId, status.reason());
+        }
+        return status == MembershipStatus.CONFIRMED;
+    }
+
+    private MembershipStatus lookupMembership(long workspaceId, String teamId, String subject) {
+        try {
+            var token = resolveToken(workspaceId);
+            if (token.isEmpty()) return MembershipStatus.CREDENTIAL;
+            var response = callHonoringRateLimit(
+                    SlackBackoff.interactive(time, rateLimitTracker, workspaceId),
+                    () -> readMembership(token.get(), subject));
+            return membershipStatus(response, teamId, subject);
+        } catch (CredentialUnreadableException | MissingCredentialKeyException unreadable) {
+            return MembershipStatus.CREDENTIAL;
+        } catch (SlackApiException unavailable) {
+            var response = unavailable.getResponse();
+            return response != null && response.code() == 429
+                    ? MembershipStatus.RATE_LIMITED
+                    : MembershipStatus.PROVIDER;
+        } catch (IOException unavailable) {
+            return MembershipStatus.TRANSPORT;
+        } catch (JacksonException malformed) {
+            return MembershipStatus.PAYLOAD;
+        }
+    }
+
+    private static MembershipStatus membershipStatus(JsonNode response, String teamId, String subject) {
+        if (BooleanNode.FALSE.equals(response.path("ok"))) {
+            return "user_not_found".equals(response.path("error").asString(""))
+                    ? MembershipStatus.INELIGIBLE
+                    : MembershipStatus.PROVIDER;
+        }
+        var user = response.path("user");
+        var userTeam = user.path("team_id").asString("");
+        if (!BooleanNode.TRUE.equals(response.path("ok"))
+                || !subject.equals(user.path("id").asString(""))
+                || userTeam.isBlank()) return MembershipStatus.PAYLOAD;
+        if (!teamId.equals(userTeam)
+                || REQUIRED_NON_MEMBER_FLAGS.stream().anyMatch(flag -> BooleanNode.TRUE.equals(user.path(flag)))
+                || OPTIONAL_NON_MEMBER_FLAGS.stream().anyMatch(flag -> BooleanNode.TRUE.equals(user.path(flag)))) {
+            return MembershipStatus.INELIGIBLE;
+        }
+        boolean incomplete = REQUIRED_NON_MEMBER_FLAGS.stream()
+                        .anyMatch(flag -> !user.path(flag).isBoolean())
+                || OPTIONAL_NON_MEMBER_FLAGS.stream()
+                        .anyMatch(flag -> user.has(flag) && !user.path(flag).isBoolean());
+        return incomplete ? MembershipStatus.PAYLOAD : MembershipStatus.CONFIRMED;
+    }
+
+    private JsonNode readMembership(String token, String subject) throws IOException, SlackApiException {
+        // The SDK's User type maps missing membership flags to false. Admission needs an explicit false.
+        var form = new FormBody.Builder().add("user", subject);
+        try (var response = slack.methods(token).runPostFormWithToken(form, "users.info", token)) {
+            if (!response.isSuccessful()) throw new SlackApiException(response, "");
+            var body = response.body();
+            if (body == null) throw new IOException("Slack membership response has no body");
+            return MEMBERSHIP_JSON.readTree(body.byteStream());
         }
     }
 

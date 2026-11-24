@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
+import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.CredentialReaders;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -75,6 +76,7 @@ class SlackMessageServiceLiveTest {
                 credentialProvider,
                 new SlackRateLimitTracker(new SimpleMeterRegistry()),
                 new OutboundEgressGuard(() -> false),
+                new SlackMetrics(new SimpleMeterRegistry()),
                 new SlackProperties(SlackProperties.SLACK));
 
         // The real send: block-kit payload through the app's SlackMessageService to the live channel.

@@ -84,7 +84,12 @@ After that, the server ignores the client ID and secret of the chart for account
    Slack returns you to Hephaestus.
    The Slack page shows **Connected**.
 4. In Slack, send the app a direct message.
-   Hephaestus answers when the member linked their Slack account and the workspace has a ready **Ask Hephaestus** model ([Assign models](/user/ai-models#assign-models)).
+   Hephaestus checks full membership in the connected Slack team before it accepts a question.
+   The member must also link their Slack account.
+   The workspace must have a ready **Ask Hephaestus** model ([Assign models](/user/ai-models#assign-models)).
+   If Slack cannot confirm membership, Hephaestus refuses the question.
+   If full members see this refusal, look for Slack DM membership lookup failures in the server log.
+   Check that the Slack connection has the `users:read` scope.
 5. Activate one channel, as [Integrations](/user/integrations) describes.
    The channel shows **Activating** until Slack confirms the announcement of Hephaestus in the channel.
    Hephaestus reads no message of the channel before that confirmation.
@@ -111,7 +116,7 @@ The manifest asks for these bot scopes, and Hephaestus uses no other scope:
 | `channels:history`, `groups:history` | Messages in the public and private channels that a workspace admin activates |
 | `channels:read`, `groups:read` | The channel list for the channel picker, and channel names |
 | `channels:join` | A workspace admin adds a public channel from the picker. |
-| `users:read` | The match of a Slack user to a workspace member |
+| `users:read` | A Slack user's display name and current team membership |
 
 Account linking uses the user scopes `openid`, `profile` and `email`.
 Hephaestus reads no reactions.

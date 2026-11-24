@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationAdmission;
@@ -34,13 +34,21 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
+import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackNoticeActions;
+import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackInteractiveReplyAdapter;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackRateLimitTracker;
+import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackConversationDmMessageHandler;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
@@ -48,6 +56,9 @@ import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.IOException;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
@@ -57,11 +68,19 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import mockwebserver3.Dispatcher;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
+import mockwebserver3.RecordedRequest;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -80,6 +99,10 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
     private static final String OTHER_TEAM = "T2";
     private static final String CHANNEL = "D9";
     private static final String SLACK_USER = "U1";
+    private static final String FULL_MEMBER = """
+            {"ok":true,"user":{"id":"U1","team_id":"T1","deleted":false,"is_restricted":false,
+            "is_ultra_restricted":false,"is_bot":false,"is_app_user":false}}
+            """;
 
     @Autowired
     private ConversationService conversations;
@@ -141,7 +164,13 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
     @Autowired
     private ObjectMapper mapper;
 
-    private final SlackMessageService slack = mock(SlackMessageService.class);
+    private final MockWebServer slackApi = new MockWebServer();
+    private final AtomicReference<MockResponse> membership = new AtomicReference<>(slackJson(FULL_MEMBER));
+    private final ConcurrentLinkedQueue<MockResponse> lookupResponses = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<String> ephemeralReplies = new ConcurrentLinkedQueue<>();
+    private final AtomicReference<MockResponse> ephemeralResponse =
+            new AtomicReference<>(slackJson("{\"ok\":true,\"message_ts\":\"101.1\"}"));
+    private final SimpleMeterRegistry slackMeters = new SimpleMeterRegistry();
     private final SlackConversationIdentityResolver identities = mock(SlackConversationIdentityResolver.class);
     private final ConversationReadinessQuery readiness = mock(ConversationReadinessQuery.class);
     private final ConversationAdmission admission = mock(ConversationAdmission.class);
@@ -149,10 +178,45 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
     private Workspace workspace;
     private Workspace otherWorkspace;
     private long developerId;
+    private SlackMessageService slack;
     private SlackConversationService service;
 
     @BeforeEach
-    void setUpSlack() {
+    void setUpSlack() throws IOException {
+        slackApi.setDispatcher(new Dispatcher() {
+            @Override
+            public MockResponse dispatch(RecordedRequest request) {
+                String path = request.getUrl().encodedPath();
+                String auth = request.getHeaders().get("Authorization");
+                if ("/api/auth.test".equals(path)) {
+                    return slackJson("{\"ok\":true,\"team_id\":\"T1\",\"user_id\":\"UBOT\"}");
+                }
+                if ("/api/chat.postEphemeral".equals(path) && ("Bearer xoxb-test-" + TEAM).equals(auth)) {
+                    var body = Objects.requireNonNull(request.getBody()).utf8();
+                    ephemeralReplies.add(URLDecoder.decode(body, StandardCharsets.UTF_8));
+                    return ephemeralResponse.get();
+                }
+                if (!"/api/users.info".equals(path)) {
+                    return new MockResponse.Builder().code(404).build();
+                }
+                if (("Bearer xoxb-test-" + TEAM).equals(auth)) {
+                    var next = lookupResponses.poll();
+                    return next == null ? membership.get() : next;
+                }
+                if (("Bearer xoxb-test-" + OTHER_TEAM).equals(auth))
+                    return slackJson(FULL_MEMBER.replace(TEAM, OTHER_TEAM));
+                return slackJson("{\"ok\":false,\"error\":\"invalid_auth\"}");
+            }
+        });
+        slackApi.start();
+        var credentials = mock(SlackCredentialProvider.class);
+        slack = new SlackMessageService(
+                credentials,
+                new SlackRateLimitTracker(slackMeters),
+                new OutboundEgressGuard(() -> false),
+                new SlackMetrics(slackMeters),
+                new SlackProperties(slackApi.url("/").toString()));
+
         User developer = persistUser("slack-ask-developer");
         developerId = accountId(developer);
         workspace = createWorkspace("slack-ask", "Slack Hephaestus", "slack-ask", AccountType.ORG, developer);
@@ -164,6 +228,8 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
                     each, IntegrationKind.SLACK, team, new ConnectionConfig.SlackConfig(team, "Slack", null, Set.of()));
             ConnectionFixtures.reachState(slackConnection, IntegrationState.ACTIVE);
             connectionRepository.save(slackConnection);
+            when(credentials.resolve(new IntegrationRef(IntegrationKind.SLACK, each.getId(), null)))
+                    .thenReturn(Optional.of(new BearerToken("xoxb-test-" + team, null)));
             when(identities.resolveActiveAccountId(each.getId(), team, SLACK_USER))
                     .thenReturn(Optional.of(developerId));
             when(readiness.isReady(each.getId())).thenReturn(true);
@@ -171,6 +237,8 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
         }
         service = new SlackConversationService(
                 new SlackWorkspaceResolver(connectionService, activeConnections),
+                slack,
+                new SlackInteractiveReplyAdapter(slack),
                 new SlackNoticeActions(actions, mapper, registry),
                 identities,
                 new KeywordSlackConversationInputGuard(),
@@ -180,6 +248,20 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
                 entries,
                 turns,
                 timeline);
+    }
+
+    @AfterEach
+    void closeSlack() throws IOException {
+        slack.close();
+        slackApi.close();
+        slackMeters.close();
+    }
+
+    private static MockResponse slackJson(String body) {
+        return new MockResponse.Builder()
+                .addHeader("Content-Type", "application/json")
+                .body(body)
+                .build();
     }
 
     private void assertNotice(String messageTs, @Nullable String threadTs, String text, boolean linkAccount) {
@@ -198,7 +280,6 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
                 .containsEntry("thread", threadTs)
                 .containsEntry("text", text)
                 .containsEntry("link", Boolean.toString(linkAccount));
-        verifyNoInteractions(slack);
     }
 
     private Conversation main() {
@@ -220,6 +301,9 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
         assertThat(conversationRepository.findMain(workspace.getId(), developerId))
                 .isEmpty();
         assertThat(maybeQuestion(ts)).isEmpty();
+        assertThat(turnRepository.findByWorkspaceIdAndRequestId(
+                        workspace.getId(), SlackConversationService.requestId(TEAM, CHANNEL, ts)))
+                .isEmpty();
     }
 
     private ConversationTurn turnOf(ConversationEntry question) {
@@ -246,7 +330,9 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
 
     @Test
     void shouldStoreAQuestionInTheMainConversationWhenTheDeveloperWritesATopLevelDm() {
-        service.handleDm(TEAM, CHANNEL, SLACK_USER, "How is my review practice?", "100.1", "100.1");
+        var claimed = claimedDm();
+        dispatchDm(claimed);
+        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
 
         Conversation main = main();
         assertThat(main.getSlackTeamId()).isEqualTo(TEAM);
@@ -261,6 +347,8 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
         ConversationTurn turn = turnOf(question);
         assertThat(turn.getStatus()).isEqualTo(ConversationTurn.Status.QUEUED);
         assertThat(turn.getSurface()).isEqualTo(ConversationTurn.Surface.SLACK);
+        assertThat(ephemeralReplies).isEmpty();
+        assertLookup("confirmed", "none", 1);
     }
 
     @Test
@@ -301,6 +389,142 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
                 .isFalse();
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "is_restricted, true",
+        "is_ultra_restricted, true",
+        "team_id, T2",
+        "deleted, true",
+        "is_stranger, true",
+        "is_external, true",
+        "is_bot, true",
+        "is_app_user, true",
+        "is_invited_user, true",
+        "is_profile_only_user, true",
+        "is_forgotten, true",
+        "is_connector_bot, true",
+        "is_workflow_bot, true"
+    })
+    void shouldAdmitOneEphemeralRefusalWhenTheSlackUserIsNotAFullMember(String field, String value) {
+        var member = mapper.readValue(FULL_MEMBER, ObjectNode.class);
+        var user = (ObjectNode) member.get("user");
+        if ("true".equals(value)) user.put(field, true);
+        else user.put(field, value);
+        membership.set(slackJson(mapper.writeValueAsString(member)));
+        var claimed = claimedDm();
+
+        dispatchDm(claimed);
+        dispatchDm(claimed);
+
+        assertNothingStored("100.1");
+        assertMembershipRefusal();
+        assertLookup("ineligible", "none", 1);
+        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "provider | {\"ok\":false,\"error\":\"missing_scope\"}",
+                "payload | {\"ok\":true,\"user\":{\"id\":\"U1\",\"team_id\":\"T1\"}}",
+                "payload | {\"ok\":true,\"user\":{\"id\":\"U2\",\"team_id\":\"T1\"}}",
+                "payload | malformed response"
+            })
+    void shouldRefuseWhenSlackCannotConfirmMembership(String reason, String response) {
+        membership.set(slackJson(response));
+        var claimed = claimedDm();
+
+        dispatchDm(claimed);
+
+        assertNothingStored("100.1");
+        assertMembershipRefusal();
+        assertLookup("unconfirmed", reason, 1);
+        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+    }
+
+    @Test
+    void shouldRefuseWhenTheSlackMembershipEndpointIsUnavailable() {
+        membership.set(new MockResponse.Builder().code(503).build());
+        var claimed = claimedDm();
+
+        dispatchDm(claimed);
+
+        assertNothingStored("100.1");
+        assertMembershipRefusal();
+        assertLookup("unconfirmed", "provider", 1);
+        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+    }
+
+    @Test
+    void shouldAdmitTheMemberAfterSlackAcceptsARateLimitRetry() {
+        lookupResponses.add(new MockResponse.Builder()
+                .code(429)
+                .addHeader("Retry-After", "1")
+                .build());
+        var claimed = claimedDm();
+
+        dispatchDm(claimed);
+
+        assertThat(turnOf(question("100.1")).getStatus()).isEqualTo(ConversationTurn.Status.QUEUED);
+        assertThat(ephemeralReplies).isEmpty();
+        assertLookup("confirmed", "none", 1);
+        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+    }
+
+    @Test
+    void shouldKeepOneRefusalAttemptWhenSlackDoesNotConfirmTheEphemeralWrite() {
+        membership.set(slackJson(FULL_MEMBER.replace("\"deleted\":false", "\"deleted\":true")));
+        ephemeralResponse.set(new MockResponse.Builder().code(503).build());
+        var claimed = claimedDm();
+
+        dispatchDm(claimed);
+        dispatchDm(claimed);
+
+        assertNothingStored("100.1");
+        assertMembershipRefusal();
+        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+    }
+
+    @Test
+    void shouldCheckMembershipAgainWhenSlackRedeliversAnUncommittedDmAfterTheMemberLeaves() {
+        when(admission.refusal(workspace.getId(), developerId))
+                .thenThrow(new IllegalStateException("admission interrupted"))
+                .thenReturn(Optional.empty());
+        var claimed = claimedDm();
+        assertThatThrownBy(() -> dispatchDm(claimed)).hasMessage("admission interrupted");
+        assertNothingStored("100.1");
+        membership.set(slackJson(FULL_MEMBER.replace("\"deleted\":false", "\"deleted\":true")));
+
+        dispatchDm(claimed);
+        dispatchDm(claimed);
+
+        assertNothingStored("100.1");
+        assertMembershipRefusal();
+        assertLookup("confirmed", "none", 1);
+        assertLookup("ineligible", "none", 1);
+        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+    }
+
+    private void assertMembershipRefusal() {
+        assertThat(ephemeralReplies)
+                .singleElement()
+                .asString()
+                .contains(
+                        "channel=" + CHANNEL,
+                        "user=" + SLACK_USER,
+                        "text=" + SlackConversationService.SLACK_MEMBERSHIP_REQUIRED);
+    }
+
+    private void assertLookup(String outcome, String reason, int count) {
+        assertThat(slackMeters
+                        .get(SlackMetrics.SLACK_DM_MEMBERSHIP_LOOKUPS)
+                        .tags("outcome", outcome, "reason", reason)
+                        .counter()
+                        .count())
+                .isEqualTo(count);
+    }
+
     @Test
     void shouldKeepOneAdmissionOutcomeWhenARefusedDmIsRedeliveredAfterReadinessChanges() {
         when(readiness.isReady(workspace.getId())).thenReturn(false);
@@ -335,7 +559,6 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
                         key))
                 .isZero();
         assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
-        verifyNoInteractions(slack);
     }
 
     @Test
@@ -398,7 +621,6 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
         assertThat(providerEvents.store(List.of(arrival)))
                 .as("a late redelivery also stays deduplicated")
                 .isZero();
-        verifyNoInteractions(slack);
     }
 
     @Test
@@ -582,7 +804,6 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "Can you review my work?", "100.1", threadTs);
 
         assertNotice("100.1", inThread ? threadTs : null, ConversationRefusal.UNAVAILABLE.userMessage(), false);
-        verifyNoMoreInteractions(slack);
         verifyNoInteractions(identities, admission);
         assertNothingStored("100.1");
         assertThat(turnRepository.findByWorkspaceIdAndRequestId(workspace.getId(), "slack:T1:D9:100.1"))
@@ -592,11 +813,12 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
     @Test
     void shouldPointToHelpAndStoreNothingWhenTheDmSpeaksOfSelfHarmAndHephaestusIsNotReady() {
         when(readiness.isReady(workspace.getId())).thenReturn(false);
+        membership.set(new MockResponse.Builder().code(503).build());
 
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "I want to kill myself", "100.1", "100.1");
 
         assertNotice("100.1", null, KeywordSlackConversationInputGuard.SELF_HARM_RESPONSE, false);
-        verifyNoMoreInteractions(slack);
+        assertLookup("unconfirmed", "provider", 0);
         verifyNoInteractions(readiness, identities, admission);
         assertNothingStored("100.1");
     }
@@ -607,7 +829,7 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
 
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "stupid bot", "100.1", "100.1");
 
-        verifyNoInteractions(slack, readiness, identities, admission);
+        verifyNoInteractions(readiness, identities, admission);
         assertNothingStored("100.1");
     }
 
@@ -623,7 +845,6 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
     void shouldStayQuietAndStoreNothingWhenTheDmIsAbusive() {
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "stupid bot", "100.1", "100.1");
 
-        verifyNoInteractions(slack);
         assertNothingStored("100.1");
     }
 }

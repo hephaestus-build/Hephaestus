@@ -62,7 +62,8 @@ Option 3.
    | Transport | Marker readback | An uncertain write |
    | --- | --- | --- |
    | GitHub and GitLab | Yes. The marker is in the comment or review. | Readback decides. |
-   | Slack | Yes. The marker is in the message metadata ([ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md)). | Readback decides. |
+   | Slack posts in history | Yes. The marker is in the message metadata ([ADR 0123](0123-slack-is-a-channel-into-the-one-conversation.md)). | Readback decides. |
+   | Slack ephemeral membership refusals | No. The server commits the inbound delivery receipt before it posts the refusal. | A replay skips the reply. |
    | Email | No | It ends `UNCERTAIN` and never runs again ([ADR 0098](0098-each-email-is-one-outbox-action-and-is-sent-at-most-once.md) decision 5). |
    | Web Push | No | It ends `UNCERTAIN` and never runs again ([ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) decision 2). |
 

@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Bear
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
+import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
@@ -60,6 +61,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
                 credentialProvider,
                 new SlackRateLimitTracker(new SimpleMeterRegistry()),
                 new OutboundEgressGuard(() -> silentModeEngaged),
+                new SlackMetrics(new SimpleMeterRegistry()),
                 new SlackProperties(SlackProperties.SLACK));
     }
 
@@ -302,6 +304,7 @@ class SlackMessageServiceTest extends BaseUnitTest {
                 credentialProvider,
                 new SlackRateLimitTracker(new SimpleMeterRegistry()),
                 new OutboundEgressGuard(() -> silentModeEngaged),
+                new SlackMetrics(new SimpleMeterRegistry()),
                 time);
     }
 
