@@ -912,6 +912,12 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-workflows.ts
 
+      # A Scorecard update whose image does not pull fails here, before it can merge.
+      # docs/contributor/supply-chain-security.mdx § Scorecard image.
+      - name: Verify the pinned Scorecard image
+        if: needs.detect-changes.outputs.should_skip != 'true'
+        run: node scripts/check-scorecard-image.ts
+
       # Without file arguments Actionlint reads every workflow, so an empty list must skip it.
       - uses: reviewdog/action-actionlint@ae857e78c1b42b3d0a49637181b09d3d56d402b4 # v1.84.1
         if: steps.native.outputs.compatible != ''

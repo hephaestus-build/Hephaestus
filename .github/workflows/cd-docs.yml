@@ -194,20 +194,14 @@ jobs:
           path: docs/dist
           retention-days: 1
 
-  deploy:
-    name: GitHub Pages
-    concurrency:
-      group: docs-production-deploy
-      cancel-in-progress: false
+  # deploy-pages finds the site artifact by listing the run's artifacts. Right after an upload in the
+  # same job the listing can still lack it, so the site is uploaded here and deployed by its own job.
+  assemble:
+    name: Assemble the site
     needs: [build-release, build-production]
     timeout-minutes: 15
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      pages: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions: {}
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -220,5 +214,21 @@ jobs:
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: docs-build
+
+  deploy:
+    name: GitHub Pages
+    concurrency:
+      group: docs-production-deploy
+      cancel-in-progress: false
+    needs: [assemble]
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      pages: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

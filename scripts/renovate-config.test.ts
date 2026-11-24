@@ -554,6 +554,7 @@ void test("every custom manager reads every file it claims to read", async () =>
 		["Track the pnpm pin in devEngines", ["package.json"]],
 		["Track release image tags and digests", ["security/release-images.json"]],
 		["Track the isolated Semgrep scanner image", [".github/workflows/semgrep.yml"]],
+		["Track the image that the pinned Scorecard action runs", [".github/workflows/scorecard.yml"]],
 		["Track the TruffleHog scanner image", [".github/workflows/ci-security-scan.yml"]],
 		[
 			"Track the Kubernetes node images of the cluster legs",

@@ -229,10 +229,25 @@ It needs its own workflow because [OpenSSF restricts the publishing job](https:/
 Reproduce it with `node scripts/check-scorecard.ts`.
 Alternatively, run `node --test scripts/check-scorecard.test.ts` without network access.
 
+### Scorecard image
+
+`ossf/scorecard-action` is a Docker action, and its `action.yaml` names its image by tag.
+`scorecard.yml` therefore pins two things: the action by commit, and the image as `SCORECARD_IMAGE`, a tag with its digest.
+`scripts/check-scorecard-image.ts` checks three facts:
+
+- The action at the pinned commit runs that tag.
+- The registry still resolves the tag to the pinned digest.
+- The digest has a linux/amd64 image whose manifest, config and layers the registry serves.
+
+The `Pinned Scorecard image` job runs the check before Scorecard runs, so a broken pin fails by name.
+`Workflow lint` runs it on every pull request that changes CI configuration.
+Renovate moves the action and its image in their own pull request, so an update whose image does not pull cannot merge.
+Run it with `node scripts/check-scorecard-image.ts`, or `node --test scripts/check-scorecard-image.test.ts` without network access.
+
 ### Gradle dependency inventory and the Vulnerabilities exclusion
 
 Scorecard's `Vulnerabilities` check does not read the dependency graph submitted to GitHub or
-Dependabot's alerts. The [pinned action's dependencies](https://github.com/ossf/scorecard-action/blob/2d1146689b8cda280b9bc96326124645441f03bc/go.mod) select two tools. These are Scorecard 5.5.0 and OSV Scanner 2.3.2.
+Dependabot's alerts. The [pinned action's dependencies](https://github.com/ossf/scorecard-action/blob/fa7117db83c52d787ae5a89f350999701505d78e/go.mod) select two tools. These are Scorecard 5.6.0 and OSV Scanner 2.5.1.
 [Scorecard's OSV client](https://github.com/ossf/scorecard/blob/v5.5.0/clients/osv.go) scans the checkout recursively and queries its Git commit. The
 [Gradle verification-metadata extractor](https://github.com/google/osv-scalibr/blob/cf20290d7624/extractor/filesystem/language/java/gradleverificationmetadataxml/gradleverificationmetadataxml.go)
 turns every component's group, name and version in `server/gradle/verification-metadata.xml` into a
