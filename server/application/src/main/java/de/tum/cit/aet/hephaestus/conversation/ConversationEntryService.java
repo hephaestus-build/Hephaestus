@@ -132,11 +132,11 @@ public class ConversationEntryService {
     @Transactional
     public ConversationEntry vote(long workspaceId, UUID entryId, ConversationEntry.@Nullable Vote vote) {
         ConversationEntry entry = require(workspaceId, entryId);
-        holdWrite(workspaceId, entry.getConversationId());
+        long accountId = holdWrite(workspaceId, entry.getConversationId());
         if (entries.vote(workspaceId, entryId, vote) == 0) {
             throw new ConversationRejectedException(ConversationRejectedException.Reason.NOT_VOTABLE);
         }
-        changed(workspaceId, entry.getConversationId(), entryId);
+        changed(workspaceId, entry.getConversationId(), accountId, entryId);
         return require(workspaceId, entryId);
     }
 
@@ -147,7 +147,7 @@ public class ConversationEntryService {
      */
     @Transactional
     public ConversationEntry editSlackMessage(long workspaceId, UUID conversationId, String slackTs, String text) {
-        holdWrite(workspaceId, conversationId);
+        long accountId = holdWrite(workspaceId, conversationId);
         ConversationEntry entry = entries.findByWorkspaceIdAndConversationIdAndSlackTs(
                         workspaceId, conversationId, slackTs)
                 .orElseThrow(() -> new EntityNotFoundException("ConversationEntry", slackTs));
@@ -164,17 +164,17 @@ public class ConversationEntryService {
             throw new ConversationRejectedException(ConversationRejectedException.Reason.NOT_EDITABLE);
         }
         redaction.eraseCopiesOf(List.of(entry.getId()));
-        changed(workspaceId, conversationId, entry.getId());
+        changed(workspaceId, conversationId, accountId, entry.getId());
         return require(workspaceId, entry.getId());
     }
 
     /** Holds the write fence of the conversation's owner ({@link ConversationService#holdWrite}). */
-    private void holdWrite(long workspaceId, UUID conversationId) {
-        ConversationService.holdWrite(
-                writeFence,
-                conversations
-                        .findAccountIdByIdAndWorkspaceId(conversationId, workspaceId)
-                        .orElseThrow(() -> new EntityNotFoundException("Conversation", conversationId.toString())));
+    private long holdWrite(long workspaceId, UUID conversationId) {
+        long accountId = conversations
+                .findAccountIdByIdAndWorkspaceId(conversationId, workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Conversation", conversationId.toString()));
+        ConversationService.holdWrite(writeFence, accountId);
+        return accountId;
     }
 
     /** The Slack message's entry in a conversation, if Hephaestus stored it. */
@@ -325,7 +325,8 @@ public class ConversationEntryService {
                 .filter(entry -> entry.getKind().isMessage())
                 .map(ConversationEntry::getId)
                 .toList();
-        ConversationLedgerEvents.EntryChanged.of(conversation.getWorkspaceId(), conversation.getId(), messages)
+        ConversationLedgerEvents.EntryChanged.of(
+                        conversation.getWorkspaceId(), conversation.getId(), conversation.getAccountId(), messages)
                 .forEach(events::publishEvent);
     }
 
@@ -426,7 +427,8 @@ public class ConversationEntryService {
         }
     }
 
-    private void changed(long workspaceId, UUID conversationId, UUID entryId) {
-        events.publishEvent(new ConversationLedgerEvents.EntryChanged(workspaceId, conversationId, List.of(entryId)));
+    private void changed(long workspaceId, UUID conversationId, long accountId, UUID entryId) {
+        events.publishEvent(
+                new ConversationLedgerEvents.EntryChanged(workspaceId, conversationId, accountId, List.of(entryId)));
     }
 }

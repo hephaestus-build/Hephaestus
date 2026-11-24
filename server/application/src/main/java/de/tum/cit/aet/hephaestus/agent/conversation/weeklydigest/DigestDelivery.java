@@ -50,7 +50,7 @@ public class DigestDelivery {
         var payload = WeeklyDigestPayload.fromJson(stimulus.payload(), mapper);
         if (payload.isEmpty()) return;
         events.publishEvent(new ConversationLedgerEvents.EntryChanged(
-                changed.workspaceId(), changed.conversationId(), List.of(stimulus.id())));
+                changed.workspaceId(), changed.conversationId(), accountId, List.of(stimulus.id())));
         var pointer = transports.stream()
                 .sorted(Comparator.comparing(WeeklyDigestTransport::pointer))
                 .filter(transport -> transport.reaches(changed.workspaceId(), accountId))

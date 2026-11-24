@@ -49,6 +49,8 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
         Long getWorkspaceId();
 
         UUID getConversationId();
+
+        long getAccountId();
     }
 
     /** How many messages a conversation holds after a sequence number, and when the newest was written. */
@@ -551,8 +553,10 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
                             UNION SELECT id FROM covering)
             RETURNING e.id, e.workspace_id, e.conversation_id, e.kind
             )
-            SELECT id AS "id", workspace_id AS "workspaceId", conversation_id AS "conversationId"
-            FROM updated WHERE kind IN ('USER','ANSWER','DIGEST')
+            SELECT u.id AS "id", u.workspace_id AS "workspaceId", u.conversation_id AS "conversationId",
+                   c.account_id AS "accountId"
+            FROM updated u JOIN conversation c ON (c.id,c.workspace_id)=(u.conversation_id,u.workspace_id)
+            WHERE u.kind IN ('USER','ANSWER','DIGEST')
             """, nativeQuery = true)
     List<EntryRef> redactWithCopies(
             @Param("ids") UUID[] ids,

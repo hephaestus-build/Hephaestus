@@ -85,16 +85,17 @@ public class ConversationRedaction {
         for (ConversationEntryRepository.EntryRef message : messages) {
             byConversation
                     .computeIfAbsent(
-                            new Conversation(message.getWorkspaceId(), message.getConversationId()),
+                            new Conversation(
+                                    message.getWorkspaceId(), message.getConversationId(), message.getAccountId()),
                             conversation -> new ArrayList<>())
                     .add(message.getId());
         }
         byConversation.forEach((conversation, changed) -> ConversationLedgerEvents.EntryChanged.of(
-                        conversation.workspaceId(), conversation.id(), changed)
+                        conversation.workspaceId(), conversation.id(), conversation.accountId(), changed)
                 .forEach(events::publishEvent));
     }
 
-    private record Conversation(long workspaceId, UUID id) {}
+    private record Conversation(long workspaceId, UUID id, long accountId) {}
 
     /**
      * Erases every copy of these entries' words but keeps the entries: an edit replaced their text. The caller locked
