@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.action.LaneAction;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Duration;
 import java.util.Collection;
@@ -24,6 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
+@OwnerScope.StoredOwnerOperation
 public class ConversationSlackReplies {
 
     /** How long a reply whose post may have reached Slack waits before the history is read. */
@@ -45,6 +47,7 @@ public class ConversationSlackReplies {
     private final ConversationEntryRepository entries;
     private final AgentActions actions;
     private final ObjectMapper mapper;
+    private final OwnerScope owners;
 
     public static String replyKey(UUID questionId) {
         return REPLY + questionId;
@@ -105,9 +108,13 @@ public class ConversationSlackReplies {
         actions.enqueue(request(turn.getWorkspaceId(), accountId, key, new Payload(questionId, turn.getId())));
     }
 
-    /** The durable ledger event runs after redaction commits, without its conversation locks. */
+    /**
+     * The durable ledger event runs after redaction commits, without its conversation locks, as the account whose
+     * entries changed.
+     */
     @ApplicationModuleListener(propagation = Propagation.REQUIRES_NEW)
     public void changed(ConversationLedgerEvents.EntryChanged changed) {
+        owners.ofJob(changed.accountId());
         forget(changed.workspaceId(), changed.entryIds());
     }
 

@@ -47,9 +47,6 @@ import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 /** Attempts after the first for a read marker the server did not take. */
 const READ_RETRIES = 3;
 
-/** A user view has no live stream, so it reads the viewed conversation again at this pace. */
-const VIEW_POLL_MS = 15_000;
-
 const NOT_SENT = "Hephaestus did not get this message.";
 
 const submitKey = (workspaceSlug: string) => ["submitConversationTurn", workspaceSlug] as const;
@@ -116,23 +113,10 @@ function usePendingMessages(
 	return [...latest.values()];
 }
 
-function useConversationQuery(workspaceSlug: string, readOnly: boolean) {
-	return useQuery({
-		...conversationOptions(workspaceSlug),
-		refetchInterval: readOnly ? VIEW_POLL_MS : false,
-	});
-}
-
 /** The developer's top-level messages, newest page first read, older pages above it on demand. */
-export function useConversationTimeline(
-	workspaceSlug: string,
-	readOnly: boolean,
-): ConversationTimelineState {
-	const conversation = useConversationQuery(workspaceSlug, readOnly);
-	const pages = useInfiniteQuery({
-		...conversationEntriesOptions(workspaceSlug),
-		refetchInterval: readOnly ? VIEW_POLL_MS : false,
-	});
+export function useConversationTimeline(workspaceSlug: string): ConversationTimelineState {
+	const conversation = useQuery(conversationOptions(workspaceSlug));
+	const pages = useInfiniteQuery(conversationEntriesOptions(workspaceSlug));
 	const entries = entriesOf(pages.data?.pages ?? []);
 	const turns = (conversation.data?.activeTurns ?? []).filter(
 		(turn) => turn.parentEntryId === undefined,
@@ -163,13 +147,9 @@ export function useConversationTimeline(
 export function useConversationThread(
 	workspaceSlug: string,
 	parentEntryId: string,
-	readOnly: boolean,
 ): ConversationThreadState {
-	const conversation = useConversationQuery(workspaceSlug, readOnly);
-	const pages = useInfiniteQuery({
-		...conversationThreadOptions(workspaceSlug, parentEntryId),
-		refetchInterval: readOnly ? VIEW_POLL_MS : false,
-	});
+	const conversation = useQuery(conversationOptions(workspaceSlug));
+	const pages = useInfiniteQuery(conversationThreadOptions(workspaceSlug, parentEntryId));
 	const entries = entriesOf(pages.data?.pages ?? []);
 	const turns = (conversation.data?.activeTurns ?? []).filter(
 		(turn) => turn.parentEntryId === parentEntryId,
@@ -375,13 +355,10 @@ export function useConversationUnread(workspaceSlug: string): boolean {
  * an answer that lands there stays unread on every device until the page shows. The server keeps the
  * later of two times, so a late request never lowers it, and every device reads the same marker.
  */
-export function useMarkConversationRead(workspaceSlug: string, enabled: boolean) {
+export function useMarkConversationRead(workspaceSlug: string) {
 	const queryClient = useQueryClient();
 	const visible = usePageVisible();
-	const conversation = useQuery({
-		...conversationOptions(workspaceSlug),
-		enabled,
-	}).data;
+	const conversation = useQuery(conversationOptions(workspaceSlug)).data;
 	const pendingRead = usePendingRead(workspaceSlug);
 	const mark = useMutation({
 		...markConversationReadMutation(),
@@ -401,8 +378,8 @@ export function useMarkConversationRead(workspaceSlug: string, enabled: boolean)
 	// A read that failed every attempt is not sent again for the same answer; the next answer tries.
 	const failed = isError && variables.body.at.getTime() === answeredAt?.getTime();
 	useEffect(() => {
-		if (enabled && visible && unread && answeredAt !== undefined && !failed) {
+		if (visible && unread && answeredAt !== undefined && !failed) {
 			mutate({ path: { workspaceSlug }, body: { at: answeredAt } });
 		}
-	}, [enabled, visible, unread, answeredAt, failed, workspaceSlug, mutate]);
+	}, [visible, unread, answeredAt, failed, workspaceSlug, mutate]);
 }

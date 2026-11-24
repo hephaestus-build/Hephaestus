@@ -25,9 +25,8 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * The developer's Hephaestus conversation as the app reads it: pages of messages, threads, turns, and the live changes
- * to them. A read for the app is the account's own: a conversation, entry or turn of another member is not found. The
- * live stream's reads ({@link #liveTurn}, {@link #liveEntry}) read any member's rows and name the developer each row
- * belongs to.
+ * to them. Every read is the account's own: a conversation, entry or turn of another member is not found. The caller
+ * binds that account as the transaction's owner first ({@code OwnerScope}).
  *
  * <p>The app shows the developer's messages, Hephaestus's messages and weekly digests ({@link ConversationEntryRepository#SHOWN}).
  * {@link ConversationEntryViews} maps each message as the app shows it.
@@ -62,9 +61,6 @@ public class ConversationTimeline {
             return event -> notifications.startListening();
         }
     }
-
-    /** A value the live stream sends, and the developer whose conversation it belongs to. */
-    public record Owned<T>(long accountId, T value) {}
 
     @Transactional(readOnly = true)
     public ConversationDTO conversation(long workspaceId, long accountId) {
@@ -147,17 +143,24 @@ public class ConversationTimeline {
         return views.dtos(owner(entry), List.of(entry)).getFirst();
     }
 
-    /** The account's entry, for a write that the account may make only to its own conversation. */
+    /** Checks ownership before a writer locks and loads the entry. */
     @Transactional(readOnly = true)
-    public ConversationEntry requireOwnedEntry(long workspaceId, long accountId, UUID entryId) {
-        return ownedEntry(workspaceId, accountId, entryId)
-                .orElseThrow(() -> new EntityNotFoundException("ConversationEntry", entryId.toString()));
+    public void requireOwnedEntry(long workspaceId, long accountId, UUID entryId) {
+        if (entries.findAccountIdByIdAndWorkspaceId(entryId, workspaceId)
+                .filter(owner -> owner == accountId)
+                .isEmpty()) {
+            throw new EntityNotFoundException("ConversationEntry", entryId.toString());
+        }
     }
 
-    /** The account's turn, for a write that the account may make only to its own conversation. */
+    /** Checks ownership before a writer locks and loads the turn. */
     @Transactional(readOnly = true)
-    public ConversationTurn requireOwnedTurn(long workspaceId, long accountId, UUID turnId) {
-        return ownedTurn(workspaceId, accountId, turnId);
+    public void requireOwnedTurn(long workspaceId, long accountId, UUID turnId) {
+        if (turns.findAccountIdByIdAndWorkspaceId(turnId, workspaceId)
+                .filter(owner -> owner == accountId)
+                .isEmpty()) {
+            throw new EntityNotFoundException("ConversationTurn", turnId.toString());
+        }
     }
 
     private ConversationTurn ownedTurn(long workspaceId, long accountId, UUID turnId) {
@@ -167,30 +170,30 @@ public class ConversationTimeline {
                 .orElseThrow(() -> new EntityNotFoundException("ConversationTurn", turnId.toString()));
     }
 
-    /** A turn as the live stream sends it, with the developer it belongs to. */
+    /** The account's turn as the live stream sends it. Empty when it is another account's or the app does not show it. */
     @Transactional(readOnly = true)
-    public Optional<Owned<ConversationTurnDTO>> liveTurn(long workspaceId, UUID turnId) {
+    public Optional<ConversationTurnDTO> liveTurn(long workspaceId, long accountId, UUID turnId) {
         return turns.findByIdAndWorkspaceId(turnId, workspaceId)
-                .filter(turn -> turn.getSurface() != ConversationTurn.Surface.SYSTEM)
+                .filter(turn ->
+                        turn.getAccountId() == accountId && turn.getSurface() != ConversationTurn.Surface.SYSTEM)
                 .flatMap(turn -> conversations
                         .findByIdAndWorkspaceId(turn.getConversationId(), workspaceId)
-                        .map(conversation -> new Owned<>(
-                                conversation.getAccountId(),
-                                turn(
-                                        turn,
-                                        conversation.getParentEntryId(),
-                                        waitingFor(turn),
-                                        working(workspaceId, List.of(turn)).contains(turn.getId()),
-                                        progress.snapshot(turn)))));
+                        .map(conversation -> turn(
+                                turn,
+                                conversation.getParentEntryId(),
+                                waitingFor(turn),
+                                working(workspaceId, List.of(turn)).contains(turn.getId()),
+                                progress.snapshot(turn))));
     }
 
     /**
-     * An entry as the live stream sends it, with the developer it belongs to. Empty when the app does not show the
-     * entry. A Hephaestus message that was erased is sent as deleted, so the app removes it.
+     * The account's entry as the live stream sends it. Empty when it is another account's or the app does not show it.
+     * A Hephaestus message that was erased is sent as deleted, so the app removes it.
      */
     @Transactional(readOnly = true)
-    public Optional<Owned<ConversationEntryDTO>> liveEntry(long workspaceId, UUID entryId) {
-        Optional<ConversationEntry> changed = entries.findByIdAndWorkspaceId(entryId, workspaceId);
+    public Optional<ConversationEntryDTO> liveEntry(long workspaceId, long accountId, UUID entryId) {
+        Optional<ConversationEntry> changed =
+                entries.findByIdAndWorkspaceId(entryId, workspaceId).filter(entry -> entry.getAccountId() == accountId);
         if (changed.isEmpty()) {
             return Optional.empty();
         }
@@ -205,9 +208,7 @@ public class ConversationTimeline {
         }
         Conversation conversation = conversation(workspaceId, entry.getConversationId());
         ConversationEntryDTO dto = views.dtos(conversation, List.of(entry)).getFirst();
-        return dto.deleted() || ConversationEntryViews.shows(dto)
-                ? Optional.of(new Owned<>(conversation.getAccountId(), dto))
-                : Optional.empty();
+        return dto.deleted() || ConversationEntryViews.shows(dto) ? Optional.of(dto) : Optional.empty();
     }
 
     private Optional<Conversation> main(long workspaceId, long accountId) {

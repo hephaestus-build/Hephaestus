@@ -171,10 +171,13 @@ export const ReadOnlyUserView: Story = {
 		isAdmin: false,
 		isAppAdmin: false,
 		readOnly: true,
+		showConversation: false,
 		context: "main",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("link", { name: /^Conversation$/u })).toBeVisible();
+		await expect(
+			canvas.queryByRole("link", { name: /^(?:Conversation|Ask Hephaestus)$/u }),
+		).not.toBeInTheDocument();
 		await expect(canvas.queryByText("User settings")).not.toBeInTheDocument();
 	},
 };

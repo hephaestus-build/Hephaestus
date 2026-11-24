@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.web.ConversationLiveHub;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -22,6 +23,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,6 +85,9 @@ class ConversationLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private ConversationLiveHub hub;
 
+    @Autowired
+    private SqlStatementCounter statements;
+
     private User developer;
     private User colleague;
     private Workspace workspace;
@@ -134,6 +142,19 @@ class ConversationLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .filter(event -> event.event() != null || event.comment() != null)
                 .subscribe(events::add, failure -> ended.set(true), () -> ended.set(true));
         return new Stream(events, ended, subscription);
+    }
+
+    /** The hub's one reader thread, which reads every snapshot and change for the streams. */
+    private Thread reader() {
+        var reader = (ExecutorService) Objects.requireNonNull(ReflectionTestUtils.getField(hub, "reader"));
+        try {
+            return reader.submit(Thread::currentThread).get(WAIT.toSeconds(), TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        } catch (ExecutionException | TimeoutException e) {
+            throw new IllegalStateException("The hub's reader thread did not answer", e);
+        }
     }
 
     private void awaitListening() {
@@ -321,6 +342,91 @@ class ConversationLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .contains("\"id\":\"" + own.turn().getConversationId() + "\"");
         } finally {
             second.subscription().dispose();
+        }
+    }
+
+    /**
+     * The snapshot on open, after a resync and on a reconnect reads the developer's rows with their account bound as
+     * the owner of its transaction, as the conversation tables' owner policy needs.
+     */
+    @Test
+    void shouldReadEverySnapshotWithTheDevelopersAccountBoundWhenTheStreamOpensResyncsOrReconnects() {
+        ConversationTurnService.Submission own = submit(developer, "Whose rows are these?");
+        String turnId = own.turn().getId().toString();
+
+        var measured = statements.measureOwnersOn(reader(), () -> {
+            Stream first = open();
+            try {
+                await().atMost(WAIT).until(() -> first.has(SNAPSHOT, turnId));
+                hub.resync();
+                await().atMost(WAIT)
+                        .until(() -> first.events().stream()
+                                        .filter(event -> SNAPSHOT.equals(event.event())
+                                                && event.data() != null
+                                                && event.data().contains(turnId))
+                                        .count()
+                                >= 2);
+            } finally {
+                first.subscription().dispose();
+            }
+            Stream second = open("snapshot-1");
+            try {
+                await().atMost(WAIT).until(() -> second.has(SNAPSHOT, turnId));
+            } finally {
+                second.subscription().dispose();
+            }
+            return own;
+        });
+
+        var reads = ConversationStatements.of(measured);
+        assertThat(reads)
+                .as("the snapshots' reads of the conversation tables")
+                .isNotEmpty()
+                .extracting(SqlStatementCounter.Prepared::owner)
+                .doesNotContainNull()
+                .contains(accountId(developer));
+        assertThat(reads)
+                .allSatisfy(statement -> assertThat(statement.readOnly())
+                        .as("a snapshot reads in a read-only transaction: %s", statement.sql())
+                        .isTrue());
+    }
+
+    /**
+     * A change is read with its developer's account bound as the owner, and only for a developer with a stream open on
+     * this server: a colleague's change, with no stream of theirs here, is not read at all.
+     */
+    @Test
+    void shouldReadOnlyTheStreamingDevelopersChangesWithTheirAccountBoundWhenTheLedgerChanges() {
+        Stream stream = open();
+        try {
+            await().atMost(WAIT).until(() -> stream.has(SNAPSHOT, "\"activeTurns\":[]"));
+            awaitListening();
+
+            var measured = statements.measureOwnersOn(reader(), () -> {
+                submit(colleague, "A colleague's question");
+                ConversationTurnService.Submission own = submit(developer, "My question");
+                // The ledger delivers in commit order and the reader reads in that order: the colleague's change
+                // was handled before the developer's arrives.
+                await().atMost(WAIT)
+                        .until(() -> stream.has(ENTRY, own.question().getId().toString())
+                                && stream.has(TURN, own.turn().getId().toString()));
+                return own;
+            });
+
+            var reads = ConversationStatements.of(measured);
+            assertThat(reads)
+                    .as("the live reads of the conversation tables")
+                    .isNotEmpty()
+                    .extracting(SqlStatementCounter.Prepared::owner)
+                    .doesNotContainNull()
+                    .contains(accountId(developer))
+                    .doesNotContain(accountId(colleague));
+            assertThat(reads)
+                    .allSatisfy(statement -> assertThat(statement.readOnly())
+                            .as("a change is read in a read-only transaction: %s", statement.sql())
+                            .isTrue());
+        } finally {
+            stream.subscription().dispose();
         }
     }
 

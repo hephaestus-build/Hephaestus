@@ -71,11 +71,3 @@ export const OwnMessage: Story = {
 		await expect(args.onDelete).toHaveBeenCalledOnce();
 	},
 };
-
-/** A read-only conversation, such as a user view: only Copy. */
-export const ReadOnly: Story = {
-	args: { vote: undefined, onReply: undefined },
-	play: async ({ canvas }) => {
-		await expect(canvas.getAllByRole("button")).toHaveLength(1);
-	},
-};

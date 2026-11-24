@@ -27,11 +27,15 @@ export const Route = createFileRoute("/_authenticated")({
 		const viewed = getUserViewSession();
 		if (viewed) {
 			const workspacePath = `/w/${viewed.workspaceSlug}`;
+			const conversationRoute = matches.some(
+				(match) => match.routeId === "/_authenticated/w/$workspaceSlug/conversation",
+			);
 			if (
 				(location.pathname !== workspacePath &&
 					!location.pathname.startsWith(`${workspacePath}/`)) ||
 				location.pathname.startsWith(`${workspacePath}/admin`) ||
-				location.pathname === `${workspacePath}/onboarding`
+				location.pathname === `${workspacePath}/onboarding` ||
+				conversationRoute
 			) {
 				throw redirect({
 					to: "/w/$workspaceSlug",

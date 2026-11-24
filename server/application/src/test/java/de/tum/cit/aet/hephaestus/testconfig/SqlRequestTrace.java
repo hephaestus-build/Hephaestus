@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.springframework.core.Ordered;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -27,7 +28,7 @@ public class SqlRequestTrace extends OncePerRequestFilter implements Ordered {
     static final String HEADER = "X-Test-Sql-Trace";
 
     private final SqlStatementCounter statements;
-    private final Map<String, CompletableFuture<List<String>>> requests = new ConcurrentHashMap<>();
+    private final Map<String, Request> requests = new ConcurrentHashMap<>();
 
     SqlRequestTrace(SqlStatementCounter statements) {
         this.statements = statements;
@@ -35,12 +36,25 @@ public class SqlRequestTrace extends OncePerRequestFilter implements Ordered {
 
     /** Runs one exchange through a client that tags its request, then returns the SQL that the request prepared. */
     public <T> SqlStatementCounter.Measurement<T> measure(WebTestClient http, Function<WebTestClient, T> exchange) {
+        return measure(http, exchange, false);
+    }
+
+    /** Like {@link #measure}, with the owner and read-only state of each statement's transaction. */
+    public <T> SqlStatementCounter.Measurement<T> measureOwners(
+            WebTestClient http, Function<WebTestClient, T> exchange) {
+        return measure(http, exchange, true);
+    }
+
+    private <T> SqlStatementCounter.Measurement<T> measure(
+            WebTestClient http, Function<WebTestClient, T> exchange, boolean owners) {
         String id = UUID.randomUUID().toString();
+        Request request = new Request(owners, new CompletableFuture<>());
+        requests.put(id, request);
         try {
             T value = exchange.apply(http.mutate().defaultHeader(HEADER, id).build());
             // The client can read a complete body before the server thread leaves this filter.
-            List<String> sql = request(id).get(30, TimeUnit.SECONDS);
-            return new SqlStatementCounter.Measurement<>(value, sql);
+            List<SqlStatementCounter.Prepared> prepared = request.prepared().get(30, TimeUnit.SECONDS);
+            return new SqlStatementCounter.Measurement<>(value, prepared);
         } catch (ExecutionException failure) {
             throw new IllegalStateException("The measured request failed", failure.getCause());
         } catch (TimeoutException failure) {
@@ -57,34 +71,36 @@ public class SqlRequestTrace extends OncePerRequestFilter implements Ordered {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String id = request.getHeader(HEADER);
-        if (id == null) {
+        Request measured = id == null ? null : requests.get(id);
+        if (measured == null) {
             chain.doFilter(request, response);
             return;
         }
+        Supplier<String> exchange = () -> {
+            try {
+                chain.doFilter(request, response);
+            } catch (IOException | ServletException failure) {
+                throw new FailedRequest(failure);
+            }
+            return "measured";
+        };
         try {
-            var measured = statements.measure(() -> {
-                try {
-                    chain.doFilter(request, response);
-                } catch (IOException | ServletException failure) {
-                    throw new FailedRequest(failure);
-                }
-                return id;
-            });
-            request(id).complete(measured.sql());
+            measured.prepared()
+                    .complete((measured.owners() ? statements.measureOwners(exchange) : statements.measure(exchange))
+                            .prepared());
         } catch (FailedRequest failure) {
             Throwable cause = Objects.requireNonNull(failure.getCause());
-            request(id).completeExceptionally(cause);
+            measured.prepared().completeExceptionally(cause);
             if (cause instanceof IOException io) throw io;
             throw (ServletException) cause;
         } catch (RuntimeException | Error failure) {
-            request(id).completeExceptionally(failure);
+            measured.prepared().completeExceptionally(failure);
             throw failure;
         }
     }
 
-    private CompletableFuture<List<String>> request(String id) {
-        return requests.computeIfAbsent(id, key -> new CompletableFuture<>());
-    }
+    /** A tagged request: whether it reads owners, and the statements it prepared once it leaves this filter. */
+    private record Request(boolean owners, CompletableFuture<List<SqlStatementCounter.Prepared>> prepared) {}
 
     @Override
     public int getOrder() {

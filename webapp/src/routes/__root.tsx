@@ -663,16 +663,16 @@ function AppSidebarContainer() {
 	);
 
 	const isMember = workspaceAccess.role !== undefined;
-	// The server refuses this read in a user view, since it carries the signed-in account's own
-	// choice. A view keeps Hephaestus listed, as before, for the viewed member's saved conversations.
+	// The saved choice belongs to the signed-in account.
 	const onboarding = useQuery({
 		...getMemberOnboardingOptions({ path: { workspaceSlug: chromeWorkspaceSlug ?? "" } }),
 		enabled: sidebarContext === "main" && isAuthenticated && isMember && !userView && hasWorkspace,
 	});
 	const showConversation =
 		isMember &&
-		(Boolean(userView) ||
-			(onboarding.data !== undefined && !isConversationOutOfReach(onboarding.data)));
+		!userView &&
+		onboarding.data !== undefined &&
+		!isConversationOutOfReach(onboarding.data);
 
 	// Read only where the sidebar says "No workspace".
 	const workspaceCreation = useWorkspaceCreation({

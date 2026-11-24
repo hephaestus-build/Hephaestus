@@ -6,8 +6,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,7 +24,9 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntryDTO;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerNotifications;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.WebServerDrainProbe;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -44,6 +49,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigUtils;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
@@ -52,16 +58,20 @@ class ConversationLiveHubTest extends BaseUnitTest {
 
     private static final long WORKSPACE = 1L;
     private static final long ACCOUNT = 70L;
+    private static final long COLLEAGUE = 71L;
     private static final Duration WAIT = Duration.ofSeconds(5);
 
     private final ConversationTimeline timeline = mock(ConversationTimeline.class);
     private final AccountMembershipQuery memberships = mock(AccountMembershipQuery.class);
+    private final OwnerScope owners = mock(OwnerScope.class);
     private final AtomicBoolean member = new AtomicBoolean(true);
     private final RecordingEmitter emitter = new RecordingEmitter();
     private final ConversationLiveHub hub = new ConversationLiveHub(
             mock(ConversationLedgerNotifications.class),
             timeline,
             memberships,
+            owners,
+            TransactionOperations.withoutTransaction(),
             new ObjectMapper(),
             new SimpleMeterRegistry(),
             () -> emitter,
@@ -73,8 +83,8 @@ class ConversationLiveHubTest extends BaseUnitTest {
         when(memberships.isActiveVisibleMember(WORKSPACE, ACCOUNT)).thenAnswer(call -> member.get());
         when(timeline.conversation(anyLong(), anyLong()))
                 .thenReturn(new ConversationDTO(null, 0, List.of(), List.of(), null, null));
-        when(timeline.liveEntry(anyLong(), any()))
-                .thenAnswer(call -> Optional.of(new ConversationTimeline.Owned<>(ACCOUNT, entry(call.getArgument(1)))));
+        when(timeline.liveEntry(anyLong(), anyLong(), any()))
+                .thenAnswer(call -> Optional.of(entry(call.getArgument(2))));
     }
 
     @AfterEach
@@ -137,6 +147,33 @@ class ConversationLiveHubTest extends BaseUnitTest {
 
         await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot", "entry"));
         assertThat(emitter.frames()).anyMatch(frame -> frame.contains(committed.toString()));
+    }
+
+    @Test
+    void shouldReadNoChangeWhenItsDeveloperHasNoStreamOnThisServer() {
+        hub.subscribe(WORKSPACE, ACCOUNT);
+        await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot"));
+
+        hub.entryChanged(new ConversationLedgerEvents.EntryChanged(
+                WORKSPACE, UUID.randomUUID(), COLLEAGUE, List.of(UUID.randomUUID())));
+        hub.turnChanged(new ConversationLedgerEvents.TurnChanged(
+                WORKSPACE,
+                UUID.randomUUID(),
+                COLLEAGUE,
+                UUID.randomUUID(),
+                ConversationTurn.Status.QUEUED,
+                ConversationTurn.Surface.APP,
+                0));
+        UUID own = UUID.randomUUID();
+        hub.entryChanged(
+                new ConversationLedgerEvents.EntryChanged(WORKSPACE, UUID.randomUUID(), ACCOUNT, List.of(own)));
+
+        // One reader thread reads in order: the developer's own entry arrives after any read of the colleague's.
+        await().atMost(WAIT).untilAsserted(() -> assertThat(emitter.names()).containsExactly("snapshot", "entry"));
+        verify(timeline, never()).liveEntry(anyLong(), eq(COLLEAGUE), any());
+        verify(timeline, never()).liveTurn(anyLong(), eq(COLLEAGUE), any());
+        verify(owners, never()).ofJob(COLLEAGUE);
+        verify(owners, times(2)).ofJob(ACCOUNT);
     }
 
     @Test

@@ -16,16 +16,15 @@ import { parseLiveEvent } from "@/lib/conversation-entry";
 import { openEventStream } from "@/lib/event-stream";
 
 /**
- * Keeps the conversation live while `enabled` and the page is visible. A hidden tab closes its
+ * Keeps the conversation live while the page is visible. A hidden tab closes its
  * stream, so tabs left open in the background do not each hold a connection. When the page shows
  * again, the stream opens again and its first event, a snapshot, reads back what changed meanwhile.
  * Returns whether the stream keeps failing and is reconnecting.
  */
-export function useConversationLive(workspaceSlug: string, enabled: boolean): boolean {
+export function useConversationLive(workspaceSlug: string): boolean {
 	const queryClient = useQueryClient();
 	const [paused, setPaused] = useState(false);
-	const visible = usePageVisible();
-	const streaming = enabled && visible;
+	const streaming = usePageVisible();
 
 	useEffect(() => {
 		if (!streaming) {

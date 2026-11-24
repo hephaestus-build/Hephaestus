@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationThreadDTO;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
-import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -32,8 +31,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * The developer's Hephaestus conversation in a workspace. Hephaestus is for the workspace's own members: instance-admin elevation
- * gives no place in it, and a conversation, message or turn of another member is not found. A read-only user view
- * reads the viewed member's conversation through the {@code GET} routes.
+ * gives no place in it, and a conversation, message or turn of another member is not found.
  */
 @WorkspaceScopedController
 @TeamOnly
@@ -45,12 +43,12 @@ public class ConversationController {
 
     private final ConversationTimeline timeline;
     private final ConversationService conversations;
-    private final CurrentDeveloperLookup developer;
+    private final ConversationRequestScope scope;
 
     @GetMapping
     @Operation(summary = "The developer's conversation: what runs now, its threads and how far it reached")
     public ConversationDTO getConversation(WorkspaceContext workspace) {
-        return timeline.conversation(workspace.id(), CurrentConversationAccount.of(developer));
+        return scope.read(account -> timeline.conversation(workspace.id(), account));
     }
 
     @PutMapping("/read")
@@ -61,8 +59,8 @@ public class ConversationController {
     @ApiResponse(responseCode = "200", description = "The marker after the request: this time or a later one")
     public ConversationReadDTO markConversationRead(
             WorkspaceContext workspace, @Valid @RequestBody ConversationReadRequestDTO request) {
-        return new ConversationReadDTO(
-                conversations.markRead(workspace.id(), CurrentConversationAccount.of(developer), request.at()));
+        return scope.write(
+                account -> new ConversationReadDTO(conversations.markRead(workspace.id(), account, request.at())));
     }
 
     @GetMapping("/entries")
@@ -71,7 +69,7 @@ public class ConversationController {
             WorkspaceContext workspace,
             @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(defaultValue = "" + ConversationTimeline.DEFAULT_PAGE) int size) {
-        return timeline.entries(workspace.id(), CurrentConversationAccount.of(developer), cursor, size);
+        return scope.read(account -> timeline.entries(workspace.id(), account, cursor, size));
     }
 
     @GetMapping("/entries/{entryId}/thread")
@@ -89,6 +87,6 @@ public class ConversationController {
             @PathVariable UUID entryId,
             @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(defaultValue = "" + ConversationTimeline.DEFAULT_PAGE) int size) {
-        return timeline.thread(workspace.id(), CurrentConversationAccount.of(developer), entryId, cursor, size);
+        return scope.read(account -> timeline.thread(workspace.id(), account, entryId, cursor, size));
     }
 }

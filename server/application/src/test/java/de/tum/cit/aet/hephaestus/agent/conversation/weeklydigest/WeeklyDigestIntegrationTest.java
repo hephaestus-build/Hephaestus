@@ -331,7 +331,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(run.getBand()).isEqualTo(AgentRunBand.BACKGROUND);
         assertThat(run.getConcurrencyKey()).isEqualTo("conversation:" + digest.getConversationId());
         assertThat(written()).isEmpty();
-        assertThat(timeline.liveEntry(workspaceId, digest.getId())).isEmpty();
+        assertThat(timeline.liveEntry(workspaceId, accountId, digest.getId())).isEmpty();
         assertThat(timeline.entries(workspaceId, accountId, null, 50).content()).isEmpty();
     }
 
@@ -732,6 +732,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                     .on(new ConversationLedgerEvents.TurnChanged(
                             workspaceId,
                             stimulus.getConversationId(),
+                            stimulus.getAccountId(),
                             turnId,
                             outcome,
                             ConversationTurn.Surface.SYSTEM,
@@ -793,7 +794,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
                         workspaceId, turnId, ConversationEntry.Kind.ANSWER))
                 .isEmpty();
-        assertThat(timeline.liveEntry(workspaceId, stimulus.getId())).isEmpty();
+        assertThat(timeline.liveEntry(workspaceId, accountId, stimulus.getId())).isEmpty();
         assertThat(entryRepository.searchByWorkspaceId(
                         workspaceId, List.of(stimulus.getConversationId()), null, null, null, 50))
                 .noneMatch(hit -> hit.getId().equals(stimulus.getId()));
@@ -822,7 +823,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
                         workspaceId, turnId, ConversationEntry.Kind.ANSWER))
                 .isEmpty();
-        assertThat(timeline.liveEntry(workspaceId, stimulus.getId())).isEmpty();
+        assertThat(timeline.liveEntry(workspaceId, accountId, stimulus.getId())).isEmpty();
         assertThat(written()).isEmpty();
         assertThat(meters.find(AgentMetrics.CONVERSATION_TURN_COMPLETED).counters())
                 .isEmpty();

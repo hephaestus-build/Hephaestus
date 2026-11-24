@@ -9,11 +9,9 @@ import type { ThreadFocus } from "@/components/conversation/ConversationTimeline
 import { pixelsPerRem, ThreadPanel } from "@/components/conversation/ThreadPanel";
 import { WorkspaceConversationNotice } from "@/components/onboarding/WorkspaceConversationNotice";
 import { useConversationLive } from "@/hooks/use-conversation-live";
-import { type ConversationNotice, conversationNotice } from "@/lib/conversation-availability";
+import { conversationNotice } from "@/lib/conversation-availability";
 import { pageHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
-import { useAuth } from "@/runtime/auth/AuthContext";
-import { getUserViewSession } from "@/runtime/user-view/session";
 
 import { MainConversation, ThreadConversation } from "@/routes/-ConversationView";
 
@@ -24,57 +22,27 @@ import { MainConversation, ThreadConversation } from "@/routes/-ConversationView
  */
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/conversation")({
-	head: () => pageHead(getUserViewSession() === undefined ? "Ask Hephaestus" : "Conversation")(),
+	head: pageHead("Ask Hephaestus"),
 	staticData: { surface: "fullscreen" },
 	validateSearch: conversationSearchSchema,
 	// A draft, an open thread and the live stream belong to one workspace.
 	remountDeps: ({ params }) => params.workspaceSlug,
 	// Usually a cache hit, since the workspace gate fetched this on the way in; when the gate's
 	// fetch failed, a cold-load outage reaches the router error surface rather than a skeleton.
-	// A user view never asks for the saved AI choice: it belongs to the signed-in account.
 	loader: async ({ context, params }) =>
-		getUserViewSession() === undefined
-			? context.queryClient.query({
-					...getMemberOnboardingOptions({ path: params }),
-					staleTime: "static",
-					retry: false,
-				})
-			: undefined,
-	component: ConversationRoute,
+		context.queryClient.query({
+			...getMemberOnboardingOptions({ path: params }),
+			staleTime: "static",
+			retry: false,
+		}),
+	component: ConversationPage,
 });
 
-function ConversationRoute() {
+/** The signed-in developer's conversation. A thread opens beside it from `?thread=`. */
+function ConversationPage() {
 	const { workspaceSlug } = Route.useParams();
-	const { userView } = useAuth();
-	return userView ? (
-		<ConversationPage workspaceSlug={workspaceSlug} readOnly />
-	) : (
-		<MemberConversationPage workspaceSlug={workspaceSlug} />
-	);
-}
-
-function MemberConversationPage({ workspaceSlug }: { workspaceSlug: string }) {
-	// The loader settled this; a refetch that fails later keeps the last answer on screen rather
-	// than hiding a readable conversation behind an alert.
 	const preference = useSuspenseQuery(getMemberOnboardingOptions({ path: { workspaceSlug } }));
 	const notice = conversationNotice(preference.data);
-	return <ConversationPage workspaceSlug={workspaceSlug} readOnly={false} notice={notice} />;
-}
-
-/**
- * The developer's one conversation with Hephaestus, the same one the Hephaestus panel shows. A thread
- * opens beside it from `?thread=`. A user view reads the viewed member's conversation without a
- * live stream; a member whose AI choice keeps Hephaestus from answering reads theirs without a composer.
- */
-function ConversationPage({
-	workspaceSlug,
-	readOnly,
-	notice,
-}: {
-	workspaceSlug: string;
-	readOnly: boolean;
-	notice?: ConversationNotice;
-}) {
 	const { thread, entry } = Route.useSearch();
 	const returnTo = useLocation().href;
 	const setSearch = useSearchState();
@@ -98,8 +66,8 @@ function ConversationPage({
 		observer.observe(element);
 		return () => observer.disconnect();
 	}, []);
-	const livePaused = useConversationLive(workspaceSlug, !readOnly);
-	const canAsk = notice === undefined && !readOnly;
+	const livePaused = useConversationLive(workspaceSlug);
+	const canAsk = notice === undefined;
 
 	return (
 		<div ref={host} className="flex min-h-0 flex-1">
@@ -111,12 +79,11 @@ function ConversationPage({
 						notice={notice}
 					/>
 				) : (
-					<h1 className="sr-only">{readOnly ? "Conversation" : "Ask Hephaestus"}</h1>
+					<h1 className="sr-only">Ask Hephaestus</h1>
 				)}
-				<h2 className="sr-only">{readOnly ? "Conversation messages" : "Your conversation"}</h2>
+				<h2 className="sr-only">Your conversation</h2>
 				<MainConversation
 					workspaceSlug={workspaceSlug}
-					readOnly={readOnly}
 					canAsk={canAsk}
 					livePaused={livePaused}
 					jumpTo={thread === undefined ? entry : undefined}
@@ -148,7 +115,6 @@ function ConversationPage({
 					<ThreadConversation
 						workspaceSlug={workspaceSlug}
 						parentEntryId={thread}
-						readOnly={readOnly}
 						canAsk={canAsk}
 						livePaused={livePaused}
 						focusComposer={threadFocus === "composer"}

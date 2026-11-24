@@ -17,6 +17,7 @@ class ConversationTurnProgressTest {
 
     private static final long WORKSPACE = 7;
     private static final UUID CONVERSATION = UUID.randomUUID();
+    private static final long ACCOUNT = 70;
 
     private final JsonMapper mapper = JsonMapper.shared();
     private final ConversationTurnProgress reader = new ConversationTurnProgress(mapper);
@@ -125,7 +126,13 @@ class ConversationTurnProgressTest {
         assertThat(deliver(send(whole(1, answer("Pin"))))).isTrue();
 
         reader.changed(new ConversationLedgerEvents.TurnChanged(
-                WORKSPACE, CONVERSATION, turnId, ConversationTurn.Status.DONE, ConversationTurn.Surface.APP, 1));
+                WORKSPACE,
+                CONVERSATION,
+                ACCOUNT,
+                turnId,
+                ConversationTurn.Status.DONE,
+                ConversationTurn.Surface.APP,
+                1));
 
         assertThat(reader.snapshot(turn)).isNull();
     }
@@ -136,16 +143,28 @@ class ConversationTurnProgressTest {
         assertThat(deliver(send(whole(1, answer("Pin"))))).isTrue();
 
         reader.changed(new ConversationLedgerEvents.TurnChanged(
-                WORKSPACE, CONVERSATION, turnId, ConversationTurn.Status.STOPPED, ConversationTurn.Surface.APP, 1));
+                WORKSPACE,
+                CONVERSATION,
+                ACCOUNT,
+                turnId,
+                ConversationTurn.Status.STOPPED,
+                ConversationTurn.Surface.APP,
+                1));
 
         assertThat(reader.snapshot(WORKSPACE, turnId, 1)).isEqualTo(mapper.readTree(answer("Pin")));
         reader.changed(new ConversationLedgerEvents.TurnChanged(
-                WORKSPACE, CONVERSATION, turnId, ConversationTurn.Status.DONE, ConversationTurn.Surface.APP, 1));
+                WORKSPACE,
+                CONVERSATION,
+                ACCOUNT,
+                turnId,
+                ConversationTurn.Status.DONE,
+                ConversationTurn.Surface.APP,
+                1));
         assertThat(reader.snapshot(WORKSPACE, turnId, 1)).isNull();
     }
 
     private List<ConversationLedgerEvents.ProgressChanged> send(ConversationTurnProgress.Update update) {
-        return reader.frames(WORKSPACE, CONVERSATION, turnId, ConversationTurn.Surface.APP, 1, update);
+        return reader.frames(WORKSPACE, CONVERSATION, ACCOUNT, turnId, ConversationTurn.Surface.APP, 1, update);
     }
 
     private static ConversationTurnProgress.Update whole(long sequence, String text) {

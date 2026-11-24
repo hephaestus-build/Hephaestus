@@ -89,11 +89,13 @@ public final class ConversationLedgerEvents {
      * @param sequence the update the frame belongs to
      * @param index the frame's place in its update, from {@code 0}
      * @param count how many frames the update has
+     * @param accountId the developer's account, whose streams learn of it
      * @param data a part of the update's UTF-8 JSON, Base64-encoded
      */
     public record ProgressChanged(
             long workspaceId,
             UUID conversationId,
+            long accountId,
             UUID turnId,
             ConversationTurn.Surface surface,
             int attempt,
@@ -106,12 +108,14 @@ public final class ConversationLedgerEvents {
     /**
      * A turn was submitted, claimed, stopped, ended or requeued, or its partial answer changed.
      *
+     * @param accountId the developer's account, whose streams learn of it
      * @param attempt the turn's latest attempt, {@code 0} before its first claim; a requeued turn names the attempt
      *     that lost its lease
      */
     public record TurnChanged(
             long workspaceId,
             UUID conversationId,
+            long accountId,
             UUID turnId,
             ConversationTurn.Status status,
             ConversationTurn.Surface surface,
@@ -122,6 +126,7 @@ public final class ConversationLedgerEvents {
             return new TurnChanged(
                     turn.getWorkspaceId(),
                     turn.getConversationId(),
+                    turn.getAccountId(),
                     turn.getId(),
                     turn.getStatus(),
                     turn.getSurface(),

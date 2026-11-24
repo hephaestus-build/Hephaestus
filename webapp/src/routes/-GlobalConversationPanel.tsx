@@ -117,7 +117,7 @@ function WorkspaceConversationPanel({ workspaceSlug }: { workspaceSlug: string }
 	}, []);
 	const navigate = useNavigate();
 	// The stream runs while the header button shows, so an answer that lands with the panel closed marks it.
-	const livePaused = useConversationLive(workspaceSlug, true);
+	const livePaused = useConversationLive(workspaceSlug);
 	const unread = useConversationUnread(workspaceSlug);
 	const [thread, setThread] = useState<PanelThread>();
 	// The control that opened the thread, which Back gives focus back to.
@@ -215,7 +215,6 @@ function ConversationPanelBody({
 			>
 				<MainConversation
 					workspaceSlug={workspaceSlug}
-					readOnly={false}
 					canAsk
 					livePaused={livePaused}
 					// Not on a touch screen, where focusing the field raises the keyboard over the answer the
@@ -231,7 +230,6 @@ function ConversationPanelBody({
 						key={thread.parentEntryId}
 						workspaceSlug={workspaceSlug}
 						parentEntryId={thread.parentEntryId}
-						readOnly={false}
 						canAsk
 						livePaused={livePaused}
 						focusComposer={thread.focus === "composer"}

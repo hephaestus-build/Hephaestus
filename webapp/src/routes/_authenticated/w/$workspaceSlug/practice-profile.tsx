@@ -577,6 +577,7 @@ function OwnObservationDetail({
 	resultId: string;
 	practiceSlug: string;
 }) {
+	const { userView } = useAuth();
 	// The asked observation's own read fills this cache entry first; opening its row reuses it.
 	const result = useQuery({
 		...getOwnResultOptions({ path: { workspaceSlug, resultId } }),
@@ -625,7 +626,11 @@ function OwnObservationDetail({
 						})}
 					/>
 				),
-				conversation: <Link to="/w/$workspaceSlug/conversation" params={{ workspaceSlug }} />,
+				...(userView === undefined
+					? {
+							conversation: <Link to="/w/$workspaceSlug/conversation" params={{ workspaceSlug }} />,
+						}
+					: {}),
 			}}
 		/>
 	);

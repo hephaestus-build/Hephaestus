@@ -1383,19 +1383,6 @@ export const UnderPageHeadings: Story = {
 	},
 };
 
-/** A user view: no composer, no votes, no delete, no Reply. Threads still open to read. */
-export const ReadOnly: Story = {
-	args: { actions: undefined, composer: undefined },
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("textbox")).toBeNull();
-		// A reader with no composer still reads answers, so the disclosure stays.
-		await expect(canvas.getByText(DISCLOSURE)).toBeVisible();
-		await expect(canvas.queryByRole("button", { name: /^Helpful/u })).toBeNull();
-		await expect(canvas.queryByRole("button", { name: /^Reply in thread/u })).toBeNull();
-		await expect(canvas.getByRole("button", { name: /^3 replies/u })).toBeVisible();
-	},
-};
-
 export const Reflow320: Story = {
 	args: { state: ready({ entries: [ANSWER_WITH_FEEDBACK] }) },
 	parameters: { viewport: { defaultViewport: "reflow" } },

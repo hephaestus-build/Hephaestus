@@ -6,16 +6,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerNotifications;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSlackMessages;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSlackReplies;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -30,6 +29,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.scheduling.annotation.AsyncAnnotationBeanPostProcessor;
+import org.springframework.transaction.PlatformTransactionManager;
 
 class SlackConversationProjectorSubscriptionTest extends BaseUnitTest {
 
@@ -52,12 +52,8 @@ class SlackConversationProjectorSubscriptionTest extends BaseUnitTest {
         var notifications = mock(ConversationLedgerNotifications.class);
         var turnId = UUID.randomUUID();
         var actionId = UUID.randomUUID();
-        var question = mock(ConversationEntry.class);
         var questionId = UUID.randomUUID();
-        when(question.getId()).thenReturn(questionId);
-        when(messages.slackTurn(1L, turnId))
-                .thenReturn(Optional.of(new ConversationSlackMessages.SlackTurn(
-                        mock(ConversationTurn.class), 2L, "D1", null, question, List.of(), false)));
+        when(messages.endedSlackQuestion(1L, 2L, turnId)).thenReturn(Optional.of(questionId));
         when(replies.forQuestion(1L, questionId)).thenReturn(Optional.of(actionId));
         var started = new CountDownLatch(1);
         var release = new CountDownLatch(1);
@@ -75,7 +71,12 @@ class SlackConversationProjectorSubscriptionTest extends BaseUnitTest {
                     .withBean(ConversationLedgerNotifications.class, () -> notifications)
                     .withBean(
                             SlackConversationProjector.class,
-                            () -> new SlackConversationProjector(messages, replies, executor))
+                            () -> new SlackConversationProjector(
+                                    messages,
+                                    replies,
+                                    executor,
+                                    mock(OwnerScope.class),
+                                    mock(PlatformTransactionManager.class)))
                     .withBean(AsyncAnnotationBeanPostProcessor.class, () -> {
                         var advice = new AsyncAnnotationBeanPostProcessor();
                         advice.setProxyTargetClass(true);
@@ -94,6 +95,7 @@ class SlackConversationProjectorSubscriptionTest extends BaseUnitTest {
                                 .turnChanged(new ConversationLedgerEvents.TurnChanged(
                                         1L,
                                         UUID.randomUUID(),
+                                        2L,
                                         turnId,
                                         ConversationTurn.Status.DONE,
                                         ConversationTurn.Surface.SLACK,

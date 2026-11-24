@@ -15,7 +15,6 @@ import { Greeting } from "@/components/conversation/Greeting";
 import { ThreadGone } from "@/components/conversation/ThreadPanel";
 import { liveTurnOf } from "@/components/conversation/timeline-rows";
 import { WeeklyDigestCard } from "@/components/conversation/WeeklyDigestCard";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Marker, MarkerContent } from "@/components/ui/marker";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import {
@@ -46,12 +45,9 @@ function useWorkspaceName(workspaceSlug: string): string | undefined {
 	return workspaces.find((workspace) => workspace.workspaceSlug === workspaceSlug)?.displayName;
 }
 
-/** Signs the developer's messages: the viewed member's in a user view, else the signed-in account's. */
+/** Signs the developer's messages with the signed-in account. */
 function useDeveloper(): MessageAuthor {
-	const { userView, userProfile, username, getUserProfilePictureUrl } = useAuth();
-	if (userView) {
-		return { name: userView.name };
-	}
+	const { userProfile, username, getUserProfilePictureUrl } = useAuth();
 	return {
 		name: firstNonBlank(userProfile?.name, username) ?? "You",
 		avatarUrl: getUserProfilePictureUrl(),
@@ -59,28 +55,11 @@ function useDeveloper(): MessageAuthor {
 }
 
 /**
- * The writes the conversation offers: none in a user view, and no asking again — Reply in thread,
- * Try again, Retry — while the developer cannot ask Hephaestus.
+ * The writes the conversation offers: no asking again — Reply in thread, Try again, Retry — while
+ * the developer cannot ask Hephaestus.
  */
-function offeredActions(actions: ConversationActions, { readOnly, canAsk }: ConversationAccess) {
-	if (readOnly) {
-		return;
-	}
+function offeredActions(actions: ConversationActions, canAsk: boolean) {
 	return canAsk ? actions : { ...actions, ask: undefined };
-}
-
-/** A user view of a conversation with no message: whose conversation it is, and what appears in it. */
-function NoMessagesYet({ name }: { name: string }) {
-	return (
-		<Empty>
-			<EmptyHeader>
-				<EmptyTitle>No messages yet</EmptyTitle>
-				<EmptyDescription>
-					Questions {name} asks Hephaestus, here or in Slack, show up with Hephaestus’s answers.
-				</EmptyDescription>
-			</EmptyHeader>
-		</Empty>
-	);
 }
 
 /**
@@ -88,15 +67,8 @@ function NoMessagesYet({ name }: { name: string }) {
  * above the conversation already says why and what to do, so a second empty state under it would
  * only repeat that nothing is there.
  */
-function emptyConversation(
-	{ readOnly, canAsk }: ConversationAccess,
-	developer: MessageAuthor,
-	onAsk: ((question: string) => void) | undefined,
-) {
-	if (canAsk) {
-		return <Greeting onAsk={onAsk} />;
-	}
-	return readOnly ? <NoMessagesYet name={developer.name} /> : undefined;
+function emptyConversation(canAsk: boolean, onAsk: ((question: string) => void) | undefined) {
+	return canAsk ? <Greeting onAsk={onAsk} /> : undefined;
 }
 
 /** The turn the composer's Stop ends: the live one. */
@@ -106,8 +78,6 @@ function stoppableTurn(state: ConversationTimelineState): string | undefined {
 
 /** Who may do what, as the page that shows the conversation decides it. */
 interface ConversationAccess {
-	/** A user view: no writes at all. */
-	readOnly: boolean;
 	/** A composer to ask in. */
 	canAsk: boolean;
 }
@@ -125,7 +95,6 @@ export interface MainConversationProps extends ConversationAccess {
 
 export function MainConversation({
 	workspaceSlug,
-	readOnly,
 	canAsk,
 	livePaused,
 	threads,
@@ -135,11 +104,11 @@ export function MainConversation({
 }: MainConversationProps) {
 	const developer = useDeveloper();
 	const workspaceName = useWorkspaceName(workspaceSlug);
-	const state = useConversationTimeline(workspaceSlug, readOnly);
+	const state = useConversationTimeline(workspaceSlug);
 	const actions = useConversationActions(workspaceSlug);
 	// Reading the conversation here, on the conversation page or in the Hephaestus panel, clears the
-	// header button's dot, for answers in its threads too. A user view reads another member's conversation, not the reader's.
-	useMarkConversationRead(workspaceSlug, !readOnly);
+	// header button's dot, for answers in its threads too.
+	useMarkConversationRead(workspaceSlug);
 	const stoppable = stoppableTurn(state);
 	const draftKey = `${workspaceSlug}:main`;
 	// An example question goes into an empty draft, and the composer remounts to read it and take
@@ -162,8 +131,8 @@ export function MainConversation({
 			threads={threads}
 			livePaused={livePaused}
 			jumpTo={jumpTo}
-			actions={offeredActions(actions, { readOnly, canAsk })}
-			empty={emptyConversation({ readOnly, canAsk }, developer, drafting ? undefined : askExample)}
+			actions={offeredActions(actions, canAsk)}
+			empty={emptyConversation(canAsk, drafting ? undefined : askExample)}
 			composer={
 				canAsk ? (
 					<ConversationComposer
@@ -199,7 +168,6 @@ export interface ThreadConversationProps extends ConversationAccess {
 export function ThreadConversation({
 	workspaceSlug,
 	parentEntryId,
-	readOnly,
 	canAsk,
 	livePaused,
 	focusComposer,
@@ -207,7 +175,7 @@ export function ThreadConversation({
 }: ThreadConversationProps) {
 	const developer = useDeveloper();
 	const workspaceName = useWorkspaceName(workspaceSlug);
-	const thread = useConversationThread(workspaceSlug, parentEntryId, readOnly);
+	const thread = useConversationThread(workspaceSlug, parentEntryId);
 	const actions = useConversationActions(workspaceSlug);
 	switch (thread.status) {
 		case "loading": {
@@ -264,7 +232,7 @@ export function ThreadConversation({
 							)}
 						</div>
 					}
-					actions={offeredActions(actions, { readOnly, canAsk: canAskHere })}
+					actions={offeredActions(actions, canAskHere)}
 					composer={
 						canAskHere ? (
 							<ConversationComposer

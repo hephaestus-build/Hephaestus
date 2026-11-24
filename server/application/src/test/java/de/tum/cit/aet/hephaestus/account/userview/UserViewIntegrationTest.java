@@ -45,7 +45,6 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -204,55 +203,22 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldListOnlyTheViewedUsersConversationWhenOthersExistInAndOutsideTheWorkspace() {
-        User other = persistUser("another-view-user");
-        ensureMembership(workspace, other, Membership.WorkspaceRole.MEMBER);
-        ConversationTurnService.Submission own = question(workspace, viewed, "Viewed user's question");
-        ConversationTurnService.Submission colleagues = question(workspace, other, "Other private question");
-        Workspace elsewhere = createWorkspace("other-view", "Other view", other.getLogin(), AccountType.USER, other);
-        ConversationTurnService.Submission foreign = question(elsewhere, viewed, "Other workspace question");
-
-        sessionRequest("/workspaces/acme/conversation/entries")
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.content[*].id")
-                .value(ids -> assertThat(ids)
-                        .asInstanceOf(InstanceOfAssertFactories.LIST)
-                        .containsExactly(own.question().getId().toString())
-                        .doesNotContain(
-                                colleagues.question().getId().toString(),
-                                foreign.question().getId().toString()));
-        assertThat(userViewRowsFor(viewed)).isOne();
-    }
-
-    @Test
-    void shouldNotDiscloseAConversationWhenItBelongsToAnotherMember() {
-        User other = persistUser("another-view-user");
-        ensureMembership(workspace, other, Membership.WorkspaceRole.MEMBER);
-        ConversationTurnService.Submission colleagues = question(workspace, other, "Other private question");
-
-        sessionRequest("/workspaces/acme/conversation/entries/"
-                        + colleagues.question().getId() + "/thread")
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
-    }
-
-    @Test
-    void shouldNotDiscloseAConversationWhenItBelongsToAnotherWorkspace() {
-        User other = persistUser("another-view-user");
-        Workspace elsewhere = createWorkspace("other-view", "Other view", other.getLogin(), AccountType.USER, other);
-        ConversationTurnService.Submission foreign = question(elsewhere, viewed, "Other workspace question");
-
-        sessionRequest("/workspaces/acme/conversation/entries/"
-                        + foreign.question().getId() + "/thread")
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
+    void shouldRefuseEveryConversationReadWithoutRecordingAUserView() {
+        var submission = question(workspace, viewed, "Viewed user's question");
+        String conversationPaths = "/workspaces/{workspaceSlug}/conversation";
+        var paths = mappings.getHandlerMethods().keySet().stream()
+                .filter(mapping -> mapping.getMethodsCondition().getMethods().contains(RequestMethod.GET))
+                .flatMap(mapping -> mapping.getPatternValues().stream())
+                .filter(path -> path.startsWith(ApiPath.of(conversationPaths)))
+                .map(path -> path.substring(ApiPath.PREFIX.length()))
+                .map(path -> path.replace("{workspaceSlug}", "acme")
+                        .replace("{entryId}", submission.question().getId().toString()))
+                .toList();
+        assertThat(paths).isNotEmpty();
+        for (String path : paths) {
+            sessionRequest(path).exchange().expectStatus().isForbidden().expectBody(Void.class);
+        }
+        assertThat(userViewRowsFor(viewed)).isZero();
     }
 
     @Test

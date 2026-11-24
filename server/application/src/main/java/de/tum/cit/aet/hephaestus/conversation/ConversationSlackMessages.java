@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -15,6 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ConversationSlackMessages {
+    private static final List<ConversationTurn.Status> ENDED = Arrays.stream(ConversationTurn.Status.values())
+            .filter(ConversationTurn.Status::isTerminal)
+            .toList();
+
     private final ConversationRepository conversations;
     private final ConversationEntryRepository entries;
     private final ConversationTurnRepository turns;
@@ -96,6 +101,16 @@ public class ConversationSlackMessages {
                 views.shown(conversation.get(), stored),
                 !entries.answeredInSlackBefore(
                         workspaceId, Objects.requireNonNull(conversation.get().getId()), question.getSeq())));
+    }
+
+    /**
+     * The question of the account's ended Slack turn, whose reply the outbox posts. One statement checks the owner and
+     * finds the question, so a change of owner cannot fall between two reads, and it reads no content.
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> endedSlackQuestion(long workspaceId, long accountId, UUID turnId) {
+        return entries.findQuestionOfEndedTurn(
+                workspaceId, accountId, turnId, ConversationTurn.Surface.SLACK, ENDED, ConversationEntry.Kind.USER);
     }
 
     /** The turn of a question, for the outbox's end callback. */
