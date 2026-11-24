@@ -1,0 +1,109 @@
+// Deployment view: where the turns of the conversation core run, as a UML 2.5.1 § 19 allocation view.
+// Page: docs/contributor/conversation-core.mdx. Each «Pod» is an execution environment that holds the image
+// («artifact») it runs. Its namespace and its subject are tagged values. A solid line is a communication path
+// labelled with its protocol and port; its arrow points from the side that opens the connection.
+umlDiagram(showComponentKeyword = false) {
+    // @shared-style
+    node("Kubernetes cluster", keywords = list("cluster admin")) layout {
+        pos = apos(-10, 200)
+        width = 900
+        height = 880
+    }
+    serverPod = node("Server Pods ×N {namespace = release}", keywords = list("Pod", "Hephaestus chart")) layout {
+        pos = apos(-20, 130)
+        width = 840
+        height = 160
+    }
+    artifact("hephaestus server image") layout {
+        pos = apos(-30, 165)
+        width = 280
+    }
+    pgPod = node("PostgreSQL Pod {namespace = release}", keywords = list("Pod", "Hephaestus chart")) layout {
+        pos = apos(300, -100)
+        width = 200
+        height = 200
+    }
+    artifact("PostgreSQL image") layout {
+        pos = apos(290, -50)
+        width = 150
+    }
+    privatePod = node("Private thread Pod {namespace = sandboxes, subject = conversation:<id>}", keywords = list("Pod", "created at runtime")) layout {
+        pos = apos(-340, 470)
+        width = 200
+        height = 270
+    }
+    artifact("agent image") layout {
+        pos = apos(-350, 550)
+        width = 150
+    }
+    placePod = node("Shared thread Pod {namespace = sandboxes, subject = conversation:<id>}", keywords = list("Pod", "created at runtime", "planned")) layout {
+        pos = apos(-128, 470)
+        width = 200
+        height = 270
+    }
+    artifact("agent image") layout {
+        pos = apos(-138, 550)
+        width = 150
+    }
+    reviewPod = node("Review Pod {namespace = sandboxes, subject = review:<id>}", keywords = list("Pod", "created at runtime")) layout {
+        pos = apos(84, 470)
+        width = 200
+        height = 270
+    }
+    artifact("agent image") layout {
+        pos = apos(74, 550)
+        width = 150
+    }
+    taskPod = node("Task Pod {namespace = sandboxes, subject = task:<id>}", keywords = list("Pod", "created at runtime", "planned")) layout {
+        pos = apos(296, 470)
+        width = 200
+        height = 270
+    }
+    artifact("agent image") layout {
+        pos = apos(286, 550)
+        width = 150
+    }
+    model = component("Model provider", keywords = list("external")) styles {
+        class += "ext"
+    } layout {
+        pos = apos(-260, -370)
+        width = 200
+        height = 80
+    }
+    providers = component("GitHub, GitLab, Slack, Outline", keywords = list("external")) styles {
+        class += "ext"
+    } layout {
+        pos = apos(110, -370)
+        width = 250
+        height = 80
+    }
+    privatePod --> serverPod with {
+        over = start(0.75).line(end(0.3452381))
+        label("HTTP 8081", 0.5, -48)
+    }
+    placePod --> serverPod with {
+        over = start(0.75).line(end(0.2821429))
+        label("HTTP 8081", 0.5, -48)
+    }
+    reviewPod --> serverPod with {
+        over = start(0.75).line(end(0.2175))
+        label("HTTP 8081", 0.5, -48)
+    }
+    taskPod --> serverPod with {
+        over = start(0.75).line(end(0.15125))
+        label("HTTP 8081", 0.5, -48)
+    }
+    serverPod --> pgPod with {
+        over = start(0.8452381).line(end(0.25))
+        label("TCP 5432", 0.5, 42)
+    }
+    serverPod --> model with {
+        over = start(0.675).line(end(0.25))
+        label("HTTPS", 0.5, 32)
+    }
+    serverPod --> providers with {
+        over = start(0.7886905).line(end(0.25))
+        label("HTTPS", 0.5, 32)
+    }
+    legendDeployment(-340, 710)
+}
