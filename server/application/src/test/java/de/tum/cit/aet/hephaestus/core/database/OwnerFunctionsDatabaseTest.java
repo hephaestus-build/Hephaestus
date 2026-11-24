@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.core.database;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.DueWorkKind;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepRule;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
 import java.sql.Connection;
@@ -10,13 +12,20 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
@@ -232,6 +241,114 @@ class OwnerFunctionsDatabaseTest {
                     .rootCause()
                     .hasMessageContaining("needs a cutoff, a limit and a whole cursor or none");
         }
+    }
+
+    /** Every registered kind reaches its own branch: the seeded due entries come back. */
+    @ParameterizedTest
+    @EnumSource(DueWorkKind.class)
+    void shouldAnswerEveryRegisteredKindThroughItsOwnBranch(DueWorkKind kind) throws SQLException {
+        List<UUID> expected = switch (kind) {
+            case ENTRY_RETENTION -> List.of(ADA_OLD, BO_TIE, BO_OLD, BO_ELSEWHERE_OLD);
+        };
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {
+            assertThat(jdbc(connection)
+                            .queryForList(
+                                    "SELECT id FROM public.mentoring_due_work(?, now() - interval '30 days', NULL, NULL, 10)",
+                                    UUID.class,
+                                    kind.name()))
+                    .containsExactlyElementsOf(expected);
+        }
+    }
+
+    /**
+     * Every registered rule reaches its own branch, in a transaction that rolls back: a purge of a workspace that does
+     * not exist and an expiry before any export change no row, and an account absorbed into itself gets the refusal of
+     * that branch.
+     */
+    @ParameterizedTest
+    @EnumSource(RowSweepRule.class)
+    void shouldAnswerEveryRegisteredRuleThroughItsOwnBranch(RowSweepRule rule) throws SQLException {
+        var arguments = switch (rule) {
+            case WORKSPACE_PURGE -> new @Nullable Object[] {rule.name(), -1L, null, null};
+            case EXPIRED_EXPORTS -> new @Nullable Object[] {rule.name(), null, null, "-infinity"};
+            case ACCOUNT_ABSORB -> new @Nullable Object[] {rule.name(), 11L, 11L, null};
+        };
+        var refusal = switch (rule) {
+            case WORKSPACE_PURGE, EXPIRED_EXPORTS -> Optional.<String>empty();
+            case ACCOUNT_ABSORB -> Optional.of("ACCOUNT_ABSORB needs two different accounts");
+        };
+        String call = "SELECT public.person_row_sweep(?, ?::bigint, ?::bigint, ?::timestamptz)";
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {
+            connection.setAutoCommit(false);
+            try {
+                JdbcTemplate app = jdbc(connection);
+                if (refusal.isEmpty()) {
+                    assertThat(app.queryForObject(call, Long.class, arguments)).isZero();
+                } else {
+                    assertThatThrownBy(() -> app.queryForObject(call, Long.class, arguments))
+                            .isInstanceOf(DataAccessException.class)
+                            .rootCause()
+                            .hasMessageContaining(refusal.get());
+                }
+            } finally {
+                connection.rollback();
+            }
+        }
+    }
+
+    @Test
+    void shouldRegisterEveryBranchOfTheInstalledFunctions() throws SQLException {
+        assertBranchesRegistered(SEEDED);
+    }
+
+    @Test
+    void shouldFindABranchThatOnlyTheDatabaseHas() throws SQLException {
+        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_branch", SEEDED);
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            JdbcTemplate owner = jdbc(connection);
+            String definition = Objects.requireNonNull(owner.queryForObject(
+                    "SELECT pg_get_functiondef(p.oid) FROM pg_proc p WHERE p.proname = 'mentoring_due_work'",
+                    String.class));
+            owner.execute(definition.replace(
+                    "IF work_kind = 'ENTRY_RETENTION' THEN",
+                    "IF work_kind = 'DATABASE_ONLY_V2' THEN RETURN; ELSIF work_kind = 'ENTRY_RETENTION' THEN"));
+        }
+
+        assertThatThrownBy(() -> assertBranchesRegistered(database))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("DATABASE_ONLY_V2");
+    }
+
+    /**
+     * The installed functions answer exactly the registered kinds and rules. Each branch tests its name as
+     * {@code work_kind = 'NAME'} or {@code rule = 'NAME'}, so the branches are read from the functions' source.
+     */
+    private static void assertBranchesRegistered(TestDatabase database) throws SQLException {
+        try (Connection connection = connect(database)) {
+            JdbcTemplate jdbc = jdbc(connection);
+            assertThat(branches(jdbc, "mentoring_due_work", "work_kind"))
+                    .as("branches of mentoring_due_work")
+                    .isEqualTo(names(DueWorkKind.values()));
+            assertThat(branches(jdbc, "person_row_sweep", "rule"))
+                    .as("branches of person_row_sweep")
+                    .isEqualTo(names(RowSweepRule.values()));
+        }
+    }
+
+    private static Set<String> branches(JdbcTemplate jdbc, String function, String parameter) {
+        Pattern branch = Pattern.compile("\\b" + parameter + "\\s*=\\s*'([^']*)'");
+        return jdbc
+                .queryForList(
+                        "SELECT prosrc FROM pg_proc WHERE proname = ? AND pronamespace = 'public'::regnamespace",
+                        String.class,
+                        function)
+                .stream()
+                .flatMap(source -> branch.matcher(source).results().map(match -> match.group(1)))
+                .collect(Collectors.toSet());
+    }
+
+    private static Set<String> names(Enum<?>[] registered) {
+        return Arrays.stream(registered).map(Enum::name).collect(Collectors.toSet());
     }
 
     @Test
