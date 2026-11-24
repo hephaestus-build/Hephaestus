@@ -156,12 +156,17 @@ BEGIN
         IF cutoff IS NULL THEN
             RAISE EXCEPTION 'person_row_sweep: CLIENT_INPUT_EXPIRY needs the cutoff' USING ERRCODE = 'invalid_parameter_value';
         END IF;
-        DELETE FROM public.client_input WHERE ctid IN (
-            SELECT ctid FROM public.client_input
-            WHERE created_at < LEAST(cutoff, clock_timestamp()) - interval '8 days'
-            ORDER BY created_at LIMIT 1000
-        );
-        GET DIAGNOSTICS changed = ROW_COUNT;
+        -- A variable reaches the query as a parameter, so the created_at index bounds the scan.
+        DECLARE
+            expires_before timestamptz := LEAST(cutoff, clock_timestamp()) - interval '8 days';
+        BEGIN
+            DELETE FROM public.client_input WHERE ctid IN (
+                SELECT ctid FROM public.client_input
+                WHERE created_at < expires_before
+                ORDER BY created_at LIMIT 1000
+            );
+            GET DIAGNOSTICS changed = ROW_COUNT;
+        END;
     ELSE
         RAISE EXCEPTION 'person_row_sweep: unknown rule %', rule USING ERRCODE = 'invalid_parameter_value';
     END IF;
