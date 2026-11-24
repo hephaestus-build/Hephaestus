@@ -6,7 +6,8 @@
         <comment>Keep the create fingerprint and result ids after a retry or after the result is erased.</comment>
         <sql splitStatements="false"><![CDATA[
 CREATE TABLE client_input (
-    workspace_id bigint NOT NULL CONSTRAINT sfk_client_input_workspace REFERENCES workspace(id) ON DELETE CASCADE,
+    -- A plain id: core sits below the workspace module. The owner policy refuses a purged workspace, and rows expire.
+    workspace_id bigint NOT NULL,
     account_id bigint NOT NULL CONSTRAINT sfk_client_input_account REFERENCES account(id) ON DELETE CASCADE,
     idem_key uuid NOT NULL,
     fingerprint bytea NOT NULL CHECK (octet_length(fingerprint) = 32),

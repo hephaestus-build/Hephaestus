@@ -766,12 +766,12 @@ for ((taskName, command) in
                 "--reference-url=hibernate:spring:de.tum.cit.aet.hephaestus?dialect=org.hibernate.dialect.PostgreSQLDialect&hibernate.physical_naming_strategy=org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy&hibernate.implicit_naming_strategy=org.springframework.boot.hibernate.SpringImplicitNamingStrategy",
                 // Hibernate cannot emit unmapped tables, partitions, or scalar-id foreign keys.
                 // Pending contractions are listed in docs/contributor/database-migration.mdx.
-                // event_publication is the JDBC registry.
+                // event_publication is the JDBC registry, client_input the JDBC create receipts.
                 // INCLUDE columns are native index metadata; database contracts verify the covering
                 // index. Partial successor uniqueness is also native;
                 // ClientSessionMigratedSchemaTest
                 // verifies it.
-                "--exclude-objects=table:shedlock,table:account_public_activity_hidden_by_default,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,foreignkey:sfk_.*,index:idx_activity_event_workspace_covering,index:uq_issued_jwt_live_successor",
+                "--exclude-objects=table:shedlock,table:account_public_activity_hidden_by_default,table:event_publication,table:client_input,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,foreignkey:sfk_.*,index:idx_activity_event_workspace_covering,index:uq_issued_jwt_live_successor",
             )
         }
     }

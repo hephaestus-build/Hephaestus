@@ -20,7 +20,7 @@ erDiagram
     }
 
     ClientInput {
-        BIGINT workspace_id PK,FK
+        BIGINT workspace_id PK
         BIGINT account_id PK,FK
         UUID idem_key PK
         BYTEA fingerprint "NOT NULL"
@@ -49,7 +49,6 @@ erDiagram
     }
 
     Account["Account · Core"]
-    Workspace["Workspace · Workspace (Tenancy)"]
 
     %% Relationships
     %% One-to-One relationships
@@ -57,7 +56,6 @@ erDiagram
 
     %% One-to-Many relationships
     Account ||--o{ ClientInput : has
-    Workspace ||--o{ ClientInput : has
 
     %% Styling
     classDef primaryEntity stroke-width:2px
@@ -66,4 +64,3 @@ erDiagram
     classDef referenceEntity stroke-dasharray:5 5
 
     class Account referenceEntity
-    class Workspace referenceEntity
