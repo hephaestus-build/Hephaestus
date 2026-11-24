@@ -478,7 +478,20 @@
 		"privacyJournal": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["retention", "backupsEnabled"],
+			"required": [
+				"retention",
+				"backupsEnabled",
+				"bucket",
+				"prefix",
+				"credentialSecret",
+				"endpoint",
+				"region",
+				"port",
+				"uriStyle",
+				"cidr",
+				"privateCa",
+				"objectLockDays"
+			],
 			"properties": {
 				"retention": {
 					"type": "string",
@@ -487,6 +500,53 @@
 				"backupsEnabled": {
 					"type": "boolean",
 					"description": "Require an observed recovery point before pruning. Set false only when the installation retains no database backups."
+				},
+				"bucket": {
+					"type": "string",
+					"description": "Bucket for privacy facts. If empty, use the PostgreSQL backup bucket when chart backups are enabled."
+				},
+				"prefix": {
+					"type": "string",
+					"pattern": "^(?:[A-Za-z0-9_-]+/)+$",
+					"description": "Object prefix for the journal identity."
+				},
+				"credentialSecret": {
+					"type": "string",
+					"description": "Secret in the release namespace with accessKeyId and secretAccessKey for the journal prefix."
+				},
+				"endpoint": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9.-]*$",
+					"description": "S3 endpoint hostname. The default AWS regional endpoint applies when this is empty for an explicit bucket."
+				},
+				"region": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9-]+$",
+					"description": "Signing region of the journal bucket."
+				},
+				"port": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 65535,
+					"description": "HTTPS port of the S3 endpoint."
+				},
+				"uriStyle": {
+					"type": "string",
+					"enum": ["host", "path"],
+					"description": "S3 bucket addressing style."
+				},
+				"cidr": {
+					"$ref": "#/definitions/cidr",
+					"description": "Network block of the journal endpoint. Leave empty to use external egress."
+				},
+				"privateCa": {
+					"type": "string",
+					"description": "Secret with the private endpoint CA in s3-ca.crt."
+				},
+				"objectLockDays": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Retention in days on each object. Set 0 to use the bucket policy."
 				}
 			}
 		},

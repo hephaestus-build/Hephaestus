@@ -5,7 +5,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { currentUser } from "@/mocks/fixtures/auth";
 import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
-import { deferred } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, loadRouteCode, renderRouteAt } from "@/test/router-harness";
 
@@ -70,18 +69,9 @@ async function signInPageNotice(): Promise<HTMLElement | null> {
 }
 
 describe("account deletion on the settings page", () => {
-	// The deletion already revoked every session, so the sign-in page must not wait for a sign-out.
-	it.each([
-		["answers 503", () => new HttpResponse(null, { status: 503 })],
-		[
-			"never answers",
-			async () => {
-				await deferred().promise;
-				return new HttpResponse(null, { status: 204 });
-			},
-		],
-	])("opens the sign-in page with the notice when a sign-out %s", async (_name, answer) => {
-		server.use(http.post("*/auth/logout", answer));
+	it("shows the accepted notice without another logout request", async () => {
+		const logout = vi.fn(() => HttpResponse.error());
+		server.use(http.post("*/auth/logout", logout));
 		renderRouteAt("/settings");
 		const assigned = captureNavigation();
 
@@ -89,7 +79,8 @@ describe("account deletion on the settings page", () => {
 
 		await waitFor(() => expect(assigned).toStrictEqual(["/login"]));
 		const notice = await signInPageNotice();
-		expect(notice?.textContent).toContain("Your account is deleted");
+		expect(notice?.textContent).toContain("Your deletion request was accepted");
+		expect(logout).not.toHaveBeenCalled();
 	});
 
 	it("does not show the notice to another person who signs in and out in the same tab", async () => {

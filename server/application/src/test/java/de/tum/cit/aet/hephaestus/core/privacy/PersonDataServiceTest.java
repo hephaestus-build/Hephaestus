@@ -64,7 +64,8 @@ class PersonDataServiceTest extends BaseUnitTest {
                 mapper,
                 mock(JdbcTemplate.class),
                 new SimpleMeterRegistry(),
-                mock(PrivacyJournal.class));
+                mock(PrivacyJournal.class),
+                mock(PrivacyJournalShipping.class));
     }
 
     @Test

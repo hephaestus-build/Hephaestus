@@ -10534,6 +10534,14 @@ export type AdminErasePersonDataData = {
 
 export type AdminErasePersonDataErrors = {
 	/**
+	 * The preview changed or a copy is in progress
+	 */
+	409: ProblemDetail;
+	/**
+	 * The erasure is on hold and its journal copy is pending (journal-pending)
+	 */
+	503: ProblemDetail;
+	/**
 	 * A problem. Its type names the kind.
 	 */
 	"4XX": ProblemDetail;
@@ -13212,6 +13220,14 @@ export type DeleteCurrentUserErrors = {
 	 */
 	403: ProblemDetail;
 	/**
+	 * The erasure needs an instance administrator or a copy is in progress
+	 */
+	409: ProblemDetail;
+	/**
+	 * The account is on hold and its journal copy is pending (journal-pending)
+	 */
+	503: ProblemDetail;
+	/**
 	 * A problem. Its type names the kind.
 	 */
 	"4XX": ProblemDetail;
@@ -13225,7 +13241,7 @@ export type DeleteCurrentUserError = DeleteCurrentUserErrors[keyof DeleteCurrent
 
 export type DeleteCurrentUserResponses = {
 	/**
-	 * Account deletion requested
+	 * Account erasure accepted and the account is on hold
 	 */
 	204: void;
 };

@@ -33,6 +33,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -149,6 +150,21 @@ public class PersonDataAdminController {
     @RequiresRecentSignIn
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "PERSON_DATA_ERASURE_REQUESTED")
     @Operation(operationId = "adminErasePersonData", summary = "Start or resume the preview's audited erasure job")
+    @ApiResponse(
+            responseCode = "200",
+            description = "OK",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PersonDataRequestDTO.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The preview changed or a copy is in progress",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "The erasure is on hold and its journal copy is pending (journal-pending)",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<PersonDataRequestDTO> erase(
             @PathVariable UUID id, @Valid @RequestBody ErasureRequestDTO body) {
         service.requestErasure(id, CurrentAccount.requireId(), body.externalCopiesRemoved());

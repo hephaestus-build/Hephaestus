@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -234,7 +235,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
 
         service.onHomeOpened("T1", "U1");
 
-        verify(messageService, never()).publishHomeView(anyLong(), any(), any());
+        verify(messageService, never()).publishHomeView(anyLong(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -244,7 +245,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
 
         service.onHomeOpened("T1", "U1");
 
-        verify(messageService).publishHomeView(eq(7L), eq("U1"), any(View.class));
+        verify(messageService).publishHomeView(eq(7L), eq("T1"), eq("U1"), any(View.class), isNull(), any());
     }
 
     @Test

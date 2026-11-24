@@ -339,7 +339,7 @@ await test("a restore stops PostgreSQL and the database roles, suspends the back
 	assert.equal(named(running, "Job", "heph-postgresql-backup-restore-1"), false);
 });
 
-await test("a private S3 CA reaches every Pod that reads the repository, and no other", () => {
+await test("a private S3 CA reaches only Pods that use the backup bucket", () => {
 	const s3 = {
 		bucket: "hephaestus-backups",
 		endpoint: "s3.internal",
@@ -390,6 +390,7 @@ await test("a private S3 CA reaches every Pod that reads the repository, and no 
 			"heph-postgresql-backup-full",
 			"heph-postgresql-backup-stanza-1",
 			"postgresql",
+			"server",
 		],
 	);
 });
@@ -1214,4 +1215,68 @@ await test("the server has the Kubernetes API only for the sandboxes or the back
 	const unstated = render([...layersFor("dev"), backupsOn]);
 	assert.equal(unstated.ok, false);
 	assert.match(unstated.stderr, /networkPolicy\.kubernetesApi\.cidr is required/u);
+});
+
+await test("only a configured privacy journal adds bucket egress and its private CA to the server", () => {
+	const cidr = "10.33.64.10/32";
+	for (const enabled of [false, true]) {
+		const resources = rendered([
+			...layersFor("external"),
+			{
+				privacyJournal: {
+					bucket: enabled ? "journal-bucket" : "",
+					endpoint: "archive.example.test",
+					uriStyle: "path",
+					cidr,
+					port: 9443,
+					privateCa: "journal-ca",
+					credentialSecret: "journal-credential",
+				},
+			},
+		]);
+		const server = workload(resources, "server");
+		assert.equal(
+			envValue(server, "HEPHAESTUS_PRIVACY_JOURNAL_BUCKET"),
+			enabled ? "journal-bucket" : undefined,
+		);
+		assert.equal(
+			envValue(server, "HEPHAESTUS_PRIVACY_JOURNAL_ENDPOINT"),
+			enabled ? "https://archive.example.test:9443" : undefined,
+		);
+		assert.equal(
+			envValue(server, "HEPHAESTUS_PRIVACY_JOURNAL_PATH_STYLE"),
+			enabled ? "true" : undefined,
+		);
+		const ca = list(get(podSpec(server), "volumes")).find(
+			(volume) => get(volume, "name") === "journal-s3-ca",
+		);
+		assert.equal(get(ca, "secret", "secretName"), enabled ? "journal-ca" : undefined);
+		assert.equal(
+			list(get(container(server), "volumeMounts")).some(
+				(mount) => get(mount, "name") === "journal-s3-ca" && get(mount, "readOnly") === true,
+			),
+			enabled,
+		);
+		const policy = resources.find(
+			(resource) => kindOf(resource) === "NetworkPolicy" && nameOf(resource) === nameOf(server),
+		);
+		assert.ok(policy);
+		assert.equal(
+			list(get(policy, "spec", "egress")).some(
+				(rule) =>
+					list(get(rule, "to")).some((peer) => get(peer, "ipBlock", "cidr") === cidr) &&
+					list(get(rule, "ports")).some((port) => get(port, "port") === 9443),
+			),
+			enabled,
+		);
+	}
+});
+
+await test("the journal uses the backup bucket with its own credential by default", () => {
+	const resources = rendered([...layersFor("small"), backupsOn]);
+	const server = workload(resources, "server");
+	assert.equal(envValue(server, "HEPHAESTUS_PRIVACY_JOURNAL_BUCKET"), "hephaestus-backups");
+	assert.equal(envValue(server, "HEPHAESTUS_PRIVACY_JOURNAL_PREFIX"), "privacy-journal/");
+	const key = env(server, "HEPHAESTUS_PRIVACY_JOURNAL_ACCESS_KEY_ID");
+	assert.match(String(get(key, "valueFrom", "secretKeyRef", "name")), /-journal-s3$/u);
 });

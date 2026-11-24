@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.privacy.spi;
 
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Records a privacy fact, so that the recovery after a database restore can apply it again. A producer calls it in the
@@ -25,5 +26,21 @@ public interface PrivacyJournal {
     /** Records a fact with the durable identifier of its cause. */
     default void record(UUID entryId, PrivacyJournalKind kind, Map<String, Object> refs) {
         record(kind, refs);
+    }
+
+    /** Records a fact whose direct confirmation is durably queued by the same transaction. */
+    default void recordDeferred(UUID entryId, PrivacyJournalKind kind, Map<String, Object> refs) {
+        record(entryId, kind, refs);
+    }
+
+    /** Confirms a queued fact without keeping a transaction open during the object write. */
+    default void confirmStored(UUID entryId) {}
+
+    /** Confirms an earlier fact before acknowledging a repeated withdrawal of the same authority. */
+    default void confirmPending(PrivacyJournalKind kind, Map<String, Object> subject) {}
+
+    /** Finds a completed cause by its receipt, or by its exact target when the receipt is absent. */
+    default boolean confirmIfRecorded(@Nullable UUID receipt, PrivacyJournalKind kind, Map<String, Object> subject) {
+        return false;
     }
 }

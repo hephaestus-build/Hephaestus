@@ -309,7 +309,8 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                 mapper,
                 jdbc,
                 beans.getBean(MeterRegistry.class),
-                mock(PrivacyJournal.class));
+                mock(PrivacyJournal.class),
+                mock(PrivacyJournalShipping.class));
     }
 
     @PersonDataStores(ConversationEntryRepository.COPIES_PERSON_DATA_STORE)

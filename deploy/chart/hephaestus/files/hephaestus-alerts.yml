@@ -740,6 +740,17 @@ groups:
           summary: The conversation retention margin failed to refresh more than 5 times in 15 minutes, or a server read none for 15 minutes
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: hephaestus-privacy-journal
+    rules:
+      - alert: HephaestusPrivacyJournalShippingStalled
+        expr: max(privacy_journal_shipping_lag_seconds{job="hephaestus"}) > 300
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: A privacy fact has waited over five minutes for its journal bucket copy
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   # The bundled PostgreSQL's backups. The server reports their age only when the chart gives it the backup CronJobs,
   # and the chart renders this group only then (hephaestus.backupsRead), so the rule and its metric exist together.
   - name: hephaestus-backups

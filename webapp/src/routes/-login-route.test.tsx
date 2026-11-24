@@ -116,6 +116,17 @@ describe("contextual sign-in", () => {
 		expect(screen.queryByRole("note")).toBeNull();
 	});
 
+	it.each([
+		["account-erasure-pending", "Your deletion request was accepted"],
+		["account-erasure-needs-admin", "Your deletion request needs an administrator"],
+	] as const)("shows the %s notice after sign-out", async (state, title) => {
+		recordAccountDeleted(String(currentUser.id), state);
+		renderRouteAtWithRouter("/login");
+		const notice = await screen.findByRole("note", undefined, ROUTE_RENDER_WAIT);
+		expect(notice.textContent).toContain(title);
+		expect(notice.textContent).not.toContain("Your account is deleted");
+	});
+
 	it("does not show an account deletion notice recorded too long ago", async () => {
 		// oxlint-disable-next-line no-restricted-properties -- The record expires in wall-clock time.
 		const recordedAt = Date.now() - ACCOUNT_DELETED_NOTICE_LIFETIME_MS;

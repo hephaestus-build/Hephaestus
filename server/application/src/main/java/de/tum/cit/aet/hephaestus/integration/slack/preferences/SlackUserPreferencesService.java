@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Instant;
 import java.util.Comparator;
@@ -44,7 +43,6 @@ public class SlackUserPreferencesService {
     private final SlackParticipantConsentRepository participantConsentRepository;
     private final SlackMonitoredChannelRepository monitoredChannelRepository;
     private final SlackParticipantConsentService participantConsentService;
-    private final SlackPersonErasureService erasureService;
     private final WorkspaceSummaryQuery workspaceSummaryQuery;
 
     public SlackUserPreferencesService(
@@ -55,7 +53,6 @@ public class SlackUserPreferencesService {
             SlackParticipantConsentRepository participantConsentRepository,
             SlackMonitoredChannelRepository monitoredChannelRepository,
             SlackParticipantConsentService participantConsentService,
-            SlackPersonErasureService erasureService,
             WorkspaceSummaryQuery workspaceSummaryQuery) {
         this.accountIdentityQuery = accountIdentityQuery;
         this.membershipQuery = membershipQuery;
@@ -64,7 +61,6 @@ public class SlackUserPreferencesService {
         this.participantConsentRepository = participantConsentRepository;
         this.monitoredChannelRepository = monitoredChannelRepository;
         this.participantConsentService = participantConsentService;
-        this.erasureService = erasureService;
         this.workspaceSummaryQuery = workspaceSummaryQuery;
     }
 
@@ -118,12 +114,10 @@ public class SlackUserPreferencesService {
         String slackUserId = slackLink.providerUserKey();
         Instant decidedAt = Instant.now();
         boolean recorded = channelMessagesAllowed
-                ? participantConsentService.recordChannelMessageOptIn(workspaceId, slackUserId, decidedAt)
+                ? participantConsentService.recordChannelMessageOptIn(
+                        workspaceId, requiredTeamId, slackUserId, decidedAt)
                 : participantConsentService.recordChannelMessageOptOut(
-                        workspaceId, requiredTeamId, slackUserId, decidedAt);
-        if (recorded && !channelMessagesAllowed) {
-            erasureService.erasePerson(workspaceId, accountId, slackUserId);
-        }
+                        workspaceId, requiredTeamId, slackUserId, accountId, decidedAt);
         // A choice made in Slack with a later time keeps its place, so the answer shows what is stored.
         boolean allowed = recorded
                 ? channelMessagesAllowed

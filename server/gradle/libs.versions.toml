@@ -1,4 +1,5 @@
 [versions]
+aws-sdk = "2.59.2"
 commons-compress = "1.28.0"
 checker-qual = "4.3.1"
 jsr305 = "3.0.2"
@@ -42,6 +43,8 @@ bcpkix = "1.86"
 commonmark = "0.31.0"
 
 [libraries]
+aws-s3 = { module = "software.amazon.awssdk:s3", version.ref = "aws-sdk" }
+aws-url-connection-client = { module = "software.amazon.awssdk:url-connection-client", version.ref = "aws-sdk" }
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 httpcore5 = { module = "org.apache.httpcomponents.core5:httpcore5" }
 checker-qual = { module = "org.checkerframework:checker-qual", version.ref = "checker-qual" }

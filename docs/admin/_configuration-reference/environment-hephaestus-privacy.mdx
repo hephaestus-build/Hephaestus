@@ -2,5 +2,14 @@
 
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
+| `HEPHAESTUS_PRIVACY_JOURNAL_ACCESS_KEY_ID` | `hephaestus.privacy.journal.s3.access-key-id` | `default: (empty)` | `server` | Access key of the journal credential. |
 | `HEPHAESTUS_PRIVACY_JOURNAL_BACKUPS_ENABLED` | `hephaestus.privacy.journal.backups-enabled` | `default: true` | `server` | Whether a backup job must report a recovery point before pruning. |
+| `HEPHAESTUS_PRIVACY_JOURNAL_BUCKET` | `hephaestus.privacy.journal.s3.bucket` | `default: (empty)` | `server` | Bucket that stores the journal. Leave empty to keep the journal in the database only. |
+| `HEPHAESTUS_PRIVACY_JOURNAL_ENDPOINT` | `hephaestus.privacy.journal.s3.endpoint` | `default: (empty)` | `server` | HTTPS endpoint of the bucket. Leave empty to use the AWS regional endpoint. |
+| `HEPHAESTUS_PRIVACY_JOURNAL_OBJECT_LOCK_DAYS` | `hephaestus.privacy.journal.s3.object-lock-days` | `default: 0` | `server` | Retention in days set on each journal object. Zero uses the bucket setting. |
+| `HEPHAESTUS_PRIVACY_JOURNAL_PATH_STYLE` | `hephaestus.privacy.journal.s3.path-style` | `default: false` | `server` | Use path-style bucket addressing. |
+| `HEPHAESTUS_PRIVACY_JOURNAL_PREFIX` | `hephaestus.privacy.journal.s3.prefix` | `default: privacy-journal/` | `server` | Key prefix for the journal credential. |
+| `HEPHAESTUS_PRIVACY_JOURNAL_PRIVATE_CA` | `hephaestus.privacy.journal.s3.private-ca` | `default: (empty)` | `server` | PEM file with the CA certificate for a private bucket endpoint. |
+| `HEPHAESTUS_PRIVACY_JOURNAL_REGION` | `hephaestus.privacy.journal.s3.region` | `default: us-east-1` | `server` | Region that signs requests to the journal bucket. |
 | `HEPHAESTUS_PRIVACY_JOURNAL_RETENTION` | `hephaestus.privacy.journal.retention` | `default: 35d` | `server` | Time a fact stays in the database when backups are explicitly off. |
+| `HEPHAESTUS_PRIVACY_JOURNAL_SECRET_ACCESS_KEY` | `hephaestus.privacy.journal.s3.secret-access-key` | `default: (empty)` | `server` | Secret key of the journal credential. |

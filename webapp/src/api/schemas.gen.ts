@@ -10255,11 +10255,13 @@ export const ProblemTypeSchema = {
 		"Extensible enum: a client accepts a value that the examples do not name. The problem's kind. A client branches on it, never on the title or the detail. A problem without a type is about:blank: its status is its kind.",
 	examples: [
 		"about:blank",
+		"https://docs.hephaestus.build/contributor/api-error-handling#account-erasure-accepted",
 		"https://docs.hephaestus.build/contributor/api-error-handling#model-assignment-slot-mismatch",
 		"https://docs.hephaestus.build/contributor/api-error-handling#agent-job-state-conflict",
 		"https://docs.hephaestus.build/contributor/api-error-handling#concurrent-modification",
 		"https://docs.hephaestus.build/contributor/api-error-handling#csrf-token-rejected",
 		"https://docs.hephaestus.build/contributor/api-error-handling#feedback-withheld",
+		"https://docs.hephaestus.build/contributor/api-error-handling#journal-pending",
 		"https://docs.hephaestus.build/contributor/api-error-handling#llm-call-pool-in-use",
 		"https://docs.hephaestus.build/contributor/api-error-handling#llm-call-pool-slug-conflict",
 		"https://docs.hephaestus.build/contributor/api-error-handling#llm-connection-in-use",

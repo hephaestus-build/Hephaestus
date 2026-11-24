@@ -51,6 +51,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("AgentRuntimeOffIntegrationTest", "agent-off-e2e"),
             assignment("practices.feedback.FeedbackRecipientRowSecurityIntegrationTest", "recipient-row-security"),
             assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
+            assignment("core.privacy.PrivacyJournalOutageIntegrationTest", "privacy-journal-bucket"),
+            assignment("core.privacy.S3PrivacyJournalStoreIntegrationTest", "privacy-journal-bucket"),
             assignment("agent.conversation.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence-freshness"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
             assignment("practices.review.ReviewEndToEndIntegrationTest", "review-end-to-end"),
@@ -145,6 +147,10 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "isolated controlled clock with an agent runtime to exercise digest admission"),
             Map.entry("evaluation-disabled", "default server with a collector to prove evaluation stays off"),
             Map.entry("evaluation-enabled", "isolated server with a controlled clock, durable queues and a collector"),
+            Map.entry(
+                    "privacy-journal-bucket",
+                    "switches the journal bucket between a real MinIO endpoint and an outage"
+                            + " while using the real database and erasure service"),
             Map.entry(
                     "review-enqueue-atomicity",
                     "real review transaction and event listener with an injected fault before queue creation"),
@@ -411,6 +417,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
             "core.evaluation.EvaluationDigestIntegrationTest",
+            "core.privacy.PrivacyJournalOutageIntegrationTest",
+            "core.privacy.S3PrivacyJournalStoreIntegrationTest",
             "practices.feedback.FeedbackRecipientRowSecurityIntegrationTest",
             "practices.repository.PracticeRepositorySyncIntegrationTest",
             "integration.scm.github.installation.adoption.GitHubInstallationAdoptionIntegrationTest",

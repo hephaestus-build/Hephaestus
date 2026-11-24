@@ -163,6 +163,10 @@ Provider identity fields and links between research subjects and released rows s
 Restrict access to the events.
 Keep them while the oldest retained backup can restore data that the fact removed.
 
+The `privacy.journal.bucket_check_failed` event means the server could not verify conditional writes and SHA-256 checksums at startup.
+The `privacy.journal.checksum_mismatch` event means an object under the entry's key had a different checksum.
+Investigate the journal bucket before retrying the entry.
+
 ## Agent-job lifecycle
 
 Lifecycle records contain `event.name`, `job.id`, `workspace.id`, `review.id`, `job.phase`,

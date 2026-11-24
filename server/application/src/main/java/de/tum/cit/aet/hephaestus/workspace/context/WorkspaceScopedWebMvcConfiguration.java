@@ -1,14 +1,21 @@
 package de.tum.cit.aet.hephaestus.workspace.context;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalHttpReply;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import java.lang.reflect.Method;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.webmvc.autoconfigure.WebMvcRegistrations;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod;
 
 /**
  * Registers the {@link RequestMappingHandlerMapping} that prefixes workspace-scoped controllers with
@@ -17,9 +24,30 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * <p>The API prefix is chosen by path, not by handler type as {@code PathMatchConfigurer#addPathPrefix} would: the
  * routes that keep their own root are path families that the Gateway also routes by path. Framework handlers, such as
  * the error controller and the OpenAPI description, keep their own paths.
+ * Boot takes one registration, so this also installs the server privacy reply boundary for every handler.
  */
 @Configuration
+@RequiredArgsConstructor
 public class WorkspaceScopedWebMvcConfiguration implements WebMvcRegistrations {
+
+    private final Optional<PrivacyJournalHttpReply> journalReply;
+
+    @Override
+    public @Nullable RequestMappingHandlerAdapter getRequestMappingHandlerAdapter() {
+        return journalReply
+                .map(reply -> new RequestMappingHandlerAdapter() {
+                    @Override
+                    protected ServletInvocableHandlerMethod createInvocableHandlerMethod(HandlerMethod handlerMethod) {
+                        return new ServletInvocableHandlerMethod(handlerMethod) {
+                            @Override
+                            protected @Nullable Object doInvoke(@Nullable Object... args) throws Exception {
+                                return reply.invoke(() -> super.doInvoke(args));
+                            }
+                        };
+                    }
+                })
+                .orElse(null);
+    }
 
     @Override
     public RequestMappingHandlerMapping getRequestMappingHandlerMapping() {

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795498240544-1" author="hephaestus">
+        <addColumn tableName="privacy_journal">
+            <column name="requires_shipping" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <stop>Preserve the journal's shipping requirements and the bucket prefix before restoring the pre-upgrade backup. Follow the erasure recovery guide.</stop>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795498240544-2" author="hephaestus">
+        <addColumn tableName="privacy_journal">
+            <column name="erasure_request_id" type="UUID"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="privacy_journal" columnName="erasure_request_id"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795500000000-journal-shipping-attempt" author="hephaestus">
+        <addColumn tableName="privacy_journal">
+            <column name="shipping_attempted_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

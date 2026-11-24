@@ -259,6 +259,11 @@ public class AccountService {
         Account account = requireById(accountId);
         Account.Status previous = account.getStatus();
         if (previous == status) {
+            if (block) {
+                journal.confirmPending(PrivacyJournalKind.ACCOUNT_SUSPENDED, Map.of("accountId", accountId));
+                journal.confirmPending(
+                        PrivacyJournalKind.SESSION_REVOKED, Map.of("accountId", accountId, "target", "ACCOUNT"));
+            }
             return account;
         }
         if (previous != Account.Status.ACTIVE && previous != Account.Status.BLOCKED) {

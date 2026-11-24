@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
@@ -41,7 +42,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -148,6 +152,92 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
             context.refresh();
             assertThat(processing).isTrue();
         }
+    }
+
+    @Test
+    void shouldExportAndEraseThePublicationForTheExactUnlinkedSlackSubject() {
+        var subject = new PersonIdentity(19, "UMEMBER", "TRECOVERY");
+        var person = new PersonScope(null, List.of(subject), List.of());
+        UUID target = UUID.randomUUID();
+        UUID unrelated = UUID.randomUUID();
+        for (var publication : Map.of(target, subject, unrelated, new PersonIdentity(19, "UMEMBER", "TOTHER"))
+                .entrySet()) {
+            jdbc.update(
+                    """
+                    INSERT INTO event_publication(id, listener_id, event_type, publication_date, serialized_event)
+                    VALUES (?, 'slack-withdrawal-test', 'SlackOptOutConfirmation', clock_timestamp(), ?)
+                    """,
+                    publication.getKey(),
+                    mapper.writeValueAsString(Map.of("subjectIdentity", publication.getValue())));
+        }
+        var store = beans.getBean(CorePrivacyPersonDataCatalog.class).contributors().stream()
+                .filter(contributor -> contributor.store().equals("event_publication"))
+                .findFirst()
+                .orElseThrow();
+        var selection = store.select(person);
+        assertThat(selection.rows())
+                .singleElement()
+                .satisfies(row -> assertThat(row.columns().get("id")).isEqualTo(target.toString()));
+        assertThat(store.export(selection, person)).hasSize(1);
+        assertThat(store.erase(selection, person)).isEqualTo(1);
+        assertThat(jdbc.queryForList(
+                        "SELECT id FROM event_publication WHERE id IN (?,?)", UUID.class, target, unrelated))
+                .containsExactly(unrelated);
+    }
+
+    @Test
+    void shouldResumeVersionFourRecoveryWhenTheJournalBucketReturns() throws Exception {
+        var operator = new Account("Journal recovery operator");
+        operator.setAppRole(Account.AppRole.APP_ADMIN);
+        var administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(operator).getId());
+        var accountId = Objects.requireNonNull(
+                accounts.saveAndFlush(new Account("Restored person")).getId());
+        var available = new AtomicBoolean();
+        PrivacyJournalObjectStore bucket = new PrivacyJournalObjectStore() {
+            @Override
+            public boolean store(String key, byte[] bytes) {
+                return available.get();
+            }
+
+            @Override
+            public boolean verified() {
+                return available.get();
+            }
+        };
+        var shipping =
+                new PrivacyJournalShipping(jdbc, mapper, Optional.of(bucket), beans.getBean(MeterRegistry.class));
+        var journal = new DatabasePrivacyJournal(jdbc, mapper, Optional.of(resolver), shipping);
+        var recoveryService = advisedService(beans.getBean(PersonDataRegistry.class), List.of(), journal, shipping);
+        Path manifest = manifest(mapper.writeValueAsString(new PersonDataRecovery.Manifest(
+                4,
+                Instant.parse("2026-01-01T00:00:00Z"),
+                false,
+                administratorId,
+                List.of(new PersonDataRecovery.Person(accountId, List.of(), false)),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of())));
+        var processing = new AtomicBoolean();
+        try (var context = context(manifest, processing, recoveryService)) {
+            assertThatThrownBy(context::refresh).hasStackTraceContaining("Erasure recovery is incomplete");
+            assertThat(processing).isFalse();
+        }
+        assertThat(accounts.findById(accountId).orElseThrow().getStatus()).isEqualTo(Account.Status.DELETING);
+
+        available.set(true);
+        try (var context = context(manifest, processing, recoveryService)) {
+            context.refresh();
+            assertThat(processing).isTrue();
+        }
+        assertThat(accounts.findById(accountId).orElseThrow().getStatus()).isEqualTo(Account.Status.DELETED);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM privacy_journal
+                WHERE refs ->> 'accountId' = ? AND requires_shipping AND shipped_at IS NULL
+                """, Long.class, accountId.toString())).isZero();
     }
 
     @Test
@@ -378,6 +468,14 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
      */
     private PersonDataService advisedService(
             PersonDataRegistry registry, List<PersonEvidenceErasure> evidence, PrivacyJournal journal) {
+        return advisedService(registry, evidence, journal, beans.getBean(PrivacyJournalShipping.class));
+    }
+
+    private PersonDataService advisedService(
+            PersonDataRegistry registry,
+            List<PersonEvidenceErasure> evidence,
+            PrivacyJournal journal,
+            PrivacyJournalShipping shipping) {
         var unadvised = new PersonDataService(
                 new PersonDataScopeResolver(resolver, evidence, new OwnerScope(jdbc)),
                 registry,
@@ -397,7 +495,8 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 mapper,
                 jdbc,
                 beans.getBean(MeterRegistry.class),
-                journal);
+                journal,
+                shipping);
         var initialized = beans.getAutowireCapableBeanFactory()
                 .initializeBean(unadvised, "recoveryService" + System.identityHashCode(unadvised));
         return PersonDataService.class.cast(initialized);

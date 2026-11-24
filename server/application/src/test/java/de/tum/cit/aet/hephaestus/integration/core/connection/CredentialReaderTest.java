@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.config.SpringAsyncConfig;
 import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Clock;
@@ -21,6 +22,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -41,6 +43,7 @@ class CredentialReaderTest extends BaseUnitTest {
     private static final String KEY_A = "0123456789abcdef0123456789abcdef";
     private static final String KEY_B = "ABCDEFabcdef0123ABCDEFabcdef0123";
     private static final Instant NOW = Instant.parse("2026-09-05T12:00:00Z");
+    private static final String TEAM_ID = "T0974LHQU7K";
     private static final BearerToken TOKEN = new BearerToken("xoxb-stored-under-key-a", null);
 
     private final ConnectionRepository connectionRepository = mock(ConnectionRepository.class);
@@ -55,8 +58,8 @@ class CredentialReaderTest extends BaseUnitTest {
         connection = new Connection(
                 workspace,
                 IntegrationKind.SLACK,
-                "T0974LHQU7K",
-                new ConnectionConfig.SlackConfig("T0974LHQU7K", "hephaestus-test", null, Set.of()));
+                TEAM_ID,
+                new ConnectionConfig.SlackConfig(TEAM_ID, "hephaestus-test", null, Set.of()));
         ReflectionTestUtils.setField(connection, "id", 55L);
     }
 
@@ -152,6 +155,26 @@ class CredentialReaderTest extends BaseUnitTest {
 
         assertThat(readerWith(converter).credentialsOf(connection)).contains(TOKEN);
         verify(connectionRepository, never()).markCredentialsReadable(any(), any(), any());
+    }
+
+    @Test
+    void shouldResolveABearerTokenOnlyForTheExactActiveInstallation() {
+        var converter = new CredentialBundleConverter(KEY_A);
+        connection.setCredentials(TOKEN, converter);
+        var reader = readerWith(converter);
+        when(connectionRepository.findByWorkspaceIdAndKindAndInstanceKey(7L, IntegrationKind.SLACK, TEAM_ID))
+                .thenReturn(Optional.of(connection));
+
+        assertThat(reader.findActiveBearerToken(7L, IntegrationKind.SLACK, TEAM_ID))
+                .isEmpty();
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
+
+        assertThat(reader.findActiveBearerToken(7L, IntegrationKind.SLACK, TEAM_ID))
+                .contains(TOKEN);
+        assertThat(reader.findActiveBearerToken(7L, IntegrationKind.SLACK, "TNEW"))
+                .isEmpty();
+        assertThat(reader.findActiveBearerToken(8L, IntegrationKind.SLACK, TEAM_ID))
+                .isEmpty();
     }
 
     @Test

@@ -57,7 +57,7 @@ de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService -> de.tum.cit.aet.heph
 de.tum.cit.aet.hephaestus.integration.core.connection.Connection -> de.tum.cit.aet.hephaestus.workspace.Workspace x5
 de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAudit -> de.tum.cit.aet.hephaestus.workspace.Workspace x1
 de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionLifecycleEffects -> de.tum.cit.aet.hephaestus.workspace.Workspace x1
-de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService -> de.tum.cit.aet.hephaestus.workspace.Workspace x12
+de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService -> de.tum.cit.aet.hephaestus.workspace.Workspace x10
 de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader -> de.tum.cit.aet.hephaestus.workspace.Workspace x2
 de.tum.cit.aet.hephaestus.integration.core.connection.CredentialRotationService -> de.tum.cit.aet.hephaestus.workspace.Workspace x1
 de.tum.cit.aet.hephaestus.integration.core.connection.ProviderTeardown -> de.tum.cit.aet.hephaestus.workspace.Workspace x2

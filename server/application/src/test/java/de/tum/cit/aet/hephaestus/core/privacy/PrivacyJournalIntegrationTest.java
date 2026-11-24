@@ -47,10 +47,16 @@ class PrivacyJournalIntegrationTest extends BaseIntegrationTest {
     private PrivacyJournal journal;
 
     @Autowired
-    private PrivacyJournalRetention retention;
+    private PrivacyJournalMaintenance maintenance;
 
     @Autowired
     private MeterRegistry meters;
+
+    @Autowired
+    private PrivacyJournalShipping shipping;
+
+    @Autowired
+    private PrivacyJournalProperties properties;
 
     @Autowired
     private PersonDataRegistry registry;
@@ -72,23 +78,23 @@ class PrivacyJournalIntegrationTest extends BaseIntegrationTest {
         var old = journalFactAt(now.minus(Duration.ofDays(100)));
 
         clearBackupObservation();
-        assertThat(retention.prune(now)).isZero();
+        assertThat(maintenance.prune(now)).isZero();
         assertThat(count(old)).isOne();
         assertThat(backupHorizonUnavailable()).isEqualTo(1);
 
         observeBackup(null, now);
-        assertThat(retention.prune(now)).isZero();
+        assertThat(maintenance.prune(now)).isZero();
         assertThat(count(old)).isOne();
         assertThat(backupHorizonUnavailable()).isEqualTo(1);
 
         observeBackup(now.minus(Duration.ofDays(5)), now.minus(Duration.ofHours(31)));
-        assertThat(retention.prune(now)).isZero();
+        assertThat(maintenance.prune(now)).isZero();
         assertThat(count(old)).isOne();
         assertThat(backupHorizonUnavailable()).isEqualTo(1);
 
         var beforeBackupButWithinAgeLimit = journalFactAt(now.minus(Duration.ofDays(20)));
         observeBackup(now.minus(Duration.ofDays(5)), now);
-        retention.prune(now);
+        maintenance.prune(now);
         assertThat(count(old)).isZero();
         assertThat(count(beforeBackupButWithinAgeLimit)).isZero();
         assertThat(backupHorizonUnavailable()).isZero();
@@ -103,7 +109,7 @@ class PrivacyJournalIntegrationTest extends BaseIntegrationTest {
         var reporter = HeldTransaction.holdIn(transactions, jdbc, () -> jdbc.execute("""
             SELECT pg_advisory_xact_lock(hashtext('hephaestus'), hashtext('privacy-journal-backup-horizon'))
             """));
-        var sweep = CompletableFuture.supplyAsync(() -> retention.prune(now));
+        var sweep = CompletableFuture.supplyAsync(() -> maintenance.prune(now));
         reporter.commitAfter(sweep);
 
         assertThat(sweep.get(20, TimeUnit.SECONDS)).isZero();
@@ -121,7 +127,7 @@ class PrivacyJournalIntegrationTest extends BaseIntegrationTest {
                 jdbc,
                 () -> jdbc.queryForObject(
                         "SELECT id FROM privacy_journal WHERE entry_id = ? FOR UPDATE", Long.class, old));
-        var sweep = CompletableFuture.supplyAsync(() -> retention.prune(now));
+        var sweep = CompletableFuture.supplyAsync(() -> maintenance.prune(now));
         row.commitAfter(
                 sweep, () -> assertThat(jdbc.queryForObject("""
             SELECT pg_try_advisory_xact_lock(hashtext('hephaestus'), hashtext('privacy-journal-backup-horizon'))
@@ -136,10 +142,11 @@ class PrivacyJournalIntegrationTest extends BaseIntegrationTest {
         var now = Instant.now();
         var old = journalFactAt(now.minus(Duration.ofDays(36)));
         var recent = journalFactAt(now.minus(Duration.ofDays(34)));
-        var withoutBackups = new PrivacyJournalRetention(
+        var withoutBackups = new PrivacyJournalMaintenance(
                 jdbc,
                 Clock.systemUTC(),
-                new PrivacyJournalProperties(Duration.ofDays(35), false),
+                new PrivacyJournalProperties(Duration.ofDays(35), false, properties.s3()),
+                shipping,
                 meters,
                 transactions);
 
@@ -165,7 +172,7 @@ class PrivacyJournalIntegrationTest extends BaseIntegrationTest {
 
         // A failed rotation can leave an old backup in the repository even though the report is fresh.
         observeBackup(oldestBackup, now);
-        retention.prune(now);
+        maintenance.prune(now);
 
         assertThat(jdbc.queryForList(
                         "SELECT entry_id FROM privacy_journal WHERE entry_id IN (?,?,?)",
@@ -189,7 +196,7 @@ class PrivacyJournalIntegrationTest extends BaseIntegrationTest {
 
         var now = backup.toInstant().plus(Duration.ofDays(100));
         observeBackup(backup.toInstant(), now);
-        retention.prune(now);
+        maintenance.prune(now);
 
         assertThat(jdbc.queryForList(
                         "SELECT retention_observed_at >= ? FROM privacy_journal WHERE entry_id = ?",
@@ -351,6 +358,9 @@ class PrivacyJournalIntegrationTest extends BaseIntegrationTest {
                         accountId.toString()))
                 .containsExactly("PERSON_ERASED");
         assertThat(accounts.findById(accountId).orElseThrow().getStatus()).isEqualTo(Account.Status.DELETING);
+        assertThat(jdbc.queryForList(
+                        "SELECT shipped_at IS NULL FROM privacy_journal WHERE entry_id = ?", Boolean.class, id))
+                .containsExactly(true);
     }
 
     @Test

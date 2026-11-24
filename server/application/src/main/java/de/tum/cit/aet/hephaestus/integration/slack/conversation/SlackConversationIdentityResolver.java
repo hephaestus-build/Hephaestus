@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountSummaryQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -37,6 +38,11 @@ public class SlackConversationIdentityResolver {
         this.accountIdentityQuery = accountIdentityQuery;
         this.workspaceMembershipQuery = workspaceMembershipQuery;
         this.accounts = accounts;
+    }
+
+    public PersonIdentity nativeSubject(String teamId, String slackUserId) {
+        return new PersonIdentity(
+                gitProviderRegistry.resolveProviderId("SLACK", SLACK_SERVER_URL), slackUserId, teamId);
     }
 
     /** Resolves the account summary for a live interaction; requires an active account and workspace membership. */

@@ -306,6 +306,15 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 .isNoContent()
                 .expectBody(Void.class);
 
+        webTestClient
+                .delete()
+                .uri("/workspaces/{slug}/outline/collections/{id}", workspace.getWorkspaceSlug(), COLLECTION_ID)
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+
         assertThat(collectionRepository.findByWorkspaceIdAndConnectionIdAndCollectionId(
                         workspace.getId(), connectionId, COLLECTION_ID))
                 .isEmpty();

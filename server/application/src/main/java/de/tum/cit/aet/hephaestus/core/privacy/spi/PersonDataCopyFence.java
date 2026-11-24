@@ -17,6 +17,9 @@ public interface PersonDataCopyFence {
 
     void holdForErasure();
 
+    /** Queues admission behind existing captures for a bounded time. The transaction must roll back on timeout. */
+    void holdForErasureInRequest();
+
     /**
      * Whether the erasure step of {@code store} ran at or after {@code since} for any person, by the database clock.
      * Asked after {@link #holdForCapture()} in the same transaction, the answer holds until that transaction commits: a

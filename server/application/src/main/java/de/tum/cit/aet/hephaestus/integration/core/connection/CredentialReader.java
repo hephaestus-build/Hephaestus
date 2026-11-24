@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 import de.tum.cit.aet.hephaestus.config.CredentialReadabilityExecutor;
 import de.tum.cit.aet.hephaestus.core.security.EncryptionException;
 import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import java.time.Clock;
 import java.time.Instant;
@@ -15,6 +17,7 @@ import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -70,6 +73,17 @@ public class CredentialReader {
             return Optional.empty();
         }
         return read(connection);
+    }
+
+    /** Reads a bearer token for the named installation if it is still active in this workspace. */
+    @Transactional(readOnly = true, noRollbackFor = CredentialUnreadableException.class)
+    public Optional<BearerToken> findActiveBearerToken(long workspaceId, IntegrationKind kind, String instanceKey) {
+        return connectionRepository
+                .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, kind, instanceKey)
+                .filter(connection -> connection.getState() == IntegrationState.ACTIVE)
+                .flatMap(this::credentialsOf)
+                .filter(BearerToken.class::isInstance)
+                .map(BearerToken.class::cast);
     }
 
     /** The credential a disconnect retained, read only to remove what it controls at the provider. */

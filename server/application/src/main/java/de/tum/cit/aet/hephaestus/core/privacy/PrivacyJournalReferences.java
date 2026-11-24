@@ -46,7 +46,7 @@ final class PrivacyJournalReferences {
         var optional = optional(kind);
         if (!refs.keySet().containsAll(required)
                 || (kind == PrivacyJournalKind.SESSION_REVOKED && !validRevocation(refs))
-                || (kind == PrivacyJournalKind.REPOSITORY_REMOVED && refs.size() != 2)
+                || (kind == PrivacyJournalKind.REPOSITORY_REMOVED && !validRepositoryRemoval(refs))
                 || refs.entrySet().stream()
                         .anyMatch(field -> (!required.contains(field.getKey()) && !optional.contains(field.getKey()))
                                 || !valid(field.getKey(), field.getValue()))
@@ -73,9 +73,14 @@ final class PrivacyJournalReferences {
         return switch (kind) {
             case PERSON_ERASED -> Set.of("accountId");
             case SESSION_REVOKED -> Set.of("keepTokenId", "keepSessionId", "sessionId", "tokenId", "grantId");
-            case REPOSITORY_REMOVED -> Set.of("monitorId", "repositoryId");
+            case REPOSITORY_REMOVED -> Set.of("monitorId", "repositoryId", "itemId");
             default -> Set.of();
         };
+    }
+
+    private static boolean validRepositoryRemoval(Map<String, Object> refs) {
+        if (refs.containsKey("repositoryId")) return !refs.containsKey("monitorId");
+        return refs.containsKey("monitorId") && !refs.containsKey("itemId");
     }
 
     private static boolean validRevocation(Map<String, Object> refs) {

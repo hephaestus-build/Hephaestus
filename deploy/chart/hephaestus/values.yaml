@@ -355,6 +355,16 @@ privacyJournal:
   retention: 35d
   # Set false only when this installation retains no database backups.
   backupsEnabled: true
+  bucket: ""
+  prefix: privacy-journal/
+  credentialSecret: ""
+  endpoint: ""
+  region: us-east-1
+  port: 443
+  uriStyle: host
+  cidr: ""
+  privateCa: ""
+  objectLockDays: 0
 
 # Application settings. docs/admin/configuration-reference.mdx maps each key to its setting.
 config:

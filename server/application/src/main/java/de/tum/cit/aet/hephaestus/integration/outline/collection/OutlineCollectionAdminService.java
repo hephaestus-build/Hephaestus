@@ -226,19 +226,24 @@ public class OutlineCollectionAdminService {
     @Transactional
     public void delete(long workspaceId, String collectionId) {
         OutlineInstall install = requireInstall(workspaceId);
-        OutlineCollection row = requireRegistered(install, collectionId);
+        Map<String, Object> target = Map.of(
+                "workspaceId",
+                workspaceId,
+                "connectionId",
+                install.connectionId(),
+                "collectionId",
+                new NativeId(collectionId));
+        var row = collectionRepository
+                .findByWorkspaceIdAndConnectionIdAndCollectionId(workspaceId, install.connectionId(), collectionId)
+                .orElse(null);
+        if (row == null) {
+            if (journal.confirmIfRecorded(null, PrivacyJournalKind.COLLECTION_ERASED, target)) return;
+            throw new EntityNotFoundException("Outline collection", collectionId);
+        }
         long erased = documentRepository.deleteByWorkspaceIdAndConnectionIdAndCollectionId(
                 workspaceId, install.connectionId(), collectionId);
         collectionRepository.delete(row);
-        journal.record(
-                PrivacyJournalKind.COLLECTION_ERASED,
-                Map.of(
-                        "workspaceId",
-                        workspaceId,
-                        "connectionId",
-                        install.connectionId(),
-                        "collectionId",
-                        new NativeId(collectionId)));
+        journal.record(PrivacyJournalKind.COLLECTION_ERASED, target);
         eventPublisher.publishEvent(new AgentContextChangedEvent(workspaceId));
         String actor =
                 SecurityUtils.getCurrentAccountId().map(id -> "account " + id).orElse("system");

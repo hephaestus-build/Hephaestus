@@ -5,7 +5,7 @@ import { LoginPage } from "@/components/auth/LoginPage";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { pageHead } from "@/lib/page-title";
 import {
-	accountDeletedRecently,
+	recentAccountDeletionNotice,
 	clearAccountDeletedNotice,
 } from "@/runtime/auth/account-deleted-notice";
 import { useAuth } from "@/runtime/auth/AuthContext";
@@ -40,7 +40,7 @@ function LoginRoute() {
 
 	// Account deletion reloads this route, so the Danger zone leaves a record behind. Read it on the
 	// first render and clear it afterwards: a later reload must not repeat the notice.
-	const [accountDeleted] = useState(accountDeletedRecently);
+	const [accountDeletionNotice] = useState(recentAccountDeletionNotice);
 	useEffect(() => {
 		clearAccountDeletedNotice();
 	}, []);
@@ -49,7 +49,7 @@ function LoginRoute() {
 		<LoginPage
 			options={providers}
 			error={error}
-			notice={accountDeleted ? "account-deleted" : undefined}
+			notice={accountDeletionNotice}
 			onSignIn={(registrationId) => login(registrationId, returnTo)}
 			onDevSignIn={async (username) => devLogin(username, returnTo)}
 		/>

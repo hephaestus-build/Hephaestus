@@ -7,6 +7,8 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sql.DataSource;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
@@ -64,6 +66,23 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
     @Transactional(propagation = Propagation.MANDATORY)
     public void holdForErasure() {
         waitUnbounded("SELECT pg_advisory_xact_lock(2165,1)");
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void holdForErasureInRequest() {
+        // Queue an exclusive request so later captures cannot starve an erasure.
+        jdbc.execute("SET LOCAL lock_timeout = '2s'");
+        try {
+            jdbc.query("SELECT pg_advisory_xact_lock(2165,1)", rs -> {});
+        } catch (UncategorizedSQLException failure) {
+            // PostgreSQL reports lock_timeout as lock_not_available. Spring's default translator may leave it raw.
+            if (failure.getCause() instanceof SQLException cause && "55P03".equals(cause.getSQLState())) {
+                throw new CannotAcquireLockException("The person data copy fence is busy", failure);
+            }
+            throw failure;
+        }
+        jdbc.execute("SET LOCAL lock_timeout TO DEFAULT");
     }
 
     /**

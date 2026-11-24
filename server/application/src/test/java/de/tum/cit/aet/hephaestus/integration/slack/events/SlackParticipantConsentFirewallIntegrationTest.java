@@ -11,11 +11,16 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -23,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.StoredEventHandling;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
@@ -111,10 +117,14 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
     @Autowired
     private ProviderEventStore eventStore;
 
+    @Autowired
+    private PersonDataWriteFence personWriteFence;
+
     private SlackWorkspaceResolver workspaceResolver;
     private SlackRosterIdentityResolver identityResolver;
     private SlackIngestService ingestService;
     private long workspaceId;
+    private long humanAccountId;
 
     @BeforeEach
     void setUp() {
@@ -138,11 +148,11 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
         workspaceResolver = mock(SlackWorkspaceResolver.class);
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(workspaceId));
         identityResolver = mock(SlackRosterIdentityResolver.class);
-        long human = Objects.requireNonNull(
+        humanAccountId = Objects.requireNonNull(
                 accounts.save(new Account("Allowed human")).getId());
-        memberships.createMembership(workspace, human, Membership.WorkspaceRole.MEMBER);
+        memberships.createMembership(workspace, humanAccountId, Membership.WorkspaceRole.MEMBER);
         when(identityResolver.displayName(anyLong(), any(), any())).thenReturn(Optional.of("A person"));
-        when(identityResolver.humanAccountId(anyLong(), any(), any(), any())).thenReturn(Optional.of(human));
+        when(identityResolver.humanAccountId(anyLong(), any(), any(), any())).thenReturn(Optional.of(humanAccountId));
 
         ingestService = service(messageRepository);
     }
@@ -198,6 +208,48 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                         CHANNEL,
                         "100.1"))
                 .isZero();
+    }
+
+    @Test
+    void shouldEraseAnIngestThatWasAlreadyWritingWhenThePersonOptedOut() throws Exception {
+        long slackProviderId = Objects.requireNonNull(identityProviderRepository
+                .saveAndFlush(new IdentityProvider(IdentityProviderType.SLACK, "https://slack.com"))
+                .getId());
+        var tx = new TransactionTemplate(transactionManager);
+        var ingest = HeldTransaction.holdIn(
+                tx,
+                jdbcTemplate,
+                () -> ingestService.ingestChannelMessage(
+                        TEAM, CHANNEL, "100.1", null, ALLOWED_USER, "in-flight message"));
+        var subjects = mock(SlackConversationIdentityResolver.class);
+        when(subjects.resolveAccountId(workspaceId, TEAM, ALLOWED_USER)).thenReturn(Optional.of(humanAccountId));
+        when(subjects.nativeSubject(TEAM, ALLOWED_USER))
+                .thenReturn(new PersonIdentity(slackProviderId, ALLOWED_USER, TEAM));
+        var consent = new SlackParticipantConsentService(
+                participantConsentRepository,
+                (kind, refs) -> {},
+                new SlackPersonErasureService(
+                        messageRepository,
+                        threadRepository,
+                        conversationFeedbackErasure,
+                        mock(AgentActions.class),
+                        mock(ConnectionService.class),
+                        mock(GitProviderRegistry.class)),
+                personWriteFence,
+                subjects);
+        var withdrawal = CompletableFuture.runAsync(() -> tx.executeWithoutResult(
+                status -> consent.recordChannelMessageOptOut(workspaceId, TEAM, ALLOWED_USER, null, Instant.now())));
+        ingest.commitAfter(withdrawal, () -> assertThat(withdrawal).isNotDone());
+        withdrawal.get(10, TimeUnit.SECONDS);
+
+        assertThat(participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
+                        workspaceId, ALLOWED_USER))
+                .isTrue();
+        assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, CHANNEL, "100.1"))
+                .isFalse();
+        assertThat(threadRepository.findByWorkspaceIdAndSlackChannelIdAndSlackThreadTs(workspaceId, CHANNEL, "100.1"))
+                .hasValueSatisfying(
+                        thread -> assertThat(thread.getParticipantAccountIds()).isEmpty());
     }
 
     @Test

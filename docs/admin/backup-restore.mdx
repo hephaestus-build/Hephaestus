@@ -54,7 +54,7 @@ The chart cannot see a backup that you take yourself, for example a volume snaps
    The server reads the backup CronJobs through the API for `HephaestusBackupStale`.
 6. Optional: if a private CA signs the certificate of the endpoint, add the CA to the PostgreSQL TLS Secret as `s3-ca.crt`.
    Then set `postgresql.backup.s3.privateCa=true`.
-7. Upgrade the release.
+7. Create the [privacy journal credential](#keep-the-privacy-journal-outside-the-database), then upgrade the release.
 
 A failed WAL archive keeps the WAL on the PostgreSQL volume until the volume is full.
 The [alert rules](./alert-rules.mdx) watch the WAL archive, the age of the latest backup and the free space of the volume.
@@ -95,6 +95,59 @@ This setting is a count, not a time limit.
 Erased data can stay in a backup until pgBackRest expires that backup.
 Keep the manifest of [Reapply erasures after a restore](./erasure-recovery) as long as any backup that can restore erased data.
 This includes backup copies that you keep elsewhere.
+
+### Keep the privacy journal outside the database
+
+Configure a journal bucket for managed PostgreSQL, external PostgreSQL and volume snapshots.
+When `postgresql.backup.enabled` is true, the journal uses the backup bucket under `privacy-journal/` by default.
+
+1. Set `privacyJournal.bucket` to use a separate bucket.
+   Give each instance its own prefix if it shares a bucket. Use `privacyJournal.prefix` to set it.
+2. Create a separate bucket identity for the server. Grant `s3:PutObject` and `s3:GetObject` only on objects under this prefix.
+   The server uses `GetObject` to check the stored checksum after a conflicting write.
+   Give listing access to the backup identity that copies the prefix for recovery.
+3. Set `privacyJournal.credentialSecret` to a Secret in the release namespace with `accessKeyId` and `secretAccessKey`.
+   The chart uses `<release>-journal-s3` when this value is empty.
+4. For an S3-compatible endpoint such as MinIO, Garage, or Ceph, set its hostname, region, port, and CIDR in `privacyJournal`.
+   Set `privacyJournal.uriStyle: path` if the bucket name goes in the request path.
+   If the endpoint needs a private CA, set `privacyJournal.privateCa` to the Secret with `s3-ca.crt`.
+   If the journal uses the backup bucket and its private CA, the server uses the CA of that endpoint.
+
+At startup, the server checks that the bucket rejects conditional overwrites and returns the SHA-256 checksum of the stored object.
+The bucket endpoint must support `Expect: 100-continue` for conditional uploads.
+If the bucket is temporarily unreachable, the server starts and retries the check before it writes a journal object.
+If the bucket fails the conditional-write or checksum check, fix its capabilities and restart the server.
+
+The health check uses the object `_checks/if-none-match-sha256-v1.json` within the journal prefix.
+If the bucket incorrectly allowed an overwrite, use an administrator credential to remove this check object after fixing the bucket.
+Keep the journal entry objects.
+
+If the bucket becomes unavailable, a privacy withdrawal takes effect at once.
+Person erasure blocks reads and processing when it is accepted. Its worker waits for the journal copy before deletion.
+A narrower removal can delete local data in its cause transaction.
+
+If the journal copy is still pending, the server returns `journal-pending` instead of confirming success.
+The server retries each pending fact.
+The `HephaestusPrivacyJournalShippingStalled` alert reports facts that have waited more than five minutes.
+
+Keep each journal object through the oldest backup that can restore data named in that object.
+Keep backups for 30 days or less where possible.
+Exclude the journal prefix from lifecycle deletion.
+For immutability, use a separate bucket with Object Lock and a default retention longer than the oldest backup.
+
+You can use a bucket with Object Lock and set retention on each journal object instead.
+Set `privacyJournal.objectLockDays` and add `s3:PutObjectRetention` under the same prefix.
+A default Object Lock retention on the backup bucket prevents pgBackRest from expiring its backups.
+Keep the bucket and its prefix in your site values and the recovery record.
+A database-volume restore uses that same prefix, including for a backup made before you enabled the journal.
+The date and fact ID identify each object within that prefix.
+
+[Stop every server role](./upgrade#stopped-schema-upgrades) before you enable the bucket.
+Every server must use the same bucket and prefix when it restarts.
+Before you disable or move a destination, wait for `privacy_journal_shipping_lag_seconds` to reach zero.
+Then stop every server and keep all confirmed objects in the recovery prefix.
+A pending person erasure stays on hold until its required journal copy ships.
+Do not change the prefix while backups still need facts from it.
 
 ## Platform recovery material
 

@@ -130,6 +130,7 @@ public class SlackIngestService {
         if (!DeliveryInbox.claim("slack.message.ingest")) return;
         Long authorAccountId = null;
         if (authorSlackUserId != null && !authorSlackUserId.isBlank()) {
+            if (!participantConsentGate.admitIngestionWrite(workspaceId, authorSlackUserId)) return;
             authorAccountId = identityResolver
                     .humanAccountId(workspaceId, teamId, authorSlackUserId, Objects.requireNonNull(authorName))
                     .orElse(null);

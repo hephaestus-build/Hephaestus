@@ -3,4 +3,14 @@
 | Key | Type | Default | Required in object | Constraints |
 | --- | --- | --- | --- | --- |
 | `privacyJournal.backupsEnabled` | boolean | `true` | yes | Require an observed recovery point before pruning. Set false only when the installation retains no database backups. |
+| `privacyJournal.bucket` | string | `""` | yes | Bucket for privacy facts. If empty, use the PostgreSQL backup bucket when chart backups are enabled. |
+| `privacyJournal.cidr` | string | `""` | yes | Network block of the journal endpoint. Leave empty to use external egress.<br />`pattern: "^(?:\|[0-9]{1,3}(?:\\.[0-9]{1,3}){3}/[0-9]{1,2}\|[0-9a-fA-F:]+/[0-9]{1,3})$"` |
+| `privacyJournal.credentialSecret` | string | `""` | yes | Secret in the release namespace with accessKeyId and secretAccessKey for the journal prefix. |
+| `privacyJournal.endpoint` | string | `""` | yes | S3 endpoint hostname. The default AWS regional endpoint applies when this is empty for an explicit bucket.<br />`pattern: "^[A-Za-z0-9.-]*$"` |
+| `privacyJournal.objectLockDays` | integer | `0` | yes | Retention in days on each object. Set 0 to use the bucket policy.<br />`minimum: 0` |
+| `privacyJournal.port` | integer | `443` | yes | HTTPS port of the S3 endpoint.<br />`minimum: 1. maximum: 65535` |
+| `privacyJournal.prefix` | string | `"privacy-journal/"` | yes | Object prefix for the journal identity.<br />`pattern: "^(?:[A-Za-z0-9_-]+/)+$"` |
+| `privacyJournal.privateCa` | string | `""` | yes | Secret with the private endpoint CA in s3-ca.crt. |
+| `privacyJournal.region` | string | `"us-east-1"` | yes | Signing region of the journal bucket.<br />`pattern: "^[A-Za-z0-9-]+$"` |
 | `privacyJournal.retention` | string | `"35d"` | yes | Age before the database prunes a privacy fact when backups are explicitly off. |
+| `privacyJournal.uriStyle` | string | `"host"` | yes | S3 bucket addressing style.<br />`enum: ["host","path"]` |

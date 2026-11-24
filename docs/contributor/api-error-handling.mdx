@@ -117,6 +117,21 @@ The advice handles this exception and returns the same `errors` map shape as bod
 
 Each heading is the slug at the end of a problem `type`.
 
+### account-erasure-accepted
+
+The self-service erasure put the account on hold and revoked its sessions.
+A 409 response means an instance admin must finish the erasure.
+A 503 response means the recovery copy is still pending.
+Send the person to the sign-in page with the corresponding notice.
+
+### journal-pending
+
+The server accepted a privacy change and put the affected data on hold. It returns `503` while
+the recovery record is waiting for the journal bucket. A repeat of an operation with a stable
+target or receipt confirms the same record. A route that addresses a repository by its former
+name can return `404` after the removal. The server still retries the recovery copy.
+If the person erased their own account, send them to the sign-in page.
+
 ### model-assignment-slot-mismatch
 
 The selected model does not fill this model assignment. `declaredTier` names the model's data-handling tier.

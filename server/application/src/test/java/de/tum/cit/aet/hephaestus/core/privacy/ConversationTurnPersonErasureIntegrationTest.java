@@ -459,7 +459,8 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 mapper,
                 jdbc,
                 meters,
-                mock(PrivacyJournal.class));
+                mock(PrivacyJournal.class),
+                mock(PrivacyJournalShipping.class));
     }
 
     /** The account linked to the user's provider identity, so an erasure by that identity resolves it. */

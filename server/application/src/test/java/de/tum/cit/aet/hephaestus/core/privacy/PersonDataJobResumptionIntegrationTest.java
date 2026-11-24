@@ -152,7 +152,8 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
                 mapper,
                 jdbc,
                 new SimpleMeterRegistry(),
-                mock(PrivacyJournal.class));
+                mock(PrivacyJournal.class),
+                mock(PrivacyJournalShipping.class));
         var tx = new TransactionTemplate(transactions);
         var identities = List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null));
         var preview = Objects.requireNonNull(tx.execute(status -> service.preview(adminId, null, identities)));

@@ -58,11 +58,12 @@ Option 6.
 4. **Each fact is one small object, written before the person sees "done".**
    - The write uses `If-None-Match: *`, so a stored object is never replaced.
    - A conflicting retry reads the stored checksum. A match counts as stored. A mismatch raises an alert and keeps the acknowledgement waiting.
-5. **Journal first.** A deny intent is accepted at once. The person's data is put on hold at once: no reads and no use.
-   - The local deletion runs only after the fact is written to the journal bucket. The person sees "done" only after that.
-   - Deny intents are withdrawals, Forget, revocations and key destructions.
-   - This applies whenever a journal bucket is configured.
-   - While the bucket cannot be reached, the client gets `journal-pending`. The hold stays, and every egress that the intent stops waits.
+5. **A deny intent takes effect in the cause transaction.** This covers withdrawals, Forget, revocations and key destructions.
+   - Person erasure puts the person's data on hold and queues the erasure. The worker waits for checksum confirmation before physical deletion.
+   - Narrower removals can delete local data in the same transaction as the fact.
+   - The requester's success reply and direct confirmation wait for the checksum. A feed frame can report the current local state, including a redaction.
+   - While the copy is pending, the client gets `journal-pending`. The local restriction stays in effect.
+   - Slack receives a transport acknowledgement after the local commit. The durable publication waits for the copy before it confirms the withdrawal to the person.
 6. **The server gets one new credential.** It can write and read objects under the prefix only. It cannot list or delete. Bucket egress and trust of the bucket's private CA exist only when a journal bucket is configured.
 7. **Journal objects outlive the oldest backup.** The admin guide recommends a separate journal bucket with Object Lock and a default retention. It warns that a default retention on the backup bucket blocks pgBackRest's expire.
 8. **After a restore, the recovery reapplies the facts.**
@@ -100,7 +101,7 @@ No ADR changes. The admin pages [Erasure recovery](../admin/erasure-recovery.mdx
 - Good: with a journal bucket, a restore never brings back an erasure or a revocation, also on managed PostgreSQL.
 - Good: with a journal bucket, the operator no longer writes the manifest by hand.
 - Good: a forged or replayed object can only narrow access.
-- Bad: the data goes on hold at once. A configured journal bucket can delay local deletion and the success reply.
+- Bad: the data goes on hold at once. A configured journal bucket can delay physical person erasure and the success reply.
 - Bad: the server needs one more credential and, with a journal bucket, bucket egress.
 - Bad: settings, mutes and disagreements after the recovery point are lost. Each person must repeat them.
 - Bad: an instance without object storage cannot run delivery experiments or release research datasets.
@@ -110,8 +111,8 @@ No ADR changes. The admin pages [Erasure recovery](../admin/erasure-recovery.mdx
 
 Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- JournalBeforeEffectTest fails when a local deletion runs before its object is stored. It also fails when held data is read or used during a bucket outage.
-- It also fails when an acknowledgement, a feed frame or a research byte leaves before its object is stored.
+- JournalBeforeEffectTest fails when physical person erasure runs before its object is stored. It also fails when held data is read or used during a bucket outage.
+- It also fails when a requester acknowledgement or a research byte leaves before its object is stored.
 - JournalCoverageTest fails when a removal path writes no journal row or no log event.
 - JournalCoverageTest also fails when a kind has no step in the recovery.
 - A test fails when an experiment starts or a dataset is released with no journal bucket configured.
