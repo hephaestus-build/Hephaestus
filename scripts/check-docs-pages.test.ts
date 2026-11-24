@@ -4,6 +4,7 @@ import {
 	checkPage,
 	type Guide,
 	headingAnchors,
+	mentoringUpgradeNoteProblems,
 	migrationNoteProblems,
 	screenshotProblems,
 } from "./check-docs-pages.ts";
@@ -12,6 +13,31 @@ const page = (frontMatter: string, body: string) => `---\n${frontMatter}\n---\n\
 const feature = (body: string) =>
 	page("title: Activity\ndescription: See your work.\npage_type: feature", body);
 const check = (source: string, guide: Guide = "user") => checkPage("page.md", guide, source);
+
+await test("the operator note must match the stable changelog slug of a mentoring cutover", () => {
+	const file = "20261125120000-convert-legacy-turns.xml";
+	const source = `<databaseChangeLog>
+		<changeSet id="turns" author="hephaestus" labels="cutover, mentoring-cutover"/>
+		<changeSet id="unrelated" author="hephaestus" labels="mentoring-cutover-report"/>
+	</databaseChangeLog>`;
+	const expected = `${file}: Change set turns needs docs/admin/upgrade-notes/convert-legacy-turns.mdx. See docs/contributor/database-migration.mdx#mentoring-cutover-notes.`;
+	assert.deepEqual(
+		mentoringUpgradeNoteProblems(file, source, () => false),
+		[expected],
+	);
+	assert.deepEqual(
+		mentoringUpgradeNoteProblems(file, source, (route) => route === "admin/upgrade-notes/turns"),
+		[expected],
+	);
+	assert.deepEqual(
+		mentoringUpgradeNoteProblems(
+			file,
+			source,
+			(route) => route === "admin/upgrade-notes/convert-legacy-turns",
+		),
+		[],
+	);
+});
 
 await describe("checkPage", async () => {
 	await test("accepts a feature page that follows its template", () => {

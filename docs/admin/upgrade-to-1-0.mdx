@@ -140,15 +140,8 @@ Do not start the target servers beside old servers with an active review during 
 An old server held each composition's claim decision in its own memory, and an older review attempt has no published preparation checkpoint.
 A target server cannot continue either of them.
 
-Before you start the target servers, check that no review run has a live lease:
-
-```sql
-SELECT count(*) FROM agent_run
-WHERE state = 'LEASED' AND kind IN ('REVIEW', 'REVIEW_COMPOSE')
-  AND leased_until > clock_timestamp();
-```
-
-The count must be zero. If the drain deadline expired, keep the target stopped until the remaining leases expire.
+Before you start the migration, [check for live leases](./upgrade-notes/person-row-level-security#check-for-live-leases).
+If the drain deadline expired, keep the target stopped until the remaining leases expire.
 Queued work can stay queued. The target claims it and records its own decision and preparation checkpoint in PostgreSQL.
 After this first upgrade, the sandbox gateway Service has no client-IP affinity.
 Each ready server reads the same run, lease, decision and checkpoint, so later rolling upgrades keep all active work.
@@ -255,6 +248,8 @@ Use [If migration fails](./upgrade#if-migration-fails).
    Wait for an active run to finish.
 3. Verify the target's [signed release assets](./release-image-lock#independent-verification) and [chart](./kubernetes#verify-the-release-chart).
    Record the current chart, profile, site values and replica counts.
+   Open **Instance administration → Instance settings** and record the state of **Silent mode**.
+   [Turn on silent mode](./silent-deployment#undo) if it is off.
 4. On a host on 1.0.0-rc.5 or earlier, drain the webhook streams just before you stop the roles.
    Wait until `webhook_stream_consumer_pending` and `webhook_stream_consumer_ack_pending` are 0 for each stream.
    The upgrade does not read the streams.
@@ -274,6 +269,7 @@ Use [If migration fails](./upgrade#if-migration-fails).
 
    Wait until every sandbox Pod is gone.
    The first reaper pass of the target servers takes back each ready sandbox whose claim you deleted.
+   [Check for live leases](./upgrade-notes/person-row-level-security#check-for-live-leases).
 6. Back up the database.
    Verify that the backup restores, as [Backup and restore](./backup-restore#back-up-the-database) describes.
    Export the keys and keep them with the backup and the current signed release lock.
@@ -301,7 +297,8 @@ Use [If migration fails](./upgrade#if-migration-fails).
    It still queues work, and a server of 1.0.0-rc.14 or earlier still tries to claim work. Thus, step 5 is still necessary.
    Save the log of the migration Job.
    Require its `Complete` condition and no `ERROR` line in the log.
-   If the Job fails, keep the server stopped and go to [Roll back](#roll-back).
+   If the only error reports a live lease, follow the [person row-level security upgrade note](./upgrade-notes/person-row-level-security#when-the-migration-reports-a-live-lease).
+   For other errors, keep the server stopped and go to [Roll back](#roll-back).
 10. Check the sandbox prerequisites on the migrated release:
     - The controller is ready, and the chart's `SandboxTemplate` and `SandboxWarmPool` objects exist in the sandbox namespace.
     - The pre-pull DaemonSet is ready on every sandbox node: `kubectl --namespace hephaestus rollout status daemonset/hephaestus-agent-image`.
@@ -360,7 +357,9 @@ An older image or `helm rollback` does not undo the migration.
 3. Install the previous release.
    For a pull-based host, [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover) gives the Helm and applied-record steps.
 4. Start the roles of the previous release only on the restored database.
-5. Report the recovery point and any lost writes.
+5. [Prove silence](./silent-deployment#prove-silence).
+   If silent mode was off before the cutover, [turn off silent mode](./silent-deployment#turn-off-silent-mode).
+6. Report the recovery point and any lost writes.
 
 The migration entry of a stopped change can give its own rollback notes.
 
@@ -379,6 +378,8 @@ The migration entry of a stopped change can give its own rollback notes.
 9. Watch these alerts for the first hours: `HephaestusAgentQueueStalled`, `HephaestusAgentRunReaperFailing`, `HephaestusAgentSandboxReaperFailing`, `HephaestusReviewSandboxFailing`, `HephaestusSandboxGatewayRefusing`.
    [Alert response](./production-operations-runbook#alert-response) gives the action for each.
 10. Do the actions that [The other migration entries](#the-other-migration-entries) lists for after the upgrade.
+11. [Prove silence](./silent-deployment#prove-silence).
+12. If silent mode was off before the cutover, [turn off silent mode](./silent-deployment#turn-off-silent-mode).
 
 [Sizing and scaling](./sizing) states the workload and limits of its measurements.
 A successful upgrade does not qualify throughput or recovery time.

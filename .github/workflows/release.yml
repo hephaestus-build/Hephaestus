@@ -172,6 +172,7 @@ jobs:
           MIGRATIONS: ${{ needs.release.outputs.migrations }}
         run: |
           set -euo pipefail
+          node scripts/check-docs-pages.ts
           node scripts/plan-release.ts --notes "$PREVIOUS_VERSION" "$NOTES_VERSION" CHANGELOG.md notes.md "$VERSION"
           node scripts/github-release-notes.ts notes.md release-body.md
 
