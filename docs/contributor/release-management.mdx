@@ -808,13 +808,16 @@ Each later promotion then fails, so do not wait for the next release candidate.
 ### Host watch
 
 **Release / Host watch** checks the project's hosts from outside, every 10 minutes.
-A failed check fails the run, and **CI / Scheduled failures** opens or updates one issue for the maintainer team.
+Each check keeps one issue.
+Its first failure opens the issue and notifies the maintainer team.
+Later failures add nothing, and the next pass closes the issue.
+If the report itself fails, **CI / Scheduled failures** reports the run.
 The hosts' own Alertmanager notifies no one unless its site configuration names a receiver.
 
 | Check | Fails when | Response |
 | --- | --- | --- |
-| The server of each host is ready | `https://<host>/readyz` does not answer the server's `{"status":"UP"}` in three tries over 40 seconds | Read the server and PostgreSQL Pods (`kubectl -n hephaestus get pods`) and the [alert response](../admin/production-operations-runbook#alert-response). A server stopped on purpose also fails this check. Record why in the issue. |
-| Staging follows main | The Staging channel is frozen for 24 hours or more, or deploy-state cannot date the freeze | Promote Staging without **freeze** when the hold is over. Otherwise record in the issue why the hold continues. Continuous staging shows a held run as a warning with the freeze age. |
+| The server of each host is ready | `https://<host>/readyz` does not answer the server's `{"status":"UP"}` in three tries over 40 seconds | Read the server and PostgreSQL Pods (`kubectl -n hephaestus get pods`) and the [alert response](../admin/production-operations-runbook#alert-response). A server stopped on purpose also fails this check: record why in the issue. The issue closes when the server is ready again. |
+| Staging follows main | The Staging channel has been frozen for 24 hours or more | Promote Staging without **freeze** when the hold is over. Otherwise record in the issue why the hold continues. Continuous staging shows each held run as a warning with the freeze age. A freeze that deploy-state cannot date shows only that warning. |
 
 ### Kernel updates on the project's hosts
 

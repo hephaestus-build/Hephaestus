@@ -46,7 +46,7 @@ jobs:
           script: |
             const run = context.payload.workflow_run;
             let jobs = [];
-            if (['CI / Kubernetes nightly', 'Security / Rescan images'].includes(run.name)) {
+            if (['CI / Kubernetes nightly', 'Security / Rescan images', 'Release / Host watch'].includes(run.name)) {
               jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
                 ...context.repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100,
               });

@@ -1,8 +1,9 @@
 name: Release / Host watch
 
 # Checks from outside what users and continuous staging depend on: the server of each host is ready, and
-# Staging is not frozen for longer than a day. A failed check fails the run; CI / Scheduled failures
-# then notifies the maintainers. docs/admin/production-operations-runbook.mdx § Host watch has the response.
+# Staging is not frozen for longer than a day. Each check keeps one issue: its first failure opens it and
+# notifies the maintainers, and its next pass closes it. docs/contributor/release-management.mdx
+# § Host watch has the response.
 on:
   schedule:
     - cron: "*/10 * * * *"
@@ -50,3 +51,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/watch-hosts.ts freeze
+
+  # CI / Scheduled failures leaves a run alone when this job succeeds, so a long outage notifies once.
+  report:
+    name: "Report a failure"
+    needs: [api, freeze]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - name: Open or close each check's issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_RESULT: ${{ needs.api.result }}
+          FREEZE_RESULT: ${{ needs.freeze.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/watch-hosts.ts report

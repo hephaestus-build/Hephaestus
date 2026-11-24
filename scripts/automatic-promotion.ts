@@ -64,10 +64,11 @@ export async function channelChangedAt(
 /** The deploy-state history of one channel file, newest first. */
 export const channelCommits = (repository: string, file: string) => async () =>
 	parseJson(
-		await output("gh", [
-			"api",
-			`repos/${repository}/commits?sha=deploy-state&path=${file}&per_page=1`,
-		]),
+		await output(
+			"gh",
+			["api", `repos/${repository}/commits?sha=deploy-state&path=${file}&per_page=1`],
+			{ signal: AbortSignal.timeout(30_000) },
+		),
 	);
 
 /** How long a hold has lasted, in whole hours, or undefined without a start. */

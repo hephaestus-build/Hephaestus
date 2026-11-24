@@ -170,3 +170,25 @@ void test("the shared reporter knows every failure reporter of the workflows tha
 		[],
 	);
 });
+
+void test("a failed Host watch run whose own report succeeded files nothing more", async () => {
+	const checksFailed = { conclusion: "failure", steps: [] };
+	assert.deepEqual(
+		await notify(
+			[],
+			[],
+			false,
+			[checksFailed, { name: "Report a failure", conclusion: "success", steps: [] }],
+			"Release / Host watch",
+		),
+		[],
+	);
+	const unreported = await notify(
+		[],
+		[],
+		false,
+		[checksFailed, { name: "Report a failure", conclusion: "failure", steps: [] }],
+		"Release / Host watch",
+	);
+	assert.equal(unreported.length, 1);
+});

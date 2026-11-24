@@ -48,6 +48,25 @@ async function waitReady(step: string): Promise<void> {
 	}
 }
 
+/** The process's /proc status inside the container, or "" once it no longer exists. */
+function procStatus(pid: string): string {
+	const result = spawnSync("docker", ["exec", container, "cat", `/proc/${pid}/status`], {
+		encoding: "utf8",
+		maxBuffer: CAPTURE_LIMIT_BYTES,
+	});
+	return result.status === 0 ? result.stdout : "";
+}
+
+async function waitFor(what: string, done: () => boolean): Promise<void> {
+	const deadline = Date.now() + 15_000;
+	while (!done()) {
+		if (Date.now() > deadline) {
+			throw new Error(`Timed out waiting for ${what}:\n${logs()}`);
+		}
+		await sleep(200);
+	}
+}
+
 function logs(): string {
 	const result = spawnSync("docker", ["logs", container], {
 		encoding: "utf8",
@@ -113,9 +132,19 @@ try {
 		throw new Error(`PID 1 is ${init}, not tini`);
 	}
 
-	// An orphan that exits non-zero, as a killed probe's pg_isready does.
-	docker("exec", container, "sh", "-c", "(sleep 1; exit 2) &");
-	await sleep(4000);
+	// An orphan that exits non-zero, as a killed probe's pg_isready does. The subshell outlives its
+	// exec session, so PID 1 adopts it; it is reaped when its /proc entry disappears.
+	const orphan = docker(
+		"exec",
+		container,
+		"sh",
+		"-c",
+		"(sleep 3; exit 2) >/dev/null 2>&1 & echo $!",
+	);
+	await waitFor(`PID 1 to adopt the orphan ${orphan}`, () =>
+		/^PPid:\s+1$/mu.test(procStatus(orphan)),
+	);
+	await waitFor(`PID 1 to reap the orphan ${orphan}`, () => procStatus(orphan) === "");
 	if (/untracked child process|terminating any other active server processes/u.test(logs())) {
 		throw new Error(`PostgreSQL treated an orphan as a crashed backend:\n${logs()}`);
 	}

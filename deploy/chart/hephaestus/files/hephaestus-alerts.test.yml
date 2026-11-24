@@ -2954,7 +2954,29 @@ tests:
               severity: critical
               namespace: hephaestus
             exp_annotations:
-              summary: PostgreSQL has not answered its exporter for 5 minutes
+              summary: PostgreSQL or its exporter has not answered for 5 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 14m
+        alertname: HephaestusPostgresDown
+        exp_alerts: []
+
+  - name: a scrape of the PostgreSQL exporter that fails for 5 minutes leaves no pg_up and still alerts
+    interval: 1m
+    input_series:
+      - series: 'up{job="postgresql",namespace="hephaestus",instance="10.42.0.222:9187"}'
+        values: "1x2 0x10 1x5"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: HephaestusPostgresDown
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: HephaestusPostgresDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: hephaestus
+            exp_annotations:
+              summary: PostgreSQL or its exporter has not answered for 5 minutes
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 14m
         alertname: HephaestusPostgresDown
