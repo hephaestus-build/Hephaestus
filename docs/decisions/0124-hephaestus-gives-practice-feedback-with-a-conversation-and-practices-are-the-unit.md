@@ -1,7 +1,7 @@
 # ADR 0124: Hephaestus gives practice feedback with a conversation, and practices are the unit
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:**
@@ -114,7 +114,7 @@ Option 4.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these checks:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
 - `gate:prose` fails when product text uses "mentor" alone for Hephaestus, or "AI mentor" for a person.
 - A review gateway test fails when a review run calls a tool that writes outside its observations.
