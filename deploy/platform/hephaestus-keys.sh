@@ -249,6 +249,7 @@ has WEBHOOK_ROUTING_SECRET || add WEBHOOK_ROUTING_SECRET "$(random -hex 32)"
 has HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET || add HEPHAESTUS_INTEGRATION_OAUTH_STATE_SECRET "$(random -hex 32)"
 if [ "$BACKUPS" = true ]; then
 	has BACKUP_CIPHER_PASS || add BACKUP_CIPHER_PASS "$(random -base64 48)"
+	has DATABASE_BACKUP_REPORTER_PASSWORD || add DATABASE_BACKUP_REPORTER_PASSWORD "$(random -hex 24)"
 fi
 # The login of hephaestus_monitor, for postgresql.metrics.enabled.
 if [ "$METRICS" = true ]; then

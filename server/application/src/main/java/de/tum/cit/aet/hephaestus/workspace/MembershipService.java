@@ -326,7 +326,8 @@ public class MembershipService {
                         case "name" ->
                             JpaSort.unsafe(
                                     order.getDirection(),
-                                    "LOWER(COALESCE(NULLIF(TRIM(a.displayName),''),NULLIF(TRIM(u.name),''),NULLIF(TRIM(u.login),''),'Unnamed account'))");
+                                    "LOWER(COALESCE(NULLIF(TRIM(a.displayName),''),NULLIF(TRIM(u.name),''),NULLIF(TRIM(u.login),''),'Unnamed"
+                                            + " account'))");
                         case "username" -> Sort.by(order.withProperty("u.login"));
                         default ->
                             Sort.by(order.withProperty(PropertyPath.from(order.getProperty(), Membership.class)

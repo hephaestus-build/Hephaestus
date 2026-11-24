@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryExcludedFromWorkspacesEvent;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryWithdrawnFromWorkspaceEvent;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -11,6 +13,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryHoldings;
 import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorQuery;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -40,6 +43,7 @@ public class ExcludedRepositoryWithdrawalService {
     private final WorkspaceQueries workspaces;
     private final WorkspaceScopeFilter scopeFilter;
     private final ApplicationEventPublisher eventPublisher;
+    private final PrivacyJournal journal;
     private final WorkspaceRepositoryMonitorService repositoryMonitors;
     private final TransactionTemplate transactionTemplate;
 
@@ -94,6 +98,11 @@ public class ExcludedRepositoryWithdrawalService {
                     // Asked again under the workspace lock: the destination may have been replaced since.
                     if (!scopeFilter.isExcluded(nameWithOwner)) return;
                     eventPublisher.publishEvent(new RepositoryWithdrawnFromWorkspaceEvent(workspaceId, repositoryIds));
+                    for (long repositoryId : repositoryIds) {
+                        journal.record(
+                                PrivacyJournalKind.REPOSITORY_REMOVED,
+                                Map.of("workspaceId", workspaceId, "repositoryId", repositoryId));
+                    }
                     log.info("Removed what a workspace kept of an excluded repository: workspaceId={}", workspaceId);
                 });
             } catch (RuntimeException failure) {

@@ -184,6 +184,9 @@ spec:
         {{- range $component := list "server" "migration" }}
         {{- include "hephaestus.componentPeer" (dict "root" $root "component" $component) | nindent 8 }}
         {{- end }}
+        {{- if .Values.postgresql.backup.enabled }}
+        {{- include "hephaestus.componentPeer" (dict "root" $root "component" "postgresql-backup") | nindent 8 }}
+        {{- end }}
         {{- if .Values.postgresql.metrics.enabled }}
         {{- range $component := list "postgresql-exporter" "postgresql-monitor" }}
         {{- include "hephaestus.componentPeer" (dict "root" $root "component" $component) | nindent 8 }}

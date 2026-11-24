@@ -21,6 +21,8 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.Cookie;
@@ -30,6 +32,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -58,6 +61,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
     private ClientSessionService clientSessionService;
     private SessionRevocation sessionRevocation;
     private SimpleMeterRegistry meterRegistry;
+    private final PrivacyJournal journal = mock(PrivacyJournal.class);
     private AuthSessionService service;
 
     @BeforeEach
@@ -85,7 +89,8 @@ class AuthSessionServiceTest extends BaseUnitTest {
                 sessionRevocation,
                 properties,
                 clock,
-                new AuthMetrics(meterRegistry));
+                new AuthMetrics(meterRegistry),
+                journal);
     }
 
     private double refreshResult(String tag) {
@@ -154,6 +159,10 @@ class AuthSessionServiceTest extends BaseUnitTest {
 
         verify(issuedJwtRepository).revokeOwned(eq(jti), eq(ACCOUNT_ID), any(), eq(IssuedJwt.RevokedReason.LOGOUT));
         verify(issuedJwtRepository).revokeBrowserDescendants(eq(ACCOUNT_ID), eq(jti), any(), eq("LOGOUT"));
+        verify(journal)
+                .record(
+                        PrivacyJournalKind.SESSION_REVOKED,
+                        Map.of("accountId", ACCOUNT_ID, "target", "TOKEN", "through", NOW, "tokenId", jti));
         assertCookieCleared(response);
         AuthEventData event = capturedEvent();
         assertThat(event.type()).isEqualTo(AuthEvent.EventType.LOGOUT);

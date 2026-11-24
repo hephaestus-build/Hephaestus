@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.workspace.gitlab;
 
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
@@ -15,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemQueryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +48,7 @@ public class GitLabStoppedProjectService {
     private final ScmItemQueryRepository items;
     private final WorkspaceRepositoryMonitorService repositoryMonitorService;
     private final ApplicationEventPublisher eventPublisher;
+    private final PrivacyJournal journal;
 
     @Transactional(readOnly = true)
     public List<GitLabStoppedProjectDTO> getStoppedProjects(long workspaceId) {
@@ -84,6 +88,10 @@ public class GitLabStoppedProjectService {
         // The workspace no longer monitors the source, so this unindexes its repository item.
         eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(workspaceId, List.of(project.repositoryId())));
         repositoryMonitorService.deleteRepositoryIfOrphaned(project.repositoryId());
+        journal.record(
+                stopReceipt,
+                PrivacyJournalKind.REPOSITORY_REMOVED,
+                Map.of("workspaceId", workspaceId, "repositoryId", project.repositoryId()));
         connectionCommands.recordAdministrativeChange(
                 connection,
                 "STOPPED_PROJECT_WORK_REMOVED",

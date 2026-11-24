@@ -1,6 +1,9 @@
 package de.tum.cit.aet.hephaestus.core.auth.consent;
 
+import static org.mockito.Mockito.mock;
+
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import org.springframework.context.ApplicationContext;
 
 /**
@@ -15,7 +18,8 @@ public final class ResearchConsentTestSupport {
         return new ConsentService(
                 context.getBean(ConsentDecisionRepository.class),
                 context.getBean(AccountRepository.class),
-                new ConsentProperties(organization));
+                new ConsentProperties(organization),
+                mock(PrivacyJournal.class));
     }
 
     public static String wordingVersion() {

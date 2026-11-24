@@ -3,9 +3,16 @@ package de.tum.cit.aet.hephaestus.practices.research.adapter;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.ResearchRecoverySubjects;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureAccountErasureAdapter;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -19,17 +26,27 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnServerRole
 @PersonDataStores({"research_disclosure_subject", "research_disclosure"})
-public class ResearchDisclosurePersonDataCatalog implements PersonDataCatalog {
-
-    static final String SUBJECT_ERASURE = "account_id=NULL,removal_required_at=COALESCE(removal_required_at,now()),"
-            + "removal_reason=COALESCE(removal_reason,'ACCOUNT_ERASED')";
+public class ResearchDisclosurePersonDataCatalog implements PersonDataCatalog, ResearchRecoverySubjects {
 
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
+    private final ResearchDisclosureAccountErasureAdapter subjectErasure;
 
-    public ResearchDisclosurePersonDataCatalog(NamedParameterJdbcTemplate jdbc, ObjectMapper mapper) {
+    public ResearchDisclosurePersonDataCatalog(
+            NamedParameterJdbcTemplate jdbc,
+            ObjectMapper mapper,
+            ResearchDisclosureAccountErasureAdapter subjectErasure) {
         this.jdbc = jdbc;
         this.mapper = mapper;
+        this.subjectErasure = subjectErasure;
+    }
+
+    @Override
+    public List<UUID> releasesFor(long accountId) {
+        return jdbc.query(
+                "SELECT DISTINCT disclosure_id FROM research_disclosure_subject WHERE account_id = :account",
+                Map.of("account", accountId),
+                (row, index) -> Objects.requireNonNull(row.getObject(1, UUID.class)));
     }
 
     @Override
@@ -43,8 +60,19 @@ public class ResearchDisclosurePersonDataCatalog implements PersonDataCatalog {
                         "t.account_id=:account",
                         "id,disclosure_id,workspace_id,participant_key,removal_required_at,removal_reason,removed_at",
                         "id",
-                        SUBJECT_ERASURE,
-                        -140),
+                        "account_id=NULL",
+                        -140) {
+                    @Override
+                    public long erase(PersonDataSelection selection, PersonScope frozenScope) {
+                        var accountId = frozenScope.accountId();
+                        if (selection.rows().isEmpty() || accountId == null) return 0L;
+                        List<UUID> ids = selection.rows().stream()
+                                .map(row -> UUID.fromString(
+                                        Objects.requireNonNull(row.columns().get("id"))))
+                                .toList();
+                        return subjectErasure.unlink(accountId, ids);
+                    }
+                },
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

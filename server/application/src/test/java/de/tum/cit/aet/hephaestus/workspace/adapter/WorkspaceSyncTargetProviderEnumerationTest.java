@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -68,7 +69,8 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
                 connectionService,
                 mock(ReviewScopeRepositoryRepository.class),
                 mock(ApplicationEventPublisher.class),
-                new SimpleMeterRegistry());
+                new SimpleMeterRegistry(),
+                mock(PrivacyJournal.class));
         lenient()
                 .when(workspaceScopeFilter.isRepositoryAllowed(any(Workspace.class), anyString()))
                 .thenReturn(true);
@@ -208,7 +210,8 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
                 connectionService,
                 mock(ReviewScopeRepositoryRepository.class),
                 mock(ApplicationEventPublisher.class),
-                new SimpleMeterRegistry());
+                new SimpleMeterRegistry(),
+                mock(PrivacyJournal.class));
         Workspace nested = workspace(9);
         nested.setAccountLogin("acme/platform");
         RepositoryToMonitor monitor =

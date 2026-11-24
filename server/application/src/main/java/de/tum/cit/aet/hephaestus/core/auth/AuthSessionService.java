@@ -13,6 +13,8 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt.RevokedReason;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.micrometer.core.instrument.Timer;
 import jakarta.servlet.http.Cookie;
@@ -43,6 +45,7 @@ public class AuthSessionService {
     // first.
     private static final Duration SUCCESSOR_REISSUE_WINDOW = Duration.ofSeconds(30);
 
+    private final PrivacyJournal journal;
     private final IssuedJwtRepository issuedJwtRepository;
     private final AccountRepository accountRepository;
     private final HephaestusJwtIssuer jwtIssuer;
@@ -62,7 +65,9 @@ public class AuthSessionService {
             SessionRevocation sessionRevocation,
             AuthProperties properties,
             Clock clock,
-            AuthMetrics metrics) {
+            AuthMetrics metrics,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.issuedJwtRepository = issuedJwtRepository;
         this.accountRepository = accountRepository;
         this.jwtIssuer = jwtIssuer;
@@ -300,7 +305,12 @@ public class AuthSessionService {
         accountRepository.lockStatusForUpdate(accountId);
         Instant now = clock.instant();
         int revoked = issuedJwtRepository.revokeOwned(jti, accountId, now, reason);
-        issuedJwtRepository.revokeBrowserDescendants(accountId, jti, now, reason.name());
+        int descendants = issuedJwtRepository.revokeBrowserDescendants(accountId, jti, now, reason.name());
+        if (revoked > 0 || descendants > 0) {
+            journal.record(
+                    PrivacyJournalKind.SESSION_REVOKED,
+                    Map.of("accountId", accountId, "through", now, "target", "TOKEN", "tokenId", jti));
+        }
         return revoked;
     }
 

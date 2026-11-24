@@ -214,6 +214,9 @@ Pod reads. Without a cluster, as in `helm template`, the kubelet refuses a Pod w
 {{- if .Values.postgresql.bundled -}}
 {{- $required = concat (list "DATABASE_ADMIN_USERNAME" "DATABASE_ADMIN_PASSWORD") $required -}}
 {{- end -}}
+{{- if .Values.postgresql.backup.enabled -}}
+{{- $required = append $required "DATABASE_BACKUP_REPORTER_PASSWORD" -}}
+{{- end -}}
 {{- range $required -}}
 {{- if not (hasKey $data .) -}}
 {{- fail (printf "the Secret %s needs the key %s: see docs/admin/helm-chart.mdx § Database roles" $.Values.secret.name .) -}}
@@ -626,6 +629,23 @@ spec:
         - name: PGBACKREST_CONFIG
           value: /etc/pgbackrest/client.conf
         {{- include "hephaestus.backup.env" $root | nindent 8 }}
+        {{- if .reportsHorizon }}
+        - name: PGHOST
+          value: {{ include "hephaestus.databaseHost" $root | quote }}
+        - name: PGPORT
+          value: {{ include "hephaestus.databasePort" $root | quote }}
+        - name: PGDATABASE
+          value: {{ $root.Values.postgresql.database | quote }}
+        - name: PGUSER
+          value: hephaestus_backup_reporter
+        - name: PGSSLMODE
+          value: verify-full
+        - name: PGSSLROOTCERT
+          value: {{ printf "%s/ca.crt" (include "hephaestus.postgresqlCaDirectory" $root) | quote }}
+        - name: PGCONNECT_TIMEOUT
+          value: "5"
+        {{- include "hephaestus.secretEnv" (dict "root" $root "env" "PGPASSWORD" "key" "DATABASE_BACKUP_REPORTER_PASSWORD") | nindent 8 }}
+        {{- end }}
       resources:
         {{- toYaml (.resources | default $root.Values.postgresql.backup.resources) | nindent 8 }}
       securityContext:
@@ -635,6 +655,17 @@ spec:
           mountPath: /etc/pgbackrest/client.conf
           subPath: client.conf
           readOnly: true
+        {{- if .reportsHorizon }}
+        - name: config
+          mountPath: /etc/pgbackrest/backup-publish-horizon.sh
+          subPath: backup-publish-horizon.sh
+          readOnly: true
+        - name: config
+          mountPath: /etc/pgbackrest/backup-oldest-point.pl
+          subPath: backup-oldest-point.pl
+          readOnly: true
+        {{- include "hephaestus.postgresqlCaMount" $root | nindent 8 }}
+        {{- end }}
         - name: tls
           mountPath: /etc/pgbackrest/tls
           readOnly: true
@@ -643,6 +674,9 @@ spec:
         {{- include "hephaestus.backup.caMount" $root | nindent 8 }}
   volumes:
     {{- include "hephaestus.backup.caVolume" $root | nindent 4 }}
+    {{- if .reportsHorizon }}
+    {{- include "hephaestus.postgresqlCaVolume" $root | nindent 4 }}
+    {{- end }}
     - name: config
       configMap:
         name: {{ include "hephaestus.name" (dict "root" $root "component" "postgresql-backup") }}

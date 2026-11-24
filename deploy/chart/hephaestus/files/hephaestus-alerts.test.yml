@@ -3330,6 +3330,30 @@ tests:
               summary: GitHub redelivery runs read only part of the App's deliveries at least three times in two hours
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: an unavailable backup horizon stops privacy journal pruning and alerts
+    interval: 1m
+    input_series:
+      - series: 'privacy_journal_backup_horizon_unavailable{job="hephaestus",instance="server:9090"}'
+        values: "0x1 1x16 0x2"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusPrivacyJournalBackupHorizonUnavailable
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: HephaestusPrivacyJournalBackupHorizonUnavailable
+        exp_alerts: []
+      - eval_time: 17m
+        alertname: HephaestusPrivacyJournalBackupHorizonUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The privacy journal cannot verify the oldest retained backup
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 19m
+        alertname: HephaestusPrivacyJournalBackupHorizonUnavailable
+        exp_alerts: []
+
   - name: a privacy job that fails twice fires, one incomplete run does not
     interval: 1m
     input_series:

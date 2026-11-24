@@ -73,6 +73,9 @@ spec:
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGPASSWORD" "key" "DATABASE_ADMIN_PASSWORD") | nindent 12 }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_OWNER_PASSWORD") | nindent 12 }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_APP_PASSWORD") | nindent 12 }}
+            {{- if .Values.postgresql.backup.enabled }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_BACKUP_REPORTER_PASSWORD") | nindent 12 }}
+            {{- end }}
           resources:
             requests: { cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi }
             limits: { cpu: 200m, memory: 64Mi, ephemeral-storage: 64Mi }

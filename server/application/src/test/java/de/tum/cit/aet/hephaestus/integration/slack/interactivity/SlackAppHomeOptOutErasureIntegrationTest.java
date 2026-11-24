@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -57,6 +58,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -127,6 +129,12 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private PrivacyJournal journal;
+
+    @Autowired
+    private TransactionTemplate transactions;
+
     private final JsonMapper mapper = JsonMapper.builder().build();
 
     private SlackInteractivityHandler handler;
@@ -167,7 +175,7 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
                 workspaceResolver,
                 identityResolver,
                 mock(SlackAppHomeService.class),
-                new SlackParticipantConsentService(participantConsentRepository),
+                new SlackParticipantConsentService(participantConsentRepository, journal),
                 new SlackPersonErasureService(
                         messageRepository,
                         threadRepository,
@@ -196,7 +204,7 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
         UUID prObs = seedResult(ScmItemEvents.PULL_REQUEST, 7777L, meMemberId);
         UUID myDmId = seedOwnConversationDm();
 
-        handler.handleBlockActions(optOut(OPTING_OUT_SLACK_USER));
+        handleBlockActions(optOut(OPTING_OUT_SLACK_USER));
 
         assertThat(participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
                         workspaceId, OPTING_OUT_SLACK_USER))
@@ -226,7 +234,7 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
         insertUnlinkedMessage("unlinked.1", unlinkedSlackUser);
         insertMessage("other.1", otherMemberId, "UOTHER");
 
-        handler.handleBlockActions(optOut(unlinkedSlackUser));
+        handleBlockActions(optOut(unlinkedSlackUser));
 
         assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, CHANNEL, "unlinked.1"))
                 .isFalse();
@@ -235,6 +243,18 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
                         workspaceId, unlinkedSlackUser))
                 .isTrue();
+
+        assertThat(jdbcTemplate.queryForList(
+                        """
+                        SELECT jsonb_exists(refs, 'decidedAt') AND (refs - 'decidedAt') = jsonb_build_object(
+                            'workspaceId', CAST(? AS bigint),
+                            'slackTeamId', CAST(? AS text),
+                            'slackUserId', CAST(? AS text),
+                            'scope', 'MONITORED_CHANNELS')
+                        FROM privacy_journal
+                        WHERE kind='SLACK_PARTICIPANT_WITHDRAWN' AND refs->>'workspaceId'=?
+                        """, Boolean.class, workspaceId, TEAM, unlinkedSlackUser, Long.toString(workspaceId)))
+                .containsExactly(true);
     }
 
     @Test
@@ -242,9 +262,9 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
     void shouldKeepTheLaterOptInAndEraseNothingWhenAnEarlierOptOutArrivesLate() {
         insertMessage("me.after-opt-in", meMemberId, OPTING_OUT_SLACK_USER);
 
-        handler.handleBlockActions(
+        handleBlockActions(
                 action(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_IN, OPTING_OUT_SLACK_USER, "1793000010.000100"));
-        handler.handleBlockActions(action(
+        handleBlockActions(action(
                 SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT, OPTING_OUT_SLACK_USER, "1793000000.000100"));
 
         assertThat(participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
@@ -253,6 +273,10 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(
                         workspaceId, CHANNEL, "me.after-opt-in"))
                 .isTrue();
+    }
+
+    private void handleBlockActions(ObjectNode action) {
+        transactions.executeWithoutResult(status -> handler.handleBlockActions(action));
     }
 
     private UUID seedOwnConversationDm() {

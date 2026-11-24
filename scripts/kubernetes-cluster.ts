@@ -31,6 +31,7 @@
  * generated value stays in the work directory, which only the user can read; the script prints no
  * secret value.
  */
+import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { once } from "node:events";
@@ -1435,6 +1436,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 		BACKUP_S3_KEY: credentials.key,
 		BACKUP_S3_KEY_SECRET: credentials.secret,
 		BACKUP_CIPHER_PASS: randomBytes(48).toString("base64"),
+		DATABASE_BACKUP_REPORTER_PASSWORD: randomBytes(48).toString("base64"),
 	});
 	await join(`${RELEASE}-postgresql-tls`, {
 		"s3-ca.crt": await readFile(path.join(work, "ca.crt"), "utf8"),
@@ -1511,7 +1513,12 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 		`--from=cronjob/${RELEASE}-postgresql-backup-full`,
 	]);
 	await waitForJob("drill-full");
-	process.stdout.write("backup drill: a full backup completed\n");
+	const horizon = await psql(
+		"SELECT oldest_backup_at IS NOT NULL AND oldest_backup_at <= observed_at " +
+			"FROM privacy_journal_backup_horizon WHERE id = 1",
+	);
+	assert.equal(horizon.trim(), "t", "the full backup Job published its recovery point");
+	process.stdout.write("backup drill: a full backup completed and published its recovery point\n");
 	await psql("INSERT INTO drill_marker VALUES ('only in the WAL archive')");
 	const now = await psql(
 		"SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS.US') || '+00'",

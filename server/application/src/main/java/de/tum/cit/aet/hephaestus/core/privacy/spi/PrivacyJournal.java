@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.privacy.spi;
 
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Records a privacy fact, so that the recovery after a database restore can apply it again. A producer calls it in the
@@ -9,6 +10,7 @@ import java.util.Map;
  * <p>Facts are delivered at least once, and replaying a fact is idempotent. A duplicate fact, or a fact whose erasure
  * found nothing, is harmless: each recovery step erases again only what is still there.
  */
+@FunctionalInterface
 public interface PrivacyJournal {
 
     /**
@@ -19,4 +21,9 @@ public interface PrivacyJournal {
      *     text
      */
     void record(PrivacyJournalKind kind, Map<String, Object> refs);
+
+    /** Records a fact with the durable identifier of its cause. */
+    default void record(UUID entryId, PrivacyJournalKind kind, Map<String, Object> refs) {
+        record(kind, refs);
+    }
 }

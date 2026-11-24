@@ -298,6 +298,9 @@ class AccountServiceTest extends BaseUnitTest {
 
         service.adminSetStatus(2L, Account.Status.BLOCKED, 1L);
 
+        assertThat(journal.facts())
+                .containsExactly(new RecordingPrivacyJournal.Fact(
+                        PrivacyJournalKind.ACCOUNT_SUSPENDED, Map.of("accountId", 2L)));
         assertThat(account.getStatus()).isEqualTo(Account.Status.BLOCKED);
         verify(accountRepository).save(account);
         verify(sessionRevocation).lockAccount(2L);

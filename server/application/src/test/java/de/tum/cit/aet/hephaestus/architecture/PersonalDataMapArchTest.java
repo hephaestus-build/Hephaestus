@@ -93,6 +93,7 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "identity_provider",
             "issue_blocking",
             "issue_label",
+            "privacy_journal_backup_horizon", // Only dates from the instance backup job.
             "issue_type",
             "jwt_signing_key",
             // Sealed instance secrets, such as the key of the namespace reservations: key material with no person.

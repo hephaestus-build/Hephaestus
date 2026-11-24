@@ -6,9 +6,13 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -28,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SessionRevocation {
 
+    private final PrivacyJournal journal;
     private final AccountRepository accountRepository;
     private final ClientSessionRepository clientSessionRepository;
     private final ClientSignInHandoffRepository handoffRepository;
@@ -41,7 +46,9 @@ public class SessionRevocation {
             ClientSignInHandoffRepository handoffRepository,
             IssuedJwtRepository issuedJwtRepository,
             McpClientGrantRepository grantRepository,
-            Clock clock) {
+            Clock clock,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.accountRepository = accountRepository;
         this.clientSessionRepository = clientSessionRepository;
         this.handoffRepository = handoffRepository;
@@ -72,6 +79,15 @@ public class SessionRevocation {
             Long accountId, IssuedJwt.RevokedReason reason, @Nullable UUID exceptJti, @Nullable UUID exceptSessionId) {
         accountRepository.lockStatusForUpdate(accountId);
         Instant now = clock.instant();
+        if (reason != IssuedJwt.RevokedReason.ACCOUNT_DELETED) {
+            Map<String, Object> refs = new HashMap<>();
+            refs.put("accountId", accountId);
+            refs.put("through", now);
+            refs.put("target", "ACCOUNT");
+            if (exceptJti != null) refs.put("keepTokenId", exceptJti);
+            if (exceptSessionId != null) refs.put("keepSessionId", exceptSessionId);
+            journal.record(PrivacyJournalKind.SESSION_REVOKED, refs);
+        }
         handoffRepository.consumeAllForAccount(accountId, now);
         if (exceptSessionId != null) {
             grantRepository.revokeAllForAccountExceptSession(accountId, exceptSessionId, now);

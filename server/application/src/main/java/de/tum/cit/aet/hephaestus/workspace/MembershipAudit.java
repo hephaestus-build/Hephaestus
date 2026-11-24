@@ -3,7 +3,10 @@ package de.tum.cit.aet.hephaestus.workspace;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import java.time.Clock;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +21,7 @@ class MembershipAudit {
     private final ConfigAuditPort configAudit;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final PrivacyJournal journal;
 
     /** Records unchanged roles and the initial provider roster, without a role-change event. */
     void record(ConfigAuditEntry entry) {
@@ -40,6 +44,13 @@ class MembershipAudit {
         configAudit.record(entry);
         var role = member.getLeftAt() == null ? member.getRole() : null;
         if (previousRole == role) return;
+        if (role == null) {
+            journal.record(
+                    PrivacyJournalKind.MEMBERSHIP_ENDED,
+                    Map.of(
+                            "workspaceId", member.getWorkspace().getId(),
+                            "accountId", Objects.requireNonNull(member.getAccountId())));
+        }
         events.publishEvent(new RoleChangedEvent(
                 UUID.randomUUID(),
                 Objects.requireNonNull(member.getAccountId()),

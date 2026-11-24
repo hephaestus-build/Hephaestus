@@ -327,6 +327,11 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
             Workspace purged = workspaceRepository.findById(workspaceId).orElseThrow();
             assertThat(purged.getStatus()).isEqualTo(Workspace.WorkspaceStatus.PURGED);
+            assertThat(jdbcTemplate.queryForList(
+                            "SELECT kind FROM privacy_journal WHERE kind='WORKSPACE_PURGED' AND refs->>'workspaceId'=?",
+                            String.class,
+                            workspaceId.toString()))
+                    .containsExactly("WORKSPACE_PURGED");
 
             assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspaceId))
                     .isEmpty();

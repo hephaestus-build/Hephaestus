@@ -276,7 +276,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 workspaceResolver,
                 identityResolver,
                 mock(SlackAppHomeService.class),
-                new SlackParticipantConsentService(participantConsentRepository),
+                new SlackParticipantConsentService(participantConsentRepository, (kind, refs) -> {}),
                 new SlackPersonErasureService(
                         messageRepository,
                         threadRepository,

@@ -119,7 +119,8 @@ public class SlackUserPreferencesService {
         Instant decidedAt = Instant.now();
         boolean recorded = channelMessagesAllowed
                 ? participantConsentService.recordChannelMessageOptIn(workspaceId, slackUserId, decidedAt)
-                : participantConsentService.recordChannelMessageOptOut(workspaceId, slackUserId, decidedAt);
+                : participantConsentService.recordChannelMessageOptOut(
+                        workspaceId, requiredTeamId, slackUserId, decidedAt);
         if (recorded && !channelMessagesAllowed) {
             erasureService.erasePerson(workspaceId, accountId, slackUserId);
         }

@@ -13,13 +13,17 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 class ConsentServiceTest extends BaseUnitTest {
@@ -39,22 +43,26 @@ class ConsentServiceTest extends BaseUnitTest {
         when(accountRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(new Account("Ada")));
     }
 
+    private final PrivacyJournal journal = mock(PrivacyJournal.class);
+
     private ConsentService serviceWithResearch() {
-        return new ConsentService(decisionRepository, accountRepository, AET);
+        return new ConsentService(decisionRepository, accountRepository, AET, journal);
     }
 
     private ConsentService serviceWithoutResearch() {
-        return new ConsentService(decisionRepository, accountRepository, NO_STUDY);
+        return new ConsentService(decisionRepository, accountRepository, NO_STUDY, journal);
     }
 
     private static ConsentDecision researchDecision(boolean granted, String noticeVersion, String organisation) {
-        return new ConsentDecision(
+        var decision = new ConsentDecision(
                 new Account("Ada"),
                 ConsentDecision.Purpose.RESEARCH_PARTICIPATION,
                 granted,
                 ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL,
                 noticeVersion,
                 organisation);
+        ReflectionTestUtils.setField(decision, "id", 73L);
+        return decision;
     }
 
     private void researchOnRecord(ConsentDecision decision) {
@@ -271,8 +279,8 @@ class ConsentServiceTest extends BaseUnitTest {
     @Test
     void shouldNotCarryAGrantAcrossAChangeOfResearchOrganisation() {
         researchOnRecord(researchDecision(true, VERSION, ORG));
-        ConsentService other =
-                new ConsentService(decisionRepository, accountRepository, new ConsentProperties("Another lab"));
+        ConsentService other = new ConsentService(
+                decisionRepository, accountRepository, new ConsentProperties("Another lab"), journal);
 
         assertThat(other.participates(42L)).isFalse();
     }
@@ -309,6 +317,7 @@ class ConsentServiceTest extends BaseUnitTest {
         researchOnRecord(researchDecision(true, VERSION, ORG));
 
         serviceWithResearch().setResearchParticipation(42L, new ConsentService.ResearchConsentDTO(VERSION, false, ORG));
+        verify(journal).record(PrivacyJournalKind.CONSENT_WITHDRAWN, Map.of("accountId", 42L, "consentId", 73L));
 
         assertThat(saved(1)).singleElement().satisfies(decision -> {
             assertThat(decision.isGranted()).isFalse();

@@ -51,6 +51,8 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -167,6 +169,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     private PersonDataService personData;
 
     @Autowired
+    private PrivacyJournal journal;
+
+    @Autowired
     private PracticeVersionService practiceVersions;
 
     @Autowired
@@ -260,6 +265,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             "account",
             "user",
             "identity_restriction",
+            "privacy_journal",
             "person_data_request",
             "person_evidence_copy",
             "slack_thread",
@@ -299,7 +305,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("replayed-retention"));
         String delivery = inboxArrival(workspace.getId(), IntegrationKind.GITHUB, "https://github.com", "owner", "{}");
         jdbc.update(
-                "UPDATE provider_event SET replayed_by=?,state='DONE',ended_at=clock_timestamp()-interval '4 days' WHERE delivery_key=?",
+                "UPDATE provider_event SET replayed_by=?,state='DONE',ended_at=clock_timestamp()-interval '4 days'"
+                        + " WHERE delivery_key=?",
                 person,
                 delivery);
         var preview = personData.preview(administratorId, person, List.of());
@@ -357,7 +364,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             String completed = mapper.writeValueAsString(
                     Map.of("provider_event", new PersonDataStoreReceipt(3, Instant.now(), administratorId)));
             jdbc.update(
-                    "UPDATE person_data_request SET state='FAILED',failure_code='STORE_ERASURE_FAILED',completed_json=? WHERE id=?",
+                    "UPDATE person_data_request SET"
+                            + " state='FAILED',failure_code='STORE_ERASURE_FAILED',completed_json=? WHERE id=?",
                     completed,
                     request);
             erasedDeliveries.add(inboxArrival(second.getId(), kind, origin, "T1", body));
@@ -503,8 +511,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 .containsAll(keptBuckets);
         var erased = jdbc.queryForMap(
                 "SELECT w.id, w.slug, w.display_name, w.account_login, c.display_name AS connection_name,"
-                        + " (c.config->'orgLogin') IS NOT NULL AS has_login FROM connection c JOIN workspace w ON w.id=c.workspace_id"
-                        + " WHERE c.id=?",
+                        + " (c.config->'orgLogin') IS NOT NULL AS has_login FROM connection c JOIN workspace w ON"
+                        + " w.id=c.workspace_id WHERE c.id=?",
                 personalInstallation);
         String erasedSlug = "erased-" + erased.get("id");
         assertThat(erased)
@@ -621,17 +629,17 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 result, FeedbackDestination.PRACTICE_PAGE, FeedbackState.READY, "Developer feedback");
         UUID mark = UUID.randomUUID();
         jdbc.update("""
-                INSERT INTO result_mark(id, workspace_id, result_id, kind, reason, created_by_id, created_at,
-                    removed_by_id, removed_at, removal_reason)
-                VALUES (?, ?, ?, 'INCORRECT', 'Marked by the developer', ?, now() - interval '1 hour', ?, now(),
-                    'Decider removal words')
-                """, mark, result.getWorkspaceId(), result.getId(), developerId, deciderId);
+            INSERT INTO result_mark(id, workspace_id, result_id, kind, reason, created_by_id, created_at,
+                removed_by_id, removed_at, removal_reason)
+            VALUES (?, ?, ?, 'INCORRECT', 'Marked by the developer', ?, now() - interval '1 hour', ?, now(),
+                'Decider removal words')
+            """, mark, result.getWorkspaceId(), result.getId(), developerId, deciderId);
         UUID decision = UUID.randomUUID();
         jdbc.update("""
-                INSERT INTO feedback_decision(id, workspace_id, feedback_id, action, actor_account_id, reason, note,
-                    content_digest)
-                VALUES (?, ?, ?, 'REJECT', ?, 'Decider reason words', 'Decider note words', ?)
-                """, decision, result.getWorkspaceId(), feedback.getId(), deciderId, "a".repeat(64));
+            INSERT INTO feedback_decision(id, workspace_id, feedback_id, action, actor_account_id, reason, note,
+                content_digest)
+            VALUES (?, ?, ?, 'REJECT', ?, 'Decider reason words', 'Decider note words', ?)
+            """, decision, result.getWorkspaceId(), feedback.getId(), deciderId, "a".repeat(64));
 
         var preview = personData.preview(operatorId, deciderId, List.of());
         UUID requestId = preview.request().getId();
@@ -711,7 +719,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     void shouldSuppressSelectedJobsAndRevokeCredentialsWhenErasureFinishes() {
         var fixture = externalInspectionFixture("https://privacy-gitlab.example.com/team/repo/-/merge_requests/19");
         jdbc.update(
-                "UPDATE feedback_copy SET state='POSTED',posted_at=CURRENT_TIMESTAMP,external_ref='note-99' WHERE feedback_id=?",
+                "UPDATE feedback_copy SET state='POSTED',posted_at=CURRENT_TIMESTAMP,external_ref='note-99' WHERE"
+                        + " feedback_id=?",
                 fixture.feedbackId());
         var preview = personData.preview(
                 fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null)));
@@ -1063,13 +1072,13 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 """, entry.getKey().toString(), entry.getValue().getId());
             jdbc.update(
                     """
-                INSERT INTO mcp_client_grant(id,workspace_id,account_id,client_id,client_name,redirect_uri,resource,
-                    scopes,code_challenge,state,status,client_session_id,expires_at,created_at,approved_at)
-                VALUES (?,?,?,'https://client.example.test/client.json','Privacy client',
-                    'http://127.0.0.1:53111/callback','https://hephaestus.example.test/api/workspaces/privacy-nonce/mcp',
-                    'practices:read','pkce-credential-canary','state-credential-canary','ACTIVE',?,
-                    CURRENT_TIMESTAMP+INTERVAL '1 hour',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-                """,
+                    INSERT INTO mcp_client_grant(id,workspace_id,account_id,client_id,client_name,redirect_uri,resource,
+                        scopes,code_challenge,state,status,client_session_id,expires_at,created_at,approved_at)
+                    VALUES (?,?,?,'https://client.example.test/client.json','Privacy client',
+                        'http://127.0.0.1:53111/callback','https://hephaestus.example.test/api/workspaces/privacy-nonce/mcp',
+                        'practices:read','pkce-credential-canary','state-credential-canary','ACTIVE',?,
+                        CURRENT_TIMESTAMP+INTERVAL '1 hour',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+                    """,
                     UUID.randomUUID(),
                     nonceWorkspace.getId(),
                     entry.getValue().getId(),
@@ -1192,10 +1201,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         // GitHub App installations: the target's own that no admin adopted, the target's adopted one, a decision
         // that the target made as an admin, and another person's own.
         String installationRow = """
-                INSERT INTO github_installation_request
-                  (installation_id, account_id, account_login, account_kind, status, received_at, decided_by_account_id)
-                VALUES (?, ?, ?, ?, ?, now(), ?)
-                """;
+            INSERT INTO github_installation_request
+              (installation_id, account_id, account_login, account_kind, status, received_at, decided_by_account_id)
+            VALUES (?, ?, ?, ?, ?, now(), ?)
+            """;
         jdbc.update(installationRow, 991001L, 4242L, "target-github", "USER", "PENDING", null);
         jdbc.update(installationRow, 991002L, 4242L, "target-github", "USER", "ADOPTED", null);
         jdbc.update(installationRow, 991003L, 7777L, "decided-org", "ORGANIZATION", "DECLINED", targetAccount.getId());
@@ -1247,10 +1256,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         for (Account addressed : List.of(targetAccount, otherAccount)) {
             String key = "email:erasure-test:" + UUID.randomUUID();
             jdbc.update("""
-                    INSERT INTO agent_action (id, kind, lane_key, idempotency_key, state, payload, subject_account_id,
-                      max_attempts, next_attempt_at, created_at, updated_at)
-                    VALUES (?, 'EMAIL', ?, ?, 'ADMITTED', '{}', ?, 1, now() + interval '1 day', now(), now())
-                    """, UUID.randomUUID(), key, key, addressed.getId());
+                INSERT INTO agent_action (id, kind, lane_key, idempotency_key, state, payload, subject_account_id,
+                  max_attempts, next_attempt_at, created_at, updated_at)
+                VALUES (?, 'EMAIL', ?, ?, 'ADMITTED', '{}', ?, 1, now() + interval '1 day', now(), now())
+                """, UUID.randomUUID(), key, key, addressed.getId());
         }
         PersonScope otherScope = resolver.resolve(Objects.requireNonNull(otherAccount.getId()), List.of());
         // Shared source aggregates change; compare the other person's own rows.
@@ -1313,7 +1322,14 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 personalSpace,
                 targetAccount.getId());
         long administratorId = Objects.requireNonNull(administrator.getId());
-        var preview = personData.preview(administratorId, targetAccount.getId(), List.of());
+        long targetId = Objects.requireNonNull(targetAccount.getId());
+        long recoveryWorkspaceId = Objects.requireNonNull(nonceWorkspace.getId());
+        UUID recoveryEntry = UUID.randomUUID();
+        transactions.executeWithoutResult(status -> journal.record(
+                recoveryEntry,
+                PrivacyJournalKind.MEMBERSHIP_ENDED,
+                Map.of("workspaceId", recoveryWorkspaceId, "accountId", targetId)));
+        var preview = personData.preview(administratorId, targetId, List.of());
         UUID requestId = preview.request().getId();
         PersonScope frozen =
                 mapper.readValue(Objects.requireNonNull(preview.request().getScopeJson()), PersonScope.class);
@@ -1483,6 +1499,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         // the copies' erasure already deleted the recorded attempt inputs.
         for (String store : List.of(
                 "identity_restriction",
+                "privacy_journal",
                 "git_repository_history",
                 "installation_account",
                 "feedback_decision_actor",
@@ -1493,6 +1510,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(completed)
                 .as("store receipts, including the explicit retained/cascade exceptions")
                 .isEqualTo(expectedReceipts);
+        assertThat(jdbc.queryForObject(
+                        "SELECT kind FROM privacy_journal WHERE entry_id=?", String.class, recoveryEntry))
+                .isEqualTo("MEMBERSHIP_ENDED");
         // Both closures may retain only anonymised, tombstone or control rows.
         var resolvedAfter = resolver.resolve(targetAccount.getId(), frozen.identities());
         Map<String, Long> reselected = registry.counts(registry.select(resolvedAfter));
@@ -1513,8 +1533,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         .getStatus())
                 .isEqualTo(Account.Status.DELETED);
         assertThat(jdbc.queryForList(
-                        "SELECT installation_id FROM github_installation_request WHERE installation_id BETWEEN 991001 AND 991004"
-                                + " ORDER BY installation_id",
+                        "SELECT installation_id FROM github_installation_request WHERE installation_id BETWEEN 991001"
+                                + " AND 991004 ORDER BY installation_id",
                         Long.class))
                 .as("the target's unadopted installation goes; the adopted one and another person's stay")
                 .containsExactly(991002L, 991003L, 991004L);
@@ -1530,18 +1550,18 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 .as("the target's adopted installation keeps only what stops a replay")
                 .isTrue();
         assertThat(jdbc.queryForObject("""
-                SELECT display_name='deleted-account' AND primary_email IS NULL AND primary_email_verified_at IS NULL
-                  AND time_zone IS NULL AND ai_choice IS NULL AND ai_choice_at IS NULL
-                  AND NOT feedback_delivery_enabled AND NOT public_activity_visible
-                  AND passkey_user_handle IS NULL AND NOT passkey_protection_enabled AND NOT passkey_recovery_required
-                FROM account WHERE id=?
-                """, Boolean.class, targetAccount.getId()))
+            SELECT display_name='deleted-account' AND primary_email IS NULL AND primary_email_verified_at IS NULL
+              AND time_zone IS NULL AND ai_choice IS NULL AND ai_choice_at IS NULL
+              AND NOT feedback_delivery_enabled AND NOT public_activity_visible
+              AND passkey_user_handle IS NULL AND NOT passkey_protection_enabled AND NOT passkey_recovery_required
+            FROM account WHERE id=?
+            """, Boolean.class, targetAccount.getId()))
                 .isTrue();
         for (long userId : List.of(target.getId(), githubUser.getId())) {
             assertThat(jdbc.queryForObject("""
-                    SELECT login='erased-'||id::text AND name IS NULL AND email IS NULL AND avatar_url='' AND html_url=''
-                    FROM "user" WHERE id=?
-                    """, Boolean.class, userId)).isTrue();
+                SELECT login='erased-'||id::text AND name IS NULL AND email IS NULL AND avatar_url='' AND html_url=''
+                FROM "user" WHERE id=?
+                """, Boolean.class, userId)).isTrue();
         }
         for (var derived : targetDerived) {
             assertThat(jdbc.queryForList(
@@ -1933,7 +1953,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
         // The turn's deletion settled the call still out; both rows keep their spend, detached together.
         String financial = "SELECT id, source_id, review_id, run_id, input_tokens, cost_usd, measurement_verification"
-                + " FROM llm_usage_event WHERE workspace_id=? AND source_type='CONVERSATION_TURN' ORDER BY input_tokens DESC";
+                + " FROM llm_usage_event WHERE workspace_id=? AND source_type='CONVERSATION_TURN' ORDER BY input_tokens"
+                + " DESC";
         var kept = jdbc.queryForList(financial, workspaceId);
         assertThat(kept).hasSize(2);
         assertThat(kept.getFirst().get("id")).isEqualTo(ended);

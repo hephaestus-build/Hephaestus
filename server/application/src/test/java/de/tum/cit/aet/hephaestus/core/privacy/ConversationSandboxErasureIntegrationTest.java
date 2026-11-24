@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
@@ -25,6 +26,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
@@ -298,14 +300,16 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                         beans.getBean(PersonIdentityResolver.class), List.of(), new OwnerScope(jdbc)),
                 new PersonDataRegistry(List.of(new ToolCopyStore(List.of(store)))),
                 beans.getBean(PersonDataRequestRepository.class),
-                beans.getBean(IdentityRestrictionService.class),
-                beans.getBean(PersonDataWriteFence.class),
-                beans.getBean(PersonDataCopyFence.class),
+                new PersonDataErasureHold(
+                        beans.getBean(IdentityRestrictionService.class),
+                        beans.getBean(PersonDataWriteFence.class),
+                        beans.getBean(PersonDataCopyFence.class)),
                 beans.getBean(IssuedJwtRepository.class),
                 beans.getBean(PlatformTransactionManager.class),
                 mapper,
                 jdbc,
-                beans.getBean(MeterRegistry.class));
+                beans.getBean(MeterRegistry.class),
+                mock(PrivacyJournal.class));
     }
 
     @PersonDataStores(ConversationEntryRepository.COPIES_PERSON_DATA_STORE)

@@ -240,6 +240,8 @@ Thus a workspace purge records no `CONNECTION_ERASED` for a connection whose pro
 
 A ref holds an identifier or a state, never text.
 Use a number, a boolean, a UUID, an enum constant, a `NativeId`, a `PersonIdentity`, or a collection of these.
+The server stores each fact in the instance database.
+A version 5 entry records a Slack participant withdrawal with the workspace ID, Slack user ID, monitored-channel scope, and decision time.
 Tests read the facts that a producer records from `RecordingPrivacyJournal`.
 It refuses a ref that is text.
 

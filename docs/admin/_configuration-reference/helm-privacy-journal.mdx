@@ -1,0 +1,6 @@
+### `privacyJournal`
+
+| Key | Type | Default | Required in object | Constraints |
+| --- | --- | --- | --- | --- |
+| `privacyJournal.backupsEnabled` | boolean | `true` | yes | Require an observed recovery point before pruning. Set false only when the installation retains no database backups. |
+| `privacyJournal.retention` | string | `"35d"` | yes | Age before the database prunes a privacy fact when backups are explicitly off. |

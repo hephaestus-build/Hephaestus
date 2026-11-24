@@ -456,8 +456,8 @@ de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser ->
 de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceOrganizationLookup -> de.tum.cit.aet.hephaestus.workspace.Workspace x2
 de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceProvisioningService -> de.tum.cit.aet.hephaestus.workspace.Workspace x16
 de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService -> de.tum.cit.aet.hephaestus.integration.core.connection.Connection x4
-de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService -> de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor x34
-de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService -> de.tum.cit.aet.hephaestus.workspace.Workspace x45
+de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService -> de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor x33
+de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService -> de.tum.cit.aet.hephaestus.workspace.Workspace x44
 de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceTeamLabelService -> de.tum.cit.aet.hephaestus.workspace.Workspace x7
 de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceTeamScope -> de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider x1
 de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceTeamScopeResolver -> de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider x1

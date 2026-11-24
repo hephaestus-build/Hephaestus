@@ -5,11 +5,11 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
@@ -18,6 +18,7 @@ import java.sql.SQLRecoverableException;
 import java.sql.SQLTransientException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,14 +55,13 @@ public class PersonDataService {
     private final PersonDataScopeResolver scopes;
     private final PersonDataRegistry registry;
     private final PersonDataRequestRepository requests;
-    private final IdentityRestrictionService suppression;
-    private final PersonDataWriteFence writeFence;
-    private final PersonDataCopyFence copyFence;
+    private final PersonDataErasureHold hold;
     private final IssuedJwtRepository issuedTokens;
     private final PlatformTransactionManager transactions;
     private final ObjectMapper mapper;
     private final JdbcTemplate jdbc;
     private final MeterRegistry meters;
+    private final PrivacyJournal journal;
 
     @PostConstruct
     void registerFailureCounter() {
@@ -128,8 +128,7 @@ public class PersonDataService {
         if (Objects.equals(person.accountId(), administratorId))
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "Another instance admin must authorize this erasure.");
-        copyFence.holdForErasure();
-        writeFence.holdForErasure(person.identities());
+        hold.acquire(person);
         requireActiveAdministratorAndLockAccount(administratorId, person.accountId());
         PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
         if (r.getState() == PersonDataRequest.State.COMPLETE || r.getState() == PersonDataRequest.State.ERASING) return;
@@ -138,6 +137,9 @@ public class PersonDataService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The request scope changed. Create a new preview.");
         if (r.getState() == PersonDataRequest.State.FAILED) {
             requireExternalRemoval(selections(r), externalCopiesRemoved);
+            if (externalCopiesRemoved && "EXTERNAL_COPIES_REQUIRE_REMOVAL".equals(r.getFailureCode())) {
+                journal.record(PrivacyJournalKind.PERSON_ERASED, erasureReferences(person, true));
+            }
             r.startErasure(administratorId);
             return;
         }
@@ -156,7 +158,7 @@ public class PersonDataService {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT, "An erasure request already owns this account. Resume that request.");
         }
-        suppression.suppress(person, id);
+        hold.suppress(person, id, externalCopiesRemoved);
         if (person.accountId() != null) {
             jdbc.update(
                     "UPDATE account SET status='DELETING',deleted_at=CURRENT_TIMESTAMP,version=version+1"
@@ -166,6 +168,14 @@ public class PersonDataService {
                     person.accountId(), Instant.now(), IssuedJwt.RevokedReason.ACCOUNT_DELETED);
         }
         r.startErasure(administratorId);
+    }
+
+    private Map<String, Object> erasureReferences(PersonScope person, boolean externalCopiesRemoved) {
+        Map<String, Object> refs = new HashMap<>();
+        if (person.accountId() != null) refs.put("accountId", person.accountId());
+        refs.put("identities", person.identities());
+        refs.put("externalCopiesRemoved", externalCopiesRemoved);
+        return refs;
     }
 
     private record ErasureAdmission(String state, @Nullable String scopeJson) {}
@@ -192,8 +202,7 @@ public class PersonDataService {
         TransactionTemplate tx = new TransactionTemplate(transactions);
         UUID requestId = tx.execute(status -> {
             PersonScope person = scopes.resolve(accountId, List.of());
-            copyFence.holdForErasure();
-            writeFence.holdForErasure(person.identities());
+            hold.acquire(person);
             var accountStatus = jdbc.queryForObject(
                     "SELECT status FROM account WHERE id=? FOR NO KEY UPDATE", String.class, accountId);
             if ("DELETED".equals(accountStatus)) return null;
@@ -211,7 +220,7 @@ public class PersonDataService {
             request.setCountsJson(mapper.writeValueAsString(registry.counts(selected)));
             request.startErasure(null);
             requests.saveAndFlush(request);
-            suppression.suppress(person, request.getId());
+            hold.suppress(person, request.getId(), false);
             jdbc.update(
                     "UPDATE account SET status='DELETING',"
                             + "deleted_at=COALESCE(deleted_at,CURRENT_TIMESTAMP),version=version+1 WHERE id=?",
@@ -240,7 +249,7 @@ public class PersonDataService {
         TransactionTemplate tx = new TransactionTemplate(transactions);
         String activeStore = "inventory";
         try {
-            var admission = copyFence.erase();
+            var admission = hold.erase();
             try (admission) {
                 Map<String, PersonDataSelection> frozen = tx.execute(status -> {
                     PersonDataRequest r = lockAdmittedErasure(id);
@@ -287,7 +296,7 @@ public class PersonDataService {
                 tx.executeWithoutResult(status -> {
                     PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
                     if (r.getState() != PersonDataRequest.State.ERASING) return;
-                    suppression.release(id);
+                    hold.release(id);
                     r.complete(Instant.now());
                     requests.saveAndFlush(r);
                 });
@@ -322,12 +331,15 @@ public class PersonDataService {
                         .addKeyValue("person_data.failure_recorded", failureState != null)
                         .log(
                                 failureState == null
-                                        ? "Person data erasure status could not be recorded; check database availability"
+                                        ? "Person data erasure status could not be recorded; check database"
+                                                + " availability"
                                         : retry
                                                 ? "Person data erasure will retry once after a temporary store failure"
                                                 : failed
-                                                        ? "Person data erasure stopped; an instance admin must resume it"
-                                                        : "Person data erasure pass cleanup failed; check the request state");
+                                                        ? "Person data erasure stopped; an instance admin must resume"
+                                                                + " it"
+                                                        : "Person data erasure pass cleanup failed; check the request"
+                                                                + " state");
             }
         }
     }
@@ -379,9 +391,16 @@ public class PersonDataService {
     }
 
     private Map<String, PersonDataSelection> selections(PersonDataRequest r) {
-        return mapper.readValue(
+        Map<String, PersonDataSelection> selected = mapper.readValue(
                 Objects.requireNonNull(r.getSelectionsJson()),
                 new TypeReference<Map<String, PersonDataSelection>>() {});
+        // A request frozen before the journal was added has no recovery facts to export or erase.
+        String journalStore = CorePrivacyPersonDataCatalog.PRIVACY_JOURNAL;
+        if (!selected.containsKey(journalStore)
+                && registry.stores().stream().anyMatch(s -> s.store().equals(journalStore))) {
+            selected.put(journalStore, new PersonDataSelection(List.of()));
+        }
+        return selected;
     }
 
     private @Nullable PersonDataRequest lockAdmittedErasure(UUID id) {

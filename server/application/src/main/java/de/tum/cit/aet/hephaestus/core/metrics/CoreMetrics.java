@@ -35,6 +35,8 @@ public final class CoreMetrics {
     public static final String PERSON_DATA_ERASURE_FAILURES = "person.data.erasure.failures";
     public static final String PRIVACY_JOB_AFFECTED = "privacy.job.affected";
     public static final String PRIVACY_JOB_COMPLETED = "privacy.job.completed";
+    public static final String PRIVACY_JOURNAL_BACKUP_HORIZON_UNAVAILABLE =
+            "privacy.journal.backup.horizon.unavailable";
     public static final String TENANCY_PARSE_FAILURE_TOTAL = "tenancy.parse_failure.total";
     public static final String TENANCY_VIOLATION_TOTAL = "tenancy.violation.total";
     public static final String WEB_VITAL_DURATION = "web.vital.duration";

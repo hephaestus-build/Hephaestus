@@ -2,12 +2,17 @@ package de.tum.cit.aet.hephaestus.practices.research;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.core.auth.consent.ConsentService;
 import de.tum.cit.aet.hephaestus.core.auth.consent.ResearchConsentTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchDisclosureAudit;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRegistry;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
@@ -18,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeBlockedException;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
@@ -30,6 +36,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import org.assertj.core.groups.Tuple;
@@ -92,6 +100,12 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
     ResearchDisclosureRepository disclosures;
 
     @Autowired
+    ResearchDisclosureAccountErasureAdapter accountErasure;
+
+    @Autowired
+    PrivacyJournal journal;
+
+    @Autowired
     ResearchDisclosureSubjectRepository subjects;
 
     @Autowired
@@ -119,7 +133,7 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
         // the proxies would open are opened below with the same isolation.
         consent = ResearchConsentTestSupport.forOrganization(context, "AET");
         source = new ResearchDatasetSource(datasetRows, consent, runtime);
-        recorder = new ResearchDisclosureRecorder(disclosures, subjects, consent, audit);
+        recorder = new ResearchDisclosureRecorder(disclosures, subjects, consent, audit, journal);
         course = data.scenario();
         at = Instant.now().minus(2, ChronoUnit.DAYS);
     }
@@ -196,7 +210,8 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
 
     private long decide(long accountId, boolean granted, Instant occurredAt) {
         jdbc.update(
-                "INSERT INTO consent_decision(account_id,purpose,granted,mechanism,notice_version,research_organization,occurred_at)"
+                "INSERT INTO"
+                        + " consent_decision(account_id,purpose,granted,mechanism,notice_version,research_organization,occurred_at)"
                         + " VALUES (?,'RESEARCH_PARTICIPATION',?,'ACCOUNT_SETTINGS',?,'AET',?)",
                 accountId,
                 granted,
@@ -434,7 +449,8 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
 
     private void copyPracticeAssignment(Result own, Long practiceId, Long versionId) {
         jdbc.update(
-                "INSERT INTO review_practice(review_id,workspace_id,practice_id,practice_version_id,status,items_listed,listing_complete,capture_decision,method)"
+                "INSERT INTO"
+                        + " review_practice(review_id,workspace_id,practice_id,practice_version_id,status,items_listed,listing_complete,capture_decision,method)"
                         + " SELECT review_id,workspace_id,?,?,status,items_listed,listing_complete,capture_decision,method"
                         + " FROM review_practice WHERE workspace_id=? AND review_id=? AND practice_id=?",
                 practiceId,
@@ -447,7 +463,8 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
     private void reuse(Result own, Result prior) {
         copyPracticeAssignment(own, prior.getPracticeId(), Objects.requireNonNull(prior.getPracticeVersionId()));
         jdbc.update(
-                "INSERT INTO review_item(workspace_id,review_id,practice_id,item_id,item_version,state,result_id,detail)"
+                "INSERT INTO"
+                        + " review_item(workspace_id,review_id,practice_id,item_id,item_version,state,result_id,detail)"
                         + " VALUES (?,?,?,?,?,'REUSED',?,jsonb_build_object('developerId',CAST(? AS bigint)))",
                 own.getWorkspaceId(),
                 own.getReviewId(),
@@ -553,7 +570,8 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
 
         // Without a usable recorded developer the assignment is unknown; nobody is guessed in.
         jdbc.update(
-                "UPDATE review_item SET detail=CAST('{\"developerId\":null}' AS jsonb) WHERE workspace_id=? AND review_id=? AND practice_id=?",
+                "UPDATE review_item SET detail=CAST('{\"developerId\":null}' AS jsonb) WHERE workspace_id=? AND"
+                        + " review_id=? AND practice_id=?",
                 workspace,
                 shared,
                 unjudged.practice().getId());
@@ -587,6 +605,48 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
                 .isZero();
     }
 
+    @Autowired
+    private PersonDataRegistry personData;
+
+    @Test
+    void shouldKeepAProtectedRecoveryReceiptWhenAClosedReleaseDisappearsFromAnExistingPreview() {
+        long workspace = Objects.requireNonNull(course.workspace().getId());
+        long participant = Objects.requireNonNull(course.account().getId());
+        decide(participant, true, at.minus(10, ChronoUnit.DAYS));
+        data.result(course, ResultOutcome.MET, at);
+        var dataset = release(workspace, Instant.now().plus(30, ChronoUnit.DAYS))
+                .disclosure()
+                .getId();
+        var journalStore = personData.stores().stream()
+                .filter(store -> store.store().equals("privacy_journal"))
+                .findFirst()
+                .orElseThrow();
+        var scope = new PersonScope(participant, List.of(), List.of());
+        var preview = journalStore.select(scope);
+        assertThat(journalStore.export(preview, scope))
+                .extracting(entry -> entry.path("entry_id").asString())
+                .contains(dataset.toString());
+
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            recorder.close(dataset, ResearchDisclosure.Closure.DESTROYED, participant, Instant.now());
+            status.setRollbackOnly();
+        });
+        assertThat(journalStore.export(preview, scope))
+                .extracting(entry -> entry.path("entry_id").asString())
+                .contains(dataset.toString());
+
+        committed(() -> recorder.close(dataset, ResearchDisclosure.Closure.DESTROYED, participant, Instant.now()));
+
+        assertThat(journalStore.export(preview, scope))
+                .extracting(entry -> entry.path("entry_id").asString())
+                .doesNotContain(dataset.toString());
+        assertThat(jdbc.queryForObject(
+                        "SELECT jsonb_array_length(refs->'subjectLinks') FROM privacy_journal WHERE entry_id=?",
+                        Integer.class,
+                        dataset))
+                .isEqualTo(1);
+    }
+
     @Test
     void shouldOweRemovalAfterWithdrawalAndRegrantAndKeepTheKeyThroughErasure() {
         long workspace = Objects.requireNonNull(course.workspace().getId());
@@ -602,15 +662,22 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
                 at);
         Released released = release(workspace, Instant.now().plus(365, ChronoUnit.DAYS));
         UUID dataset = released.disclosure().getId();
+        assertThat(jdbc.queryForObject(
+                        "SELECT jsonb_array_length(refs->'subjectLinks') FROM privacy_journal WHERE entry_id=?",
+                        Integer.class,
+                        dataset))
+                .isEqualTo(2);
 
         decide(withdrawing, false, Instant.now());
         decide(withdrawing, true, Instant.now().plusSeconds(1));
         jdbc.update("UPDATE consent_decision SET account_id=NULL WHERE account_id=?", erased);
         jdbc.update("UPDATE account SET status='DELETED' WHERE id=?", erased);
         write(() -> {
-            new ResearchDisclosureAccountErasureAdapter(subjects, disclosures).eraseAccount(erased);
+            accountErasure.eraseAccount(erased);
             return true;
         });
+
+        assertThat(snapshot(workspace).grants()).doesNotContainKey(erased);
 
         var manifest = write(() -> recorder.detectRemovals(Instant.now()));
         assertThat(manifest).singleElement().satisfies(open -> {
@@ -630,7 +697,37 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
         });
 
         String withdrawnKey = Objects.requireNonNull(released.keys().get(withdrawing));
-        write(() -> recorder.recordRemoved(dataset, List.of(withdrawnKey), withdrawing, Instant.now()));
+        assertThat(jdbc.queryForList("""
+            SELECT refs->>'rowKey'
+            FROM privacy_journal
+            WHERE kind='RESEARCH_REMOVAL_OWED' AND refs->>'datasetId'=?
+            """, String.class, dataset.toString()))
+                .containsExactlyInAnyOrder(
+                        withdrawnKey, Objects.requireNonNull(released.keys().get(erased)));
+        var removedAt = Instant.now();
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            recorder.recordRemoved(dataset, List.of(withdrawnKey), withdrawing, removedAt);
+            status.setRollbackOnly();
+        });
+        assertThat(jdbc.queryForList("""
+            SELECT entry_id FROM privacy_journal WHERE kind='RESEARCH_REMOVAL_RECORDED' AND refs->>'datasetId'=?
+            """, UUID.class, dataset.toString())).isEmpty();
+        assertThat(subjects.findForDisclosure(workspace, dataset))
+                .filteredOn(subject -> subject.getParticipantKey().equals(withdrawnKey))
+                .singleElement()
+                .satisfies(subject -> {
+                    assertThat(subject.getAccountId()).isEqualTo(withdrawing);
+                    assertThat(subject.getRemovedAt()).isNull();
+                });
+
+        write(() -> recorder.recordRemoved(dataset, List.of(withdrawnKey), withdrawing, removedAt));
+        assertThat(jdbc.queryForList("""
+            SELECT refs::text FROM privacy_journal WHERE kind='RESEARCH_REMOVAL_RECORDED' AND refs->>'datasetId'=?
+            """, String.class, dataset.toString()))
+                .singleElement()
+                .satisfies(refs -> assertThat(mapper.readTree(Objects.requireNonNull(refs)))
+                        .isEqualTo(mapper.valueToTree(Map.of(
+                                "datasetId", dataset, "rowKeys", List.of(withdrawnKey), "removedAt", removedAt))));
         assertThat(subjects.findForDisclosure(workspace, dataset))
                 .filteredOn(s -> s.getParticipantKey().equals(withdrawnKey))
                 .singleElement()
@@ -645,15 +742,80 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
         var purge = new ResearchDisclosureWorkspacePurge(disclosures);
         assertThatThrownBy(() -> purge.verifyQuiescent(workspace)).isInstanceOf(WorkspacePurgeBlockedException.class);
 
+        var closedAt = Instant.now();
         write(() -> {
-            recorder.close(dataset, ResearchDisclosure.Closure.DESTROYED, withdrawing, Instant.now());
+            recorder.close(dataset, ResearchDisclosure.Closure.DESTROYED, withdrawing, closedAt);
             return true;
         });
+        assertThat(jdbc.queryForList("""
+            SELECT refs::text FROM privacy_journal WHERE kind='RESEARCH_MAPPING_ERASED' AND refs->>'datasetId'=?
+            """, String.class, dataset.toString()))
+                .singleElement()
+                .satisfies(refs -> assertThat(mapper.readTree(Objects.requireNonNull(refs)))
+                        .isEqualTo(mapper.valueToTree(
+                                Map.of("datasetId", dataset, "closure", "DESTROYED", "closedAt", closedAt))));
         assertThat(subjects.findForDisclosure(workspace, dataset)).isEmpty();
         assertThat(disclosures.findById(dataset).orElseThrow().getClosure())
                 .isEqualTo(ResearchDisclosure.Closure.DESTROYED);
         purge.verifyQuiescent(workspace);
         assertThat(write(() -> recorder.detectRemovals(Instant.now()))).isEmpty();
+    }
+
+    @Test
+    void shouldUnlinkSubjectsInTheSameOrderAsTheRemovalCheck() throws Exception {
+        long participant = Objects.requireNonNull(course.account().getId());
+        long workspace = Objects.requireNonNull(course.workspace().getId());
+        decide(participant, true, at.minus(10, ChronoUnit.DAYS));
+        data.result(course, ResultOutcome.NOT_MET, at);
+        var oldest = release(workspace, Instant.now().plus(30, ChronoUnit.DAYS));
+        var newest = release(workspace, Instant.now().plus(30, ChronoUnit.DAYS));
+        UUID firstDataset = oldest.disclosure().getId();
+        UUID secondDataset = newest.disclosure().getId();
+        var first = UUID.fromString("ffffffff-0000-4000-8000-000000000001");
+        var second = UUID.fromString("00000000-0000-4000-8000-000000000002");
+        jdbc.update("UPDATE research_disclosure SET created_at=? WHERE id=?", Timestamp.from(at), firstDataset);
+        jdbc.update(
+                "UPDATE research_disclosure SET created_at=? WHERE id=?",
+                Timestamp.from(at.plusSeconds(1)),
+                secondDataset);
+        jdbc.update("UPDATE research_disclosure_subject SET id=? WHERE disclosure_id=?", first, firstDataset);
+        jdbc.update("UPDATE research_disclosure_subject SET id=? WHERE disclosure_id=?", second, secondDataset);
+        var subject = subjects.findForDisclosure(workspace, firstDataset).getFirst();
+        long grant = Objects.requireNonNull(subject.getGrantDecisionId());
+
+        var check = HeldTransaction.holdIn(new TransactionTemplate(transactions), jdbc, () -> {
+            assertThat(subjects.requireRemoval(
+                            workspace, first, participant, grant, "CONSENT_WITHDRAWN", Instant.now()))
+                    .isOne();
+            journal.record(
+                    first,
+                    PrivacyJournalKind.RESEARCH_REMOVAL_OWED,
+                    Map.of(
+                            "datasetId",
+                            firstDataset,
+                            "rowKey",
+                            subject.getParticipantKey(),
+                            "reason",
+                            "CONSENT_WITHDRAWN"));
+        });
+        var erasure = CompletableFuture.runAsync(() -> committed(() -> erase(participant)));
+
+        check.commitAfter(
+                erasure,
+                () -> assertThat(write(() -> Objects.requireNonNull(jdbc.queryForObject(
+                                "SELECT id FROM research_disclosure_subject WHERE id=? FOR UPDATE NOWAIT",
+                                UUID.class,
+                                second))))
+                        .as("while erasure waits for the oldest disclosure, the newer subject remains unlocked")
+                        .isEqualTo(second));
+        erasure.get(20, TimeUnit.SECONDS);
+
+        assertThat(jdbc.queryForList("""
+            SELECT entry_id FROM privacy_journal WHERE kind='RESEARCH_REMOVAL_OWED' AND entry_id IN (?,?)
+            """, UUID.class, first, second)).containsExactlyInAnyOrder(first, second);
+        assertThat(jdbc.queryForList("""
+            SELECT id FROM research_disclosure_subject WHERE id IN (?,?) AND account_id IS NULL
+            """, UUID.class, first, second)).containsExactlyInAnyOrder(first, second);
     }
 
     @Test
@@ -672,7 +834,7 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
             committed(() -> erase(participant));
             erased.set(subjectRow(dataset));
         });
-        var checking = new ResearchDisclosureRecorder(disclosures, subjects, ledger, audit);
+        var checking = new ResearchDisclosureRecorder(disclosures, subjects, ledger, audit, mock(PrivacyJournal.class));
 
         var manifest = write(() -> checking.detectRemovals(Instant.now()));
 
@@ -715,7 +877,7 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
             committed(() -> recorder.recordRemoved(dataset, List.of(key), participant, removedAt));
             receipted.set(subjectRow(dataset));
         });
-        var checking = new ResearchDisclosureRecorder(disclosures, subjects, ledger, audit);
+        var checking = new ResearchDisclosureRecorder(disclosures, subjects, ledger, audit, mock(PrivacyJournal.class));
 
         var manifest = write(() -> checking.detectRemovals(removedAt.plusSeconds(1)));
 
@@ -747,7 +909,7 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
     private void erase(long accountId) {
         jdbc.update("UPDATE consent_decision SET account_id=NULL WHERE account_id=?", accountId);
         jdbc.update("UPDATE account SET status='DELETED' WHERE id=?", accountId);
-        new ResearchDisclosureAccountErasureAdapter(subjects, disclosures).eraseAccount(accountId);
+        accountErasure.eraseAccount(accountId);
     }
 
     /** Commits on its own connection, as a concurrent request would, while a caller's transaction stays open. */
@@ -883,7 +1045,8 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
         String key = Objects.requireNonNull(released.keys().get(participant));
         var noProgram = ResearchConsentTestSupport.forOrganization(context, "");
         assertThat(noProgram.currentQuestion()).isEmpty();
-        var remaining = new ResearchDisclosureRecorder(disclosures, subjects, noProgram, audit);
+        var remaining =
+                new ResearchDisclosureRecorder(disclosures, subjects, noProgram, audit, mock(PrivacyJournal.class));
 
         assertThat(write(() -> remaining.detectRemovals(Instant.now())))
                 .singleElement()
@@ -920,7 +1083,8 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
         long otherWorkspace = Objects.requireNonNull(data.scenario().workspace().getId());
 
         assertThatThrownBy(() -> jdbc.update(
-                        "INSERT INTO research_disclosure_subject(id,disclosure_id,workspace_id,account_id,participant_key,grant_decision_id)"
+                        "INSERT INTO"
+                                + " research_disclosure_subject(id,disclosure_id,workspace_id,account_id,participant_key,grant_decision_id)"
                                 + " VALUES (?,?,?,?,?,?)",
                         UUID.randomUUID(),
                         dataset,

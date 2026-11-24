@@ -85,10 +85,14 @@ public class JdbcPersonDataStore implements PersonDataContributor {
 
     @Override
     public PersonDataSelection select(PersonScope scope) {
+        return selectUsing(parameters(scope, mapper));
+    }
+
+    protected PersonDataSelection selectUsing(Map<String, Object> bindings) {
         return new PersonDataSelection(jdbc.query(
                 "SELECT " + keyExpression() + "::text FROM " + quotedTable() + " t WHERE " + predicate + " ORDER BY "
                         + keyExpression() + "::text",
-                parameters(scope, mapper),
+                bindings,
                 (rs, row) -> {
                     JsonNode key = mapper.readTree(Objects.requireNonNull(rs.getString(1)));
                     Map<String, String> values = new LinkedHashMap<>();
@@ -123,7 +127,11 @@ public class JdbcPersonDataStore implements PersonDataContributor {
     }
 
     protected List<JsonNode> exportMatchingScope(PersonDataSelection selection, PersonScope frozenScope) {
-        var bindings = new LinkedHashMap<>(parameters(frozenScope, mapper));
+        return exportMatchingScope(selection, parameters(frozenScope, mapper));
+    }
+
+    protected List<JsonNode> exportMatchingScope(PersonDataSelection selection, Map<String, Object> scopeBindings) {
+        var bindings = new LinkedHashMap<>(scopeBindings);
         bindings.putAll(selectionParameters(selection));
         return exportWhere(bindings, "(" + selected() + ") AND (" + predicate + ")");
     }

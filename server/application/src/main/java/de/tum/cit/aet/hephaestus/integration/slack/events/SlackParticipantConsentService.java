@@ -1,8 +1,11 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import java.time.Instant;
+import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,8 +26,12 @@ public class SlackParticipantConsentService {
 
     private final SlackParticipantConsentRepository participantConsentRepository;
 
-    public SlackParticipantConsentService(SlackParticipantConsentRepository participantConsentRepository) {
+    private final PrivacyJournal journal;
+
+    public SlackParticipantConsentService(
+            SlackParticipantConsentRepository participantConsentRepository, PrivacyJournal journal) {
         this.participantConsentRepository = participantConsentRepository;
+        this.journal = journal;
     }
 
     /**
@@ -34,8 +41,23 @@ public class SlackParticipantConsentService {
      * @return whether the opt-out is the stored choice; false when a later choice is stored or the user is blank
      */
     @Transactional
-    public boolean recordChannelMessageOptOut(long workspaceId, String slackUserId, Instant decidedAt) {
-        return record(workspaceId, slackUserId, true, decidedAt);
+    public boolean recordChannelMessageOptOut(
+            long workspaceId, String slackTeamId, String slackUserId, Instant decidedAt) {
+        if (!record(workspaceId, slackUserId, true, decidedAt)) return false;
+        journal.record(
+                PrivacyJournalKind.SLACK_PARTICIPANT_WITHDRAWN,
+                Map.of(
+                        "workspaceId",
+                        workspaceId,
+                        "slackTeamId",
+                        slackTeamId,
+                        "slackUserId",
+                        slackUserId,
+                        "scope",
+                        "MONITORED_CHANNELS",
+                        "decidedAt",
+                        decidedAt));
+        return true;
     }
 
     /** @return whether the opt-in is the stored choice; false when a later choice is stored or the user is blank */

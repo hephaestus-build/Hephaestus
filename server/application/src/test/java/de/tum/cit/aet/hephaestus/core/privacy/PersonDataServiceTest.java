@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
@@ -56,14 +57,14 @@ class PersonDataServiceTest extends BaseUnitTest {
                 new PersonDataScopeResolver(resolver, List.of(evidence), mock(OwnerScope.class)),
                 registry,
                 requests,
-                suppression,
-                mock(PersonDataWriteFence.class),
-                mock(PersonDataCopyFence.class),
+                new PersonDataErasureHold(
+                        suppression, mock(PersonDataWriteFence.class), mock(PersonDataCopyFence.class)),
                 mock(IssuedJwtRepository.class),
                 mock(PlatformTransactionManager.class),
                 mapper,
                 mock(JdbcTemplate.class),
-                new SimpleMeterRegistry());
+                new SimpleMeterRegistry(),
+                mock(PrivacyJournal.class));
     }
 
     @Test

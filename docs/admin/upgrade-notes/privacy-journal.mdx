@@ -1,0 +1,46 @@
+---
+title: Keep privacy facts while a backup needs them
+description: Configure privacy journal retention for erasure recovery.
+page_type: how-to
+---
+
+After a backup attempt, the Job reports the start of the oldest backup that pgBackRest retains.
+This is a conservative recovery point.
+The report uses a database lock to serialize reading the backup inventory, publishing the report and pruning.
+If the Job cannot publish a report, the last verified point remains a conservative bound while pgBackRest adds newer backups and expires older ones.
+After the backup attempt, reporting has one minute to finish and five more seconds to stop.
+A report older than 30 hours stops pruning.
+A backup that fails to rotate can leave an older recovery point in the report.
+The journal keeps the facts that this backup needs.
+
+1. If the chart manages your backups, run the release key setup with backups enabled to add the `DATABASE_BACKUP_REPORTER_PASSWORD` key before you upgrade.
+   Only the backup Jobs and the role setup use this credential.
+2. If you back up the database outside the chart, keep `privacyJournal.backupsEnabled=true`.
+   Configure the backup job to publish the oldest retained recovery point and the time it inspected the backups in the `privacy_journal_backup_horizon` singleton.
+   Use the `hephaestus_backup_reporter` role to write only that observation.
+   Hold the session lock while reading the inventory and publishing the report.
+   The lock key is `hashtext('hephaestus'), hashtext('privacy-journal-backup-horizon')`.
+   Before you add an older backup back to the inventory, clear the recovery point in the same locking protocol.
+   Publish an empty recovery point if the job cannot verify one.
+3. If you keep no database backups, set `privacyJournal.backupsEnabled=false` to prune by age alone.
+   Keep the default age of 35 days, or set `privacyJournal.retention` to a longer period.
+   Use this setting only when there are also no volume snapshots or external backups.
+
+When backups are on, the journal keeps every fact if the report is missing, invalid or more than 30 hours old.
+The alert `HephaestusPrivacyJournalBackupHorizonUnavailable` reports this condition.
+The first pruning run that sees a committed fact records when it saw the fact.
+The instance uses that observation time to prune because a transaction can commit after it writes the fact.
+Before a rollback through a backup restore, preserve the protected journal.
+A fact can commit after the recovery point even when its recorded time comes before that point.
+A schema rollback stops before it drops the journal.
+Follow [Erasure recovery](../erasure-recovery) before the restored instance serves requests.
+
+## Check that it worked
+
+After a backup Job finishes, check that `privacy_journal_backup_horizon_unavailable` is 0.
+When backups are on, check that the backup job reported the actual oldest recovery point.
+Run the following query with a read-only database login.
+
+```sql
+SELECT observed_at, oldest_backup_at FROM privacy_journal_backup_horizon;
+```

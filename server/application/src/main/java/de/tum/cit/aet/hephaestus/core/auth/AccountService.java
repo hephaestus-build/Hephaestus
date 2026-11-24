@@ -274,6 +274,7 @@ public class AccountService {
         else account.unblock();
         accountRepository.save(account);
         if (block) {
+            journal.record(PrivacyJournalKind.ACCOUNT_SUSPENDED, Map.of("accountId", accountId));
             sessionRevocation.revokeAccount(accountId, IssuedJwt.RevokedReason.ADMIN_REVOKE, null, null);
         }
         authEventLogger

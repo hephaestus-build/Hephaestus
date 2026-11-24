@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -16,6 +17,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -141,14 +143,16 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
                 new PersonDataScopeResolver(resolver, List.of(), new OwnerScope(jdbc)),
                 registry,
                 requests,
-                suppression,
-                fence,
-                new PostgresPersonDataCopyFence(Objects.requireNonNull(jdbc.getDataSource()), jdbc),
+                new PersonDataErasureHold(
+                        suppression,
+                        fence,
+                        new PostgresPersonDataCopyFence(Objects.requireNonNull(jdbc.getDataSource()), jdbc)),
                 tokens,
                 transactions,
                 mapper,
                 jdbc,
-                new SimpleMeterRegistry());
+                new SimpleMeterRegistry(),
+                mock(PrivacyJournal.class));
         var tx = new TransactionTemplate(transactions);
         var identities = List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null));
         var preview = Objects.requireNonNull(tx.execute(status -> service.preview(adminId, null, identities)));

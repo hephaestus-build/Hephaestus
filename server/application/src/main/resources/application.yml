@@ -299,6 +299,10 @@ springdoc:
     paths-to-exclude: /internal/**, /webhooks/**
 
 hephaestus:
+    privacy:
+        journal:
+            retention: ${HEPHAESTUS_PRIVACY_JOURNAL_RETENTION:35d}
+            backups-enabled: ${HEPHAESTUS_PRIVACY_JOURNAL_BACKUPS_ENABLED:true}
     commit-identity-resolution:
         enabled: ${HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_ENABLED:true}
         batch-size: ${HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_BATCH_SIZE:50}
