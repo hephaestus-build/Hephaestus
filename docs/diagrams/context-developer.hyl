@@ -1,0 +1,100 @@
+// System context, developer view: the people who work with Hephaestus on their work, and the services that carry it.
+// Page: docs/contributor/conversation-core.mdx. Each arrow points from the side that starts the exchange.
+// All positions are absolute. Outline positions: 0 is the right middle, 0.25 the bottom middle, 0.5 the left middle
+// and 0.75 the top middle.
+umlDiagram(showComponentKeyword = false) {
+    // @shared-style
+
+    hephaestus = component("Hephaestus") layout {
+        pos = apos(0, 120)
+        width = 220
+        height = 160
+    }
+    developer = actor("Developer") layout {
+        pos = apos(-60, -380)
+    }
+    reviewer = actor("Reviewer") layout {
+        pos = apos(370, -380)
+    }
+    admin = actor("Workspace admin") layout {
+        pos = apos(-380, 290)
+    }
+    scm = component("GitHub, GitLab", keywords = list("external")) styles {
+        class += "ext"
+    } layout {
+        pos = apos(370, 90)
+        width = 170
+        height = 80
+    }
+    slack = component("Slack", keywords = list("external")) styles {
+        class += "ext"
+    } layout {
+        pos = apos(-370, 120)
+        width = 160
+        height = 80
+    }
+    outline = component("Outline", keywords = list("external")) styles {
+        class += "ext"
+    } layout {
+        pos = apos(300, 380)
+        width = 160
+        height = 80
+    }
+    model = component("Model provider", keywords = list("external")) styles {
+        class += "ext"
+    } layout {
+        pos = apos(-40, 380)
+        width = 180
+        height = 80
+    }
+
+    developer --> hephaestus with {
+        over = start(0.25).line(end(0.6818182))
+        label("asks, reads feedback, confirms commands", 0.25, 170)
+    }
+    developer --> slack with {
+        over = start(0.5).line(apos(-370, -340.625)).line(end(0.75))
+        label("DMs, mentions", 0.75, 70)
+    }
+    developer --> scm with {
+        over = start(0.0).line(apos(330, -340.625)).line(end(0.6911765))
+        label("pushes work, replies", 0.8, -85)
+    }
+    reviewer --> scm with {
+        over = start(0.25).line(end(0.75))
+        label("reviews, replies", 0.5, 62)
+    }
+    admin --> hephaestus with {
+        over = start(0.0).line(apos(-90, 329.375)).line(end(0.3522727))
+        label("approves copies, sets mode", 0.25, 20)
+    }
+    slack --> hephaestus with {
+        over = start(0.9375).line(end(0.53125))
+        label("messages, mentions", 0.45, 20)
+    }
+    hephaestus --> slack with {
+        over = start(0.46875).line(end(0.0625))
+        label("answers, cards", 0.5, 20)
+    }
+    scm --> hephaestus with {
+        over = start(0.5625).line(end(0.921875))
+        label("events, shared replies", 0.5, -20)
+    }
+    hephaestus --> scm with {
+        over = start(0.984375).line(end(0.4375))
+        label("reads work, comments", 0.5, -20)
+    }
+    outline --> hephaestus with {
+        over = start(0.65625).line(apos(240, 185)).line(end(0.1015625))
+        label("document events", 0.3, 75)
+    }
+    hephaestus --> outline with {
+        over = start(0.0625).line(apos(340, 160)).line(end(0.8125))
+        label("reads documents", 0.75, 70)
+    }
+    hephaestus --> model with {
+        over = start(0.2954545).line(end(0.75))
+        label("model calls", 0.5, 50)
+    }
+    legendExternal(-200, 490)
+}

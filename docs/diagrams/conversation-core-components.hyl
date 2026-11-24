@@ -1,0 +1,134 @@
+// Component view: the conversation core in the server, as a UML white box. Page: docs/contributor/conversation-core.mdx.
+// Parts are wired by provided (ball) and required (socket) interfaces, named after their Java type or route. A socket
+// at its ball is an assembly connector. A dashed arrow from a socket to a ball is the same wiring, routed. A port on the
+// frame delegates to the part that handles it. «planned» marks a part that the accepted design adds.
+umlDiagram(showComponentKeyword = false) {
+    // @shared-style
+    server = component("Server", keyword = "subsystem") layout {
+        pos = apos(242.5, 285)
+        width = 845
+        height = 770
+    }
+    sweep = component("Sweep") layout {
+        pos = apos(0, 0)
+        width = 170
+        height = 80
+    }
+    ingest = component("Ingest") layout {
+        pos = apos(260, 0)
+        width = 170
+        height = 80
+    }
+    proxy = component("LLM proxy") layout {
+        pos = apos(520, 0)
+        width = 170
+        height = 80
+    }
+    dispatcher = component("Dispatcher", keywords = list("planned")) layout {
+        pos = apos(0, 190)
+        width = 170
+        height = 80
+    }
+    inbox = component("Inbox", keywords = list("planned")) layout {
+        pos = apos(260, 190)
+        width = 170
+        height = 80
+    }
+    seal = component("Seal") layout {
+        pos = apos(520, 190)
+        width = 170
+        height = 80
+    }
+    runQueue = component("Agent control") layout {
+        pos = apos(0, 380)
+        width = 170
+        height = 80
+    }
+    turns = component("Conversation") layout {
+        pos = apos(260, 380)
+        width = 170
+        height = 80
+    }
+    outbox = component("Action outbox") layout {
+        pos = apos(520, 380)
+        width = 170
+        height = 80
+    }
+    gateway = component("Sandbox gateway") layout {
+        pos = apos(0, 570)
+        width = 170
+        height = 80
+    }
+    composer = component("Composer tools and guardrails") layout {
+        pos = apos(260, 570)
+        width = 170
+        height = 80
+    }
+    p1 = server.port(0.737426)
+    server.provides("/webhooks", 0.737426, dist = 40, namePos = [0, -32])
+    p1 -- ingest with {
+        over = start(0.25).line(end(0.6617647))
+    }
+    p2 = server.port(0.772929)
+    server.provides("/api", 0.772929, dist = 40, namePos = [0, -32])
+    p2 -- ingest with {
+        over = start(0.25).line(end(0.8382353))
+    }
+    p3 = server.port(0.8321006)
+    server.requires("model API", 0.8321006, dist = 40, namePos = [0, -32])
+    p3 -- proxy with {
+        over = start(0.25).line(end(0.75))
+    }
+    p4 = server.port(0.3217456)
+    server.provides("/internal/agent", 0.3217456, dist = 40, namePos = [0, 32])
+    p4 -- gateway with {
+        over = start(0.75).line(end(0.25))
+    }
+    p5 = server.port(0.1678994)
+    server.requires("provider APIs", 0.1678994, dist = 40, namePos = [0, 32])
+    p5 -- outbox with {
+        over = start(0.75).line(end(0.25))
+    }
+    p6 = server.port(0.9383117)
+    server.provides("/internal/llm", 0.9383117, dist = 40, namePos = [6, -30])
+    p6 -- proxy with {
+        over = start(0.5).line(apos(635, 95)).line(apos(635, 10)).line(end(0.03125))
+    }
+    p6 -- seal with {
+        over = start(0.5).line(apos(635, 95)).line(apos(635, 180)).line(end(0.96875))
+    }
+    i7 = inbox.provides("InboxItems", 0.7941176, dist = 45, namePos = [64, 0])
+    ingest.requires(0.2058824, i7)
+    i8 = inbox.provides("InboxItems", 0.5, dist = 45, namePos = [0, -55])
+    dispatcher.requires(0.0, i8)
+    i9 = inbox.provides("InboxItems", 0.0, dist = 45, namePos = [0, -55])
+    seal.requires(0.5, i9)
+    i10 = inbox.provides("InboxItems", 0.25, dist = 45, namePos = [64, 0])
+    turns.requires(0.75, i10)
+    i11 = inbox.provides("InboxItems", 0.6617647, dist = 45, namePos = [-50, -28])
+    s11 = sweep.requires(0.1764706, dist = 30)
+    s11 dependsOn i11 with {
+        over = start(0.25).line(apos(50, 105)).line(end(0.5))
+    }
+    i12 = runQueue.provides("AgentRuns", 0.75, dist = 55, namePos = [-62, 0])
+    dispatcher.requires(0.25, i12)
+    i13 = runQueue.provides("AgentRuns", 0.25, dist = 55, namePos = [-62, 0])
+    gateway.requires(0.75, i13)
+    i14 = runQueue.provides("AgentRuns", 0.5, dist = 45, namePos = [0, 30])
+    s14 = sweep.requires(0.5, dist = 30)
+    s14 dependsOn i14 with {
+        over = start(0.5).line(apos(-170, 0)).line(apos(-170, 380)).line(end(0.5))
+    }
+    i15 = turns.provides("SandboxRunKind", 0.3455882, dist = 45, namePos = [-40, 34])
+    s15 = gateway.requires(0.8308824, dist = 30)
+    s15 dependsOn i15 with {
+        over = start(0.75).line(apos(55, 465)).line(end(0.5))
+    }
+    i16 = composer.provides("CompositionSessions", 0.421875, dist = 45, namePos = [0, 36])
+    gateway.requires(0.078125, i16)
+    i17 = composer.provides("FeedbackGate", 0.75, dist = 55, namePos = [70, 0])
+    turns.requires(0.25, i17)
+    i18 = outbox.provides("AgentActions", 0.5, dist = 45, namePos = [-20, -58])
+    turns.requires(0.0, i18)
+    legendComponents(-120, 860)
+}
