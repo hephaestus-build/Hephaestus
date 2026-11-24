@@ -454,6 +454,31 @@ The proxy's integration tests send through the guarded client, so a proxy reques
 - It fails when a class outside the proxy reads the provider key of a resolved model (`ProxyCredential`).
   A call and a method reference both count.
 
+### The runtime contract
+
+The runtime contract states what the run kinds rely on from the loop that runs a session.
+Its cases are in `runtime-contract.ts`, and `runtime-contract.spec.ts` runs them in `vp run test:agents`.
+Each case drives a session with a scripted model and checks one of these promises:
+
+- The model gets the descriptor's system prompt and tools with their schemas.
+- A tool call runs the tool, and its result reaches the next request. The tool events carry the call ID, arguments and result.
+- The session log keeps the run's messages and their content in order.
+- The hooks and the events come in the order that the run kinds rely on.
+- A `tool_call` hook that blocks keeps the tool from running.
+
+The cases run on Pi through `openRunSession`.
+For each case, a Pi build that breaks its promise must fail it, and the spec checks that it does.
+A broken build replaces the system prompt, ignores a block, moves a hook, or reorders or strips events.
+
+These parts are outside the contract:
+
+- Compaction.
+- The provider hooks. A scripted model builds no provider payload.
+- The session APIs that only the review runner uses, such as steering, queues and compaction control.
+
+A Pi upgrade passes the contract.
+When a run kind starts to rely on another hook or event, add a case for it.
+
 ### Isolation
 
 The model loop and its tools run in the same container.
