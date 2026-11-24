@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
+import de.tum.cit.aet.hephaestus.core.web.LabelDTO;
+import de.tum.cit.aet.hephaestus.core.web.MentoringCopy;
 import java.io.Serial;
 
 /** The ledger refused a request that conflicts with its state. Nothing was written. */
@@ -10,28 +12,28 @@ public final class ConversationRejectedException extends RuntimeException {
 
     public enum Reason {
         /** The conversation already holds the maximum number of follow-ups waiting for an answer. */
-        FOLLOW_UPS_FULL("Hephaestus is still answering. Wait for an answer before you send more messages."),
+        FOLLOW_UPS_FULL,
         /** The request id belongs to a different conversation or kind of write. */
-        REQUEST_ID_REUSED("This message was already sent somewhere else."),
+        REQUEST_ID_REUSED,
         /** Threads start only on a message of a main conversation. */
-        NOT_A_THREAD_PARENT("You can reply in a thread only to a message in your conversation with Hephaestus."),
+        NOT_A_THREAD_PARENT,
         /** Votes are only on Hephaestus's messages that are not erased. */
-        NOT_VOTABLE("You can rate only Hephaestus's messages that are still in your conversation."),
+        NOT_VOTABLE,
         /** Only a Slack message the developer wrote can be edited. */
-        NOT_EDITABLE("This message cannot be edited."),
-        NOT_DELETABLE("You can delete only your own messages."),
-        /** The developer's personal data was erased, so Hephaestus stores nothing new about them. */
-        PERSON_ERASED(
-                "Hephaestus cannot reply because your personal data was erased. Contact the instance privacy contact.");
+        NOT_EDITABLE,
+        NOT_DELETABLE,
+        /** The person's data was erased, so Hephaestus stores nothing new about them. */
+        PERSON_ERASED;
 
-        private final String userMessage;
-
-        Reason(String userMessage) {
-            this.userMessage = userMessage;
+        public LabelDTO label() {
+            return MentoringCopy.label(
+                    this == PERSON_ERASED
+                            ? "conversation.person-erased"
+                            : MentoringCopy.code("conversation.rejected.", this));
         }
 
         public String userMessage() {
-            return userMessage;
+            return label().text();
         }
     }
 

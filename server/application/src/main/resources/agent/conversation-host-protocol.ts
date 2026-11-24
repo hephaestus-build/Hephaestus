@@ -6,6 +6,9 @@
 //   /internal/agent/runs/<runId>/turn/*         → ConversationTurnController
 //   /internal/agent/runs/<runId>/turn/sandbox/* → ConversationTurnSandboxController
 
+// oxlint-disable-next-line import/no-relative-parent-imports -- The server catalog lives outside the sandbox source folder.
+import type english from "../copy/mentoring.en.json";
+
 /** The tools that work in the turn's context folder. Hephaestus has them only in a turn whose context sets `contextFolder`. */
 export const CONTEXT_FOLDER_TOOL_NAMES = ["read", "bash", "load_context"] as const;
 
@@ -133,8 +136,8 @@ export interface PartialSnapshot {
 	activity: "thinking" | "writing" | "tool";
 	/** The tool running, while `activity` is `tool`. */
 	tool: string | null;
-	/** What Hephaestus is doing, in the developer's words: the one label both surfaces show while the answer is not written. */
-	stage: string;
+	/** The copy catalog key for what Hephaestus is doing while the answer is not written. */
+	stage: Extract<keyof typeof english, `conversation.stage.${string}`>;
 	/** Every assistant message of the turn so far; the last one may still be written. */
 	messages: PartialMessage[];
 }

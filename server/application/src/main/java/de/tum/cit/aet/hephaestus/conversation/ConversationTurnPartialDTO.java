@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
+import de.tum.cit.aet.hephaestus.core.web.LabelDTO;
+import de.tum.cit.aet.hephaestus.core.web.MentoringCopy;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Locale;
 import org.jspecify.annotations.NonNull;
@@ -15,16 +17,18 @@ public record ConversationTurnPartialDTO(
         String tool,
 
         @Schema(
-                description =
-                        "What Hephaestus is doing, in the developer's words, for example \"Reading your practice feedback…\"")
+                description = "What Hephaestus is doing, in the developer's words, for example \"Reading your practice"
+                        + " feedback…\"")
         @NonNull
         String stage,
+
+        @Nullable LabelDTO stageLabel,
 
         @Schema(description = "The text Hephaestus has written in this turn so far") @NonNull
         String text) {
 
     /** {@code THINKING_STAGE} in {@code turn.ts}. */
-    static final String THINKING_STAGE = "Thinking…";
+    static final String THINKING_STAGE = "conversation.stage.thinking";
 
     public enum Activity {
         THINKING,
@@ -45,7 +49,8 @@ public record ConversationTurnPartialDTO(
         // The turn driver names the stage; a snapshot without one uses the driver's default.
         String stage =
                 snapshot.path("stage").isString() ? snapshot.path("stage").asString() : THINKING_STAGE;
+        LabelDTO label = MentoringCopy.progressLabel(stage);
         return new ConversationTurnPartialDTO(
-                activity, tool, stage, ConversationPiEntries.partialText(snapshot, false));
+                activity, tool, label.text(), label, ConversationPiEntries.partialText(snapshot, false));
     }
 }

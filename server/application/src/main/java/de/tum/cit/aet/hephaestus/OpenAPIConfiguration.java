@@ -395,6 +395,7 @@ public class OpenAPIConfiguration {
      */
     private static void declareProblemExtensions(Schema<?> problem) {
         Map<String, Schema<?>> members = new LinkedHashMap<>();
+        members.put("label", new Schema<>().$ref(COMPONENTS + "Label"));
         members.put(
                 "errors",
                 new MapSchema()
@@ -419,7 +420,9 @@ public class OpenAPIConfiguration {
             members.put(id, new StringSchema().format("uuid"));
         }
         for (String text : List.of(
+                "by",
                 "callbackError",
+                "field",
                 "currentVersion",
                 "currentVersionId",
                 "declaredTier",
@@ -427,6 +430,7 @@ public class OpenAPIConfiguration {
                 "state",
                 "stop",
                 "supportedRef",
+                "what",
                 "withholdingReason")) {
             members.put(text, new StringSchema());
         }

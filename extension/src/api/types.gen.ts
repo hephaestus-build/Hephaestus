@@ -1349,6 +1349,7 @@ export type ConversationTurnPartial = {
 	 * What Hephaestus is doing, in the developer's words, for example "Reading your practice feedback…"
 	 */
 	stage: string;
+	stageLabel?: Label;
 	/**
 	 * The text Hephaestus has written in this turn so far
 	 */
@@ -2779,7 +2780,10 @@ export type IntegrationCatalogEntry = {
 	kind: IntegrationKind;
 };
 
-export type IntegrationFamily = "SCM" | "MESSAGING" | "DOCUMENTATION";
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type IntegrationFamily = string;
 
 /**
  * Extensible enum: a client accepts a value that the examples do not name.
@@ -2869,6 +2873,23 @@ export type JudgedScanReportItem = {
 };
 
 /**
+ * Text that a client can render from a message catalog
+ */
+export type Label = {
+	/**
+	 * Extensible enum: a catalog key. Accept keys that the client does not know.
+	 */
+	code: string;
+	params?: {
+		[key: string]: LabelParam;
+	};
+	/**
+	 * English fallback text. Use it when the client has no copy for this key.
+	 */
+	text: string;
+};
+
+/**
  * Information about a label from a repository
  */
 export type LabelInfo = {
@@ -2888,6 +2909,20 @@ export type LabelInfo = {
 	 * Repository the label belongs to
 	 */
 	repository?: RepositoryInfo;
+};
+
+/**
+ * One named value for a label template
+ */
+export type LabelParam = {
+	count?: number;
+	instant?: string;
+	ownWords?: string;
+	/**
+	 * Extensible enum: value, instant, count or ownWords. Accept other kinds.
+	 */
+	type: string;
+	value?: string;
 };
 
 /**
@@ -4984,6 +5019,7 @@ export type ProblemChanges = {
 
 export type ProblemDetail = {
 	activeScanId?: string;
+	by?: string;
 	callbackError?: string;
 	connectionId?: number;
 	currentVersion?: string;
@@ -4996,8 +5032,10 @@ export type ProblemDetail = {
 	errors?: {
 		[key: string]: Array<string>;
 	};
+	field?: string;
 	instance?: string;
 	jobId?: number;
+	label?: Label;
 	maxAgeSeconds?: number;
 	/**
 	 * Why a practice folder cannot become a practice: each problem with its file and, where known, its line and column
@@ -5016,6 +5054,7 @@ export type ProblemDetail = {
 	supportedRef?: string;
 	title: string;
 	type?: ProblemType;
+	what?: string;
 	withholdingReason?: string;
 	workspaceByteBudget?: number;
 	workspaceBytes?: number;

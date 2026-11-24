@@ -1337,10 +1337,36 @@ export const updateConnectionStatusResponseTransformer = async (
 	return data;
 };
 
+const labelParamSchemaResponseTransformer = (data: any) => {
+	if (data.instant) {
+		data.instant = new Date(data.instant);
+	}
+	return data;
+};
+
+const labelSchemaResponseTransformer = (data: any) => {
+	if (data.params) {
+		for (const key of Object.keys(data.params)) {
+			data.params[key] = labelParamSchemaResponseTransformer(data.params[key]);
+		}
+	}
+	return data;
+};
+
+const conversationTurnPartialSchemaResponseTransformer = (data: any) => {
+	if (data.stageLabel) {
+		data.stageLabel = labelSchemaResponseTransformer(data.stageLabel);
+	}
+	return data;
+};
+
 const conversationTurnSchemaResponseTransformer = (data: any) => {
 	data.createdAt = new Date(data.createdAt);
 	if (data.finishedAt) {
 		data.finishedAt = new Date(data.finishedAt);
+	}
+	if (data.partial) {
+		data.partial = conversationTurnPartialSchemaResponseTransformer(data.partial);
 	}
 	return data;
 };

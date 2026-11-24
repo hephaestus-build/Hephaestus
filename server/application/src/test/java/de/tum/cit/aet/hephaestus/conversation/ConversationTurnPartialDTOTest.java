@@ -13,18 +13,22 @@ class ConversationTurnPartialDTOTest extends BaseUnitTest {
     @Test
     void shouldCarryTheStageTheHostNamed() {
         ConversationTurnPartialDTO partial = ConversationTurnPartialDTO.from(mapper.readTree("""
-                {"activity":"tool","tool":"fetch_context","stage":"Reading your practice feedback…","messages":[]}
-                """));
+            {"activity":"tool","tool":"fetch_context","stage":"conversation.stage.practice","messages":[]}
+            """));
 
         assertThat(partial.activity()).isEqualTo(ConversationTurnPartialDTO.Activity.TOOL);
         assertThat(partial.stage()).isEqualTo("Reading your practice feedback…");
+        assertThat(partial.stageLabel()).isNotNull().satisfies(label -> {
+            assertThat(label.code()).isEqualTo("conversation.stage.practice");
+            assertThat(label.text()).isEqualTo("Reading your practice feedback…");
+        });
     }
 
     @Test
     void shouldReadASnapshotWithoutAStageAsThinking() {
         ConversationTurnPartialDTO partial = ConversationTurnPartialDTO.from(mapper.readTree("""
-                {"activity":"thinking","tool":null,"messages":[]}
-                """));
+            {"activity":"thinking","tool":null,"messages":[]}
+            """));
 
         assertThat(partial.stage()).isEqualTo("Thinking…");
     }

@@ -134,17 +134,17 @@ public class AgentControllerAdvice {
     /** Hephaestus declines the member; the detail names the setting that changes it. */
     @ExceptionHandler(ConversationRefusedException.class)
     ProblemDetail handleConversationRefused(ConversationRefusedException exception) {
-        return ProblemType.CONVERSATION_REFUSED.problem(
+        return ProblemType.CONVERSATION_REFUSED.labelledProblem(
                 HttpStatus.CONFLICT,
                 "Hephaestus cannot reply",
-                exception.reason().userMessage());
+                exception.reason().label());
     }
 
     /** The ledger refused a write that conflicts with its state; the detail is worded for the developer. */
     @ExceptionHandler(ConversationRejectedException.class)
     ProblemDetail handleConversationRejected(ConversationRejectedException exception) {
-        return ProblemType.CONVERSATION_REJECTED.problem(
-                HttpStatus.CONFLICT, "Conversation conflict", exception.reason().userMessage());
+        return ProblemType.CONVERSATION_REJECTED.labelledProblem(
+                HttpStatus.CONFLICT, "Conversation conflict", exception.reason().label());
     }
 
     /** A Hephaestus host wrote for a turn attempt that lost its lease. */

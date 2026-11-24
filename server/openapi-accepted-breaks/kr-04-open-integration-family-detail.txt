@@ -1,0 +1,2 @@
+# KR-04 opens IntegrationFamily under ADR 0103 so clients can receive new values.
+in API GET /workspaces/{workspaceSlug}/connections/{id} removed the enum constraint from the `family` response property for the response status `200`

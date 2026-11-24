@@ -128,6 +128,7 @@ IntegrationCatalogEntryDTO.connectionId  # identifier
 IntroducedBasis.head
 JudgedScanReportItemDTO.problemCount
 LabelInfoDTO.id  # identifier
+LabelParamDTO.count  # work count in a label template
 LlmCallPoolDTO.baselineFirstTokenMs
 LlmCallPoolDTO.conversationReserve
 LlmCallPoolDTO.effectiveLimit
