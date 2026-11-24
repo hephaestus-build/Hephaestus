@@ -6,7 +6,7 @@
 
 **Supersedes:** [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md)
 
-**Amends:** [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rules 1, 4, 19 and 21. [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16. [ADR 0047](0047-the-practice-profile-has-one-reader.md), its View as user exception. [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), its smallest count.
+**Amends:** [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rules 1, 19 and 21. [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16. [ADR 0047](0047-the-practice-profile-has-one-reader.md), its View as user exception. [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), its smallest count.
 
 **Builds on:** ADR 0124 (proposed in #4866)
 
@@ -71,9 +71,7 @@ Option 4.
 10. **The operator statement.** Settings show **Who runs this server**, with the operator's name and a link to its statement.
     - The first screen promises only what Hephaestus enforces: "Acme's admins and managers cannot see this in Hephaestus."
     - "Your employer sees nothing about you" appears only where the operator declares that it is not the employer.
-11. **Nothing ranks people, and Activity shows each reader only what that reader may read.**
-    - Activity shows people unordered, by name, with no positions, or as team aggregates.
-    - A ranking of people is a differencing surface, and it contradicts feedback on work. So [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rule 4 changes.
+11. **Activity shows each reader only what that reader may read.** Its sort stays as ADR 0093 decides it.
     - A member-visible Activity projection follows the provider reader rules of [ADR 0127](0127-every-record-and-route-resolves-to-concrete-readers.md). Or it shows only sources that every member may read. So ADR 0093 rule 1 changes.
     - No member-visible projection shows conversations, personal records or practice feedback.
     - The owner's item cards live on a separate owner-only route with its own cache (ADR 0150, proposed in #4862).
@@ -88,13 +86,13 @@ Option 4.
     - A release whose difference with an earlier release isolates fewer than 5 people does not go out. A release ledger records each release for this check.
     - Linkable fields, such as exact timings and version sequences, are suppressed or coarsened.
     - Text that quotes a private message or names a bystander is omitted.
+    - Sorting by a value that the floor withholds must not reveal it, so withheld cells sort as one group.
     - ADR 0141 (proposed in #4868) applies this rule to research datasets and owns their floor of 20.
 
 ### What this changes in other ADRs
 
 - [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md) is superseded. Decision 6 keeps its mechanism and raises the threshold. Its open question gets the answer of decision 3: admins see work items only inside an approval or a correction.
-- [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rule 4 changes. People no longer sort by a count and show no positions. The code change is a separate issue.
-- ADR 0093 rule 1 changes. Member-visible Activity no longer reads repositories that a member cannot read on the provider (decision 11).
+- [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rule 1 changes. Member-visible Activity no longer reads repositories that a member cannot read on the provider (decision 11).
 - ADR 0093 rule 19 changes. Admins no longer read the observations of the review and delivery pages, except inside an approval or a correction. Rule 21 goes, because no read-only user view exists.
 - [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16 keeps "Nobody acts as another account". The read-only user views go.
 - ADR 0131 (proposed in #4862) supersedes ADR 0082. It keeps the conversation for its owner only, without View as user.
