@@ -56,7 +56,6 @@
 		"sonner": "2.0.8",
 		"spin-delay": "2.0.1",
 		"streamdown": "2.7.1",
-		"usehooks-ts": "3.1.1",
 		"web-vitals": "6.2.3",
 		"zod": "catalog:"
 	},

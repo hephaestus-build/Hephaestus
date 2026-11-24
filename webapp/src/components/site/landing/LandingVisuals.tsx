@@ -2,11 +2,11 @@ import { cn } from "cn";
 import { CircleDot, GitMerge, GitPullRequest, type LucideIcon, Sparkle } from "lucide-react";
 import { motion } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
-import { useMediaQuery } from "usehooks-ts";
 import { HephaestusMark } from "@/components/brand/HephaestusMark";
 import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { Badge } from "@/components/ui/badge";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { hasText } from "@/lib/text";
 import styles from "./LandingVisuals.module.css";
 
