@@ -1111,7 +1111,8 @@ Database tests and drills wait for the merge group, which still runs every selec
 The rest of the fast tier is reduced, not empty.
 Quality, the server tests, the browser suites and the cluster legs skip.
 `Release notes` runs on every pull request.
-When the head also changes CI configuration or the chart, `Workflow lint` still runs its Zizmor step and the server image can still build.
+`Workflow lint` still runs its Zizmor step when the head changes CI configuration.
+A ready head that matches the server image, Kubernetes or all-images paths can still build the server image after `Server package`.
 
 ### Reproduce a queue-tier failure
 
