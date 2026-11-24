@@ -47,6 +47,28 @@ function breach(kind: string, use: Use): string | null {
 /** A runner that ends its run without opening any session. */
 const noSession: KindRunner = async () => ({ leaseLost: false, outcome: "completed" });
 
+/** Runs the staged review runner through the review specs' harness and reads what it built. */
+async function stagedReview(env: Record<string, string>): Promise<Use> {
+	const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-session-review-")));
+	try {
+		stagePractices(cwd, [{ slug: "measured" }]);
+		const exit = await runRunner(cwd, {}, env);
+		// The review went on to its end, whatever else the runner built.
+		assert.equal(exit.status, 0, exit.stderr);
+		const returned = new Set(capturedLines(cwd, "sessions"));
+		const standIns = capturedLines(cwd, "built-sessions");
+		return {
+			factory: returned.size,
+			direct:
+				standIns.filter((session) => !returned.has(session)).length +
+				capturedLines(cwd, "real-sessions").length,
+			modelSession: capturedLines(cwd, "model-sessions").length,
+		};
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+}
+
 if (process.env[CHILD] === undefined) {
 	void test("every in-process run kind opens its sessions through openRunSession", () => {
 		const child = spawnSync(
@@ -62,23 +84,17 @@ if (process.env[CHILD] === undefined) {
 	});
 
 	void test("the review runner that REVIEW starts opens its sessions through openRunSession", async () => {
-		const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-session-review-")));
-		try {
-			stagePractices(cwd, [{ slug: "measured" }]);
-			const exit = await runRunner(cwd, {});
-			assert.equal(exit.status, 0, exit.stderr);
-			const returned = new Set(capturedLines(cwd, "sessions"));
-			const built = capturedLines(cwd, "built-sessions");
-			const use = {
-				factory: returned.size,
-				direct: built.filter((session) => !returned.has(session)).length,
-				modelSession: capturedLines(cwd, "model-sessions").length,
-			};
-			assert.equal(breach("REVIEW", use), null);
-		} finally {
-			rmSync(cwd, { recursive: true, force: true });
-		}
+		assert.equal(breach("REVIEW", await stagedReview({})), null);
 	});
+
+	for (const how of ["construct", "services"]) {
+		void test(`a review runner that also builds a Pi session by ${how} breaks the rule, though its review goes on`, async () => {
+			assert.match(
+				breach("REVIEW", await stagedReview({ PI_HOST_BUILD_BESIDE: how })) ?? "",
+				/past the factory/u,
+			);
+		});
+	}
 } else {
 	await dispatch();
 }
@@ -173,7 +189,8 @@ async function dispatch(): Promise<void> {
 		fromFactory = new WeakSet();
 		modelSessions = 0;
 		let asked = 0;
-		mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+		// Only this run's own stand-in goes when it ends: the module recorders stay for every later import.
+		const gateway = mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
 			const url = new URL(input instanceof Request ? input.url : input);
 			if (url.pathname.startsWith("/internal/llm")) {
 				asked += 1;
@@ -217,7 +234,7 @@ async function dispatch(): Promise<void> {
 				outcome,
 			};
 		} finally {
-			mock.restoreAll();
+			gateway.mock.restore();
 		}
 	}
 
@@ -247,9 +264,10 @@ async function dispatch(): Promise<void> {
 		});
 	}
 
-	/** A runner that builds a model session of its own, as the composer does. */
+	/** A runner that imports the composer's model client when it runs and builds one, as a kind's own loop would. */
 	const ownLoop: KindRunner = async () => {
-		const own = new RecordedModelSession(
+		const { ModelSession } = await import("../../../main/resources/agent/review-composer-model.ts");
+		const own = new ModelSession(
 			async () => ({ status: 200, body: "", refusal: null }),
 			{
 				protocol: "openai-completions",
@@ -278,12 +296,31 @@ async function dispatch(): Promise<void> {
 		session.dispose();
 	}
 
-	/** A turn runner that builds a second Pi session itself while its factory session is open. */
+	/** A turn runner that builds a second Pi session itself while its call to the factory is still open. */
 	const alongsideFactory: KindRunner = async (run) => {
-		const turn = KINDS.TURN;
-		assert.ok(turn);
-		const [outcome] = await Promise.all([turn(run), buildPastFactory()]);
-		return outcome;
+		const reload: unknown = Reflect.get(sdk.DefaultResourceLoader.prototype, "reload");
+		assert.ok(typeof reload === "function");
+		// The factory loads its resources before it builds its session: the second build lands inside the call. That
+		// build loads resources too, so only the first load builds.
+		let besideBuilt = false;
+		const loading = mock.method(
+			sdk.DefaultResourceLoader.prototype,
+			"reload",
+			async function reloadAfterBuild(this: InstanceType<typeof sdk.DefaultResourceLoader>) {
+				if (!besideBuilt) {
+					besideBuilt = true;
+					await buildPastFactory();
+				}
+				return Reflect.apply(reload, this, []) as unknown;
+			},
+		);
+		try {
+			const turn = KINDS.TURN;
+			assert.ok(turn);
+			return await turn(run);
+		} finally {
+			loading.mock.restore();
+		}
 	};
 
 	void test("a runner that builds a Pi session past the factory breaks the rule, also beside its factory session", async () => {
@@ -319,12 +356,16 @@ async function dispatch(): Promise<void> {
 
 	/** The turn runner, whose call to the factory fails before it builds a session; the turn still ends. */
 	const failedFactory: KindRunner = async (run) => {
-		mock.method(sdk.DefaultResourceLoader.prototype, "reload", async () => {
+		const loading = mock.method(sdk.DefaultResourceLoader.prototype, "reload", async () => {
 			throw new Error("the factory failed");
 		});
-		const turn = KINDS.TURN;
-		assert.ok(turn);
-		return turn(run);
+		try {
+			const turn = KINDS.TURN;
+			assert.ok(turn);
+			return await turn(run);
+		} finally {
+			loading.mock.restore();
+		}
 	};
 
 	void test("a runner whose factory call fails opens no session through the factory", async () => {

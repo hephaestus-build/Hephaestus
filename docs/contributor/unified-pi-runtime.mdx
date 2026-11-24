@@ -386,31 +386,38 @@ The factory adds nothing that the descriptor does not name:
 - The system prompt is the descriptor's alone.
 - Cache warming is off.
 
-`pi-session-dispatch.spec.ts` checks by behaviour that every run kind opens its sessions through `openRunSession`:
+`pi-session-dispatch.spec.ts` checks by behaviour that every run kind opens its sessions through `openRunSession`.
+It observes two things:
 
-- It runs each in-process runner of the registry (`TURN`, `DIGEST`, `REVIEW_COMPOSE`) with the real factory and the real SDK.
+- **Pi sessions.** The spec counts each Pi session where the SDK constructs it, whichever SDK function or caller builds it.
+  A factory session is a session that a call to the factory returned. A failed factory call opens none.
+  Every other session counts as built past the factory, also one built while a factory call is still open.
+- **The composer's model client.** The spec counts each construction of `ModelSession` from `review-composer-model.ts`, also from an import at run time.
+  It does not detect a model client of another type.
+
+It runs these cases:
+
+- Each in-process runner of the registry (`TURN`, `DIGEST`, `REVIEW_COMPOSE`), with the real factory and the real SDK.
   The model refuses each call, so a turn ends after its first request.
-- It counts each Pi session where it is constructed, whichever SDK function or caller builds it.
-  The count hooks the SDK's `AgentSession` construction. If an SDK update moves that step, the spec sees no session and every kind fails it.
-- A factory session is a session that a call to the factory returned. A failed factory call opens none.
-  Every other session counts as built past the factory, also one built beside a factory call that is still open.
-- It also counts each `ModelSession` built.
-- A kind must open a session through the factory. It must build no `ModelSession` and no Pi session past the factory.
-  Except for `REVIEW_COMPOSE`, the kind's session must ask the model.
-- `REVIEW`'s runner is the measurement that starts the staged review runner.
+  `TURN` and `DIGEST` must open a factory session and ask the model. They must build no Pi session past the factory and no `ModelSession`.
+  If an SDK update stops the construction count, these two fail, because they then open no factory session.
+- `REVIEW`'s runner, which is the measurement that starts the staged review runner.
   The spec runs the measurement's whole path in a temporary image layout, with stand-in programs.
   The measurement must build no session at all, through the factory or past it.
-- The spec also runs the staged review runner through the harness of the review specs.
-  The harness's stand-in SDK has only the session builder that the factory calls.
-  A runner that builds a session any other way fails its run.
-  The harness records each build and each session that the factory returned. The spec applies the same rule to them.
+- The staged review runner, through the harness of the review specs.
+  The harness's stand-in SDK replaces the session builder that the factory calls. The real SDK serves every other export.
+  The harness counts each real session that the SDK constructs.
+  A real SDK call can fail on the stand-in's parts before it constructs a session. The runner can then go on without it.
+  The harness cannot see what that call builds in a sandbox.
+  Thus, it counts each failed call into the real SDK as a build past the factory.
 - `REVIEW_COMPOSE` is the one exemption, named by its kind. It keeps its own model client until the publication cutover (CF-18). The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
-- Five fixture runners break the rule and must fail it:
-  - One builds a `ModelSession`.
-  - One builds a second Pi session beside its factory session.
-  - One constructs a Pi session itself after its factory session.
-  - One runs a turn whose factory call fails.
-  - One opens no session.
+- Seven fixtures break the rule and must fail it:
+  - A runner imports `ModelSession` at run time and builds one.
+  - A turn builds a second Pi session while its factory call is open.
+  - A turn constructs a Pi session itself after its factory session.
+  - A turn's factory call fails.
+  - A runner opens no session.
+  - Two staged review runners build a second Pi session beside their factory session. One constructs it, and one uses the SDK's services. Their reviews still complete.
 
 The server makes its own model calls only through the proxy's gateways, such as `ProductFeedbackModelGateway` for a report draft.
 `ModelEgressConfig` refuses a model request on every client built from the application's Spring builders, unless the proxy sent it.
@@ -431,8 +438,13 @@ Server code builds every client from the application's Spring builders. A vendor
 
 `ModelEgressConfigTest` sends model requests to a local endpoint with the application's client builders, also on paths that no list names, and the guard refuses each.
 The proxy's integration tests send through the guarded client, so a proxy request without its mark fails them.
-`ModelCallBoundaryArchTest` fails when server code builds an OkHttp client or sends a request with Reactor Netty's client directly, by a call or a method reference.
-It also fails when a class outside the proxy reads the provider key of a resolved model (`ProxyCredential`), by a call or a method reference.
+`ModelCallBoundaryArchTest` has three rules:
+
+- It fails when server code calls an OkHttp client's constructor.
+- It fails when server code calls the send API of Reactor Netty's client directly.
+  It also fails on a method reference to a method of that client.
+- It fails when a class outside the proxy reads the provider key of a resolved model (`ProxyCredential`).
+  A call and a method reference both count.
 
 ### Isolation
 

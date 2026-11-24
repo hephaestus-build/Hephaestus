@@ -32,6 +32,7 @@ import {
 	truncateLine,
 	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import * as realCodingAgent from "@earendil-works/pi-coding-agent";
 
 import { isJsonObject } from "../../../../../../docker/agents/practice-scripts/lib/core/json.ts";
 import {
@@ -150,6 +151,74 @@ export function codingAgentExports(
 			},
 		},
 	};
+}
+
+/** A real SDK export whose every failed call, construction or rejected promise is reported. */
+function observed(value: unknown, failed: () => void): unknown {
+	if (typeof value !== "function") {
+		return value;
+	}
+	const settle = (call: () => unknown): unknown => {
+		try {
+			const result = call();
+			return result instanceof Promise ? settleLater(result, failed) : result;
+		} catch (error) {
+			failed();
+			throw error;
+		}
+	};
+	return new Proxy(value, {
+		apply: (target, self, args) => settle(() => Reflect.apply(target, self, args) as unknown),
+		construct: (target, args, newTarget) => {
+			const built = settle(() => Reflect.construct(target, args, newTarget) as unknown);
+			assert.ok(typeof built === "object" && built !== null);
+			return built;
+		},
+	});
+}
+
+async function settleLater(result: Promise<unknown>, failed: () => void): Promise<unknown> {
+	try {
+		return await result;
+	} catch (error) {
+		failed();
+		throw error;
+	}
+}
+
+/**
+ * For pi-session-dispatch.spec.ts: builds a second Pi session past the factory, beside its session, with an SDK entry
+ * point that the stand-in does not replace. A failure is swallowed, so the review goes on with the factory's session.
+ */
+async function buildBeside(
+	how: string | undefined,
+	opened: realCodingAgent.AgentSession,
+	place: { cwd: string; agentDir: string },
+): Promise<void> {
+	const sdk = await import("@earendil-works/pi-coding-agent");
+	try {
+		if (how === "construct") {
+			new sdk.AgentSession({
+				agent: opened.agent,
+				sessionManager: opened.sessionManager,
+				settingsManager: opened.settingsManager,
+				resourceLoader: opened.resourceLoader,
+				modelRuntime: opened.modelRuntime,
+				cwd: place.cwd,
+			}).dispose();
+		} else if (how === "services") {
+			const { session } = await sdk.createAgentSessionFromServices({
+				services: await sdk.createAgentSessionServices({
+					cwd: place.cwd,
+					agentDir: nodePath.join(place.cwd, ".pi-beside"),
+				}),
+				sessionManager: realCodingAgent.SessionManager.inMemory(place.cwd),
+			});
+			session.dispose();
+		}
+	} catch {
+		// A runner that falls back to its factory session after a failed build keeps reviewing.
+	}
 }
 
 export function mockPiCodingAgent(
@@ -581,8 +650,27 @@ if (scenario !== undefined && scenario !== "") {
 		execute: (id: string, input: unknown) => Promise<unknown>;
 	}
 	let sessionCount = 0;
-	// The stand-in SDK has no other session builder, so a runner that builds a session any other way fails.
+	// The real SDK stays beneath the stand-in, so a runner that builds a Pi session any other way builds a real one, and
+	// each real session is counted where it is constructed. A real build can fail on the stand-in's parts before it
+	// constructs anything, and a runner can fall back from it; the harness cannot see what that build would have made in
+	// a sandbox, so each failed call into the real SDK is counted with them.
+	const realSession: object = realCodingAgent.AgentSession.prototype;
+	const installToolHooks: unknown = Reflect.get(realSession, "_installAgentToolHooks");
+	assert.ok(typeof installToolHooks === "function", "a Pi session installs its tool hooks as it is built");
+	Reflect.set(realSession, "_installAgentToolHooks", function recordBuild(this: object, ...args: unknown[]) {
+		capture("real-sessions", true);
+		return Reflect.apply(installToolHooks, this, args) as unknown;
+	});
+	const standIn = codingAgentExports(cwd, manager);
+	const failedCall = () => {
+		capture("real-sessions", "failed call");
+	};
 	mockPiCodingAgent(cwd, manager, {
+		...Object.fromEntries(
+			Object.entries(realCodingAgent)
+				.filter(([name]) => !(name in standIn))
+				.map(([name, value]) => [name, observed(value, failedCall)]),
+		),
 		async createAgentSession(options: { customTools: CustomTool[] }) {
 			sessionCount += 1;
 			const session = sessionCount;
@@ -966,6 +1054,7 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 				const opened = await factory.openRunSession(...args);
 				const session: unknown = Reflect.get(opened.session, "hostSession");
 				capture("sessions", session);
+				await buildBeside(process.env.PI_HOST_BUILD_BESIDE, opened.session, args[0]);
 				return opened;
 			},
 		},
