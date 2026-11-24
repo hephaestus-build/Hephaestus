@@ -1,7 +1,7 @@
 # ADR 0133: A check-in is an agreed contact with a scope
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:** ADR 0131 (proposed in #4862, the main thread), [ADR 0132](0132-personal-records-are-written-by-the-persons-act-or-noted-from-their-own-words.md) (saves with Undo, goals)
@@ -104,20 +104,20 @@ Option 5.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- `OncePerOccurrenceTest` fails when one slot of a check-in inserts two `SCHEDULE_DUE` items.
-- `ZoneChangeSlotTest` fails when a zone change fires one local date twice.
-- `DaylightSavingSlotTest` fails when a gap or an overlap moves a slot against the `java.time` rules.
-- `NoModelBeforeDueTest` fails when a model call starts before a slot is due and allowed.
-- `OverdueDispositionTest` fails when an occurrence has no disposition 30 minutes after its due time while the model breaker is open.
-- `LateSlotTest` fails when a slot found after its grace runs a model or sends a notification.
-- `NoBurstTest` fails when one check-in writes two overdue entries after an outage.
-- `FirstSignInOfferTest` fails when the rhythm choice at first sign-in offers the weekly reflection.
-- `UnansweredAsksOnceTest` fails when a check-in pauses, ends or slows after unanswered messages.
-- `OnlyThePersonCreatesTest` fails when a turn creates a check-in without the person's act.
-- `HeldResultOutOfScheduledTurnTest` fails when a turn that a `SCHEDULE_DUE` item started reads a held result.
-- `CheckInNeverDrawnTest` fails when a check-in fire gets a draw.
+- OncePerOccurrenceTest fails when one slot of a check-in inserts two `SCHEDULE_DUE` items.
+- ZoneChangeSlotTest fails when a zone change fires one local date twice.
+- DaylightSavingSlotTest fails when a gap or an overlap moves a slot against the `java.time` rules.
+- NoModelBeforeDueTest fails when a model call starts before a slot is due and allowed.
+- OverdueDispositionTest fails when an occurrence has no disposition 30 minutes after its due time while the model breaker is open.
+- LateSlotTest fails when a slot found after its grace runs a model or sends a notification.
+- NoBurstTest fails when one check-in writes two overdue entries after an outage.
+- FirstSignInOfferTest fails when the rhythm choice at first sign-in offers the weekly reflection.
+- UnansweredAsksOnceTest fails when a check-in pauses, ends or slows after unanswered messages.
+- OnlyThePersonCreatesTest fails when a turn creates a check-in without the person's act.
+- HeldResultOutOfScheduledTurnTest fails when a turn that a `SCHEDULE_DUE` item started reads a held result.
+- CheckInNeverDrawnTest fails when a check-in fire gets a draw.
 
 ## Revisit trigger
 

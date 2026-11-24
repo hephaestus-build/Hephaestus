@@ -1,7 +1,7 @@
 # ADR 0139: The contact policy decides whether Hephaestus may interrupt a person now
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Amends:** [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) rule 6 (what the client shows) and rule 7 (the kinds and quiet hours)
@@ -146,17 +146,17 @@ Option 6.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- `ContactPolicyTableTest` fails when a contact kind, rule and state give an effect that the table does not allow.
-- `RequestedResultAnyHourTest` fails when quiet hours delay a requested result's notification.
-- `UnpromptedSlotsTest` fails when Sometimes sends 2 unprompted notifications in a day, or Often sends 2 within 3 hours.
-- `ActiveNoPushTest` fails when a push goes to a person who is active in that workspace.
-- `SendRecheckTest` fails when a contact queued before a pause is sent after it.
-- `AppOnlyItemRouteTest` fails when an item that only the app may show is routed to Slack.
-- `HeldResultNotCitedTest` fails when an unprompted message cites a result that a delivery experiment holds.
-- `DeliveryDecisionTest` fails when an unprompted decision has no row, or a model call starts before it.
-- `DeliveryDecisionWithoutDrawTest` fails when the row of a person who is not enrolled holds a probability, a draw or an exposure.
+- ContactPolicyTableTest fails when a contact kind, rule and state give an effect that the table does not allow.
+- RequestedResultAnyHourTest fails when quiet hours delay a requested result's notification.
+- UnpromptedSlotsTest fails when Sometimes sends 2 unprompted notifications in a day, or Often sends 2 within 3 hours.
+- ActiveNoPushTest fails when a push goes to a person who is active in that workspace.
+- SendRecheckTest fails when a contact queued before a pause is sent after it.
+- AppOnlyItemRouteTest fails when an item that only the app may show is routed to Slack.
+- HeldResultNotCitedTest fails when an unprompted message cites a result that a delivery experiment holds.
+- DeliveryDecisionTest fails when an unprompted decision has no row, or a model call starts before it.
+- DeliveryDecisionWithoutDrawTest fails when the row of a person who is not enrolled holds a probability, a draw or an exposure.
 
 ## Revisit trigger
 

@@ -1,7 +1,7 @@
 # ADR 0132: Personal records are written by the person's act or noted from their own words
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:** ADR 0131 (proposed in #4862, the conversation and its ledger)
@@ -93,14 +93,14 @@ Option 5.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- `NotedRecordOriginTest` fails when a noted record cites an entry whose origin is not the person.
-- `NotedRecordNeverTravelsTest` fails when a noted record passes the transfer path without **Keep** and **Take along**.
-- `ForgetLatchTest` fails when Hephaestus notes a forgotten item again before the person says it again.
-- `NoteSupersedesTest` fails when two active notes on one subject exist.
-- `ChangedSinceShownTest` fails when a card whose consequence digest changed is accepted.
-- `SaveUndoTest` fails when Undo of a save in the conversation leaves the record or its effect.
+- NotedRecordOriginTest fails when a noted record cites an entry whose origin is not the person.
+- NotedRecordNeverTravelsTest fails when a noted record passes the transfer path without **Keep** and **Take along**.
+- ForgetLatchTest fails when Hephaestus notes a forgotten item again before the person says it again.
+- NoteSupersedesTest fails when two active notes on one subject exist.
+- ChangedSinceShownTest fails when a card whose consequence digest changed is accepted.
+- SaveUndoTest fails when Undo of a save in the conversation leaves the record or its effect.
 
 ## Revisit trigger
 
