@@ -1,6 +1,15 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { appendFileSync, readFileSync, readdirSync } from "node:fs";
+import {
+	appendFileSync,
+	mkdtempSync,
+	readFileSync,
+	readdirSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -8,12 +17,19 @@ import { readCutoverSeeds } from "./lib/cutover-seeds.ts";
 import { applyDatabaseRoles, databaseRolePasswords } from "./lib/database-roles.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { stopEveryRoleEntries } from "./lib/migration-guide.ts";
+import { BASELINE_RELEASE } from "./lib/previous-release.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
 	partialMigration,
 	preservationSql,
 	type PreservedPeopleIds,
 } from "./lib/release-upgrade-fingerprint.ts";
+import {
+	assertForwardReferenceRefused,
+	assertPrefixHistory,
+	PREFIX_HISTORY_SQL,
+	prefixChangelog,
+} from "./lib/release-upgrade-prefix.ts";
 import { parseVersion } from "./lib/release-version.ts";
 import { researchConsentFields } from "./lib/research-consent.ts";
 
@@ -54,6 +70,8 @@ const ADOPTION_WORKSPACE_SLUG = "upgrade-adoption-fixture";
 const PREVIOUS_RELEASE_WORKSPACE_SLUG = "upgrade-previous-fixture";
 // A copy of the seeded database that the partial migration runs on.
 const PARTIAL_DATABASE = "hephaestus_partial";
+const VALID_PREFIX_DATABASE = "hephaestus_valid_prefix";
+const BROKEN_PREFIX_DATABASE = "hephaestus_broken_prefix";
 const MIGRATION_STOP_MESSAGE = "the upgrade test stops the migration here";
 const HTTP_TIMEOUT_MS = 30_000;
 const READINESS_TIMEOUT_MS = 2000;
@@ -101,14 +119,15 @@ function databaseEnvironment(database: string, role: "owner" | "app"): string[] 
 /**
  * Both releases support the migrate run mode. Each runtime starts as the application role on the schema it prepared.
  */
-function migrate(image: string, database = "hephaestus") {
-	return spawnSync(
+function migrate(image: string, database = "hephaestus", changelog?: string) {
+	const name = `${runId}-migration`;
+	const result = spawnSync(
 		"docker",
 		[
 			"run",
 			"--rm",
 			"--name",
-			`${runId}-migration`,
+			name,
 			"--network",
 			network,
 			"--env",
@@ -120,10 +139,23 @@ function migrate(image: string, database = "hephaestus") {
 			`HEPHAESTUS_SECURITY_ENCRYPTION_KEY=${SYSTEM_KEY}`,
 			"--env",
 			`HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY=${CREDENTIAL_KEY}`,
+			...(changelog === undefined
+				? []
+				: [
+						"--mount",
+						`type=bind,source=${changelog},target=/upgrade-prefix.xml,readonly`,
+						"--env",
+						"SPRING_LIQUIBASE_CHANGE_LOG=file:/upgrade-prefix.xml",
+					]),
 			image,
 		],
 		{ encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES, timeout: 600_000 },
 	);
+	if (result.error !== undefined) {
+		spawnSync("docker", ["rm", "--force", name], { stdio: "ignore" });
+		throw new Error(`Could not run migration with ${image}`, { cause: result.error });
+	}
+	return result;
 }
 
 function migrateRelease(image: string, database = "hephaestus"): void {
@@ -648,6 +680,36 @@ function appliedChangeCount(database = "hephaestus"): number {
 	return count("SELECT count(*) FROM databasechangelog;", database);
 }
 
+function copyStoppedFixture(database: string): void {
+	docker("exec", postgres, "createdb", "--username=root", "--template=hephaestus", database);
+}
+
+function assertRc1MigrationPrefix(): void {
+	const directory = mkdtempSync(nodePath.join(tmpdir(), "hephaestus-upgrade-prefix-"));
+	const changelog = nodePath.join(directory, "prefix.xml");
+	try {
+		for (const [database, broken] of [
+			[BROKEN_PREFIX_DATABASE, true],
+			[VALID_PREFIX_DATABASE, false],
+		] as const) {
+			writeFileSync(changelog, prefixChangelog(broken), { mode: 0o644 });
+			applyDatabaseRoles(postgres, database, credentials);
+			const result = migrate(candidateImage, database, changelog);
+			const output = `${result.stdout}${result.stderr}`;
+			if (broken) {
+				assertForwardReferenceRefused(result.status, output);
+			} else if (result.status !== 0) {
+				throw new Error(`The valid migration prefix failed:\n${output}`);
+			}
+			assertPrefixHistory(query(PREFIX_HISTORY_SQL, database), broken);
+		}
+		console.log("Liquibase refused the broken prefix at upgrade-test-forward-reference.");
+		console.log(`The candidate's first migration applied on ${previousVersion}.`);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+}
+
 /** A check that passed without testing anything: a warning in the log and a line in the job summary. */
 /** One job can run the upgrade from more than one release, so each line names its starting release. */
 function summarize(line: string): void {
@@ -926,14 +988,15 @@ try {
 		"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'hephaestus' AND pid <> pg_backend_pid()",
 		"postgres",
 	);
-	docker(
-		"exec",
-		postgres,
-		"createdb",
-		"--username=root",
-		"--template=hephaestus",
-		PARTIAL_DATABASE,
-	);
+	copyStoppedFixture(PARTIAL_DATABASE);
+	const qualifiesRc1Prefix = `v${previousVersion}` === BASELINE_RELEASE;
+	if (qualifiesRc1Prefix) {
+		copyStoppedFixture(BROKEN_PREFIX_DATABASE);
+		copyStoppedFixture(VALID_PREFIX_DATABASE);
+		assertRc1MigrationPrefix();
+	} else {
+		summarize(`Migration prefix qualification applies to ${BASELINE_RELEASE}.`);
+	}
 	migrateRelease(candidateImage);
 	application = `${runId}-candidate`;
 	port = startApplication(application, candidateImage);
@@ -958,6 +1021,14 @@ try {
 		throw new Error(
 			`Liquibase history shrank during upgrade: before=${previousChanges}, after=${candidateChanges}`,
 		);
+	}
+	if (qualifiesRc1Prefix) {
+		migrateRelease(candidateImage, VALID_PREFIX_DATABASE);
+		const history = "SELECT filename, id, author FROM databasechangelog ORDER BY 1, 2, 3";
+		if (query(history, VALID_PREFIX_DATABASE) !== query(history)) {
+			throw new Error("The valid migration prefix did not resume to the full migration history");
+		}
+		console.log("The candidate completed the migration from the valid prefix.");
 	}
 	const candidateSession = await login(api, "alice");
 	await completeTransparencyNotice(api, candidateSession);
