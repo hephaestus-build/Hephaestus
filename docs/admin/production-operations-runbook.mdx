@@ -180,6 +180,9 @@ Messages from the time that monitoring was off stay unread.
 | `HephaestusPrivacyJobFailing` | A privacy job failed or left eligible work at least twice in 26 hours. The `exported_job` label names it: `account_erasure`, `export_generation`, `export_retention` or `llm_usage_retention`. Erasure and retention are legal duties: act on the same day. | Read the server log of that job. Its lines start with `auth.account:` for `account_erasure`, `auth.export:` for the two export jobs, and `Retention:` for `llm_usage_retention`. A failed run also logs the error of its scheduled task. `incomplete` means that eligible work remains: look for one account or export that blocks it, and for slow statements. For an erasure, follow [An erasure stops](./person-data-requests#an-erasure-stops). [Data retention](./data-retention#postgresql) gives the period of each job. | `privacy_job_completed_total{outcome="success"}` increases for that job. |
 | `HephaestusPrivacyJobNotRunning` | An hourly privacy job ended no run in four hours. | Check the `shedlock` row of the job for a stuck lock. Check that the servers run. | The job ends a run. |
 
+The server log records `reason=account_unavailable` when erasure stops export generation.
+This outcome needs no operator action.
+
 ### Service levels
 
 | Alert | Cause | Action | Check |

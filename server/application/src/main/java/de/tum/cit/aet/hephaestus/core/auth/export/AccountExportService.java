@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.core.auth.export;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.export.dto.ExportStatusDTO;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
@@ -43,6 +45,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class AccountExportService {
 
     private final AccountExportRepository accountExportRepository;
+    private final AccountRepository accounts;
     private final ApplicationEventPublisher events;
     private final AuthEventLogger authEventLogger;
     private final Clock clock;
@@ -50,11 +53,13 @@ public class AccountExportService {
 
     public AccountExportService(
             AccountExportRepository accountExportRepository,
+            AccountRepository accounts,
             ApplicationEventPublisher events,
             AuthEventLogger authEventLogger,
             Clock clock,
             OwnerScope ownerScope) {
         this.accountExportRepository = accountExportRepository;
+        this.accounts = accounts;
         this.events = events;
         this.authEventLogger = authEventLogger;
         this.clock = clock;
@@ -77,13 +82,20 @@ public class AccountExportService {
     /**
      * Create a PENDING export for the account and kick off async generation.
      *
-     * @throws org.springframework.web.server.ResponseStatusException 409 CONFLICT if the account
-     *     already has a PENDING/PROCESSING export — caps concurrent async bundle assemblies at one
-     *     per account (DoS / storage-amplification guard).
+     * @throws ResponseStatusException 409 CONFLICT if the account is being erased or already has an
+     *     export in progress.
      */
     @Transactional
     public AccountExport requestExport(PersonAct act) {
         long accountId = ownerScope.fromPrincipal(act);
+        // Hold the account lock through insertion and durable event publication. Erasure locks it before deleting
+        // exports.
+        if (accounts.lockStatusForShare(accountId)
+                .map(Account.Status::valueOf)
+                .filter(AccountExport::accountAllowsExport)
+                .isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This account is unavailable for export.");
+        }
         // Fast-path friendly check; the authoritative guard is the partial unique index
         // uq_account_export_in_flight (changeset -14-), which closes the check-then-insert TOCTOU below.
         if (accountExportRepository.existsByAccountIdAndStatusIn(accountId, IN_FLIGHT)) {
@@ -100,7 +112,7 @@ public class AccountExportService {
                 .event(AuthEvent.EventType.EXPORT_REQUESTED, AuthEvent.Result.SUCCESS)
                 .account(accountId)
                 .details("{\"exportId\":" + export.getId() + "}")
-                .record();
+                .recordInCurrentTransaction();
         events.publishEvent(new AccountExportRequested(Objects.requireNonNull(export.getId()), accountId));
         return export;
     }

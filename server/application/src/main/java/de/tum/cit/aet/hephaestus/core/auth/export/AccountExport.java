@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.export;
 
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonOwned;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -23,8 +24,8 @@ import org.jspecify.annotations.Nullable;
  *
  * <h2>Lifecycle</h2>
  * <pre>
- *   PENDING ──(picked up async)──▶ PROCESSING ──(bundle assembled)──▶ READY ──(48h)──▶ EXPIRED
- *                                       └────────(assembly failed)──▶ FAILED
+ *   PENDING ──(bundle assembled)──▶ READY ──(48h)──▶ EXPIRED
+ *       └─────────(generation stopped)──▶ FAILED
  * </pre>
  *
  * <h2>Ownership &amp; enumeration defense</h2>
@@ -88,6 +89,10 @@ public class AccountExport {
     public AccountExport(Long accountId) {
         this.accountId = accountId;
         this.status = Status.PENDING;
+    }
+
+    static boolean accountAllowsExport(Account.Status status) {
+        return status != Account.Status.DELETING && status != Account.Status.DELETED;
     }
 
     public enum Status {

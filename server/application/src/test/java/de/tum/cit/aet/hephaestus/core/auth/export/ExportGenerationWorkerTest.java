@@ -10,6 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -32,6 +34,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
     private static final Instant NOW = Instant.parse("2026-06-02T10:00:00Z");
 
     private AccountExportRepository repository;
+    private AccountRepository accounts;
     private ExportBundleAssembler assembler;
     private ObjectMapper objectMapper;
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
@@ -45,8 +48,10 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
         objectMapper = mock(ObjectMapper.class);
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
         when(transactionManager.getTransaction(any())).thenAnswer(invocation -> new SimpleTransactionStatus());
+        accounts = mock(AccountRepository.class);
         worker = new ExportGenerationWorker(
                 repository,
+                accounts,
                 assembler,
                 objectMapper,
                 Clock.fixed(NOW, ZoneOffset.UTC),
@@ -56,14 +61,22 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
     }
 
     private AccountExport existingExport() {
+        pendingExport();
         AccountExport export = new AccountExport(ACCOUNT_ID);
         when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenReturn(Optional.of(export));
         return export;
     }
 
+    private void pendingExport() {
+        when(repository.tryLockGeneration(EXPORT_ID)).thenReturn(true);
+        when(repository.findStatus(EXPORT_ID, ACCOUNT_ID)).thenReturn(Optional.of(AccountExport.Status.PENDING));
+        when(accounts.findById(ACCOUNT_ID)).thenReturn(Optional.of(new Account("User")));
+    }
+
     @Test
     void shouldSetPayloadExpiryAndReadyWhenGenerationSucceeds() {
         AccountExport export = existingExport();
+        when(accounts.lockStatusForShare(ACCOUNT_ID)).thenReturn(Optional.of(Account.Status.ACTIVE.name()));
         ExportBundle.Profile profile =
                 new ExportBundle.Profile(Long.toString(ACCOUNT_ID), "User", null, null, "ACTIVE", NOW, false);
         ExportBundle bundle = new ExportBundle(
@@ -120,7 +133,9 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldMarkFailedWhenTheInitialLookupFails() {
+    void shouldMarkFailedWhenThePublicationLookupFails() {
+        pendingExport();
+        when(accounts.lockStatusForShare(ACCOUNT_ID)).thenReturn(Optional.of(Account.Status.ACTIVE.name()));
         AccountExport export = new AccountExport(ACCOUNT_ID);
         when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID))
                 .thenThrow(new IllegalStateException("lookup failed"))
@@ -138,16 +153,23 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldMarkFailedWhenSavingProcessingFails() {
-        AccountExport export = existingExport();
-        when(repository.save(export))
-                .thenThrow(new IllegalStateException("save failed"))
-                .thenReturn(export);
+    void shouldMarkFailedWhenSavingThePayloadFails() {
+        pendingExport();
+        AccountExport export = new AccountExport(ACCOUNT_ID);
+        AccountExport rolledBack = new AccountExport(ACCOUNT_ID);
+        var bundle = mock(ExportBundle.class);
+        when(accounts.lockStatusForShare(ACCOUNT_ID)).thenReturn(Optional.of(Account.Status.ACTIVE.name()));
+        when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID))
+                .thenReturn(Optional.of(export))
+                .thenReturn(Optional.of(rolledBack));
+        when(assembler.assemble(ACCOUNT_ID)).thenReturn(bundle);
+        when(objectMapper.writeValueAsBytes(bundle)).thenReturn(new byte[] {1});
+        when(repository.save(export)).thenThrow(new IllegalStateException("save failed"));
 
         worker.generate(EXPORT_ID, ACCOUNT_ID);
 
-        assertThat(export.getStatus()).isEqualTo(AccountExport.Status.FAILED);
-        assertThat(export.getFailureReason()).isEqualTo("assembly_failed");
+        assertThat(rolledBack.getStatus()).isEqualTo(AccountExport.Status.FAILED);
+        assertThat(rolledBack.getFailureReason()).isEqualTo("assembly_failed");
         assertThat(registry.get("privacy.job.completed")
                         .tags("job", "export_generation", "outcome", "failure")
                         .counter()
@@ -157,6 +179,8 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
 
     @Test
     void shouldReportFailureAndRethrowWhenTheDatabaseCannotRecordIt() {
+        when(repository.tryLockGeneration(EXPORT_ID)).thenReturn(true);
+        when(repository.findStatus(EXPORT_ID, ACCOUNT_ID)).thenThrow(new IllegalStateException("db down"));
         when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenThrow(new IllegalStateException("db down"));
 
         // Rethrowing leaves the publication incomplete, so the registry resubmits the generation.
@@ -177,7 +201,8 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
 
     @Test
     void shouldWriteNothingAndReportFailureWhenRowIsMissing() {
-        when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(repository.tryLockGeneration(EXPORT_ID)).thenReturn(true);
+        when(accounts.findById(ACCOUNT_ID)).thenReturn(Optional.of(new Account("User")));
 
         worker.generate(EXPORT_ID, ACCOUNT_ID);
 

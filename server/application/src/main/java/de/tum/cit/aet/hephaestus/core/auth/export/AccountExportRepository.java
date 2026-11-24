@@ -22,7 +22,17 @@ public interface AccountExportRepository extends JpaRepository<AccountExport, Lo
     /** Ownership-scoped lookup. Empty if the id doesn't exist OR belongs to another account. */
     Optional<AccountExport> findByIdAndAccountId(Long id, Long accountId);
 
-    /** The ownership-scoped row, locked until the transaction ends, so one generation at a time decides its state. */
+    @Query("SELECT e.status FROM AccountExport e WHERE e.id = :id AND e.accountId = :accountId")
+    Optional<AccountExport.Status> findStatus(@Param("id") Long id, @Param("accountId") Long accountId);
+
+    /** Serializes duplicate deliveries without holding a lock on the account or the export during assembly. */
+    @Query(
+            value =
+                    "SELECT pg_try_advisory_xact_lock(hashtext('account-export-generation'), hashtext(CAST(:id AS text)))",
+            nativeQuery = true)
+    boolean tryLockGeneration(@Param("id") Long id);
+
+    /** The ownership-scoped row, locked through the terminal state change. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT e FROM AccountExport e WHERE e.id = :id AND e.accountId = :accountId")
     Optional<AccountExport> lockByIdAndAccountId(@Param("id") Long id, @Param("accountId") Long accountId);
