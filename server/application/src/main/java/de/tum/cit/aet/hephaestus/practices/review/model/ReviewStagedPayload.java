@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review.model;
 
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -14,6 +15,7 @@ import tools.jackson.databind.JsonNode;
 
 /** Cold columns of the existing membership row. Ordinary membership reads never load cited source bytes. */
 @Entity
+@RawObservationAccess
 @Table(name = "review_item")
 @IdClass(ReviewItem.Id.class)
 @Getter

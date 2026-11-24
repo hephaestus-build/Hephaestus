@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptStopReason;
@@ -26,6 +27,7 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 @Entity
+@RawObservationAccess
 @Table(
         name = "review_job_script_run",
         indexes = @Index(name = "idx_review_job_script_run_job_attempt", columnList = "job_id,attempt,practice_id"))
@@ -50,6 +52,7 @@ public class ScriptRun {
     private ScriptKind scriptKind;
 
     @Enumerated(EnumType.STRING)
+    @RawObservationAccess
     @Column(name = "stop_reason", length = 32)
     private @Nullable ScriptStopReason stopReason;
 
@@ -60,6 +63,7 @@ public class ScriptRun {
     public static final String REVIEW_SESSIONS = "reviewSessions";
 
     /** The host's calls by kind, and under {@link #REVIEW_SESSIONS} the runner's review-session counts. */
+    @RawObservationAccess
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "calls", columnDefinition = "jsonb")
     private @Nullable JsonNode calls;
@@ -67,6 +71,7 @@ public class ScriptRun {
     @Column(name = "finished_at", nullable = false)
     private Instant finishedAt;
 
+    @RawObservationAccess
     @Column(name = "error", length = 500)
     private @Nullable String error;
 

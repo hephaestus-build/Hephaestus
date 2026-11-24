@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review.model;
 
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -27,6 +28,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 @Entity
+@RawObservationAccess
 @Table(
         name = "review_item",
         uniqueConstraints = {
@@ -69,6 +71,7 @@ public class ReviewItem {
     @Column(name = "state", nullable = false, length = 16)
     private ReviewItemState state = ReviewItemState.LISTED;
 
+    @RawObservationAccess
     @Column(name = "result_id")
     private @Nullable UUID resultId;
 
@@ -78,9 +81,11 @@ public class ReviewItem {
     @Column(name = "attempted_at")
     private @Nullable Instant attemptedAt;
 
+    @RawObservationAccess
     @Column(name = "reason", length = 128)
     private @Nullable String reason;
 
+    @RawObservationAccess
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "detail", columnDefinition = "jsonb")
     private @Nullable JsonNode detail;

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.model;
 
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
@@ -48,9 +49,11 @@ import tools.jackson.databind.JsonNode;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@RawObservationAccess
 public class Result {
 
     @Id
+    @RawObservationAccess
     @Column(name = "id", nullable = false)
     private UUID id;
 
@@ -77,28 +80,35 @@ public class Result {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "outcome", nullable = false, length = 24)
+    @RawObservationAccess
     private ResultOutcome outcome;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "severity", length = 16)
+    @RawObservationAccess
     private @Nullable Severity severity;
 
     @Column(name = "summary", length = 255)
+    @RawObservationAccess
     private @Nullable String summary;
 
     @Column(name = "explanation", columnDefinition = "TEXT")
+    @RawObservationAccess
     private @Nullable String explanation;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "evidence", columnDefinition = "jsonb")
+    @RawObservationAccess
     private @Nullable JsonNode evidence;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "example", columnDefinition = "jsonb")
+    @RawObservationAccess
     private @Nullable JsonNode example;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "coverage", columnDefinition = "jsonb")
+    @RawObservationAccess
     private @Nullable JsonNode coverage;
 
     /**
@@ -109,6 +119,7 @@ public class Result {
     @Getter(AccessLevel.NONE)
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "source_kinds", columnDefinition = "text[]")
+    @RawObservationAccess
     private String @Nullable [] recordedSourceKinds;
 
     /** The citations of this result's evidence, its open questions and its example. Authorization reads their sources. */
@@ -233,6 +244,7 @@ public class Result {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "end_reason", length = 24)
+    @RawObservationAccess
     private @Nullable ResultEndReason endReason;
 
     public void end(ResultEndReason reason, Instant at) {

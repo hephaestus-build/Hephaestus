@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.model;
 
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -41,6 +42,7 @@ import tools.jackson.databind.JsonNode;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@RawObservationAccess
 public class Problem {
 
     @Id

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review.model;
 
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import jakarta.persistence.Column;
@@ -26,6 +27,7 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 @Entity
+@RawObservationAccess
 @Table(
         name = "review_practice",
         uniqueConstraints = {
@@ -62,6 +64,7 @@ public class ReviewPractice {
     @Column(name = "status", nullable = false, length = 16)
     private ReviewPracticeStatus status = ReviewPracticeStatus.QUEUED;
 
+    @RawObservationAccess
     @Column(name = "reason", length = 48)
     private @Nullable String reason;
 
@@ -71,6 +74,7 @@ public class ReviewPractice {
     @Column(name = "listing_complete")
     private @Nullable Boolean listingComplete;
 
+    @RawObservationAccess
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "capture_decision", columnDefinition = "jsonb")
     private @Nullable JsonNode captureDecision;
