@@ -6,7 +6,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-/** The browser asks before it sends a request header cross-origin; the SPA's conditional writes need If-Match. */
+/**
+ * The browser asks before it sends a request header cross-origin; the SPA's conditional writes need If-Match, and its
+ * retryable creates need Idempotency-Key.
+ */
 class CorsPreflightIntegrationTest extends BaseIntegrationTest {
 
     /** The origin application-test.yml allows. */
@@ -30,6 +33,24 @@ class CorsPreflightIntegrationTest extends BaseIntegrationTest {
                 .valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN)
                 .expectHeader()
                 .valueMatches(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, "(?i).*\\bIf-Match\\b.*")
+                .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldAllowIdempotencyKeyWhenAnAllowedOriginAsksBeforeSendingAQuestion() {
+        webTestClient
+                .options()
+                .uri("/workspaces/any/conversation/turns")
+                .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "content-type,idempotency-key")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN)
+                .expectHeader()
+                .valueMatches(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, "(?i).*\\bIdempotency-Key\\b.*")
                 .expectBody(Void.class);
     }
 }

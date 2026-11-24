@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
+import de.tum.cit.aet.hephaestus.core.web.ClientInputs;
 import de.tum.cit.aet.hephaestus.core.web.ProblemResponse;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import de.tum.cit.aet.hephaestus.core.webapp.WebAppRequests;
@@ -546,9 +547,11 @@ public class SecurityConfig {
                 UserViewContextHolder.REASON_HEADER,
                 UserViewContextHolder.WORKSPACE_HEADER,
                 UserViewContextHolder.ACCOUNT_HEADER,
-                // Every endpoint that hands out an ETag reads it back from If-Match (EntityTagPrecondition); a
-                // header not listed here never leaves the browser when the SPA runs on another origin, as in dev.
-                HttpHeaders.IF_MATCH));
+                // Every endpoint that hands out an ETag reads it back from If-Match (EntityTagPrecondition), and every
+                // create that a client may retry carries Idempotency-Key (ClientInputs). A header not listed here never
+                // leaves the browser when the SPA runs on another origin, as in dev or on a workspace subdomain.
+                HttpHeaders.IF_MATCH,
+                ClientInputs.HEADER));
         configuration.setExposedHeaders(List.of(RequestReference.HEADER));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
