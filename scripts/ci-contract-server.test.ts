@@ -182,12 +182,11 @@ void describe("ci-contract: server", () => {
 				`\${{ needs.detect-changes.outputs.rename-only != 'true' && needs.detect-changes.outputs.migrations-changed == 'true' && 'true' || 'false' }}`,
 			);
 			const server = output("server-tests") === "true";
-			const shards = server ? serverShards(caller, queue, only) : [];
+			// Every server pull request runs the numbered shards, as the merge group does.
+			assert.equal(output("full-integration"), "true", label);
 			assert.deepEqual(
-				shards,
-				server
-					? [...(only ? [] : SERVER_TIERS), ...(queue ? integrationShards() : ["review"])]
-					: [],
+				server ? serverShards(caller, true, only) : [],
+				server ? [...(only ? [] : SERVER_TIERS), ...integrationShards()] : [],
 			);
 			const contracts = expandExpressions(
 				caller.getIn(["jobs", "Build", "with", "contracts_changed"]),
@@ -200,17 +199,38 @@ void describe("ci-contract: server", () => {
 					},
 				},
 			);
+			// Every server pull request runs the database tests too; the drills follow the migrations.
+			const databaseTier = expandExpressions(
+				caller.getIn(["jobs", "Build", "with", "database_tier"]),
+				{
+					needs: {
+						"detect-changes": {
+							outputs: { "rename-only": "false", "server-tests": output("server-tests") },
+						},
+					},
+				},
+			);
 			for (const name of ["server-database", "postgres-drill"]) {
 				assert.equal(
 					jobRuns(build, name, event, {}, false, {
 						contracts_changed: contracts,
 						queue_tier: output("queue-tier"),
 						migrations_changed: output("migrations-changed"),
+						database_tier: databaseTier,
 					}),
-					database,
+					name === "server-database" ? database || (event === "pull_request" && server) : database,
 					`${name}: ${label}`,
 				);
 			}
+			assert.equal(
+				expandExpressions(caller.getIn(["jobs", "Build", "with", "database_tier"]), {
+					needs: {
+						"detect-changes": { outputs: { "rename-only": "true", "server-tests": "true" } },
+					},
+				}),
+				"false",
+				"a rename-only head leaves the database tests to the merge group",
+			);
 			if (only) {
 				assert.equal(
 					jobRuns(build, "server-api", event, {}, false, {

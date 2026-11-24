@@ -25,6 +25,11 @@ on:
         description: "Whether the run also verifies the queue tier (docs/contributor/ci-cd.mdx § Two verification tiers)"
         required: true
         type: string
+      database_tier:
+        description: "Whether a pull request changes the server, which selects the database tests"
+        required: false
+        type: string
+        default: "false"
 
 permissions: {}
 
@@ -171,7 +176,7 @@ jobs:
 
   server-database:
     name: Database migrations
-    if: inputs.contracts_changed == 'true' && (inputs.queue_tier == 'true' || inputs.migrations_changed == 'true')
+    if: inputs.contracts_changed == 'true' && (inputs.queue_tier == 'true' || inputs.migrations_changed == 'true' || inputs.database_tier == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

@@ -130,9 +130,10 @@ jobs:
       # the full tier. Release evidence selection is separate. Every merge group still runs the
       # queue tier: ci-cd.mdx § Two verification tiers.
       queue-tier: ${{ github.event_name != 'pull_request' || (steps.opt_in.outputs.light != 'true' && steps.opt_in.outputs.full != 'false') }}
-      # The numbered integration shards, which the `Full integration` status reports on. Today they
-      # run in the queue tier only. ci-cd.mdx § Full integration status.
-      full-integration: ${{ github.event_name != 'pull_request' || (steps.opt_in.outputs.light != 'true' && steps.opt_in.outputs.full != 'false') }}
+      # The numbered integration shards, which the `Full integration` status reports on. A pull request
+      # runs them as the merge group does, so a failing class shows on the pull request first; a layer
+      # of a stack runs the light tier. ci-cd.mdx § Full integration status.
+      full-integration: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.light != 'true' }}
       # A draft runs the fast tier and builds no image: no cluster jobs, no image scan, unless it
       # carries `ci:images`. A release candidate always builds its evidence. Marking it
       # ready starts the ordinary run. ci-cd.mdx § Two verification tiers.
@@ -1255,6 +1256,8 @@ jobs:
       queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
       # A rename-only head leaves database tests and drills to the merge group.
       migrations_changed: ${{ needs.detect-changes.outputs.rename-only != 'true' && needs.detect-changes.outputs.migrations-changed == 'true' && 'true' || 'false' }}
+      # Every server pull request runs the database tier, as the merge group does.
+      database_tier: ${{ needs.detect-changes.outputs.rename-only != 'true' && needs.detect-changes.outputs.server-tests == 'true' && 'true' || 'false' }}
 
   Test:
     name: Server tests
@@ -1968,8 +1971,9 @@ jobs:
           message: >-
             The [combined merge-queue CI run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             failed, so this pull request left the queue. Inspect the run before re-queueing it.
-            A pull request runs only the fast tier, so an integration, database, drill or browser
-            failure first shows here; add the `ci:full` label to reproduce it on the pull request.
+            A pull request does not run the browser suites or the drills, so their failures first show
+            here; add the `ci:full` label to reproduce one on the pull request. An integration or database
+            failure here comes from the merged result, because the pull request runs those suites too.
             An image build or scan failure also first shows here; add the `ci:images` label to build
             the images on the pull request.
 
