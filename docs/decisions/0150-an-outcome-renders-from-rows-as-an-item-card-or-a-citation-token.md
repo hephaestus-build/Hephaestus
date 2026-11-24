@@ -40,9 +40,11 @@ Option 4.
 1. **An item card is a projection of rows about one item.** It shows the problems with their labels and cited lines. It also shows the delivery state of each copy, the task status and "Could not check". No model writes it. An update needs no turn.
 2. **The card exists from the first queued review of the item,** except for an On request result. ADR 0137 (proposed in #4863) decides what shows of that result. "Reviewing #42" is a state of the card. Its lifecycle is in progress, open and closed. Its revision only grows.
 3. **The same card shows in four places.** These are each message that cites it, the Activity section, the practice page and the extension.
-4. **A verdict renders from admitted rows only.** A claim about a result uses a citation token, and the server renders the token from current rows. The model never writes an outcome or a delivery state as free text. Prose may discuss a card. It mints no new verdict.
-   - The server validates every visible unit before it leaves the server. No verdict text streams before admission.
-   - An unvalidated claim fails closed. The client never receives it.
+4. **Generated prose never carries a check verdict.** It refers to a check only through a citation token. The renderer shows the admitted verdict from rows beside it.
+   - Before a visible unit leaves, the server rejects it if it names a known check without a token.
+   - A unit names a check when it holds the check's identifier or title.
+   - The known checks are an exact set: the practices of the workspace. So the rule is deterministic.
+   - A rejected unit is withheld, never edited. The model never writes an outcome or a delivery state as free text.
 5. **A message says "posted" only if the copy was delivered when the message was stored.** Its token renders the current delivery state after that.
 6. **Activity gets a proposed section that lists the owner's item cards** in three groups: In progress, Open feedback and Closed. Only the owner reads it. Main's Needs you stays as it is.
 7. **Card controls.** Mute card notifications stops messages and notifications about the card. Typed commands follow [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md).
@@ -67,12 +69,12 @@ Option 4.
 Not enforced yet. The implementation adds these tests:
 
 - `CardWithoutModelTest` fails when an item card update needs a turn.
-- `UnvalidatedVerdictNotStreamedTest` fails when a verdict without an admitted row reaches a client, with or without a citation token.
+- `KnownCheckWithoutTokenTest` fails when a unit that names a known check without a token reaches a client. It also fails when a rejected unit is edited, not withheld.
 - `PostedClaimTest` fails when a message says "posted" for a copy that was not delivered at its commit.
 
 ## Revisit trigger
 
-- The check holds back more than 1 % of visible units as unvalidated claims.
+- The known-check rule withholds more than 1 % of visible units.
 - People ask what a card means more often than they open it.
 
 ## Sources

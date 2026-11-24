@@ -59,7 +59,7 @@ Option 4.
 
    Inbox items, one turn at a time, cancel, steering and Stop are [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decisions 2 to 9. This ADR does not restate them.
 
-7. **An answer to the owner in the app is a streamed response.** It streams token by token while the turn runs. No verdict text streams before admission ([ADR 0150](0150-an-outcome-renders-from-rows-as-an-item-card-or-a-citation-token.md) decision 4).
+7. **An answer to the owner in the app is a streamed response.** It streams token by token while the turn runs. Each visible unit passes the known-check rule of [ADR 0150](0150-an-outcome-renders-from-rows-as-an-item-card-or-a-citation-token.md) decision 4 before it streams.
    - A Slack answer posts as one complete message ([ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) decision 6).
 8. **A message from Hephaestus is written complete.** A background turn commits it whole, at its commit, and never streams it. It has a message summary, a reason line, and at most three more lines.
 9. **An entry that Hephaestus wrote never changes.** A wrong message gets a correction below it, with a reference to the wrong message.
