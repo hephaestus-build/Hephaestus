@@ -69,7 +69,7 @@ class PracticeReviewOutputControllerIntegrationTest extends BaseIntegrationTest 
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.developer")
+                .jsonPath("$.person")
                 .isEmpty();
         get("/practices/reviews/results")
                 .expectStatus()
@@ -77,13 +77,13 @@ class PracticeReviewOutputControllerIntegrationTest extends BaseIntegrationTest 
                 .expectBody()
                 .jsonPath("$.content[0].id")
                 .isEqualTo(r.getId().toString())
-                .jsonPath("$.content[0].developer")
+                .jsonPath("$.content[0].person")
                 .isEmpty();
         get("/practices/reviews/problems?resultId=" + r.getId() + "&openOnly=false")
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.content[0].developer")
+                .jsonPath("$.content[0].person")
                 .isEmpty();
         for (var path : List.of(
                 "/practices/reviews",
@@ -92,8 +92,8 @@ class PracticeReviewOutputControllerIntegrationTest extends BaseIntegrationTest 
                 "/practices/reviews/feedback",
                 "/practices/reviews/feedback/locations",
                 "/practices/reviews/feedback/reasons")) {
-            get(path + "?developerId=" + scenarioAccountId).expectStatus().isForbidden();
-            get(path + "?disagreed=true&developerId=" + scenarioAccountId)
+            get(path + "?personId=" + scenarioAccountId).expectStatus().isForbidden();
+            get(path + "?disagreed=true&personId=" + scenarioAccountId)
                     .expectStatus()
                     .isForbidden();
         }
@@ -108,7 +108,7 @@ class PracticeReviewOutputControllerIntegrationTest extends BaseIntegrationTest 
                 .expectBody()
                 .jsonPath("$.reviewId")
                 .isEqualTo(r.getReviewId().toString())
-                .jsonPath("$.developer.accountId")
+                .jsonPath("$.person.accountId")
                 .isEqualTo(Long.toString(scenarioAccountId))
                 .jsonPath("$.problems.length()")
                 .isEqualTo(1)

@@ -52,7 +52,7 @@ public class FeedbackBasis {
     @Column(name = "problem_id", nullable = true, columnDefinition = "UUID")
     private @Nullable UUID problemId;
 
-    @Column(name = "developer_id", nullable = false)
+    @Column(name = "person_account_id", nullable = false)
     private long developerId;
 
     @Column(name = "ordinal", nullable = false)

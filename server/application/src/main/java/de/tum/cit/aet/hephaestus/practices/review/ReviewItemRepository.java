@@ -93,7 +93,7 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         SELECT m.practice_id AS practiceId,m.item_id AS itemId FROM review_item m JOIN item i ON i.id=m.item_id
         AND i.workspace_id=m.workspace_id
         LEFT JOIN result r ON r.workspace_id=m.workspace_id AND r.item_id=m.item_id
-          AND r.practice_id=m.practice_id AND r.developer_id IS NULL AND r.ended_at IS NULL
+          AND r.practice_id=m.practice_id AND r.person_account_id IS NULL AND r.ended_at IS NULL
         WHERE m.workspace_id=:workspaceId AND m.review_id=:reviewId
         AND m.state='LISTED' AND (m.job_id IS NULL OR m.job_id<>ALL(CAST(:active AS uuid[])))
         ORDER BY r.recorded_at ASC NULLS FIRST,i.path,m.item_id,m.practice_id
@@ -141,7 +141,7 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
             MAX(v.recorded_at) AS last_verdict
           FROM result v WHERE v.workspace_id=m.workspace_id AND v.item_id=m.item_id
             AND v.practice_id=m.practice_id
-            AND v.developer_id IS NOT DISTINCT FROM (m.detail->>'developerId')::bigint
+            AND v.person_account_id IS NOT DISTINCT FROM (m.detail->>'developerId')::bigint
         ) history ON true WHERE m.workspace_id=:workspaceId
         AND m.review_id=:reviewId AND m.item_id=:itemId AND m.state='LISTED' AND p.status IN ('QUEUED','READY')
         AND r.status IN ('QUEUED','RUNNING') AND NOT

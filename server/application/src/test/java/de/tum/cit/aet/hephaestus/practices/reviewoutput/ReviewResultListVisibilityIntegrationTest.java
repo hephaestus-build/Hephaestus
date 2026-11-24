@@ -123,8 +123,8 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
         assertThat(shown.markedIncorrectAt()).isNull();
         assertThat(shown.feedback().delivered()).isEqualTo(1);
         assertThat(shown.feedback().ready()).isZero();
-        assertThat(shown.developer()).isNotNull();
-        assertThat(shown.developer().accountId()).isEqualTo(Long.toString(account));
+        assertThat(shown.person()).isNotNull();
+        assertThat(shown.person().accountId()).isEqualTo(Long.toString(account));
         var withheld = page.getContent().getLast();
         assertThat(withheld.id()).isEqualTo(hidden.getId());
         assertThat(withheld.summary()).isNull();
@@ -173,7 +173,7 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
             assertThat(row.problems())
                     .singleElement()
                     .satisfies(problem -> assertThat(problem.summary()).isEqualTo("A recorded problem"));
-            assertThat(row.developer()).isNotNull();
+            assertThat(row.person()).isNotNull();
             assertThat(row.feedback().delivered()).isEqualTo(1);
         });
         assertThat(larger.cost().statements())
@@ -245,7 +245,7 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
     private UUID feedback(Result result, FeedbackState state, boolean duplicateBasis) {
         var id = UUID.randomUUID();
         jdbc.sql("""
-            INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at,stop_reason)
+            INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,delivered_at,stop_reason)
             VALUES(:id,:ws,:review,:item,:developer,'ON_WORK',:state,'Review this change.',:at,:delivered,:stop)
             """)
                 .param("id", id)
@@ -270,7 +270,7 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
 
     private void basis(Result result, UUID feedbackId, @Nullable UUID problemId, int ordinal) {
         jdbc.sql("""
-            INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,problem_id,developer_id,ordinal)
+            INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,problem_id,person_account_id,ordinal)
             VALUES(:id,:ws,:feedback,:result,:problem,:developer,:ordinal)
             """)
                 .param("id", UUID.randomUUID())

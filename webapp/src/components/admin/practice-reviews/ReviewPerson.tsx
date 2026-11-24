@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import type { ReviewDeveloper } from "@/api/types.gen";
+import type { ReviewPerson as ReviewPersonData } from "@/api/types.gen";
 import { MemberAvatar } from "@/components/activity/MemberAvatar";
 import type { RecordTableColumn } from "@/components/practice-vocabulary/RecordTable";
 import { hasText } from "@/lib/text";
@@ -7,7 +7,7 @@ import { hasText } from "@/lib/text";
 import { developerLabel } from "./review-format";
 
 export interface ReviewPersonProps {
-	person: ReviewDeveloper | null;
+	person: ReviewPersonData | null;
 	/**
 	 * Says which person this is when a surface shows two people. Omitted everywhere only one person is in play, where a
 	 * prefix would be reading out the column header.
@@ -41,7 +41,7 @@ export function ReviewPerson({ person, prefix, className }: ReviewPersonProps) {
  * Who a piece of feedback is for. Its developer is `null` only for private feedback while the
  * workspace shows admins results without names.
  */
-export function FeedbackPerson({ person }: { person: ReviewDeveloper | null }) {
+export function FeedbackPerson({ person }: { person: ReviewPersonData | null }) {
 	return person === null ? (
 		<span className="text-xs text-muted-foreground">Not shown</span>
 	) : (

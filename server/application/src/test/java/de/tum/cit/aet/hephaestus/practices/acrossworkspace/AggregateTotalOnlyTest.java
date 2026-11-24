@@ -15,9 +15,9 @@ class AggregateTotalOnlyTest extends BaseUnitTest {
     void shouldSendOnlyTheTotalWhenOnePartHoldsFourPeople() {
         var sent = sent(new Split(4, 0, 6, 7));
 
-        assertThat(sent.path("developers").asInt()).isEqualTo(17);
+        assertThat(sent.path("people").asInt()).isEqualTo(17);
         assertThat(sent.path("noneYet").isNull()).isTrue();
-        assertThat(sent.path("parts").valueStream().map(part -> part.path("developers")))
+        assertThat(sent.path("parts").valueStream().map(part -> part.path("people")))
                 .hasSize(3)
                 .allMatch(JsonNode::isNull);
     }
@@ -26,11 +26,11 @@ class AggregateTotalOnlyTest extends BaseUnitTest {
     void shouldSendEveryPartWhenEachHoldsNoneOrFiveOrMore() {
         var sent = sent(new Split(5, 0, 6, 7));
 
-        assertThat(sent.path("developers").asInt()).isEqualTo(18);
+        assertThat(sent.path("people").asInt()).isEqualTo(18);
         assertThat(sent.path("noneYet").asInt()).isEqualTo(7);
         assertThat(sent.path("parts")
                         .valueStream()
-                        .map(part -> part.path("developers").asInt()))
+                        .map(part -> part.path("people").asInt()))
                 .containsExactly(5, 0, 6);
     }
 
@@ -38,8 +38,8 @@ class AggregateTotalOnlyTest extends BaseUnitTest {
     void shouldSendOnlyTheTotalWhenAllSixPeopleShareOnePart() {
         var sent = sent(new Split(0, 0, 6, 0));
 
-        assertThat(sent.path("developers").asInt()).isEqualTo(6);
-        assertThat(sent.path("parts").valueStream().map(part -> part.path("developers")))
+        assertThat(sent.path("people").asInt()).isEqualTo(6);
+        assertThat(sent.path("parts").valueStream().map(part -> part.path("people")))
                 .allMatch(JsonNode::isNull);
     }
 
@@ -47,9 +47,9 @@ class AggregateTotalOnlyTest extends BaseUnitTest {
     void shouldSendNeitherTotalNorPartsWhenFourPeopleAreCounted() {
         var sent = sent(new Split(2, 0, 2, 0));
 
-        assertThat(sent.path("developers").isNull()).isTrue();
+        assertThat(sent.path("people").isNull()).isTrue();
         assertThat(sent.path("noneYet").isNull()).isTrue();
-        assertThat(sent.path("parts").valueStream().map(part -> part.path("developers")))
+        assertThat(sent.path("parts").valueStream().map(part -> part.path("people")))
                 .allMatch(JsonNode::isNull);
     }
 

@@ -39,7 +39,7 @@ public class PracticeGroupService {
 
     public List<PracticeGroup> listGroups(WorkspaceContext ctx, @Nullable Boolean shownOnly) {
         return Boolean.TRUE.equals(shownOnly)
-                ? groups.findByWorkspaceIdAndShownToDevelopersTrueOrderByPositionAscNameAsc(ctx.id())
+                ? groups.findByWorkspaceIdAndShownToPeopleTrueOrderByPositionAscNameAsc(ctx.id())
                 : groups.findByWorkspaceIdOrderByPositionAscNameAsc(ctx.id());
     }
 
@@ -50,15 +50,15 @@ public class PracticeGroupService {
 
     @Transactional
     public PracticeGroup createGroup(
-            WorkspaceContext ctx, String slug, GroupAttributes attributes, boolean shownToDevelopers) {
-        return create(ctx, slug, attributes, shownToDevelopers, null);
+            WorkspaceContext ctx, String slug, GroupAttributes attributes, boolean shownToPeople) {
+        return create(ctx, slug, attributes, shownToPeople, null);
     }
 
     private PracticeGroup create(
             WorkspaceContext ctx,
             String slug,
             GroupAttributes attributes,
-            boolean shownToDevelopers,
+            boolean shownToPeople,
             @Nullable GroupDefinition catalogDefinition) {
         lock(ctx);
         if (!slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*") || slug.length() > 64)
@@ -68,7 +68,7 @@ public class PracticeGroupService {
         PracticeGroup group = new PracticeGroup();
         group.setWorkspace(Objects.requireNonNull(entityManager).getReference(Workspace.class, ctx.id()));
         group.setSlug(slug);
-        group.setShownToDevelopers(shownToDevelopers);
+        group.setShownToPeople(shownToPeople);
         apply(group, attributes);
         group.setPosition(attributes.position() == null ? groups.findMaxPosition(ctx.id()) + 1 : attributes.position());
         if (catalogDefinition != null) {
@@ -107,12 +107,12 @@ public class PracticeGroupService {
 
     @Transactional
     public PracticeGroup updateGroup(
-            WorkspaceContext ctx, String slug, GroupAttributes attributes, @Nullable Boolean shownToDevelopers) {
+            WorkspaceContext ctx, String slug, GroupAttributes attributes, @Nullable Boolean shownToPeople) {
         lock(ctx);
         PracticeGroup group = getGroup(ctx, slug);
         var before = PracticeGroupSnapshot.of(group);
         apply(group, attributes);
-        if (shownToDevelopers != null) group.setShownToDevelopers(shownToDevelopers);
+        if (shownToPeople != null) group.setShownToPeople(shownToPeople);
         groups.save(group);
         record(ctx, group, before);
         return group;

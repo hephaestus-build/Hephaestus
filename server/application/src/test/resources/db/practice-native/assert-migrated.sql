@@ -9,7 +9,7 @@ BEGIN
  IF EXISTS (SELECT FROM result r LEFT JOIN item i ON (i.id,i.workspace_id)=(r.item_id,r.workspace_id) WHERE i.id IS NULL) THEN
   RAISE EXCEPTION 'Result has no tenant-owned item';
  END IF;
- IF EXISTS (SELECT FROM result WHERE ended_at IS NULL GROUP BY workspace_id,practice_id,item_id,developer_id HAVING count(*)>1) THEN
+ IF EXISTS (SELECT FROM result WHERE ended_at IS NULL GROUP BY workspace_id,practice_id,item_id,person_account_id HAVING count(*)>1) THEN
   RAISE EXCEPTION 'More than one current result';
  END IF;
  IF EXISTS (SELECT FROM result r WHERE (r.outcome='NOT_MET') <> EXISTS(SELECT FROM problem p WHERE (p.result_id,p.workspace_id)=(r.id,r.workspace_id))) THEN
@@ -17,7 +17,7 @@ BEGIN
  END IF;
  IF EXISTS (SELECT FROM feedback_basis b JOIN result r ON (r.id,r.workspace_id)=(b.result_id,b.workspace_id)
   JOIN feedback f ON (f.id,f.workspace_id)=(b.feedback_id,b.workspace_id)
-  WHERE b.developer_id IS DISTINCT FROM r.developer_id OR b.developer_id IS DISTINCT FROM f.developer_id) THEN
+  WHERE b.person_account_id IS DISTINCT FROM r.person_account_id OR b.person_account_id IS DISTINCT FROM f.person_account_id) THEN
   RAISE EXCEPTION 'Feedback basis changes the developer';
  END IF;
  IF EXISTS (SELECT FROM feedback WHERE id='00000000-0000-0000-0000-000000992161')

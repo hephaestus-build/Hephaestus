@@ -38,10 +38,10 @@ class PracticeV1RetentionDatabaseTest {
                 created_at,last_activity_at)
             VALUES('00000000-0000-0000-0000-000000996194',992101,992106,'00000000-0000-0000-0000-000000996191',
                 '00000000-0000-0000-0000-000000996193',now(),now());
-            DELETE FROM feedback WHERE workspace_id=992101 AND developer_id=992106;
+            DELETE FROM feedback WHERE workspace_id=992101 AND person_account_id=992106;
             DELETE FROM review_item WHERE workspace_id=992101 AND result_id IN
-                (SELECT id FROM result WHERE workspace_id=992101 AND developer_id=992106);
-            DELETE FROM result WHERE workspace_id=992101 AND developer_id=992106;
+                (SELECT id FROM result WHERE workspace_id=992101 AND person_account_id=992106);
+            DELETE FROM result WHERE workspace_id=992101 AND person_account_id=992106;
             DELETE FROM conversation WHERE workspace_id=992101 AND account_id=992106
                 AND parent_conversation_id IS NULL;
             DELETE FROM membership WHERE workspace_id=992101 AND account_id=992106;

@@ -117,7 +117,7 @@ class ProviderDerivedErasureIntegrationTest extends BaseIntegrationTest {
         Result result = data.result(on, ResultOutcome.NOT_MET, Instant.now());
         long ws = on.workspace().getId();
         UUID feedback = UUID.randomUUID();
-        jdbc.sql("INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,"
+        jdbc.sql("INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,"
                         + "created_at,delivered_at)"
                         + " VALUES(:id,:ws,:review,:item,:developer,'ON_WORK','DELIVERED','Review this.',:at,:at)")
                 .param("id", feedback)
@@ -127,7 +127,7 @@ class ProviderDerivedErasureIntegrationTest extends BaseIntegrationTest {
                 .param("developer", on.account().getId())
                 .param("at", Timestamp.from(Instant.now()))
                 .update();
-        jdbc.sql("INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)"
+        jdbc.sql("INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal)"
                         + " VALUES(:id,:ws,:feedback,:result,:developer,0)")
                 .param("id", FeedbackIds.basis(feedback, result.getId(), null))
                 .param("ws", ws)

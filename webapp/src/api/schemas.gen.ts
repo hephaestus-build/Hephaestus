@@ -2964,7 +2964,7 @@ export const CreatePracticeGroupRequestSchema = {
 			format: "int32",
 			minimum: 0,
 		},
-		shownToDevelopers: {
+		shownToPeople: {
 			type: "boolean",
 		},
 		slug: {
@@ -2974,7 +2974,7 @@ export const CreatePracticeGroupRequestSchema = {
 			pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*(?![\\s\\S])",
 		},
 	},
-	required: ["color", "description", "icon", "name", "position", "shownToDevelopers", "slug"],
+	required: ["color", "description", "icon", "name", "position", "shownToPeople", "slug"],
 } as const;
 
 export const CreatePracticeRequestSchema = {
@@ -8633,7 +8633,7 @@ export const PracticeGroupSchema = {
 			type: "integer",
 			format: "int32",
 		},
-		shownToDevelopers: {
+		shownToPeople: {
 			type: "boolean",
 		},
 		slug: {
@@ -8654,7 +8654,7 @@ export const PracticeGroupSchema = {
 		"id",
 		"name",
 		"position",
-		"shownToDevelopers",
+		"shownToPeople",
 		"slug",
 		"updatedAt",
 	],
@@ -9911,16 +9911,16 @@ export const PracticesAcrossWorkspaceTilesSchema = {
 	description:
 		"The reader's figures over one window beside the middle half of the developers with a standing in it",
 	properties: {
-		developersWithAStandingInWindow: {
-			type: ["null", "integer"],
-			format: "int32",
-			description:
-				"Developers with a standing in the window, the developers the tiles compare. Null for 1 to 4",
-		},
 		includesEarlierReviews: {
 			type: "boolean",
 			description:
 				"Whether at least 5 developers counted in the window have a standing read only from earlier reviews",
+		},
+		peopleWithAStandingInWindow: {
+			type: ["null", "integer"],
+			format: "int32",
+			description:
+				"Developers with a standing in the window, the developers the tiles compare. Null for 1 to 4",
 		},
 		practicesGoingWell: {
 			$ref: "#/components/schemas/WorkspaceTile",
@@ -9946,8 +9946,8 @@ export const PracticesAcrossWorkspaceTilesSchema = {
 		},
 	},
 	required: [
-		"developersWithAStandingInWindow",
 		"includesEarlierReviews",
+		"peopleWithAStandingInWindow",
 		"practicesGoingWell",
 		"practicesNeedingAttention",
 		"reviewedWork",
@@ -12593,16 +12593,6 @@ export const ReviewBoundResultSchema = {
 		currentness: {
 			$ref: "#/components/schemas/Currentness",
 		},
-		developer: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewDeveloper",
-				},
-				{
-					type: "null",
-				},
-			],
-		},
 		id: {
 			type: "string",
 			format: "uuid",
@@ -12612,6 +12602,16 @@ export const ReviewBoundResultSchema = {
 		},
 		outcome: {
 			$ref: "#/components/schemas/ResultOutcome",
+		},
+		person: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewPerson",
+				},
+				{
+					type: "null",
+				},
+			],
 		},
 		practiceName: {
 			type: "string",
@@ -12658,10 +12658,10 @@ export const ReviewBoundResultSchema = {
 	required: [
 		"capturedAt",
 		"currentness",
-		"developer",
 		"id",
 		"item",
 		"outcome",
+		"person",
 		"practiceName",
 		"practiceSlug",
 		"recordedAt",
@@ -12883,26 +12883,6 @@ export const ReviewDetailSchema = {
 	],
 } as const;
 
-export const ReviewDeveloperSchema = {
-	type: "object",
-	properties: {
-		accountId: {
-			type: "string",
-			pattern: "^[1-9][0-9]*$",
-		},
-		avatarUrl: {
-			type: ["string", "null"],
-		},
-		displayName: {
-			type: ["string", "null"],
-		},
-		providerLogin: {
-			type: ["string", "null"],
-		},
-	},
-	required: ["accountId", "avatarUrl", "displayName", "providerLogin"],
-} as const;
-
 export const ReviewFeedbackSchema = {
 	type: "object",
 	properties: {
@@ -12926,20 +12906,6 @@ export const ReviewFeedbackSchema = {
 		destination: {
 			$ref: "#/components/schemas/FeedbackDestination",
 		},
-		developer: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewDeveloper",
-					description:
-						"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
-				},
-				{
-					type: "null",
-				},
-			],
-			description:
-				"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
-		},
 		disagreedAt: {
 			type: ["string", "null"],
 			format: "date-time",
@@ -12960,6 +12926,20 @@ export const ReviewFeedbackSchema = {
 		},
 		location: {
 			$ref: "#/components/schemas/FeedbackLocation",
+		},
+		person: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewPerson",
+					description:
+						"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
+				},
+				{
+					type: "null",
+				},
+			],
+			description:
+				"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
 		},
 		replacesId: {
 			type: ["string", "null"],
@@ -13003,11 +12983,11 @@ export const ReviewFeedbackSchema = {
 		"createdAt",
 		"deliveredAt",
 		"destination",
-		"developer",
 		"disagreedAt",
 		"id",
 		"item",
 		"location",
+		"person",
 		"replacesId",
 		"resultCount",
 		"reviewId",
@@ -13133,20 +13113,6 @@ export const ReviewFeedbackDetailSchema = {
 		destination: {
 			$ref: "#/components/schemas/FeedbackDestination",
 		},
-		developer: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewDeveloper",
-					description:
-						"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
-				},
-				{
-					type: "null",
-				},
-			],
-			description:
-				"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
-		},
 		disagreedAt: {
 			type: ["string", "null"],
 			format: "date-time",
@@ -13167,6 +13133,20 @@ export const ReviewFeedbackDetailSchema = {
 		},
 		location: {
 			$ref: "#/components/schemas/FeedbackLocation",
+		},
+		person: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewPerson",
+					description:
+						"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
+				},
+				{
+					type: "null",
+				},
+			],
+			description:
+				"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
 		},
 		replacesId: {
 			type: ["string", "null"],
@@ -13223,11 +13203,11 @@ export const ReviewFeedbackDetailSchema = {
 		"decisions",
 		"deliveredAt",
 		"destination",
-		"developer",
 		"disagreedAt",
 		"id",
 		"item",
 		"location",
+		"person",
 		"replacesId",
 		"resultCount",
 		"reviewId",
@@ -13581,6 +13561,26 @@ export const ReviewOverviewSchema = {
 	],
 } as const;
 
+export const ReviewPersonSchema = {
+	type: "object",
+	properties: {
+		accountId: {
+			type: "string",
+			pattern: "^[1-9][0-9]*$",
+		},
+		avatarUrl: {
+			type: ["string", "null"],
+		},
+		displayName: {
+			type: ["string", "null"],
+		},
+		providerLogin: {
+			type: ["string", "null"],
+		},
+	},
+	required: ["accountId", "avatarUrl", "displayName", "providerLogin"],
+} as const;
+
 export const ReviewPracticeSchema = {
 	type: "object",
 	properties: {
@@ -13701,16 +13701,6 @@ export const ReviewProblemSchema = {
 		currentness: {
 			$ref: "#/components/schemas/Currentness",
 		},
-		developer: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewDeveloper",
-				},
-				{
-					type: "null",
-				},
-			],
-		},
 		disagreedAt: {
 			type: ["string", "null"],
 			format: "date-time",
@@ -13745,6 +13735,16 @@ export const ReviewProblemSchema = {
 		},
 		path: {
 			type: ["string", "null"],
+		},
+		person: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewPerson",
+				},
+				{
+					type: "null",
+				},
+			],
 		},
 		practiceName: {
 			type: "string",
@@ -13806,7 +13806,6 @@ export const ReviewProblemSchema = {
 		"acceptedAt",
 		"capturedAt",
 		"currentness",
-		"developer",
 		"disagreedAt",
 		"endLine",
 		"evidenceHidden",
@@ -13815,6 +13814,7 @@ export const ReviewProblemSchema = {
 		"item",
 		"markedIncorrectAt",
 		"path",
+		"person",
 		"practiceName",
 		"practiceSlug",
 		"recordedAt",
@@ -13844,16 +13844,6 @@ export const ReviewProblemDetailSchema = {
 		},
 		currentness: {
 			$ref: "#/components/schemas/Currentness",
-		},
-		developer: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewDeveloper",
-				},
-				{
-					type: "null",
-				},
-			],
 		},
 		disagreedAt: {
 			type: ["string", "null"],
@@ -13889,6 +13879,16 @@ export const ReviewProblemDetailSchema = {
 		},
 		path: {
 			type: ["string", "null"],
+		},
+		person: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewPerson",
+				},
+				{
+					type: "null",
+				},
+			],
 		},
 		practiceName: {
 			type: "string",
@@ -13956,7 +13956,6 @@ export const ReviewProblemDetailSchema = {
 		"acceptedAt",
 		"capturedAt",
 		"currentness",
-		"developer",
 		"disagreedAt",
 		"endLine",
 		"evidenceHidden",
@@ -13965,6 +13964,7 @@ export const ReviewProblemDetailSchema = {
 		"item",
 		"markedIncorrectAt",
 		"path",
+		"person",
 		"practiceName",
 		"practiceSlug",
 		"problem",
@@ -14065,16 +14065,6 @@ export const ReviewQueueSchema = {
 export const ReviewQueueItemSchema = {
 	type: "object",
 	properties: {
-		developer: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewDeveloper",
-				},
-				{
-					type: "null",
-				},
-			],
-		},
 		heldForBudget: {
 			type: "boolean",
 		},
@@ -14084,6 +14074,16 @@ export const ReviewQueueItemSchema = {
 		jobId: {
 			type: "string",
 			format: "uuid",
+		},
+		person: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewPerson",
+				},
+				{
+					type: "null",
+				},
+			],
 		},
 		progress: {
 			anyOf: [
@@ -14107,16 +14107,7 @@ export const ReviewQueueItemSchema = {
 			$ref: "#/components/schemas/ReviewJobStatus",
 		},
 	},
-	required: [
-		"developer",
-		"heldForBudget",
-		"item",
-		"jobId",
-		"progress",
-		"reviewId",
-		"since",
-		"status",
-	],
+	required: ["heldForBudget", "item", "jobId", "person", "progress", "reviewId", "since", "status"],
 } as const;
 
 export const ReviewQueueStateSchema = {
@@ -14250,16 +14241,6 @@ export const ReviewResultSchema = {
 		currentness: {
 			$ref: "#/components/schemas/Currentness",
 		},
-		developer: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewDeveloper",
-				},
-				{
-					type: "null",
-				},
-			],
-		},
 		feedback: {
 			$ref: "#/components/schemas/ReviewFeedbackCounts",
 		},
@@ -14279,6 +14260,16 @@ export const ReviewResultSchema = {
 		},
 		outcome: {
 			$ref: "#/components/schemas/ResultOutcome",
+		},
+		person: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewPerson",
+				},
+				{
+					type: "null",
+				},
+			],
 		},
 		practiceName: {
 			type: "string",
@@ -14336,13 +14327,13 @@ export const ReviewResultSchema = {
 		"acceptedAt",
 		"capturedAt",
 		"currentness",
-		"developer",
 		"feedback",
 		"id",
 		"item",
 		"markedIncorrectAt",
 		"origin",
 		"outcome",
+		"person",
 		"practiceName",
 		"practiceSlug",
 		"problemCount",
@@ -14407,16 +14398,6 @@ export const ReviewResultDetailSchema = {
 		},
 		currentness: {
 			$ref: "#/components/schemas/Currentness",
-		},
-		developer: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewDeveloper",
-				},
-				{
-					type: "null",
-				},
-			],
 		},
 		disagreements: {
 			type: "array",
@@ -14500,6 +14481,16 @@ export const ReviewResultDetailSchema = {
 		outcome: {
 			$ref: "#/components/schemas/ResultOutcome",
 		},
+		person: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewPerson",
+				},
+				{
+					type: "null",
+				},
+			],
+		},
 		practiceName: {
 			type: "string",
 		},
@@ -14561,7 +14552,6 @@ export const ReviewResultDetailSchema = {
 		"capturedAt",
 		"coverage",
 		"currentness",
-		"developer",
 		"disagreements",
 		"endReason",
 		"endedAt",
@@ -14578,6 +14568,7 @@ export const ReviewResultDetailSchema = {
 		"marks",
 		"origin",
 		"outcome",
+		"person",
 		"practiceName",
 		"practiceSlug",
 		"practiceVersionId",
@@ -17414,11 +17405,11 @@ export const UpdatePracticeGroupRequestSchema = {
 			maxLength: 128,
 			minLength: 0,
 		},
-		shownToDevelopers: {
+		shownToPeople: {
 			type: "boolean",
 		},
 	},
-	required: ["color", "description", "icon", "name", "shownToDevelopers"],
+	required: ["color", "description", "icon", "name", "shownToPeople"],
 } as const;
 
 export const UpdatePracticeRequestSchema = {
@@ -19270,12 +19261,6 @@ export const WorkspaceSplitSchema = {
 	description:
 		"How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total. A split with a part of 1 to 4, or with every developer in one part, shows only its total",
 	properties: {
-		developers: {
-			type: ["null", "integer"],
-			format: "int32",
-			description:
-				"Every developer the split counts, the parts and none yet together, the reader included when counted. Null for 1 to 4",
-		},
 		noneYet: {
 			type: ["null", "integer"],
 			format: "int32",
@@ -19290,15 +19275,21 @@ export const WorkspaceSplitSchema = {
 				$ref: "#/components/schemas/WorkspaceSplitPart",
 			},
 		},
+		people: {
+			type: ["null", "integer"],
+			format: "int32",
+			description:
+				"Every developer the split counts, the parts and none yet together, the reader included when counted. Null for 1 to 4",
+		},
 	},
-	required: ["developers", "noneYet", "parts"],
+	required: ["noneYet", "parts", "people"],
 } as const;
 
 export const WorkspaceSplitPartSchema = {
 	type: "object",
 	description: "The developers at one verdict in a split",
 	properties: {
-		developers: {
+		people: {
 			type: ["null", "integer"],
 			format: "int32",
 			description:
@@ -19309,7 +19300,7 @@ export const WorkspaceSplitPartSchema = {
 			description: "The verdict the part counts",
 		},
 	},
-	required: ["developers", "standing"],
+	required: ["people", "standing"],
 } as const;
 
 export const WorkspaceSplitsVerdictSchema = {

@@ -137,7 +137,7 @@ class ReviewOperationalViewsIntegrationTest extends BaseIntegrationTest {
     private void feedback(Result result, FeedbackState state) {
         var id = UUID.randomUUID();
         jdbc.sql("INSERT INTO"
-                        + " feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at,stop_reason)"
+                        + " feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,delivered_at,stop_reason)"
                         + " VALUES(:id,:ws,:review,:item,:developer,'PRACTICE_PAGE',:state,'Confirmed practice"
                         + " feedback.',:at,:delivered,:stop)")
                 .param("id", id)
@@ -150,7 +150,7 @@ class ReviewOperationalViewsIntegrationTest extends BaseIntegrationTest {
                 .param("delivered", state == FeedbackState.DELIVERED ? Timestamp.from(result.getRecordedAt()) : null)
                 .param("stop", state == FeedbackState.WITHHELD ? "COMPOSER_WITHHELD" : null)
                 .update();
-        jdbc.sql("INSERT INTO feedback_basis(id,workspace_id,feedback_id,developer_id,result_id,ordinal)"
+        jdbc.sql("INSERT INTO feedback_basis(id,workspace_id,feedback_id,person_account_id,result_id,ordinal)"
                         + " VALUES(:id,:ws,:feedback,:developer,:result,0)")
                 .param("id", UUID.randomUUID())
                 .param("ws", result.getWorkspaceId())

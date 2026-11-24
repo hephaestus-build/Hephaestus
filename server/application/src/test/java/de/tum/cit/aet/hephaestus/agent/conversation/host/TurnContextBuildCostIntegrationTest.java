@@ -379,7 +379,7 @@ class TurnContextBuildCostIntegrationTest extends AbstractWorkspaceIntegrationTe
     private void feedback(Result bound, String destination, boolean delivered) {
         var id = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,"
+                "INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,"
                         + "delivered_at) VALUES(?,?,?,?,?,?,?,'Keep each change focused.',?,?)",
                 id,
                 bound.getWorkspaceId(),
@@ -391,7 +391,7 @@ class TurnContextBuildCostIntegrationTest extends AbstractWorkspaceIntegrationTe
                 Timestamp.from(bound.getRecordedAt()),
                 delivered ? Timestamp.from(bound.getRecordedAt()) : null);
         jdbc.update(
-                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)"
+                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal)"
                         + " VALUES(?,?,?,?,?,0)",
                 FeedbackIds.basis(id, bound.getId(), null),
                 bound.getWorkspaceId(),

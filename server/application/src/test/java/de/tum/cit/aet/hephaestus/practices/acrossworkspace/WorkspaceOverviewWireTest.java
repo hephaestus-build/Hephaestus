@@ -40,11 +40,11 @@ class WorkspaceOverviewWireTest extends BaseUnitTest {
         var dto = new PracticesAcrossWorkspaceDTO(
                 new WorkspaceTileDTO(1, new WorkspaceRangeDTO(0, 2)), true, List.of(group));
         var tree = new JsonMapper().valueToTree(dto);
-        assertThat(tree.path("groups").path(0).path("split").path("developers").asInt())
+        assertThat(tree.path("groups").path(0).path("split").path("people").asInt())
                 .isEqualTo(6);
         assertThat(tree.path("includesEarlierReviews").asBoolean()).isTrue();
         assertThat(tree.toString())
-                .doesNotContain("developerId", "accountId", "login", "feedbackBody", "toWorkOn", "summary");
+                .doesNotContain("developerId", "personId", "accountId", "login", "feedbackBody", "toWorkOn", "summary");
     }
 
     @Test

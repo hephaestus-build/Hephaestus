@@ -101,7 +101,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends BaseIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.developersWithAStandingInWindow")
+                .jsonPath("$.peopleWithAStandingInWindow")
                 .isEqualTo(6);
 
         Map<String, List<String>> levers = Map.of(
@@ -209,7 +209,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends BaseIntegrationTest {
                 .expectBody()
                 .jsonPath("$.reviewedWork.yours")
                 .isEqualTo(0)
-                .jsonPath("$.developersWithAStandingInWindow")
+                .jsonPath("$.peopleWithAStandingInWindow")
                 .isEqualTo(0);
     }
 }

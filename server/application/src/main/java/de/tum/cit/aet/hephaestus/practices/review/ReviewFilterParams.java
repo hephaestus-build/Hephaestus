@@ -15,7 +15,7 @@ public record ReviewFilterParams(
         @Nullable ReviewKind kind,
         @Nullable UUID reviewId,
         @Nullable Long itemId,
-        @Nullable Long developerId,
+        @Nullable Long personId,
         @Nullable String practiceSlug,
         @Nullable String groupSlug,
         @Nullable Instant from,

@@ -1,0 +1,20 @@
+---
+title: Use person names in practice review API clients
+description: Update API clients for the practice review field names in 1.0.
+page_type: reference
+---
+
+Before the 1.0 upgrade, update clients that call the practice review, practice group, or workspace practice overview API.
+
+| Before 1.0 | In 1.0 |
+| --- | --- |
+| `developerId` query parameter | `personId` |
+| `developer` response field and `ReviewDeveloper` schema | `person` and `ReviewPerson` |
+| `shownToDevelopers` practice group field and `shownToDevelopersOnly` query parameter | `shownToPeople` and `shownToPeopleOnly` |
+| `developersWithAStandingInWindow` in the workspace tiles | `peopleWithAStandingInWindow` |
+| `developers` in the workspace split and its parts | `people` |
+
+The upgrade renames account columns in results, feedback, and feedback basis to `person_account_id`.
+The practice group column becomes `shown_to_people`.
+The migration preserves existing feedback approvals.
+Person-data exports use `person_account_id` for these account references. Update scripts that read the exported rows.

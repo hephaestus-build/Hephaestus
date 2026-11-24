@@ -302,7 +302,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
                 SELECT uuidv7(), f.workspace_id, ?, 'feedback:' || f.id,
                        'feedback:' || f.id || ':' || (SELECT count(*) + 1 FROM agent_action a
                                                        WHERE a.lane_key = 'feedback:' || f.id) || ':' || ?,
-                       'ADMITTED', jsonb_build_object('feedbackId', f.id), f.developer_id, 8,
+                       'ADMITTED', jsonb_build_object('feedbackId', f.id), f.person_account_id, 8,
                        now() - interval '1 second', now(), now()
                   FROM feedback f WHERE f.id = ?
                 """,

@@ -473,7 +473,7 @@ final class PersonErasureAllStoresFixture {
                 person.result(),
                 "problem_id",
                 problemId,
-                "developer_id",
+                "person_account_id",
                 account,
                 "ordinal",
                 1);

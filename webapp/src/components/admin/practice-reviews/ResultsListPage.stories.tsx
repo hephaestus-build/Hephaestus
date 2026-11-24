@@ -87,7 +87,7 @@ function resultPage(
 			selects(query.severity, row.severity) &&
 			selects(query.outcome, row.outcome) &&
 			(query.reviewId === undefined || row.reviewId === query.reviewId) &&
-			(search.developerId === undefined || row.developer?.accountId === search.developerId),
+			(search.developerId === undefined || row.person?.accountId === search.developerId),
 		REVIEW_PAGE_SIZE,
 	);
 }
@@ -167,7 +167,7 @@ export const Default: Story = {
 export const WithoutNames: Story = {
 	args: {
 		people: { ...PEOPLE, named: false },
-		results: pool(reviewResults.map((result) => ({ ...result, developer: null }))),
+		results: pool(reviewResults.map((result) => ({ ...result, person: null }))),
 	},
 	play: async ({ canvas }) => {
 		await canvas.findByText("16 observations.");

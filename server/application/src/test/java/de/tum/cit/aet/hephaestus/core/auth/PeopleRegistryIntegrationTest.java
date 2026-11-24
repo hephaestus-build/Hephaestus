@@ -198,20 +198,23 @@ class PeopleRegistryIntegrationTest extends BaseIntegrationTest {
 
         people.absorbUnclaimed(targetId, sourceId);
 
-        assertThat(jdbc.queryForObject("SELECT developer_id FROM result WHERE id=?", Long.class, newer.getId()))
+        assertThat(jdbc.queryForObject("SELECT person_account_id FROM result WHERE id=?", Long.class, newer.getId()))
                 .isEqualTo(targetId);
         assertThat(jdbc.queryForObject("SELECT ended_at IS NULL FROM result WHERE id=?", Boolean.class, newer.getId()))
                 .isTrue();
         assertThat(jdbc.queryForObject("SELECT end_reason FROM result WHERE id=?", String.class, older.getId()))
                 .isEqualTo("OUTRANKED");
-        assertThat(jdbc.queryForObject("SELECT developer_id FROM feedback WHERE id=?", Long.class, feedback.getId()))
+        assertThat(jdbc.queryForObject(
+                        "SELECT person_account_id FROM feedback WHERE id=?", Long.class, feedback.getId()))
                 .isEqualTo(targetId);
         assertThat(jdbc.queryForObject("SELECT body FROM feedback WHERE id=?", String.class, feedback.getId()))
                 .isEqualTo("Confirmed copy words");
         assertThat(jdbc.queryForObject("SELECT state FROM feedback WHERE id=?", String.class, feedback.getId()))
                 .isEqualTo("DELIVERED");
         assertThat(jdbc.queryForObject(
-                        "SELECT developer_id FROM feedback_basis WHERE feedback_id=?", Long.class, feedback.getId()))
+                        "SELECT person_account_id FROM feedback_basis WHERE feedback_id=?",
+                        Long.class,
+                        feedback.getId()))
                 .isEqualTo(targetId);
         assertThat(jdbc.queryForObject("SELECT external_ref FROM feedback_copy WHERE id=?", String.class, copyId))
                 .isEqualTo("retained-copy");

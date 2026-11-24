@@ -96,12 +96,12 @@ function YouBracket() {
  * is a dashed track that says so, at the same width, so the rows line up.
  */
 export function WorkspaceSplitBar({ split, yourStanding }: WorkspaceSplitBarProps) {
-	if (split.developers === 0 || split.developers === null) {
+	if (split.people === 0 || split.people === null) {
 		return (
 			<div className="flex w-full min-w-0 flex-col gap-1">
 				<EmptyTrack />
 				<p className="text-xs text-muted-foreground">
-					{split.developers === 0 ? NOBODY_YET : TOO_FEW_TO_SPLIT}.
+					{split.people === 0 ? NOBODY_YET : TOO_FEW_TO_SPLIT}.
 				</p>
 			</div>
 		);
@@ -121,7 +121,7 @@ export function WorkspaceSplitBar({ split, yourStanding }: WorkspaceSplitBarProp
 	const parts = [
 		...split.parts.map((part) => ({
 			def: standingPart(part.standing),
-			count: part.developers ?? 0,
+			count: part.people ?? 0,
 			isYours: part.standing === yourStanding,
 		})),
 		{

@@ -89,11 +89,11 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .expectStatus()
                 .isCreated()
                 .expectBody()
-                .jsonPath("$.shownToDevelopers")
+                .jsonPath("$.shownToPeople")
                 .isEqualTo(false);
         var stored = groups.findByWorkspaceIdAndSlug(workspace.getId(), "hidden-group")
                 .orElseThrow();
-        assertThat(stored.isShownToDevelopers()).isFalse();
+        assertThat(stored.isShownToPeople()).isFalse();
         client.get()
                 .uri("/workspaces/{workspace}/practice-groups/{slug}", workspace.getWorkspaceSlug(), stored.getSlug())
                 .headers(TestAuthUtils.withCurrentUser())
@@ -103,7 +103,7 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .expectHeader()
                 .exists("ETag")
                 .expectBody()
-                .jsonPath("$.shownToDevelopers")
+                .jsonPath("$.shownToPeople")
                 .isEqualTo(false);
     }
 
@@ -148,7 +148,7 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .isEqualTo(source.effective().name())
                 .jsonPath("$.position")
                 .isEqualTo(7)
-                .jsonPath("$.shownToDevelopers")
+                .jsonPath("$.shownToPeople")
                 .isEqualTo(false)
                 .jsonPath("$.feedbackMode.override")
                 .isEqualTo("OFF");
@@ -160,7 +160,7 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(stored.getColor()).isEqualTo(source.effective().color());
         assertThat(stored.getCatalogBase()).isEqualTo(source.effective());
         assertThat(stored.getPosition()).isEqualTo(7);
-        assertThat(stored.isShownToDevelopers()).isFalse();
+        assertThat(stored.isShownToPeople()).isFalse();
         assertThat(stored.getFeedbackMode()).isEqualTo(FeedbackMode.OFF);
     }
 }

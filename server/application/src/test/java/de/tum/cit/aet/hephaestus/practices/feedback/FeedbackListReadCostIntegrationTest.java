@@ -229,7 +229,7 @@ class FeedbackListReadCostIntegrationTest extends BaseIntegrationTest {
         var result = data.result(data.onOtherWork(owner), ResultOutcome.NOT_MET, AT.plusSeconds(index));
         var id = UUID.randomUUID();
         jdbc.sql("""
-            INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at)
+            INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,delivered_at)
             VALUES(:id,:ws,:review,:item,:developer,'ON_WORK','DELIVERED','Recorded feedback.',:at,:at)
             """)
                 .param("id", id)
@@ -240,7 +240,7 @@ class FeedbackListReadCostIntegrationTest extends BaseIntegrationTest {
                 .param("at", Timestamp.from(result.getRecordedAt()))
                 .update();
         jdbc.sql("""
-            INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)
+            INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal)
             VALUES(:id,:ws,:feedback,:result,:developer,0)
             """)
                 .param("id", UUID.randomUUID())

@@ -129,7 +129,7 @@ export function buildFeedbackModeFixture({
 				icon: null,
 				color: null,
 				position: practiceGroups.length,
-				shownToDevelopers: true,
+				shownToPeople: true,
 				catalogOrigin: CATALOG_ORIGIN,
 				feedbackMode: assignment(
 					group.override,

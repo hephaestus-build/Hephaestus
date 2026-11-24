@@ -71,7 +71,7 @@ public interface FeedbackBasisRepository extends JpaRepository<FeedbackBasis, UU
             AS delivering
         FROM feedback f JOIN feedback_basis b ON b.feedback_id=f.id AND b.workspace_id=f.workspace_id
           JOIN review r ON r.id=f.review_id AND r.workspace_id=f.workspace_id
-        WHERE f.workspace_id=:workspaceId AND f.review_id=:reviewId AND f.developer_id=:developerId
+        WHERE f.workspace_id=:workspaceId AND f.review_id=:reviewId AND f.person_account_id=:developerId
           AND f.destination IN ('PRACTICE_PAGE','CONVERSATION') AND b.result_id IN (:resultIds)
         """, nativeQuery = true)
     List<PrivateDecisionRow> findPrivateDecisions(
@@ -94,7 +94,7 @@ public interface FeedbackBasisRepository extends JpaRepository<FeedbackBasis, UU
             long workspaceId, Collection<UUID> feedbackIds);
 
     @Query(value = """
-        SELECT r.* FROM result r WHERE r.workspace_id = :workspaceId AND r.developer_id IN (:developerIds)
+        SELECT r.* FROM result r WHERE r.workspace_id = :workspaceId AND r.person_account_id IN (:developerIds)
            AND r.recorded_at > :from AND r.recorded_at < :to AND r.ended_at IS NULL
         ORDER BY r.recorded_at, r.id
         """, nativeQuery = true)
@@ -132,7 +132,7 @@ public interface FeedbackBasisRepository extends JpaRepository<FeedbackBasis, UU
     @WorkspaceAgnostic("Verified account absorption moves the same person across all workspaces")
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(
-            value = "UPDATE feedback_basis SET developer_id = :claimedAccountId WHERE developer_id"
+            value = "UPDATE feedback_basis SET person_account_id = :claimedAccountId WHERE person_account_id"
                     + " = :unclaimedAccountId",
             nativeQuery = true)
     int absorbDeveloper(
@@ -185,10 +185,10 @@ public interface FeedbackBasisRepository extends JpaRepository<FeedbackBasis, UU
     @Query(value = """
         SELECT DISTINCT fresh.id AS id,answer.resolution AS resolution FROM problem fresh JOIN result current_result ON current_result.id=fresh.result_id AND current_result.workspace_id=fresh.workspace_id
          JOIN result prior ON prior.workspace_id=current_result.workspace_id AND prior.practice_id=current_result.practice_id
-           AND prior.item_id=current_result.item_id AND prior.developer_id=current_result.developer_id
+           AND prior.item_id=current_result.item_id AND prior.person_account_id=current_result.person_account_id
          JOIN problem old ON old.result_id=prior.id AND old.workspace_id=prior.workspace_id AND old.key=fresh.key
          JOIN feedback_basis b ON b.result_id=prior.id AND b.workspace_id=prior.workspace_id AND (b.problem_id IS NULL OR b.problem_id=old.id)
-         JOIN feedback f ON f.id=b.feedback_id AND f.workspace_id=b.workspace_id AND f.developer_id=current_result.developer_id AND f.delivered_at IS NOT NULL
+         JOIN feedback f ON f.id=b.feedback_id AND f.workspace_id=b.workspace_id AND f.person_account_id=current_result.person_account_id AND f.delivered_at IS NOT NULL
            AND (f.destination='ON_WORK' OR NOT :onWork)
          JOIN LATERAL (SELECT r.resolution FROM feedback_response r WHERE r.feedback_id=f.id AND r.workspace_id=f.workspace_id
            ORDER BY r.created_at DESC,r.id::text DESC LIMIT 1) answer ON true

@@ -183,8 +183,8 @@ function groupDetails(
 	group: PracticeGroup,
 	patch: Partial<UpdatePracticeGroupRequest>,
 ): UpdatePracticeGroupRequest {
-	const { name, description, icon, color, shownToDevelopers } = group;
-	return { name, description, icon, color, shownToDevelopers, ...patch };
+	const { name, description, icon, color, shownToPeople } = group;
+	return { name, description, icon, color, shownToPeople, ...patch };
 }
 
 /** What the adoption panel's primary action reads as, once the preview it acts on is known. */
@@ -383,7 +383,7 @@ function PracticeCatalogRoute() {
 		detailStack.map((entry) => detailStackKey(entry)),
 	);
 	/** The groups the editor offers. A hidden group still holds practices but is not a destination. */
-	const editableGroups = groupsQuery.data?.filter((group) => group.shownToDevelopers);
+	const editableGroups = groupsQuery.data?.filter((group) => group.shownToPeople);
 
 	const catalogReset = usePracticeCatalogReset({
 		workspaceSlug,
@@ -544,7 +544,7 @@ function PracticeCatalogRoute() {
 									icon,
 									color,
 									position: null,
-									shownToDevelopers: true,
+									shownToPeople: true,
 								},
 							});
 							return true;
@@ -560,8 +560,8 @@ function PracticeCatalogRoute() {
 							return false;
 						}
 					}}
-					onSetGroupShownToDevelopers={(groupSlug, shownToDevelopers) => {
-						void updateGroup(groupSlug, { shownToDevelopers }).catch(() => undefined);
+					onSetGroupShownToDevelopers={(groupSlug, shownToPeople) => {
+						void updateGroup(groupSlug, { shownToPeople }).catch(() => undefined);
 					}}
 					onDeleteGroup={(groupSlug) =>
 						setDeletingGroup(groups.find((group) => group.slug === groupSlug) ?? null)

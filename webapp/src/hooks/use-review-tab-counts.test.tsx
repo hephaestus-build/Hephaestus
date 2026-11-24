@@ -87,7 +87,7 @@ describe("practice review tab totals", () => {
 				expect(url.searchParams.get("size")).toBe("1");
 				expect(url.searchParams.get("practiceSlug")).toBe("testing");
 			}
-			expect(wire.reads.map((url) => url.searchParams.get("developerId"))).toStrictEqual(
+			expect(wire.reads.map((url) => url.searchParams.get("personId"))).toStrictEqual(
 				Array.from({ length: 8 }, () => "7"),
 			);
 		} finally {

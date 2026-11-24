@@ -1,0 +1,2 @@
+# 1.0 calls the person a review concerns person (#4905).
+in API DELETE /workspaces/{workspaceSlug}/practice-groups/{groupSlug}/catalog-customization removed the required property `shownToDevelopers` from the response with the `200` status

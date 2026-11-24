@@ -279,7 +279,7 @@ describe("practice review list routes", () => {
 
 		// "Clear scope" ends the shared scope; the list's own ordering is not part of it.
 		await userEvent.click(within(scope).getByRole("button", { name: "Clear scope" }));
-		await waitFor(() => expect(resultUrls.at(-1)?.searchParams.get("developerId")).toBeNull());
+		await waitFor(() => expect(resultUrls.at(-1)?.searchParams.get("personId")).toBeNull());
 		expect(resultUrls.at(-1)?.searchParams.get("sort")).toBe("ACTIONABILITY");
 
 		const tabs = screen.getByRole("navigation", { name: "Practice review sections" });
@@ -357,7 +357,7 @@ describe("practice review list routes", () => {
 
 		const requested = problemUrls.at(-1);
 		expect(values(requested, "severity")).toStrictEqual(["MAJOR"]);
-		expect(requested?.searchParams.get("developerId")).toBe("7");
+		expect(requested?.searchParams.get("personId")).toBe("7");
 		expect(values(requested, "practiceSlug")).toStrictEqual(["thin-controllers"]);
 		expect(values(requested, "groupSlug")).toStrictEqual(["design"]);
 		expect(requested?.searchParams.get("from")).not.toBeNull();
@@ -413,9 +413,9 @@ describe("practice review list routes", () => {
 		);
 		await screen.findByText("No feedback for this developer yet", undefined, ROUTE_RENDER_WAIT);
 
-		expect(feedbackUrls.at(-1)?.searchParams.get("developerId")).toBe("9");
+		expect(feedbackUrls.at(-1)?.searchParams.get("personId")).toBe("9");
 		const counts = locationCountUrls.at(-1);
-		expect(counts?.searchParams.get("developerId")).toBe("9");
+		expect(counts?.searchParams.get("personId")).toBe("9");
 		expect(counts?.searchParams.get("location")).toBeNull();
 		expect(values(counts, "state")).toStrictEqual([]);
 	});
@@ -424,7 +424,7 @@ describe("practice review list routes", () => {
 		recordRequests();
 		const [feedback] = reviewFeedback;
 		assert(feedback);
-		const name = developerLabel(feedback.developer);
+		const name = developerLabel(feedback.person);
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback", () =>
 				HttpResponse.json(pageOf([feedback])),
@@ -447,7 +447,7 @@ describe("practice review list routes", () => {
 			),
 			http.get("*/workspaces/:workspaceSlug/practices/reviews/results", ({ request }) => {
 				resultUrls.push(new URL(request.url));
-				return HttpResponse.json(pageOf([{ ...result, developer: null }]));
+				return HttpResponse.json(pageOf([{ ...result, person: null }]));
 			}),
 		);
 
@@ -457,7 +457,7 @@ describe("practice review list routes", () => {
 
 		expect(screen.queryByRole("combobox", { name: "Developer" })).toBeNull();
 		expect(screen.queryAllByRole("columnheader", { name: "Developer" })).toHaveLength(0);
-		expect(resultUrls.flatMap((url) => values(url, "developerId"))).toStrictEqual([]);
+		expect(resultUrls.flatMap((url) => values(url, "personId"))).toStrictEqual([]);
 	});
 
 	it("drops the person from an old address while per-person results are off", async () => {
@@ -475,7 +475,7 @@ describe("practice review list routes", () => {
 		await waitFor(() => expect(resultUrls.length).toBeGreaterThan(0));
 
 		expect(router.state.location.search).not.toHaveProperty("developerId");
-		expect(resultUrls.flatMap((url) => values(url, "developerId"))).toStrictEqual([]);
+		expect(resultUrls.flatMap((url) => values(url, "personId"))).toStrictEqual([]);
 	});
 
 	/**
@@ -525,7 +525,7 @@ describe("practice review list routes", () => {
 		await screen.findByText(scopedReview.item.label, { exact: false }, ROUTE_RENDER_WAIT);
 
 		const requested = reviewUrls.at(-1);
-		expect(requested?.searchParams.get("developerId")).toBe("7");
+		expect(requested?.searchParams.get("personId")).toBe("7");
 		expect(values(requested, "practiceSlug")).toStrictEqual(["thin-controllers"]);
 		expect(values(requested, "groupSlug")).toStrictEqual(["design"]);
 		expect(requested?.searchParams.get("from")).not.toBeNull();
@@ -609,11 +609,11 @@ describe("practice review list routes", () => {
 		await userEvent.click(screen.getByRole("button", { name: "Reset" }));
 
 		await waitFor(() => expect(values(resultUrls.at(-1), "outcome")).toStrictEqual([]));
-		expect(resultUrls.at(-1)?.searchParams.get("developerId")).toBe("7");
+		expect(resultUrls.at(-1)?.searchParams.get("personId")).toBe("7");
 		expect(router.state.location.search).toMatchObject({ developerId: "7" });
 
 		await userEvent.click(screen.getByRole("button", { name: "Clear scope" }));
-		await waitFor(() => expect(resultUrls.at(-1)?.searchParams.get("developerId")).toBeNull());
+		await waitFor(() => expect(resultUrls.at(-1)?.searchParams.get("personId")).toBeNull());
 	});
 
 	/**

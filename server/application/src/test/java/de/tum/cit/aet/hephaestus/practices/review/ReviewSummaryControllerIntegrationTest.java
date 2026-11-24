@@ -465,7 +465,7 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .expectBody()
                 .jsonPath("$.head[0].reviewId")
                 .isEqualTo(review.getId().toString())
-                .jsonPath("$.head[0].developer.accountId")
+                .jsonPath("$.head[0].person.accountId")
                 .isEqualTo(Long.toString(scenarioAccountId));
 
         jdbc.sql("UPDATE workspace SET per_person_results_for_admins = false WHERE id = :ws")
@@ -478,7 +478,7 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .expectBody()
                 .jsonPath("$.head[0].reviewId")
                 .isEqualTo(review.getId().toString())
-                .jsonPath("$.head[0].developer")
+                .jsonPath("$.head[0].person")
                 .isEmpty();
     }
 

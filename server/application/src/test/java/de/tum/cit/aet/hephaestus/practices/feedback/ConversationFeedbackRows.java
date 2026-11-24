@@ -36,7 +36,7 @@ public final class ConversationFeedbackRows {
                 item);
         UUID feedback = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,stop_reason,body,"
+                "INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,stop_reason,body,"
                         + "created_at) VALUES (?,?,?,?,?,'CONVERSATION','UNCONFIRMED','DELIVERY_UNCONFIRMED',?,now())",
                 feedback,
                 workspaceId,

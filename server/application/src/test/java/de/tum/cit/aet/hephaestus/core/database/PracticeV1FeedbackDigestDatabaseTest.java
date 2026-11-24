@@ -15,6 +15,17 @@ class PracticeV1FeedbackDigestDatabaseTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"prod", "dev"})
+    void shouldVerifyAnApprovalStoredBeforeThePersonRename(String context) throws Exception {
+        var database = PracticeMigrationFixture.migratedDatabase(context);
+        assertThat(PracticeMigrationFixture.column(database, """
+            SELECT (content_digest = feedback_content_digest(feedback_id))::text
+            FROM feedback_decision
+            WHERE id='00000000-0000-0000-0000-000000992261'
+            """)).containsExactly("true");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"prod", "dev"})
     void shouldKeepRepairStateBoundedAndTheConfirmedThreadImmutable(String context) throws Exception {
         var database = NativePracticeFixture.feedbackParent(context);
         PracticeMigrationFixture.execute(database, """

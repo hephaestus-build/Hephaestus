@@ -1,0 +1,2 @@
+# 1.0 calls the person a review concerns person (#4905).
+in API GET /workspaces/{workspaceSlug}/practices/workspace-overview removed the required property `groups/items/practices/items/split/developers` from the response with the `200` status

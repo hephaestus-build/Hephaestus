@@ -12,7 +12,7 @@ import org.springframework.data.repository.Repository;
 public interface ProfileOverviewRepository extends Repository<Result, UUID> {
     @Query(value = """
         SELECT p.slug,min(r.recorded_at) AS recordedAt FROM result r JOIN practice p ON p.id=r.practice_id
-          AND p.workspace_id=r.workspace_id WHERE r.workspace_id=:ws AND r.developer_id=:account GROUP BY p.slug
+          AND p.workspace_id=r.workspace_id WHERE r.workspace_id=:ws AND r.person_account_id=:account GROUP BY p.slug
         """, nativeQuery = true)
     List<FirstOpportunity> firstOpportunities(long ws, long account);
 
@@ -34,7 +34,7 @@ public interface ProfileOverviewRepository extends Repository<Result, UUID> {
           AND EXISTS(SELECT 1 FROM review_item m WHERE m.workspace_id=q.workspace_id AND m.review_id=q.id
             AND m.state='LISTED' AND m.detail->>'developerId'=CAST(:account AS text))
           AND NOT EXISTS(SELECT 1 FROM result r WHERE r.workspace_id=q.workspace_id AND r.review_id=q.id
-            AND r.developer_id=:account)
+            AND r.person_account_id=:account)
         ORDER BY q.ordered_at DESC,q.id DESC LIMIT 1
         """, nativeQuery = true)
     Optional<ActiveReview> activeReview(long ws, long account);

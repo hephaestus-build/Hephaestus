@@ -247,7 +247,7 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
     /** Each read's statements, after checking that the read saw the seeded work. */
     private Map<String, Long> costs(int unreadPieces) {
         var context = WorkspaceContext.fromWorkspace(scenario.workspace(), Set.of(), null);
-        var shown = groups.findByWorkspaceIdAndShownToDevelopersTrueOrderByPositionAscNameAsc(
+        var shown = groups.findByWorkspaceIdAndShownToPeopleTrueOrderByPositionAscNameAsc(
                 scenario.workspace().getId());
         Map<String, Long> costs = new LinkedHashMap<>();
         costs.put(
@@ -321,7 +321,7 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
     /** How many times each standing read asks the mirror for the current fingerprints of a piece of work. */
     private Map<String, Long> workReads() {
         var context = WorkspaceContext.fromWorkspace(scenario.workspace(), Set.of(), null);
-        var shown = groups.findByWorkspaceIdAndShownToDevelopersTrueOrderByPositionAscNameAsc(
+        var shown = groups.findByWorkspaceIdAndShownToPeopleTrueOrderByPositionAscNameAsc(
                 scenario.workspace().getId());
         Map<String, Runnable> reads = new LinkedHashMap<>();
         reads.put("overview", () -> overview.getOverview(context));
@@ -390,7 +390,7 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
     private UUID practicePageFeedback(Result bound, boolean delivered) {
         var id = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,"
+                "INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,"
                         + "delivered_at) VALUES(?,?,?,?,?,'PRACTICE_PAGE',?,'Keep each change focused.',?,?)",
                 id,
                 bound.getWorkspaceId(),
@@ -401,7 +401,7 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
                 Timestamp.from(bound.getRecordedAt()),
                 delivered ? Timestamp.from(bound.getRecordedAt()) : null);
         jdbc.update(
-                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)"
+                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal)"
                         + " VALUES(?,?,?,?,?,0)",
                 FeedbackIds.basis(id, bound.getId(), null),
                 bound.getWorkspaceId(),

@@ -80,7 +80,7 @@ function feedbackPage(
 			selects(query.destination, row.destination) &&
 			(query.location === undefined || row.location === query.location) &&
 			selects(query.stopReason, row.stopReason) &&
-			(query.developerId === undefined || row.developer?.accountId === query.developerId),
+			(query.personId === undefined || row.person?.accountId === query.personId),
 		REVIEW_PAGE_SIZE,
 	);
 }
@@ -127,7 +127,7 @@ const meta = {
 									status: "ready",
 									counts: locationCounts(
 										(args.feedback.status === "ready" ? args.feedback.rows : []).filter(
-											(row) => row.developer?.accountId === search.developerId,
+											(row) => row.person?.accountId === search.developerId,
 										),
 									),
 								}
@@ -185,9 +185,7 @@ export const WithoutNames: Story = {
 	args: {
 		people: { ...PEOPLE, named: false },
 		feedback: pool(
-			reviewFeedback.map((row) =>
-				row.destination === "ON_WORK" ? row : { ...row, developer: null },
-			),
+			reviewFeedback.map((row) => (row.destination === "ON_WORK" ? row : { ...row, person: null })),
 		),
 	},
 	play: async ({ canvas }) => {

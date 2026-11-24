@@ -39,13 +39,13 @@ import tools.jackson.databind.node.JsonNodeFactory;
                     columnNames = {"id", "workspace_id"}),
             @UniqueConstraint(
                     name = "uk_feedback_developer",
-                    columnNames = {"id", "developer_id", "workspace_id"})
+                    columnNames = {"id", "person_account_id", "workspace_id"})
         },
         indexes = {
             @Index(
                     name = "idx_feedback_recipient",
-                    columnList = "workspace_id, developer_id, destination, created_at DESC, id DESC"),
-            @Index(name = "idx_feedback_review", columnList = "workspace_id, review_id, destination, developer_id")
+                    columnList = "workspace_id, person_account_id, destination, created_at DESC, id DESC"),
+            @Index(name = "idx_feedback_review", columnList = "workspace_id, review_id, destination, person_account_id")
         })
 @Getter
 @Builder
@@ -66,7 +66,7 @@ public class Feedback {
     @Column(name = "item_id", nullable = true)
     private @Nullable Long itemId;
 
-    @Column(name = "developer_id", nullable = false)
+    @Column(name = "person_account_id", nullable = false)
     private long developerId;
 
     @Enumerated(EnumType.STRING)

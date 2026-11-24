@@ -42,7 +42,7 @@ import tools.jackson.databind.JsonNode;
                     columnNames = {"id", "practice_id", "item_id", "workspace_id"}),
             @UniqueConstraint(
                     name = "uk_result_developer",
-                    columnNames = {"id", "developer_id", "workspace_id"})
+                    columnNames = {"id", "person_account_id", "workspace_id"})
         })
 @Getter
 @Builder
@@ -72,7 +72,7 @@ public class Result {
     @Column(name = "item_version", columnDefinition = "TEXT")
     private @Nullable String itemVersion;
 
-    @Column(name = "developer_id")
+    @Column(name = "person_account_id")
     private @Nullable Long developerId;
 
     @Enumerated(EnumType.STRING)

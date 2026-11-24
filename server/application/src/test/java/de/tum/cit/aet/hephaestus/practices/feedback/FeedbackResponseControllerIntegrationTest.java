@@ -85,7 +85,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractFeedbackIntegrat
                         + " VALUES (?,?,'MEMBER',now(),false,false,false)",
                 workspace.getId(),
                 other);
-        jdbc.update("UPDATE feedback SET developer_id=? WHERE id=?", other, shown.getId());
+        jdbc.update("UPDATE feedback SET person_account_id=? WHERE id=?", other, shown.getId());
         client.get()
                 .uri(route(shown.getId()))
                 .headers(TestAuthUtils.withCurrentUser())

@@ -27,9 +27,9 @@ class ListPracticeGroupsTool implements McpTool {
     private static final String OUTPUT_SCHEMA = """
             {"type": "object", "required": ["groups"], "additionalProperties": false,
              "properties": {"groups": {"type": "array", "items": {
-               "type": "object", "required": ["slug", "name", "position", "shownToDevelopers", "feedbackMode"], "additionalProperties": false,
+               "type": "object", "required": ["slug", "name", "position", "shownToPeople", "feedbackMode"], "additionalProperties": false,
                "properties": {"slug": {"type": "string"}, "name": {"type": "string"}, "position": {"type": "integer"},
-                              "shownToDevelopers": {"type": "boolean"}, "feedbackMode": %s}}}}}
+                              "shownToPeople": {"type": "boolean"}, "feedbackMode": %s}}}}}
             """.formatted(McpProjections.FEEDBACK_MODE_SCHEMA);
 
     private final PracticeGroupService groups;
@@ -62,7 +62,7 @@ class ListPracticeGroupsTool implements McpTool {
                         group.slug(),
                         group.name(),
                         group.position(),
-                        group.shownToDevelopers(),
+                        group.shownToPeople(),
                         McpProjections.FeedbackMode.of(group.feedbackMode())))
                 .toList();
         return McpTools.result(new Result(rows));
@@ -71,9 +71,5 @@ class ListPracticeGroupsTool implements McpTool {
     record Result(List<Group> groups) {}
 
     record Group(
-            String slug,
-            String name,
-            int position,
-            boolean shownToDevelopers,
-            McpProjections.FeedbackMode feedbackMode) {}
+            String slug, String name, int position, boolean shownToPeople, McpProjections.FeedbackMode feedbackMode) {}
 }

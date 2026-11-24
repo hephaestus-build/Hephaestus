@@ -83,7 +83,7 @@ export const Default: Story = {
 export const WithoutNames: Story = {
 	args: {
 		people: { ...PEOPLE, named: false },
-		problems: loadedList(reviewProblems.map((problem) => ({ ...problem, developer: null }))),
+		problems: loadedList(reviewProblems.map((problem) => ({ ...problem, person: null }))),
 	},
 	play: async ({ canvas }) => {
 		await canvas.findByText(`${reviewProblems.length} problems.`);

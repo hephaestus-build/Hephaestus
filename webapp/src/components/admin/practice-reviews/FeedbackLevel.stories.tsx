@@ -266,7 +266,7 @@ async function expectHeaderChip(panel: HTMLElement, label: string) {
 /** The sheet's title: the developer and where the feedback goes, never its text. */
 function titleOf(feedback: ReviewFeedbackDetail): string {
 	const where = FEEDBACK_LOCATION_DEFS[feedback.location].label;
-	return `For ${developerLabel(feedback.developer)} · ${where}`;
+	return `For ${developerLabel(feedback.person)} · ${where}`;
 }
 
 function history(panel: HTMLElement) {
@@ -320,7 +320,7 @@ export const Withheld: Story = {
  * names nobody, so the sheet says where the feedback goes and not for whom.
  */
 export const WithoutTheDeveloper: Story = {
-	args: { feedback: ready({ ...practicePageCard, developer: null }) },
+	args: { feedback: ready({ ...practicePageCard, person: null }) },
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByRole("heading", { level: 2 })).toHaveTextContent(

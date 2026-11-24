@@ -8,7 +8,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponseRep
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.PerPersonResults;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDeveloperDTO;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPersonDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackLocation;
@@ -152,7 +152,7 @@ public class FeedbackListReadQuery {
 
     private record Facts(
             Map<Long, ItemRefDTO> items,
-            Map<Long, ReviewDeveloperDTO> developers,
+            Map<Long, ReviewPersonDTO> developers,
             // Per row: one developer's feedback on the work and on their practice page share an id.
             boolean perPersonShown,
             Map<UUID, FeedbackBasisRead.Snapshot> basis,

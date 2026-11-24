@@ -173,7 +173,7 @@ class PracticeV1ConstraintDatabaseTest {
                 .containsExactly("true");
         assertThatThrownBy(() -> PracticeMigrationFixture.execute(database, """
             INSERT INTO result SELECT gen_random_uuid(),workspace_id,review_id,practice_id,practice_version_id,item_id,
-                item_version,developer_id,outcome,severity,summary,explanation,evidence,example,coverage,
+                item_version,person_account_id,outcome,severity,summary,explanation,evidence,example,coverage,
                 evidence_version,recorded_at,ended_at,end_reason FROM result WHERE evidence_version=0 LIMIT 1
             """))
                 .hasRootCauseInstanceOf(SQLException.class)
