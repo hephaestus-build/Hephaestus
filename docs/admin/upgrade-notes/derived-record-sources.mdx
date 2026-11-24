@@ -1,0 +1,23 @@
+---
+title: Check the derived-record source tables after the upgrade
+description: Confirm that the 1.0 migration created the provenance references and the removed-source records.
+page_type: how-to
+---
+
+Use this procedure after the 1.0 migration, to check the tables that record what a derived record read.
+The migration adds two empty tables and three triggers on the conversation entries.
+It changes no existing row, and it needs no action before the upgrade.
+
+1. Use the migration login to run this query.
+
+   ```sql
+   SELECT to_regclass('public.basis_edge') IS NOT NULL AS references_table,
+          to_regclass('public.source_tombstone') IS NOT NULL AS removed_sources_table,
+          (SELECT count(*) FROM pg_trigger
+           WHERE tgrelid = 'public.conversation_entry'::regclass
+             AND tgname LIKE 'conversation_entry_basis_%') AS triggers;
+   ```
+
+## Check that it worked
+
+The query returns `true`, `true` and `3`.

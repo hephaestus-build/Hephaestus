@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795551211195-1" author="hephaestus">
+        <createTable tableName="basis_edge">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="basis_edgePK"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueComputed="now()" name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dependent_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dependent_kind" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_kind" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1795551211195-2" author="hephaestus">
+        <addUniqueConstraint columnNames="dependent_kind, dependent_id, source_kind, source_id" constraintName="uk_basis_edge_dependent_source" tableName="basis_edge"/>
+    </changeSet>
+    <changeSet id="1795551211195-3" author="hephaestus">
+        <createIndex indexName="idx_basis_edge_account" tableName="basis_edge">
+            <column name="account_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795551211195-4" author="hephaestus">
+        <comment>A provenance reference names known kinds, belongs to an existing account, and only its owner reads or writes it.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE public.basis_edge
+    ADD CONSTRAINT ck_basis_edge_dependent_kind CHECK (dependent_kind IN ('ENTRY')),
+    ADD CONSTRAINT ck_basis_edge_source_kind CHECK (source_kind IN ('ENTRY')),
+    ADD CONSTRAINT sfk_basis_edge_account FOREIGN KEY (account_id) REFERENCES public.account(id) ON DELETE RESTRICT;
+
+ALTER TABLE public.basis_edge ENABLE ROW LEVEL SECURITY;
+CREATE POLICY basis_edge_owner ON public.basis_edge TO hephaestus_app
+    USING (account_id = public.current_owner_account())
+    WITH CHECK (account_id = public.current_owner_account());
+        ]]></sql>
+        <rollback>
+            <sql>DROP POLICY basis_edge_owner ON public.basis_edge</sql>
+            <sql>ALTER TABLE public.basis_edge DISABLE ROW LEVEL SECURITY</sql>
+            <sql>ALTER TABLE public.basis_edge DROP CONSTRAINT sfk_basis_edge_account</sql>
+            <sql>ALTER TABLE public.basis_edge DROP CONSTRAINT ck_basis_edge_source_kind</sql>
+            <sql>ALTER TABLE public.basis_edge DROP CONSTRAINT ck_basis_edge_dependent_kind</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795551211195-5" author="hephaestus">
+        <comment>A removed source of a workspace. Workspace tenancy, not an owner policy, scopes it, so a removal by one person makes the records of every person that cite the source stale.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE TABLE public.source_tombstone (
+    workspace_id bigint NOT NULL,
+    source_kind varchar(16) NOT NULL,
+    source_id uuid NOT NULL,
+    kind varchar(16) NOT NULL,
+    created_at timestamp(6) with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT source_tombstone_pk PRIMARY KEY (workspace_id, source_kind, source_id),
+    CONSTRAINT ck_source_tombstone_source_kind CHECK (source_kind IN ('ENTRY')),
+    CONSTRAINT ck_source_tombstone_kind CHECK (kind IN ('DELETED_SOURCE'))
+);
+        ]]></sql>
+        <rollback>
+            <sql>DROP TABLE public.source_tombstone</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795551211195-6" author="hephaestus">
+        <comment>A redacted entry is a removed source. An entry whose row goes takes its tombstone and the references of the record it is with it. An entry that moves to another account takes the references of its record along.</comment>
+        <sql splitStatements="false"><![CDATA[
+-- The function names its tables with the schema: person_row_sweep fires these triggers with an empty search path.
+CREATE FUNCTION public.basis_entry_removed() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    INSERT INTO public.source_tombstone (workspace_id, source_kind, source_id, kind)
+    VALUES (NEW.workspace_id, 'ENTRY', NEW.id, 'DELETED_SOURCE')
+    ON CONFLICT DO NOTHING;
+    RETURN NULL;
+END
+$$;
+
+CREATE FUNCTION public.basis_entry_moved() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    UPDATE public.basis_edge SET account_id = NEW.account_id
+    WHERE dependent_kind = 'ENTRY' AND dependent_id = NEW.id AND account_id = OLD.account_id;
+    RETURN NULL;
+END
+$$;
+
+CREATE FUNCTION public.basis_entries_deleted() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    DELETE FROM public.source_tombstone t USING gone
+    WHERE t.workspace_id = gone.workspace_id AND t.source_kind = 'ENTRY' AND t.source_id = gone.id;
+    DELETE FROM public.basis_edge e USING gone
+    WHERE e.dependent_kind = 'ENTRY' AND e.dependent_id = gone.id;
+    RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER conversation_entry_basis_removed
+    AFTER UPDATE OF redacted_at ON public.conversation_entry
+    FOR EACH ROW WHEN (OLD.redacted_at IS NULL AND NEW.redacted_at IS NOT NULL)
+    EXECUTE FUNCTION public.basis_entry_removed();
+
+CREATE TRIGGER conversation_entry_basis_moved
+    AFTER UPDATE OF account_id ON public.conversation_entry
+    FOR EACH ROW WHEN (OLD.account_id IS DISTINCT FROM NEW.account_id)
+    EXECUTE FUNCTION public.basis_entry_moved();
+
+CREATE TRIGGER conversation_entry_basis_deleted
+    AFTER DELETE ON public.conversation_entry
+    REFERENCING OLD TABLE AS gone
+    FOR EACH STATEMENT EXECUTE FUNCTION public.basis_entries_deleted();
+        ]]></sql>
+        <rollback>
+            <sql>DROP TRIGGER conversation_entry_basis_deleted ON public.conversation_entry</sql>
+            <sql>DROP TRIGGER conversation_entry_basis_moved ON public.conversation_entry</sql>
+            <sql>DROP TRIGGER conversation_entry_basis_removed ON public.conversation_entry</sql>
+            <sql>DROP FUNCTION public.basis_entries_deleted()</sql>
+            <sql>DROP FUNCTION public.basis_entry_moved()</sql>
+            <sql>DROP FUNCTION public.basis_entry_removed()</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

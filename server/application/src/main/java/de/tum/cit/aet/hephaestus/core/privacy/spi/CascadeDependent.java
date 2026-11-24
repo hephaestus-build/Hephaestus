@@ -44,7 +44,10 @@ public enum CascadeDependent {
     /**
      * A practice result about a source's work, with the feedback based on it and the scan-report members that name it.
      */
-    PRACTICE_RESULT(Home.STORE);
+    PRACTICE_RESULT(Home.STORE),
+
+    /** A record whose {@code basis_edge} references cite the source, or cite a record that is stale. */
+    CITING_RECORD(Home.STORE);
 
     /** Where the dependent lives. */
     public enum Home {

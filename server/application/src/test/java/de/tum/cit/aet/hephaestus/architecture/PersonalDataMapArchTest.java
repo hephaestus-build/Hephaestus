@@ -104,6 +104,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             // Instance keys that sign provenance records: key material with no person, kept for the life of the
             // instance.
             "provenance_signing_key",
+            // The removed sources of a workspace: a kind and the id of an erased conversation entry, no words and no
+            // person. The trigger that redacts the entry writes it, and the row goes when the entry row goes.
+            "source_tombstone",
             "label",
             "llm_call_permit",
             "llm_call_pool",

@@ -69,6 +69,12 @@ class CascadeTableTest extends BaseUnitTest {
         /** The credentials of the dependent are revoked in the transaction of the cause. */
         REVOKE,
 
+        /**
+         * The dependent keeps its row and is stale from the commit of the cause: the {@code source_tombstone} row of
+         * the source tells every read of its basis.
+         */
+        STALE,
+
         /** Nothing changes. The cell states why, or names the issue that owns the gap. */
         KEEP
     }
@@ -456,7 +462,35 @@ class CascadeTableTest extends BaseUnitTest {
                     List.of(),
                     "A narrowing keeps the source, so the results about its work stay: a stopped repository keeps"
                             + " its indexed work, and a paused channel consent or an AI-choice change removes no"
-                            + " result."));
+                            + " result."),
+            // CITING_RECORD
+            new Cell(
+                    CascadeCause.REMOVAL,
+                    CascadeDependent.CITING_RECORD,
+                    Action.STALE,
+                    List.of(
+                            "core.privacy.BasisInvalidationIntegrationTest"
+                                    + "#shouldMakeTheAnswerBasisStaleOnTheNextReadWhenTheDeveloperDeletesASourceMessage",
+                            "core.privacy.BasisInvalidationIntegrationTest"
+                                    + "#shouldMakeARecordStaleWhenARecordThatItCitesIsStale"),
+                    ""),
+            new Cell(
+                    CascadeCause.SOURCE_ERASURE,
+                    CascadeDependent.CITING_RECORD,
+                    Action.KEEP,
+                    List.of(),
+                    "Only a conversation entry can be a cited source today (BasisKind), and nothing cites one until a"
+                            + " producer ships (#4924, #4932). A Slack disconnect redacts the entries written in Slack,"
+                            + " and the redaction writes their tombstones, so a record that cites one is stale. Each"
+                            + " other source kind adds its kind and its removal trigger with the producer that cites it."),
+            new Cell(
+                    CascadeCause.ERASURE,
+                    CascadeDependent.CITING_RECORD,
+                    Action.DELETE,
+                    List.of("core.privacy.BasisInvalidationIntegrationTest"
+                            + "#shouldDeleteTheReferencesOfThePersonWhenTheirDataIsErased"),
+                    ""),
+            new Cell(CascadeCause.NARROWING, CascadeDependent.CITING_RECORD, Action.KEEP, List.of(), NARROWING_GAP));
 
     /**
      * The rows of the person-data map's main table that hold copies of their own, such as a copy outside PostgreSQL,
@@ -515,6 +549,7 @@ class CascadeTableTest extends BaseUnitTest {
             "PostgreSQL product feedback destinations",
             "PostgreSQL product feedback filing",
             "PostgreSQL product reviews",
+            "PostgreSQL provenance references",
             "PostgreSQL provider event inbox",
             "PostgreSQL recovery facts",
             "PostgreSQL runtime",
@@ -543,7 +578,9 @@ class CascadeTableTest extends BaseUnitTest {
             "feedback",
             EnumSet.of(CascadeDependent.PRACTICE_RESULT),
             "review_item",
-            EnumSet.of(CascadeDependent.PRACTICE_RESULT));
+            EnumSet.of(CascadeDependent.PRACTICE_RESULT),
+            "basis_edge",
+            EnumSet.of(CascadeDependent.CITING_RECORD));
 
     /**
      * The stores of the person-data map that hold no words of a conversation entry. A provider's own record of a Slack

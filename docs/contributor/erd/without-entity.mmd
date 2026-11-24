@@ -38,6 +38,14 @@ erDiagram
         VARCHAR(255) locked_by "NOT NULL"
     }
 
+    SourceTombstone {
+        BIGINT workspace_id PK
+        VARCHAR(16) source_kind PK
+        UUID source_id PK
+        VARCHAR(16) kind "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
     Account["Account · Core"]
 
     %% Relationships

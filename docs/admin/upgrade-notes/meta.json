@@ -4,6 +4,7 @@
 		"person-row-level-security",
 		"privacy-journal",
 		"authorization-recheck",
-		"practice-identity"
+		"practice-identity",
+		"derived-record-sources"
 	]
 }

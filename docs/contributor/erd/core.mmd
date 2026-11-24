@@ -90,6 +90,17 @@ erDiagram
         BIGINT viewed_account_id FK
     }
 
+    BasisEdge {
+        BIGINT id PK
+        BIGINT account_id FK "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        UUID dependent_id UK "NOT NULL"
+        VARCHAR(16) dependent_kind UK "NOT NULL"
+        UUID source_id UK "NOT NULL"
+        VARCHAR(16) source_kind UK "NOT NULL"
+        BIGINT workspace_id "NOT NULL"
+    }
+
     ClientSession {
         UUID id PK
         BIGINT account_id FK "NOT NULL"
@@ -333,6 +344,7 @@ erDiagram
     Account ||--o{ AuthEvent : viewed_account_id
     User ||--o{ AuthEvent : references
     Workspace ||--o{ AuthEvent : has
+    Account ||--o{ BasisEdge : has
     Account ||--o{ ClientSession : has
     Account ||--o{ ClientSignInHandoff : has
     Account ||--o{ ConfigAuditEvent : acting_account_id
