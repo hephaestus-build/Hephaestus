@@ -7529,6 +7529,40 @@ export const OffsetPageDTOScanSummarySchema = {
 	required: ["content", "page", "size", "totalElements", "totalPages"],
 } as const;
 
+export const OffsetPageDTOSpaceSchema = {
+	type: "object",
+	description: "One numbered page of a list",
+	properties: {
+		content: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/Space",
+			},
+		},
+		page: {
+			type: "integer",
+			format: "int32",
+			description: "This page's number, from 0",
+		},
+		size: {
+			type: "integer",
+			format: "int32",
+			description: "The most rows a page holds",
+		},
+		totalElements: {
+			type: "integer",
+			format: "int64",
+			description: "Rows in the whole list",
+		},
+		totalPages: {
+			type: "integer",
+			format: "int32",
+			description: "Pages in the whole list",
+		},
+	},
+	required: ["content", "page", "size", "totalElements", "totalPages"],
+} as const;
+
 export const OffsetPageDTOSyncJobSchema = {
 	type: "object",
 	description: "One numbered page of a list",
@@ -16317,6 +16351,24 @@ export const SlackUserWorkspacePreferencesSchema = {
 	required: ["slackTeamId", "workspaceName", "workspaceSlug"],
 } as const;
 
+export const SpaceSchema = {
+	type: "object",
+	description:
+		"A workspace of the signed-in person: their personal space, or a team workspace they belong to.",
+	properties: {
+		displayName: {
+			type: "string",
+		},
+		kind: {
+			$ref: "#/components/schemas/WorkspaceKind",
+		},
+		workspaceSlug: {
+			type: "string",
+		},
+	},
+	required: ["displayName", "kind", "workspaceSlug"],
+} as const;
+
 export const StandingSchema = {
 	type: "string",
 	enum: ["DEVELOPING", "STRENGTH", "MIXED", "NOT_OBSERVED", "NO_OPPORTUNITY"],
@@ -18522,6 +18574,12 @@ export const WorkspaceGroupSplitSchema = {
 		"yourBasis",
 		"yourStanding",
 	],
+} as const;
+
+export const WorkspaceKindSchema = {
+	type: "string",
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["TEAM", "PERSONAL"],
 } as const;
 
 export const WorkspaceListItemSchema = {

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import java.time.Clock;
@@ -43,7 +44,7 @@ public class WorkspaceMembershipsAdapter implements WorkspaceMemberships {
         memberships
                 .findById_AccountId(accountId)
                 .forEach(membership -> ids.add(membership.getWorkspace().getId()));
-        workspaces.findPersonalSpaceId(accountId).ifPresent(ids::add);
+        workspaces.findByPersonalAccountId(accountId).map(Workspace::getId).ifPresent(ids::add);
         return List.copyOf(ids);
     }
 

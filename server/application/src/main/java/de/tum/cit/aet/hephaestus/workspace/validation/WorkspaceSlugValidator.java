@@ -14,6 +14,14 @@ public class WorkspaceSlugValidator implements ConstraintValidator<WorkspaceSlug
     public static final int MAX_LENGTH = 51;
     public static final String LABEL_PATTERN = "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$";
     private static final Pattern LABEL = Pattern.compile(LABEL_PATTERN);
+
+    /**
+     * The slug of any workspace that a path can name: a team slug, or a personal space's {@code me--} and 16 base32
+     * characters. A team slug never contains {@code --}, so the two never meet, and a label with {@code --} in its
+     * third and fourth place is reserved in DNS, so a personal space never gets a host name.
+     */
+    public static final String ADDRESS_PATTERN = "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$";
+
     private static final Set<String> RESERVED = Set.of(
             "www",
             "api",

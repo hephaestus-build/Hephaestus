@@ -280,6 +280,7 @@ export { listSessions } from "./sdk/listSessions.gen.js";
 export { listSlackChannelCandidates } from "./sdk/listSlackChannelCandidates.gen.js";
 export { listSlackChannelConsentEvents } from "./sdk/listSlackChannelConsentEvents.gen.js";
 export { listSlackChannels } from "./sdk/listSlackChannels.gen.js";
+export { listSpaces } from "./sdk/listSpaces.gen.js";
 export { listUserViewUsers } from "./sdk/listUserViewUsers.gen.js";
 export { listWorkspaceConfigAuditEvents } from "./sdk/listWorkspaceConfigAuditEvents.gen.js";
 export { listWorkspaces } from "./sdk/listWorkspaces.gen.js";

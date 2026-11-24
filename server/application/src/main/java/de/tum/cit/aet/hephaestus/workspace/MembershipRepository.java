@@ -129,7 +129,14 @@ public interface MembershipRepository extends JpaRepository<Membership, Membersh
      * Registry discovery returns only tenant IDs for the account, not membership data across tenants. An admin or owner
      * also finds a suspended workspace, because only they can resume it. It lists team workspaces only.
      */
-    @Query("""
+    @Query(LISTED_TEAM_IDS)
+    List<Long> findListedWorkspaceIdsByAccountId(@Param("accountId") Long accountId);
+
+    /**
+     * The team workspaces that the registry lists for {@code :accountId}, as a JPQL subquery: the one rule for the
+     * workspace list and the space list ({@link WorkspaceRepository#findSpaces}).
+     */
+    String LISTED_TEAM_IDS = """
         SELECT m.workspace.id FROM Membership m
         WHERE m.id.accountId = :accountId
           AND m.leftAt IS NULL
@@ -139,8 +146,7 @@ public interface MembershipRepository extends JpaRepository<Membership, Membersh
               AND m.role IN (
                 de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole.ADMIN,
                 de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole.OWNER)))
-        """)
-    List<Long> findListedWorkspaceIdsByAccountId(@Param("accountId") Long accountId);
+        """;
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @WorkspaceAgnostic("Account absorption locks memberships across workspaces")
@@ -197,4 +203,16 @@ public interface MembershipRepository extends JpaRepository<Membership, Membersh
     @WorkspaceAgnostic("Account erasure or verified absorption removes memberships across workspaces")
     @Query("DELETE FROM Membership m WHERE m.id.accountId = :accountId")
     void deleteByAccountId(@Param("accountId") long accountId);
+
+    /**
+     * The owner's active membership of their personal space: a member, never an admin (the database holds this). A
+     * membership that ended is active again.
+     */
+    @Modifying
+    @Query(value = """
+        INSERT INTO membership (workspace_id, account_id, role, role_source)
+        VALUES (:workspaceId, :accountId, 'MEMBER', 'PERSON')
+        ON CONFLICT (workspace_id, account_id) DO UPDATE SET left_at = NULL WHERE membership.left_at IS NOT NULL
+        """, nativeQuery = true)
+    int keepPersonalOwner(@Param("workspaceId") long workspaceId, @Param("accountId") long accountId);
 }

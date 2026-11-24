@@ -5829,6 +5829,55 @@ paths:
       summary: Get current user's Slack preferences
       tags:
       - Slack User Preferences
+  /user/spaces:
+    get:
+      description: "The first call creates your personal space. The first page starts\
+        \ with it, followed by the team workspaces that the workspace list shows you,\
+        \ by name: an active workspace where your membership is active, and a suspended\
+        \ one where your membership is active with the admin or owner role. No workspace\
+        \ route opens a personal space yet."
+      operationId: listSpaces
+      parameters:
+      - in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          maximum: 10000000
+          minimum: 0
+      - in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+          maximum: 100
+          minimum: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OffsetPageDTOSpace"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: List your personal space and your team workspaces
+      tags:
+      - Account
   /web-vitals:
     post:
       operationId: reportWebVitals
@@ -6076,7 +6125,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "204":
           description: Workspace purged
@@ -6113,7 +6162,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -6150,7 +6199,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -6203,7 +6252,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -6258,7 +6307,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - description: Activity range
         in: query
         name: range
@@ -6348,7 +6397,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - description: Activity range
         in: query
         name: range
@@ -6464,7 +6513,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - description: The member's login
         in: path
         name: login
@@ -6523,7 +6572,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - description: Activity range
         in: query
         name: range
@@ -6613,7 +6662,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: userId
         required: true
@@ -6709,7 +6758,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: userId
         required: true
@@ -6769,7 +6818,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: userId
         required: true
@@ -6829,7 +6878,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: userId
         required: true
@@ -6953,7 +7002,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: login
         required: false
@@ -7073,7 +7122,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: cursor
         required: false
@@ -7162,7 +7211,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: entityType
         required: false
@@ -7239,7 +7288,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -7274,7 +7323,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -7314,7 +7363,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -7356,7 +7405,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -7399,7 +7448,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -7453,7 +7502,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: connectionId
         required: true
@@ -7510,7 +7559,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: connectionId
         required: true
@@ -7558,7 +7607,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: connectionId
         required: true
@@ -7599,7 +7648,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: connectionId
         required: true
@@ -7656,7 +7705,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: connectionId
         required: true
@@ -7735,7 +7784,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: connectionId
         required: true
@@ -7806,7 +7855,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: connectionId
         required: true
@@ -7849,7 +7898,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: id
         required: true
@@ -7895,7 +7944,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: id
         required: true
@@ -7944,7 +7993,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -7980,7 +8029,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: cursor
         required: false
@@ -8030,7 +8079,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: entryId
         required: true
@@ -8073,7 +8122,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: entryId
         required: true
@@ -8133,7 +8182,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: entryId
         required: true
@@ -8173,7 +8222,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: entryId
         required: true
@@ -8228,7 +8277,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -8272,7 +8321,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -8324,7 +8373,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: turnId
         required: true
@@ -8371,7 +8420,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -8412,7 +8461,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: cursor
         required: false
@@ -8461,7 +8510,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: id
         required: true
@@ -8502,7 +8551,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -8539,7 +8588,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -8576,7 +8625,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -8612,7 +8661,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -8659,7 +8708,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: connectionId
         required: true
@@ -8719,7 +8768,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: id
         required: true
@@ -8768,7 +8817,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: id
         required: true
@@ -8821,7 +8870,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: id
         required: true
@@ -8862,7 +8911,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -8899,7 +8948,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: id
         required: true
@@ -8947,7 +8996,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: id
         required: true
@@ -9007,7 +9056,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: id
         required: true
@@ -9048,7 +9097,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -9083,7 +9132,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: month
         required: false
@@ -9124,7 +9173,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -9161,7 +9210,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: grantId
         required: true
@@ -9198,7 +9247,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: q
         required: false
@@ -9271,7 +9320,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -9323,7 +9372,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "204":
           description: You left the workspace
@@ -9359,7 +9408,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -9394,7 +9443,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: accountId
         required: true
@@ -9440,7 +9489,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: accountId
         required: true
@@ -9491,7 +9540,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: accountId
         required: true
@@ -9539,7 +9588,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -9576,7 +9625,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: purpose
         required: true
@@ -9617,7 +9666,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: purpose
         required: true
@@ -9682,7 +9731,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -9717,7 +9766,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -9758,7 +9807,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -9793,7 +9842,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -9827,7 +9876,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -9868,7 +9917,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -9905,7 +9954,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -9947,7 +9996,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -10017,7 +10066,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -10075,7 +10124,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: collectionId
         required: true
@@ -10120,7 +10169,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: collectionId
         required: true
@@ -10174,7 +10223,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -10208,7 +10257,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -10249,7 +10298,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -10285,7 +10334,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -10332,7 +10381,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -10375,7 +10424,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: slug
         required: true
@@ -10414,7 +10463,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: slug
         required: true
@@ -10459,7 +10508,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: slug
         required: true
@@ -10516,7 +10565,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: slug
         required: true
@@ -10585,7 +10634,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -10622,7 +10671,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -10661,7 +10710,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -10708,7 +10757,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -10750,7 +10799,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: shownToPeopleOnly
         required: false
@@ -10790,7 +10839,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -10830,7 +10879,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -10874,7 +10923,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -10911,7 +10960,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: groupSlug
         required: true
@@ -10945,7 +10994,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: groupSlug
         required: true
@@ -10983,7 +11032,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: groupSlug
         required: true
@@ -11028,7 +11077,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: groupSlug
         required: true
@@ -11072,7 +11121,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: groupSlug
         required: true
@@ -11117,7 +11166,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: groupSlug
         required: true
@@ -11187,7 +11236,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -11223,7 +11272,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - description: Only work of these kinds
         in: query
         name: itemKind
@@ -11311,7 +11360,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: reviewId
         required: true
@@ -11354,7 +11403,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "204":
           description: The workspace has no practice repository
@@ -11390,7 +11439,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -11428,7 +11477,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -11479,7 +11528,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -11539,7 +11588,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -11584,7 +11633,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -11625,7 +11674,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: trialId
         required: true
@@ -11666,7 +11715,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: feedbackMode
         required: false
@@ -11706,7 +11755,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -11746,7 +11795,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -11780,7 +11829,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -11821,7 +11870,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: url
         required: true
@@ -11863,7 +11912,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -11900,7 +11949,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: feedbackId
         required: true
@@ -11946,7 +11995,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: feedbackId
         required: true
@@ -11994,7 +12043,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: feedbackId
         required: true
@@ -12059,7 +12108,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: itemKind
         required: false
@@ -12113,7 +12162,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: itemId
         required: true
@@ -12155,7 +12204,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: itemId
         required: true
@@ -12203,7 +12252,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: itemId
         required: true
@@ -12259,7 +12308,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: itemId
         required: true
@@ -12301,7 +12350,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -12338,7 +12387,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: slug
         required: true
@@ -12378,7 +12427,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: slug
         required: true
@@ -12417,7 +12466,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: slug
         required: true
@@ -12470,7 +12519,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: practiceSlug
         required: false
@@ -12561,7 +12610,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: resultId
         required: true
@@ -12608,7 +12657,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: origin
         required: false
@@ -12661,7 +12710,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -12702,7 +12751,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: batchId
         required: true
@@ -12758,7 +12807,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - description: "The provider page's address, as the browser shows it"
         in: query
         name: url
@@ -12820,7 +12869,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -12861,7 +12910,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -12897,7 +12946,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -12938,7 +12987,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: scheduleId
         required: true
@@ -12979,7 +13028,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: scheduleId
         required: true
@@ -13030,7 +13079,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: scheduleId
         required: true
@@ -13082,7 +13131,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -13116,7 +13165,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: header
         name: If-Match
         required: false
@@ -13162,7 +13211,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -13202,7 +13251,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -13241,7 +13290,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: page
         required: false
@@ -13362,7 +13411,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: reviewId
         required: false
@@ -13506,7 +13555,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: reviewId
         required: false
@@ -13635,7 +13684,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: reviewId
         required: false
@@ -13764,7 +13813,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: feedbackId
         required: true
@@ -13804,7 +13853,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: feedbackId
         required: true
@@ -13845,7 +13894,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: feedbackId
         required: true
@@ -13891,7 +13940,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: feedbackId
         required: true
@@ -13931,7 +13980,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: feedbackId
         required: true
@@ -13971,7 +14020,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: kind
         required: true
@@ -14046,7 +14095,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - description: Inclusive lower bound; defaults to seven days before to. A range
           spans at most 400 days.
         in: query
@@ -14121,7 +14170,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: reviewId
         required: false
@@ -14274,7 +14323,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: problemId
         required: true
@@ -14318,7 +14367,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -14353,7 +14402,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: reviewId
         required: false
@@ -14492,7 +14541,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: resultId
         required: true
@@ -14533,7 +14582,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: resultId
         required: true
@@ -14575,7 +14624,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: resultId
         required: true
@@ -14622,7 +14671,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: resultId
         required: true
@@ -14679,7 +14728,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - description: Inclusive lower bound; defaults to seven days before to. A range
           spans at most 400 days.
         in: query
@@ -14745,7 +14794,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: reviewId
         required: true
@@ -14786,7 +14835,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: reviewId
         required: true
@@ -14833,7 +14882,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: reviewId
         required: true
@@ -14875,7 +14924,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: repositoryItemId
         required: false
@@ -14938,7 +14987,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: header
         name: Idempotency-Key
         required: true
@@ -14985,7 +15034,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: scanId
         required: true
@@ -15026,7 +15075,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: scanId
         required: true
@@ -15067,7 +15116,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: scanId
         required: true
@@ -15147,7 +15196,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: scanId
         required: true
@@ -15228,7 +15277,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: scanId
         required: true
@@ -15270,7 +15319,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: scanId
         required: true
@@ -15325,7 +15374,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -15364,7 +15413,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: window
         required: true
@@ -15408,7 +15457,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -15444,7 +15493,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -15478,7 +15527,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -15516,7 +15565,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -15561,7 +15610,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -15605,7 +15654,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -15652,7 +15701,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -15698,7 +15747,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -15739,7 +15788,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -15785,7 +15834,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -15830,7 +15879,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -15876,7 +15925,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: practiceSlug
         required: true
@@ -15917,7 +15966,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -15958,7 +16007,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -15994,7 +16043,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -16035,7 +16084,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: nameWithOwner
         required: true
@@ -16070,7 +16119,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -16106,7 +16155,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: nameWithOwner
         required: true
@@ -16142,7 +16191,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -16177,7 +16226,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -16219,7 +16268,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -16257,7 +16306,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: repositoryItemId
         required: true
@@ -16301,7 +16350,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -16338,7 +16387,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -16380,7 +16429,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -16417,7 +16466,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: slackChannelId
         required: true
@@ -16464,7 +16513,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: slackChannelId
         required: true
@@ -16506,7 +16555,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -16547,7 +16596,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -16583,7 +16632,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -16624,7 +16673,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -16660,7 +16709,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -16698,7 +16747,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: id
         required: true
@@ -16741,7 +16790,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: teamId
         required: true
@@ -16787,7 +16836,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: teamId
         required: true
@@ -16834,7 +16883,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: teamId
         required: true
@@ -16882,7 +16931,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       requestBody:
         content:
           application/json:
@@ -16923,7 +16972,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: query
         name: page
         required: false
@@ -16975,7 +17024,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       - in: path
         name: accountId
         required: true
@@ -17024,7 +17073,7 @@ paths:
           type: string
           maxLength: 51
           minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+          pattern: "^(?:me--[a-z2-7]{16}|(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])$"
       responses:
         "200":
           content:
@@ -23439,6 +23488,36 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ScanSummary"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOSpace:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/Space"
         page:
           type: integer
           format: int32
@@ -30442,6 +30521,21 @@ components:
       - slackTeamId
       - workspaceName
       - workspaceSlug
+    Space:
+      type: object
+      description: "A workspace of the signed-in person: their personal space, or\
+        \ a team workspace they belong to."
+      properties:
+        displayName:
+          type: string
+        kind:
+          $ref: "#/components/schemas/WorkspaceKind"
+        workspaceSlug:
+          type: string
+      required:
+      - displayName
+      - kind
+      - workspaceSlug
     Standing:
       type: string
       enum:
@@ -32303,6 +32397,13 @@ components:
       - split
       - yourBasis
       - yourStanding
+    WorkspaceKind:
+      type: string
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
+      - TEAM
+      - PERSONAL
     WorkspaceListItem:
       type: object
       description: Summary information about a workspace for list views

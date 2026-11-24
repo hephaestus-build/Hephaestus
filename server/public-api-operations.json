@@ -14,6 +14,7 @@
   "GET /user/consent",
   "GET /user/public-activity",
   "GET /user/public-activity/workspaces/{slug}/onboarding",
+  "GET /user/spaces",
   "GET /workspaces",
   "GET /workspaces/{workspaceSlug}",
   "GET /workspaces/{workspaceSlug}/activity/hidden-contributors",

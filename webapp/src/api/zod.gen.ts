@@ -6460,6 +6460,40 @@ export const zWorkspaceAiOption = z.object({
 });
 
 /**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zWorkspaceKind = z.string();
+
+/**
+ * A workspace of the signed-in person: their personal space, or a team workspace they belong to.
+ */
+export const zSpace = z.object({
+	displayName: z.string(),
+	kind: zWorkspaceKind,
+	workspaceSlug: z.string(),
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoSpace = z.object({
+	content: z.array(zSpace),
+	page: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	size: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	totalElements: z.int(),
+	totalPages: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+/**
  * Your AI provider connection (API key redacted)
  */
 export const zWorkspaceLlmConnection = z.object({

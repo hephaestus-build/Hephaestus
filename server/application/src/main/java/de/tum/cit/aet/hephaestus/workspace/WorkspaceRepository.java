@@ -9,6 +9,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -222,9 +224,6 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
 
     List<Workspace> findByStatusAndKind(Workspace.WorkspaceStatus status, WorkspaceKind kind);
 
-    @Query("SELECT w.id FROM Workspace w WHERE w.personalAccountId = :accountId")
-    Optional<Long> findPersonalSpaceId(@Param("accountId") long accountId);
-
     /** The workspace's status, share-locked: a status change or a delete waits for the caller ({@code holdActive}). */
     @Query(value = "SELECT status FROM workspace WHERE id = :id FOR SHARE", nativeQuery = true)
     Optional<String> lockStatusForShare(@Param("id") long id);
@@ -254,4 +253,32 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "DELETE FROM workspace WHERE id = :id AND kind = 'PERSONAL'", nativeQuery = true)
     int deletePersonalSpace(@Param("id") long id);
+
+    Optional<Workspace> findByPersonalAccountId(Long accountId);
+
+    /**
+     * Creates the account's personal space. The login is the slug: no provider login has {@code --}, so no provider
+     * event or lookup by login reaches a personal space.
+     */
+    @Modifying
+    @Query(value = """
+        INSERT INTO workspace (slug, display_name, account_login, account_type, status, kind, personal_account_id)
+        VALUES (:slug, :displayName, :slug, 'USER', 'ACTIVE', 'PERSONAL', :accountId)
+        """, nativeQuery = true)
+    int insertPersonalSpace(
+            @Param("accountId") long accountId, @Param("slug") String slug, @Param("displayName") String displayName);
+
+    /**
+     * One page of the account's spaces: its personal space first, then the team workspaces that the registry lists for
+     * it, by name and slug.
+     */
+    @Query(
+            value = "SELECT w FROM Workspace w WHERE w.personalAccountId = :accountId OR w.id IN ("
+                    + MembershipRepository.LISTED_TEAM_IDS
+                    + ") ORDER BY CASE WHEN w.kind = de.tum.cit.aet.hephaestus.workspace.WorkspaceKind.PERSONAL"
+                    + " THEN 0 ELSE 1 END, lower(w.displayName), w.workspaceSlug",
+            countQuery = "SELECT count(w) FROM Workspace w WHERE w.personalAccountId = :accountId OR w.id IN ("
+                    + MembershipRepository.LISTED_TEAM_IDS
+                    + ")")
+    Page<Workspace> findSpaces(@Param("accountId") Long accountId, Pageable pageable);
 }

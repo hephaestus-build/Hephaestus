@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.workspace;
 import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewSettings;
-import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlug;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
@@ -81,9 +80,9 @@ public class Workspace {
 
     // Identity & Display
 
+    /** A team slug is checked where it is chosen; the database checks the slug of either kind. */
     @Column(name = "slug", unique = true, nullable = false, length = 64)
     @NotBlank(message = "Workspace slug is required")
-    @WorkspaceSlug
     private String workspaceSlug;
 
     /** Human-readable name shown in UI (e.g., "TUM Applied Software Engineering") */

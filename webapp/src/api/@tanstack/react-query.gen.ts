@@ -833,6 +833,12 @@ export {
 	listSlackChannelsQueryKey,
 } from "./react-query/listSlackChannels.gen.js";
 export {
+	listSpacesInfiniteOptions,
+	listSpacesInfiniteQueryKey,
+	listSpacesOptions,
+	listSpacesQueryKey,
+} from "./react-query/listSpaces.gen.js";
+export {
 	listUserViewUsersInfiniteOptions,
 	listUserViewUsersInfiniteQueryKey,
 	listUserViewUsersOptions,

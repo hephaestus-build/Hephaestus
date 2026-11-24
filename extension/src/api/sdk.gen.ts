@@ -790,6 +790,9 @@ import type {
 	ListSlackChannelsData,
 	ListSlackChannelsErrors,
 	ListSlackChannelsResponses,
+	ListSpacesData,
+	ListSpacesErrors,
+	ListSpacesResponses,
 	ListUserViewUsersData,
 	ListUserViewUsersErrors,
 	ListUserViewUsersResponses,
@@ -3966,6 +3969,20 @@ export const getSlackUserPreferences = <ThrowOnError extends boolean = false>(
 	>({
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/user/slack/preferences",
+		...options,
+	});
+
+/**
+ * List your personal space and your team workspaces
+ *
+ * The first call creates your personal space. The first page starts with it, followed by the team workspaces that the workspace list shows you, by name: an active workspace where your membership is active, and a suspended one where your membership is active with the admin or owner role. No workspace route opens a personal space yet.
+ */
+export const listSpaces = <ThrowOnError extends boolean = false>(
+	options?: Options<ListSpacesData, ThrowOnError>,
+): RequestResult<ListSpacesResponses, ListSpacesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListSpacesResponses, ListSpacesErrors, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/user/spaces",
 		...options,
 	});
 

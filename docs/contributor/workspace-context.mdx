@@ -80,6 +80,13 @@ The privilege and audit policy lives in [Instance administration](./instance-adm
 A workspace is a team workspace (`TEAM`) or a personal space (`PERSONAL`).
 A personal space is a person's own place for goals and reflection. It belongs to no team.
 
+`GET /user/spaces` returns numbered pages: the person's personal space first, then their team workspaces by name.
+The first call creates the personal space.
+It locks the account row, so concurrent calls create one space, and a deleted account gets none.
+It draws a slug that is not reserved, as itself or as the token of an ended space (`WorkspaceSlugService.isReserved`).
+Each call keeps the owner's membership active.
+No route serves a personal space yet.
+
 The database holds these rules:
 
 - The kind and the owner (`personal_account_id`) never change.

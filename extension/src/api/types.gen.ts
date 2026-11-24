@@ -3983,6 +3983,29 @@ export type OffsetPageDtoScanSummary = {
 /**
  * One numbered page of a list
  */
+export type OffsetPageDtoSpace = {
+	content: Array<Space>;
+	/**
+	 * This page's number, from 0
+	 */
+	page: number;
+	/**
+	 * The most rows a page holds
+	 */
+	size: number;
+	/**
+	 * Rows in the whole list
+	 */
+	totalElements: number;
+	/**
+	 * Pages in the whole list
+	 */
+	totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
 export type OffsetPageDtoSyncJob = {
 	content: Array<SyncJob>;
 	/**
@@ -7034,6 +7057,15 @@ export type SlackUserWorkspacePreferences = {
 	workspaceSlug: string;
 };
 
+/**
+ * A workspace of the signed-in person: their personal space, or a team workspace they belong to.
+ */
+export type Space = {
+	displayName: string;
+	kind: WorkspaceKind;
+	workspaceSlug: string;
+};
+
 export type Standing = "DEVELOPING" | "STRENGTH" | "MIXED" | "NOT_OBSERVED" | "NO_OPPORTUNITY";
 
 export type StandingBasis =
@@ -8395,6 +8427,11 @@ export type WorkspaceGroupSplit = {
 	 */
 	yourStanding: Standing | null;
 };
+
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export type WorkspaceKind = string;
 
 /**
  * Summary information about a workspace for list views
@@ -14262,6 +14299,38 @@ export type GetSlackUserPreferencesResponses = {
 
 export type GetSlackUserPreferencesResponse =
 	GetSlackUserPreferencesResponses[keyof GetSlackUserPreferencesResponses];
+
+export type ListSpacesData = {
+	body?: never;
+	path?: never;
+	query?: {
+		page?: number;
+		size?: number;
+	};
+	url: "/user/spaces";
+};
+
+export type ListSpacesErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type ListSpacesError = ListSpacesErrors[keyof ListSpacesErrors];
+
+export type ListSpacesResponses = {
+	/**
+	 * OK
+	 */
+	200: OffsetPageDtoSpace;
+};
+
+export type ListSpacesResponse = ListSpacesResponses[keyof ListSpacesResponses];
 
 export type ReportWebVitalsData = {
 	body: WebVitalsReport;

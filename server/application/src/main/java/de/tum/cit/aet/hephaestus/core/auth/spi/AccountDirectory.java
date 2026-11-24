@@ -13,6 +13,12 @@ import org.jspecify.annotations.Nullable;
 public interface AccountDirectory {
     Optional<AccountView> find(long accountId);
 
+    /**
+     * Locks the account row until the caller's transaction ends, with the lock that the account's erasure takes, and
+     * says whether the account is active. Two callers for one account wait for each other.
+     */
+    boolean lockWhileActive(long accountId);
+
     Map<Long, AccountView> findAll(Collection<Long> accountIds);
 
     /** Locks an account eligible for retention in the caller's transaction. */

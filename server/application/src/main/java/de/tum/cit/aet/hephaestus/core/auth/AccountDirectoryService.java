@@ -41,6 +41,14 @@ public class AccountDirectoryService implements AccountDirectory {
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean lockWhileActive(long accountId) {
+        return accounts.lockStatusForUpdate(accountId)
+                .map(Account.Status.ACTIVE.name()::equals)
+                .orElse(false);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Map<Long, AccountView> findAll(Collection<Long> accountIds) {
         return accounts.findAllById(accountIds).stream()

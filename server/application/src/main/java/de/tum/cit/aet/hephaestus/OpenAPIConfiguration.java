@@ -719,7 +719,7 @@ public class OpenAPIConfiguration {
                             .required(true)
                             .description("Workspace slug")
                             .schema(new StringSchema()
-                                    .pattern(WorkspaceSlugValidator.LABEL_PATTERN)
+                                    .pattern(WorkspaceSlugValidator.ADDRESS_PATTERN)
                                     .minLength(WorkspaceSlugValidator.MIN_LENGTH)
                                     .maxLength(WorkspaceSlugValidator.MAX_LENGTH)));
         }

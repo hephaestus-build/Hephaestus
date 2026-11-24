@@ -42,6 +42,7 @@ import de.tum.cit.aet.hephaestus.notification.preferences.NotificationPreference
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.productfeedback.InstanceFeedbackController;
 import de.tum.cit.aet.hephaestus.productfeedback.MyProductFeedbackController;
+import de.tum.cit.aet.hephaestus.workspace.SpaceController;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRegistryController;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireWorkspaceOwner;
@@ -297,6 +298,8 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
             AccountController.class,
             AccountAiChoiceController.class,
             FeatureFlagController.class,
+            // The caller's own personal space and team workspaces, before any of them is chosen.
+            SpaceController.class,
             // The caller's own account or membership: their notification choices across their memberships, their own
             // product feedback reports (to read them, and to count them for the rate limit of a new one), and their own
             // membership row in the public workspace that the path's slug names, which must be opted in and ACTIVE
