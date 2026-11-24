@@ -95,7 +95,7 @@ Option 6.
       1. `REQUESTED_RESULT`
       2. `AGREED`
       3. `UNPROMPTED`
-    - When a turn ends and items still wait, the next claim starts at once. It does not wait for a new event.
+    - When a turn ends, the next claim starts at once for the items that decision 8 does not hold. It does not wait for a new event.
 11. **The notification text is the notice line, never the message summary.** The push payload stays ids only. On arrival, the service worker fetches the notice line with the person's session. On any failure it shows the kind's fixed text.
     - The notice line is registry copy with parameters, such as "Check ready: 1 problem on PR #42". It is never model text.
     - The fetch never refreshes a credential.
@@ -165,8 +165,8 @@ Not enforced. The implementing issues add the checks below, and review of each i
 - ActiveNoPushTest fails when a push goes to a person who is active in that workspace.
 - SendRecheckTest fails when a contact queued before a pause is sent after it.
 - OneKindBatchTest fails when a background batch holds items of two contact kinds.
-  It also fails when a requested result waits behind another kind.
-  It also fails when a waiting item needs a new event to be claimed after a turn ends.
+  It also fails when a claim takes another kind while a requested result is in the inbox.
+  It also fails when a turn ends and the next claim does not start at once.
 - AppOnlyItemRouteTest fails when an item that only the app may show is routed to Slack.
 - HeldResultNotCitedTest fails when an unprompted message cites a result that a delivery experiment holds.
 - DeliveryDecisionTest fails when an unprompted decision has no row, or a model call starts before it.
