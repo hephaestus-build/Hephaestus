@@ -4770,7 +4770,7 @@ export const markConversationRead = <ThrowOnError extends boolean = false>(
 /**
  * Ask Hephaestus
  *
- * Stores the question before anything is shown and queues a turn. A question while Hephaestus answers waits as a follow-up. Repeating a requestId returns the first submission.
+ * Stores the question before anything is shown and queues a turn. A question while Hephaestus answers waits as a follow-up. Repeat the original body and Idempotency-Key after a lost response.
  */
 export const submitConversationTurn = <ThrowOnError extends boolean = false>(
 	options: Options<SubmitConversationTurnData, ThrowOnError>,

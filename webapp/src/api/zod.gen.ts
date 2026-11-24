@@ -659,7 +659,6 @@ export const zConversationTurnPhase = z.string();
 export const zConversationTurnRequest = z.object({
 	pageContext: z.string().min(0).max(500).optional(),
 	parentEntryId: z.uuid().optional(),
-	requestId: z.uuid(),
 	text: z.string().min(1),
 });
 
@@ -1715,7 +1714,6 @@ export const zConversationTurn = z.object({
 	parentEntryId: z.uuid().optional(),
 	partial: zConversationTurnPartial.optional(),
 	phase: zConversationTurnPhase.optional(),
-	requestId: z.string(),
 	status: zConversationTurnStatus,
 	surface: zConversationTurnSurface,
 	waitingFor: zConversationTurnWaitingFor.optional(),
@@ -6410,7 +6408,6 @@ export const zConversationEntry = z.object({
 	kind: zConversationEntryKind,
 	links: z.array(zConversationLink),
 	parentEntryId: z.uuid().optional(),
-	requestId: z.string().optional(),
 	seq: z.int(),
 	slackDelivery: zConversationEntrySlackDelivery.optional(),
 	surface: zConversationEntrySurface,

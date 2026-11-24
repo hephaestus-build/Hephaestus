@@ -1137,10 +1137,6 @@ export type ConversationEntry = {
 	 */
 	parentEntryId?: string;
 	/**
-	 * The submission that wrote the message; the app matches its own optimistic message by it
-	 */
-	requestId?: string;
-	/**
 	 * Order within its conversation
 	 */
 	seq: number;
@@ -1325,10 +1321,6 @@ export type ConversationTurn = {
 	 * Where the running attempt stands. STARTING: it prepares, and the server admitted none of its model calls yet. WORKING: the server admitted a model call of the attempt. Only while the turn runs.
 	 */
 	phase?: ConversationTurnPhase;
-	/**
-	 * The submission or schedule key; the stimulus entry carries the same value
-	 */
-	requestId: string;
 	status: ConversationTurnStatus;
 	surface: ConversationTurnSurface;
 	/**
@@ -1384,10 +1376,6 @@ export type ConversationTurnRequest = {
 	 * Ask in the thread on this top-level message; the first reply opens the thread
 	 */
 	parentEntryId?: string;
-	/**
-	 * Chosen by the app for each message. Sending the same id again returns the first submission, so a retried request never asks twice.
-	 */
-	requestId: string;
 	/**
 	 * The developer's words
 	 */
@@ -16373,6 +16361,9 @@ export type MarkConversationReadResponse =
 
 export type SubmitConversationTurnData = {
 	body: ConversationTurnRequest;
+	headers: {
+		"Idempotency-Key": string;
+	};
 	path: {
 		/**
 		 * Workspace slug
@@ -16385,9 +16376,13 @@ export type SubmitConversationTurnData = {
 
 export type SubmitConversationTurnErrors = {
 	/**
-	 * Hephaestus declines the developer (conversation-refused), too many follow-ups wait, the requestId was used for another message, or the parent cannot have a thread (conversation-rejected)
+	 * The request is still running (idempotency-key-in-flight), Hephaestus declines the person (conversation-refused), or the conversation cannot accept the question (conversation-rejected)
 	 */
 	409: ProblemDetail;
+	/**
+	 * The key was already used with a different body
+	 */
+	422: ProblemDetail;
 	/**
 	 * A problem. Its type names the kind.
 	 */

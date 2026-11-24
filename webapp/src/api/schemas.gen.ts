@@ -2329,11 +2329,6 @@ export const ConversationEntrySchema = {
 			description:
 				"Set when the message is in a thread: the top-level message the thread replies to",
 		},
-		requestId: {
-			type: "string",
-			description:
-				"The submission that wrote the message; the app matches its own optimistic message by it",
-		},
 		seq: {
 			type: "integer",
 			format: "int64",
@@ -2595,10 +2590,6 @@ export const ConversationTurnSchema = {
 			description:
 				"Where the running attempt stands. STARTING: it prepares, and the server admitted none of its model calls yet. WORKING: the server admitted a model call of the attempt. Only while the turn runs.",
 		},
-		requestId: {
-			type: "string",
-			description: "The submission or schedule key; the stimulus entry carries the same value",
-		},
 		status: {
 			$ref: "#/components/schemas/ConversationTurnStatus",
 		},
@@ -2611,16 +2602,7 @@ export const ConversationTurnSchema = {
 				"Why a queued turn has not started. CAPACITY: a server may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.",
 		},
 	},
-	required: [
-		"attempt",
-		"conversationId",
-		"createdAt",
-		"id",
-		"maxAttempts",
-		"requestId",
-		"status",
-		"surface",
-	],
+	required: ["attempt", "conversationId", "createdAt", "id", "maxAttempts", "status", "surface"],
 } as const;
 
 export const ConversationTurnFailureReasonSchema = {
@@ -2689,19 +2671,13 @@ export const ConversationTurnRequestSchema = {
 			format: "uuid",
 			description: "Ask in the thread on this top-level message; the first reply opens the thread",
 		},
-		requestId: {
-			type: "string",
-			format: "uuid",
-			description:
-				"Chosen by the app for each message. Sending the same id again returns the first submission, so a retried request never asks twice.",
-		},
 		text: {
 			type: "string",
 			description: "The developer's words",
 			minLength: 1,
 		},
 	},
-	required: ["requestId", "text"],
+	required: ["text"],
 } as const;
 
 export const ConversationTurnStatusSchema = {
@@ -10279,6 +10255,7 @@ export const ProblemTypeSchema = {
 		"https://docs.hephaestus.build/contributor/api-error-handling#turned-off",
 		"https://docs.hephaestus.build/contributor/api-error-handling#no-model",
 		"https://docs.hephaestus.build/contributor/api-error-handling#check-in-invalid",
+		"https://docs.hephaestus.build/contributor/api-error-handling#idempotency-key-in-flight",
 		"https://docs.hephaestus.build/contributor/api-error-handling#oauth-callback-failed",
 		"https://docs.hephaestus.build/contributor/api-error-handling#outline-rate-limited",
 		"https://docs.hephaestus.build/contributor/api-error-handling#outline-unreachable",

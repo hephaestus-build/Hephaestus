@@ -8453,8 +8453,8 @@ paths:
   /workspaces/{workspaceSlug}/conversation/turns:
     post:
       description: Stores the question before anything is shown and queues a turn.
-        A question while Hephaestus answers waits as a follow-up. Repeating a requestId
-        returns the first submission.
+        A question while Hephaestus answers waits as a follow-up. Repeat the original
+        body and Idempotency-Key after a lost response.
       operationId: submitConversationTurn
       parameters:
       - description: Workspace slug
@@ -8466,6 +8466,12 @@ paths:
           maxLength: 51
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          format: uuid
       requestBody:
         content:
           application/json:
@@ -8484,9 +8490,15 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: "Hephaestus declines the developer (conversation-refused),\
-            \ too many follow-ups wait, the requestId was used for another message,\
-            \ or the parent cannot have a thread (conversation-rejected)"
+          description: "The request is still running (idempotency-key-in-flight),\
+            \ Hephaestus declines the person (conversation-refused), or the conversation\
+            \ cannot accept the question (conversation-rejected)"
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The key was already used with a different body
         "4XX":
           content:
             application/problem+json:
@@ -19222,10 +19234,6 @@ components:
           format: uuid
           description: "Set when the message is in a thread: the top-level message\
             \ the thread replies to"
-        requestId:
-          type: string
-          description: The submission that wrote the message; the app matches its
-            own optimistic message by it
         seq:
           type: integer
           format: int64
@@ -19470,10 +19478,6 @@ components:
           description: "Where the running attempt stands. STARTING: it prepares, and\
             \ the server admitted none of its model calls yet. WORKING: the server\
             \ admitted a model call of the attempt. Only while the turn runs."
-        requestId:
-          type: string
-          description: The submission or schedule key; the stimulus entry carries
-            the same value
         status:
           $ref: "#/components/schemas/ConversationTurnStatus"
         surface:
@@ -19492,7 +19496,6 @@ components:
       - createdAt
       - id
       - maxAttempts
-      - requestId
       - status
       - surface
     ConversationTurnFailureReason:
@@ -19557,17 +19560,11 @@ components:
           format: uuid
           description: Ask in the thread on this top-level message; the first reply
             opens the thread
-        requestId:
-          type: string
-          format: uuid
-          description: "Chosen by the app for each message. Sending the same id again\
-            \ returns the first submission, so a retried request never asks twice."
         text:
           type: string
           description: The developer's words
           minLength: 1
       required:
-      - requestId
       - text
     ConversationTurnStatus:
       type: string
@@ -25849,6 +25846,7 @@ components:
       - https://docs.hephaestus.build/contributor/api-error-handling#turned-off
       - https://docs.hephaestus.build/contributor/api-error-handling#no-model
       - https://docs.hephaestus.build/contributor/api-error-handling#check-in-invalid
+      - https://docs.hephaestus.build/contributor/api-error-handling#idempotency-key-in-flight
       - https://docs.hephaestus.build/contributor/api-error-handling#oauth-callback-failed
       - https://docs.hephaestus.build/contributor/api-error-handling#outline-rate-limited
       - https://docs.hephaestus.build/contributor/api-error-handling#outline-unreachable
