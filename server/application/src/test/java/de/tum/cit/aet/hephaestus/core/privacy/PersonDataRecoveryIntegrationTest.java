@@ -163,8 +163,15 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
                  "people":[{"accountId":%d,"identities":[]}]}
                 """.formatted(administratorId, personId));
+        var journal = new RecordingPrivacyJournal();
+        var recordingService = advisedService(
+                beans.getBean(PersonDataRegistry.class),
+                beans.getBeanProvider(PersonEvidenceErasure.class)
+                        .orderedStream()
+                        .toList(),
+                journal);
         var processing = new AtomicBoolean();
-        try (var context = context(manifest, processing)) {
+        try (var context = context(manifest, processing, recordingService)) {
             context.registerBean("erasureBeforeProcessing", Runnable.class, () -> () -> {
                 Account erased = accounts.findById(personId).orElseThrow();
                 assertThat(erased.getStatus()).isEqualTo(Account.Status.DELETED);
@@ -174,6 +181,10 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
             context.refresh();
             assertThat(processing).isTrue();
         }
+        assertThat(journal.facts()).singleElement().satisfies(fact -> {
+            assertThat(fact.kind()).isEqualTo(PrivacyJournalKind.PERSON_ERASED);
+            assertThat(fact.refs()).containsEntry("accountId", personId).containsKey("identities");
+        });
         // The same recovery configuration is safe after a restart.
         try (var context = context(manifest, new AtomicBoolean())) {
             context.refresh();

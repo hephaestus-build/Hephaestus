@@ -40,6 +40,7 @@ class SlackUninstallServiceTest extends BaseUnitTest {
 
     private static final long WORKSPACE = 42L;
     private static final String TEAM = "T1";
+    private static final IntegrationRef REF = new IntegrationRef(IntegrationKind.SLACK, WORKSPACE, TEAM);
 
     @Mock
     private SlackWorkspaceResolver workspaceResolver;
@@ -77,7 +78,7 @@ class SlackUninstallServiceTest extends BaseUnitTest {
     void eventTypeMapsToConnectionTransition(
             String slackEventType, String eventId, String expectedEventType, String expectedCorrelationId) {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
-        when(connectionService.findActive(WORKSPACE, IntegrationKind.SLACK)).thenReturn(Optional.of(connection));
+        when(connectionService.findReferenced(REF)).thenReturn(Optional.of(connection));
         lenient().when(connectionService.transition(eq(connection), any())).thenReturn(connection);
 
         service().onUninstall(TEAM, slackEventType, eventId);
@@ -93,12 +94,28 @@ class SlackUninstallServiceTest extends BaseUnitTest {
     @Test
     void shouldEraseWhatADisconnectErasesWhenTheAppIsUninstalled() {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
-        when(connectionService.findActive(WORKSPACE, IntegrationKind.SLACK)).thenReturn(Optional.of(connection));
+        when(connectionService.findReferenced(REF)).thenReturn(Optional.of(connection));
         lenient().when(connectionService.transition(eq(connection), any())).thenReturn(connection);
 
         service().onUninstall(TEAM, "app_uninstalled", "Ev1");
 
-        verify(connectionStrategy).eraseLocalData(new IntegrationRef(IntegrationKind.SLACK, WORKSPACE, TEAM));
+        verify(connectionStrategy).eraseLocalData(REF);
+        assertThat(journal.facts())
+                .containsExactly(new RecordingPrivacyJournal.Fact(
+                        PrivacyJournalKind.CONNECTION_ERASED, Map.of("workspaceId", WORKSPACE, "connectionId", 7L)));
+    }
+
+    @Test
+    void shouldDisconnectAndRecordAConnectionSuspendedAfterItResolved() {
+        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
+        // The team's connection in any state, not only an active one, so a suspension after resolving cannot hide it.
+        when(connectionService.findReferenced(REF)).thenReturn(Optional.of(connection));
+        when(connectionService.transition(eq(connection), any())).thenReturn(connection);
+
+        service().onUninstall(TEAM, "app_uninstalled", "Ev1");
+
+        verify(connectionService).transition(eq(connection), any());
+        verify(connectionStrategy).eraseLocalData(REF);
         assertThat(journal.facts())
                 .containsExactly(new RecordingPrivacyJournal.Fact(
                         PrivacyJournalKind.CONNECTION_ERASED, Map.of("workspaceId", WORKSPACE, "connectionId", 7L)));

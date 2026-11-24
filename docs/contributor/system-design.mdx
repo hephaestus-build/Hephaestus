@@ -234,6 +234,10 @@ Each recovery step erases again only what is still there.
 Thus a duplicate fact, or a fact whose erasure found nothing, is harmless.
 For example, an account deletion records `ACCOUNT_ERASED` at the self-deletion and again at the purge.
 
+Recovery must be able to apply each fact with the configuration that recorded it.
+Thus a workspace purge records no `CONNECTION_ERASED` for a connection whose provider is turned off.
+`WORKSPACE_PURGED` covers the data of that connection.
+
 A ref holds an identifier or a state, never text.
 Use a number, a boolean, a UUID, an enum constant, a `NativeId`, a `PersonIdentity`, or a collection of these.
 Tests read the facts that a producer records from `RecordingPrivacyJournal`.
