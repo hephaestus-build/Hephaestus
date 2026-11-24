@@ -83,7 +83,8 @@ Option 4.
 14. **One disclosure rule covers every figure that staff, the steward or a research recipient sees.** The server enforces it before any figure or dataset leaves.
     - Each cell counts at least 5 people. `SmallCounts` holds that floor.
     - A unanimous cell, in which every person has the same outcome, is suppressed.
-    - A release whose difference with an earlier release isolates fewer than 5 people does not go out. A release ledger records each release for this check.
+    - Figures are released only for fixed, non-overlapping calendar periods. A period's figure is released once and never recomputed.
+    - A correction can only suppress a released figure, never release it again. Without overlapping populations, no combination of releases isolates a person.
     - Linkable fields, such as exact timings and version sequences, are suppressed or coarsened.
     - Text that quotes a private message or names a bystander is omitted.
     - Sorting by a value that the floor withholds must not reveal it, so withheld cells sort as one group.
@@ -115,7 +116,7 @@ Not enforced yet. The implementation adds these tests:
 
 - A generated staff route test fails when a staff route returns an account ID beside an outcome.
 - `SmallCountsTest` fails when a count of 1 to 4 people shows, or a split with such a cell shows a cell.
-- A disclosure test fails when a figure from fewer than 5 people or a unanimous cell leaves the server. It also fails for a release that isolates fewer than 5 people against an earlier release.
+- A disclosure test fails when a figure from fewer than 5 people or a unanimous cell leaves the server. It also fails when a period's figure is recomputed or released twice, or when two released periods overlap. A three-release fixture in which every pair passes the floor isolates no person.
 - A route test fails when any route reads another account's conversation, records or Practice profile.
 - An Activity route test fails when a member sees work from a repository that the member cannot read. It also fails when a member sees another person's item cards.
 - `ArchitectureTest` fails when a class named for View as user or Per-person results for admins exists.

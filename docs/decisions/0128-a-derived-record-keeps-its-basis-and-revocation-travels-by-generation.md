@@ -59,7 +59,7 @@ Option 4.
    - An erased source removes the provenance references of other people that cite it.
    - An erased Slack channel redacts that channel's entries in every person's conversation.
 8. **Every new row and every remote copy has a person-data catalog entry with its cascade.** A generated test fails without it.
-9. **Erasures and revocations survive a database restore.** A deny intent is durable in the off-database journal before it takes effect. A restore reapplies every journaled fact before it serves data. ADR 0140 (proposed in #4867) owns both rules, the journal bucket and the manual path.
+9. **Erasures and revocations survive a database restore.** A deny intent puts the data on hold at once. The local deletion runs only after the off-database journal holds the fact. A restore reapplies every journaled fact before it serves data. ADR 0140 (proposed in #4867) owns both rules, the journal bucket and the manual path.
 
 ### What this changes in other ADRs
 

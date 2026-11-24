@@ -58,9 +58,9 @@ Option 4.
    - `public.person_row_counts(kind, workspace, period)` returns counts only, under the disclosure rule of [ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md).
    - Each is `SECURITY DEFINER`, owned by `hephaestus_owner`, with a fixed `search_path` and `REVOKE ALL … FROM PUBLIC`.
 9. **The research export function has one caller.**
-   - Only the research export job calls it, and only for an approved release. An architecture test enforces the one caller.
-   - The function refuses a release that is not approved. It checks consent, redaction and the disclosure rule of [ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md).
-   - ADR 0141 (proposed in #4868) names who approves a release and the checks.
+   - Only the research export job calls it. The job has no human reader, and it builds a release into sealed staging. An architecture test enforces the one caller.
+   - The function checks consent, redaction and the disclosure rule of [ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md).
+   - The sealed bytes leave staging only after the two approvals of ADR 0141 (proposed in #4868).
    - It serves only the recipient's grant that ADR 0141 defines. No staff role, no staff route and no admin download reaches it.
 10. **Workspace tenancy stays.** The workspace statement inspector of [ADR 0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) runs beside row-level security.
 11. **Provider access is fresh.**
