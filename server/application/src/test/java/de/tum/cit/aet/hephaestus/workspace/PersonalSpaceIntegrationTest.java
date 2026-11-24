@@ -199,6 +199,19 @@ class PersonalSpaceIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .satisfies(row -> assertThat(row.get("workspace_id").asLong()).isEqualTo(teamId));
         // Other modules' person-data stores read the same team workspaces through the workspace module.
         assertThat(workspaceMemberships.teamWorkspaceIds(ownerId)).containsExactly(teamId);
+        // The personal space store names the space by its slug and creation time, and nothing else of it.
+        var spaces = personData.contributors().stream()
+                .filter(store -> store.store().equals("workspace"))
+                .findFirst()
+                .orElseThrow();
+        var selected = spaces.select(subject);
+        assertThat(selected.rows())
+                .singleElement()
+                .satisfies(row -> assertThat(row.columns()).containsEntry("id", Long.toString(spaceId)));
+        assertThat(spaces.export(selected, subject)).singleElement().satisfies(row -> {
+            assertThat(row.get("slug").asString()).isEqualTo(slug);
+            assertThat(row.propertyNames()).containsExactlyInAnyOrder("slug", "created_at");
+        });
     }
 
     /** The erasure of the account disposes of the personal space and its membership. */

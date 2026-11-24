@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace.adapter;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.ErasesColumns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
@@ -14,10 +15,13 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@PersonDataStores({"membership", "workspace_onboarding_settings"})
+@PersonDataStores({"membership", "workspace_onboarding_settings", "workspace"})
+// The membership store selects team memberships; the personal space store deletes the space and its owner's membership.
+@ErasesColumns({"membership.account_id", "workspace.personal_account_id"})
 public class WorkspacePersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
+    private final PersonalSpaceErasureAdapter personalSpaces;
 
     @Override
     public List<PersonDataContributor> contributors() {
@@ -27,8 +31,8 @@ public class WorkspacePersonDataCatalog implements PersonDataCatalog {
                         mapper,
                         "membership",
                         "membership",
-                        // A personal space is the owner's alone: an instance admin's preview or export does not
-                        // name it, and the erasure of its account disposes of it whole (PersonalSpaceErasureAdapter).
+                        // A personal space is the owner's alone: PersonalSpacePersonDataStore exports it and disposes
+                        // of it whole.
                         "t.account_id=:account AND NOT EXISTS (SELECT 1 FROM workspace w"
                                 + " WHERE w.id=t.workspace_id AND w.kind='PERSONAL')",
                         "workspace_id,account_id,role,role_source,hidden,review_selected,onboarding_seen_revision,public_activity_seen,joined_at,left_at",
@@ -44,6 +48,7 @@ public class WorkspacePersonDataCatalog implements PersonDataCatalog {
                         "workspace_id,ai_choice_required,enabled,required_connection_ids,revision",
                         "workspace_id",
                         "",
-                        0));
+                        0),
+                new PersonalSpacePersonDataStore(jdbc, mapper, personalSpaces));
     }
 }
