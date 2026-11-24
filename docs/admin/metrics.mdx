@@ -683,6 +683,12 @@ Search the log store for it to find every server record of that request ([Correl
 `browser.fault.frames` lists the frames as `<hash>:<line>:<column>`.
 The hash is the last eight characters of the script's file name, which name one build of the script.
 
+## Mentoring metrics
+
+The mentoring runtime counts its events with `mentoring_events_total`.
+Its `kind` label uses the closed set of event names.
+Each replica counts its own events.
+
 ## Outbox metrics
 
 [Effect boundary](/contributor/outbox#effect-boundary) defines which provider writes use the outbox.

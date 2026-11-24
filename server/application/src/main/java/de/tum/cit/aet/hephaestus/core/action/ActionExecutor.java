@@ -281,8 +281,8 @@ public class ActionExecutor implements SmartLifecycle {
     }
 
     /**
-     * Carries out a claim with the given adapter. Each record of the attempt, the adapter's own included, names the
-     * action, its attempt and its workspace in the log context. The caller's context is back when it returns: {@link
+     * Carries out a claim with the given adapter. The log context supplies the action, its attempt and its workspace
+     * for the duration of the attempt. The caller's context is back when it returns: {@link
      * #runNow} runs on a request thread. The keys are the observability contract's names, written here because {@code
      * core} cannot depend on the observability module.
      */

@@ -12,26 +12,31 @@ import com.tngtech.archunit.core.domain.AccessTarget;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.JavaModifier;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
+import de.tum.cit.aet.hephaestus.relationship.MentoringEventMetrics;
 import de.tum.cit.aet.hephaestus.relationship.MentoringLog;
-import de.tum.cit.aet.hephaestus.relationship.MentoringLogKey;
-import java.time.Duration;
+import de.tum.cit.aet.hephaestus.relationship.MentoringLogEvent;
+import de.tum.cit.aet.hephaestus.relationship.MentoringLogField;
+import de.tum.cit.aet.hephaestus.relationship.MentoringTrace;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Tracer;
 import java.util.Arrays;
-import java.util.Map;
+import java.util.Formatter;
 import java.util.ResourceBundle;
 import java.util.Timer;
-import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * A mentoring log record, trace and metric carries only allowed field classes (ADR 0125; proposed ADR 0138 lists this
- * test under Confirmation). A mentoring class writes a record only through {@link MentoringLog}: its event is a constant
- * of a closed enum with literal text, and each field has a key from a closed list whose value class is fixed.
+ * Mentoring code uses the three typed telemetry emitters. Only the emitters use the telemetry libraries.
  *
- * <p>The rule checks the direct dependencies and accesses of each mentoring production class except {@link
- * MentoringLog}. A class may depend only on the packages that {@link #ALLOWED_PACKAGES} names, minus the types that
+ * <p>A producer may depend only on the packages that {@link #ALLOWED_PACKAGES} names, minus the types that
  * {@link #JDK_WRITE_POINTS} refuses. It may not access {@code System.out} or {@code System.err}, or make an access that
  * {@link #WRITE_ACCESS} names. A new package changes the list in review, after a reviewer checks it for a method that writes
  * its argument to a log, a console, a meter or a span. The rule catches an ordinary log call; it does not stop a
@@ -55,6 +60,7 @@ class MentoringLogFieldArchitectureTest extends HephaestusArchitectureTest {
                             "java.time..",
                             "java.util",
                             "java.util.function",
+                            "java.util.regex",
                             "java.util.stream",
                             "org.jspecify.annotations",
                             "org.springframework.modulith"))
@@ -69,6 +75,7 @@ class MentoringLogFieldArchitectureTest extends HephaestusArchitectureTest {
             System.Logger.class,
             System.LoggerFinder.class,
             IO.class,
+            Formatter.class,
             ProcessBuilder.class,
             Runtime.class,
             ThreadGroup.class,
@@ -99,32 +106,78 @@ class MentoringLogFieldArchitectureTest extends HephaestusArchitectureTest {
                 return base.isPrimitive() || (IN_ALLOWED_PACKAGE.test(base) && !JDK_WRITE_POINTS.test(base));
             });
 
-    /**
-     * The keys that a mentoring record may carry, by their written name. A new key changes this list in review: it
-     * must name a row, a count, a duration, a flag or a code, and never a person.
-     */
-    private static final Map<String, Class<?>> ALLOWED_KEYS = Map.of(
-            "workspace.id", Long.class,
-            "run.id", UUID.class,
-            "run.epoch", Integer.class,
-            "mentoring.duration_ms", Duration.class);
+    private static final ArchCondition<JavaClass> RAW_DEPENDENCY = new ArchCondition<>("access an unapproved type") {
+        @Override
+        public void check(JavaClass owner, ConditionEvents events) {
+            for (var dependency : owner.getDirectDependenciesFromSelf()) {
+                var target = dependency.getTargetClass().getBaseComponentType();
+                if (!ALLOWED.test(target) && !emitterDependency(owner, target)) {
+                    events.add(SimpleConditionEvent.satisfied(owner, dependency.getDescription()));
+                }
+            }
+        }
+    };
 
-    static final ArchRule TELEMETRY_ONLY_THROUGH_THE_MENTORING_LOGGER = noClasses()
+    private static boolean emitterDependency(JavaClass owner, JavaClass target) {
+        var targetPackage = target.getPackageName();
+        if (owner.isEquivalentTo(MentoringLog.class)) return targetPackage.startsWith("org.slf4j");
+        if (owner.isEquivalentTo(MentoringTrace.class)) return targetPackage.equals("io.micrometer.tracing");
+        return owner.isEquivalentTo(MentoringEventMetrics.class)
+                && targetPackage.equals("io.micrometer.core.instrument");
+    }
+
+    private static final DescribedPredicate<JavaAccess<?>> METER_WRITE_OUTSIDE_CONSTRUCTOR =
+            DescribedPredicate.describe(
+                    "bind a metric outside the constructor",
+                    access -> access.getOrigin() instanceof JavaMethod
+                            && access.getTargetOwner().getPackageName().startsWith("io.micrometer.core.instrument")
+                            && !(access.getTargetOwner().isAssignableTo(Counter.class)
+                                    && access.getTarget() instanceof AccessTarget.MethodCallTarget method
+                                    && method.getName().equals("increment")
+                                    && method.getRawParameterTypes().isEmpty()));
+
+    static final ArchRule TYPED_TELEMETRY_ONLY = noClasses()
             .that()
             .resideInAnyPackage(MentoringModules.PACKAGES)
-            .and()
-            .doNotBelongToAnyOf(MentoringLog.class)
-            .should()
-            .dependOnClassesThat(DescribedPredicate.not(ALLOWED))
+            .should(RAW_DEPENDENCY)
             .orShould(ACCESS_STANDARD_STREAMS)
             .orShould()
             .accessTargetWhere(WRITE_ACCESS)
-            .because("a mentoring record, trace or metric carries only allowed field classes: log through"
-                    + " MentoringLog, and allow a package only after checking it for log writes");
+            .because("mentoring logs, spans and meters use typed emitters that enforce the field class policy");
+
+    private static final ArchRule METERS_BOUND_AT_CONSTRUCTION = noClasses()
+            .that()
+            .resideInAnyPackage(MentoringModules.PACKAGES)
+            .should()
+            .accessTargetWhere(METER_WRITE_OUTSIDE_CONSTRUCTOR)
+            .because("mentoring methods only increment counters that already have their declared labels");
 
     @Test
-    void shouldDependOnlyOnPackagesWithoutALogWrite() {
-        TELEMETRY_ONLY_THROUGH_THE_MENTORING_LOGGER.check(classes);
+    void shouldUseTypedTelemetryEmitters() {
+        TYPED_TELEMETRY_ONLY.check(classes);
+        METERS_BOUND_AT_CONSTRUCTION.check(classes);
+    }
+
+    @Test
+    void shouldOnlyExposeTypedEmitterInputs() {
+        checkEmitterInputs(classes.get(MentoringLog.class));
+        checkEmitterInputs(classes.get(MentoringTrace.class));
+        checkEmitterInputs(classes.get(MentoringEventMetrics.class));
+    }
+
+    private static void checkEmitterInputs(JavaClass emitter) {
+        var allowed = belongToAnyOf(
+                Class.class,
+                Throwable.class,
+                MentoringLogEvent.class,
+                MentoringLogField.class,
+                MeterRegistry.class,
+                Tracer.class);
+        assertThat(emitter.getCodeUnits())
+                .filteredOn(unit -> !unit.getModifiers().contains(JavaModifier.PRIVATE))
+                .allSatisfy(unit -> assertThat(unit.getRawParameterTypes())
+                        .as("Inputs of %s", unit.getFullName())
+                        .allMatch(type -> allowed.test(type.getBaseComponentType())));
     }
 
     /** The rule finds each write that the fixture makes: a library log call, a span, a meter and the JDK accesses. */
@@ -136,7 +189,7 @@ class MentoringLogFieldArchitectureTest extends HephaestusArchitectureTest {
                         .equals("de.tum.cit.aet.hephaestus.relationship.MentoringTelemetryViolationFixture")));
         assertThat(fixture).isNotEmpty();
 
-        assertThatThrownBy(() -> TELEMETRY_ONLY_THROUGH_THE_MENTORING_LOGGER.check(fixture))
+        assertThatThrownBy(() -> TYPED_TELEMETRY_ONLY.check(fixture))
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("calls method <org.slf4j.Logger.info(")
                 .hasMessageContaining("calls method <io.opentelemetry.api.trace.Span.setAttribute(")
@@ -146,6 +199,7 @@ class MentoringLogFieldArchitectureTest extends HephaestusArchitectureTest {
                 .hasMessageContaining("calls method <java.lang.System$LoggerFinder.getLogger(")
                 .hasMessageContaining("calls method <java.util.logging.Logger.info(")
                 .hasMessageContaining("calls method <java.lang.IO.println(")
+                .hasMessageContaining("calls constructor <java.util.Formatter.<init>(")
                 .hasMessageContaining("references method <java.lang.Throwable.printStackTrace()>")
                 .hasMessageContaining("calls method <java.lang.Thread$UncaughtExceptionHandler.uncaughtException(")
                 .hasMessageContaining("gets field <java.lang.System.err>")
@@ -157,13 +211,12 @@ class MentoringLogFieldArchitectureTest extends HephaestusArchitectureTest {
                 .hasMessageContaining("calls method <java.lang.Runtime.getRuntime()>")
                 .hasMessageContaining("calls constructor <java.lang.ThreadGroup.<init>(")
                 .hasMessageContaining("calls method <java.util.ResourceBundle.getBundle(");
-    }
 
-    @Test
-    void shouldCarryOnlyTheAllowedKeysWithTheirValueClasses() {
-        assertThat(Arrays.stream(MentoringLogKey.values())
-                        .collect(Collectors.toMap(MentoringLogKey::key, MentoringLogKey::type)))
-                .as("the written keys of a mentoring record and their value classes")
-                .containsExactlyInAnyOrderEntriesOf(ALLOWED_KEYS);
+        assertThatThrownBy(() -> METERS_BOUND_AT_CONSTRUCTION.check(fixture))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("calls method <io.micrometer.core.instrument.Counter$Builder.tag(");
+        assertThatThrownBy(() -> fixture.forEach(MentoringLogFieldArchitectureTest::checkEmitterInputs))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("java.lang.String");
     }
 }

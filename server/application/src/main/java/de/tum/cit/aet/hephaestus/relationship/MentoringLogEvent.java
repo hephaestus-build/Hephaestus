@@ -5,12 +5,11 @@ package de.tum.cit.aet.hephaestus.relationship;
  * text of a person can become either. A producer adds its events to this enum, where review sees the list as a whole.
  */
 public enum MentoringLogEvent {
-    ;
+    OPERATION_FAILED("mentoring.operation.failed", "A mentoring operation failed");
 
     private final String eventName;
     private final String message;
 
-    @SuppressWarnings("UnusedMethod") // The list starts empty: the first producer's event calls it.
     MentoringLogEvent(String eventName, String message) {
         this.eventName = eventName;
         this.message = message;

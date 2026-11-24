@@ -162,10 +162,13 @@ A weekly run erases at most 20,000 entries and 20,000 tool results for each work
 | Traces | Off by default. The OTLP recipient keeps them under its own retention. | `TRACING_OTLP_ENABLED` |
 
 No container writes an HTTP access log.
+Omit the request path and query from external access logs.
+If the gateway knows the route template, record that template.
 
 Log lines carry account, user and provider ids, which identify a person indirectly.
 They carry no provider login and no email address.
-Thus, give your log store an age limit, for example 30 days in Loki.
+Set an age limit in your log store, for example 30 days in Loki for general logs.
+The [personal-data map](./dsms/personal-data-map#mentoring-telemetry) gives the limits for mentoring telemetry.
 
 ## Backups
 

@@ -200,6 +200,21 @@ class MetricOwnershipArchTest {
         }
     }
 
+    @Test
+    void shouldPermitTheSharedMentoringRecorderAcrossModules() throws IOException {
+        String catalog = "de.tum.cit.aet.hephaestus.relationship.metrics.MentoringMetrics";
+        for (String module : List.of("learning", "mentoring")) {
+            String sourcePackage = "package de.tum.cit.aet.hephaestus." + module + "; ";
+            assertThat(ownershipViolations(
+                            parse(sourcePackage
+                                    + "import de.tum.cit.aet.hephaestus.relationship.MentoringEventMetrics;"),
+                            Set.of(catalog)))
+                    .isEmpty();
+            assertThat(ownershipViolations(parse(sourcePackage + "import " + catalog + ";"), Set.of(catalog)))
+                    .hasSize(1);
+        }
+    }
+
     private static List<CompilationUnitTree> parse(Iterable<? extends JavaFileObject> sources) throws IOException {
         var diagnostics = new DiagnosticCollector<JavaFileObject>();
         List<CompilationUnitTree> units = new ArrayList<>();
