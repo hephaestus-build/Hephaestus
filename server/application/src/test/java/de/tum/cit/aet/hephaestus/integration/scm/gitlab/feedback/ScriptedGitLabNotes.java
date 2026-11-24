@@ -53,8 +53,18 @@ public final class ScriptedGitLabNotes {
     private static final Map<String, Object> UNPOSITIONED = unpositioned();
     private int draftCalls;
     private int failDraft;
+    private final Map<Integer, String> heads = new ConcurrentHashMap<>();
     private boolean losePublish;
     private int bulkPublications;
+
+    /**
+     * Sets a merge request's head on GitLab, as a push does, whether or not a webhook tells this server. A merge
+     * request with no head set answers its head read with an error, as an unreachable provider does.
+     */
+    void head(int iid, @Nullable String sha) {
+        if (sha == null) heads.remove(iid);
+        else heads.put(iid, sha);
+    }
 
     void failDraft(int call) {
         failDraft = call;
@@ -286,6 +296,12 @@ public final class ScriptedGitLabNotes {
     private Mono<ClientGraphQlResponse> answer(Request request) {
         return switch (request.document()) {
             case "GetIssueGlobalId" -> threads.resolve(Map.of("project.issue.id", issue(iid(request))));
+            case "GetFeedbackMergeRequestHead" -> {
+                String head = heads.get(iid(request));
+                yield head == null
+                        ? Mono.error(new IllegalStateException("GitLab did not answer"))
+                        : threads.resolve(Map.of("project.mergeRequest.diffHeadSha", head));
+            }
             case "GetMergeRequestGlobalId" ->
                 threads.resolve(Map.of("project.mergeRequest.id", mergeRequest(iid(request))));
             case "GetMergeRequestDiscussions" ->

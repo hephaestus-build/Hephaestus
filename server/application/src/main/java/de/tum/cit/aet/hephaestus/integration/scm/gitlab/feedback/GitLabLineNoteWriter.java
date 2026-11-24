@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LiveHead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
@@ -95,6 +96,30 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     @Override
     public IntegrationKind kind() {
         return IntegrationKind.GITLAB;
+    }
+
+    @Override
+    public LiveHead liveHead(FeedbackTarget target) {
+        long workspace = target.item().workspaceId();
+        if (gitLabProvider.isRateLimitCritical(workspace)) return LiveHead.UNKNOWN;
+        try {
+            String reviewed = ScmVersion.reviewedHead(target.version());
+            if (reviewed == null) return LiveHead.UNKNOWN;
+            var mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, kind()));
+            ClientGraphQlResponse response = gitLabProvider
+                    .forScope(workspace)
+                    .documentName("GetFeedbackMergeRequestHead")
+                    .variable("fullPath", mr.projectPath())
+                    .variable("iid", String.valueOf(mr.iid()))
+                    .execute()
+                    .block(GRAPHQL_TIMEOUT);
+            if (response == null || !response.getErrors().isEmpty()) return LiveHead.UNKNOWN;
+            String head = response.field("project.mergeRequest.diffHeadSha").getValue();
+            if (head == null || head.isBlank()) return LiveHead.UNKNOWN;
+            return head.equalsIgnoreCase(reviewed) ? LiveHead.CURRENT : LiveHead.MOVED;
+        } catch (RuntimeException unknown) {
+            return LiveHead.UNKNOWN;
+        }
     }
 
     @Override

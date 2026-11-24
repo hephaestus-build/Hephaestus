@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LiveHead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
@@ -414,6 +415,11 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         @Override
         public IntegrationKind kind() {
             return IntegrationKind.GITHUB;
+        }
+
+        @Override
+        public LiveHead liveHead(FeedbackTarget target) {
+            return LiveHead.CURRENT;
         }
 
         private void during() {
