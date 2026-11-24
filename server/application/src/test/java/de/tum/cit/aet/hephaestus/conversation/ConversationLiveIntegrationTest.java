@@ -364,12 +364,17 @@ class ConversationLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
             return own;
         });
 
-        assertThat(ConversationStatements.of(measured))
+        var reads = ConversationStatements.of(measured);
+        assertThat(reads)
                 .as("the snapshots' reads of the conversation tables")
                 .isNotEmpty()
                 .extracting(SqlStatementCounter.Prepared::owner)
                 .doesNotContainNull()
                 .contains(accountId(developer));
+        assertThat(reads)
+                .allSatisfy(statement -> assertThat(statement.readOnly())
+                        .as("a snapshot reads in a read-only transaction: %s", statement.sql())
+                        .isTrue());
     }
 
     /**
@@ -394,13 +399,18 @@ class ConversationLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 return own;
             });
 
-            assertThat(ConversationStatements.of(measured))
+            var reads = ConversationStatements.of(measured);
+            assertThat(reads)
                     .as("the live reads of the conversation tables")
                     .isNotEmpty()
                     .extracting(SqlStatementCounter.Prepared::owner)
                     .doesNotContainNull()
                     .contains(accountId(developer))
                     .doesNotContain(accountId(colleague));
+            assertThat(reads)
+                    .allSatisfy(statement -> assertThat(statement.readOnly())
+                            .as("a change is read in a read-only transaction: %s", statement.sql())
+                            .isTrue());
         } finally {
             stream.subscription().dispose();
         }

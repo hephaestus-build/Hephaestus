@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.testconfig;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -96,6 +97,31 @@ class SqlStatementCounterTest extends BaseUnitTest {
                     .join();
             assertThat(counter.measureOwnersOn("measured-worker", () -> "after").statements())
                     .isZero();
+        }
+    }
+
+    @Test
+    void shouldIgnoreTheNamedThreadOnADataSourceThatAnotherCounterWrapsWhenAWorkerIsMeasured() throws Exception {
+        Connection other = mock(Connection.class);
+        when(other.prepareStatement("SELECT 1")).thenReturn(mock(PreparedStatement.class));
+        // Only a regression probes the owner: it then counts the statement instead of failing on a null probe.
+        Statement probe = mock(Statement.class);
+        lenient().when(other.createStatement()).thenReturn(probe);
+        lenient().when(probe.executeQuery(anyString())).thenReturn(mock(ResultSet.class));
+        DataSource otherSource = mock(DataSource.class);
+        when(otherSource.getConnection()).thenReturn(other);
+        var otherContext =
+                (DataSource) new SqlStatementCounter().postProcessAfterInitialization(otherSource, "dataSource");
+        ThreadFactory named = Thread.ofPlatform().name("measured-worker").factory();
+        try (var worker = Executors.newSingleThreadExecutor(named);
+                Connection jdbc = otherContext.getConnection()) {
+            var measured = counter.measureOwnersOn("measured-worker", () -> {
+                CompletableFuture.runAsync(() -> prepare(jdbc), worker)
+                        .orTimeout(30, TimeUnit.SECONDS)
+                        .join();
+                return "read";
+            });
+            assertThat(measured.statements()).isZero();
         }
     }
 

@@ -15,12 +15,16 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.jdbc.datasource.DelegatingDataSource;
 
-/** Counts JDBC preparations, including SQL that does not pass through Hibernate. */
+/**
+ * Counts JDBC preparations, including SQL that does not pass through Hibernate. A measurement counts only the data
+ * sources that this counter wraps: those of its own Spring context, not those of another cached context.
+ */
 public class SqlStatementCounter implements BeanPostProcessor {
-    private static final ThreadLocal<Counter> ACTIVE = new ThreadLocal<>();
+    /** The measurement on this thread, with the counter that owns it. */
+    private static final ThreadLocal<Active> ACTIVE = new ThreadLocal<>();
 
     /** A worker thread whose preparations a test measures from its own thread. */
-    private static final AtomicReference<@Nullable Worker> WORKER = new AtomicReference<>();
+    private final AtomicReference<@Nullable Worker> worker = new AtomicReference<>();
 
     /** What an owner policy reads on the connection, and whether the transaction may write. */
     private static final String OWNER =
@@ -42,21 +46,21 @@ public class SqlStatementCounter implements BeanPostProcessor {
      */
     public <T> Measurement<T> measureOwnersOn(String thread, Supplier<T> block) {
         Counter counter = new Counter(true);
-        if (!WORKER.compareAndSet(null, new Worker(thread, counter))) {
+        if (!worker.compareAndSet(null, new Worker(thread, counter))) {
             throw new IllegalStateException("Only one worker thread can be measured at a time");
         }
         try {
             T value = block.get();
             return new Measurement<>(value, List.copyOf(counter.prepared));
         } finally {
-            WORKER.set(null);
+            worker.set(null);
         }
     }
 
     private <T> Measurement<T> measure(Supplier<T> read, boolean owners) {
         if (ACTIVE.get() != null) throw new IllegalStateException("SQL measurements cannot be nested");
         Counter counter = new Counter(owners);
-        ACTIVE.set(counter);
+        ACTIVE.set(new Active(this, counter));
         try {
             T value = read.get();
             return new Measurement<>(value, List.copyOf(counter.prepared));
@@ -84,6 +88,8 @@ public class SqlStatementCounter implements BeanPostProcessor {
 
     private record Worker(String thread, Counter counter) {}
 
+    private record Active(SqlStatementCounter owner, Counter counter) {}
+
     private static class Counter {
         private final boolean owners;
         private final List<Prepared> prepared = new CopyOnWriteArrayList<>();
@@ -106,11 +112,14 @@ public class SqlStatementCounter implements BeanPostProcessor {
         }
     }
 
-    private static @Nullable Counter current() {
-        Counter counter = ACTIVE.get();
-        if (counter != null) return counter;
-        Worker worker = WORKER.get();
-        return worker != null && worker.thread().equals(Thread.currentThread().getName()) ? worker.counter() : null;
+    private @Nullable Counter current() {
+        Active measuring = ACTIVE.get();
+        if (measuring != null) return measuring.owner().equals(this) ? measuring.counter() : null;
+        Worker measured = worker.get();
+        return measured != null
+                        && measured.thread().equals(Thread.currentThread().getName())
+                ? measured.counter()
+                : null;
     }
 
     @Override
@@ -118,7 +127,7 @@ public class SqlStatementCounter implements BeanPostProcessor {
         return bean instanceof DataSource source ? new CountingDataSource(source) : bean;
     }
 
-    private static class CountingDataSource extends DelegatingDataSource {
+    private class CountingDataSource extends DelegatingDataSource {
         CountingDataSource(DataSource source) {
             super(source);
         }
