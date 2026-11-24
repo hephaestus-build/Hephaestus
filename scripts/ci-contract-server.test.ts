@@ -772,7 +772,16 @@ void describe("ci-contract: server", () => {
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		const detection = job(source, "detect-changes");
 		const tooling = pathFilter(detection, "tooling");
-		for (const pattern of ["docs/**", ".vscode/settings.json", "**/AGENTS.md", "**/CLAUDE.md"]) {
+		for (const pattern of [
+			"docs/**",
+			".vscode/settings.json",
+			"**/AGENTS.md",
+			"**/CLAUDE.md",
+			// gate:dependency-baseline runs on this leg and reads these.
+			"security/dependency-baseline.json",
+			"security/retired-dependencies.json",
+			"**/pnpm-lock.yaml",
+		]) {
 			assert.match(tooling, new RegExp(`- '${escapeRegExp(pattern)}'`, "u"));
 		}
 		assert.doesNotMatch(pathFilter(detection, "server"), /- 'docs\/\*\*'/u);

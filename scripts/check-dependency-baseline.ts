@@ -7,23 +7,53 @@
  * baseline. An exact match would serialize every pull request that changes a count.
  * `docs/contributor/dependencies.mdx` gives the bar for an addition.
  *
+ * A package that the repository removed on purpose stays out: a lockfile that holds a name from
+ * `security/retired-dependencies.json` fails, whatever the counts, so a removal cannot come back at
+ * the same or a lower count.
+ *
  * Usage: `node scripts/check-dependency-baseline.ts [--write]`.
  */
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseAllDocuments } from "yaml";
 
+import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asRecord, isRecord, parseJson } from "./lib/json.ts";
+import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 export const BASELINE_FILE = "security/dependency-baseline.json";
+export const RETIRED_FILE = "security/retired-dependencies.json";
 
-// Each lockfile that the repository installs from. The agent images resolve on their own.
-export const LOCKFILES = [
-	"pnpm-lock.yaml",
-	"docker/agents/pi/pnpm-lock.yaml",
-	"docker/agents/practice-scripts/pnpm-lock.yaml",
-] as const;
+/**
+ * Each pnpm lockfile in the checkout, committed or new: the workspace's, and the agent images', which
+ * resolve on their own. Found by name, so a new install root enters the counts and the retired check.
+ */
+export function lockfiles(cwd = process.cwd()): string[] {
+	return execFileSync(
+		"git",
+		[
+			"ls-files",
+			"-z",
+			"--cached",
+			"--others",
+			"--exclude-standard",
+			"--",
+			":(glob)**/pnpm-lock.yaml",
+		],
+		{
+			cwd,
+			encoding: "utf8",
+			maxBuffer: CAPTURE_LIMIT_BYTES,
+			// Under a hook, git exports GIT_DIR and friends, which would outrank `cwd`.
+			env: environmentWithoutGitRepository(),
+		},
+	)
+		.split("\0")
+		.filter(Boolean)
+		.toSorted();
+}
 
 export interface ImporterCounts {
 	direct: { prod: number; dev: number };
@@ -142,9 +172,76 @@ export function countLockfile(text: string, file: string): LockfileCounts {
 	return { envPackages, packages: Object.keys(packages).length, importers: counts };
 }
 
-export function measure(read: (file: string) => string = (file) => readFileSync(file, "utf8")) {
+// A package key is `name@version` or `@scope/name@version`; the version can hold `@` (a tarball URL).
+const packageName = (key: string): string => {
+	const id = packageId(key);
+	const at = id.indexOf("@", id.startsWith("@") ? 1 : 0);
+	return at === -1 ? id : id.slice(0, at);
+};
+
+/**
+ * Every package name a lockfile installs: its env document's and its project's, by resolved name.
+ * An npm alias (`foo: npm:bar@1`) resolves to `bar@1` there, so it cannot hide a retired name.
+ */
+export function lockedNames(text: string, file: string): Set<string> {
+	const { env, lock } = lockDocuments(text, file);
+	const names = new Set<string>();
+	for (const packages of [env?.packages, lock.packages]) {
+		for (const [key, entry] of isRecord(packages) ? Object.entries(packages) : []) {
+			names.add(packageName(key));
+			// A package can ship others inside its tarball; pnpm lists their names, not their versions.
+			const bundled = isRecord(entry) ? entry.bundledDependencies : undefined;
+			for (const name of Array.isArray(bundled) ? bundled : []) {
+				if (typeof name === "string") {
+					names.add(name);
+				}
+			}
+		}
+	}
+	// A workspace package that satisfies a dependency is linked under the dependency's name, with no
+	// entry in `packages`.
+	for (const importer of isRecord(lock.importers) ? Object.values(lock.importers) : []) {
+		const dependencies = isRecord(importer)
+			? references(importer, [...PROD_FIELDS, "devDependencies"])
+			: [];
+		for (const [name, value] of dependencies) {
+			const reference = isRecord(value) ? value.version : value;
+			if (typeof reference === "string" && reference.startsWith("link:")) {
+				names.add(name);
+			}
+		}
+	}
+	return names;
+}
+
+/** The retired packages that a lockfile installs again, each with the reason it was retired. */
+export function retiredInLockfiles(
+	retired: unknown,
+	read: (file: string) => string = (file) => readFileSync(file, "utf8"),
+	files: readonly string[] = lockfiles(),
+): string[] {
+	const reasons = asRecord(retired, RETIRED_FILE);
+	const found: string[] = [];
+	for (const file of files) {
+		const names = lockedNames(read(file), file);
+		for (const [name, reason] of Object.entries(reasons)) {
+			if (typeof reason !== "string" || reason.trim() === "") {
+				throw new TypeError(`${RETIRED_FILE}: ${name} needs the reason it was retired`);
+			}
+			if (names.has(name)) {
+				found.push(`${file} installs ${name}, which is retired: ${reason}`);
+			}
+		}
+	}
+	return found;
+}
+
+export function measure(
+	read: (file: string) => string = (file) => readFileSync(file, "utf8"),
+	files: readonly string[] = lockfiles(),
+) {
 	return Object.fromEntries(
-		LOCKFILES.map((file) => [file, countLockfile(read(file), file)]),
+		files.map((file) => [file, countLockfile(read(file), file)]),
 	) satisfies Baseline;
 }
 
@@ -191,6 +288,19 @@ export function compare(
 export const render = (counts: Baseline): string => `${JSON.stringify(counts, null, "\t")}\n`;
 
 if (import.meta.main) {
+	const returned = retiredInLockfiles(parseJson(readFileSync(RETIRED_FILE, "utf8")));
+	if (returned.length > 0) {
+		console.error(
+			[
+				`A lockfile installs a package from ${RETIRED_FILE}:`,
+				...returned.map((line) => `  ${line}`),
+				"",
+				"Use the replacement. To take a retired package back, remove its entry and meet the bar in",
+				"docs/contributor/dependencies.mdx in the same pull request.",
+			].join("\n"),
+		);
+		process.exitCode = 1;
+	}
 	const measured = measure();
 	if (process.argv.includes("--write")) {
 		writeFileSync(BASELINE_FILE, render(measured));

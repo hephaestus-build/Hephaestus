@@ -182,6 +182,14 @@ To raise the baseline with an addition, or to lower it after a removal, run:
 node scripts/check-dependency-baseline.ts --write
 ```
 
+### Retired dependencies
+
+A count cannot see a removed package that comes back while another one leaves.
+`security/retired-dependencies.json` names each package that left every lockfile on purpose, with what replaced it.
+`gate:dependency-baseline` fails when a lockfile installs a retired name again, as a direct or a transitive package, also through an npm alias.
+To take a retired package back, remove its entry and meet the bar for an addition in the same pull request.
+Retire only a package that no lockfile still needs: a parent that brings it transitively makes the entry fail.
+
 ## How to remove a dependency
 
 1. Find each import site with `git grep -n "<package>"`. Include configuration files, `package.json` scripts and CSS `@import` and `@plugin` lines.
@@ -191,7 +199,7 @@ node scripts/check-dependency-baseline.ts --write
 5. Find each `pnpm-workspace.yaml` entry that names the package: `allowBuilds`, `overrides`, `minimumReleaseAgeExclude`, `packageExtensions` and `patchedDependencies`.
 6. For each entry, run `pnpm why -r <package>` in each lockfile directory, so that every workspace importer is searched. Remove the entry only if no package in any lockfile still needs it. A security override for a package that stays as a transitive dependency must stay.
 7. If you removed an entry, run `pnpm install` again. The lockfile records the workspace settings.
-8. Update the dependency baseline.
+8. Update the dependency baseline. If the package left every lockfile, add it to [the retired dependencies](#retired-dependencies) with its replacement.
 9. Run the tests of each tree that used the package.
 10. If the package was in shipped code, add a changeset.
 

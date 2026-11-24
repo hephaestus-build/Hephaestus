@@ -412,6 +412,9 @@ jobs:
               - 'scripts/**'
               - 'security/semgrep/**'
               - 'security/dependency-baseline.json'
+              - 'security/retired-dependencies.json'
+              # gate:dependency-baseline finds every pnpm lockfile by name.
+              - '**/pnpm-lock.yaml'
               - 'docker/agents/**'
               # test:agents runs on this leg, and these files are what it tests.
               - 'server/application/src/main/resources/agent/**'
