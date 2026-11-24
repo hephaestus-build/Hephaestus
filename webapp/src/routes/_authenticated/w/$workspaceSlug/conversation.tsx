@@ -1,7 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useLocation } from "@tanstack/react-router";
-import { type RefObject, useId, useRef, useState } from "react";
-import { useResizeObserver } from "usehooks-ts";
+// oxlint-disable-next-line no-restricted-imports -- React detaches and reattaches a ref callback whose identity changes. The observer must survive a render.
+import { useCallback, useId, useState } from "react";
 import { conversationSearchSchema } from "@/lib/conversation-search";
 
 import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
@@ -83,13 +83,21 @@ function ConversationPage({
 	// The region the conversation and its thread share. Its width does not change with how the
 	// thread shows, so the choice between a column and a drawer cannot flip back and forth, and it
 	// already leaves out the sidebar, collapsed or open, and the rest of the page.
-	const host = useRef<HTMLDivElement>(null);
-	const { width: availableWidth } = useResizeObserver({
-		// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- usehooks-ts 3 types `ref` without the `| null` that React 19 gives `useRef(null)`; the hook reads `current` only once mounted.
-		ref: host as RefObject<HTMLDivElement>,
-	});
-	// Read with each new measurement, so it follows the reader's text size as it stands then.
-	const availableRem = availableWidth === undefined ? undefined : availableWidth / pixelsPerRem();
+	const [availableRem, setAvailableRem] = useState<number>();
+	const host = useCallback((element: HTMLDivElement | null) => {
+		if (!element || typeof ResizeObserver === "undefined") {
+			return;
+		}
+		const observer = new ResizeObserver(([measurement]) => {
+			if (measurement) {
+				const width = measurement.contentBoxSize[0]?.inlineSize ?? measurement.contentRect.width;
+				// A text-size change can change the height while the width stays the same.
+				setAvailableRem(width / pixelsPerRem());
+			}
+		});
+		observer.observe(element);
+		return () => observer.disconnect();
+	}, []);
 	const livePaused = useConversationLive(workspaceSlug, !readOnly);
 	const canAsk = notice === undefined && !readOnly;
 

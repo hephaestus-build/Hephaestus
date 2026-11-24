@@ -516,10 +516,6 @@ export {
 	getPublicActivityChoiceQueryKey,
 } from "./react-query/getPublicActivityChoice.gen.js";
 export {
-	getPublicActivityHiddenCountOptions,
-	getPublicActivityHiddenCountQueryKey,
-} from "./react-query/getPublicActivityHiddenCount.gen.js";
-export {
 	getPublicActivityOnboardingOptions,
 	getPublicActivityOnboardingQueryKey,
 } from "./react-query/getPublicActivityOnboarding.gen.js";

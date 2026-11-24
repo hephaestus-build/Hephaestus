@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -263,6 +264,8 @@ public class ActionExecutor implements SmartLifecycle {
     /**
      * Adds the action already claimed and carries it out on the caller's thread, for a caller that shows the result
      * at once. Empty when its idempotency key was already enqueued.
+     *
+     * @throws MaintenanceInProgressException while a database migration runs ({@link ActionStore#start})
      */
     public Optional<ActionResult> runNow(ActionRequest request) {
         return store.start(request, LEASE).map(this::run);

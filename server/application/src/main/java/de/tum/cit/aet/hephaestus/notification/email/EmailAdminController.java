@@ -29,8 +29,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Lets an instance admin prove the relay end to end. The test email goes through the same outbox and
  * {@link EmailAdapter} as every notification — Silent Mode, the sender identity and the headers
- * included — so {@code SENT} proves relay acceptance, not inbox delivery. Every outcome is
- * HTTP 200 with the outcome named in the body; malformed requests remain HTTP 400.
+ * included — so {@code SENT} proves relay acceptance, not inbox delivery. Every delivery outcome is
+ * HTTP 200 with the outcome named in the body; malformed requests remain HTTP 400. While a database
+ * migration runs, the request sends nothing and answers HTTP 503.
  */
 @ConditionalOnServerRole
 @RestController
@@ -79,6 +80,13 @@ public class EmailAdminController {
     @ApiResponse(
             responseCode = "400",
             description = "Malformed request or invalid recipient address",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "A database migration runs, so nothing was sent. Retry after the Retry-After seconds.",
             content =
                     @Content(
                             mediaType = "application/problem+json",

@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useSpinDelay } from "spin-delay";
 
 import { SigningInPage } from "@/components/auth/SigningInPage";
 import { pageHead } from "@/lib/page-title";
+import { useSpinDelay } from "@/lib/use-spin-delay";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/return-to";
 

@@ -3,8 +3,6 @@ import { toast } from "@/lib/toast";
 
 import {
 	getPublicActivityPolicyOptions,
-	getPublicActivityHiddenCountOptions,
-	getPublicActivityHiddenCountQueryKey,
 	getWorkspacePublicActivitySettingsOptions,
 	getWorkspacePublicActivitySettingsQueryKey,
 	listHiddenContributorsOptions,
@@ -31,8 +29,8 @@ import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-ref
 
 /**
  * A workspace's public activity page as its admin settings show it: whether it is on, whether search
- * engines may list it, whether it names contributors without an account, how many people it leaves
- * out, and the three changes. Beside it, the hidden
+ * engines may list it, whether it names contributors without an account, and the three changes.
+ * Beside it, the hidden
  * people an admin can show again, since showing one again is a public activity objection taken back.
  * `live` is the server-computed publication status from the workspace list.
  * An instance administrator outside that list reads the existing instance policy instead.
@@ -59,9 +57,6 @@ export function useWorkspacePublicActivity({
 	const settings = useQuery({ ...settingsOptions, enabled: workspaceSlug !== undefined });
 	useQueryReadRefusal(settingsOptions.queryKey, settings.isError, settings.error);
 	const current = lastRead(settings);
-	const hiddenOptions = getPublicActivityHiddenCountOptions({ path });
-	const hidden = useQuery({ ...hiddenOptions, enabled: current.data?.enabled === true });
-	useQueryReadRefusal(hiddenOptions.queryKey, hidden.isError, hidden.error);
 	const hiddenContributorsOptions = listHiddenContributorsOptions({ path });
 	const hiddenContributors = useQuery({
 		...hiddenContributorsOptions,
@@ -79,9 +74,6 @@ export function useWorkspacePublicActivity({
 		onSuccess: (_data, { path: { workspaceSlug: submitted } }) => {
 			const workspace = { path: { workspaceSlug: submitted } };
 			void queryClient.invalidateQueries({ queryKey: listHiddenContributorsQueryKey(workspace) });
-			void queryClient.invalidateQueries({
-				queryKey: getPublicActivityHiddenCountQueryKey(workspace),
-			});
 			toast.success("Shown in activity again", { description: inWorkspace(submitted) });
 		},
 		onError: (error, { path: { workspaceSlug: submitted } }) =>
@@ -98,11 +90,8 @@ export function useWorkspacePublicActivity({
 			return data;
 		},
 		onSuccess: async (_data, { path: submitted, body }) => {
-			// The list carries the publication status, and the count follows what the page lists.
+			// The list carries the publication status.
 			void queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() });
-			void queryClient.invalidateQueries({
-				queryKey: getPublicActivityHiddenCountQueryKey({ path: submitted }),
-			});
 			announce(body, submitted.workspaceSlug);
 			// The saved settings reach the page only through a fresh read, so a read that is refused
 			// by the time the change returns stays refused.
@@ -161,8 +150,6 @@ export function useWorkspacePublicActivity({
 				current.refreshFailure ??
 				(live === undefined ? publicationPolicy.refreshFailure : undefined),
 			live: publication,
-			// A count that did not load is left out rather than shown from an earlier read.
-			hiddenPeople: hidden.isError ? undefined : hidden.data?.hiddenPeople,
 			pending:
 				update.isPending && update.variables.path.workspaceSlug === workspaceSlug
 					? update.variables.change

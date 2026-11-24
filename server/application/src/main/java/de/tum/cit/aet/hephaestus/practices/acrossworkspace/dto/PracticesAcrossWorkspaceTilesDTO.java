@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import de.tum.cit.aet.hephaestus.core.ShownCount;
+import de.tum.cit.aet.hephaestus.core.SmallCounts;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.PracticesAcrossWorkspaceWindow;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.Nullable;
@@ -14,11 +16,13 @@ public record PracticesAcrossWorkspaceTilesDTO(
         PracticesAcrossWorkspaceWindow window,
 
         @Schema(
+                implementation = Integer.class,
                 requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "Developers with a standing in a practice group shown in the window, the developers the"
-                        + " tiles compare. Null for fewer than 3")
+                description = "Developers with a standing in the window, the developers the tiles compare. Null for"
+                        + " 1 to "
+                        + (SmallCounts.MINIMUM - 1))
         @Nullable
-        Integer developersWithAStandingInWindow,
+        ShownCount developersWithAStandingInWindow,
 
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,
@@ -27,7 +31,9 @@ public record PracticesAcrossWorkspaceTilesDTO(
 
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "Whether a counted standing in the window was read only from earlier reviews")
+                description = "Whether at least "
+                        + SmallCounts.MINIMUM
+                        + " developers counted in the window have a standing read only from earlier reviews")
         boolean includesEarlierReviews,
 
         @Schema(

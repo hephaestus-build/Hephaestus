@@ -59,12 +59,6 @@ public interface SlackParticipantConsentRepository
             @Param("optedOut") boolean optedOut,
             @Param("decidedAt") Instant decidedAt);
 
-    /**
-     * Count of individuals who have opted OUT of ingestion in this workspace. Person opt-out is workspace-scoped
-     * (not per-channel), so this is a single workspace-wide count.
-     */
-    long countByWorkspaceIdAndIngestionOptedOutTrue(Long workspaceId);
-
     /** Workspace purge: delete every consent row for one workspace. */
     long deleteByWorkspaceId(Long workspaceId);
 }

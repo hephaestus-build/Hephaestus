@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssueUpdates;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
@@ -28,6 +29,7 @@ import de.tum.cit.aet.hephaestus.notification.preferences.UpdateNotificationPref
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackDestinationsDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.InternetAddress;
@@ -35,6 +37,7 @@ import jakarta.mail.internet.MimeMessage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -43,6 +46,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
+import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -107,6 +111,9 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private DataSource dataSource;
 
     @Autowired
     private ActionExecutor executor;
@@ -394,6 +401,31 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldAnswerThatHephaestusIsUpdatingBeforeAMoveReadsTheFilingThatAMigrationHolds() throws Exception {
+        Account reporter = account(Account.AppRole.USER);
+        UUID report = makePrivateSetUp(reporter);
+        long actionsBefore = actionsOf(report);
+        try (var _ = RunningMigration.start(dataSource);
+                Connection ddl = dataSource.getConnection();
+                var statement = ddl.createStatement()) {
+            // A change set that rewrites the filings holds their table: the refusal must not wait for it.
+            ddl.setAutoCommit(false);
+            statement.execute("LOCK TABLE product_feedback_filing IN ACCESS EXCLUSIVE MODE");
+            try {
+                assertThatThrownBy(() -> myReports.makePrivate(Objects.requireNonNull(reporter.getId()), report))
+                        .isInstanceOf(MaintenanceInProgressException.class);
+            } finally {
+                ddl.rollback();
+            }
+        } finally {
+            privateRepository(null);
+        }
+        verify(updates, never()).transfer(any(), any());
+        assertThat(actionsOf(report)).as("the move adds no action").isEqualTo(actionsBefore);
+        assertThat(filings.findById(report).orElseThrow().getRoute()).isEqualTo(FilingRoute.PUBLIC);
+    }
+
+    @Test
     void shouldFinishAMoveWhoseAnswerWasLostWithoutMovingTheIssueAgain() {
         Account reporter = account(Account.AppRole.USER);
         UUID report = makePrivateSetUp(reporter);
@@ -465,6 +497,11 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
         when(issues.repository(PRIVATE_REPOSITORY.fullName())).thenReturn(Optional.of(PRIVATE_REPOSITORY));
         privateRepository(PRIVATE_REPOSITORY.fullName());
         return report;
+    }
+
+    private long actionsOf(UUID report) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM agent_action WHERE idempotency_key LIKE ?", Long.class, "%" + report + "%"));
     }
 
     private void privateRepository(@Nullable String name) {

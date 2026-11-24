@@ -1,9 +1,9 @@
 import { CatchBoundary } from "@tanstack/react-router";
 import { type ReactNode, Suspense } from "react";
-import { useSpinDelay } from "spin-delay";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { lazyComponent, useLazyComponent } from "@/lib/lazy-component";
+import { useSpinDelay } from "@/lib/use-spin-delay";
 
 /**
  * The Markdown stack (the parser, the HTML tree tools and the renderer) loads the first time a page

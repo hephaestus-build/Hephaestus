@@ -41,6 +41,7 @@ class ScheduledJobLockTest {
             Map.entry("ProviderEventConsumer#reap", "ROW"),
             Map.entry("ProviderEventBacklogSampler#sample", "LOCAL"),
             Map.entry("WalArchiveMonitor#sample", "LOCAL"),
+            Map.entry("MaintenanceBarrierMonitor#sample", "LOCAL"),
             Map.entry("BackupScheduleMonitor#sample", "LOCAL"),
             Map.entry("DatabaseSizeMonitor#sample", "LOCAL"),
             Map.entry("OverduePublicationMeter#measure", "LOCAL"),

@@ -11,7 +11,6 @@ import {
 	UserRoundIcon,
 } from "lucide-react";
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useMediaQuery } from "usehooks-ts";
 
 import { cn } from "cn";
 import type { PracticeStanding } from "@/api/types.gen";
@@ -25,6 +24,7 @@ import {
 import { PRACTICE_TREND_DEFS } from "@/components/practice-vocabulary/practice-trend-defs";
 import { PracticeGroupStandingRing } from "@/components/practice-vocabulary/PracticeGroupStandingRing";
 import { countPracticeStandings } from "@/components/practice-vocabulary/standing-counts";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import type { ItemProvider } from "@/lib/item-kinds";
 
 import { exampleWorkLabel } from "./example-profile";
@@ -36,7 +36,7 @@ import styles from "./tour.module.css";
  * so nothing it teaches waits for an animation.
  */
 export function useStill(): boolean {
-	return useMediaQuery("(prefers-reduced-motion: reduce)", { initializeWithValue: true });
+	return useMediaQuery("(prefers-reduced-motion: reduce)");
 }
 
 /** How many beats of a scene have played. Under reduced motion, all of them. */

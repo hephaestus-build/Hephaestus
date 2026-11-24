@@ -14,7 +14,6 @@ const channel: SlackMonitoredChannel = {
 	slackChannelId: "C01ACTIVE001",
 	channelName: "team-standup",
 	consentState: "ACTIVE",
-	optedOutMemberCount: 0,
 	consentAnnouncedAt: daysBefore(2),
 	createdAt: daysBefore(5),
 };
@@ -169,17 +168,6 @@ export const ActivationFailed: Story = {
 		await expect(
 			screen.queryByRole("menuitem", { name: /activate monitoring/iu }),
 		).not.toBeInTheDocument();
-	},
-};
-
-export const WithOptOuts: Story = {
-	args: { channel: { ...channel, optedOutMemberCount: 3 } },
-	play: async ({ canvas }) => {
-		// A bare non-interactive <span> trigger has no accessible role for keyboard/SR users; the
-		// tooltip trigger must be a real, enabled <button> so Tab can reach it.
-		const trigger = canvas.getByRole("button", { name: "3" });
-		await expect(trigger.tagName).toBe("BUTTON");
-		await expect(trigger).toBeEnabled();
 	},
 };
 

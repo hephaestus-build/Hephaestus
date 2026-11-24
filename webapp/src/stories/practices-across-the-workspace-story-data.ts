@@ -51,8 +51,8 @@ export const split = (
 });
 
 /**
- * A split as the server sends it when a part would hold 1 or 2, or everyone sits in one part: its
- * total only. A null total is fewer than 3 developers.
+ * A split as the server sends it when a part would hold 1 to 4, or everyone sits in one part: its
+ * total only. A null total is fewer than 5 developers.
  */
 export const totalOnly = (developers: number | null): WorkspaceSplit => ({
 	parts: [
@@ -82,7 +82,7 @@ const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
 	practice(
 		"keep-the-diff-reviewable",
 		"Keep the diff reviewable in one sitting",
-		split(9, 4, 8, 7),
+		split(9, 5, 7, 7),
 		"DEVELOPING",
 		"CURRENT_REVIEWS",
 	),
@@ -108,7 +108,7 @@ const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
 	practice(
 		"keep-history-clean",
 		"Keep the history readable",
-		split(4, 5, 12, 7),
+		split(5, 5, 11, 7),
 		"MIXED",
 		"CURRENT_REVIEWS",
 	),
@@ -132,24 +132,24 @@ export const PACKAGING_GROUP: WorkspaceGroupSplit = group(
 
 /** 28 developers with a standing, the reader among them, each counted once. */
 export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
-	openFeedback: { yours: 3, middle: { low: 1, high: 4 } },
+	openFeedback: { yours: 3, middle: null },
 	includesEarlierReviews: false,
 	groups: [
 		group(
 			ACTING,
-			split(4, 6, 10, 8),
+			split(5, 6, 9, 8),
 			[
 				practice(
 					"answer-every-comment",
 					"Answer every review comment",
-					split(3, 5, 12, 8),
+					split(5, 5, 10, 8),
 					"STRENGTH",
 					"CURRENT_REVIEWS",
 				),
 				practice(
 					"re-request-review",
 					"Ask for review again after changes",
-					split(6, 4, 9, 9),
+					split(6, 5, 8, 9),
 					"MIXED",
 					"CURRENT_REVIEWS",
 				),
@@ -157,7 +157,7 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 			"STRENGTH",
 			"CURRENT_REVIEWS",
 		),
-		// A part under 3 hides the split: only the total shows; the reader has no verdict here.
+		// A part under 5 hides the split: only the total shows; the reader has no verdict here.
 		group(
 			COMMUNICATION,
 			totalOnly(28),
@@ -174,12 +174,12 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 		PACKAGING_GROUP,
 		group(
 			TESTING,
-			split(10, 9, 3, 6),
+			split(10, 7, 5, 6),
 			[
 				practice(
 					"test-the-change",
 					"Add tests for the change",
-					split(10, 9, 3, 6),
+					split(10, 7, 5, 6),
 					"DEVELOPING",
 					"CURRENT_REVIEWS",
 				),
@@ -216,7 +216,7 @@ export const EARLIER_REVIEWS_WORKSPACE: PracticesAcrossWorkspace = {
 	),
 };
 
-/** The reader is the only developer with a standing: fewer than 3, so the split stays hidden. */
+/** The reader is the only developer with a standing: fewer than 5, so the split stays hidden. */
 export const ONE_DEVELOPER_WORKSPACE: PracticesAcrossWorkspace = {
 	openFeedback: { yours: 2, middle: null },
 	includesEarlierReviews: false,
@@ -303,14 +303,14 @@ export const MANY_GROUPS_WORKSPACE: PracticesAcrossWorkspace = {
 	groups: Array.from({ length: 26 }, (_, index) =>
 		group(
 			{ ...ACTING, groupSlug: `group-${index + 1}`, groupName: `Practice group ${index + 1}` },
-			split(4, 6, 10, 8),
-			[practice(`practice-${index + 1}`, `Practice ${index + 1}`, split(4, 6, 10, 8))],
+			split(5, 6, 9, 8),
+			[practice(`practice-${index + 1}`, `Practice ${index + 1}`, split(5, 6, 9, 8))],
 		),
 	),
 };
 
 export const MANY_PRACTICES: WorkspacePracticeSplit[] = Array.from({ length: 24 }, (_, index) =>
-	practice(`practice-${index + 1}`, `Practice ${index + 1}`, split(4, 6, 10, 8)),
+	practice(`practice-${index + 1}`, `Practice ${index + 1}`, split(5, 6, 9, 8)),
 );
 
 const figure = (yours: number, low: number, high: number): WorkspaceTile => ({
@@ -363,7 +363,7 @@ export const TILES_BY_WINDOW: Record<
 
 export const ACROSS_WORKSPACE_TILES = TILES_BY_WINDOW.DAYS_30;
 
-/** One developer with a standing: fewer than 3, so the count and every middle half stay hidden. */
+/** One developer with a standing: fewer than 5, so the count and every middle half stay hidden. */
 export const ONE_DEVELOPER_TILES: PracticesAcrossWorkspaceTiles = {
 	...ACROSS_WORKSPACE_TILES,
 	developersWithAStandingInWindow: null,

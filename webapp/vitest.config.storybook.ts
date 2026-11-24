@@ -25,14 +25,12 @@ export default defineConfig({
 		include: [
 			// `@shadcn/react` has no root export; only the subpath the app imports can be pre-bundled.
 			...runtimeDeps.filter(
-				(dependency) =>
-					dependency !== "@monaco-editor/react" &&
-					dependency !== "monaco-editor" &&
-					dependency !== "@shadcn/react",
+				(dependency) => dependency !== "monaco-editor" && dependency !== "@shadcn/react",
 			),
 			"@shadcn/react/questionnaire",
-			"use-sync-external-store/shim",
-			"use-sync-external-store/shim/with-selector",
+			// Base UI, TanStack Store and Recharts import React's shim; it is not an app dependency.
+			"@base-ui/react > use-sync-external-store/shim",
+			"@base-ui/react > use-sync-external-store/shim/with-selector",
 		],
 	},
 	test: {

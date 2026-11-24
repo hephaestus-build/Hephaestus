@@ -95,6 +95,13 @@ Renovate groups routine Gradle updates as server dependencies and webapp develop
 separately. Webapp production dependencies remain separate unless Renovate identifies a package
 family that must move together.
 
+A Spring Boot patch release does not wait for the weekly server batch.
+It opens its own pull request at the next Renovate run, with no release age and no PR limit.
+A newer Spring Boot minor does not hide it.
+Spring Framework and Spring Security fixes come to the server only through the Spring Boot BOM.
+The build files declare those modules without a version.
+Thus, a vulnerability alert cannot propose the fix.
+
 A dependency update changes only the lock entries that it needs. Renovate does not deduplicate after
 it, so the dependency baseline judges that update alone. The weekly lock file maintenance refreshes
 every locked version within its range, and only it runs `pnpm dedupe` over the whole tree.

@@ -6,9 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncStateProvide
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RateLimitSnapshot;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResourceCount;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResourceState;
-import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
@@ -18,8 +16,6 @@ import de.tum.cit.aet.hephaestus.integration.slack.sync.SlackSyncProperties;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -29,19 +25,16 @@ import org.springframework.stereotype.Component;
 public class SlackConnectionSyncStateProvider implements ConnectionSyncStateProvider {
 
     private final SlackMonitoredChannelRepository monitoredChannelRepository;
-    private final SlackMessageRepository messageRepository;
     private final SlackSyncProperties properties;
     private final SlackRateLimitTracker rateLimitTracker;
     private final Clock clock;
 
     public SlackConnectionSyncStateProvider(
             SlackMonitoredChannelRepository monitoredChannelRepository,
-            SlackMessageRepository messageRepository,
             SlackSyncProperties properties,
             SlackRateLimitTracker rateLimitTracker,
             Clock clock) {
         this.monitoredChannelRepository = monitoredChannelRepository;
-        this.messageRepository = messageRepository;
         this.properties = properties;
         this.rateLimitTracker = rateLimitTracker;
         this.clock = clock;
@@ -80,23 +73,20 @@ public class SlackConnectionSyncStateProvider implements ConnectionSyncStateProv
                 false);
     }
 
+    /**
+     * Each monitored channel without its stored message count. A person's opt-out deletes their messages, so in a
+     * quiet channel the count falling would tell an admin who opted out.
+     */
     @Override
     public List<SyncResourceState> resources(IntegrationRef ref, long connectionId) {
-        long workspaceId = ref.workspaceId();
-        Map<String, Long> itemCountByChannelId = messageRepository.countGroupedByChannelId(workspaceId).stream()
-                .collect(Collectors.toMap(
-                        SlackMessageRepository.ChannelItemCount::getSlackChannelId,
-                        SlackMessageRepository.ChannelItemCount::getItemCount));
-
         return monitoredChannelRepository
-                .findByWorkspaceIdAndConsentStateNot(workspaceId, ConsentState.REVOKED)
+                .findByWorkspaceIdAndConsentStateNot(ref.workspaceId(), ConsentState.REVOKED)
                 .stream()
-                .map(channel -> toResourceState(channel, itemCountByChannelId))
+                .map(SlackConnectionSyncStateProvider::toResourceState)
                 .toList();
     }
 
-    private SyncResourceState toResourceState(SlackMonitoredChannel channel, Map<String, Long> itemCountByChannelId) {
-        Long itemCount = itemCountByChannelId.getOrDefault(channel.getSlackChannelId(), 0L);
+    private static SyncResourceState toResourceState(SlackMonitoredChannel channel) {
         String name = channel.getChannelName() != null ? channel.getChannelName() : channel.getSlackChannelId();
         Instant lastSyncedAt = SlackTs.toInstant(channel.getLastHistorySyncedTs());
         return new SyncResourceState(
@@ -106,10 +96,8 @@ public class SlackConnectionSyncStateProvider implements ConnectionSyncStateProv
                 SyncResourceState.Type.CHANNEL,
                 channel.getConsentState().name(),
                 lastSyncedAt,
-                itemCount,
-                // A channel maps to exactly one entity class, so the breakdown is a single row rendered inline
-                // (no expander); its watermark is the channel's own, not a stand-in for a missing per-class one.
-                List.of(new SyncResourceCount(SyncResourceCount.KEY_MESSAGES, "Messages", itemCount, lastSyncedAt)),
+                null,
+                List.of(),
                 null,
                 channel.getLastSyncError(),
                 null,

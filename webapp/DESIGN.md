@@ -248,7 +248,7 @@ Choose by **region**, not by feel.
 |---|---|
 | A region whose shape you know at author time — list, table, card grid, form, page body, drawer body | A skeleton mirroring that shape, inside the region's real container |
 | A control the reader just activated — button, switch, row action, select | `pending` on `Button`, `Switch` or `SelectTrigger`. The label changes at once ("Saving…"): it confirms the press. The control shows its spinner only after a second. `hephaestus/no-spinner-in-button` refuses a spinner placed by hand. |
-| Anything else under ~1s | Nothing. Gate it with `usePendingSpinner` (`@/lib/use-pending-spinner`), which wraps [`spin-delay`](https://www.npmjs.com/package/spin-delay). Do not hand-roll the timer. Its state machine must be discrete, or the effect re-arms. |
+| Anything else under ~1s | Nothing. Gate it with `usePendingSpinner` (`@/lib/use-pending-spinner`), which wraps the owned [spinner state machine](src/lib/use-spin-delay.ts). Do not hand-roll the timer. Its state machine must be discrete, or the effect re-arms. |
 | A whole route transition | The router's `pendingComponent`. It already delays 1000ms with a 500ms floor |
 
 Below 1s a reader perceives the result as immediate and

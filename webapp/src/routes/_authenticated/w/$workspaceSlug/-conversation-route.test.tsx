@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, type PathParams } from "msw";
 import { beforeAll, afterEach, assert, expect, it, vi } from "vitest";
@@ -52,8 +52,7 @@ afterEach(() => {
 });
 
 /** What a browser reports for an element `width` CSS pixels wide. */
-function sizeEntry(target: Element, width: number): ResizeObserverEntry {
-	const height = 800;
+function sizeEntry(target: Element, width: number, height = 800): ResizeObserverEntry {
 	const box = [{ inlineSize: width, blockSize: height }];
 	return {
 		target,
@@ -78,37 +77,46 @@ function sizeEntry(target: Element, width: number): ResizeObserverEntry {
  * jsdom lays nothing out, so the page cannot measure the region its conversation and thread share,
  * and a thread shows as a drawer. This gives the region `width` CSS pixels at a root text size of
  * `textPx`, the browser's default unless the reader changed it: every element observed reports the
- * width once observing starts, as in a browser. The returned function reports a new width, as a
+ * width once observing starts, as in a browser. The resize function reports a new width, as a
  * window resize or a sidebar toggle does.
  */
-function giveRoom(width: number, textPx = 16): (next: number) => void {
+function giveRoom(width: number, textPx = 16) {
 	document.documentElement.style.fontSize = `${textPx}px`;
 	let current = width;
-	const observed: {
+	const observed = new Set<{
 		onResize: ResizeObserverCallback;
 		observer: ResizeObserver;
 		target: Element;
-	}[] = [];
+	}>();
 	class ReportingResizeObserver implements ResizeObserver {
 		readonly #onResize: ResizeObserverCallback;
 		constructor(onResize: ResizeObserverCallback) {
 			this.#onResize = onResize;
 		}
 		observe(target: Element) {
-			observed.push({ onResize: this.#onResize, observer: this, target });
+			observed.add({ onResize: this.#onResize, observer: this, target });
 			this.#onResize([sizeEntry(target, current)], this);
 		}
 		unobserve = vi.fn();
-		disconnect = vi.fn();
+		disconnect() {
+			for (const observation of observed) {
+				if (observation.observer === this) {
+					observed.delete(observation);
+				}
+			}
+		}
 	}
 	vi.stubGlobal("ResizeObserver", ReportingResizeObserver);
-	return (next) => {
-		current = next;
-		act(() => {
-			for (const { onResize, observer, target } of observed) {
-				onResize([sizeEntry(target, next)], observer);
-			}
-		});
+	return {
+		observed,
+		resize: (next: number, height = 800) => {
+			current = next;
+			act(() => {
+				for (const { onResize, observer, target } of observed) {
+					onResize([sizeEntry(target, next, height)], observer);
+				}
+			});
+		},
 	};
 }
 
@@ -824,10 +832,21 @@ it("shows a thread as a drawer until the page has measured room for it beside th
 	expect(screen.queryByRole("complementary", { name: "Thread" })).toBeNull();
 });
 
+it("disconnects the conversation layout observer when the page unmounts", async () => {
+	const { observed } = giveRoom(ROOMY);
+	serve(new ConversationFake("acme"));
+
+	renderRouteAtWithRouter("/w/acme/conversation");
+	await screen.findByRole("textbox", { name: "Message Hephaestus" }, ROUTE_RENDER_WAIT);
+	expect(observed.size).toBeGreaterThan(0);
+	cleanup();
+	expect(observed.size).toBe(0);
+});
+
 it("needs a wider region for the thread's column when the reader's browser shows larger text", async () => {
 	// The same 952px region that holds both at 16px: at 20px the 26rem column is 520px, and the
 	// 432px left over is less than the conversation's 24rem, 480px.
-	const resize = giveRoom(952, 20);
+	const { resize } = giveRoom(952, 20);
 	const fake = new ConversationFake();
 	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
 	fake.add({ kind: "ANSWER", text: "Share blockers earlier.", parentEntryId: parent.id });
@@ -843,10 +862,25 @@ it("needs a wider region for the thread's column when the reader's browser shows
 	await screen.findByRole("complementary", { name: "Thread" });
 });
 
+it("checks the thread layout again when the reader changes text size at the same width", async () => {
+	const { resize } = giveRoom(952);
+	const fake = new ConversationFake();
+	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
+	fake.add({ kind: "ANSWER", text: "Share blockers earlier.", parentEntryId: parent.id });
+	serve(fake);
+
+	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
+	await screen.findByRole("complementary", { name: "Thread" }, ROUTE_RENDER_WAIT);
+
+	document.documentElement.style.fontSize = "20px";
+	resize(952, 750);
+	await screen.findByRole("dialog", { name: "Thread" }, ROUTE_RENDER_WAIT);
+});
+
 it("chooses the thread's column or drawer by the room the page measures, and keeps the reply being written", async () => {
 	// 1000px windows: the open sidebar leaves this region 744px wide, the collapsed one 952px. A
 	// 26rem column beside it would leave the conversation 328px, below its 24rem; 536px is enough.
-	const resize = giveRoom(744);
+	const { resize } = giveRoom(744);
 	const fake = new ConversationFake();
 	const parent = fake.add({ kind: "USER", text: "How did my week go?" });
 	fake.add({ kind: "ANSWER", text: "Share blockers earlier.", parentEntryId: parent.id });

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
+import { matchesGlob } from "node:path/posix";
 import { test } from "node:test";
 
 import { parse } from "yaml";
@@ -392,6 +393,116 @@ void test("vulnerability remediation bypasses normal update latency", () => {
 		groupName: null,
 		labels: ["security", "dependencies"],
 	});
+});
+
+/** The keys a package rule selects on. */
+function ruleSelectors(rule: Record<string, unknown>) {
+	return Object.keys(rule)
+		.filter((key) => key.startsWith("match"))
+		.toSorted();
+}
+
+/** The string entries of a rule's matcher, or undefined when the rule has no such matcher. */
+function strings(value: unknown) {
+	return Array.isArray(value)
+		? value.filter((entry): entry is string => typeof entry === "string")
+		: undefined;
+}
+
+/** Whether a Renovate name matcher (glob, `/regex/` or negation) can match one of the names. */
+function anyName(patterns: string[], names: string[]) {
+	return patterns.some(
+		(pattern) =>
+			pattern.startsWith("!") ||
+			names.some((name) =>
+				pattern.startsWith("/")
+					? new RegExp(
+							pattern.slice(1, pattern.lastIndexOf("/")),
+							`${pattern.slice(pattern.lastIndexOf("/") + 1)}u`,
+						).test(name)
+					: matchesGlob(name, pattern),
+			),
+	);
+}
+
+void test("a Spring Boot patch opens when it is released, outside the weekly batch and the PR limits", async () => {
+	const catalog = await readFile("server/gradle/libs.versions.toml", "utf8");
+	const plugin = /^spring-boot = \{ id = "(?<id>[^"]+)", version\.ref = "spring-boot" \}$/mu.exec(
+		catalog,
+	)?.groups?.id;
+	const version = /^spring-boot = "(?<version>[^"]+)"$/mu.exec(catalog)?.groups?.version;
+	assert.ok(isSet(plugin) && isSet(version));
+	const boot = {
+		depNames: [plugin, "org.springframework.boot:spring-boot-dependencies"],
+		packageNames: [
+			`${plugin}:${plugin}.gradle.plugin`,
+			"org.springframework.boot:spring-boot-dependencies",
+		],
+		files: ["server/gradle/libs.versions.toml", "server/build.gradle.kts"],
+	};
+	// What Renovate matches a Boot patch on. A matcher that this does not model counts as a match.
+	const matchesBootPatch = (rule: Record<string, unknown>) => {
+		const managers = strings(rule.matchManagers);
+		const updateTypes = strings(rule.matchUpdateTypes);
+		const depNames = strings(rule.matchDepNames);
+		const packageNames = strings(rule.matchPackageNames);
+		const files = strings(rule.matchFileNames);
+		const datasources = strings(rule.matchDatasources);
+		const current =
+			typeof rule.matchCurrentVersion === "string" ? rule.matchCurrentVersion : undefined;
+		return (
+			(managers === undefined || managers.includes("gradle")) &&
+			(updateTypes === undefined || updateTypes.includes("patch")) &&
+			(depNames === undefined || anyName(depNames, boot.depNames)) &&
+			(packageNames === undefined || anyName(packageNames, boot.packageNames)) &&
+			(files === undefined ||
+				files.some((glob) => boot.files.some((file) => matchesGlob(file, glob)))) &&
+			(datasources === undefined ||
+				datasources.some((name) => ["maven", "gradle-plugin"].includes(name))) &&
+			(current === undefined || !current.startsWith("/") || anyName([current], [version]))
+		);
+	};
+	assert.ok(Array.isArray(config.packageRules));
+	const rules = config.packageRules.filter(isRecord);
+	const index = rules.findIndex((rule) => rule.groupName === "Spring Boot");
+	const rule = rules[index];
+	// The rules select on exactly these keys: any other selector could drop the Boot plugin or BOM.
+	assert.ok(rule);
+	assert.deepEqual(ruleSelectors(rule), ["matchDepNames", "matchManagers", "matchUpdateTypes"]);
+	assert.deepEqual(rule.matchManagers, ["gradle"]);
+	assert.deepEqual(rule.matchDepNames, boot.depNames);
+	assert.deepEqual(rule.matchUpdateTypes, ["patch"]);
+	assert.deepEqual(rule.schedule, ["* * * * *"]);
+	assert.equal(rule.minimumReleaseAge, null);
+	assert.equal(rule.prConcurrentLimit, 0);
+	assert.equal(rule.branchConcurrentLimit, 0);
+	assert.equal(rule.prHourlyLimit, 0);
+	const effects = [
+		"groupName",
+		"schedule",
+		"minimumReleaseAge",
+		"dependencyDashboardApproval",
+		"enabled",
+		"prConcurrentLimit",
+		"branchConcurrentLimit",
+		"prHourlyLimit",
+		"allowedVersions",
+		"ignoreVersions",
+	];
+	const overriding = rules
+		.slice(index + 1)
+		.filter((later) => matchesBootPatch(later) && effects.some((key) => key in later));
+	assert.deepEqual(overriding, [], "a later rule overrides the Spring Boot patch rule");
+	// Renovate splits minor and patch releases at lookup, before it knows the update type.
+	const separate = rules.filter(
+		(candidate) => "separateMinorPatch" in candidate && matchesBootPatch(candidate),
+	);
+	const split = separate.at(-1);
+	assert.ok(split, "a newer Boot minor hides the patch");
+	assert.equal(split.separateMinorPatch, true);
+	assert.deepEqual(ruleSelectors(split), ["matchDepNames", "matchManagers"]);
+	assert.deepEqual(split.matchManagers, ["gradle"]);
+	assert.deepEqual(split.matchDepNames, boot.depNames);
 });
 
 /** The datasources a manager's match strings extract from a file, through their `datasource` group. */

@@ -21,7 +21,6 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEve
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
-import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
@@ -72,9 +71,6 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
     private SlackChannelConsentEventRepository consentEventRepository;
 
     @Mock
-    private SlackParticipantConsentRepository participantConsentRepository;
-
-    @Mock
     private SlackIngestService ingestService;
 
     @Mock
@@ -108,7 +104,6 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
         return new SlackChannelConsentService(
                 monitoredChannelRepository,
                 consentEventRepository,
-                participantConsentRepository,
                 ingestService,
                 slackMessageService,
                 connectionService,

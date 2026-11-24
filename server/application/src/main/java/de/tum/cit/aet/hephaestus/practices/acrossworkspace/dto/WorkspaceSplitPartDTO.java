@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import de.tum.cit.aet.hephaestus.core.ShownCount;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.WorkspaceSplits.Verdict;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.Nullable;
@@ -12,8 +13,9 @@ public record WorkspaceSplitPartDTO(
         Verdict standing,
 
         @Schema(
+                implementation = Integer.class,
                 requiredMode = Schema.RequiredMode.REQUIRED,
                 description = "Developers at the verdict, the reader included when counted. Null when the split"
                         + " shows only its total")
         @Nullable
-        Integer developers) {}
+        ShownCount developers) {}

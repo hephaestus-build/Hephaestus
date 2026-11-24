@@ -44,7 +44,7 @@ section before any rule file.
 
 | Rule | Read it as |
 |------|-----------|
-| `bundle-dynamic-imports` | The reasoning holds and the repo has the rule's own example (`@monaco-editor/react`). The mechanism is `React.lazy()` plus TanStack Router's `autoCodeSplitting`, not `next/dynamic` |
+| `bundle-dynamic-imports` | The code editor uses `React.lazy()` in `webapp/src/components/common/CodeEditor.tsx`. Routes use TanStack Router's `autoCodeSplitting` |
 
 ### Apply as written
 

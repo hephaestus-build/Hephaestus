@@ -103,9 +103,11 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                 e.actor_id, e.repository_id, e.event_type, e.target_id, e.occurred_at,
                 date_trunc('week', e.occurred_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS week,
                 prr.pull_request_id AS reviewed_id,
-                CASE WHEN author.type = 'USER' AND author_machine.user_id IS NULL
+                CASE WHEN author.type = 'USER'
         """;
-    String PUBLIC_HELPED = " AND author.id IN (SELECT id FROM public_people) ";
+    // Internal activity also leaves out authors the workspace marked as automation. The public count does not: that
+    // mark is a staff choice, and a count of one or none would tell a reader the mark on an author they know.
+    String INTERNAL_HELPED_AUTHOR = " AND author_machine.user_id IS NULL ";
     String NORMALIZED_HELPED = " THEN pr.author_id END AS helped_id ";
     String SOURCE_HEAD = """
             FROM activity_event e
@@ -159,20 +161,15 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                 row_number() OVER (PARTITION BY actor_id, week) AS week_first
         """;
     String NORMALIZED_TAIL = NORMALIZED_EVENTS_END + MARKED_HEAD;
-    String PUBLIC_EVENTS = PUBLIC_PEOPLE + ", " + MONITORS + NORMALIZED_HEAD + PUBLIC_HELPED + NORMALIZED_HELPED
-            + SOURCE + NORMALIZED_EVENTS_END;
-    String NORMALIZED = PUBLIC_PEOPLE + ", " + MONITORS + NORMALIZED_HEAD + PUBLIC_HELPED + NORMALIZED_HELPED + SOURCE
-            + NORMALIZED_TAIL;
+    // People helped counts every human author of a reviewed pull request in a public repository, as the provider
+    // shows them. Counting only authors who chose to show would tell a reader each known author's choice.
+    String PUBLIC_EVENTS =
+            PUBLIC_PEOPLE + ", " + MONITORS + NORMALIZED_HEAD + NORMALIZED_HELPED + SOURCE + NORMALIZED_EVENTS_END;
+    String NORMALIZED =
+            PUBLIC_PEOPLE + ", " + MONITORS + NORMALIZED_HEAD + NORMALIZED_HELPED + SOURCE + NORMALIZED_TAIL;
 
-    /** How many public contributors the scope keeps in the range, without counting their work. */
-    @Query(value = PUBLIC_EVENTS + " SELECT count(DISTINCT actor_id) FROM normalized", nativeQuery = true)
-    long countPublicContributors(
-            @Param("scope") ActivityScope scope,
-            @Param("range") TimeRange range,
-            @Param("person") long person,
-            @Param("own") boolean own);
-
-    String INTERNAL_NORMALIZED = "WITH " + HIDDEN_ACTORS + ", " + MONITORS + NORMALIZED_HEAD + NORMALIZED_HELPED
+    String INTERNAL_NORMALIZED = "WITH " + HIDDEN_ACTORS + ", " + MONITORS + NORMALIZED_HEAD + INTERNAL_HELPED_AUTHOR
+            + NORMALIZED_HELPED
             + INTERNAL_SOURCE + NORMALIZED_TAIL;
     String HEADLINE_COUNTS = """
                 count(*) FILTER (WHERE event_type = 'PULL_REQUEST_OPENED') AS opened,
@@ -427,8 +424,9 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
     @Nullable
     Instant findInternalEarliest(@Param("scope") ActivityScope scope);
 
+    // The period and the coverage read every public event in the published repositories, whoever is shown, so a
+    // person's choice to hide moves neither of them.
     @Query(value = PUBLIC_PEOPLE + EARLIEST + """
-        AND u.id IN (SELECT id FROM public_people)
             AND e.event_type IN ('PULL_REQUEST_OPENED', 'ISSUE_CREATED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED')
         """ + FIRST, nativeQuery = true)
     @Nullable
@@ -452,7 +450,6 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                         WHERE m.complete AND m.name_with_owner = r.name_with_owner)
         """;
     String PUBLIC_COVERAGE_FILTER = """
-                    AND e.actor_id IN (SELECT id FROM public_people)
                     AND e.event_type IN ('PULL_REQUEST_OPENED', 'ISSUE_CREATED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED')
         """;
     String COVERAGE_TAIL = FIRST + ") AS since FROM monitors ";
@@ -490,38 +487,6 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
             OR EXISTS (SELECT 1 FROM membership m WHERE m.workspace_id = :workspace AND m.account_id IN (SELECT identity_owner.account_id FROM identity identity_owner JOIN "user" member_actor ON identity_owner.provider_id = member_actor.provider_id AND identity_owner.provider_user_key = CAST(member_actor.native_id AS text) AND identity_owner.team_key = '' WHERE member_actor.id = :person))
         """, nativeQuery = true)
     boolean canClassify(@Param("workspace") long workspace, @Param("person") long userId);
-
-    @Query(
-            value = """
-                SELECT count(DISTINCT u.id) FROM "user" u
-                JOIN activity_event e ON e.actor_id = u.id AND e.workspace_id = :workspace
-                JOIN repository r ON r.id = e.repository_id AND r.provider_id = u.provider_id
-                LEFT JOIN membership wm ON wm.workspace_id = :workspace AND wm.account_id IN (SELECT identity_owner.account_id FROM identity identity_owner WHERE identity_owner.provider_id = u.provider_id AND identity_owner.provider_user_key = CAST(u.native_id AS text) AND identity_owner.team_key = '')
-                WHERE u.type = 'USER' AND
-                """ + PUBLIC_REPOSITORY_CONDITION + """
-                AND EXISTS (SELECT 1 FROM repository_to_monitor m WHERE m.workspace_id = :workspace AND m.name_with_owner = r.name_with_owner
-                AND
-                """ + PUBLIC_MONITOR + " AND " + MONITOR_AUTHORITY + ")" + """
-                  AND NOT EXISTS (SELECT 1 FROM activity_automation a WHERE a.workspace_id = :workspace AND a.user_id = u.id)
-                  AND NOT EXISTS (SELECT 1 FROM identity_restriction s WHERE s.kind = 'ERASED' AND s.provider_id = u.provider_id
-                      AND s.provider_user_key = CAST(u.native_id AS text) AND s.team_key = '')
-                  AND NOT EXISTS (SELECT 1 FROM identity l JOIN account a ON a.id = l.account_id
-                      WHERE l.provider_id = u.provider_id AND l.provider_user_key = CAST(u.native_id AS text)
-                          AND a.status IN ('DELETING', 'DELETED'))
-                  AND e.event_type IN ('PULL_REQUEST_OPENED', 'ISSUE_CREATED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED')
-                  AND (EXISTS (SELECT 1 FROM identity_restriction o
-                        WHERE o.kind = 'HIDE_PUBLIC' AND o.team_key = '' AND o.provider_id = u.provider_id AND o.provider_user_key = CAST(u.native_id AS text))
-                    OR coalesce(wm.hidden, false)
-                    OR EXISTS (SELECT 1 FROM membership h WHERE h.workspace_id = :workspace AND h.hidden AND h.account_id IN (SELECT identity_owner.account_id FROM identity identity_owner WHERE identity_owner.provider_id = u.provider_id AND identity_owner.provider_user_key = CAST(u.native_id AS text) AND identity_owner.team_key = ''))
-                    OR EXISTS (SELECT 1 FROM identity l JOIN account a ON a.id = l.account_id
-                        WHERE l.provider_id = u.provider_id AND l.provider_user_key = CAST(u.native_id AS text) AND
-                """
-                    + ACCOUNT_HIDES_PUBLIC + """
-                    ))
-                """,
-            nativeQuery = true)
-    long countPublicHiddenPeople(
-            @Param("workspace") long workspace, @Param("visibilityConfirmedAfter") Instant visibilityConfirmedAfter);
 
     interface RepositoryRow {
         long getId();

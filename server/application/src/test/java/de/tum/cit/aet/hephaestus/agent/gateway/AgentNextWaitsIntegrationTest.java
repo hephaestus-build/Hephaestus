@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
@@ -29,6 +30,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -60,6 +62,9 @@ class AgentNextWaitsIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private DataSource dataSource;
 
     private final List<AgentNextWaits> replicas = new ArrayList<>();
     private final ExecutorService requests = Executors.newVirtualThreadPerTaskExecutor();
@@ -159,6 +164,29 @@ class AgentNextWaitsIntegrationTest extends BaseIntegrationTest {
         assertThat(Duration.ofNanos(System.nanoTime() - asked)).isGreaterThanOrEqualTo(Duration.ofSeconds(1));
         assertThat(replica.waiting()).isZero();
         assertThat(runs.find(other).orElseThrow().getState()).isEqualTo(AgentRunState.QUEUED);
+    }
+
+    @Test
+    void shouldAnswerNothingWhileAMigrationRunsAndLeaseTheRunOnceTheMigrationEnds() throws Exception {
+        var replica = replica(Duration.ofSeconds(1));
+        var sandbox = sandbox(workspace, "review:" + UUID.randomUUID());
+        var run = queue(sandbox.subjectKey());
+        var claims = new AtomicInteger();
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            var answer = next(replica, sandbox, claims);
+            waitFor(replica, 1);
+            // The run is due, but a pass under the barrier wakes no request to claim it again.
+            replica.pass();
+
+            assertThat(answer.get(10, TimeUnit.SECONDS)).isEmpty();
+            assertThat(claims).hasValue(1);
+            assertThat(runs.find(run).orElseThrow().getState()).isEqualTo(AgentRunState.QUEUED);
+        }
+
+        assertThat(next(replica, sandbox).get(10, TimeUnit.SECONDS))
+                .map(AgentRunLease::runId)
+                .contains(run.id());
     }
 
     @Test

@@ -710,7 +710,6 @@ export function publicActivityOf(
 		workspaceName: "Hephaestus",
 		providerType: "GITHUB",
 		allowSearchEngines: false,
-		unlistedContributors: 0,
 		from: everyone.from,
 		to: everyone.to,
 		coverage: everyone.coverage,

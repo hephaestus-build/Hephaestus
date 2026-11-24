@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
@@ -14,7 +15,9 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -27,6 +30,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,6 +57,9 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private DataSource dataSource;
 
     private final FakeSandboxClaims claims = new FakeSandboxClaims();
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
@@ -228,6 +235,25 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
 
         assertThat(sandboxesOf(subject)).isOne();
         assertThat(claims.creates).hasSize(1);
+    }
+
+    @Test
+    void shouldRequestNoSandboxWhileAMigrationRunsAndCountNoFailure() throws Exception {
+        String subject = queue();
+        var dispatcher = dispatcher(5);
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            dispatcher.dispatch();
+            // A pass that read its runs just before the migration began: the request is refused before it writes.
+            assertThatThrownBy(() -> sandboxes.ensure(workspace, subject, AgentSandboxKind.REVIEW))
+                    .isInstanceOf(MaintenanceInProgressException.class);
+            assertThat(sandboxesOf(subject)).isZero();
+            assertThat(claims.creates).as("no claim reaches Kubernetes").isEmpty();
+        }
+        assertThat(meters.counter("agent.sandbox.dispatch.failure").count()).isZero();
+
+        dispatcher.dispatch();
+        assertThat(sandboxesOf(subject)).isOne();
     }
 
     @Test

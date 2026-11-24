@@ -18,7 +18,6 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { ConsentStateBadge } from "./consent-terms";
 
@@ -39,7 +38,7 @@ export interface SlackChannelRowProps {
 }
 
 /**
- * One allow-listed Slack channel: name/id, status badge, opted-out signal, announcement
+ * One allow-listed Slack channel: name/id, status badge, announcement
  * time and a state-gated row action menu. Pure — every transition is delegated upward.
  */
 export function SlackChannelRow({
@@ -63,24 +62,6 @@ export function SlackChannelRow({
 
 			<TableCell>
 				<ConsentStateBadge state={channel.consentState} />
-			</TableCell>
-
-			<TableCell numeric className="text-right">
-				{channel.optedOutMemberCount > 0 ? (
-					<Tooltip>
-						{/* Default TooltipTrigger renders a real <button>, so it's reachable by keyboard
-						and screen-reader users — a bare <span> trigger has no focus stop. */}
-						<TooltipTrigger className="cursor-help underline decoration-dotted underline-offset-2">
-							{channel.optedOutMemberCount}
-						</TooltipTrigger>
-						<TooltipContent>
-							{channel.optedOutMemberCount} workspace member
-							{channel.optedOutMemberCount === 1 ? "" : "s"} opted out (App Home)
-						</TooltipContent>
-					</Tooltip>
-				) : (
-					<span className="text-muted-foreground">0</span>
-				)}
 			</TableCell>
 
 			<TableCell className="text-sm text-muted-foreground">

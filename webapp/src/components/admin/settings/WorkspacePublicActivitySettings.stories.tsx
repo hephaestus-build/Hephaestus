@@ -22,7 +22,6 @@ const meta = {
 			allowSearchEngines: false,
 			contributorsWithoutAccount: false,
 			live: false,
-			hiddenPeople: undefined,
 			pending: undefined,
 		},
 		onEnabledChange: fn(),
@@ -50,7 +49,6 @@ const live = {
 	allowSearchEngines: false,
 	contributorsWithoutAccount: false,
 	live: true,
-	hiddenPeople: 3,
 	pending: undefined,
 } as const;
 
@@ -97,8 +95,8 @@ export const On: Story = {
 		await expect(
 			canvas.getByText("On. Anyone can see it at https://hephaestus.build/w/hephaestus."),
 		).toBeVisible();
-		const hidden = canvas.getByText("People left out of the page").closest("li");
-		await expect(hidden).toHaveTextContent("3");
+		// The page never counts the people it leaves out: a count would tell an admin who hid themselves.
+		await expect(canvas.queryByText("People left out of the page")).toBeNull();
 		await expect(canvas.getByRole("switch", { name: "Allow search engines" })).not.toBeChecked();
 		await userEvent.click(canvas.getByRole("switch", { name: "Allow search engines" }));
 		await expect(args.onSearchEnginesChange).toHaveBeenCalledWith(true);
@@ -232,23 +230,6 @@ export const Refused: Story = {
 		).toBeVisible();
 		await expect(canvas.queryByRole("switch")).toBeNull();
 		await expect(canvas.queryByRole("button", { name: /Retry/u })).toBeNull();
-	},
-};
-
-/** Where the count did not load, the row is left out rather than guessed. */
-export const HiddenCountUnavailable: Story = {
-	args: { state: { ...live, hiddenPeople: undefined } },
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByText("People left out of the page")).toBeNull();
-	},
-};
-
-export const NobodyHidden: Story = {
-	args: { state: { ...live, hiddenPeople: 0 } },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("People left out of the page").closest("li")).toHaveTextContent(
-			"0",
-		);
 	},
 };
 

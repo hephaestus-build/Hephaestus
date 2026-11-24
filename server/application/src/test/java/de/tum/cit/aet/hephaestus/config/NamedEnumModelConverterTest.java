@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import io.swagger.v3.core.converter.AnnotatedType;
 import io.swagger.v3.core.converter.ModelConverterContextImpl;
 import io.swagger.v3.oas.models.media.Schema;
@@ -59,7 +60,7 @@ class NamedEnumModelConverterTest {
     }
 
     private final NamedEnumModelConverter converter =
-            new NamedEnumModelConverter(JsonMapper.builder().build());
+            new NamedEnumModelConverter(JsonMapper.builder().build(), type -> false);
 
     @Test
     void shouldNameANestedEnumAfterItsDeclaringTypeWithTheWireValues() {
@@ -104,6 +105,16 @@ class NamedEnumModelConverterTest {
         assertThatThrownBy(() -> context.resolve(new AnnotatedType(Clash.Kind.class)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("ClashKind");
+    }
+
+    @Test
+    void shouldRefuseToReplaceAClosedPublicEnumWithAnInlineSubset() throws NoSuchFieldException {
+        var context = new ModelConverterContextImpl(List.of(converter));
+        Annotation[] subset = FirstDTO.class.getDeclaredField("onlyBugs").getAnnotations();
+
+        assertThatThrownBy(() -> context.resolve(new AnnotatedType(Severity.class).ctxAnnotations(subset)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Severity");
     }
 
     private static AnnotatedType usage(String component) throws NoSuchFieldException {

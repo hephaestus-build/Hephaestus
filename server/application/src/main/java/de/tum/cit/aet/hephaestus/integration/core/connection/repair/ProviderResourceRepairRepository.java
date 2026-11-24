@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection.repair;
 
+import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepair.State;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -16,6 +17,11 @@ import org.springframework.data.jpa.repository.Query;
 
 @WorkspaceAgnostic("Unresolved pseudonymous provider identities survive deletion of their former owners")
 public interface ProviderResourceRepairRepository extends JpaRepository<ProviderResourceRepair, UUID> {
+
+    /** Takes the maintenance barrier for the transaction; false while a migration runs or waits. Reads no table. */
+    @Query(value = "SELECT " + MaintenanceBarrier.LIFTED, nativeQuery = true)
+    boolean maintenanceBarrierLifted();
+
     @Query(
             "SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairView(r.id, r.identityHash, r.kind, r.origin, r.resourceType, r.parentId, r.resourceId, r.ownershipHash, r.state, r.createdAt, r.observedTeamId) FROM ProviderResourceRepair r")
     Page<ProviderResourceRepairView> readPage(Pageable pageable);

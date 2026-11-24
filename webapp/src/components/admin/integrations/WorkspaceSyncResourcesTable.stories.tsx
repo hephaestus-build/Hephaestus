@@ -91,20 +91,19 @@ const channels: SyncResourceState[] = [
 		externalId: "C0123ABCD",
 		name: "#engineering",
 		type: "CHANNEL",
-		counts: [{ key: "messages", label: "Messages", count: 8421, lastSyncedAt: minutesBefore(5) }],
+		// Slack withholds message counts.
+		counts: [],
 		state: "ACTIVE",
 		lastSyncedAt: minutesBefore(5),
-		itemCount: 8421,
 	},
 	{
 		id: 11,
 		externalId: "C0456EFGH",
 		name: "#design",
 		type: "CHANNEL",
-		counts: [{ key: "messages", label: "Messages", count: 213, lastSyncedAt: minutesBefore(400) }],
+		counts: [],
 		state: "PAUSED",
 		lastSyncedAt: minutesBefore(400),
-		itemCount: 213,
 	},
 ];
 
@@ -409,15 +408,20 @@ export const RowHover: Story = {
 	},
 };
 
+/**
+ * Slack channels carry no message counts, since a falling count in a quiet channel would tell who
+ * opted out. The table shows no count column and no record total, never a zero.
+ */
 export const SlackChannels: Story = {
 	args: {
 		resources: channels,
 		resourceNoun: "channel",
 		resourceNounPlural: "channels",
-		expectedClassKeys: ["messages"],
+		expectedClassKeys: [],
 	},
 	play: async ({ canvas }) => {
-		canvas.getByRole("columnheader", { name: "Messages" });
+		await expect(canvas.queryByRole("columnheader", { name: "Messages" })).toBeNull();
+		await expect(canvas.queryByText(/records?$/u)).toBeNull();
 		await expect(canvas.queryByRole("columnheader", { name: "Issues" })).toBeNull();
 		canvas.getByText("#engineering");
 		canvas.getByText("C0123ABCD");

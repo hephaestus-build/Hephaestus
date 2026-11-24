@@ -1,7 +1,6 @@
 import path from "node:path";
 
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-import Terminal from "vite-plugin-terminal";
 import { configDefaults, defineConfig, loadEnv } from "vite-plus";
 
 import { bundleBudget } from "./tools/bundle-budget/bundle-budget-plugin.ts";
@@ -30,9 +29,6 @@ const viteConfig = defineConfig({
 		bundlePackages(),
 		precompress(),
 		bundleBudget(),
-		...Terminal({ output: ["terminal", "console"] }).map((plugin) =>
-			plugin === false ? false : { ...plugin, apply: "serve" as const },
-		),
 	],
 	// The server writes each request's script nonce in place of this placeholder (`WebAppIndex`).
 	html: { cspNonce: "HEPHAESTUS_CSP_NONCE" },

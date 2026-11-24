@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { asDate, formatDate } from "@/lib/dates";
 import { getProviderLabel } from "@/lib/provider/provider-labels";
+import { FEWER_THAN_SMALLEST } from "@/lib/small-counts";
 import { hasText } from "@/lib/text";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
@@ -146,7 +147,7 @@ export function AdminWorkspacesTable({
 							</TableCell>
 							<TableCell className="text-muted-foreground">{ws.ownerLogin ?? "—"}</TableCell>
 							<TableCell numeric className="text-right">
-								{ws.memberCount}
+								{ws.memberCount ?? FEWER_THAN_SMALLEST}
 							</TableCell>
 							<TableCell className="text-sm whitespace-nowrap text-muted-foreground">
 								{formatCreatedAt(ws.createdAt)}
