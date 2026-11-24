@@ -1734,21 +1734,25 @@ Use literal public addresses so the check covers an IPv6 address even without a 
 ]
 ```
 
-Set `"http3": true` on a host only if its firewall policy allows HTTP/3.
+Use the same `http3` setting as the host firewall policy.
+To turn HTTP/3 off, change the probe setting before you apply the host firewall change.
 Set `"expectedOnline": false` on a host during an approved outage.
 The probe still checks every port on both addresses.
 It reports a silent address as unreachable and still fails if a blocked port answers.
 Remove the marker when the host returns to service.
 
 Generate a dedicated SSH key for the workflow.
+Create an empty `scan.lock` in the probe account's home. Give it root ownership, the `heph-probe` group, and mode `0640`.
 In the probe account's `authorized_keys`, give that key one forced command.
+The lock permits one scan at a time.
 Use the absolute path to the installed Node.js executable:
 
 ```text
-restrict,command="/usr/local/bin/node /usr/local/libexec/probe-public-host-ports.ts /etc/hephaestus/public-hosts.json" ssh-ed25519 <public-key>
+restrict,command="/usr/bin/flock --nonblock /var/lib/heph-probe/scan.lock /usr/local/bin/node /usr/local/libexec/probe-public-host-ports.ts /etc/hephaestus/public-hosts.json" ssh-ed25519 <public-key>
 ```
 
-Set three Actions secrets in the repository.
+Create the Actions environment `public-host-port-probe` and allow deployments from the `main` branch.
+Set three secrets in that environment.
 
 - `PUBLIC_PORT_PROBE_HOST` holds the probe host name.
 - `PUBLIC_PORT_PROBE_KEY` holds only the dedicated private key.

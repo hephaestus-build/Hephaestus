@@ -1168,6 +1168,7 @@ groups:
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusHostFirewallPolicyStale
         expr: time() - host_firewall_policy_check_timestamp_seconds > 120
+        for: 1m
         labels:
           severity: warning
         annotations:

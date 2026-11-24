@@ -1926,14 +1926,17 @@ tests:
     interval: 1m
     input_series:
       - series: 'host_firewall_policy_check_timestamp_seconds{job="node",instance="node-a"}'
-        values: "0 0 0 0 240"
+        values: "0 0 0 0 0 300"
       - series: 'host_firewall_policy_check_timestamp_seconds{job="node",instance="node-b"}'
-        values: "0+60x4"
+        values: "0+60x5"
     alert_rule_test:
       - eval_time: 2m
         alertname: HephaestusHostFirewallPolicyStale
         exp_alerts: []
       - eval_time: 3m
+        alertname: HephaestusHostFirewallPolicyStale
+        exp_alerts: []
+      - eval_time: 4m
         alertname: HephaestusHostFirewallPolicyStale
         exp_alerts:
           - exp_labels:
@@ -1943,7 +1946,7 @@ tests:
             exp_annotations:
               summary: A host firewall has reported no policy check for more than two minutes
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - eval_time: 4m
+      - eval_time: 5m
         alertname: HephaestusHostFirewallPolicyStale
         exp_alerts: []
 

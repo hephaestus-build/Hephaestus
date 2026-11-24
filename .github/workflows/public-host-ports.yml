@@ -14,6 +14,7 @@ concurrency:
 jobs:
   probe:
     if: github.repository == 'hephaestus-build/Hephaestus' && github.ref == 'refs/heads/main'
+    environment: public-host-port-probe
     runs-on: ubuntu-slim
     timeout-minutes: 15
     steps:
