@@ -79,7 +79,7 @@ Write the way a helpful colleague speaks: direct and specific.
 - Put the point first. Put a condition before the action that depends on it.
 - Use short, common words. The Home Office [recommends](https://design.homeoffice.gov.uk/accessibility/written-content/readability) a reading age of 9, even for expert readers.
 - Write no more than 25 words per sentence. This project limit follows [GOV.UK](https://insidegovuk.blog.gov.uk/2014/08/04/sentence-length-why-25-words-is-our-limit/).
-- Do not joke. Do not use exclamation marks, "please", "sorry", "oops", or marketing words. A safety message, such as a crisis reply, may say "please": warmth outweighs brevity there.
+- Do not joke. Do not use exclamation marks, "please", "sorry", "oops", or marketing words. A support reply, such as a crisis reply, may say "please": warmth outweighs brevity there. Its message key starts with `support.`.
 - Do not blame the reader. Say what the system could not do.
 
 ### Voice for each situation
@@ -301,6 +301,10 @@ Vale reports these errors in all docs:
 
 In STE docs, Vale also rejects every contraction.
 In `docs/user/`, it rejects only negative contractions.
+There it also rejects exclamation marks, "sorry", "oops" and "please".
+
+Vale checks each message of the server's `messages.properties` catalog with the rules of `docs/user/`.
+A message whose key starts with `support.` may say "please".
 
 The `ui-text-voice` rule reports these errors in UI text:
 
@@ -309,6 +313,7 @@ The `ui-text-voice` rule reports these errors in UI text:
 - A word with a clear replacement, such as `utilize`.
 - A semicolon.
 - A sentence of more than 25 words.
+- An exclamation mark, "sorry", "oops" or "please". An exclamation mark before a digit, such as the merge request `!88`, is a reference.
 
 The rule checks literal JSX text, literal text expressions, and known text props.
 It also checks the message of a `toast` call and the text keys of object literals, such as `label` and `description`.
@@ -325,7 +330,7 @@ A part-of-speech tagger can also be wrong.
 No tool can check tone, a button that names its action, or an error that gives the next step.
 Reviewers check those points on the rendered screen.
 They also check the meaning, word senses, and warnings in STE prose.
-They check text from variables, prompts, diagrams, and user-facing server messages, which the tools cannot reach.
+They check text from variables, prompts, diagrams, and user-facing server messages outside the catalog, which the tools cannot reach.
 
 ## Add enforcement
 

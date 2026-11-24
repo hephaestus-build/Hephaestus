@@ -32,6 +32,7 @@ ruleTester.run("ui-text-voice", uiTextVoice, {
 		{ code: "<code>const a = 1;</code>" },
 		{ code: '<pre>{"if (x) { y(); }"}</pre>' },
 		{ code: "<p>Press <kbd>Ctrl+C</kbd>.</p>" },
+		{ code: '<Badge label="!88" />' },
 		{ code: '<Dialog confirmLabel="Delete practice" emptyTitle="No practices yet" />' },
 		{
 			// Exactly 25 words is the longest sentence the rule accepts.
@@ -39,6 +40,22 @@ ruleTester.run("ui-text-voice", uiTextVoice, {
 		},
 	],
 	invalid: [
+		{ code: "<p>Saved!Try again.</p>", errors: [{ messageId: "voice", data: { found: "!" } }] },
+		{
+			code: "<p>Saved!Please try again.</p>",
+			errors: [
+				{ messageId: "voice", data: { found: "!" } },
+				{ messageId: "voice", data: { found: "Please" } },
+			],
+		},
+		{
+			code: "<p>Great job! Sorry, please try again.</p>",
+			errors: [
+				{ messageId: "voice", data: { found: "!" } },
+				{ messageId: "voice", data: { found: "Sorry" } },
+				{ messageId: "voice", data: { found: "please" } },
+			],
+		},
 		{
 			code: '<Dialog confirmLabel="Don’t utilize it" />',
 			errors: [{ messageId: "word" }, { messageId: "word" }],

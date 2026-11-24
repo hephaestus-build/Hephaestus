@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
 import {
@@ -22,6 +22,8 @@ import { zipSync } from "fflate";
 
 import {
 	assertGrowth,
+	catalogAlerts,
+	catalogProse,
 	parsePaths,
 	checkRatchet,
 	issueFormProse,
@@ -65,6 +67,8 @@ await test("STE paths are explicit, unique, and grow only", () => {
 		'[".github/workflows/check.yml"]',
 		'[".github/ISSUE_TEMPLATE/nested/form.yml"]',
 		'["webapp/src/components/Test.tsx"]',
+		'["server/application/src/main/resources/application.properties"]',
+		'["messages.properties"]',
 		'[{"path":"new.md","renamedFrom":"old.md"}]',
 	]) {
 		assert.throws(() => parsePaths(source));
@@ -76,6 +80,9 @@ await test("STE paths are explicit, unique, and grow only", () => {
 		[".github/DISCUSSION_TEMPLATE/ideas.yml", ".claude/skills/composition-patterns/metadata.json"],
 	);
 	assert.throws(() => parsePaths('[".claude/skills/composition-patterns/other.json"]'));
+	assert.deepEqual(parsePaths('["server/application/src/main/resources/messages.properties"]'), [
+		"server/application/src/main/resources/messages.properties",
+	]);
 	assert.doesNotThrow(() => assertGrowth(["a.md"], ["a.md", "b.md"]));
 	assert.throws(() => assertGrowth(["a.md"], ["b.md"]), /restore its entry/u);
 	assert.doesNotThrow(() => assertGrowth(["a.md"], ["b.md"], new Map(), () => false));
@@ -539,7 +546,7 @@ await test("each Vale rule has a passing sample, a failing sample, and a repair 
 	}
 });
 
-await test("user docs allow positive contractions and spell out negative ones", async () => {
+await test("user docs allow positive contractions and refuse negative ones, apologies and exclamations", async () => {
 	const vale = await prepareVale();
 	try {
 		const checks = (file: string) =>
@@ -549,9 +556,95 @@ await test("user docs allow positive contractions and spell out negative ones", 
 			"STE.NegativeContractions",
 		]);
 		assert.deepEqual(checks(".vale/fixtures/Contractions-bad.md"), ["STE.Contractions"]);
+		assert.deepEqual(checks(".vale/fixtures/docs/user/ProductVoice-good.md"), []);
+		assert.deepEqual(checks(".vale/fixtures/docs/user/ProductVoice-bad.md"), [
+			"STE.Exclamation",
+			"STE.ProductVoice",
+			"STE.Please",
+			"STE.Exclamation",
+		]);
 	} finally {
 		await vale.dispose();
 	}
+});
+
+await test("catalog messages use the product voice, and only a support reply may say please", async () => {
+	assert.deepEqual(catalogProse("# note\n! note\n\na.b = Saved\nc:Done\n"), [
+		{ field: "a.b", text: "Saved" },
+		{ field: "c", text: "Done" },
+	]);
+	assert.deepEqual(catalogProse("a=one \\\n   two\nb=end\\"), [
+		{ field: "a", text: "one two" },
+		{ field: "b", text: "end" },
+	]);
+	assert.deepEqual(catalogProse("\\\n# comment=Great job!\nc=d"), [{ field: "c", text: "d" }]);
+	assert.deepEqual(catalogProse(String.raw`a\u0062=c\:d \\`), [{ field: "ab", text: "c:d \\" }]);
+	assert.deepEqual(catalogProse("  key  :  text\nalone\na\\=b=c"), [
+		{ field: "key", text: "text" },
+		{ field: "alone", text: "" },
+		{ field: "a=b", text: "c" },
+	]);
+	assert.deepEqual(catalogProse("\u00A0support.x=y"), [{ field: "\u00A0support.x", text: "y" }]);
+	const vale = await prepareVale();
+	try {
+		const alerts = catalogAlerts(vale, ".vale/fixtures/messages-voice.properties");
+		const checks = (key: string) =>
+			alerts.filter(({ field }) => field === key).map(({ alert }) => alert.Check);
+		// The cases that #4894 names: "Great job!" fails, and a support reply may say "please".
+		assert.deepEqual(checks("email.done.subject"), ["STE.Exclamation"]);
+		assert.deepEqual(checks("support.distress"), []);
+		// Each refused word or mark fails, however the catalog writes it.
+		assert.deepEqual(checks("email.retry"), ["STE.ProductVoice", "STE.Please"]);
+		assert.deepEqual(checks("email.spaced"), ["STE.Exclamation"]);
+		assert.deepEqual(checks("email.quoted"), ["STE.Exclamation"]);
+		assert.deepEqual(checks("email.placeholder"), ["STE.Exclamation"]);
+		assert.deepEqual(checks("email.escaped"), ["STE.Please"]);
+		assert.deepEqual(checks("email.code"), ["STE.ProductVoice"]);
+		assert.deepEqual(checks("email.joined"), ["STE.Exclamation"]);
+		assert.deepEqual(checks("email.adjacent"), ["STE.Exclamation", "STE.ProductVoice"]);
+		assert.deepEqual(checks("email.tab"), ["STE.Please", "STE.Exclamation"]);
+		assert.deepEqual(checks("email.body"), ["STE.ProductVoice", "STE.Exclamation"]);
+		// The exemption is the decoded key's `support.` prefix, and only for "please".
+		assert.deepEqual(checks("support.mixed"), ["STE.ProductVoice", "STE.Exclamation"]);
+		// A continued line is one message, as Java reads it.
+		assert.deepEqual(checks("email.continued"), ["STE.Exclamation"]);
+		assert.deepEqual(checks("support.continued"), []);
+		assert.deepEqual(checks("support.escaped-key"), []);
+		assert.deepEqual(checks("\u00A0support.nbsp"), ["STE.Please"]);
+		// A mark before a digit is a merge request, and a key is not prose.
+		assert.deepEqual(checks("email.reference"), []);
+		assert.deepEqual(checks("email=please"), []);
+		assert.equal(alerts.length, 19);
+	} finally {
+		await vale.dispose();
+	}
+});
+
+await test('the gate refuses a catalog with "Great job!" and accepts a support reply with "please"', async () => {
+	const catalog = "server/application/src/main/resources/messages.properties";
+	// The gate's default run reads the enforced paths, so the catalog must be one of them.
+	assert.ok(parsePaths(await readFile(".vale/enforced-paths.json", "utf8")).includes(catalog));
+	const run = async (message: string) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "prose-catalog-"));
+		try {
+			await mkdir(path.join(directory, path.dirname(catalog)), { recursive: true });
+			await writeFile(path.join(directory, catalog), `${message}\n`);
+			const { status, stdout } = spawnSync(
+				process.execPath,
+				[path.resolve("scripts/check-prose.ts"), catalog],
+				{ cwd: directory, encoding: "utf8" },
+			);
+			return { status, stdout };
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	};
+	const refused = await run("email.done.subject=Great job!");
+	assert.equal(refused.status, 1);
+	assert.match(refused.stdout, /email\.done\.subject:1: error STE\.Exclamation/u);
+	const allowed = await run("support.distress=If you are in danger now, please call for help.");
+	assert.equal(allowed.status, 0);
+	assert.match(allowed.stdout, /0 errors/u);
 });
 
 await test("the UI report names the check behind each rule message", () => {
@@ -560,6 +653,9 @@ await test("the UI report names the check behind each rule message", () => {
 		"STE.SentenceLength",
 	);
 	assert.equal(uiRuleName("Write two sentences instead of a semicolon."), "STE.Semicolons");
+	assert.equal(uiRuleName('Remove "Please". The product voice does not plead.'), "STE.Please");
+	assert.equal(uiRuleName('Remove "!". The product voice does not exclaim.'), "STE.Exclamation");
+	assert.equal(uiRuleName('Remove "Oops". The product voice does not joke.'), "STE.ProductVoice");
 	assert.equal(uiRuleName('Write the apostrophe in "it\'s" as ’.'), "UI.Apostrophe");
 	assert.equal(
 		uiRuleName('Write "do not" instead of "don’t". Keep the same meaning.'),

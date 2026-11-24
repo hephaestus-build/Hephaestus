@@ -320,6 +320,7 @@
 	"extension/CLAUDE.md",
 	"server/AGENTS.md",
 	"server/CLAUDE.md",
+	"server/application/src/main/resources/messages.properties",
 	"server/application/src/main/resources/practices/guidance/asks-answerable-questions/guide.md",
 	"server/application/src/main/resources/practices/guidance/avoids-insecure-defaults-and-over-broad-permissions/guide.md",
 	"server/application/src/main/resources/practices/guidance/avoids-unsafe-panics-and-chosen-crashes/guide.md",

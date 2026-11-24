@@ -10,9 +10,12 @@ import { asArray, asRecord, asString, parseJson } from "./json.ts";
 import { installPinnedBinary, toolCache } from "./pinned-binary.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
 import {
+	apologies,
 	approvedWords,
 	contractions,
+	exclamationForVale,
 	negativeContractions,
+	pleading,
 	productTerms,
 	steRoot,
 	substitutions,
@@ -136,6 +139,37 @@ async function generateWordStyles(directory: string): Promise<void> {
 			ignorecase: true,
 			message: 'Write "%s" instead of "%s". Keep the same meaning.',
 			swap: Object.fromEntries(substitutions.map(({ from, to }) => [from, to])),
+		}),
+	);
+	await writeFile(
+		path.join(styles, "STE", "ProductVoice.yml"),
+		stringify({
+			extends: "existence",
+			level: "error",
+			ignorecase: true,
+			nonword: true,
+			message: "Remove '%s'. The product voice does not apologize or joke.",
+			tokens: apologies.map((word) => String.raw`\b${word}\b`),
+		}),
+	);
+	await writeFile(
+		path.join(styles, "STE", "Exclamation.yml"),
+		stringify({
+			extends: "existence",
+			level: "error",
+			nonword: true,
+			message: "Remove the exclamation mark. Say what happened calmly.",
+			tokens: [exclamationForVale],
+		}),
+	);
+	await writeFile(
+		path.join(styles, "STE", "Please.yml"),
+		stringify({
+			extends: "existence",
+			level: "error",
+			ignorecase: true,
+			message: "Remove '%s'. Only a support reply, such as a crisis reply, may say it.",
+			tokens: [pleading],
 		}),
 	);
 }

@@ -40,14 +40,14 @@ const allowed: readonly (Omit<Finding, "line"> & { count: number; reason: string
 	{
 		rule: "retired-name",
 		file: "docs/contributor/practice-feedback-language.mdx",
-		text: `| **Ask Hephaestus** | The product area where a developer talks with Hephaestus: its menu item, page and panel. | \`${RETIRED_NAME}\`, Mentor, Conversations (as the area), chat, AI assistant |`,
+		text: `| **Ask Hephaestus** | The product area where a person talks with Hephaestus: its menu item, page and panel. | \`${RETIRED_NAME}\`, Mentor, Conversations (as the area), chat, AI assistant |`,
 		count: 1,
 		reason: "The vocabulary names the retired word to forbid it.",
 	},
 	{
 		rule: "retired-name",
 		file: "docs/contributor/practice-feedback-language.mdx",
-		text: `| **Hephaestus** | The application. It also answers in a developer's conversation. It is an AI mentor. | agent, \`${RETIRED_NAME}\`, mentor, the mentor, your mentor, assistant |`,
+		text: `| **Hephaestus** | The application. It also answers in a person's conversation. It is an AI mentor. | agent, \`${RETIRED_NAME}\`, mentor, the mentor, your mentor, assistant |`,
 		count: 1,
 		reason: "The vocabulary names the retired word to forbid it.",
 	},

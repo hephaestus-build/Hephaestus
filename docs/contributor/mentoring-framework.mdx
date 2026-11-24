@@ -79,25 +79,25 @@ flowchart LR
 5. **The person answers or asks.** An answer streams in the app.
 6. **Private context reaches the work only by the person's act.** A typed command needs a confirmed preview.
 
-### The concepts, one line each
+### The concepts
 
-| Concept | One line | Status |
-| --- | --- | --- |
-| Workspace | The team's tenant. SQL keeps workspaces apart. | Exists |
-| Practice | A defined way of working that Hephaestus uses to review work. The unit of learning. | Exists |
-| Observation | A record from reviewing one practice for one item at a version | Exists |
-| Reviewed item | A pull request, a merge request or an issue | Exists. Issues as an opt-in kind with private delivery only are planned. |
-| Personal space | A workspace that only its owner can enter. Records that travel with the person live here. | Planned |
-| Conversation | The person's private threads with Hephaestus in one workspace | Planned, as a change to the current conversation |
-| Item card | A view of one item's results and delivery, built from rows. It changes without a model. | Planned |
-| Private check | A review of the person's own draft that only they see | Planned |
-| Personal record | A goal, lesson or preference of the person, in their own words | Planned |
-| Check-in | An agreed return to a topic, at a time or on an event | Planned |
-| Contact policy | The code that decides whether Hephaestus may interrupt a person now | Planned |
-| Conversation agent | The agent on one account's private threads. It never writes on the work. | Planned |
-| Composer | The agent on a shared thread: the work place of a pull request, or a Slack channel thread | Planned. The feedback composer exists. |
+Each concept links to the one entry that defines it.
 
-The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) and the [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) define each planned term.
+| Concept | Status |
+| --- | --- |
+| [Workspace](./practice-feedback-language.mdx#people-and-product-surfaces) | Exists |
+| [Practice](./practice-feedback-language.mdx#practices) | Exists. It is the unit of learning. |
+| [Observation](./practice-feedback-language.mdx#observations) | Exists |
+| [Item](./practice-review-glossary.mdx#review-terms) | Exists. Issues as an opt-in kind with private delivery only are planned. |
+| [Personal space](./practice-feedback-language.mdx#mentoring-planned) | Planned |
+| [Conversation](./practice-feedback-language.mdx#conversation) | Planned, as a change to the current conversation |
+| [Item card](./practice-feedback-language.mdx#mentoring-planned) | Planned |
+| [Private check](./practice-feedback-language.mdx#mentoring-planned) | Planned |
+| [Personal record](./practice-feedback-language.mdx#mentoring-planned) | Planned |
+| [Check-in](./practice-feedback-language.mdx#mentoring-planned) | Planned |
+| [Contact policy](./practice-review-glossary.mdx#mentoring-terms-planned) | Planned |
+| [Conversation agent](./practice-review-glossary.mdx#mentoring-terms-planned) | Planned |
+| [Composer](./practice-review-glossary.mdx#mentoring-terms-planned) | Planned. The feedback composer exists. |
 
 ### The trust commitments
 
@@ -304,8 +304,7 @@ Under each answer, **What Hephaestus used** lists the records and entries that t
 
 ### Item cards
 
-An item card is a projection of rows about one item, for one person (ADR 0150, proposed in #4862).
-No model writes it, so it changes without a model.
+[Observations render as item cards](./practice-review-glossary.mdx#shared-rules-planned) (ADR 0150).
 The card exists from the first queued review, so "Reviewing #42" is a state of the card. An On request result is the exception (ADR 0137).
 
 The same card shows in four places: each message that cites it, a new section of Activity, the practice page and the extension.
@@ -329,12 +328,10 @@ The [practice pages](/user/practice-profile) exist. The design adds the item car
 
 ### Check-ins, goals and help settings
 
-A **check-in** is an agreed contact with a scope: what it is about, where it appears, when it fires and how it stops.
-Only the person creates one: in the rhythm choice at first sign-in, in the app, or by accepting an offer.
-A **goal** is a personal record in the person's own words. Hephaestus saves it at once with **Undo**, and follows up only when the person asks.
-
-**Help settings** are a closed set: answer length, command first, language, form of address and help style.
-They carry no employer content, so they apply in every workspace. Hephaestus sets them from the person's own words, with no card.
+The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) defines the **check-in**, the **goal** and the **help settings**.
+Only the person creates a check-in: in the rhythm choice at first sign-in, in the app, or by accepting an offer.
+Hephaestus saves a goal at once with **Undo**, and follows up only when the person asks.
+Help settings carry no employer content, so they apply in every workspace. Hephaestus sets them from the person's own words, with no card.
 [Mentoring behavior](./mentoring-behaviour.mdx#check-ins) gives the templates, the follow-up and the fading rules.
 
 ### Memory
@@ -349,12 +346,12 @@ Hephaestus has four kinds of memory. The person can see and change all four.
 | Kept-in-mind item | The conversation summary | That workspace only | No | 400 days. **Keep** turns it into a person-authored record. |
 
 A noted record is never evidence about the person's work, and never about another person.
-**What Hephaestus keeps in mind** shows every item, with **Forget**, **Not right** and **Keep**.
+[**What Hephaestus keeps in mind**](./practice-feedback-language.mdx#mentoring-planned) lists every item.
 **Forget** leaves a tombstone, so Hephaestus does not note the item again until the person says it again.
 
 ### Tasks
 
-A task is background work that a turn starts, at the person's request or at an agreed check-in. It ends with a result for the thread that asked.
+The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) defines the task. A turn starts one at the person's request or at an agreed check-in.
 A task status card shows its state: queued, running, then done, failed or cancelled. The person can cancel a queued or running task on the card.
 The times on the card are targets, not promises. ADR 0120 (proposed in #4862) decides the lifecycle.
 
@@ -362,7 +359,7 @@ A review is not a task. It is its own run on the server ([ADR 0086](https://gith
 
 | Task | What it does | Who sees the result |
 | --- | --- | --- |
-| Private check | Checks the person's own draft before review | Only the person |
+| [Private check](./practice-feedback-language.mdx#mentoring-planned) | Returns a private check outcome | Only the person |
 | Research task | Reads items that the person can read and returns a report | Only the person |
 
 A private check has no copy on the work and writes no observation.
@@ -385,14 +382,14 @@ Each one is the mechanism of one trust commitment.
 | Staff get no path to one person. | A manager reads one person's results | No person-level view, export or impersonation for staff | Never a performance instrument | ADR 0125 |
 | Every record has concrete readers. | The wrong person reads a record | Each record and route resolves to its readers. Unknown readers refuse. A guessed ID returns 404. | Private never shows in public | ADR 0127 |
 | A shared place reads no private data. | A personal record appears on the work | The composer reads only the data of its place. Isolation tests prove it. | Private never shows in public | ADR 0121 |
-| Only the person's act bridges private and public. | Hephaestus discloses a private reason in public | A typed command carries IDs only, after the person confirms a preview | Private never shows in public | ADR 0121 |
+| Only the person's act bridges private and public. | Hephaestus discloses a private reason in public | A [typed command](./practice-review-glossary.mdx#mentoring-terms-planned) crosses only after the person confirms a preview | Private never shows in public | ADR 0121 |
 | Inside a workspace, records refer to sources and never copy them. | Erased content survives in a copy | Provenance references. A revocation makes every consumer stale at once. | Private never shows in public | ADR 0128 |
 | Erasure survives a database restore. | A restore brings back erased data | A deny intent puts the data on hold at once. When a journal bucket is configured, local deletion runs only after the journal holds the fact. A restore reapplies the journal before it serves data. | Private never shows in public | ADR 0140 |
 | Each person's rows belong to their account. | One person reads another's records through a bug in one query | PostgreSQL row-level security on every person table, on top of [workspace tenancy](./workspace-context.mdx) | Authority is never inherited | ADR 0127 |
-| Access is checked again before it is used. | Stale permissions act | An authorization recheck at context read, model request and every send to another person | Authority is never inherited | ADR 0134 |
+| Access is checked again before it is used. | Stale permissions act | An authorization recheck at context read, model request and every send to another person. The [authorization context](./practice-review-glossary.mdx#shared-rules-planned) says which records carry it. | Authority is never inherited | ADR 0134 |
 | A contact change is not a permission change. | A pause stops a running answer | Pause, quiet hours and **Not now** change contact only. They never stop work in progress. | Authority is never inherited | ADR 0134 |
 | Learning travels only as the person's own words or closed fields. | One employer's content reaches another employer | The source workspace's export policy decides. **Closed** blocks all transfer. Noted records never travel. | Learning travels with the person | ADR 0129 |
-| Claims about results come from rows. | A model writes a wrong outcome | A citation token renders the outcome from current rows. The model never writes it as free text. | Feedback earns trust or it is not sent | ADR 0150 |
+| Claims about results come from rows. | A model writes a wrong outcome | [Observations render as item cards](./practice-review-glossary.mdx#shared-rules-planned). A citation token renders the outcome from current rows. | Feedback earns trust or it is not sent | ADR 0150 |
 | Each candidate observation passes admission. | A capture failure becomes a claim about the work | A capture failure says "Could not check" | Feedback earns trust or it is not sent | ADR 0124 |
 
 Without a journal bucket, a restore uses the hand-written manifest of the [erasure recovery](/admin/erasure-recovery), and the instance cannot turn on delivery experiments or research datasets.

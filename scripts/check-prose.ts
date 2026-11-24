@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,7 +20,9 @@ export function parsePaths(source: string): readonly string[] {
 		throw new Error("Write a nonempty list of unique STE paths.");
 	}
 	for (const file of paths) {
-		if (!/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w.$/-]+\.(?:md|mdx|ya?ml|json)$/u.test(file)) {
+		if (
+			!/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w.$/-]+\.(?:md|mdx|ya?ml|json|properties)$/u.test(file)
+		) {
 			throw new Error(`Invalid STE path: ${file}. Write an exact repository-relative prose path.`);
 		}
 		if (
@@ -29,6 +31,14 @@ export function parsePaths(source: string): readonly string[] {
 		) {
 			throw new Error(
 				`STE YAML path is outside the form-template directories: ${file}. Add an issue or discussion form.`,
+			);
+		}
+		if (
+			file.endsWith(".properties") &&
+			!/^server\/application\/src\/main\/resources\/messages[\w-]*\.properties$/u.test(file)
+		) {
+			throw new Error(
+				`STE properties path is outside the server message catalog: ${file}. Add a message catalog.`,
 			);
 		}
 		if (file.endsWith(".json") && !/^\.claude\/skills\/[^/]+\/metadata\.json$/u.test(file)) {
@@ -191,19 +201,109 @@ export function skillMetadataAlerts(
 	);
 }
 
+/** Java reads `\uXXXX`, `\t`, `\n`, `\r` and `\f` as escapes. Any other escaped character stands for itself. */
+function unescapeProperty(text: string) {
+	const controls: Record<string, string> = { t: "\t", n: "\n", r: "\r", f: "\f" };
+	return text.replaceAll(
+		/\\(?:u(?<code>[\da-fA-F]{4})|(?<char>.))/gu,
+		(_match, code: string | undefined, char: string) =>
+			code === undefined
+				? (controls[char] ?? char)
+				: String.fromCodePoint(Number.parseInt(code, 16)),
+	);
+}
+
+/** `java.util.Properties` counts only space, tab and form feed as blank, not a no-break space. */
+function blank(char: string) {
+	return char === " " || char === "\t" || char === "\f";
+}
+
+function withoutLeadingBlanks(line: string) {
+	let start = 0;
+	while (blank(line.charAt(start))) {
+		start += 1;
+	}
+	return line.slice(start);
+}
+
+/** Each message of a server catalog, read as `java.util.Properties` reads it, with escapes decoded. */
+export function catalogProse(source: string) {
+	const fields: { field: string; text: string }[] = [];
+	const lines = source.split(/\r\n|\r|\n/u);
+	for (let index = 0; index < lines.length; index += 1) {
+		let line = withoutLeadingBlanks(lines[index] ?? "");
+		if (line === "" || line.startsWith("#") || line.startsWith("!")) {
+			continue;
+		}
+		// An odd run of backslashes at the end continues the message on the next line.
+		while (/(?:^|[^\\])(?:\\\\)*\\$/u.test(line)) {
+			index += 1;
+			const head = line.slice(0, -1);
+			const next = withoutLeadingBlanks(lines[index] ?? "");
+			// A line of only a backslash leaves nothing to continue, so the next line starts afresh.
+			line = head === "" && (next.startsWith("#") || next.startsWith("!")) ? "" : head + next;
+		}
+		if (line === "") {
+			continue;
+		}
+		let key = 0;
+		while (key < line.length && !"=:".includes(line.charAt(key)) && !blank(line.charAt(key))) {
+			key += line.charAt(key) === "\\" ? 2 : 1;
+		}
+		let text = key;
+		while (blank(line.charAt(text))) {
+			text += 1;
+		}
+		if (line.charAt(text) === "=" || line.charAt(text) === ":") {
+			text += 1;
+			while (blank(line.charAt(text))) {
+				text += 1;
+			}
+		}
+		fields.push({
+			field: unescapeProperty(line.slice(0, key)),
+			text: unescapeProperty(line.slice(text)),
+		});
+	}
+	return fields;
+}
+
+/**
+ * Catalog messages use the product voice. A `support.` message, such as a crisis reply, may say
+ * "please", because warmth outweighs brevity there.
+ */
+export function catalogAlerts(
+	vale: Pick<Vale, "binary" | "config">,
+	file: string,
+	level = "error",
+) {
+	return proseFieldAlerts(
+		vale,
+		file,
+		catalogProse(readFileSync(file, "utf8")),
+		level,
+		"catalog",
+	).filter(({ field, alert }) => !(field.startsWith("support.") && alert.Check === "STE.Please"));
+}
+
 function proseFieldAlerts(
 	vale: Pick<Vale, "binary" | "config">,
 	file: string,
 	fields: readonly { field: string; text: string }[],
 	level: string,
+	kind: "markdown" | "catalog" = "markdown",
 ) {
 	if (fields.length === 0) {
 		return [];
 	}
 	const directory = mkdtempSync(path.join(tmpdir(), "ste-issue-form-"));
 	try {
+		// A catalog message is plain text in the product voice, which `.vale.ini` gives to `docs/user/`.
+		const folder = kind === "catalog" ? path.join(directory, "docs", "user") : directory;
+		const extension = kind === "catalog" ? "txt" : "md";
+		mkdirSync(folder, { recursive: true });
 		const inputs = fields.map(({ field, text }, index) => {
-			const target = path.join(directory, `${index}.md`);
+			const target = path.join(folder, `${index}.${extension}`);
 			writeFileSync(target, text);
 			return { field, target };
 		});
@@ -251,6 +351,18 @@ if (process.argv[1] === import.meta.filename) {
 		}
 		for (const file of paths.filter((item) => /\.ya?ml$/u.test(item))) {
 			for (const { field, alert } of issueFormAlerts(
+				vale,
+				file,
+				args.length > 0 ? "suggestion" : "error",
+			)) {
+				console.log(
+					`${file}:${field}:${alert.Line}: ${alert.Severity} ${alert.Check}: ${alert.Message}`,
+				);
+				errors += Number(alert.Severity === "error");
+			}
+		}
+		for (const file of paths.filter((item) => item.endsWith(".properties"))) {
+			for (const { field, alert } of catalogAlerts(
 				vale,
 				file,
 				args.length > 0 ? "suggestion" : "error",

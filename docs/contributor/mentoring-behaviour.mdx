@@ -26,8 +26,7 @@ Silence never changes what Hephaestus does. Only the person's explicit controls 
 
 ## The contact policy
 
-The contact policy answers one question: may Hephaestus interrupt this person now, on this channel?
-It is code with no model. It runs when a message is committed, and again before each send.
+The [contact policy](./practice-review-glossary.mdx#mentoring-terms-planned) runs when a message is committed, and again before each send.
 
 ### Kinds of contact
 
@@ -64,7 +63,7 @@ ADR 0134 (proposed in #4863) owns this order. A contact change never counts as a
 
 ## The notification budget
 
-The notification budget is the set of limits that the initiative level sets. The contact policy adds the checks of channel, activity and quiet hours.
+The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) defines the notification budget.
 A Slack direct message that Hephaestus starts is its one interrupting effect. These rules apply at its send, and its app entry commits either way (ADR 0139).
 
 | ID | Rule | Decided in |
@@ -105,7 +104,7 @@ Each control has its reverse, and a disabled option names who disabled it, for e
 
 ## Check-ins
 
-A check-in is an agreed contact with a scope: what it is about, where it appears, when it fires and how it stops.
+The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) defines the check-in.
 Only the person creates one.
 It appears in the conversation, on the practice page, as a notification, or in the Slack direct message when the person chooses Slack.
 
@@ -174,12 +173,14 @@ It offers to raise the bar. It names the change in the work, never the person: "
 
 ## Help settings and the help mode
 
-| Term | What it is | Who sets it |
-| --- | --- | --- |
-| Help settings | Answer length, command first, language, form of address and help style | The person, in words or in Settings |
-| Help style | "Give me a hint first" or "Just tell me" | The person |
-| Help mode | What Hephaestus does on one practice: explain, hint, ask first, or step back | Growth computes it |
-| Help mode override | A goal's own help preference | The person, on the goal |
+The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) defines the help settings, the help style and the help mode.
+
+| Term | Who sets it |
+| --- | --- |
+| Help settings | The person, in words or in Settings |
+| Help style | The person |
+| Help mode | Growth computes it |
+| Help mode override: a goal's own help preference | The person, on the goal |
 
 The UI shows the help mode in words, such as "I give a hint first", never as a level.
 
@@ -254,7 +255,7 @@ Each hard case has fixed behavior and a scenario test.
 | X5 | Sends re-engagement messages, such as "You have not talked to me in a while". | ADR 0124 |
 | X6 | Reads silence as dislike, or pauses a check-in on its own. | ADR 0133, ADR 0139 |
 | X7 | Asks for consent in a conversation or a notification, or recruits for research. The one follow-up notice of ADR 0149, from the steward to the people of one experiment, is not recruiting. | ADR 0149 |
-| X8 | Writes an outcome or a delivery state as free text. A citation token renders it from rows. | ADR 0150 |
+| X8 | Writes an outcome or a delivery state as free text. [Observations render as item cards](./practice-review-glossary.mdx#shared-rules-planned), and a citation token renders the outcome and the current delivery state from rows. | ADR 0150 |
 | X9 | Puts personal context in a place that other people read, such as a Slack channel. The one exception is a Slack direct message at the Full detail level, which the person chooses. | ADR 0121, ADR 0123 |
 | X10 | Calls itself an assistant, an agent, a coach, or "your mentor". It is Hephaestus, an AI mentor. | ADR 0124 |
 | X11 | Tunes its behavior on in-the-moment ratings. **Helpful** and **Not helpful** are never a target. | ADR 0131, ADR 0142 |
