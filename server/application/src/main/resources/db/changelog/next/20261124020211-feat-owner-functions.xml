@@ -1,0 +1,353 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795485731446-1" author="hephaestus">
+        <comment>A scheduler finds whose work is due without reading anyone's rows: it gets only the key, the workspace, the account and the due time of each due row, oldest first, a page at a time.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.mentoring_due_work(
+        work_kind text, due_before timestamp with time zone, after_due timestamp with time zone, after_id uuid,
+        max_rows integer)
+    RETURNS TABLE (kind text, id uuid, workspace_id bigint, account_id bigint, due_at timestamp with time zone)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+BEGIN
+    -- A page starts after the row (after_due, after_id) of the previous page, or at the oldest row when both are null.
+    IF due_before IS NULL OR max_rows IS NULL OR max_rows < 0 OR (after_due IS NULL) <> (after_id IS NULL) THEN
+        RAISE EXCEPTION 'mentoring_due_work: needs a cutoff, a limit and a whole cursor or none'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF work_kind = 'ENTRY_RETENTION' THEN
+        -- A conversation entry is due when it was written before the retention cutoff and is not erased yet. due_at is
+        -- the time it was written.
+        IF after_due IS NULL THEN
+            RETURN QUERY
+                SELECT work_kind, e.id, e.workspace_id, c.account_id, e.created_at
+                FROM public.conversation_entry e
+                JOIN public.conversation c ON c.id = e.conversation_id
+                WHERE e.redacted_at IS NULL AND e.created_at < due_before
+                ORDER BY e.created_at, e.id
+                LIMIT max_rows;
+        ELSE
+            -- A row range, so the partial index on unerased entries serves each later page directly.
+            RETURN QUERY
+                SELECT work_kind, e.id, e.workspace_id, c.account_id, e.created_at
+                FROM public.conversation_entry e
+                JOIN public.conversation c ON c.id = e.conversation_id
+                WHERE e.redacted_at IS NULL AND e.created_at < due_before
+                  AND (e.created_at, e.id) > (after_due, after_id)
+                ORDER BY e.created_at, e.id
+                LIMIT max_rows;
+        END IF;
+    ELSE
+        RAISE EXCEPTION 'mentoring_due_work: unknown kind %', work_kind USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+END
+$$
+        ]]></sql>
+        <sql>REVOKE ALL ON FUNCTION public.mentoring_due_work(text, timestamp with time zone, timestamp with time zone, uuid, integer) FROM PUBLIC</sql>
+        <sql>GRANT EXECUTE ON FUNCTION public.mentoring_due_work(text, timestamp with time zone, timestamp with time zone, uuid, integer) TO hephaestus_app</sql>
+        <rollback>
+            <sql>DROP FUNCTION public.mentoring_due_work(text, timestamp with time zone, timestamp with time zone, uuid, integer)</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795485731446-2" author="hephaestus">
+        <comment>A job changes or deletes the rows of many people only by one closed rule: a workspace purge, expired exports, or an absorbed account's conversations. The last change set in this file drops the two-argument sweep that expired exports alone.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.person_row_sweep(rule text, subject_id bigint, other_id bigint, cutoff timestamp with time zone)
+    RETURNS integer
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+DECLARE
+    changed integer := 0;
+    counted integer;
+    clash record;
+    absorbed record;
+BEGIN
+    IF rule = 'WORKSPACE_PURGE' THEN
+        -- subject_id is the purged workspace. A soft purge keeps the workspace row, so no cascade fires.
+        IF subject_id IS NULL THEN
+            RAISE EXCEPTION 'person_row_sweep: WORKSPACE_PURGE needs the workspace' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        DELETE FROM public.conversation_entry WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+        DELETE FROM public.conversation_turn WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+        DELETE FROM public.conversation WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+    ELSIF rule = 'EXPIRED_EXPORTS' THEN
+        -- cutoff is now: a ready export past its expiry loses its payload. A cutoff in the future counts as now.
+        IF cutoff IS NULL THEN
+            RAISE EXCEPTION 'person_row_sweep: EXPIRED_EXPORTS needs the cutoff' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        UPDATE public.account_export SET status = 'EXPIRED', payload = NULL
+        WHERE status = 'READY' AND expires_at < LEAST(cutoff, clock_timestamp());
+        GET DIAGNOSTICS changed = ROW_COUNT;
+    ELSIF rule = 'ACCOUNT_ABSORB' THEN
+        -- subject_id is the absorbed account and other_id the account that claimed it. Where both have a main
+        -- conversation in a workspace, the absorbed main's entries follow the claiming main's entries, its turns and
+        -- threads move, and it is deleted. Every other conversation of the absorbed account changes owner.
+        IF subject_id IS NULL OR other_id IS NULL OR subject_id = other_id THEN
+            RAISE EXCEPTION 'person_row_sweep: ACCOUNT_ABSORB needs two different accounts'
+                USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        -- Only an unclaimed account is absorbed, by an account that its verified owner signs in to. Both rows are locked
+        -- in id order, as the account service locks them, so a concurrent claim cannot change either status.
+        PERFORM FROM public.account a WHERE a.id IN (subject_id, other_id) ORDER BY a.id FOR UPDATE;
+        IF NOT EXISTS (SELECT FROM public.account a WHERE a.id = subject_id AND a.status = 'UNCLAIMED')
+           OR NOT EXISTS (SELECT FROM public.account a WHERE a.id = other_id AND a.status IN ('ACTIVE', 'BLOCKED')) THEN
+            RAISE EXCEPTION 'person_row_sweep: only an unclaimed account is absorbed, by an active or blocked account'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        FOR clash IN
+            SELECT a.workspace_id, a.id AS absorbed_id, k.id AS kept_id FROM public.conversation a
+            JOIN public.conversation k ON k.workspace_id = a.workspace_id
+                AND k.account_id = other_id AND k.parent_conversation_id IS NULL
+            WHERE a.account_id = subject_id AND a.parent_conversation_id IS NULL
+            ORDER BY a.id
+            FOR UPDATE OF a, k
+        LOOP
+            -- The caller prepares each clash first: it returns a running turn of the absorbed main to the queue, moves
+            -- the absorbed main's queued runs to the claiming main, and erases the absorbed main's summaries, which
+            -- summarize a conversation that no longer exists alone.
+            IF EXISTS (SELECT FROM public.conversation_turn t
+                       WHERE t.conversation_id = clash.absorbed_id AND t.status = 'RUNNING')
+               OR EXISTS (SELECT FROM public.agent_run r
+                          WHERE r.workspace_id = clash.workspace_id AND r.state = 'QUEUED'
+                            AND r.concurrency_key = 'conversation:' || clash.absorbed_id)
+               OR EXISTS (SELECT FROM public.conversation_entry e
+                          WHERE e.conversation_id = clash.absorbed_id AND e.kind = 'SUMMARY' AND e.redacted_at IS NULL) THEN
+                RAISE EXCEPTION 'person_row_sweep: the absorbed conversation % is not prepared', clash.absorbed_id
+                    USING ERRCODE = 'object_not_in_prerequisite_state';
+            END IF;
+            UPDATE public.conversation_entry e SET conversation_id = clash.kept_id, seq = top.seq + moved.position
+            FROM (SELECT x.id, row_number() OVER (ORDER BY x.seq) AS position
+                  FROM public.conversation_entry x WHERE x.conversation_id = clash.absorbed_id) moved,
+                 (SELECT COALESCE(max(y.seq), 0) AS seq FROM public.conversation_entry y
+                  WHERE y.conversation_id = clash.kept_id) top
+            WHERE e.id = moved.id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            UPDATE public.conversation_turn SET conversation_id = clash.kept_id WHERE conversation_id = clash.absorbed_id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            UPDATE public.conversation SET parent_conversation_id = clash.kept_id
+            WHERE parent_conversation_id = clash.absorbed_id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            SELECT c.slack_team_id, c.slack_user_id, c.slack_channel_id, c.last_activity_at, c.last_read_at
+            INTO absorbed FROM public.conversation c WHERE c.id = clash.absorbed_id;
+            DELETE FROM public.conversation WHERE id = clash.absorbed_id;
+            -- The Slack identity moves with the merge when the claiming main has none, so the DM keeps its conversation.
+            UPDATE public.conversation SET
+                slack_user_id = CASE WHEN slack_team_id IS NULL THEN absorbed.slack_user_id ELSE slack_user_id END,
+                slack_channel_id = CASE WHEN slack_team_id IS NULL THEN absorbed.slack_channel_id ELSE slack_channel_id END,
+                slack_team_id = COALESCE(slack_team_id, absorbed.slack_team_id),
+                last_activity_at = GREATEST(last_activity_at, absorbed.last_activity_at),
+                last_read_at = GREATEST(last_read_at, absorbed.last_read_at)
+            WHERE id = clash.kept_id;
+        END LOOP;
+        UPDATE public.conversation SET account_id = other_id WHERE account_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+    ELSE
+        RAISE EXCEPTION 'person_row_sweep: unknown rule %', rule USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    RETURN changed;
+END
+$$
+        ]]></sql>
+        <sql>REVOKE ALL ON FUNCTION public.person_row_sweep(text, bigint, bigint, timestamp with time zone) FROM PUBLIC</sql>
+        <sql>GRANT EXECUTE ON FUNCTION public.person_row_sweep(text, bigint, bigint, timestamp with time zone) TO hephaestus_app</sql>
+        <rollback>
+            <sql>DROP FUNCTION public.person_row_sweep(text, bigint, bigint, timestamp with time zone)</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795485731446-3" author="hephaestus">
+        <comment>A trigger runs with the search path of the function that fires it, and the owner functions search only pg_catalog. The triggers that a sweep fires name their tables with the schema: a deleted turn's run goes with it, the run's open model calls are settled, and a feedback copy keeps its receipt when its bound answer or turn goes.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.forget_conversation_turn_run() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ DELETE FROM public.agent_run WHERE id = OLD.run_id AND workspace_id = OLD.workspace_id;
+ RETURN NULL;
+END $$;
+CREATE OR REPLACE FUNCTION public.settle_agent_run_calls() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ UPDATE public.llm_usage_event
+    SET call_state = 'SETTLED', measurement_verification = 'UNVERIFIABLE', pricing_state = 'UNPRICED',
+        cost_usd = NULL, unreported_calls = 1
+  WHERE run_id = OLD.id AND workspace_id = OLD.workspace_id AND call_state = 'OPEN';
+ RETURN OLD;
+END $$;
+CREATE OR REPLACE FUNCTION public.guard_feedback_copy_fence()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE shown_text text;
+BEGIN
+ IF OLD.thread_ref IS NOT NULL AND NEW.thread_ref IS DISTINCT FROM OLD.thread_ref THEN
+  RAISE EXCEPTION 'physical copy thread binding is immutable' USING ERRCODE='55000';
+ END IF;
+ IF OLD.write_started_at IS NOT NULL THEN
+  IF NEW.write_started_at IS DISTINCT FROM OLD.write_started_at OR
+     ROW(NEW.id,NEW.workspace_id,NEW.feedback_id,NEW.position,NEW.write_key,NEW.write_marker,NEW.path,NEW.start_line,NEW.end_line,NEW.side)
+     IS DISTINCT FROM ROW(OLD.id,OLD.workspace_id,OLD.feedback_id,OLD.position,OLD.write_key,OLD.write_marker,OLD.path,OLD.start_line,OLD.end_line,OLD.side) THEN
+   RAISE EXCEPTION 'physical write fence is immutable' USING ERRCODE='55000';
+  END IF;
+  IF NEW.conversation_turn_id IS DISTINCT FROM OLD.conversation_turn_id AND NOT
+     (NEW.conversation_turn_id IS NULL AND NOT EXISTS(SELECT 1 FROM public.conversation_turn WHERE id=OLD.conversation_turn_id AND workspace_id=OLD.workspace_id)) THEN
+   RAISE EXCEPTION 'conversation turn binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NOT NULL AND NEW.conversation_entry_id IS DISTINCT FROM OLD.conversation_entry_id AND NOT
+     (NEW.conversation_entry_id IS NULL AND NOT EXISTS(SELECT 1 FROM public.conversation_entry WHERE id=OLD.conversation_entry_id AND workspace_id=OLD.workspace_id)) THEN
+   RAISE EXCEPTION 'conversation answer binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NULL AND NEW.conversation_entry_id IS NOT NULL AND OLD.posted_at IS NOT NULL THEN
+   RAISE EXCEPTION 'conversation answer binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NULL AND NEW.conversation_entry_id IS NOT NULL AND NOT EXISTS(
+     SELECT 1 FROM public.conversation_entry e JOIN public.conversation c ON(c.id,c.workspace_id)=(e.conversation_id,e.workspace_id)
+     JOIN public.feedback f ON(f.id,f.workspace_id)=(NEW.feedback_id,NEW.workspace_id) AND f.developer_id=c.account_id
+     WHERE e.id=NEW.conversation_entry_id AND e.workspace_id=NEW.workspace_id AND e.kind='ANSWER' AND e.turn_id=NEW.conversation_turn_id) THEN
+   RAISE EXCEPTION 'conversation answer must be the claiming turn answer to its developer' USING ERRCODE='23514';
+  END IF;
+  IF NEW.body IS DISTINCT FROM OLD.body THEN
+   IF NOT(OLD.kind='CHAT_TURN' AND OLD.body IS NULL AND NEW.body IS NOT NULL AND
+          OLD.posted_at IS NULL AND NEW.posted_at IS NOT NULL AND NEW.posted_at>=OLD.write_started_at AND
+          OLD.state IN('WRITE_STARTED','FAILED') AND NEW.state='POSTED' AND
+          NEW.conversation_entry_id IS NOT NULL AND NEW.conversation_turn_id IS NOT NULL) THEN
+    RAISE EXCEPTION 'physical copy words are immutable' USING ERRCODE='55000';
+   END IF;
+   shown_text := public.conversation_receipt_words(NEW.workspace_id,NEW.feedback_id,NEW.conversation_entry_id,NEW.conversation_turn_id);
+   IF shown_text IS NULL OR shown_text ~ '^[[:space:]]*$' OR NEW.body IS DISTINCT FROM shown_text THEN
+    RAISE EXCEPTION 'conversation receipt must contain the words the completed answer showed' USING ERRCODE='23514';
+   END IF;
+  END IF;
+  IF OLD.kind='CHAT_TURN' AND OLD.posted_at IS NULL AND NEW.posted_at IS NOT NULL AND NEW.body IS NULL THEN
+   RAISE EXCEPTION 'conversation receipt requires actual words' USING ERRCODE='23514';
+  END IF;
+ ELSIF NEW.write_started_at IS NOT NULL AND NEW.kind='CHAT_TURN' THEN
+  IF NEW.body IS NOT NULL OR NEW.state<>'WRITE_STARTED' OR NOT EXISTS(
+     SELECT 1 FROM public.conversation_turn t JOIN public.conversation c ON(c.id,c.workspace_id)=(t.conversation_id,t.workspace_id)
+     JOIN public.feedback f ON(f.id,f.workspace_id)=(NEW.feedback_id,NEW.workspace_id) AND f.developer_id=c.account_id
+     WHERE t.id=NEW.conversation_turn_id AND t.workspace_id=NEW.workspace_id AND t.status='RUNNING' AND f.destination='CONVERSATION') THEN
+   RAISE EXCEPTION 'conversation fence requires a running conversation turn of its developer' USING ERRCODE='23514';
+  END IF;
+ END IF;
+ IF OLD.kind<>NEW.kind AND NOT(OLD.kind='LINE_NOTE' AND NEW.kind='FILE_NOTE') THEN RAISE EXCEPTION 'copy form cannot change except acknowledged fallback' USING ERRCODE='55000'; END IF;
+ IF OLD.external_ref IS NOT NULL AND NEW.external_ref IS DISTINCT FROM OLD.external_ref OR OLD.external_url IS NOT NULL AND NEW.external_url IS DISTINCT FROM OLD.external_url OR OLD.posted_at IS NOT NULL AND NEW.posted_at IS DISTINCT FROM OLD.posted_at THEN RAISE EXCEPTION 'physical write receipt is immutable' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $function$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.forget_conversation_turn_run() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ DELETE FROM agent_run WHERE id = OLD.run_id AND workspace_id = OLD.workspace_id;
+ RETURN NULL;
+END $$;
+CREATE OR REPLACE FUNCTION public.settle_agent_run_calls() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ UPDATE llm_usage_event
+    SET call_state = 'SETTLED', measurement_verification = 'UNVERIFIABLE', pricing_state = 'UNPRICED',
+        cost_usd = NULL, unreported_calls = 1
+  WHERE run_id = OLD.id AND workspace_id = OLD.workspace_id AND call_state = 'OPEN';
+ RETURN OLD;
+END $$;
+CREATE OR REPLACE FUNCTION public.guard_feedback_copy_fence()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE shown_text text;
+BEGIN
+ IF OLD.thread_ref IS NOT NULL AND NEW.thread_ref IS DISTINCT FROM OLD.thread_ref THEN
+  RAISE EXCEPTION 'physical copy thread binding is immutable' USING ERRCODE='55000';
+ END IF;
+ IF OLD.write_started_at IS NOT NULL THEN
+  IF NEW.write_started_at IS DISTINCT FROM OLD.write_started_at OR
+     ROW(NEW.id,NEW.workspace_id,NEW.feedback_id,NEW.position,NEW.write_key,NEW.write_marker,NEW.path,NEW.start_line,NEW.end_line,NEW.side)
+     IS DISTINCT FROM ROW(OLD.id,OLD.workspace_id,OLD.feedback_id,OLD.position,OLD.write_key,OLD.write_marker,OLD.path,OLD.start_line,OLD.end_line,OLD.side) THEN
+   RAISE EXCEPTION 'physical write fence is immutable' USING ERRCODE='55000';
+  END IF;
+  IF NEW.conversation_turn_id IS DISTINCT FROM OLD.conversation_turn_id AND NOT
+     (NEW.conversation_turn_id IS NULL AND NOT EXISTS(SELECT 1 FROM conversation_turn WHERE id=OLD.conversation_turn_id AND workspace_id=OLD.workspace_id)) THEN
+   RAISE EXCEPTION 'conversation turn binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NOT NULL AND NEW.conversation_entry_id IS DISTINCT FROM OLD.conversation_entry_id AND NOT
+     (NEW.conversation_entry_id IS NULL AND NOT EXISTS(SELECT 1 FROM conversation_entry WHERE id=OLD.conversation_entry_id AND workspace_id=OLD.workspace_id)) THEN
+   RAISE EXCEPTION 'conversation answer binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NULL AND NEW.conversation_entry_id IS NOT NULL AND OLD.posted_at IS NOT NULL THEN
+   RAISE EXCEPTION 'conversation answer binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NULL AND NEW.conversation_entry_id IS NOT NULL AND NOT EXISTS(
+     SELECT 1 FROM conversation_entry e JOIN conversation c ON(c.id,c.workspace_id)=(e.conversation_id,e.workspace_id)
+     JOIN feedback f ON(f.id,f.workspace_id)=(NEW.feedback_id,NEW.workspace_id) AND f.developer_id=c.account_id
+     WHERE e.id=NEW.conversation_entry_id AND e.workspace_id=NEW.workspace_id AND e.kind='ANSWER' AND e.turn_id=NEW.conversation_turn_id) THEN
+   RAISE EXCEPTION 'conversation answer must be the claiming turn answer to its developer' USING ERRCODE='23514';
+  END IF;
+  IF NEW.body IS DISTINCT FROM OLD.body THEN
+   IF NOT(OLD.kind='CHAT_TURN' AND OLD.body IS NULL AND NEW.body IS NOT NULL AND
+          OLD.posted_at IS NULL AND NEW.posted_at IS NOT NULL AND NEW.posted_at>=OLD.write_started_at AND
+          OLD.state IN('WRITE_STARTED','FAILED') AND NEW.state='POSTED' AND
+          NEW.conversation_entry_id IS NOT NULL AND NEW.conversation_turn_id IS NOT NULL) THEN
+    RAISE EXCEPTION 'physical copy words are immutable' USING ERRCODE='55000';
+   END IF;
+   shown_text := conversation_receipt_words(NEW.workspace_id,NEW.feedback_id,NEW.conversation_entry_id,NEW.conversation_turn_id);
+   IF shown_text IS NULL OR shown_text ~ '^[[:space:]]*$' OR NEW.body IS DISTINCT FROM shown_text THEN
+    RAISE EXCEPTION 'conversation receipt must contain the words the completed answer showed' USING ERRCODE='23514';
+   END IF;
+  END IF;
+  IF OLD.kind='CHAT_TURN' AND OLD.posted_at IS NULL AND NEW.posted_at IS NOT NULL AND NEW.body IS NULL THEN
+   RAISE EXCEPTION 'conversation receipt requires actual words' USING ERRCODE='23514';
+  END IF;
+ ELSIF NEW.write_started_at IS NOT NULL AND NEW.kind='CHAT_TURN' THEN
+  IF NEW.body IS NOT NULL OR NEW.state<>'WRITE_STARTED' OR NOT EXISTS(
+     SELECT 1 FROM conversation_turn t JOIN conversation c ON(c.id,c.workspace_id)=(t.conversation_id,t.workspace_id)
+     JOIN feedback f ON(f.id,f.workspace_id)=(NEW.feedback_id,NEW.workspace_id) AND f.developer_id=c.account_id
+     WHERE t.id=NEW.conversation_turn_id AND t.workspace_id=NEW.workspace_id AND t.status='RUNNING' AND f.destination='CONVERSATION') THEN
+   RAISE EXCEPTION 'conversation fence requires a running conversation turn of its developer' USING ERRCODE='23514';
+  END IF;
+ END IF;
+ IF OLD.kind<>NEW.kind AND NOT(OLD.kind='LINE_NOTE' AND NEW.kind='FILE_NOTE') THEN RAISE EXCEPTION 'copy form cannot change except acknowledged fallback' USING ERRCODE='55000'; END IF;
+ IF OLD.external_ref IS NOT NULL AND NEW.external_ref IS DISTINCT FROM OLD.external_ref OR OLD.external_url IS NOT NULL AND NEW.external_url IS DISTINCT FROM OLD.external_url OR OLD.posted_at IS NOT NULL AND NEW.posted_at IS DISTINCT FROM OLD.posted_at THEN RAISE EXCEPTION 'physical write receipt is immutable' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $function$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795485731446-4" author="hephaestus">
+        <comment>The retention sweep pages through the unerased entries of every workspace by write time and id.</comment>
+        <sql>CREATE INDEX IF NOT EXISTS ix_conversation_entry_unredacted_written ON public.conversation_entry (created_at, id) WHERE redacted_at IS NULL</sql>
+        <rollback>
+            <sql>DROP INDEX public.ix_conversation_entry_unredacted_written</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795485731446-5" author="hephaestus">
+        <comment>The four-argument sweep runs the expired-export rule now, so the two-argument sweep has no caller. A definer function that nobody calls stays callable, so it goes.</comment>
+        <sql>DROP FUNCTION IF EXISTS public.person_row_sweep(text, timestamptz)</sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+CREATE FUNCTION public.person_row_sweep(rule text, cutoff timestamptz) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+    DECLARE affected integer;
+    BEGIN
+        IF rule IS DISTINCT FROM 'EXPIRED_EXPORTS' OR cutoff IS NULL THEN
+            RAISE EXCEPTION 'Invalid person row sweep' USING ERRCODE = '22023';
+        END IF;
+        UPDATE public.account_export
+        SET status = 'EXPIRED', payload = NULL
+        WHERE status = 'READY' AND expires_at < LEAST(cutoff, clock_timestamp());
+        GET DIAGNOSTICS affected = ROW_COUNT;
+        RETURN affected;
+    END
+    $$;
+ALTER FUNCTION public.person_row_sweep(text, timestamptz) OWNER TO hephaestus_owner;
+REVOKE ALL ON FUNCTION public.person_row_sweep(text, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.person_row_sweep(text, timestamptz) TO hephaestus_app;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

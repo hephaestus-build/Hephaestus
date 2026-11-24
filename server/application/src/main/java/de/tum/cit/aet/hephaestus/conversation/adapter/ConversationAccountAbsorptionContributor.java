@@ -4,13 +4,12 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationRedaction;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAbsorptionContributor;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.Nullable;
 import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -26,6 +25,11 @@ import org.springframework.stereotype.Component;
  * the queue before the merge, as after a lost lease: its host's later writes are refused, and the turn starts again
  * from the merged conversation. The absorbed main's queued runs move to the claiming main's subject, so they wait
  * behind its turns.
+ *
+ * <p>The rows move between two owners, so the owner function {@code person_row_sweep} moves them with its rule
+ * {@code ACCOUNT_ABSORB}. It refuses a clash whose absorbed main still runs a turn or keeps a summary, so a clash that
+ * this class did not prepare cannot move. Finding the clashes reads both accounts' conversations; once row-level
+ * security covers the conversation tables, that read needs each owner's scope.
  */
 @Order(30)
 @Component
@@ -55,47 +59,22 @@ public class ConversationAccountAbsorptionContributor implements AccountAbsorpti
                         rs.getLong(1),
                         Objects.requireNonNull(rs.getObject(2, UUID.class)),
                         Objects.requireNonNull(rs.getObject(3, UUID.class))));
-        clashes.forEach(this::merge);
-        jdbc.update("UPDATE conversation SET account_id = :claimed WHERE account_id = :unclaimed", accounts);
-    }
-
-    private void merge(Clash clash) {
-        Map<String, UUID> ids = Map.of("absorbed", clash.absorbed(), "kept", clash.kept());
-        List<UUID> summaries = jdbc.query(
-                "SELECT id FROM conversation_entry WHERE conversation_id = :absorbed AND kind = 'SUMMARY'"
-                        + " AND redacted_at IS NULL",
-                ids,
-                (rs, row) -> Objects.requireNonNull(rs.getObject(1, UUID.class)));
-        jdbc.update("""
-                UPDATE conversation_entry e SET conversation_id = :kept, seq = top.seq + moved.position
-                FROM (SELECT id, row_number() OVER (ORDER BY seq) AS position
-                      FROM conversation_entry WHERE conversation_id = :absorbed) moved,
-                     (SELECT COALESCE(max(seq), 0) AS seq FROM conversation_entry WHERE conversation_id = :kept) top
-                WHERE e.id = moved.id
-                """, ids);
-        turns.requeueRunning(clash.workspaceId(), clash.absorbed());
-        turnRuns.moveQueued(clash.workspaceId(), clash.absorbed(), clash.kept());
-        jdbc.update("UPDATE conversation_turn SET conversation_id = :kept WHERE conversation_id = :absorbed", ids);
-        jdbc.update(
-                "UPDATE conversation SET parent_conversation_id = :kept WHERE parent_conversation_id = :absorbed", ids);
-        Map<String, @Nullable Object> absorbed = jdbc.queryForMap("""
-                SELECT slack_team_id, slack_user_id, slack_channel_id, last_activity_at, last_read_at
-                FROM conversation WHERE id = :absorbed
-                """, ids);
-        jdbc.update("DELETE FROM conversation WHERE id = :absorbed", ids);
-        // The Slack identity moves with the merge when the claiming main has none, so the DM keeps its conversation.
-        Map<String, @Nullable Object> kept = new HashMap<>(absorbed);
-        kept.put("kept", clash.kept());
-        jdbc.update("""
-                UPDATE conversation SET
-                    slack_user_id = CASE WHEN slack_team_id IS NULL THEN :slack_user_id ELSE slack_user_id END,
-                    slack_channel_id = CASE WHEN slack_team_id IS NULL THEN :slack_channel_id ELSE slack_channel_id END,
-                    slack_team_id = COALESCE(slack_team_id, :slack_team_id),
-                    last_activity_at = GREATEST(last_activity_at, :last_activity_at),
-                    last_read_at = GREATEST(last_read_at, :last_read_at)
-                WHERE id = :kept
-                """, kept);
+        List<UUID> summaries = new ArrayList<>();
+        for (Clash clash : clashes) {
+            summaries.addAll(jdbc.query(
+                    "SELECT id FROM conversation_entry WHERE conversation_id = :absorbed AND kind = 'SUMMARY'"
+                            + " AND redacted_at IS NULL",
+                    Map.of("absorbed", clash.absorbed()),
+                    (rs, row) -> Objects.requireNonNull(rs.getObject(1, UUID.class))));
+            turns.requeueRunning(clash.workspaceId(), clash.absorbed());
+            turnRuns.moveQueued(clash.workspaceId(), clash.absorbed(), clash.kept());
+        }
+        // Summaries are never shown, so erasing them before the move changes no open conversation.
         redaction.redact(summaries);
+        jdbc.queryForObject(
+                "SELECT public.person_row_sweep('ACCOUNT_ABSORB', :unclaimed, :claimed, CAST(NULL AS timestamptz))",
+                accounts,
+                Integer.class);
     }
 
     @Override

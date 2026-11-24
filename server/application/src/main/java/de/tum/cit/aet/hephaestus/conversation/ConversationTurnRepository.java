@@ -352,11 +352,6 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
             """)
     Optional<Long> findAccountIdByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
-    @Modifying
-    @Transactional
-    @Query("DELETE FROM ConversationTurn x WHERE x.workspaceId = :workspaceId")
-    int deleteByWorkspaceId(@Param("workspaceId") Long workspaceId);
-
     /** Queues a notification on {@code channel}, which PostgreSQL delivers when the transaction commits. */
     @WorkspaceAgnostic("Sends a notification and reads no table; the payload names its workspace")
     @Query(value = "SELECT 1 FROM (SELECT pg_notify(:channel, :payload)) sent", nativeQuery = true)

@@ -164,6 +164,32 @@ class PracticeV1ConversationReceiptDatabaseTest {
                 "55000");
     }
 
+    /** The owner function runs with its own search path, under which every trigger it fires must find its tables. */
+    @ParameterizedTest
+    @ValueSource(strings = {"prod", "dev"})
+    void shouldKeepReceiptCustodyWhenTheOwnerFunctionPurgesTheWorkspace(String context) throws Exception {
+        var database = prepared(context);
+        claim(database);
+        answer(database);
+        complete(database);
+        PracticeMigrationFixture.execute(
+                database,
+                "UPDATE feedback_copy SET state='POSTED',posted_at='2026-02-01T00:01:00Z',body=" + SHOWN
+                        + ",conversation_entry_id='" + ANSWER + "' WHERE id='" + COPY + "'");
+
+        PracticeMigrationFixture.execute(
+                database, "SELECT public.person_row_sweep('WORKSPACE_PURGE', 978001, NULL, NULL)");
+
+        assertThat(PracticeMigrationFixture.column(
+                        database,
+                        "SELECT (conversation_entry_id IS NULL AND conversation_turn_id IS NULL)::text || '|' || state || '|'"
+                                + " || (body=" + SHOWN + ")::text FROM feedback_copy WHERE id='" + COPY + "'"))
+                .containsExactly("true|POSTED|true");
+        assertThat(PracticeMigrationFixture.column(
+                        database, "SELECT count(*)::text FROM conversation_turn WHERE workspace_id=978001"))
+                .containsExactly("0");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"prod", "dev"})
     void shouldKeepOnWorkWordsAndAnchorsImmutableAfterTheFence(String context) throws Exception {
