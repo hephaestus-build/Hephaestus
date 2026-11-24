@@ -41,10 +41,11 @@ public class SqlStatementCounter implements BeanPostProcessor {
     }
 
     /**
-     * The preparations of the named thread while the block runs on this one, each with the owner and read-only state of
-     * its transaction. A worker thread runs reads that the block only triggers.
+     * The preparations of the worker thread while the block runs on this one, each with the owner and read-only state of
+     * its transaction. A worker thread runs reads that the block only triggers. Another thread with the same name is not
+     * measured.
      */
-    public <T> Measurement<T> measureOwnersOn(String thread, Supplier<T> block) {
+    public <T> Measurement<T> measureOwnersOn(Thread thread, Supplier<T> block) {
         Counter counter = new Counter(true);
         if (!worker.compareAndSet(null, new Worker(thread, counter))) {
             throw new IllegalStateException("Only one worker thread can be measured at a time");
@@ -86,7 +87,7 @@ public class SqlStatementCounter implements BeanPostProcessor {
      */
     public record Prepared(String sql, @Nullable Long owner, boolean readOnly) {}
 
-    private record Worker(String thread, Counter counter) {}
+    private record Worker(Thread thread, Counter counter) {}
 
     private record Active(SqlStatementCounter owner, Counter counter) {}
 
@@ -116,10 +117,7 @@ public class SqlStatementCounter implements BeanPostProcessor {
         Active measuring = ACTIVE.get();
         if (measuring != null) return measuring.owner().equals(this) ? measuring.counter() : null;
         Worker measured = worker.get();
-        return measured != null
-                        && measured.thread().equals(Thread.currentThread().getName())
-                ? measured.counter()
-                : null;
+        return measured != null && measured.thread().equals(Thread.currentThread()) ? measured.counter() : null;
     }
 
     @Override

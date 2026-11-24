@@ -14,6 +14,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -71,7 +72,7 @@ class SqlStatementCounterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldReadTheOwnerOfEachStatementOfTheNamedThreadOnlyWhenAWorkerIsMeasured() throws Exception {
+    void shouldReadTheOwnerOfEachStatementOfTheWorkerThreadOnlyWhenItIsMeasured() throws Exception {
         Statement probe = mock(Statement.class);
         ResultSet owner = mock(ResultSet.class);
         when(connection.createStatement()).thenReturn(probe);
@@ -82,7 +83,8 @@ class SqlStatementCounterTest extends BaseUnitTest {
         try (var worker = Executors.newSingleThreadExecutor(named);
                 var other = Executors.newSingleThreadExecutor();
                 Connection jdbc = counted().getConnection()) {
-            var measured = counter.measureOwnersOn("measured-worker", () -> {
+            Thread measuredThread = threadOf(worker);
+            var measured = counter.measureOwnersOn(measuredThread, () -> {
                 CompletableFuture.allOf(
                                 CompletableFuture.runAsync(() -> prepare(jdbc), worker),
                                 CompletableFuture.runAsync(() -> prepare(jdbc), other))
@@ -95,8 +97,28 @@ class SqlStatementCounterTest extends BaseUnitTest {
             CompletableFuture.runAsync(() -> prepare(jdbc), worker)
                     .orTimeout(30, TimeUnit.SECONDS)
                     .join();
-            assertThat(counter.measureOwnersOn("measured-worker", () -> "after").statements())
+            assertThat(counter.measureOwnersOn(measuredThread, () -> "after").statements())
                     .isZero();
+        }
+    }
+
+    @Test
+    void shouldIgnoreAnotherThreadWithTheSameNameWhenAWorkerIsMeasured() throws Exception {
+        // Only a regression probes the owner: it then counts the statement instead of failing on a null probe.
+        Statement probe = mock(Statement.class);
+        lenient().when(connection.createStatement()).thenReturn(probe);
+        lenient().when(probe.executeQuery(anyString())).thenReturn(mock(ResultSet.class));
+        ThreadFactory named = Thread.ofPlatform().name("measured-worker").factory();
+        try (var worker = Executors.newSingleThreadExecutor(named);
+                var namesake = Executors.newSingleThreadExecutor(named);
+                Connection jdbc = counted().getConnection()) {
+            var measured = counter.measureOwnersOn(threadOf(worker), () -> {
+                CompletableFuture.runAsync(() -> prepare(jdbc), namesake)
+                        .orTimeout(30, TimeUnit.SECONDS)
+                        .join();
+                return "read";
+            });
+            assertThat(measured.statements()).isZero();
         }
     }
 
@@ -115,7 +137,7 @@ class SqlStatementCounterTest extends BaseUnitTest {
         ThreadFactory named = Thread.ofPlatform().name("measured-worker").factory();
         try (var worker = Executors.newSingleThreadExecutor(named);
                 Connection jdbc = otherContext.getConnection()) {
-            var measured = counter.measureOwnersOn("measured-worker", () -> {
+            var measured = counter.measureOwnersOn(threadOf(worker), () -> {
                 CompletableFuture.runAsync(() -> prepare(jdbc), worker)
                         .orTimeout(30, TimeUnit.SECONDS)
                         .join();
@@ -156,6 +178,11 @@ class SqlStatementCounterTest extends BaseUnitTest {
             assertThatThrownBy(() -> jdbc.prepareStatement("SELECT 1")).isSameAs(failure);
         }
         assertThat(counter.measure(() -> "next").statements()).isZero();
+    }
+
+    /** The one thread of a single-thread executor. */
+    private static Thread threadOf(ExecutorService executor) throws Exception {
+        return executor.submit(Thread::currentThread).get(30, TimeUnit.SECONDS);
     }
 
     private static void prepare(Connection jdbc) {

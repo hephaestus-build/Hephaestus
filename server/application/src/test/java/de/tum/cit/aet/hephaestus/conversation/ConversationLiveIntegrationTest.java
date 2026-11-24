@@ -23,6 +23,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,9 +60,6 @@ class ConversationLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private static final String ENTRY = "entry";
     private static final String TURN = "turn";
     private static final String READ = "read";
-
-    /** The hub's one reader thread, which reads every snapshot and change for the streams. */
-    private static final String READER = "conversation-live-reader";
 
     @Autowired
     private WebTestClient client;
@@ -141,6 +142,19 @@ class ConversationLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .filter(event -> event.event() != null || event.comment() != null)
                 .subscribe(events::add, failure -> ended.set(true), () -> ended.set(true));
         return new Stream(events, ended, subscription);
+    }
+
+    /** The hub's one reader thread, which reads every snapshot and change for the streams. */
+    private Thread reader() {
+        var reader = (ExecutorService) Objects.requireNonNull(ReflectionTestUtils.getField(hub, "reader"));
+        try {
+            return reader.submit(Thread::currentThread).get(WAIT.toSeconds(), TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        } catch (ExecutionException | TimeoutException e) {
+            throw new IllegalStateException("The hub's reader thread did not answer", e);
+        }
     }
 
     private void awaitListening() {
@@ -340,7 +354,7 @@ class ConversationLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
         ConversationTurnService.Submission own = submit(developer, "Whose rows are these?");
         String turnId = own.turn().getId().toString();
 
-        var measured = statements.measureOwnersOn(READER, () -> {
+        var measured = statements.measureOwnersOn(reader(), () -> {
             Stream first = open();
             try {
                 await().atMost(WAIT).until(() -> first.has(SNAPSHOT, turnId));
@@ -388,7 +402,7 @@ class ConversationLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
             await().atMost(WAIT).until(() -> stream.has(SNAPSHOT, "\"activeTurns\":[]"));
             awaitListening();
 
-            var measured = statements.measureOwnersOn(READER, () -> {
+            var measured = statements.measureOwnersOn(reader(), () -> {
                 submit(colleague, "A colleague's question");
                 ConversationTurnService.Submission own = submit(developer, "My question");
                 // The ledger delivers in commit order and the reader reads in that order: the colleague's change
