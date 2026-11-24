@@ -29,6 +29,8 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.PersonalSpaceFixtures;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspacePersonDataCatalog;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
@@ -219,6 +221,69 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                 .isZero();
     }
 
+    /**
+     * A personal space that hosted a turn ends with its owner's erasure, and only after its physical sandbox is gone: a
+     * failed claim deletion keeps the space and stops the erasure, and the resumed erasure finishes it (#5094).
+     */
+    @Test
+    void shouldEndAPersonalSpaceOnlyAfterItsPhysicalSandboxIsGone() throws Exception {
+        var person = persistUser("personal-space-copy-person");
+        long personId = accountId(person);
+        long spaceId = PersonalSpaceFixtures.insert(jdbc, personId);
+        UUID conversation = PersonalSpaceFixtures.insertFinishedTurn(jdbc, spaceId, personId);
+        var otherPerson = persistUser("personal-space-copy-other");
+        var otherWorkspace =
+                createWorkspace("personal-space-copy-other", "Other", "space-copy-other", AccountType.ORG, otherPerson);
+        var administrator = new Account("Personal-space erasure administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId = Objects.requireNonNull(
+                accountRepository.saveAndFlush(administrator).getId());
+        var claims = new PhysicalClaims(root);
+        var owner = SandboxOwnerFixtures.owner(
+                beans,
+                new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate())),
+                beans.getBean(AgentRuns.class),
+                claims);
+        var copy = owner.ensure(spaceId, "conversation:" + conversation, AgentSandboxKind.CONVERSATION);
+        var other = owner.ensure(
+                otherWorkspace.getId(), "conversation:" + UUID.randomUUID(), AgentSandboxKind.CONVERSATION);
+        Path copiedPerson = claims.copy(copy.claimName());
+        Path otherCopy = claims.copy(other.claimName());
+        var service = service(SandboxOwnerFixtures.revocations(beans, owner), personalSpaceStore());
+        var request = Objects.requireNonNull(
+                        transactions.execute(status -> service.preview(administratorId, personId, List.of())))
+                .request();
+        claims.failDelete = true;
+        transactions.executeWithoutResult(status -> service.requestErasure(request.getId(), administratorId, true));
+
+        service.run(request.getId());
+
+        assertThat(service.get(request.getId()).request().getState()).isEqualTo(PersonDataRequest.State.FAILED);
+        assertNoAcknowledgement(request.getId());
+        assertSandbox(copy, "DELETING");
+        assertThat(copiedPerson).exists();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM workspace WHERE id=?", Integer.class, spaceId))
+                .isOne();
+        claims.failDelete = false;
+        transactions.executeWithoutResult(status -> service.requestErasure(request.getId(), administratorId, true));
+
+        service.run(request.getId());
+
+        assertThat(service.get(request.getId()).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(copiedPerson).doesNotExist();
+        assertThat(claims.names()).doesNotContain(copy.claimName());
+        for (String table : List.of("workspace", "agent_sandbox", "conversation", "agent_run"))
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM " + table + " WHERE "
+                                    + (table.equals("workspace") ? "id" : "workspace_id") + "=?",
+                            Integer.class,
+                            spaceId))
+                    .as(table)
+                    .isZero();
+        assertSandbox(other, "REQUESTED");
+        assertThat(otherCopy).exists();
+    }
+
     /** A stored workspace key without its frozen sandboxes is invalid: the erasure stops instead of skipping a copy. */
     @ParameterizedTest
     @ValueSource(
@@ -280,7 +345,14 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                 .isFalse();
     }
 
-    private PersonDataService service(ConversationSandboxCopies copies) {
+    private PersonDataContributor personalSpaceStore() {
+        return beans.getBean(WorkspacePersonDataCatalog.class).contributors().stream()
+                .filter(contributor -> contributor.store().equals("workspace"))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private PersonDataService service(ConversationSandboxCopies copies, PersonDataContributor... others) {
         var catalog = new ConversationPersonDataCatalog(
                 beans.getBean(NamedParameterJdbcTemplate.class),
                 mapper,
@@ -298,7 +370,10 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
         return new PersonDataService(
                 new PersonDataScopeResolver(
                         beans.getBean(PersonIdentityResolver.class), List.of(), new OwnerScope(jdbc)),
-                new PersonDataRegistry(List.of(new ToolCopyStore(List.of(store)))),
+                new PersonDataRegistry(
+                        others.length == 0
+                                ? List.of(new ToolCopyStore(List.of(store)))
+                                : List.of(new ToolCopyStore(List.of(store)), new SpaceStore(List.of(others)))),
                 beans.getBean(PersonDataRequestRepository.class),
                 new PersonDataErasureHold(
                         beans.getBean(IdentityRestrictionService.class),
@@ -315,6 +390,9 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
 
     @PersonDataStores(ConversationEntryRepository.COPIES_PERSON_DATA_STORE)
     private record ToolCopyStore(List<PersonDataContributor> contributors) implements PersonDataCatalog {}
+
+    @PersonDataStores("workspace")
+    private record SpaceStore(List<PersonDataContributor> contributors) implements PersonDataCatalog {}
 
     private static final class PhysicalClaims implements SandboxClaims {
         private final Path root;

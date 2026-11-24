@@ -222,8 +222,24 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
 
     List<Workspace> findByStatusAndKind(Workspace.WorkspaceStatus status, WorkspaceKind kind);
 
-    /** Ends the account's personal space; its membership is gone first (PersonalSpaceErasureAdapter). */
-    @Modifying
-    @Query(value = "DELETE FROM workspace WHERE personal_account_id = :accountId", nativeQuery = true)
-    int deletePersonalSpace(@Param("accountId") long accountId);
+    @Query("SELECT w.id FROM Workspace w WHERE w.personalAccountId = :accountId")
+    Optional<Long> findPersonalSpaceId(@Param("accountId") long accountId);
+
+    /** A personal space's id and address. */
+    interface PersonalSpaceRow {
+        long getId();
+
+        String getSlug();
+    }
+
+    /** Locks the account's personal space for its erasure ({@link WorkspaceLifecycleService#erasePersonalSpace}). */
+    @Query(
+            value = "SELECT id, slug FROM workspace WHERE personal_account_id = :accountId FOR UPDATE",
+            nativeQuery = true)
+    Optional<PersonalSpaceRow> lockPersonalSpace(@Param("accountId") long accountId);
+
+    /** Ends a personal space once its cleanup owners removed what lives in it. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "DELETE FROM workspace WHERE id = :id AND kind = 'PERSONAL'", nativeQuery = true)
+    int deletePersonalSpace(@Param("id") long id);
 }
