@@ -97,8 +97,9 @@ A store that is not registered erases nothing for the test.
 A registered store reaches a column in one of two ways:
 
 - Its redaction assigns the column.
-- It has no redaction, and its scope compares the column directly with a named parameter, such as `t.author_id = :account` or `author_id IN (:accounts)`.
-  A comparison inside a subquery, an `EXISTS`, a `CASE` or a comment does not count.
+- It has no redaction, and one part of its predicate's top-level `OR` compares the column with a scope parameter.
+  For example, `t.author_id = :account`. `JdbcPersonDataStore` binds the scope parameters.
+  A comparison inside a conjunction, a subquery, an `EXISTS`, a `CASE` or a comment does not count.
 
 Custom SQL beside the catalog, such as a contributor's `UPDATE` or `DELETE`, is not parsed.
 Declare each column that it erases with `@ErasesColumns("table.column")` on the catalog or the store.

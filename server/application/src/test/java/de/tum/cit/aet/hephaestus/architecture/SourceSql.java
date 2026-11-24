@@ -141,7 +141,17 @@ final class SourceSql {
         int index = 0;
         while (index < sql.length()) {
             Matcher dollar = DOLLAR_QUOTE.matcher(sql).region(index, sql.length());
-            if (sql.charAt(index) == '$' && dollar.lookingAt()) {
+            // A dollar quote starts a token: in revision$tag$ the dollar signs belong to the identifier.
+            boolean tokenStart = index == 0 || !isIdentifierPart(sql.charAt(index - 1));
+            if (sql.charAt(index) == '"') {
+                int end = index + 1;
+                while (end < sql.length()
+                        && !(sql.charAt(end) == '"' && (end + 1 >= sql.length() || sql.charAt(end + 1) != '"')))
+                    end += sql.charAt(end) == '"' ? 2 : 1;
+                end = Math.min(end + 1, sql.length());
+                kept.append(sql, index, end);
+                index = end;
+            } else if (sql.charAt(index) == '$' && tokenStart && dollar.lookingAt()) {
                 int end = sql.indexOf(dollar.group(), dollar.end());
                 kept.append("''");
                 index = end < 0 ? sql.length() : end + dollar.group().length();
@@ -174,5 +184,9 @@ final class SourceSql {
             }
         }
         return kept.toString().replaceAll("\\s+", " ").strip();
+    }
+
+    private static boolean isIdentifierPart(char character) {
+        return Character.isLetterOrDigit(character) || character == '_' || character == '$';
     }
 }

@@ -12,6 +12,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
@@ -121,11 +122,14 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
 
     @Test
     void shouldCheckATransientMentoringPayloadThatAListenerReceivesThroughASharedInterface() {
-        Function<Class<?>, Optional<String>> moduleOf =
-                type -> Optional.of(type == MentoringPayload.class ? "mentoring" : "core");
+        Function<Class<?>, Optional<String>> moduleOf = type ->
+                Optional.of(type == MentoringPayload.class || type == MentoringNote.class ? "mentoring" : "core");
         var handler = handlers(List.of(SharedListener.class)).getFirst();
         assertThat(violations(handler, List.of(SharedEvent.class, MentoringPayload.class, Typed.class), moduleOf))
                 .containsExactly(MentoringPayload.class.getName() + ".text");
+        assertThat(violations(handler, List.of(SharedEvent.class, MentoringNote.class, AbstractNote.class), moduleOf))
+                .as("a concrete class behind the interface is a payload too, and it is no record of values")
+                .containsExactly(MentoringNote.class.getName() + " is not a record of values");
         Function<Class<?>, Optional<String>> allCore = type -> Optional.of("core");
         assertThat(violations(handler, List.of(SharedEvent.class, MentoringPayload.class), allCore))
                 .as("a transient event inside one module is no boundary crossing")
@@ -214,7 +218,7 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
 
     /**
      * The free-form components of each payload that a handler can receive and that must carry content only by
-     * reference. A payload is the parameter type itself, or any record of the application that a listener of an
+     * reference. A payload is the parameter type itself, or any concrete class of the application that a listener of an
      * interface or a superclass receives. The registry stores every payload of a stored handler, whatever its type. A
      * transient payload is checked when its module and the listener's differ and one of them is a mentoring module.
      */
@@ -224,8 +228,10 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
         var payloads = new ArrayList<Class<?>>();
         payloads.add(handler.event());
         for (Class<?> type : types)
-            if (type != handler.event() && type.isRecord() && handler.event().isAssignableFrom(type))
-                payloads.add(type);
+            if (type != handler.event()
+                    && !type.isInterface()
+                    && !Modifier.isAbstract(type.getModifiers())
+                    && handler.event().isAssignableFrom(type)) payloads.add(type);
         for (Class<?> payload : payloads) {
             boolean checked = handler.stored()
                     && (payload == handler.event() || moduleOf.apply(payload).isPresent());
@@ -283,6 +289,14 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
     private interface SharedEvent {}
 
     private record MentoringPayload(long threadId, String text) implements SharedEvent {}
+
+    @SuppressWarnings("unused") // Read by reflection only.
+    private abstract static class AbstractNote implements SharedEvent {}
+
+    @SuppressWarnings("unused") // Read by reflection only.
+    private static final class MentoringNote extends AbstractNote {
+        private final String text = "";
+    }
 
     @SuppressWarnings("unused") // Read by reflection only.
     private static final class SharedListener {

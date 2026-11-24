@@ -142,7 +142,7 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                 .as("constant-assembled SQL with a comment, a quoted count query, and two annotations with one text")
                 .containsExactly(
                         "practices ConstantQueries reads conversation_entry of conversation x2",
-                        "practices ConstantQueries reads relationship of relationship !mentoring x4");
+                        "practices ConstantQueries reads relationship of relationship !mentoring x5");
     }
 
     @Test
@@ -285,6 +285,9 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
 
         @Query(value = "SELECT $$--$$ AS separator, r.* FROM public . relationship r", nativeQuery = true)
         List<Long> dollarQuoted();
+
+        @Query(value = "SELECT 1 AS \"revision$tag$\" FROM relationship", nativeQuery = true)
+        List<Long> dollarInAnIdentifier();
     }
 
     @SuppressWarnings("unused") // Read by ArchUnit only.

@@ -212,7 +212,7 @@ Every event that crosses the boundary of a mentoring module does too.
 
 A free-form component, such as a `String` or JSON, needs `@ContentFree`: an ID, a key, a fixed code, a public URL or a configuration snapshot.
 `RegistryEventShapeArchTest` finds each listener through merged annotations and checks these events.
-A listener of an interface or a superclass receives each application record that implements it. The test checks each of these records too.
+A listener of an interface or a superclass receives each concrete application class that implements it. The test checks each of these classes too, and a payload must be a record.
 Main's source-control domain events still carry provider text from `integration.scm` to other modules in memory. The registry does not store them.
 
 Each pair of a mentoring listener and an event that it handles needs a test that implements `IdempotentListenerIntegrationTest`.

@@ -375,13 +375,15 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                 .as("an incidental predicate or a column that the redaction leaves alone erases nothing")
                 .containsExactly("conversation.reviewer_account_id");
 
+        PersonDataContributor byOwner = store("t.account_id = :account", "");
         PersonDataContributor reviewers = store("t.reviewer_account_id = :account", "");
         assertThat(unerasedColumns(
-                        columns, Set.of("conversation"), erasedColumns(List.of(owners, reviewers), List.of())))
+                        columns, Set.of("conversation"), erasedColumns(List.of(byOwner, reviewers), List.of())))
                 .isEmpty();
         PersonDataContributor anyReviewer =
                 store("t.account_id = :account AND t.reviewer_account_id IN (SELECT id FROM account)", "");
-        assertThat(unerasedColumns(columns, Set.of("conversation"), erasedColumns(List.of(anyReviewer), List.of())))
+        assertThat(unerasedColumns(
+                        columns, Set.of("conversation"), erasedColumns(List.of(byOwner, anyReviewer), List.of())))
                 .as("a subquery that selects no part of the person's scope erases nothing")
                 .containsExactly("conversation.reviewer_account_id");
         for (String hidden : List.of(
@@ -389,28 +391,36 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                 "t.account_id = :account AND t.reviewer_account_id IN"
                         + " (SELECT id FROM account ORDER BY CASE WHEN id = :account THEN 0 ELSE 1 END)",
                 "t.account_id = :account AND EXISTS (SELECT 1 FROM conversation c WHERE c.reviewer_account_id = :account)",
-                "t.account_id = :account AND t.note = 'reviewer_account_id = :account'")) {
+                "t.account_id = :account AND t.note = 'reviewer_account_id = :account'",
+                "t.account_id = :account AND t.reviewer_account_id = :account",
+                "(t.account_id = :account) AND (t.reviewer_account_id = :account)",
+                "t.account_id = :account AND CASE WHEN t.reviewer_account_id = :account THEN true"
+                        + " ELSE t.reviewer_account_id IS NOT NULL END",
+                "t.account_id = :account OR CASE WHEN t.reviewer_account_id = :account THEN true ELSE false END")) {
             assertThat(unerasedColumns(
-                            columns, Set.of("conversation"), erasedColumns(List.of(store(hidden, "")), List.of())))
-                    .as("a subquery, an EXISTS, a comment or a literal compares no column of the own rows: %s", hidden)
+                            columns,
+                            Set.of("conversation"),
+                            erasedColumns(List.of(byOwner, store(hidden, "")), List.of())))
+                    .as("only a disjunct that is one comparison selects every row of its column: %s", hidden)
                     .containsExactly("conversation.reviewer_account_id");
         }
         PersonDataContributor anyOfThem =
-                store("t.reviewer_account_id = ANY(:users) OR t.account_id IN (:account)", "");
+                store("(t.reviewer_account_id = ANY(:users)) OR t.account_id IN (:account)", "");
+        assertThat(scopedColumns("t.author_id = :account")).containsExactly("author_id");
         assertThat(unerasedColumns(columns, Set.of("conversation"), erasedColumns(List.of(anyOfThem), List.of())))
                 .isEmpty();
         PersonDataContributor clearing = store("t.reviewer_account_id IN (SELECT 1)", "reviewer_account_id=NULL");
         assertThat(unerasedColumns(
-                        columns, Set.of("conversation"), erasedColumns(List.of(owners, clearing), List.of())))
+                        columns, Set.of("conversation"), erasedColumns(List.of(byOwner, clearing), List.of())))
                 .isEmpty();
 
         assertThat(unerasedColumns(
                         columns,
                         Set.of("conversation"),
-                        erasedColumns(List.of(owners, new DeclaringStore()), List.of())))
+                        erasedColumns(List.of(byOwner, new DeclaringStore()), List.of())))
                 .as("a registered store with its own erasure declares its columns")
                 .isEmpty();
-        assertThat(unerasedColumns(columns, Set.of("conversation"), erasedColumns(List.of(owners), List.of())))
+        assertThat(unerasedColumns(columns, Set.of("conversation"), erasedColumns(List.of(byOwner), List.of())))
                 .as("a store that the registry does not hold erases nothing")
                 .containsExactly("conversation.reviewer_account_id");
         assertThat(assignedColumns(
@@ -438,10 +448,12 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
     private static final Pattern TARGET = Pattern.compile("^\\s*(?:\\w+\\.)?\"?(\\w+)\"?\\s*=");
     private static final Pattern END_OF_SET = Pattern.compile("(?i)(where|from|returning)\\b");
 
-    /** A top-level comparison of a column of the store's own rows with a parameter of the person's scope. */
+    /** One comparison of a column of the store's own rows with a parameter: the whole of one disjunct. */
     private static final Pattern SCOPED = Pattern.compile(
-            "(?<![\\w.])(?:t\\.)?\"?(\\w+)\"?\\s*(?:=\\s*(?:ANY\\s*\\(\\s*)?|IN\\s*\\(\\s*):(\\w+)",
+            "(?:t\\.)?\"?(\\w+)\"?\\s*(?:=\\s*(?:ANY\\s*\\(\\s*:(\\w+)\\s*\\)|:(\\w+))|IN\\s*\\(\\s*:(\\w+)\\s*\\))",
             Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern OR = Pattern.compile("(?i)\\bOR\\b");
 
     /** The parameters of a person's frozen scope ({@code JdbcPersonDataStore#parameters}). */
     private static final Set<String> SCOPE_PARAMETERS =
@@ -494,43 +506,62 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
     }
 
     /**
-     * The columns of the store's own rows that its predicate compares with the person's scope at the top level. A
-     * subquery, an EXISTS or a comment proves no such comparison, so a store that matches a person that way declares its
-     * columns with {@link ErasesColumns}.
+     * The columns that the predicate selects by on their own. The store deletes every row that its predicate selects, so
+     * a disjunct that is one comparison of a column with a scope parameter selects every row that names the person in
+     * that column. A conjunction, a CASE, a subquery or an EXISTS can leave such a row behind, so a store that matches a
+     * person that way declares its columns with {@link ErasesColumns}.
      */
     private static Set<String> scopedColumns(String predicate) {
         var columns = new TreeSet<String>();
-        var scoped = SCOPED.matcher(topLevel(SourceSql.normalized(predicate)));
-        while (scoped.find()) {
-            if (SCOPE_PARAMETERS.contains(scoped.group(2)))
+        for (String disjunct : topLevelDisjuncts(SourceSql.normalized(predicate))) {
+            var scoped = SCOPED.matcher(disjunct.strip());
+            if (!scoped.matches()) continue;
+            String parameter = scoped.group(2) != null
+                    ? scoped.group(2)
+                    : scoped.group(3) != null ? scoped.group(3) : scoped.group(4);
+            if (SCOPE_PARAMETERS.contains(parameter))
                 columns.add(scoped.group(1).toLowerCase(Locale.ROOT));
         }
         return columns;
     }
 
-    /** The predicate outside parentheses: a group stays only when it holds a single parameter, as in ANY(:users). */
-    private static String topLevel(String predicate) {
-        var kept = new StringBuilder();
-        int index = 0;
-        while (index < predicate.length()) {
-            char next = predicate.charAt(index);
-            if (next != '(') {
-                kept.append(next);
+    /** The parts of a predicate that a top-level OR separates, each without its enclosing parentheses. */
+    private static List<String> topLevelDisjuncts(String predicate) {
+        String whole = withoutEnclosingParentheses(predicate.strip());
+        var disjuncts = new ArrayList<String>();
+        int depth = 0;
+        int start = 0;
+        // Transparent bounds keep the word boundary honest at the region start, so a column like author is no OR.
+        var or = OR.matcher(whole).useTransparentBounds(true);
+        for (int index = 0; index < whole.length(); index++) {
+            char next = whole.charAt(index);
+            if (next == '(') depth++;
+            if (next == ')') depth--;
+            if (depth == 0 && or.region(index, whole.length()).lookingAt()) {
+                disjuncts.add(whole.substring(start, index));
+                start = index + 2;
                 index++;
-                continue;
             }
-            int depth = 1;
-            int end = index + 1;
-            while (end < predicate.length() && depth > 0) {
-                if (predicate.charAt(end) == '(') depth++;
-                if (predicate.charAt(end) == ')') depth--;
-                end++;
-            }
-            String group = predicate.substring(index, end);
-            kept.append(group.matches("\\(\\s*:\\w+\\s*\\)") ? group : "( )");
-            index = end;
         }
-        return kept.toString();
+        disjuncts.add(whole.substring(start));
+        return disjuncts.stream()
+                .map(disjunct -> withoutEnclosingParentheses(disjunct.strip()))
+                .toList();
+    }
+
+    private static String withoutEnclosingParentheses(String sql) {
+        while (sql.startsWith("(") && closingParenthesis(sql) == sql.length() - 1)
+            sql = sql.substring(1, sql.length() - 1).strip();
+        return sql;
+    }
+
+    private static int closingParenthesis(String sql) {
+        int depth = 0;
+        for (int index = 0; index < sql.length(); index++) {
+            if (sql.charAt(index) == '(') depth++;
+            if (sql.charAt(index) == ')' && --depth == 0) return index;
+        }
+        return -1;
     }
 
     private static JdbcPersonDataStore store(String predicate, String redaction) {
