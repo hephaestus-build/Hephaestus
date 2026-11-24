@@ -364,7 +364,7 @@ function run(entry: Case) {
 	const steps = {
 		filter: { outputs: entry.filters },
 		alias_base: { outputs: { commit: entry.aliasBase } },
-		opt_in: { outputs: { images: entry.images, full: "false" } },
+		opt_in: { outputs: { images: entry.images, full: "false", light: "false" } },
 		queue_run: {
 			outputs: {
 				complete: String(entry.queueImages === ALL_IMAGES),
@@ -374,7 +374,7 @@ function run(entry: Case) {
 		},
 		release_candidate: { outputs: { "release-candidate": entry.releaseCandidate } },
 		version_bump: { outputs: { changed: entry.versionBump } },
-		skip_check: { outputs: { should_skip: String(entry.skip === "should-skip") } },
+		rename_only: { outputs: { "rename-only": String(entry.skip === "should-skip") } },
 	};
 	const declared = cicd.getIn(["jobs", "detect-changes", "outputs"]);
 	assert.ok(isMap(declared));
@@ -522,7 +522,7 @@ void test("the step ids this model sets are the workflow's", () => {
 		"queue_run",
 		"release_candidate",
 		"version_bump",
-		"skip_check",
+		"rename_only",
 	]) {
 		assert.ok(ids.has(id), `detect-changes has no step ${id}`);
 	}

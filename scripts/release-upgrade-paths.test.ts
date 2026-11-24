@@ -12,6 +12,8 @@ import { isMap, isSeq, parseDocument } from "yaml";
 import { asArray } from "./lib/json.ts";
 import { currentReleaseIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 
+const childProcessFixture = new URL("fixtures/stub-child-processes.ts", import.meta.url).href;
+
 await test("release and weekly runs use the supported seeded upgrade", () => {
 	const workflow = parseDocument(readFileSync(".github/workflows/release-upgrade.yml", "utf8"));
 	assert.equal(workflow.hasIn(["jobs", "upgrade", "strategy"]), false);
@@ -105,11 +107,14 @@ for (const { source, version, tags, previous, latest } of resolutions) {
 			writeFileSync(
 				preload,
 				`import { appendFileSync } from "node:fs";
-import { mock } from "node:test";
-import * as childProcess from "node:child_process";
-mock.module("node:child_process", { exports: {
-  ...childProcess,
-  execFileSync(executable, args) {
+import { stubChildProcesses } from ${JSON.stringify(childProcessFixture)};
+stubChildProcesses(
+  (executable, args) => {
+    if (executable !== "docker") throw new Error("Unexpected command: " + executable);
+    appendFileSync(${JSON.stringify(invocations)}, args.join(" ") + "\\n");
+    return { status: 0, stdout: JSON.stringify({ digest: "sha256:" + "a".repeat(64) }), stderr: "" };
+  },
+  (executable, args) => {
     if (executable === "git" && args[0] === "show") {
       const inventory = ${JSON.stringify(inventories)}[args[1].split(":")[0]];
       if (inventory === undefined) throw new Error("Unexpected revision: " + args[1]);
@@ -118,23 +123,13 @@ mock.module("node:child_process", { exports: {
     if (executable !== "git" || args[0] !== "tag") throw new Error("Unexpected command: " + executable);
     return args.includes("--points-at") ? "" : ${JSON.stringify(tags.split(" ").join("\n"))};
   },
-  spawnSync(executable, args) {
-    if (executable !== "docker") throw new Error("Unexpected command: " + executable);
-    appendFileSync(${JSON.stringify(invocations)}, args.join(" ") + "\\n");
-    return { status: 0, stdout: JSON.stringify({ digest: "sha256:" + "a".repeat(64) }), stderr: "" };
-  }
-}});
+);
 `,
 			);
 			const { namespace } = currentReleaseIdentity();
 			const result = spawnSync(
 				process.execPath,
-				[
-					"--experimental-test-module-mocks",
-					"--import",
-					pathToFileURL(preload).href,
-					"scripts/resolve-release-upgrade-images.ts",
-				],
+				["--import", pathToFileURL(preload).href, "scripts/resolve-release-upgrade-images.ts"],
 				{
 					encoding: "utf8",
 					env: {
@@ -199,7 +194,7 @@ for (const scenario of ["rolling", "stopped"] as const) {
 				preload,
 				`import { appendFileSync } from "node:fs";
 import { mock } from "node:test";
-import * as childProcess from "node:child_process";
+import { stubChildProcesses } from ${JSON.stringify(childProcessFixture)};
 const commands = ${JSON.stringify(commands)};
 const fixtures = ${JSON.stringify(fixtures)};
 const stopped = ${JSON.stringify(stopped)};
@@ -229,27 +224,24 @@ globalThis.fetch = async (input, init) => {
   }
   throw new Error("Unexpected HTTP request: " + url);
 };
-mock.module("node:child_process", { exports: {
-  ...childProcess,
-  spawnSync(executable, args, options) {
-    if (executable !== "docker") throw new Error("Unexpected command: " + executable);
-    appendFileSync(commands, JSON.stringify(args) + "\\n");
-    if (args.includes("--file=-")) appendFileSync(fixtures, options.input + "\\n");
-    let stdout = "", stderr = "", status = 0;
-    if (args[0] === "port") stdout = "127.0.0.1:18080";
-    else if (args[0] === "inspect") stdout = "running";
-    else if (args.includes("--command")) {
-      const sql = args.at(-1);
-      if (sql.includes("INSERT INTO")) stdout = "7";
-      else if (sql.includes("SELECT kind ||")) {
-        stdout = "account|1\\nidentity|1\\nuser|1\\nworkspace|1\\nmembership|1\\nconnection|1";
-      }
-      else if (sql.includes("LEFT JOIN practice_version")) stdout = "0";
-      else if (sql.includes("count(*)")) stdout = "1";
+stubChildProcesses((executable, args, options) => {
+  if (executable !== "docker") throw new Error("Unexpected command: " + executable);
+  appendFileSync(commands, JSON.stringify(args) + "\\n");
+  if (args.includes("--file=-")) appendFileSync(fixtures, options.input + "\\n");
+  let stdout = "", stderr = "", status = 0;
+  if (args[0] === "port") stdout = "127.0.0.1:18080";
+  else if (args[0] === "inspect") stdout = "running";
+  else if (args.includes("--command")) {
+    const sql = args.at(-1);
+    if (sql.includes("INSERT INTO")) stdout = "7";
+    else if (sql.includes("SELECT kind ||")) {
+      stdout = "account|1\\nidentity|1\\nuser|1\\nworkspace|1\\nmembership|1\\nconnection|1";
     }
-    return { status, stdout, stderr };
+    else if (sql.includes("LEFT JOIN practice_version")) stdout = "0";
+    else if (sql.includes("count(*)")) stdout = "1";
   }
-}});
+  return { status, stdout, stderr };
+});
 `,
 			);
 			const result = spawnSync(

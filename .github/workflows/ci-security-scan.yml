@@ -3,11 +3,6 @@ name: Security / Scan
 on:
   workflow_call:
     inputs:
-      should_skip:
-        description: "Whether to skip the workflow"
-        required: false
-        type: string
-        default: "false"
       merge_group_base:
         description: "Where a merge group leaves main (detect-changes); empty for other events"
         required: false
@@ -20,7 +15,6 @@ jobs:
   security-scan:
     name: "Dependencies, secrets and policy"
     runs-on: ubuntu-latest
-    if: inputs.should_skip != 'true'
     timeout-minutes: 15
     permissions:
       security-events: write

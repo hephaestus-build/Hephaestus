@@ -103,29 +103,20 @@ void describe("ci-contract: merge-queue", () => {
 		const decision = String(
 			orchestrator.getIn(["jobs", "detect-changes", "outputs", "queue-tier"]),
 		);
-		const skip = String(orchestrator.getIn(["jobs", "detect-changes", "outputs", "should_skip"]));
 		// `full` is the live label read; undefined is a read that failed and wrote no output.
-		for (const [event, full, queue, skipped] of [
-			["pull_request", "false", "false", "true"],
-			["pull_request", "true", "true", "false"],
-			["pull_request", undefined, "true", "false"],
-			["merge_group", undefined, "true", "false"],
-			["push", undefined, "true", "false"],
-			["workflow_dispatch", undefined, "true", "false"],
+		for (const [event, full, queue] of [
+			["pull_request", "false", "false"],
+			["pull_request", "true", "true"],
+			["pull_request", undefined, "true"],
+			["merge_group", undefined, "true"],
+			["push", undefined, "true"],
+			["workflow_dispatch", undefined, "true"],
 		] as const) {
 			const label = full ?? "unreadable";
 			assert.equal(
 				evaluateTierOutput(decision, event, { full }),
 				queue,
 				`${event} with ci:full ${label}`,
-			);
-			// A duplicate is skipped only without the opt-in, so a re-run after the label runs the tier.
-			// A read that succeeds also reports the `ci:images` label, here absent.
-			const images = full === undefined ? undefined : "false";
-			assert.equal(
-				evaluateTierOutput(skip, event, { full, images }),
-				skipped,
-				`duplicate skip, ${event} ${label}`,
 			);
 		}
 		// A layer of a stack runs the light tier: no queue tier, even when its inputs changed.
@@ -187,20 +178,6 @@ void describe("ci-contract: merge-queue", () => {
 			);
 			assert.equal(evaluateTierOutput(decision, event, run), expected, `queue tier, ${event}`);
 		}
-		// A re-run, such as the one after a retarget, is never skipped as a duplicate.
-		assert.equal(
-			evaluateTierOutput(skip, "pull_request", {
-				full: "false",
-				images: "false",
-				attempt: 2,
-			}),
-			"false",
-		);
-		// A pull request with the `ci:images` label repeats a tree whose earlier run may have published no image.
-		assert.equal(
-			evaluateTierOutput(skip, "pull_request", { full: "false", images: "true" }),
-			"false",
-		);
 		// Changing CI, browser specs or migrations does not promote every suite on a PR.
 		for (const filter of ["migrations", "test-config", "build-config", "e2e", "extension-e2e"]) {
 			assert.equal(
@@ -351,11 +328,6 @@ void describe("ci-contract: merge-queue", () => {
 				pullRequest: draft,
 				releaseCandidate: "true",
 			}),
-			"false",
-		);
-		// Marking a draft ready repeats its tree, so it must not be skipped as a duplicate.
-		assert.equal(
-			evaluateTierOutput(skip, "pull_request", { full: "false", action: "ready_for_review" }),
 			"false",
 		);
 		for (const name of ["vulnerability-database", "upstream-images", "Docker"]) {
@@ -1349,7 +1321,7 @@ void describe("ci-contract: merge-queue", () => {
 		}
 
 		// The gate can only demand a preflight it lets run. On that branch the preflight runs for
-		// every event, and a duplicate-run skip must not take the image builds it needs away.
+		// every event, and a rename-only skip must not take the image builds it needs away.
 		assert.match(
 			String(workflow.getIn(["jobs", "Release-preflight", "if"])),
 			/needs\.detect-changes\.outputs\.release-preflight == 'true'/u,

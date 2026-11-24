@@ -312,11 +312,9 @@ export interface TierRun {
 	readonly images?: string;
 	readonly filter?: Readonly<Record<string, string>>;
 	readonly pullRequest?: Readonly<Record<string, unknown>>;
-	readonly action?: string;
 	readonly releaseCandidate?: string;
 	/** The opt-in step's light-tier decision for a layer of a stack. */
 	readonly light?: string;
-	readonly attempt?: number;
 }
 
 /** A `detect-changes` tier output for one event and run. */
@@ -334,13 +332,11 @@ export function evaluateTierOutput(source: string, event: string, run: TierRun =
 			github: {
 				event_name: event,
 				repository: "owner/repo",
-				run_attempt: run.attempt ?? 1,
-				event: { action: run.action ?? "synchronize", pull_request: run.pullRequest ?? {} },
+				event: { pull_request: run.pullRequest ?? {} },
 			},
 			steps: {
 				opt_in: { outputs: optIn },
 				filter: { outputs: run.filter ?? {} },
-				skip_check: { outputs: { should_skip: "true" } },
 				release_candidate: { outputs: { "release-candidate": run.releaseCandidate ?? "false" } },
 			},
 		}),
@@ -841,7 +837,6 @@ export function simulateRun(
 	assert.ok(isMap(declared));
 	const off: Record<string, string> = {
 		should_skip: "false",
-		duplicate: "false",
 		"rename-only": "false",
 		draft: "false",
 		"queue-images-complete": "false",

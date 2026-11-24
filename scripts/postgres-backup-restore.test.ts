@@ -32,12 +32,11 @@ function preparation(
 	const script = new URL("postgres-backup-restore-test.ts", import.meta.url).href;
 	const result = spawnSync(process.execPath, ["--input-type=module"], {
 		input: `
-import childProcess from "node:child_process";
-import { syncBuiltinESMExports } from "node:module";
+import { stubChildProcesses } from ${JSON.stringify(new URL("fixtures/stub-child-processes.ts", import.meta.url).href)};
 const commands = [];
 let java;
 let unpack;
-childProcess.spawnSync = (command, args, options = {}) => {
+stubChildProcesses((command, args, options) => {
   commands.push([command, ...args]);
   if (command === "java") java = { cwd: options.cwd, env: Object.keys(options.env ?? {}) };
   if (command === "jar") unpack = { cwd: options.cwd, env: Object.keys(options.env ?? {}) };
@@ -51,8 +50,7 @@ childProcess.spawnSync = (command, args, options = {}) => {
   if (args.includes("SHOW server_version_num")) stdout = "180000";
   if (args.some((arg) => arg.includes("current_setting('shared_buffers')"))) stdout = "512MB 128 pg_stat_statements";
   return { status, stdout, stderr: status ? "missing image" : "" };
-};
-syncBuiltinESMExports();
+});
 process.argv = ["node", ${JSON.stringify(script)}, ...${JSON.stringify(args)}];
 try {
   await import(${JSON.stringify(script)});
