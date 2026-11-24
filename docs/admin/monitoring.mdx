@@ -207,7 +207,16 @@ curl -fsS http://127.0.0.1:9100/metrics | grep '^host_firewall_policy_ok '
 ```
 
 The existing node scrape reads the verdict, check time, and any drift reasons.
+
+For the bundled stack, add the address of each host that reports its policy to
+`observability.stack.firewallPolicyNodeExporters`. Use the same address as in `nodeExporters`.
+For another scraper, set the target label `host_firewall_policy="enrolled"` on those hosts.
+This label tells the alert to expect a verdict and a check time in every successful scrape.
+Scrape those targets at least every 30 seconds so the check time stays fresh.
 See [Host alert rules](./alert-rules) for the alerts.
+
+To stop reporting, remove the host from firewall policy enrollment, disable the status timer,
+and remove `hephaestus-host-firewall.prom` from the collector directory.
 
 ## Open the dashboards
 

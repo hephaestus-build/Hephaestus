@@ -1173,6 +1173,19 @@ groups:
         annotations:
           summary: A host firewall has reported no policy check for more than two minutes
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusHostFirewallPolicyMetricsMissing
+        expr: >-
+          up{host_firewall_policy="enrolled"} == 1
+          unless on(job, instance) (
+            host_firewall_policy_ok{host_firewall_policy="enrolled"}
+            and on(job, instance) host_firewall_policy_check_timestamp_seconds{host_firewall_policy="enrolled"}
+          )
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: An enrolled host is missing firewall policy metrics
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # The kernel's own count of OOM kills on the node, including a kill of one process in a container that keeps
       # running, which no container metric shows when cAdvisor cannot read the kernel log.
       - alert: HephaestusNodeOomKill

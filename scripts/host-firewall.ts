@@ -112,12 +112,14 @@ function sources(values: unknown, field: string, subnet: boolean): Rule[] {
 		return { family, source: `${canonical}/${length}` };
 	});
 	const unique = new Set(rules.map((rule) => rule.source));
-	if (
-		unique.size !== rules.length ||
-		families.some((family) => !rules.some((rule) => rule.family === family)) ||
-		(!subnet && rules.length !== 2)
-	) {
-		throw new Error(`Specify both IP families with distinct entries in ${field}.`);
+	if (unique.size !== rules.length) {
+		throw new Error(`Use distinct entries in ${field}.`);
+	}
+	if (subnet && rules.length === 0) {
+		throw new Error(`Specify at least one network in ${field}.`);
+	}
+	if (!subnet && new Set(rules.map((rule) => rule.family)).size !== rules.length) {
+		throw new Error(`Use at most one address per IP family in ${field}.`);
 	}
 	return rules;
 }
@@ -411,16 +413,21 @@ function sshConnection(rules: Rule[]) {
 	if (!vpn.check(peer, family === 4 ? "ipv4" : "ipv6")) {
 		throw new Error("The SSH client is outside the configured VPN networks.");
 	}
-	return sshStartedAt();
+	return sshStartedAt(process.ppid, Number(run("/usr/bin/getconf", ["CLK_TCK"])), (pid) =>
+		readFileSync(`/proc/${pid}/stat`, "utf8"),
+	);
 }
 
-function sshStartedAt() {
+export function sshStartedAt(
+	parentPid: number,
+	tickRate: number,
+	readStat: (pid: number) => string,
+) {
 	// OpenSSH keeps a process for the TCP connection, even when a client multiplexes new sessions.
-	const tickRate = Number(run("/usr/bin/getconf", ["CLK_TCK"]));
-	let pid = process.ppid;
+	let pid = parentPid;
 	let started = 0;
 	while (pid > 1) {
-		const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+		const stat = readStat(pid);
 		const nameEnd = stat.lastIndexOf(")");
 		const name = stat.slice(stat.indexOf("(") + 1, nameEnd);
 		const fields = stat.slice(nameEnd + 2).split(" ");
@@ -433,6 +440,12 @@ function sshStartedAt() {
 		throw new Error("Cannot verify the age of this SSH connection.");
 	}
 	return started;
+}
+
+export function requireFreshSshConnection(changedAt: number, startedAt: () => number) {
+	if (!Number.isFinite(changedAt) || changedAt <= 0 || startedAt() <= changedAt) {
+		throw new Error("Open a new SSH connection before confirming.");
+	}
 }
 
 function ensureIpv6() {
@@ -472,24 +485,38 @@ function armRecovery() {
 	rmSync(pending, { force: true });
 }
 
+export function applyAction(
+	waiting: boolean,
+	hasPendingChange: boolean,
+	recoveryState: string,
+	policyMatches: () => boolean,
+) {
+	if ((waiting && hasPendingChange) || ["active", "activating"].includes(recoveryState)) {
+		throw new Error("A firewall change is awaiting confirmation or recovery.");
+	}
+	if (waiting) {
+		return "retry";
+	}
+	return policyMatches() ? "unchanged" : "arm";
+}
+
 function apply(rules: Rule[]) {
 	const snapshot = snapshotDrift();
 	if (snapshot !== null) {
 		throw new Error(snapshot);
 	}
 	sshConnection(rules);
-	const waiting = unitState(`${rollback}.timer`, "SubState") === "waiting";
-	if (
-		(waiting && existsSync(pending)) ||
-		["active", "activating"].includes(unitState(`${rollback}.service`, "ActiveState"))
-	) {
-		throw new Error("A firewall change is awaiting confirmation or recovery.");
-	}
-	if (!waiting && drift(rules).length === 0) {
+	const recoveryAction = applyAction(
+		unitState(`${rollback}.timer`, "SubState") === "waiting",
+		existsSync(pending),
+		unitState(`${rollback}.service`, "ActiveState"),
+		() => drift(rules).length === 0,
+	);
+	if (recoveryAction === "unchanged") {
 		console.log("UFW matches the host policy.");
 		return;
 	}
-	if (!waiting) {
+	if (recoveryAction === "arm") {
 		armRecovery();
 	}
 	// A retry after an incomplete apply uses the original timer and its remaining time.
@@ -533,9 +560,7 @@ function confirm(rules: Rule[]) {
 		throw new Error("There is no firewall change to confirm. Run --check or --apply.");
 	}
 	const changedAt = Number(readFileSync(pending, "utf8"));
-	if (!Number.isFinite(changedAt) || changedAt <= 0 || sshConnection(rules) <= changedAt) {
-		throw new Error("Open a new SSH connection before confirming.");
-	}
+	requireFreshSshConnection(changedAt, () => sshConnection(rules));
 	const problems = drift(rules);
 	if (problems.length > 0 || unitState(`${rollback}.timer`, "SubState") !== "waiting") {
 		throw new Error(

@@ -3,12 +3,13 @@ import { isIP } from "node:net";
 
 import { output } from "./lib/process.ts";
 
-const publicPorts = new Set(["80/tcp", "443/tcp", "443/udp"]);
+const publicPorts = new Set(["80/tcp", "443/tcp"]);
 const respondingStates = new Set(["open", "closed", "unfiltered"]);
 
 interface Target {
 	addresses: [string, string];
 	expectedOnline: boolean;
+	http3: boolean;
 }
 
 export function probeTargets(config: unknown): Target[] {
@@ -20,7 +21,7 @@ export function probeTargets(config: unknown): Target[] {
 		if (
 			typeof host !== "object" ||
 			host === null ||
-			Object.keys(host).some((key) => !["ipv4", "ipv6", "expectedOnline"].includes(key)) ||
+			Object.keys(host).some((key) => !["ipv4", "ipv6", "expectedOnline", "http3"].includes(key)) ||
 			!("ipv4" in host) ||
 			!("ipv6" in host) ||
 			typeof host.ipv4 !== "string" ||
@@ -39,14 +40,15 @@ export function probeTargets(config: unknown): Target[] {
 		seen.add(host.ipv4);
 		seen.add(ipv6);
 		const expectedOnline = "expectedOnline" in host ? host.expectedOnline : true;
-		if (typeof expectedOnline !== "boolean") {
-			throw new Error("Use a boolean for expectedOnline.");
+		const http3 = "http3" in host ? host.http3 : false;
+		if (typeof expectedOnline !== "boolean" || typeof http3 !== "boolean") {
+			throw new Error("Use booleans for expectedOnline and http3.");
 		}
-		return { addresses: [host.ipv4, ipv6], expectedOnline };
+		return { addresses: [host.ipv4, ipv6], expectedOnline, http3 };
 	});
 }
 
-export function assessScan(report: string, expectedOnline: boolean) {
+export function assessScan(report: string, { expectedOnline, http3 }: Omit<Target, "addresses">) {
 	// A host timeout can leave Nmap's exit code at zero. Require both full scan ranges,
 	// one completed host, and an accounting of every TCP and UDP port before accepting it.
 	const ranges = Array.from(
@@ -87,11 +89,13 @@ export function assessScan(report: string, expectedOnline: boolean) {
 	return {
 		reachable,
 		hiddenReplies,
-		unexpected: responding.filter(({ port }) => !publicPorts.has(port)).map(({ port }) => port),
+		unexpected: responding
+			.filter(({ port }) => !publicPorts.has(port) && !(http3 && port === "443/udp"))
+			.map(({ port }) => port),
 	};
 }
 
-async function probe(address: string, expectedOnline: boolean) {
+async function probe(address: string, target: Target) {
 	const ipv6 = isIP(address) === 6;
 	const stdout = await output(
 		"/usr/local/libexec/hephaestus-probe-nmap",
@@ -119,7 +123,7 @@ async function probe(address: string, expectedOnline: boolean) {
 		],
 		{ env: { NMAP_PRIVILEGED: "1" }, signal: AbortSignal.timeout(330_000) },
 	);
-	return assessScan(stdout, expectedOnline);
+	return assessScan(stdout, target);
 }
 
 async function main() {
@@ -131,12 +135,12 @@ async function main() {
 	const hosts = probeTargets(input);
 	// Check every address even when one probe fails. Limit concurrent scans to one per host.
 	const outcomes = await Promise.all(
-		hosts.map(async ({ addresses, expectedOnline }, index) => {
+		hosts.map(async (target, index) => {
 			let passed = true;
-			for (const address of addresses) {
+			for (const address of target.addresses) {
 				const family = isIP(address);
 				try {
-					const result = await probe(address, expectedOnline);
+					const result = await probe(address, target);
 					if (result.hiddenReplies || result.unexpected.length > 0) {
 						console.error(
 							`Host ${index + 1}, IPv${family}, unexpected responding ports: ${result.hiddenReplies ? "grouped replies" : result.unexpected.join(", ")}`,
@@ -145,8 +149,11 @@ async function main() {
 					} else if (!result.reachable) {
 						console.log(`Host ${index + 1}, IPv${family}: unreachable (expected while down).`);
 					}
-				} catch {
-					console.error(`Host ${index + 1}, IPv${family}, no complete probe result.`);
+				} catch (error) {
+					console.error(
+						`Host ${index + 1}, IPv${family}, no complete probe result.`,
+						error instanceof Error ? error.message : error,
+					);
 					passed = false;
 				}
 			}

@@ -1947,6 +1947,47 @@ tests:
         alertname: HephaestusHostFirewallPolicyStale
         exp_alerts: []
 
+  - name: missing firewall metrics alert only for enrolled exporters that can be scraped
+    interval: 1m
+    input_series:
+      - series: 'up{job="node",instance="node-a",host_firewall_policy="enrolled"}'
+        values: "1x4"
+      - series: 'host_firewall_policy_ok{job="node",instance="node-a",host_firewall_policy="enrolled"}'
+        values: "1 1 stale _ 1"
+      - series: 'host_firewall_policy_check_timestamp_seconds{job="node",instance="node-a",host_firewall_policy="enrolled"}'
+        values: "0 stale _ _ 240"
+      - series: 'up{job="node",instance="node-b"}'
+        values: "1x4"
+      - series: 'up{job="node",instance="node-c",host_firewall_policy="enrolled"}'
+        values: "0x4"
+      - series: 'up{job="node",instance="node-d",host_firewall_policy="enrolled"}'
+        values: "1x4"
+      - series: 'host_firewall_policy_ok{job="node",instance="node-d",host_firewall_policy="enrolled"}'
+        values: "1x4"
+      - series: 'host_firewall_policy_check_timestamp_seconds{job="node",instance="node-d",host_firewall_policy="enrolled"}'
+        values: "0+60x4"
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: HephaestusHostFirewallPolicyMetricsMissing
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: HephaestusHostFirewallPolicyMetricsMissing
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HephaestusHostFirewallPolicyMetricsMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: node
+              instance: node-a
+              host_firewall_policy: enrolled
+            exp_annotations:
+              summary: An enrolled host is missing firewall policy metrics
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 4m
+        alertname: HephaestusHostFirewallPolicyMetricsMissing
+        exp_alerts: []
+
   # 6 days and 30 days after the start.
   - name: a certificate that expires within seven days fires after one hour, a later one does not
     interval: 1m

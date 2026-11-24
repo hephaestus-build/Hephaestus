@@ -45,7 +45,7 @@ Verify the public ports from a network outside the admin VPN and the hosting pro
 
 Use Node.js 24.2 or later on the host and get [the firewall script](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/host-firewall.ts) from a trusted checkout.
 The script manages all UFW rules added through the UFW command line.
-It checks the saved rules, the live UFW chains, and the default policies.
+It checks the saved and live UFW user rules, their chain hooks, and the default policies.
 If you use custom packet filter rules or container port forwarding, check those rules separately.
 
 Use UFW to load the host rules at boot.
@@ -54,7 +54,10 @@ Move any required rules to UFW, disable `netfilter-persistent`, and archive the 
 
 Store `host-firewall.json` in `/etc/hephaestus`. Give it root ownership and mode `0600`.
 Keep it outside your Git checkout.
-Replace the example addresses with your VPN networks and the two addresses of your monitoring host.
+
+Replace the example addresses with your VPN networks and the addresses of your monitoring host.
+For each source, include only the IP families it uses.
+Use an empty `monitoringAddresses` list if the k3s Pod network already allows your scraper.
 Set `k3s` for a k3s host with the default Pod and Service networks, and set `http3` for a proxy that serves HTTP/3.
 
 ```json

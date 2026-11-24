@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+	applyAction,
 	conflictingSnapshot,
 	liveDrift,
 	renderPolicyMetrics,
+	requireFreshSshConnection,
 	ruleChanges,
 	rulesFor,
 	savedRules,
+	sshStartedAt,
 	ufwArgs,
 } from "./host-firewall.ts";
 
@@ -45,13 +48,13 @@ void test("a host proxy adds only 443/udp", () => {
 	);
 });
 
-void test("rejects malformed, broad, or incomplete address configuration", () => {
+void test("rejects malformed addresses, default routes and missing VPN networks", () => {
 	const config = { ...base, k3s: false, http3: true };
 	for (const invalid of [
 		{ sshVpnCidrs: ["0.0.0.0/0", "2001:db8:1::/64"] },
 		{ sshVpnCidrs: ["192.0.2.2/24", "2001:db8:1::/64"] },
 		{ sshVpnCidrs: ["192.0.2.0/24", "2001:db8::/129"] },
-		{ sshVpnCidrs: ["192.0.2.0/24"] },
+		{ sshVpnCidrs: [] },
 		{ monitoringAddresses: ["198.51.100.4/24", "2001:db8:2::4"] },
 		{ monitoringAddresses: ["198.51.100.4", "::ffff:192.0.2.4"] },
 		{ monitoringAddresses: ["198.51.100.4", "fe80::4%eth0"] },
@@ -61,6 +64,61 @@ void test("rejects malformed, broad, or incomplete address configuration", () =>
 	]) {
 		assert.throws(() => rulesFor({ ...config, ...invalid }));
 	}
+});
+
+void test("an address family with no VPN or monitoring source gets only the web rules", () => {
+	assert.deepEqual(
+		rulesFor({ sshVpnCidrs: ["192.0.2.0/24"], monitoringAddresses: [], k3s: false, http3: false }),
+		[
+			{ family: 4, source: "192.0.2.0/24", port: 22, protocol: "tcp" },
+			{ port: 80, protocol: "tcp" },
+			{ port: 443, protocol: "tcp" },
+		],
+	);
+});
+
+const matches = () => true;
+
+void test("apply keeps the original recovery deadline on retry and refuses outstanding recovery", () => {
+	assert.equal(applyAction(false, false, "inactive", matches), "unchanged");
+	assert.equal(
+		applyAction(false, false, "inactive", () => false),
+		"arm",
+	);
+	assert.equal(applyAction(true, false, "inactive", matches), "retry");
+	assert.throws(() => applyAction(true, true, "inactive", matches), /awaiting confirmation/u);
+	for (const service of ["active", "activating"]) {
+		assert.throws(() => applyAction(false, false, service, matches), /awaiting confirmation/u);
+	}
+});
+
+function procStat(pid: number, name: string, parent: number, ticks: number) {
+	// Start time is field 22. Populate the preceding fields so an off-by-one reads a different value.
+	return `${pid} (${name}) S ${parent} ${Array.from({ length: 17 }, (_, index) => index).join(" ")} ${ticks} 0\n`;
+}
+
+void test("confirmation uses the TCP connection age, including for multiplexed SSH", () => {
+	for (const session of ["sshd", "sshd-session"]) {
+		const ancestry = new Map([
+			[51, procStat(51, "sudo", 50, 12_000)],
+			[50, procStat(50, "shell (new)", 40, 11_500)],
+			[40, procStat(40, session, 20, 10_100)],
+			[20, procStat(20, session, 10, 10_000)],
+			[10, procStat(10, "sshd", 1, 500)],
+		]);
+		const startedAt = () => sshStartedAt(51, 100, (pid) => ancestry.get(pid) ?? "");
+		assert.equal(startedAt(), 100);
+		assert.throws(() => requireFreshSshConnection(110, startedAt), /new SSH connection/u);
+		assert.throws(() => requireFreshSshConnection(100, startedAt), /new SSH connection/u);
+		assert.doesNotThrow(() => requireFreshSshConnection(99.99, startedAt));
+	}
+});
+
+void test("a detached terminal cannot confirm a firewall change", () => {
+	assert.throws(
+		() => sshStartedAt(50, 100, (pid) => procStat(pid, "tmux: server", 1, 11_500)),
+		/Cannot verify the age/u,
+	);
 });
 
 function ufwFile(tuples: string[]) {

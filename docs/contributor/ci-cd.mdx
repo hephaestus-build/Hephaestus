@@ -1700,7 +1700,7 @@ Manual runs and pull request runs do not enter the shared reporter.
 
 `Security / Public host ports` runs each hour from a dual-stack Linux probe outside the target networks.
 It checks all TCP and UDP ports on each public IPv4 and IPv6 address.
-It accepts responses on TCP 80, TCP 443, and UDP 443.
+It accepts responses on TCP 80 and TCP 443. It also accepts UDP 443 for hosts that serve HTTP/3.
 An incomplete scan fails the check.
 A silent address also fails unless its host has an approved outage marker.
 
@@ -1734,6 +1734,7 @@ Use literal public addresses so the check covers an IPv6 address even without a 
 ]
 ```
 
+Set `"http3": true` on a host only if its firewall policy allows HTTP/3.
 Set `"expectedOnline": false` on a host during an approved outage.
 The probe still checks every port on both addresses.
 It reports a silent address as unreachable and still fails if a blocked port answers.
