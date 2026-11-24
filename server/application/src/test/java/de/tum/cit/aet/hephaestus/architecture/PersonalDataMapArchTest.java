@@ -396,7 +396,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                 "(t.account_id = :account) AND (t.reviewer_account_id = :account)",
                 "t.account_id = :account AND CASE WHEN t.reviewer_account_id = :account THEN true"
                         + " ELSE t.reviewer_account_id IS NOT NULL END",
-                "t.account_id = :account OR CASE WHEN t.reviewer_account_id = :account THEN true ELSE false END")) {
+                "t.account_id = :account OR CASE WHEN t.reviewer_account_id = :account THEN true ELSE false END",
+                "CASE WHEN t.closed_at IS NOT NULL THEN t.account_id = :account OR t.reviewer_account_id = :account"
+                        + " OR t.account_id = :users ELSE false END")) {
             assertThat(unerasedColumns(
                             columns,
                             Set.of("conversation"),
@@ -407,6 +409,11 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         PersonDataContributor anyOfThem =
                 store("(t.reviewer_account_id = ANY(:users)) OR t.account_id IN (:account)", "");
         assertThat(scopedColumns("t.author_id = :account")).containsExactly("author_id");
+        assertThat(
+                        scopedColumns(
+                                "t.vendor_id = :account OR (CASE WHEN t.ended THEN true END) OR t.reviewer_account_id = :account"))
+                .as("an OR after a closed CASE is a top-level OR again")
+                .containsExactly("reviewer_account_id", "vendor_id");
         assertThat(unerasedColumns(columns, Set.of("conversation"), erasedColumns(List.of(anyOfThem), List.of())))
                 .isEmpty();
         PersonDataContributor clearing = store("t.reviewer_account_id IN (SELECT 1)", "reviewer_account_id=NULL");
@@ -454,6 +461,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern OR = Pattern.compile("(?i)\\bOR\\b");
+    private static final Pattern CASE = Pattern.compile("(?i)\\bCASE\\b");
+    private static final Pattern END = Pattern.compile("(?i)\\bEND\\b");
 
     /** The parameters of a person's frozen scope ({@code JdbcPersonDataStore#parameters}). */
     private static final Set<String> SCOPE_PARAMETERS =
@@ -533,10 +542,13 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         int start = 0;
         // Transparent bounds keep the word boundary honest at the region start, so a column like author is no OR.
         var or = OR.matcher(whole).useTransparentBounds(true);
+        var caseStart = CASE.matcher(whole).useTransparentBounds(true);
+        var caseEnd = END.matcher(whole).useTransparentBounds(true);
         for (int index = 0; index < whole.length(); index++) {
             char next = whole.charAt(index);
-            if (next == '(') depth++;
-            if (next == ')') depth--;
+            // A CASE expression nests like a parenthesis: an OR in one of its branches separates no disjunct.
+            if (next == '(' || caseStart.region(index, whole.length()).lookingAt()) depth++;
+            if (next == ')' || caseEnd.region(index, whole.length()).lookingAt()) depth--;
             if (depth == 0 && or.region(index, whole.length()).lookingAt()) {
                 disjuncts.add(whole.substring(start, index));
                 start = index + 2;
