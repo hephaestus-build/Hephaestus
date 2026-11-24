@@ -96,6 +96,8 @@ If one review unit cannot ship the work, create a follow-up issue linked with `P
 The [issue forms](.github/ISSUE_TEMPLATE) carry the shape. In a pull request, `Fixes #n` means every
 bullet of that issue is met.
 `Part of #n` means the issue stays open and says what remains.
+A pull request to `main` names its 1.0 issue this way, or states `Outside the 1.0 plan: <reason>`.
+The [CI/CD guide](https://docs.hephaestus.build/contributor/ci-cd#plan-link) defines the check.
 
 ## Contribution Process
 

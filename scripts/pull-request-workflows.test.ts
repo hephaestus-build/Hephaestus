@@ -117,7 +117,7 @@ void test("the trusted policy checks every rule even after another rule fails", 
 		"validate-pr",
 		"steps",
 	]);
-	for (const id of ["identity", "attribution"]) {
+	for (const id of ["identity", "attribution", "plan"]) {
 		assert.equal(
 			steps.find((step) => step.get("id") === id)?.get("if"),
 			id === "identity"
@@ -378,6 +378,7 @@ void test("policy comments require a recorded violation, even when the API or an
 	for (const [id, header] of [
 		["identity", "pr-commit-identity-error"],
 		["attribution", "pr-attribution-error"],
+		["plan", "pr-plan-link-error"],
 	] as const) {
 		const step = steps.find((entry) => entry.getIn(["with", "header"]) === header);
 		assert.ok(step);
@@ -428,7 +429,11 @@ void test("unavailable PR metadata fails without claiming a policy violation", a
 	]);
 	const directory = await mkdtemp(path.join(tmpdir(), "pr-metadata-unavailable-"));
 	t.after(async () => rm(directory, { recursive: true, force: true }));
-	for (const id of ["identity", "attribution"]) {
+	for (const [id, comment] of [
+		["identity", "identity-comment.md"],
+		["attribution", "attribution-comment.md"],
+		["plan", "plan-comment.md"],
+	] as const) {
 		const script = steps.find((step) => step.get("id") === id)?.getIn(["with", "script"]);
 		assert.equal(typeof script, "string");
 		const result = spawnSync(
@@ -448,7 +453,7 @@ void test("unavailable PR metadata fails without claiming a policy violation", a
 				await assert.rejects(async () => { ${String(script)} }, {status: 503});
 				assert.deepEqual(outputs, {});
 				assert.deepEqual(failures, []);
-				assert.equal(existsSync(process.env.RUNNER_TEMP + "/${id === "identity" ? "identity" : "attribution"}-comment.md"), false);
+				assert.equal(existsSync(process.env.RUNNER_TEMP + "/${comment}"), false);
 			})().catch(error => {console.error(error); process.exitCode = 1;});
 		`,
 			],
@@ -464,6 +469,90 @@ void test("unavailable PR metadata fails without claiming a policy violation", a
 		);
 		assert.equal(result.status, 0, `${id}: ${result.stderr}`);
 		assert.equal(result.stderr, "", id);
+	}
+});
+
+void test("the plan link reads the current description and the referenced issue, and explains a refusal", async (t) => {
+	const workflow = parseDocument(
+		await readFile(".github/workflows/pull-request-policy.yml", "utf8"),
+	);
+	assert.equal(workflow.getIn(["jobs", "validate-pr", "permissions", "issues"]), "read");
+	const steps = await stepsIn(".github/workflows/pull-request-policy.yml", [
+		"jobs",
+		"validate-pr",
+		"steps",
+	]);
+	// Only the sparse checkout: a file the policy needs and the checkout omits fails here.
+	const checkout = steps.find((step) => String(step.get("uses")).startsWith("actions/checkout@"));
+	assert.ok(checkout);
+	const workspace = await mkdtemp(path.join(tmpdir(), "plan-policy-"));
+	t.after(async () => rm(workspace, { recursive: true, force: true }));
+	for (const entry of String(checkout.getIn(["with", "sparse-checkout"]))
+		.trim()
+		.split("\n")) {
+		const file = entry.trim();
+		await mkdir(path.join(workspace, path.dirname(file)), { recursive: true });
+		await copyFile(file, path.join(workspace, file));
+	}
+	const script = steps.find((step) => step.get("id") === "plan")?.getIn(["with", "script"]);
+	assert.equal(typeof script, "string");
+	for (const [body, valid] of [
+		["Part of #4900", true],
+		["Outside the 1.0 plan: repository tooling", true],
+		["Closes #12", false],
+		[null, false],
+	] as const) {
+		const directory = await mkdtemp(path.join(tmpdir(), "pr-plan-"));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
+		const result = spawnSync(
+			process.execPath,
+			[
+				"--input-type=module",
+				"-e",
+				`
+			const assert = (await import("node:assert/strict")).default;
+			const { existsSync, readFileSync } = await import("node:fs");
+			const require = (await import("node:module")).createRequire(import.meta.url);
+			const context = { repo: { owner: "owner", repo: "repo" }, payload: { pull_request: { number: 99, body: "Part of #4900" } } };
+			const github = { rest: {
+				pulls: { get: async ({pull_number}) => { assert.equal(pull_number, 7); return { data: {
+					body: ${JSON.stringify(body)},
+					head: { ref: "feat/a-change", repo: { full_name: "owner/repo" } },
+					base: { ref: "main" },
+				} }; } },
+				issues: { get: async ({issue_number}) => ({ data: {
+					body: issue_number === 4900 ? "<!-- heph-key: KR-04 -->\\n\\n### Outcome" : "### Outcome",
+				} }) },
+			} };
+			const outputs = {};
+			const failures = [];
+			const core = { setOutput(name, value) { outputs[name] = value; }, setFailed(reason) { failures.push(reason); }, notice() {} };
+			await (async () => { ${String(script)} })();
+			const comment = process.env.RUNNER_TEMP + "/plan-comment.md";
+			if (${String(valid)}) {
+				assert.deepEqual([outputs, failures, existsSync(comment)], [{}, [], false]);
+			} else {
+				assert.deepEqual(outputs, { violations: "true" });
+				assert.equal(failures.length, 1);
+				const text = readFileSync(comment, "utf8");
+				assert.ok(text.includes(failures[0]), text);
+				assert.ok(text.includes("\`Closes #<n>\`"), text);
+				assert.ok(text.includes("\`Outside the 1.0 plan: <reason>\`"), text);
+			}
+		`,
+			],
+			{
+				encoding: "utf8",
+				env: {
+					...process.env,
+					GITHUB_WORKSPACE: workspace,
+					RUNNER_TEMP: directory,
+					PR_NUMBER: "7",
+				},
+			},
+		);
+		assert.equal(result.status, 0, `${String(body)}: ${result.stderr}`);
+		assert.equal(result.stderr, "", String(body));
 	}
 });
 
@@ -517,6 +606,7 @@ void test("the verdict is posted only while the pull request still has the judge
 					TITLE: "success",
 					IDENTITY: identity,
 					ATTRIBUTION: "success",
+					PLAN: "success",
 					RUN_URL: "https://example.invalid/run",
 				},
 			},

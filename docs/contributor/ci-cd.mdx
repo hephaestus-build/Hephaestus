@@ -478,7 +478,7 @@ It posts a fresh approval for a listed maintainer when GitHub reports `REVIEW_RE
 
 ### Pull request policy
 
-The title, commit identity and attribution checks, the maintainer approval and the author assignment need write access to the pull request.
+The title, commit identity, attribution and 1.0 plan link checks, the maintainer approval and the author assignment need write access to the pull request.
 They do not run on `pull_request_target`.
 GitHub blocks that event by default in public repositories from 2026-12-02 ([GitHub changelog](https://github.blog/changelog/2026-11-02-pull_request_target-blocked-by-default-december-2)).
 Instead, two workflows split the work, as GitHub Security Lab recommends ([Preventing pwn requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)):
@@ -503,6 +503,31 @@ A `workflow_run` job reports on the default branch, not on the pull request.
 Thus, the judging job posts its verdict on the pull request's head commit as the `Validate PR` check, with the Checks API.
 The ruleset does not require `Validate PR` or the approval job.
 The native review requirement needs the approval, so a maintainer's pull request cannot merge without this workflow.
+
+#### 1.0 plan link [#plan-link]
+
+A ready pull request to `main` names the 1.0 issue that it advances.
+Thus, an issue on the 1.0 board does not stay open after its work merges.
+The description must contain one of these lines:
+
+- `Closes #<n>` or `Part of #<n>`, where issue `<n>` is on the 1.0 board.
+  Every GitHub closing keyword counts: close, closes, closed, fix, fixes, fixed, resolve, resolves and resolved, in any case.
+  An issue is on the 1.0 board when its body contains the filing tool's `<!-- heph-key: KEY -->` marker.
+  The check reads each referenced issue from the API, at most 20 per description.
+  One board issue is sufficient.
+- `Outside the 1.0 plan: <reason>` for work that no 1.0 issue covers.
+  The reason must not be empty.
+
+The check reads only the author's own prose.
+It ignores a line in an HTML comment, a code block, inline code or a quote.
+There, the line is a template, an example or someone else's words.
+Renovate's pull requests and the Version PR write no prose, so the check accepts them without a line.
+It identifies them by their head branch in this repository: a `renovate/` branch, or `changeset-release/main`.
+A fork's branch name does not count.
+
+A failure posts a comment that states what is missing and the line to add.
+An edit to the description runs the check again, and a pass removes the comment.
+`Validate PR` reports the result as `1.0 plan link`.
 
 Zizmor reports every `pull_request_target` and `workflow_run` trigger as `dangerous-triggers`, and the Zizmor job fails on any finding.
 `pull-request-policy.yml` carries an ignore comment with its reason.

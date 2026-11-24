@@ -87,6 +87,8 @@ jobs:
     permissions:
       checks: write
       contents: read
+      # Reads the referenced issues, to find the 1.0 board's marker.
+      issues: read
       pull-requests: write
     env:
       PR_NUMBER: ${{ needs.resolve.outputs.number }}
@@ -320,6 +322,58 @@ jobs:
           header: pr-attribution-error
           delete: true
 
+      - name: "Require a link to the 1.0 plan"
+        id: plan
+        if: ${{ !cancelled() && steps.identity.outputs.superseded != 'true' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        continue-on-error: true
+        with:
+          retries: 2
+          script: |
+            const { writeFile } = require("node:fs/promises");
+            const { pathToFileURL } = await import("node:url");
+            const { OUTSIDE_PLAN, planLinkProblem } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/pull-request-policy.ts`).href);
+            // Reruns keep an old event payload. Read the current description.
+            const { data: pull } = await github.rest.pulls.get({ ...context.repo, pull_number: Number(process.env.PR_NUMBER) });
+            const problem = await planLinkProblem({ github, repo: context.repo, pull });
+            if (problem === "") return;
+            await writeFile(
+              `${process.env.RUNNER_TEMP}/plan-comment.md`,
+              [
+                "## 1.0 plan link missing",
+                "",
+                problem,
+                "",
+                "A pull request to main names the 1.0 issue that it advances, or says why it is outside the 1.0 plan.",
+                "Add one of these lines to the description, outside comments, code and quotes:",
+                "",
+                "- `Closes #<n>` when this pull request completes the issue, or `Part of #<n>` when the issue stays open.",
+                "  The issue must be on the 1.0 board: its body starts with a `<!-- heph-key: … -->` marker.",
+                `- \`${OUTSIDE_PLAN} <reason>\` for work that no 1.0 issue covers.`,
+                "",
+                "Edit the description; the check runs again.",
+                "",
+              ].join("\n"),
+            );
+            core.setOutput("violations", "true");
+            core.setFailed(problem);
+
+      - name: "Comment on PR with the missing plan link"
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        if: ${{ !cancelled() && steps.plan.outputs.violations == 'true' }}
+        with:
+          number: ${{ env.PR_NUMBER }}
+          header: pr-plan-link-error
+          path: ${{ runner.temp }}/plan-comment.md
+
+      - name: "Remove plan link error comment on success"
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        if: steps.plan.outcome == 'success'
+        with:
+          number: ${{ env.PR_NUMBER }}
+          header: pr-plan-link-error
+          delete: true
+
       # A workflow_run job reports on the default branch's head, so this job does not fail for a
       # failed check: main would show it. The verdict is posted on the pull request's head commit
       # as the `Validate PR` check.
@@ -330,6 +384,7 @@ jobs:
           TITLE: ${{ steps.title.outcome }}
           IDENTITY: ${{ steps.identity.outcome }}
           ATTRIBUTION: ${{ steps.attribution.outcome }}
+          PLAN: ${{ steps.plan.outcome }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           retries: 2
@@ -343,6 +398,7 @@ jobs:
               ["Title", process.env.TITLE],
               ["Commit identity", process.env.IDENTITY],
               ["Attribution", process.env.ATTRIBUTION],
+              ["1.0 plan link", process.env.PLAN],
             ];
             const failed = parts.filter(([, outcome]) => outcome !== "success").map(([name]) => name);
             await github.rest.checks.create({

@@ -4,7 +4,7 @@
 
 <!-- Start with the problem. Then explain the solution and why this approach is appropriate. -->
 
-<!-- Link related work with "Fixes #123" when merging this PR should close it. -->
+<!-- Name the 1.0 issue: "Closes #123" when this PR completes it, or "Part of #123" when the issue stays open. For work that no 1.0 issue covers, write "Outside the 1.0 plan: <reason>" instead. The Validate PR check requires one of these lines outside this comment. -->
 
 ## How to test
 
