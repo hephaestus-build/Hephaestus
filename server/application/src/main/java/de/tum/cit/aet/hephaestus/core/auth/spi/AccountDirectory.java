@@ -15,6 +15,9 @@ public interface AccountDirectory {
 
     Map<Long, AccountView> findAll(Collection<Long> accountIds);
 
+    /** Locks an account eligible for retention in the caller's transaction. */
+    boolean holdForRetention(long accountId);
+
     void setFeedbackDeliveryEnabled(long accountId, boolean enabled);
 
     void setAiChoice(long accountId, @Nullable AiChoice choice);

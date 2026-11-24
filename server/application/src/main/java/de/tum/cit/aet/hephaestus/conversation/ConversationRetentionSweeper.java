@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.conversation;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository.DueEntry;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.FeedbackRetentionProperties;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -57,6 +58,7 @@ public class ConversationRetentionSweeper {
 
     private final ConversationEntryRepository entries;
     private final ConversationRedaction redaction;
+    private final AccountDirectory accounts;
     private final OwnerScope ownerScope;
     private final TransactionTemplate transaction;
     private final FeedbackRetentionProperties properties;
@@ -65,12 +67,14 @@ public class ConversationRetentionSweeper {
     public ConversationRetentionSweeper(
             ConversationEntryRepository entries,
             ConversationRedaction redaction,
+            AccountDirectory accounts,
             OwnerScope ownerScope,
             PlatformTransactionManager transactionManager,
             FeedbackRetentionProperties properties,
             Clock clock) {
         this.entries = entries;
         this.redaction = redaction;
+        this.accounts = accounts;
         this.ownerScope = ownerScope;
         this.transaction = new TransactionTemplate(transactionManager);
         this.properties = properties;
@@ -134,10 +138,15 @@ public class ConversationRetentionSweeper {
                 continue;
             }
             try {
-                transaction.executeWithoutResult(status -> {
+                var eligible = transaction.execute(status -> {
+                    if (!accounts.holdForRetention(owner.getKey().accountId())) return false;
                     ownerScope.ofJob(owner.getKey().accountId());
                     redaction.redact(owner.getValue());
+                    return true;
                 });
+                if (!Boolean.TRUE.equals(eligible)) {
+                    handed.merge(workspaceId, -owner.getValue().size(), Integer::sum);
+                }
             } catch (RuntimeException e) {
                 failed.add(workspaceId);
                 handed.merge(workspaceId, -owner.getValue().size(), Integer::sum);

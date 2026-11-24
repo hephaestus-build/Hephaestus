@@ -5,9 +5,11 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.auth.oauth.VerifiedAccountClaim;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAbsorptionContributor;
 import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepAdmission;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.List;
 import java.util.Objects;
@@ -26,6 +28,7 @@ public class PeopleRegistryService implements PeopleRegistry {
     private final IdentityRepository identities;
     private final List<AccountAbsorptionContributor> contributors;
     private final IdentityKeyLock identityKeys;
+    private final RowSweepAdmission sweepAdmission;
 
     @Override
     @Transactional
@@ -70,15 +73,18 @@ public class PeopleRegistryService implements PeopleRegistry {
         return Objects.requireNonNull(account.getId());
     }
 
-    @Override
     @Transactional
-    public void absorbUnclaimed(long claimedAccountId, long unclaimedAccountId) {
+    public void absorbUnclaimed(VerifiedAccountClaim claim) {
+        long claimedAccountId = claim.getClaimedAccountId();
+        long unclaimedAccountId = claim.getUnclaimedAccountId();
+        var verifiedIdentity = claim.getIdentity();
         if (claimedAccountId == unclaimedAccountId) return;
         var sourceIdentities = identities.findByAccount_Id(unclaimedAccountId);
         if (sourceIdentities.isEmpty()) throw conflict("The unclaimed account has no identity.");
         var sourceKeys = sourceIdentities.stream()
                 .map(i -> PersonIdentity.of(i.getProviderId(), i.getProviderUserKey(), i.getTeamKey()))
                 .toList();
+        if (!sourceKeys.contains(verifiedIdentity)) throw conflict("The verified identity does not own this account.");
         identityKeys.holdAndLock(sourceKeys);
         var first = accounts.findByIdForUpdate(Math.min(claimedAccountId, unclaimedAccountId))
                 .orElseThrow(() -> conflict("This account is unavailable."));
@@ -89,7 +95,13 @@ public class PeopleRegistryService implements PeopleRegistry {
         if (source.getStatus() != Account.Status.UNCLAIMED
                 || (target.getStatus() != Account.Status.ACTIVE && target.getStatus() != Account.Status.BLOCKED))
             throw conflict("Only an unclaimed account can be absorbed by its verified owner.");
+        if (!identities.lockActiveIdentity(
+                unclaimedAccountId,
+                verifiedIdentity.providerId(),
+                verifiedIdentity.subject(),
+                verifiedIdentity.teamKey())) throw conflict("The verified identity does not own this account.");
         for (var contributor : contributors) contributor.beforeAbsorb(claimedAccountId, unclaimedAccountId);
+        sweepAdmission.admitAccountAbsorption(claim);
         for (var contributor : contributors) contributor.absorb(claimedAccountId, unclaimedAccountId);
         accounts.flush();
         for (var contributor : contributors) contributor.afterAbsorb(claimedAccountId, unclaimedAccountId);

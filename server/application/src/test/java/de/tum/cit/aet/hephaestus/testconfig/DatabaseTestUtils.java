@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.testconfig;
 
 import de.tum.cit.aet.hephaestus.core.privacy.IdentityRestriction;
 import de.tum.cit.aet.hephaestus.core.privacy.IdentityRestrictionRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepAdmission;
 import de.tum.cit.aet.hephaestus.core.tenancy.TenancyBypass;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -28,9 +29,10 @@ public class DatabaseTestUtils {
     /**
      * Kept between tests. {@code provenance_signing_key} holds the key that the start-up bootstrap made for this
      * context; only the bootstrap makes one, so a wiped table would leave every later signature without a key.
+     * The migration's sweep signing key is kept too. Fixture system secrets are deleted individually.
      */
     private static final Set<String> IGNORED_TABLES =
-            Set.of("databasechangelog", "databasechangeloglock", "shedlock", "provenance_signing_key");
+            Set.of("databasechangelog", "databasechangeloglock", "shedlock", "provenance_signing_key", "system_secret");
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
@@ -78,6 +80,10 @@ public class DatabaseTestUtils {
         if (!statement.isEmpty()) {
             try (var ignored = TenancyBypass.open("Clear fixture rows in the integration database")) {
                 currentEntityManager.createNativeQuery(statement).executeUpdate();
+                currentEntityManager
+                        .createNativeQuery("DELETE FROM system_secret WHERE name <> :sweepKey")
+                        .setParameter("sweepKey", RowSweepAdmission.KEY_NAME)
+                        .executeUpdate();
             }
         }
         currentEntityManager.clear();

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.handler.AgentHandlerTestDoubles;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepAdmission;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
 import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
@@ -16,6 +17,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringApplication;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /** The application started the way every role starts in production: Liquibase off, waiting for the migration. */
 @Tag("integration")
@@ -28,6 +31,19 @@ class MigratedSchemaWaitIntegrationTest {
         try (ConfigurableApplicationContext context = start(database)) {
             assertThat(context.getBean(MigratedSchemaWait.class)).isNotNull();
         }
+    }
+
+    @Test
+    void shouldStopBeforeServingWhenOnlyTheSweepKeyIsMissing() {
+        var database = PostgreSQLTestContainer.createApplicationDatabase("hephaestus_wait_sweep_key");
+        var jdbc = new JdbcTemplate(
+                new DriverManagerDataSource(database.jdbcUrl(), database.username(), database.password()));
+        assertThat(jdbc.update("DELETE FROM system_secret WHERE name = ?", RowSweepAdmission.KEY_NAME))
+                .isEqualTo(1);
+
+        assertThatThrownBy(() -> start(database).close())
+                .rootCause()
+                .hasMessageContaining("has not installed the owner sweep admission key");
     }
 
     @Test

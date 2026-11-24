@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
+import static de.tum.cit.aet.hephaestus.core.auth.oauth.VerifiedAccountClaimFixture.verifiedClaim;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -7,7 +8,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
-import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -41,7 +41,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 class PeopleRegistryIntegrationTest extends BaseIntegrationTest {
     @Autowired
-    private PeopleRegistry people;
+    private PeopleRegistryService people;
 
     @Autowired
     private AccountRepository accounts;
@@ -147,7 +147,7 @@ class PeopleRegistryIntegrationTest extends BaseIntegrationTest {
         rosterMember.setReviewSelected(true);
         rosterMember.setPublicActivitySeen(true);
         memberships.saveAndFlush(rosterMember);
-        people.absorbUnclaimed(targetId, sourceId);
+        people.absorbUnclaimed(verifiedClaim(targetId, sourceId, sourceIdentity));
         assertThat(people.claim(sourceIdentity)).isEqualTo(targetId);
         var merged = memberships
                 .findById(new Membership.Id(workspace.getId(), targetId))
@@ -175,7 +175,8 @@ class PeopleRegistryIntegrationTest extends BaseIntegrationTest {
         var targetIdentity = identity(null);
         long targetId = people.ensureHuman(targetIdentity, "Claimed developer");
         people.claim(targetIdentity);
-        long sourceId = people.ensureHuman(gitLabIdentity(), "Roster developer");
+        var sourceIdentity = gitLabIdentity();
+        long sourceId = people.ensureHuman(sourceIdentity, "Roster developer");
         var workspace = new Workspace();
         workspace.setWorkspaceSlug("claim-merge-" + UUID.randomUUID());
         workspace.setAccountType(AccountType.ORG);
@@ -196,7 +197,7 @@ class PeopleRegistryIntegrationTest extends BaseIntegrationTest {
             VALUES (?,?,?,'SUMMARY',0,'POSTED',CURRENT_TIMESTAMP,?,?,'retained-copy',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
             """, copyId, workspace.getId(), feedback.getId(), copyId.toString(), marker);
 
-        people.absorbUnclaimed(targetId, sourceId);
+        people.absorbUnclaimed(verifiedClaim(targetId, sourceId, sourceIdentity));
 
         assertThat(jdbc.queryForObject("SELECT person_account_id FROM result WHERE id=?", Long.class, newer.getId()))
                 .isEqualTo(targetId);
@@ -247,7 +248,7 @@ class PeopleRegistryIntegrationTest extends BaseIntegrationTest {
             for (long targetId : new long[] {firstId, secondId}) {
                 attempts.add(executor.submit(() -> {
                     start.await();
-                    people.absorbUnclaimed(targetId, sourceId);
+                    people.absorbUnclaimed(verifiedClaim(targetId, sourceId, sourceIdentity));
                     return targetId;
                 }));
             }
@@ -280,7 +281,8 @@ class PeopleRegistryIntegrationTest extends BaseIntegrationTest {
         long secondId = people.ensureHuman(second, "Second");
         people.claim(first);
         people.claim(second);
-        assertThatThrownBy(() -> people.absorbUnclaimed(firstId, secondId)).isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(() -> people.absorbUnclaimed(verifiedClaim(firstId, secondId, second)))
+                .isInstanceOf(ResponseStatusException.class);
         assertThat(identities.findByAccount_Id(firstId)).hasSize(1);
         assertThat(identities.findByAccount_Id(secondId)).hasSize(1);
     }

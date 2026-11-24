@@ -13,6 +13,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.PeopleRegistryService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
@@ -21,7 +22,6 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider.ProviderType;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
-import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
@@ -64,7 +64,7 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     private LoginProviderRepository loginProviderRepository;
     private GitProviderRegistry gitProviderRegistry;
     private final PersonDataWriteFence writeFence = mock(PersonDataWriteFence.class);
-    private final PeopleRegistry people = mock(PeopleRegistry.class);
+    private final PeopleRegistryService people = mock(PeopleRegistryService.class);
     private AccountProvisioningService service;
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
 

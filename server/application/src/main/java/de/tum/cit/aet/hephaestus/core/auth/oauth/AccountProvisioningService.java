@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.auth.PeopleRegistryService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
@@ -8,7 +9,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
-import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
@@ -47,7 +47,7 @@ public class AccountProvisioningService {
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
     private final PersonDataWriteFence writeFence;
-    private final PeopleRegistry people;
+    private final PeopleRegistryService people;
 
     public AccountProvisioningService(
             AccountRepository accountRepository,
@@ -60,7 +60,7 @@ public class AccountProvisioningService {
             Clock clock,
             ApplicationEventPublisher eventPublisher,
             PersonDataWriteFence writeFence,
-            PeopleRegistry people) {
+            PeopleRegistryService people) {
         this.accountRepository = accountRepository;
         this.identityRepository = identityRepository;
         this.gitProviderRegistry = gitProviderRegistry;
@@ -106,7 +106,8 @@ public class AccountProvisioningService {
             throw new IllegalStateException(provider.getType() + " identity is missing team_id");
         }
 
-        if (!writeFence.holdForWrite(List.of(new PersonIdentity(providerId, subject, teamId)))) {
+        var verifiedIdentity = new PersonIdentity(providerId, subject, teamId);
+        if (!writeFence.holdForWrite(List.of(verifiedIdentity))) {
             throw new OAuth2AuthenticationException("identity_processing_suppressed");
         }
 
@@ -125,35 +126,33 @@ public class AccountProvisioningService {
             // here would log the operator into someone else's account (or rebind a victim's
             // identity) —
             // an account-takeover vector. LOGIN mode is unaffected (the identity owns the account).
+            Account account = link.getAccount();
+            long accountId = Objects.requireNonNull(account.getId());
+            @Nullable Long linkingAccountId = intent == null ? null : intent.linkingAccountId();
             boolean absorbed = false;
             boolean reactivated = link.getDisabledAt() != null;
             if (mode == AuthIntentCookie.Intent.Mode.LINK
-                    && intent != null
-                    && intent.linkingAccountId() != null
-                    && !Objects.requireNonNull(link.getAccount().getId()).equals(intent.linkingAccountId())) {
-                if (link.getAccount().getStatus() != Account.Status.UNCLAIMED)
-                    throw new AccountLinkConflictException(
-                            registrationId, subject, link.getAccount().getId());
-                people.absorbUnclaimed(
-                        intent.linkingAccountId(),
-                        Objects.requireNonNull(link.getAccount().getId()));
+                    && linkingAccountId != null
+                    && accountId != linkingAccountId) {
+                if (account.getStatus() != Account.Status.UNCLAIMED)
+                    throw new AccountLinkConflictException(registrationId, subject, accountId);
+                people.absorbUnclaimed(new VerifiedAccountClaim(linkingAccountId, accountId, verifiedIdentity));
+                // Bulk absorption can detach the identity read before the move.
+                accountId = linkingAccountId;
+                account = accountRepository.findById(accountId).orElseThrow();
                 absorbed = true;
             }
-            if (link.getAccount().getStatus() == Account.Status.UNCLAIMED || link.getDisabledAt() != null)
-                people.claim(new PersonIdentity(providerId, subject, teamId));
-            requireActiveAccountForWrite(
-                    Objects.requireNonNull(link.getAccount().getId()));
+            if ((absorbed || account.getStatus() == Account.Status.UNCLAIMED || reactivated)
+                    && people.claim(verifiedIdentity) != accountId) {
+                throw new OAuth2AuthenticationException("identity_processing_suppressed");
+            }
+            requireActiveAccountForWrite(accountId);
             identityRepository.touchLastLogin(link.getId(), clock.instant());
-            log.info(
-                    "auth.success: returning login provider={} accountId={}",
-                    registrationId,
-                    link.getAccount().getId());
+            log.info("auth.success: returning login provider={} accountId={}", registrationId, accountId);
             boolean linkedAuthority = absorbed || (mode == AuthIntentCookie.Intent.Mode.LINK && reactivated);
-            if (linkedAuthority)
-                publishIdentityLinked(Objects.requireNonNull(link.getAccount().getId()));
+            if (linkedAuthority) publishIdentityLinked(accountId);
             return new ProvisionResult(
-                    promoteIfBootstrapAdmin(link.getAccount(), registrationId, subject, loginOf(principal)),
-                    linkedAuthority);
+                    promoteIfBootstrapAdmin(account, registrationId, subject, loginOf(principal)), linkedAuthority);
         }
 
         if (mode == AuthIntentCookie.Intent.Mode.LINK) {
@@ -166,13 +165,12 @@ public class AccountProvisioningService {
             if (intent == null || intent.linkingAccountId() == null) {
                 throw new IllegalStateException("auth.link: link mode requires an authenticated account binding");
             }
-            var exactIdentity = new PersonIdentity(providerId, subject, teamId);
-            long sourceId = people.ensureHuman(exactIdentity, displayName(principal, subject));
+            long sourceId = people.ensureHuman(verifiedIdentity, displayName(principal, subject));
             requireActiveAccountForWrite(intent.linkingAccountId());
             if (sourceId != intent.linkingAccountId()) {
-                people.absorbUnclaimed(intent.linkingAccountId(), sourceId);
+                people.absorbUnclaimed(new VerifiedAccountClaim(intent.linkingAccountId(), sourceId, verifiedIdentity));
             }
-            people.claim(exactIdentity);
+            people.claim(verifiedIdentity);
             Account account =
                     accountRepository.findById(intent.linkingAccountId()).orElseThrow();
             var linked = identityRepository

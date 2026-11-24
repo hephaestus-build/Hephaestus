@@ -156,8 +156,12 @@ To add a kind or a rule:
 2. Add its constant to `DueWorkKind` or `RowSweepRule`.
 3. In its comment, name the work item that owns it and the tables that it uses.
 4. In each trigger that the branch fires, name the tables with the schema.
+5. If a sweep acts on a lifecycle decision, mark its `RowSweepRule` as requiring admission.
+   Check the approval from `hephaestus.sweep_admission` in the function.
+   The caller uses `RowSweepAdmission` after the guards pass, in the same transaction as the sweep.
 
 `OwnerFunctionsDatabaseTest` makes sure that the branches of the installed functions and the registry are the same set.
+It checks that each rule that requires admission refuses the application role when no approval is present.
 It also calls each registered kind and rule, and makes sure that the function refuses all others.
 The functions search only `pg_catalog` and `pg_temp`, and a trigger runs with the search path of the function that fires it.
 An unqualified table name in such a trigger can find a temporary table, or no table.

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepAdmission;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingPrivacyJournal;
 import java.util.List;
@@ -36,7 +37,8 @@ class WorkspaceLifecycleServiceTest extends BaseUnitTest {
                 List.of(),
                 mock(PlatformTransactionManager.class),
                 mock(ConfigAuditPort.class),
-                journal);
+                journal,
+                mock(RowSweepAdmission.class));
 
         service.purgeWorkspace("purged-workspace");
         service.purgeWorkspace("purged-workspace");

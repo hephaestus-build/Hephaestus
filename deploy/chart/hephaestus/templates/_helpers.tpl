@@ -273,15 +273,15 @@ container names this version, commit and environment.
   value: {{ .Values.config.tracing.otlpEndpoint | quote }}
 {{- end -}}
 
-{{/* The active system key. The migration Job reads it too, because it migrates sealed values. */}}
-{{- define "hephaestus.env.systemKey" -}}
+{{/* The system keys can open stored values while a rotation runs. The migration Job reads them too. */}}
+{{- define "hephaestus.env.systemKeys" -}}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_ENCRYPTION_KEY") }}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_PRIOR_ENCRYPTION_KEY" "optional" true) }}
 {{- end -}}
 
 {{/* The application roles use the same stored-secret keys. */}}
 {{- define "hephaestus.env.encryptionKeys" -}}
-{{ include "hephaestus.env.systemKey" . }}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_PRIOR_ENCRYPTION_KEY" "optional" true) }}
+{{ include "hephaestus.env.systemKeys" . }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY") }}
 - name: HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION
   value: {{ .Values.config.credentialKey.version | int | quote }}

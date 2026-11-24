@@ -6,6 +6,8 @@ import org.jspecify.annotations.Nullable;
 
 public final class TestSystemSecrets {
 
+    public static final String DEFAULT_KEY = "test-encryption-key-32-bytes-aes";
+
     private TestSystemSecrets() {}
 
     public static SystemSecrets systemSecrets(String key) {

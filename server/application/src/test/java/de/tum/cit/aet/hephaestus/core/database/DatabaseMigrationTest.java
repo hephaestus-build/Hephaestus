@@ -4,12 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepAdmission;
+import de.tum.cit.aet.hephaestus.core.security.SecretBinding;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
+import de.tum.cit.aet.hephaestus.testconfig.TestDatabaseCleanup;
+import de.tum.cit.aet.hephaestus.testconfig.TestSystemSecrets;
 import java.sql.Connection;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -28,6 +33,73 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @Tag("database")
 @ExtendWith(OutputCaptureExtension.class)
 class DatabaseMigrationTest {
+
+    @Test
+    void shouldResumeAnUnrecordedSweepKeyChangeAndRestoreTheMissingSigningCopy() {
+        var database = TestDatabaseCleanup.createDatabase("hephaestus_migrate_sweep_key");
+        PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_migrate_sweep_key");
+        var owner = PostgreSQLTestContainer.asOwner(database);
+        assertThat(DatabaseMigration.run(arguments(owner))).isZero();
+        var jdbc = jdbc(owner);
+        assertThat(jdbc.update("DELETE FROM databasechangelog WHERE id = '1795540920000-1'"))
+                .isEqualTo(1);
+        var app = jdbc(PostgreSQLTestContainer.asApplication(database));
+        assertThat(app.update("DELETE FROM system_secret WHERE name = 'owner-sweep-admission'"))
+                .isEqualTo(1);
+        assertThat(hasSweepSigningKey(app)).isFalse();
+
+        assertThat(DatabaseMigration.run(arguments(owner))).isZero();
+
+        assertThat(hasSweepSigningKey(app)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM lifecycle_private.sweep_key", Long.class))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldLeaveRotationToTheServerAndRefuseRepairWithAnIncompatibleSystemKey() {
+        var database = TestDatabaseCleanup.createDatabase("hephaestus_migrate_wrong_sweep_key");
+        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        var jdbc = jdbc(database);
+        var secrets = TestSystemSecrets.systemSecrets(TestSystemSecrets.DEFAULT_KEY);
+        jdbc.update(
+                "INSERT INTO system_secret (name, sealed_value) VALUES ('existing', ?)",
+                secrets.seal(new byte[32], SecretBinding.of("system_secret.sealed_value", "existing")));
+
+        String newKey = "new-encryption-key-32-byte-value";
+        var newSettings = Stream.concat(
+                        Arrays.stream(arguments(database))
+                                .filter(arg -> !arg.startsWith("--hephaestus.security.encryption-key=")),
+                        Stream.of("--hephaestus.security.encryption-key=" + newKey))
+                .toArray(String[]::new);
+        var original = jdbc.queryForObject(
+                "SELECT sealed_value FROM system_secret WHERE name = 'owner-sweep-admission'", byte[].class);
+        assertThat(DatabaseMigration.run(newSettings)).isZero();
+        assertThat(jdbc.queryForObject("""
+                        SELECT sealed_value = ? FROM system_secret WHERE name = 'owner-sweep-admission'
+                        """, Boolean.class, original)).isTrue();
+
+        assertThat(jdbc.update("DELETE FROM system_secret WHERE name = 'owner-sweep-admission'"))
+                .isEqualTo(1);
+
+        assertThatThrownBy(() -> DatabaseMigration.run(newSettings))
+                .hasStackTraceContaining("The configured system key does not open existing values");
+
+        var activeSecrets = TestSystemSecrets.systemSecrets(newKey);
+        jdbc.update(
+                "INSERT INTO system_secret (name, sealed_value) VALUES ('current', ?)",
+                activeSecrets.seal(new byte[32], SecretBinding.of("system_secret.sealed_value", "current")));
+        assertThat(DatabaseMigration.run(Stream.concat(
+                                Arrays.stream(newSettings),
+                                Stream.of(
+                                        "--hephaestus.security.prior-encryption-key=" + TestSystemSecrets.DEFAULT_KEY))
+                        .toArray(String[]::new)))
+                .isZero();
+        assertThat(hasSweepSigningKey(jdbc)).isTrue();
+        var replacement = jdbc.queryForObject(
+                "SELECT sealed_value FROM system_secret WHERE name = 'owner-sweep-admission'", byte[].class);
+        assertThat(activeSecrets.isSealedWithActiveKey(Objects.requireNonNull(replacement)))
+                .isTrue();
+    }
 
     @Test
     void shouldApplyTheChangelogAndExitWhenTheMigrateProfileRuns() throws Exception {
@@ -289,6 +361,13 @@ class DatabaseMigrationTest {
         assertThat(DatabaseMigration.requested(new String[0])).isFalse();
     }
 
+    private static boolean hasSweepSigningKey(JdbcTemplate jdbc) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT FROM public.system_secret WHERE name = ?)",
+                Boolean.class,
+                RowSweepAdmission.KEY_NAME));
+    }
+
     private static String[] arguments(TestDatabase database) {
         // The production profile and only the data source. On the command line, it outranks the SPRING_DATASOURCE_*
         // and SPRING_LIQUIBASE_* that the database job exports for its own PostgreSQL. The boot smoke covers
@@ -300,6 +379,7 @@ class DatabaseMigrationTest {
             "--spring.datasource.password=" + database.password(),
             "--spring.liquibase.user=" + database.username(),
             "--spring.liquibase.password=" + database.password(),
+            "--hephaestus.security.encryption-key=" + TestSystemSecrets.DEFAULT_KEY,
             "--spring.main.banner-mode=off"
         };
     }
@@ -318,6 +398,7 @@ class DatabaseMigrationTest {
                                 "--spring.liquibase.enabled=true",
                                 // The run mode's contexts: a database migrated under another holds other change sets.
                                 "--spring.liquibase.contexts=prod",
+                                "--hephaestus.security.encryption-key=" + TestSystemSecrets.DEFAULT_KEY,
                                 "--spring.main.banner-mode=off"),
                         Arrays.stream(settings))
                 .toArray(String[]::new);

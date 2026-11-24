@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
 import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
+import de.tum.cit.aet.hephaestus.core.security.SecurityProperties;
 import de.tum.cit.aet.hephaestus.core.web.DocsSite;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -17,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.dao.DataAccessException;
@@ -69,6 +71,7 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
 
     private static final Pattern TABLE = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
+    private final Environment environment;
     private final Duration timeout;
     private final boolean migrateRunMode;
     private final String migrationGuide;
@@ -79,6 +82,7 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
 
     /** Reads the environment rather than {@code @Value}: the run mode's context has no placeholder configurer. */
     public MigrationLock(Environment environment) {
+        this.environment = environment;
         this.timeout = environment.getRequiredProperty("hephaestus.database.migration-wait", Duration.class);
         this.migrateRunMode = environment.acceptsProfiles(Profiles.of(DatabaseMigration.PROFILE));
         this.migrationGuide =
@@ -114,7 +118,16 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
     public Object postProcessAfterInitialization(Object bean, String beanName) {
         Migration migration = held.remove(beanName);
         if (migration != null) {
-            release(migration);
+            try {
+                resetTransaction(migration.session());
+                RowSweepAdmissionKey.install(
+                        migration.session(),
+                        Binder.get(environment).bindOrCreate("hephaestus.security", SecurityProperties.class));
+            } catch (SQLException e) {
+                throw new IllegalStateException("Could not finish the database migration", e);
+            } finally {
+                release(migration);
+            }
         }
         return bean;
     }
@@ -235,10 +248,7 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
     private static void release(Connection connection, boolean raised) {
         try {
             // Liquibase ran on this session: a transaction that a failed change set left open ends first.
-            if (!connection.getAutoCommit()) {
-                connection.rollback();
-                connection.setAutoCommit(true);
-            }
+            resetTransaction(connection);
             try (var statement = connection.createStatement()) {
                 statement.execute(UNLOCK);
             }
@@ -255,6 +265,13 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
                 e.addSuppressed(aborted);
             }
             throw new IllegalStateException("Could not release the database migration lock", e);
+        }
+    }
+
+    private static void resetTransaction(Connection session) throws SQLException {
+        if (!session.getAutoCommit()) {
+            session.rollback();
+            session.setAutoCommit(true);
         }
     }
 }

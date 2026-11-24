@@ -4,14 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import de.tum.cit.aet.hephaestus.core.auth.PeopleRegistryService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +29,7 @@ import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
@@ -50,6 +56,52 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactions;
+
+    @Autowired
+    private PeopleRegistryService people;
+
+    @Autowired
+    private GitProviderRegistry providers;
+
+    @Autowired
+    private WorkspaceRepository workspaces;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Test
+    void shouldMoveASlackConversationWhenItsUnclaimedIdentityCompletesLinkSignIn() {
+        String registration = "slack-claim-" + UUID.randomUUID();
+        seedProvider(registration, LoginProvider.ProviderType.SLACK);
+        long provider = providers.resolveProviderId("SLACK", "https://" + registration + ".example");
+        String subject = "U" + UUID.randomUUID().toString().substring(0, 8);
+        var identity = new PersonIdentity(provider, subject, "T1");
+        long source = people.ensureHuman(identity, "Slack developer");
+        long target = persistedId(accountRepository
+                .saveAndFlush(new Account("Claiming developer"))
+                .getId());
+        long workspace = persistedId(workspaces
+                .saveAndFlush(WorkspaceTestFixtures.activeWorkspace("claim-" + UUID.randomUUID()))
+                .getId());
+        UUID conversation = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO conversation (id, workspace_id, account_id, created_at, last_activity_at,
+                                          slack_team_id, slack_user_id, slack_channel_id)
+                VALUES (?, ?, ?, now(), now(), 'T1', ?, 'D1')
+                """, conversation, workspace, source, subject);
+        var principal = new DefaultOAuth2User(
+                List.of(new SimpleGrantedAuthority("ROLE_USER")), Map.of("id", subject, "team_id", "T1"), "id");
+
+        var result = service.resolveOrProvision(
+                registration, subject, principal, AuthIntentCookie.Intent.link(target, null));
+
+        assertThat(result.identityLinked()).isTrue();
+        assertThat(result.account().getId()).isEqualTo(target);
+        assertThat(jdbc.queryForMap("SELECT account_id, slack_channel_id FROM conversation WHERE id = ?", conversation))
+                .containsEntry("account_id", target)
+                .containsEntry("slack_channel_id", "D1");
+        assertThat(accountRepository.findById(source)).isEmpty();
+    }
 
     @Test
     void shouldRollBackNewlyClaimedAccountWhenTheEnclosingProvisioningTransactionFails() {

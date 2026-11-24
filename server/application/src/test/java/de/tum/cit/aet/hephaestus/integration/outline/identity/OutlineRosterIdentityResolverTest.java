@@ -55,6 +55,5 @@ class OutlineRosterIdentityResolverTest extends BaseUnitTest {
         verify(memberships).ensureMember(7L, 55L);
         verify(memberships).ensureMember(7L, 56L);
         verify(people, never()).ensureHuman(new PersonIdentity(3L, "unknown-profile", "team-a"), "unknown-profile");
-        verify(people, never()).absorbUnclaimed(55L, 56L);
     }
 }

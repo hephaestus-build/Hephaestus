@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
+import de.tum.cit.aet.hephaestus.testconfig.TestSystemSecrets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -331,6 +332,7 @@ class LiquibaseBaselineIntegrationTest {
                     "--spring.datasource.url=" + database.jdbcUrl(),
                     "--spring.datasource.username=" + database.username(),
                     "--spring.datasource.password=" + database.password(),
+                    "--hephaestus.security.encryption-key=" + TestSystemSecrets.DEFAULT_KEY,
                     "--spring.main.banner-mode=off"
                 }))
                 .isZero();

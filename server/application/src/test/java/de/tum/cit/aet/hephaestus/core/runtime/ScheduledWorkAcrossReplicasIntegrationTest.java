@@ -41,7 +41,7 @@ import org.springframework.scheduling.support.ScheduledMethodRunnable;
 /**
  * Two server replicas share one database. {@link ScheduledJobLockTest} holds every {@code @Scheduled} method to a
  * ShedLock or a stated reason; this test proves the locks: a second application context on the same database plays
- * the other replica.
+ * the other replica. The second replica waits for the schema that the first context migrated as the owner.
  */
 class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
 
@@ -84,6 +84,7 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
                 "--spring.datasource.username=" + first.getRequiredProperty("spring.datasource.username"),
                 "--spring.datasource.password=" + first.getRequiredProperty("spring.datasource.password"),
                 "--spring.datasource.hikari.maximum-pool-size=4",
+                "--spring.liquibase.enabled=false",
                 "--server.port=0",
                 "--management.server.port=0",
                 "--hephaestus.llm.display-currency=",

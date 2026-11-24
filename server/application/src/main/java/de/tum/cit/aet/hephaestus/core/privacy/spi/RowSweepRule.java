@@ -10,17 +10,27 @@ public enum RowSweepRule {
      * KR-08: deletes a purged workspace's conversations. Changes {@code conversation_entry}, {@code conversation_turn},
      * {@code conversation}.
      */
-    WORKSPACE_PURGE,
+    WORKSPACE_PURGE(true),
 
     /**
      * KR-08: expires ready account exports past their download window and drops their payload. Changes
      * {@code account_export}.
      */
-    EXPIRED_EXPORTS,
+    EXPIRED_EXPORTS(false),
 
     /**
      * KR-08: moves an unclaimed account's conversations to the account that claimed it. Reads {@code account},
      * {@code agent_run}; changes {@code conversation_entry}, {@code conversation_turn}, {@code conversation}.
      */
-    ACCOUNT_ABSORB
+    ACCOUNT_ABSORB(true);
+
+    private final boolean requiresLifecycleAdmission;
+
+    RowSweepRule(boolean requiresLifecycleAdmission) {
+        this.requiresLifecycleAdmission = requiresLifecycleAdmission;
+    }
+
+    public boolean requiresLifecycleAdmission() {
+        return requiresLifecycleAdmission;
+    }
 }
