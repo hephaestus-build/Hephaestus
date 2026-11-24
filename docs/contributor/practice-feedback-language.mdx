@@ -136,7 +136,7 @@ This table records only their retired names.
 
 | Term | Meaning | Avoid for this concept |
 | --- | --- | --- |
-| **Observation** | A record from reviewing one practice for one item at a version, about a developer when the practice has a role. | finding, detection, verdict |
+| **Observation** | A record from reviewing one practice for one item at a version, about a person when the practice has a role. | finding, detection, verdict |
 | **Outcome** | The value of an observation: Met, Not met, Does not apply, or Could not determine. | presence, assessment, Not applicable, Undetermined |
 | **Problem** | One problem that a Not met observation records at a place in the work, with its own severity. | observation, finding, signal, violation, lapse |
 | **Severity** | How much a problem weighs: Critical, Major, Minor, or Trivial. | Info, informational |
@@ -149,7 +149,7 @@ This table records only their retired names.
 | **Mark** | An admin record that an observation is incorrect or accepted. Removing the mark reverses it. | invalidation |
 | **Marked incorrect** | An observation that a workspace admin marked as wrong when made. It remains in history. | invalidated, deleted, retracted |
 | **Accepted** | An admin record that excludes an observation from open-problem lists. It does not change its outcome or cancel an incorrect mark. |  |
-| **Person** | A human whom Hephaestus helps or whose work it reads. An observation concerns one person: the author, reviewer or other person whose work it reviews. Feedback based on that observation goes only to that person. Practice feedback and other screens about software development can say developer. | learner, mentee, individual |
+| **Person** | A human whom Hephaestus helps or whose work it reads. An observation concerns at most one person: the author, reviewer or other person whose work it reviews. Feedback based on that observation goes only to that person. Practice feedback and other screens about software development can say developer. | learner, mentee, individual |
 
 Storage, API contracts, generated types, routes, search params, and component and file names call this record `Result` or `result`.
 The product calls it an observation in UI text, user-facing responses and docs.

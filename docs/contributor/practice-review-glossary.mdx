@@ -23,7 +23,7 @@ config:
 ---
 erDiagram
     accTitle: The core data model of a practice review
-    accDescr: A workspace owns its items, practices and reviews. A practice has fixed versions. A review of an item records results. Each result concerns one practice and one item, at most one pinned practice version and at most one developer, and lists problems. Feedback comes from a review and addresses one developer. Feedback basis rows link feedback to one or more results, and each can name one problem. Feedback appears as copies.
+    accDescr: A workspace owns its items, practices and reviews. A practice has fixed versions. A review of an item records results. Each result concerns one practice and one item, at most one pinned practice version and at most one person, and lists problems. Feedback comes from a review and addresses one person. Feedback basis rows link feedback to one or more results, and each can name one problem. Feedback appears as copies.
     Workspace ||--o{ Review : owns
     Workspace ||--o{ Item : owns
     Workspace ||--o{ Practice : owns
@@ -44,7 +44,7 @@ erDiagram
 ```
 
 Every table here except `Workspace` carries `workspace_id NOT NULL`, so each row belongs to exactly one workspace.
-The product calls a `Result` an observation, and the `Membership` that it concerns the developer ([product vocabulary](./practice-feedback-language.mdx#observations)).
+The product calls a `Result` an observation, and the `Membership` that it concerns the person ([product vocabulary](./practice-feedback-language.mdx#observations)).
 [Database schema](./database-schema.mdx) has the full, generated schema.
 
 ## Review terms
@@ -62,7 +62,7 @@ The product calls a `Result` an observation, and the `Membership` that it concer
 | **Continuing** | A Queued review whose earlier attempts ended some of its practices. On a slow provider a review can take many attempts, and each ends some practices. The ended practices keep their results private until the last attempt admits them ([ADR 0063](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0063-each-practice-is-staged-when-it-ends.md)), so a person sees a count, not observations. | ReviewProgressDTO |
 | **Practice status**     | Where one practice stands in its review. Queued until capture decides it is Ready or Withheld. A scan's practice is Running from the first file that a server captures for it. A practice that nothing measured ends Withheld with its review's stop reason, and never Done.           | review_practice.status                              |
 | **Review scope**        | The repositories and people that a workspace permits Hephaestus to review.                                                                                    | review_scope_repository, membership.review_selected |
-| **Role**                | The developer's role a practice concerns: author, reviewer, assignee or merger. The editor label is About.                                                    | definition.about                                    |
+| **Role**                | The person's role a practice concerns:    author, reviewer, assignee or merger. The editor label is About.                                                    | definition.about                                    |
 | **Review on**           | The events and recorded state that select a practice for automatic review.                                                                                    | definition.reviewOn                                 |
 | **Applies when**        | The conditions that establish whether a practice applies on every review origin.                                                                              | definition.appliesWhen                              |
 | **Reviewed by**         | Who reviews a practice: Hephaestus, people or nobody.                                                                                                         | definition.reviewedBy                               |
@@ -70,7 +70,7 @@ The product calls a `Result` an observation, and the `Membership` that it concer
 | **Candidate**           | The proposed observation that a script returns before server admission.                                                                                       | Candidate                                           |
 | **Admission**           | The server checks that decide whether a candidate can become an observation.                                                                                  | result admission                                    |
 | **Feedback mode**       | How the workspace permits feedback: Off, Approve first or Automatic.                                                                                          | feedback_mode                                       |
-| **Publication context** | What other reviews communicated on the same work to the same developer, as one history read issued it. A public piece keeps the context it was composed from. | publicationContext                                  |
+| **Publication context** | What other reviews communicated on the same work to the same person, as one history read issued it.    A public piece keeps the context it was composed from. | publicationContext                                  |
 | **Evidence**            | The material that a review captured and read.                                                                                                                 | result.evidence                                     |
 | **Citation**            | A pointer into captured source text at an item version, with its quote and available coordinates.                                                             | citation                                            |
 | **Coverage**            | What an observation read and what it did not read.                                                                                                            | result.coverage                                     |
@@ -134,7 +134,7 @@ The two active modes permit eligible practice-page and conversation feedback wit
 A practice can inherit feedback mode from its group, then from its workspace.
 A null setting means inherit. It does not mean Off.
 Changing a setting does not approve an older proposal.
-Delivery pause and the developer's external-feedback preference remain separate checks.
+Delivery pause and the person's external-feedback preference remain separate checks.
 The [user guide](/user/practice-reviews) owns their scope and controls.
 
 ## Assessment records
@@ -161,7 +161,7 @@ The planned composer's **guardrails** check the destination, the observation ref
 The checkout's diff and tree are always readable through Git.
 A source used only to check Applies when does not become a runtime read source.
 The server records no observation for the refused candidate.
-This refusal establishes neither missing evidence nor a defect in the developer's work.
+This refusal establishes neither missing evidence nor a defect in the person's work.
 The [operations guide](/admin/practice-review-operations#the-trace-line) gives the operator's next step.
 
 ## Readiness reasons
@@ -325,7 +325,7 @@ The same name is the source capture code that causes it.
 | **Interactive reserve**        | The part of a call pool's limit that only interactive calls, such as a conversation turn's, may use: a quarter, rounded up. | LlmCallLimit.reserve |
 | **Call permit**                | One model call's share of its call pool, held as a lease by the server that makes the call. | llm_call_permit |
 | **Context folder**             | The read-only files that one agent may read for one person, in one workspace, for one purpose. | INDEX.md, inputs/context/, repos/ |
-| **Context document**           | One JSON document about the developer or the workspace in the context folder of a conversation.            | inputs/context/*.json          |
+| **Context document**           | One JSON document about the person or the workspace in the context folder of a conversation.               | inputs/context/*.json          |
 | **Context loader**             | The integration part that stages a heavy item, such as a repository, into a context folder on request. | ContextLoader, load_context |
 | **Sandbox namespace**          | The Kubernetes namespace that an operator creates for the sandboxes of one release alone.   | sandbox.namespace              |
 | **Sandbox isolation gate** | A platform check of the installed sandbox templates against the required isolation boundary. Operators run it before enabling work. | scripts/sandbox-isolation.ts |
@@ -479,12 +479,12 @@ An OSCAL finding is closer to a Hephaestus observation than to one located probl
 This correspondence does not provide an OSCAL exporter.
 
 [ISO/IEC 17000](https://www.iso.org/standard/73029.html) supplies conformity-assessment vocabulary.
-A practice review corresponds to an assessment activity, not a certification of a developer or repository.
+A practice review corresponds to an assessment activity, not a certification of a person or repository.
 Do not claim an ISO clause mapping that the implementation does not establish.
 
 [PROV-DM](https://www.w3.org/TR/prov-dm/) separates entities, activities and attribution.
 Captured versions and practice versions correspond to entities. Reviews correspond to activities.
-A provider actor and an observation's developer have different attribution roles.
+A provider actor and an observation's person have different attribution roles.
 This is a design comparison, not a PROV export contract.
 
 Task, process and self-regulation are research descriptions of feedback content.
