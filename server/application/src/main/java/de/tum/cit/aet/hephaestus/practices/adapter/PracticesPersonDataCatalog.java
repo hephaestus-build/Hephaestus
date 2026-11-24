@@ -26,7 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 // The stores delete the person's results and feedback through RESULT_IDS and FEEDBACK_IDS. A basis row names the
 // developer of its feedback (sfk_feedback_basis_feedback_person).
-@ErasesColumns({"result.developer_id", "feedback.developer_id", "feedback_basis.developer_id"})
+@ErasesColumns({"result.person_account_id", "feedback.person_account_id", "feedback_basis.person_account_id"})
 @PersonDataStores({
     "practice_version",
     "feedback_response",
