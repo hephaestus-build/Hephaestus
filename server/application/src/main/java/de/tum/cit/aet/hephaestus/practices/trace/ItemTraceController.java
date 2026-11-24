@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.trace.dto.ItemTraceDTO;
 import de.tum.cit.aet.hephaestus.practices.trace.dto.OwnItemTraceDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 @ConditionalOnServerRole
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/practices/items")
 @Tag(name = "Practice review trace")
 @RequiredArgsConstructor

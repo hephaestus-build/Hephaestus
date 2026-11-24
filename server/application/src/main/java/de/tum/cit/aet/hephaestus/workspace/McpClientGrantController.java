@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.McpClientGrants;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import de.tum.cit.aet.hephaestus.workspace.dto.McpClientGrantDTO;
@@ -29,6 +30,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /** The MCP clients that members connected to this workspace; admins list and revoke them (ADR 0110). */
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/mcp-grants")
 @RequiredArgsConstructor
 @ConditionalOnServerRole

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.sync.api;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
  */
 @ConditionalOnServerRole
 @WorkspaceScopedController
+@TeamOnly
 @PreAuthorize("isAuthenticated() && @workspaceSecure.isMember()")
 @RequestMapping("/sync/progress")
 @Tag(name = "Sync", description = "Integration sync observability and manual controls")

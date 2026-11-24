@@ -113,7 +113,7 @@ public class ResearchDisclosureController {
     public ResponseEntity<byte[]> release(@Valid @RequestBody ReleaseResearchDatasetDTO request) {
         long admin = requireActor();
         long workspaceId = parseWorkspaceId(request.workspaceId());
-        workspaces.requireWorkspace(workspaceId);
+        workspaces.requireTeamWorkspace(workspaceId);
         var released = service.release(workspaceId, request.firstDay(), request.lastDay(), request.useUntil(), admin);
         String disposition = ContentDisposition.attachment()
                 .filename("hephaestus-research-" + released.datasetId() + ".json")

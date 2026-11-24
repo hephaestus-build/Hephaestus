@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795483082685-1" author="hephaestus">
+        <comment>A workspace is a team's or a person's own space (KR-06, ADR 0126). Every existing workspace is a team's. A personal space names its owner and has the slug me-- plus 16 base32 characters, which no team slug can take. Its kind and owner never change, it never publishes activity, and its one member is the owner without an admin role, so no grant of a role can let another account in.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE workspace
+    ADD COLUMN kind varchar(16) DEFAULT 'TEAM' NOT NULL,
+    ADD COLUMN personal_account_id bigint,
+    ADD CONSTRAINT ck_workspace_kind CHECK (kind IN ('TEAM', 'PERSONAL')),
+    ADD CONSTRAINT ck_workspace_personal_owner CHECK ((kind = 'PERSONAL') = (personal_account_id IS NOT NULL)),
+    ADD CONSTRAINT ck_workspace_personal_private CHECK (kind = 'TEAM' OR NOT public_activity_enabled),
+    ADD CONSTRAINT uc_workspacepersonal_account_id_col UNIQUE (personal_account_id),
+    ADD CONSTRAINT sfk_workspace_personal_account FOREIGN KEY (personal_account_id) REFERENCES account (id)
+        ON DELETE RESTRICT;
+ALTER TABLE workspace
+    DROP CONSTRAINT chk_workspace_slug_assignable,
+    ADD CONSTRAINT chk_workspace_slug_assignable CHECK (CASE kind
+        WHEN 'PERSONAL' THEN slug COLLATE "C" ~ '^me--[a-z2-7]{16}$'
+        ELSE workspace_slug_assignable(slug) END);
+CREATE FUNCTION guard_workspace_kind() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF ROW(NEW.kind, NEW.personal_account_id) IS DISTINCT FROM ROW(OLD.kind, OLD.personal_account_id) THEN
+        RAISE EXCEPTION 'a workspace keeps its kind and its personal owner' USING ERRCODE = '55000';
+    END IF;
+    RETURN NULL;
+END $$;
+CREATE TRIGGER workspace_kind_fixed AFTER UPDATE OF kind, personal_account_id ON workspace
+    FOR EACH ROW EXECUTE FUNCTION guard_workspace_kind();
+CREATE FUNCTION guard_personal_membership() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM workspace w
+                WHERE w.id = NEW.workspace_id AND w.kind = 'PERSONAL'
+                  AND (w.personal_account_id <> NEW.account_id OR NEW.role <> 'MEMBER')) THEN
+        RAISE EXCEPTION 'a personal space has one member: its owner, without an admin role'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER membership_personal_owner BEFORE INSERT ON membership
+    FOR EACH ROW EXECUTE FUNCTION guard_personal_membership();
+CREATE TRIGGER membership_personal_owner_kept AFTER UPDATE OF workspace_id, account_id, role ON membership
+    FOR EACH ROW EXECUTE FUNCTION guard_personal_membership();
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM workspace WHERE kind = 'PERSONAL') THEN
+        RAISE EXCEPTION 'personal spaces exist: restore the backup from before the upgrade instead of rolling back';
+    END IF;
+END $$;
+DROP TRIGGER membership_personal_owner_kept ON membership;
+DROP TRIGGER membership_personal_owner ON membership;
+DROP FUNCTION guard_personal_membership();
+DROP TRIGGER workspace_kind_fixed ON workspace;
+DROP FUNCTION guard_workspace_kind();
+ALTER TABLE workspace
+    DROP CONSTRAINT chk_workspace_slug_assignable,
+    ADD CONSTRAINT chk_workspace_slug_assignable CHECK (workspace_slug_assignable(slug));
+ALTER TABLE workspace DROP COLUMN personal_account_id, DROP COLUMN kind;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

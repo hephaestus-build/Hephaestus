@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
  * until an admin reconnects Slack. Slack, not a stored copy, is asked each time, so the answer holds after a reconnect.
  */
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/slack/scopes")
 @RequireAtLeastWorkspaceAdmin
 @ConditionalOnServerRole

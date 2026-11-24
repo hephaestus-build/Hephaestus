@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestParam;
  * one assignment per purpose and data-handling tier; {@code PUT} is idempotent within that pair.
  */
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/model-assignments")
 @Tag(name = "Model assignments", description = "The model that serves each purpose in a workspace")
 @RequiredArgsConstructor

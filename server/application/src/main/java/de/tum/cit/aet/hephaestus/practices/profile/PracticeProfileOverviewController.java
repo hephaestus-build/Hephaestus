@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.profile;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.PracticeProfileOverviewDTO;
 import de.tum.cit.aet.hephaestus.practices.result.trend.PracticeTrendService;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
  */
 @ConditionalOnServerRole
 @WorkspaceScopedController
+@TeamOnly
 @PreAuthorize("@workspaceSecure.isMember()")
 @RequestMapping("/practice-profile")
 @Tag(name = "Practice Profile", description = "The current developer's practice profile")

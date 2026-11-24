@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback.page;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.dto.PracticePageFeedbackDTO;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 @WorkspaceScopedController
+@TeamOnly
 @PreAuthorize("@workspaceSecure.isMember()")
 @RequestMapping("/practices/feedback/practice-page")
 @RequiredArgsConstructor

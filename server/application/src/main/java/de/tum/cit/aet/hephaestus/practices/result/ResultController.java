@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultListDTO;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 // Membership alone is insufficient; every endpoint must restrict reads to the authenticated developer.
 @ConditionalOnServerRole
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/practices/results")
 @Tag(name = "Practice Results", description = "Read-only access to practice evaluation results")
 @RequiredArgsConstructor

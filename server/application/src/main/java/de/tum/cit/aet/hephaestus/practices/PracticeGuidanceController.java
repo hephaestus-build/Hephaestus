@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.dto.GroupRefDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGuidanceDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.ReviewedPracticeDTO;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 /** What a member reads about the workspace's practices: those that reviews measure, and one practice's guidance. */
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/practices")
 @RequiredArgsConstructor
 @ConditionalOnServerRole

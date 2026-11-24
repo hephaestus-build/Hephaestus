@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceKind;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
@@ -28,13 +29,13 @@ public class WorkspaceRootsAdapter implements WorkspaceRoots, WorkspaceLookup, W
     @Override
     @Transactional(readOnly = true)
     public Optional<Workspace> find(long workspaceId) {
-        return workspaces.findById(workspaceId);
+        return workspaces.findById(workspaceId).filter(workspace -> !workspace.isPersonal());
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Workspace> active() {
-        return workspaces.findByStatus(Workspace.WorkspaceStatus.ACTIVE);
+        return workspaces.findByStatusAndKind(Workspace.WorkspaceStatus.ACTIVE, WorkspaceKind.TEAM);
     }
 
     @Override
@@ -46,7 +47,7 @@ public class WorkspaceRootsAdapter implements WorkspaceRoots, WorkspaceLookup, W
     @Override
     @Transactional(readOnly = true)
     public Optional<Workspace> findByOrganization(long organizationId) {
-        return workspaces.findByOrganizationId(organizationId);
+        return workspaces.findByOrganizationId(organizationId).filter(workspace -> !workspace.isPersonal());
     }
 
     @Override
@@ -58,13 +59,13 @@ public class WorkspaceRootsAdapter implements WorkspaceRoots, WorkspaceLookup, W
     @Override
     @Transactional(readOnly = true)
     public boolean anyExists() {
-        return workspaces.count() > 0;
+        return workspaces.existsByKind(WorkspaceKind.TEAM);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<Workspace> findAny() {
-        return workspaces.findAll().stream().findFirst();
+        return workspaces.findFirstByKindOrderByIdAsc(WorkspaceKind.TEAM);
     }
 
     @Override

@@ -144,6 +144,10 @@ account export includes it with the choice as that literal. Account erasure dele
 finished or skipped a workspace's setup page at (`seen_revision`). It carries no choice and no free
 text, and is removed with account erasure and with workspace purge.
 
+`workspace` names the owner of a personal space (`personal_account_id`). Only the owner can enter the space.
+Person export lists the space's slug and creation time. The stores of the data inside the space export that data.
+Account erasure deletes the space and the owner's membership.
+
 `workspace_onboarding_settings` stores whether the setup page is on, whether a choice is required, and required integration
 identifiers. It holds no free text and is removed with workspace purge.
 
@@ -302,7 +306,7 @@ Other stores keep their frozen-selection contract.
 | `practice_version`, `feedback_response`, `feedback_thread_resolution`, `feedback_thread_resolution_actor`, `feedback_copy`, `feedback_basis`, `feedback_decision`, `feedback`, `result_mark`, `review_item`, `problem`, `problem_lineage`, `result`, `result_mark_created_actor`, `result_mark_removed_actor`, `feedback_decision_actor`, `trial`, `review`, `review_batch`, `review_schedule` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/adapter/PracticesPersonDataCatalog.java` (`select`, explicit export fields, `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/adapter/PracticesPersonDataCatalog.java` (`erase` policy, `JdbcPersonDataStore.erase`) |
 | `github_installation_request`, `github_installation_request_adopted`, `github_installation_request_decider` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/github/installation/adoption/GitHubInstallationRequestPersonDataCatalog.java` (the installations of the person's own GitHub account, adopted or not, matched by exact native identity, and the decisions that the person made) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/github/installation/adoption/GitHubInstallationRequestPersonDataCatalog.java` (deletes the unadopted installations, clears the login and native id of an adopted one, and clears the decider reference) |
 | `product_feedback`, `product_feedback_resolver`, `product_feedback_filing`, `product_feedback_consent`, `product_feedback_destination` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/productfeedback/adapter/ProductfeedbackPersonDataCatalog.java` (account-owned reports, choices, routes, and issue links) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/productfeedback/adapter/ProductfeedbackPersonDataCatalog.java` (source removal after the cleanup envelope is copied) |
-| `membership`, `workspace_onboarding_settings` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/adapter/WorkspacePersonDataCatalog.java` (`select`, explicit export fields, `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/adapter/WorkspacePersonDataCatalog.java` (`erase` policy, `JdbcPersonDataStore.erase`) |
+| `membership`, `workspace_onboarding_settings`, `workspace` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/adapter/WorkspacePersonDataCatalog.java` (`select`, explicit export fields, `JdbcPersonDataStore.export`. `PersonalSpacePersonDataStore` exports the personal space's slug and creation time) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/adapter/WorkspacePersonDataCatalog.java` (`erase` policy, `JdbcPersonDataStore.erase`. `PersonalSpacePersonDataStore` deletes the personal space) |
 
 A `HIDE_PUBLIC` row in `identity_restriction` retains only the provider id and provider user key.
 It honors a public-page objection, or the absence of an answer, after identity unlink or account purge.

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationThreadDTO;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,6 +36,7 @@ import org.springframework.web.bind.annotation.RequestParam;
  * reads the viewed member's conversation through the {@code GET} routes.
  */
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/conversation")
 @Tag(name = "Conversation", description = "The developer's conversation with Hephaestus")
 @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")

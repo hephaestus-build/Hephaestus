@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -286,7 +287,8 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
                         .orderedStream()
                         .toList(),
                 beans.getBean(ConversationContextChanges.class),
-                copies);
+                copies,
+                beans.getBean(WorkspaceMemberships.class));
         var store = catalog.contributors().stream()
                 .filter(contributor -> contributor.store().equals(ConversationEntryRepository.COPIES_PERSON_DATA_STORE))
                 .findFirst()

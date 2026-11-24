@@ -38,6 +38,18 @@ public class WorkspaceContextResolver {
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", slug));
     }
 
+    /**
+     * Resolves a team workspace by its primary key, for an instance admin route that names it outside its path. A
+     * personal space answers as a workspace that does not exist.
+     */
+    public Workspace requireTeamWorkspace(Long workspaceId) {
+        Workspace workspace = requireWorkspace(workspaceId);
+        if (workspace.isPersonal()) {
+            throw new EntityNotFoundException("Workspace", workspaceId.toString());
+        }
+        return workspace;
+    }
+
     /** Resolves a workspace by its primary key. */
     public Workspace requireWorkspace(Long workspaceId) {
         Objects.requireNonNull(workspaceId, "Workspace id must not be null");

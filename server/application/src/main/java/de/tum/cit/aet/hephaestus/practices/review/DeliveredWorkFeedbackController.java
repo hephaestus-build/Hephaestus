@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.review.dto.DeliveredWorkFeedbackDTO;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 /** Membership permits the lookup; verified account identities alone determine whose feedback is returned. */
 @ConditionalOnServerRole
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/practices/feedback/on-work")
 @Tag(name = "Practice feedback", description = "The authenticated developer's feedback")
 @RequiredArgsConstructor

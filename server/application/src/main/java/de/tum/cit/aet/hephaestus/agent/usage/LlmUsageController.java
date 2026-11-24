@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
  * <p>Read-only; the workspace's own cap is written through {@link WorkspaceLlmBudgetController}.
  */
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/llm/usage")
 @Tag(name = "LLM Usage", description = "Per-workspace LLM spend rollup and budget status")
 @Validated

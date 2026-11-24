@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewOverviewDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewQueueDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewTimingDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 /** The workspace's practice reviews in aggregate: counts over time, how long each stage took, and the queue now. */
 @ConditionalOnServerRole
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/practices/reviews")
 @Tag(name = "Practice reviews")
 @RequiredArgsConstructor

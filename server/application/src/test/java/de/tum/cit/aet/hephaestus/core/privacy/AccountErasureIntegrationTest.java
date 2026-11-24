@@ -1301,6 +1301,17 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                                           AND x.developer_id = ?)
                          ORDER BY j.id LIMIT 1
                         """, targetAccount.getId())).isOne();
+        // The person's personal space, which only its owner can enter.
+        Long personalSpace = jdbc.queryForObject(
+                "INSERT INTO workspace (slug, display_name, account_login, account_type, status, kind,"
+                        + " personal_account_id) VALUES ('me--aaaaaaaaaaaaaaaa', 'Personal space',"
+                        + " 'me--aaaaaaaaaaaaaaaa', 'USER', 'ACTIVE', 'PERSONAL', ?) RETURNING id",
+                Long.class,
+                targetAccount.getId());
+        jdbc.update(
+                "INSERT INTO membership (workspace_id, account_id, role, role_source) VALUES (?, ?, 'MEMBER', 'PERSON')",
+                personalSpace,
+                targetAccount.getId());
         long administratorId = Objects.requireNonNull(administrator.getId());
         var preview = personData.preview(administratorId, targetAccount.getId(), List.of());
         UUID requestId = preview.request().getId();
@@ -1405,6 +1416,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         "Other person's shared reply",
                         "credential-canary",
                         "unrelated-profile-canary");
+        assertThat(export.path("stores").path("workspace"))
+                .singleElement()
+                .satisfies(row -> assertThat(row.path("slug").asString()).isEqualTo("me--aaaaaaaaaaaaaaaa"));
         personData.requestErasure(requestId, administratorId, false);
         assertThat(oauthNonces.tryConsume("nonce-credential-canary", targetOAuthBinding))
                 .isFalse();
@@ -1459,6 +1473,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(preservedSourceRows);
         var receipt = personData.get(requestId).request();
         assertThat(receipt.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM workspace WHERE id = ?", Long.class, personalSpace))
+                .isZero();
         assertThat(receipt.getScopeJson()).isNull();
         assertThat(receipt.getSelectionsJson()).isNull();
         Map<String, Long> completed = PersonDataStoreReceipt.counts(mapper, receipt.getCompletedJson());

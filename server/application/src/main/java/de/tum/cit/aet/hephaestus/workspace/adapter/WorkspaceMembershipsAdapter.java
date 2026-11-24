@@ -8,9 +8,11 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import java.time.Clock;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -33,6 +35,15 @@ public class WorkspaceMembershipsAdapter implements WorkspaceMemberships {
                 .findByWorkspace_IdAndId_AccountId(workspaceId, accountId)
                 .filter(member -> member.getLeftAt() == null)
                 .map(Membership::getRole);
+    }
+
+    @Override
+    public List<Long> teamWorkspaceIds(long accountId) {
+        return memberships.findById_AccountId(accountId).stream()
+                .map(Membership::getWorkspace)
+                .filter(workspace -> !workspace.isPersonal())
+                .map(Workspace::getId)
+                .toList();
     }
 
     @Override

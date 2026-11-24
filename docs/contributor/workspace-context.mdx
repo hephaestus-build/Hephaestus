@@ -9,6 +9,7 @@ Scope every API endpoint that operates on workspace data to a workspace slug. Th
 
 ```java
 @WorkspaceScopedController          // auto-prefixes routes with /workspaces/{workspaceSlug}
+@TeamOnly                           // or @PersonalAllowed: see Workspace kinds
 @RequestMapping("/teams")           // becomes /workspaces/{slug}/teams
 @RequiredArgsConstructor
 public class TeamController {
@@ -36,6 +37,8 @@ scope their operations to the supplied workspace.
 | Annotation                      | Effect                                                  |
 | ------------------------------- | ------------------------------------------------------- |
 | `@WorkspaceScopedController`    | Adds `/workspaces/{workspaceSlug}` prefix to all routes |
+| `@TeamOnly`                     | Serves team workspaces only                             |
+| `@PersonalAllowed`              | Also serves a personal space, to its owner              |
 | `WorkspaceContext` parameter    | Auto-injected with workspace ID, slug, and user's roles |
 | `@RequireAtLeastWorkspaceAdmin` | Requires ADMIN or OWNER role                            |
 | `@RequireWorkspaceOwner`        | Requires OWNER role only                                |
@@ -69,6 +72,39 @@ No publication setting opens member endpoints to non-members.
 A member without the required role gets 403.
 
 The privilege and audit policy lives in [Instance administration](./instance-admin.mdx#who-is-an-instance-admin).
+
+## Workspace kinds
+
+A workspace is a team workspace (`TEAM`) or a personal space (`PERSONAL`).
+A personal space is a person's own place for goals and reflection. It belongs to no team.
+
+The database holds these rules:
+
+- The kind and the owner (`personal_account_id`) never change.
+- The slug of a personal space is `me--` and 16 base32 characters. A team slug cannot contain `--`.
+- Only the owner can be a member of a personal space, and only with the `MEMBER` role.
+- A personal space never publishes activity.
+
+`WorkspaceContextFilter` admits only the owner to a personal space, as themselves.
+It checks this before instance-admin elevation.
+Another signed-in account, an instance admin or a user view gets the 404 of an unknown workspace.
+That refusal writes no elevation audit row.
+
+Only the filter looks up a workspace of any kind by slug, with `findAnyKindByWorkspaceSlug`.
+Every other lookup by slug or provider login finds team workspaces only.
+Thus, user view, the instance console, the instance budget routes, public activity, MCP and provider routing never reach a personal space.
+Bootstrap and startup activation read team workspaces only.
+
+An instance admin's person-data preview and export of an account select its team memberships only.
+They name the personal space only by its slug and creation time (`PersonalSpacePersonDataStore`).
+The erasure of an account disposes of its personal space and the membership.
+`WorkspaceKindArchitectureTest` fails when another class calls the any-kind lookup.
+
+Every `@WorkspaceScopedController` declares `@TeamOnly` or `@PersonalAllowed`.
+`WorkspaceKindArchitectureTest` fails on a controller that declares neither, or both.
+A personal space answers a `@TeamOnly` route with the 404 of an unknown workspace.
+Add `@PersonalAllowed` only to a controller for what a person does alone.
+A controller that administers members, providers or team settings stays `@TeamOnly`.
 
 Check roles through the context:
 

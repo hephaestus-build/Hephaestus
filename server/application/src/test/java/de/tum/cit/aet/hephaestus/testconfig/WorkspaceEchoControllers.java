@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
+import de.tum.cit.aet.hephaestus.workspace.context.PersonalAllowed;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import jakarta.servlet.http.HttpServletRequest;
@@ -47,6 +48,22 @@ public final class WorkspaceEchoControllers {
                     context != null ? context.id() : null,
                     context != null ? context.roles().stream().map(Enum::name).toList() : List.of());
             return ResponseEntity.ok(payload);
+        }
+    }
+
+    /** Echoes the kind and roles from a route that also serves a personal space. */
+    public record PersonalEcho(String kind, List<String> roles) {}
+
+    @WorkspaceScopedController
+    @PersonalAllowed
+    @RequestMapping("/personal-test")
+    public static class PersonalEchoController {
+
+        @GetMapping("/echo")
+        ResponseEntity<PersonalEcho> echo(WorkspaceContext context) {
+            return ResponseEntity.ok(new PersonalEcho(
+                    context.kind().name(),
+                    context.roles().stream().map(Enum::name).toList()));
         }
     }
 

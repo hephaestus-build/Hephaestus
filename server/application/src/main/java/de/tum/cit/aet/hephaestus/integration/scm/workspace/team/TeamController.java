@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamInfoDTO;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextResolver;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.server.ResponseStatusException;
 
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/teams")
 @Tag(name = "Teams", description = "Team management within workspace")
 public class TeamController {

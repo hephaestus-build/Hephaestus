@@ -126,7 +126,6 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "provider_event_step", // Event ids and step names contain no person data.
             "repository_to_monitor",
             "attempt_public_key",
-            "workspace",
             "workspace_model_assignment",
             "workspace_llm_connection",
             "workspace_llm_model",
@@ -207,13 +206,12 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
     }
 
     /**
-     * The login of the provider account that a workspace is installed on is the namespace of its repositories, like a
-     * repository's {@code owner/name}. It is a person's login when the account is a personal one. Person export lists
-     * it, and it stays while the workspace exists. Person erasure replaces it in a purged workspace, which keeps its
-     * row (InstallationAccountPersonDataStore).
+     * The namespace of a source, like a repository's {@code owner/name}: the name of the provider account that a
+     * connection is installed on, and the repository that a workspace monitors. It is a person's login when the account
+     * is a personal one. Person export lists it, and it stays while the source exists.
      */
     private static final Set<String> SOURCE_NAMESPACE =
-            Set.of("workspace.account_login", "connection.display_name", "repository_to_monitor.name_with_owner");
+            Set.of("connection.display_name", "repository_to_monitor.name_with_owner");
 
     /** Columns whose name matches the person heuristic but that hold no person. */
     private static final Map<String, String> NOT_A_PERSON = Map.of(
@@ -455,7 +453,10 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "auth_event.identity_id",
             "Erasure deletes the identity, and sfk_auth_event_identity sets this column NULL",
             "product_feedback_filing.publish_requested_by",
-            "A Hephaestus maintainer's GitHub login on another person's report. It goes when that report is erased");
+            "A Hephaestus maintainer's GitHub login on another person's report. It goes when that report is erased",
+            "workspace.account_login",
+            "The namespace of the workspace's repositories. InstallationAccountPersonDataStore replaces it in a purged"
+                    + " workspace, which keeps its row");
 
     private static final Pattern TARGET = Pattern.compile("^\\s*(?:\\w+\\.)?\"?(\\w+)\"?\\s*=");
     private static final Pattern END_OF_SET = Pattern.compile("(?i)(where|from|returning)\\b");

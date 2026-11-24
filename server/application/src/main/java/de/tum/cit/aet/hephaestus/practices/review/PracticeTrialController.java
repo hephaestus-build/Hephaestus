@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.practices.review.dto.StartTrialRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.TrialDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 /** Trials of practices: workspace admins only (ADR 0118 decision 10). */
 @ConditionalOnServerRole
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/practice-trials")
 @Tag(name = "Practice reviews")
 @RequiredArgsConstructor
