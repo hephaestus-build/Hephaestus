@@ -1,4 +1,4 @@
-# ADR 0149: A delivery experiment draws only unprompted contact, per person and per decision
+# ADR 0149: A delivery experiment draws only unprompted delivery decisions, per person and per decision
 
 **Status:** Accepted
 **Date:** 2026-11-24
@@ -55,7 +55,7 @@ The real constraint is a fair comparison of delivery rules that never holds back
 5. **A silent arm that the composer must respect.** The composer would get a turn and be told to stay silent. That breaks its required-problem rule, and a model would decide dispatch.
 6. **Run experiments under research use alone.** The person never learns that a draw may hold a result back.
 7. **Experiments as an optional module after 1.0.** The draw on the copy on the work must happen in the seal's transaction, before any composer turn. A module added later needs that hook in the core anyway.
-8. **A draw for each person and each decision of unprompted contact (chosen).** It runs under enrollment, with a steward and period locks.
+8. **A draw for each person and each unprompted delivery decision (chosen).** It runs under enrollment, with a steward and period locks.
 
 ## Decision
 
@@ -66,7 +66,7 @@ Option 8.
    - Its practices do not run in Approve first. An expert's approval or edit would change the treatment.
    - An experiment starts only on an instance with a journal bucket (ADR 0140, proposed in #4867, decision 9).
    - Otherwise the start command returns `journal-bucket-required`. Startup stops while an experiment runs with no bucket.
-2. **Only unprompted contact is drawn, one draw for each decision.**
+2. **The server draws only unprompted delivery decisions, one draw for each decision.**
    - Two kinds are drawn: the copy on the work and an unprompted message.
    - An agreed check-in, a requested result and a stepping-back message are recorded and never drawn. A check-in fires as agreed.
    - An answer to the person's message is not a decision to contact. It has no record and no draw.

@@ -256,6 +256,7 @@
 	"docs/decisions/0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md",
 	"docs/decisions/0097-product-feedback-becomes-a-github-issue-and-only-the-reporters-tick-and-a-code-gate-make-it-public.md",
 	"docs/decisions/0098-each-email-is-one-outbox-action-and-is-sent-at-most-once.md",
+	"docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md",
 	"docs/decisions/0111-the-docs-site-is-a-static-fumadocs-build-on-astro.md",
 	"docs/decisions/0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md",
 	"docs/decisions/0119-a-workload-trained-aot-cache-needs-a-build-design-before-the-server-image-ships-it.md",
