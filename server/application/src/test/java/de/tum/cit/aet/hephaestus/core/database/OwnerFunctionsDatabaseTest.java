@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.DueWorkKind;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepRule;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
+import de.tum.cit.aet.hephaestus.testconfig.TestDatabaseCleanup;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -106,7 +107,7 @@ class OwnerFunctionsDatabaseTest {
 
     @Test
     void shouldNameTheDueEntriesOfEveryOwnerAPageAtATimeWhileRowLevelSecurityHidesTheirRows() throws SQLException {
-        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_due", SEEDED);
+        TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_due", SEEDED);
         @Nullable Object firstDue;
 
         try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
@@ -156,7 +157,7 @@ class OwnerFunctionsDatabaseTest {
 
     @Test
     void shouldPurgeTheConversationsOfEveryOwnerInTheWorkspaceOnly() throws SQLException {
-        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_purge", SEEDED);
+        TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_purge", SEEDED);
 
         sweepAsApplication(database, "SELECT public.person_row_sweep('WORKSPACE_PURGE', 1, NULL, NULL)");
 
@@ -171,7 +172,7 @@ class OwnerFunctionsDatabaseTest {
 
     @Test
     void shouldExpireTheReadyExportsOfEveryOwnerPastTheirExpiry() throws SQLException {
-        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_exports", SEEDED);
+        TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_exports", SEEDED);
 
         sweepAsApplication(database, "SELECT public.person_row_sweep('EXPIRED_EXPORTS', NULL, NULL, now())");
 
@@ -187,7 +188,7 @@ class OwnerFunctionsDatabaseTest {
 
     @Test
     void shouldMergeTheAbsorbedMainAndMoveEveryOtherConversationToTheClaimingAccount() throws SQLException {
-        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_absorb", SEEDED);
+        TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_absorb", SEEDED);
 
         sweepAsApplication(database, "SELECT public.person_row_sweep('ACCOUNT_ABSORB', 12, 11, NULL)");
 
@@ -312,7 +313,7 @@ class OwnerFunctionsDatabaseTest {
 
     @Test
     void shouldFindABranchThatOnlyTheDatabaseHas() throws SQLException {
-        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_branch", SEEDED);
+        TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_branch", SEEDED);
         try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
             JdbcTemplate owner = jdbc(connection);
             String definition = Objects.requireNonNull(owner.queryForObject(
@@ -395,7 +396,7 @@ class OwnerFunctionsDatabaseTest {
 
     @Test
     void shouldRefuseAClashThatTheCallerDidNotPrepareAndMoveNothing() throws SQLException {
-        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_unprepared", SEEDED);
+        TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_unprepared", SEEDED);
         try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
             jdbc(connection).execute("""
                     INSERT INTO conversation_entry (id, conversation_id, created_at, kind, seq, surface, text, workspace_id,
@@ -422,7 +423,7 @@ class OwnerFunctionsDatabaseTest {
 
     @Test
     void shouldRefuseAClashWhoseQueuedRunTheCallerDidNotMoveAndMoveNothing() throws SQLException {
-        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_queued", SEEDED);
+        TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_queued", SEEDED);
         try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
             jdbc(connection).execute("""
                     INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key, state, attempt, lease_epoch,

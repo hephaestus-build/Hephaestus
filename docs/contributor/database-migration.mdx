@@ -82,7 +82,7 @@ The test records each one in `MIXED_SCOPE_TABLES`, with its reason, and requires
 ## Foreign keys across modules
 
 A table belongs to the module of its entity or association.
-A table without either gets its owner in `ModulithVerificationTest.NATIVE_TABLES`.
+A table without either gets its owner in `TableOwners.NATIVE_TABLES`.
 A foreign key to another module's table follows a module edge: the referencing module declares the referenced module in its `@ApplicationModule`.
 It references a plain id column with no JPA association, so name it `sfk_<table>_<column>` (`server/AGENTS.md` § Schema changes).
 

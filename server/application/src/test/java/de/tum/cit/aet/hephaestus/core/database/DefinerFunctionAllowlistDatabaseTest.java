@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
+import de.tum.cit.aet.hephaestus.testconfig.TestDatabaseCleanup;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -75,7 +76,7 @@ class DefinerFunctionAllowlistDatabaseTest {
             })
     void shouldRefuseADefinerFunctionThatBreaksTheRule(
             String change, String probeName, String role, String refusal, String statement) throws SQLException {
-        TestDatabase probe = PostgreSQLTestContainer.copyDatabase("hephaestus_definer_" + probeName, INSTALLED);
+        TestDatabase probe = TestDatabaseCleanup.copyDatabase("hephaestus_definer_" + probeName, INSTALLED);
         try (Connection connection = connect(role.equals("owner") ? PostgreSQLTestContainer.asOwner(probe) : probe)) {
             jdbc(connection).execute(statement);
         }

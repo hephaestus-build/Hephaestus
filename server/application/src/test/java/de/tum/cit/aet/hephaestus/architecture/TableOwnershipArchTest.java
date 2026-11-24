@@ -41,8 +41,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * A module reads only its own tables, and another module's through that module's interface (ADR 0138). The test reads
  * every SQL string in the production source, whichever API runs it, and the compiled value of each query
  * annotation, its count query included. The tables of a module are the tables of its entities, its join
- * tables, and the tables without an entity that {@link ModulithVerificationTest#NATIVE_TABLES} assigns. An edge that touches a mentoring
- * module has no exception. Main's earlier reads are listed one by one in {@code legacy-native-table-reads.txt}.
+ * tables, and the tables without an entity that {@link TableOwners#NATIVE_TABLES} assigns. An edge that touches a
+ * mentoring module has no exception. Main's earlier reads are listed one by one in {@code legacy-native-table-reads.txt}.
  */
 class TableOwnershipArchTest extends HephaestusArchitectureTest {
     private static final Path SOURCES = Path.of("src/main/java");
@@ -59,7 +59,7 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
     @Test
     void shouldReadNoTableOfAnotherModuleInSql() throws IOException {
         var modules = ModulithVerificationTest.applicationModules();
-        var owners = ModulithVerificationTest.tableOwners();
+        var owners = TableOwners.byTable(modules);
         // A query annotation built from constants is whole only in the compiled class.
         Map<String, List<String>> compiled = new TreeMap<>();
         for (var module : modules) {
