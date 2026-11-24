@@ -63,7 +63,8 @@ jobs:
       pull-request-base: ${{ steps.opt_in.outputs.base }}
       tooling: ${{ steps.filter.outputs.tooling }}
       windows: ${{ steps.filter.outputs.windows }}
-      server-image: ${{ steps.filter.outputs.server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' || steps.filter.outputs.image-scan == 'true' }}
+      # The seeded upgrade installs the merge group's candidate image, even for a drill-only change.
+      server-image: ${{ steps.filter.outputs.server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' || steps.filter.outputs.image-scan == 'true' || (github.event_name == 'merge_group' && steps.filter.outputs.database-upgrade == 'true') }}
       e2e: ${{ steps.filter.outputs.e2e }}
       extension-e2e: ${{ steps.filter.outputs.extension-e2e }}
       api-clients: ${{ steps.filter.outputs.api-clients }}
@@ -633,12 +634,27 @@ jobs:
               - 'server/application/src/main/resources/agent/pi-text.ts'
             postgres-image:
               - 'docker/postgres/**'
-            # What changes an upgrade from the last release: a migration and the baseline synchronization.
-            # Both are server sources, so the merge group builds the image that the seeded
-            # upgrade tests. A change to the test alone runs at the release and weekly.
+            # The drill, the changelog and the fixtures it reads.
             database-upgrade:
+              - '.github/workflows/release-upgrade.yml'
+              - '.migration/**'
+              - 'MIGRATION.md'
+              - 'docker/postgres/**'
+              - 'scripts/release-upgrade-test.ts'
+              - 'scripts/resolve-release-upgrade-images.ts'
+              - 'scripts/lib/release-upgrade-*.ts'
+              - 'scripts/lib/changelog*.ts'
+              - 'scripts/lib/cutover-seeds.ts'
+              - 'scripts/lib/database-roles.ts'
+              - 'scripts/lib/migration-guide.ts'
+              - 'scripts/lib/previous-release.ts'
+              - 'server/application/src/main/resources/db/master.xml'
               - 'server/application/src/main/resources/db/changelog/**'
+              - 'server/application/src/main/resources/db/schema-fingerprint.sql'
               - 'server/application/src/main/java/de/tum/cit/aet/hephaestus/core/database/BaselineSynchronization.java'
+              - 'server/application/src/test/resources/db/cutover-seeds/**'
+              - 'server/application/src/test/resources/db/practice-native/assert-migrated.sql'
+              - 'server/application/src/test/resources/db/practice-native/result-parent.sql'
             # What a cluster install of the chart exercises: the chart, its scripts, the server's sandbox
             # runtime and what it binds, and the agent image that its sandboxes run. A change to the
             # one-host platform files runs it too; the k3s smoke itself runs only at a release or by
@@ -1159,7 +1175,8 @@ jobs:
         needs.detect-changes.outputs.any-code == 'true' ||
         needs.detect-changes.outputs.kubernetes == 'true' ||
         needs.detect-changes.outputs.build-config == 'true' ||
-        needs.detect-changes.outputs.test-config == 'true'
+        needs.detect-changes.outputs.test-config == 'true' ||
+        needs.detect-changes.outputs.queue-upgrade == 'true'
       ) && (
         needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || (needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
@@ -1344,7 +1361,7 @@ jobs:
 
       server: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false') == 'true' }}
       agent: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false') == 'true' }}
-      postgres: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.queue-upgrade == 'true' || needs.detect-changes.outputs.queue-server-image == 'true') && 'true' || 'false') == 'true' }}
+      postgres: ${{ ((needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.queue-upgrade == 'true')) && 'true' || 'false') == 'true' && needs.detect-changes.outputs.should_skip != 'true' && ((needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.queue-upgrade == 'true' || needs.detect-changes.outputs.queue-server-image == 'true') && 'true' || 'false') == 'true' }}
 
   # The chart on real clusters with this run's images, when the chart or the sandbox runtime changed.
   # A push to main that a merge group tested runs none: its commit is the group's. A push with no
@@ -1403,6 +1420,7 @@ jobs:
     needs: [detect-changes, Docker]
     if: >-
       !cancelled() && needs.Docker.result == 'success' &&
+      needs.Docker.outputs.server-digest != '' && needs.Docker.outputs.postgres-digest != '' &&
       needs.detect-changes.outputs.queue-upgrade == 'true' && needs.detect-changes.outputs.publishable == 'true'
     uses: ./.github/workflows/release-upgrade.yml
     permissions:
@@ -1759,9 +1777,9 @@ jobs:
             exit 1
           fi
 
-          # A skipped upgrade is a missing verdict for a merge group that changes a migration.
+          # A skipped upgrade is a missing verdict for a merge group that changes an upgrade input.
           if [[ "${{ needs.detect-changes.outputs.queue-upgrade == 'true' && needs.Database-upgrade.result != 'success' }}" == "true" ]]; then
-            echo "This merge group changes a migration and requires a successful seeded upgrade; it was '${{ needs.Database-upgrade.result }}'."
+            echo "This merge group requires a successful seeded upgrade; it was '${{ needs.Database-upgrade.result }}'."
             echo "status=failure" >> $GITHUB_OUTPUT
             exit 1
           fi

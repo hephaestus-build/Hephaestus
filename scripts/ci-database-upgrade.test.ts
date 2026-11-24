@@ -3,9 +3,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
-import { parse } from "yaml";
+import { parse, parseDocument } from "yaml";
 
 import { pathFilters } from "./check-affected.ts";
+import { evaluateTierOutput, expandExpressions, jobRuns } from "./ci-contract-support.ts";
 import { isRecord } from "./lib/json.ts";
 
 const workflow = (name: string): Record<string, unknown> => {
@@ -18,33 +19,50 @@ const record = (value: unknown, what: string): Record<string, unknown> => {
 	return value;
 };
 
-void test("a merge group whose change reaches a migration runs the release's seeded upgrade on its own images", () => {
+void test("a merge group that changes the drill or its migration inputs runs the seeded upgrade on its own images", () => {
 	const cicd = workflow("cicd.yml");
 	const jobs = record(cicd.jobs, "jobs");
 	const filter =
 		pathFilters(readFileSync(".github/workflows/cicd.yml", "utf8"))["database-upgrade"] ?? [];
-	assert.deepEqual(filter, [
-		"server/application/src/main/resources/db/changelog/**",
+	for (const input of [
+		".github/workflows/release-upgrade.yml",
+		".migration/upgrade-order.md",
+		"MIGRATION.md",
+		"docker/postgres/Dockerfile",
+		"scripts/release-upgrade-test.ts",
+		"scripts/resolve-release-upgrade-images.ts",
+		"scripts/lib/release-upgrade-prefix.ts",
+		"scripts/lib/release-upgrade-fingerprint.ts",
+		"scripts/lib/changelog-xml.ts",
+		"scripts/lib/cutover-seeds.ts",
+		"scripts/lib/database-roles.ts",
+		"scripts/lib/migration-guide.ts",
+		"scripts/lib/previous-release.ts",
+		"server/application/src/main/resources/db/master.xml",
+		"server/application/src/main/resources/db/changelog/next/a.xml",
+		"server/application/src/main/resources/db/schema-fingerprint.sql",
 		"server/application/src/main/java/de/tum/cit/aet/hephaestus/core/database/BaselineSynchronization.java",
-	]);
-	// Each path also selects the server image, which the upgrade installs: a merge group
-	// aliases nothing, so a path outside it would leave the upgrade without its candidate.
-	const serverImage =
-		pathFilters(readFileSync(".github/workflows/cicd.yml", "utf8"))["server-image"] ?? [];
-	for (const file of filter) {
+		"server/application/src/test/resources/db/cutover-seeds/a.seed.sql",
+		"server/application/src/test/resources/db/practice-native/assert-migrated.sql",
+		"server/application/src/test/resources/db/practice-native/result-parent.sql",
+	]) {
 		assert.ok(
-			serverImage.some(
-				(glob) =>
-					!glob.startsWith("!") && path.posix.matchesGlob(file.replace("**", "a.xml"), glob),
-			),
-			file,
+			filter.some((glob) => path.posix.matchesGlob(input, glob)),
+			`Changes to ${input} must run the upgrade`,
 		);
 	}
+	assert.ok(
+		!filter.some((glob) => path.posix.matchesGlob("scripts/release-upgrade-prefix.test.ts", glob)),
+	);
 
 	const outputs = record(record(jobs["detect-changes"], "detect-changes").outputs, "outputs");
 	assert.match(
 		String(outputs["queue-upgrade"]),
 		/^\$\{\{ \(github\.event_name == 'merge_group' && steps\.filter\.outputs\.database-upgrade == 'true'\) \}\}$/u,
+	);
+	assert.match(
+		String(outputs["server-image"]),
+		/github\.event_name == 'merge_group' && steps\.filter\.outputs\.database-upgrade == 'true'/u,
 	);
 
 	const upgrade = record(jobs["Database-upgrade"], "Database-upgrade");
@@ -73,5 +91,49 @@ void test("a merge group whose change reaches a migration runs the release's see
 	);
 	for (const [name, input] of Object.entries(record(call.inputs, "inputs"))) {
 		assert.equal(record(input, name).required, false, `${name} is optional for the merge group`);
+	}
+});
+
+void test("a workflow-only drill change packages the server and requires both published images", () => {
+	const document = parseDocument(readFileSync(".github/workflows/cicd.yml", "utf8"));
+	const event = "merge_group";
+	const filter = { "database-upgrade": "true", "ci-config": "true" };
+	const output = (name: string): string =>
+		evaluateTierOutput(String(document.getIn(["jobs", "detect-changes", "outputs", name])), event, {
+			filter,
+		});
+	const result = "success";
+	const candidate = { "server-digest": "sha256:server", "postgres-digest": "sha256:postgres" };
+	const needs = {
+		"detect-changes": {
+			result,
+			outputs: {
+				"any-code": output("any-code"),
+				"ci-config": output("ci-config"),
+				"queue-upgrade": output("queue-upgrade"),
+				"server-image": output("server-image"),
+				images: "true",
+				publishable: "true",
+			},
+		},
+		Security: { result },
+		"vulnerability-database": { result },
+		"server-package": { result },
+		Docker: { result, outputs: candidate },
+	};
+	assert.equal(needs["detect-changes"].outputs["any-code"], "false");
+	for (const job of ["vulnerability-database", "server-package", "Docker", "Database-upgrade"]) {
+		assert.ok(jobRuns(document, job, event, needs), `${job} must run`);
+	}
+	for (const image of ["server", "postgres"]) {
+		const selected = document.getIn(["jobs", "Docker", "with", image]);
+		assert.equal(expandExpressions(selected, { needs }), "true", `${image} image must build`);
+		assert.ok(
+			!jobRuns(document, "Database-upgrade", event, {
+				...needs,
+				Docker: { result, outputs: { ...candidate, [`${image}-digest`]: "" } },
+			}),
+			`upgrade cannot run without the ${image} image`,
+		);
 	}
 });

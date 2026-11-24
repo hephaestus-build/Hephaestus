@@ -13,6 +13,7 @@ import nodePath from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { readCutoverSeeds } from "./lib/cutover-seeds.ts";
 import { applyDatabaseRoles, databaseRolePasswords } from "./lib/database-roles.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
@@ -27,8 +28,9 @@ import {
 import {
 	assertForwardReferenceRefused,
 	assertPrefixHistory,
-	PREFIX_HISTORY_SQL,
+	firstMigration,
 	prefixChangelog,
+	prefixHistorySql,
 } from "./lib/release-upgrade-prefix.ts";
 import { parseVersion } from "./lib/release-version.ts";
 import { researchConsentFields } from "./lib/research-consent.ts";
@@ -685,6 +687,11 @@ function copyStoppedFixture(database: string): void {
 }
 
 function assertRc1MigrationPrefix(): void {
+	const next = new URL(`../${NEXT_CHANGELOG_DIRECTORY}/`, import.meta.url);
+	const files = readdirSync(next, { withFileTypes: true })
+		.filter((entry) => entry.isFile())
+		.map((entry) => entry.name);
+	const first = firstMigration(files, (file) => readFileSync(new URL(file, next), "utf8"));
 	const directory = mkdtempSync(nodePath.join(tmpdir(), "hephaestus-upgrade-prefix-"));
 	const changelog = nodePath.join(directory, "prefix.xml");
 	try {
@@ -692,19 +699,21 @@ function assertRc1MigrationPrefix(): void {
 			[BROKEN_PREFIX_DATABASE, true],
 			[VALID_PREFIX_DATABASE, false],
 		] as const) {
-			writeFileSync(changelog, prefixChangelog(broken), { mode: 0o644 });
+			writeFileSync(changelog, prefixChangelog(first, broken), { mode: 0o644 });
 			applyDatabaseRoles(postgres, database, credentials);
 			const result = migrate(candidateImage, database, changelog);
 			const output = `${result.stdout}${result.stderr}`;
 			if (broken) {
-				assertForwardReferenceRefused(result.status, output);
+				assertForwardReferenceRefused(first, result.status, output);
 			} else if (result.status !== 0) {
 				throw new Error(`The valid migration prefix failed:\n${output}`);
 			}
-			assertPrefixHistory(query(PREFIX_HISTORY_SQL, database), broken);
+			assertPrefixHistory(first, query(prefixHistorySql(first), database), broken);
 		}
 		console.log("Liquibase refused the broken prefix at upgrade-test-forward-reference.");
-		console.log(`The candidate's first migration applied on ${previousVersion}.`);
+		console.log(
+			`The candidate's first migration, ${first.resource}, applied on ${previousVersion}.`,
+		);
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
 	}
