@@ -11,7 +11,6 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
@@ -50,28 +49,8 @@ class ReviewCommandListenerTest extends BaseUnitTest {
     }
 
     private static BotCommandReceivedEvent command(@Nullable String address) {
-        return command("/hephaestus review", address);
-    }
-
-    private static BotCommandReceivedEvent command(String body, @Nullable String address) {
-        return new BotCommandReceivedEvent(IntegrationKind.GITLAB, 11L, 22L, body, "someone", 1L, 33L, 44L, address);
-    }
-
-    @Test
-    void shouldStartNoReviewWhenTheCommentHoldsMoreThanTheCommand() {
-        listener.on(command("/hephaestus review please check the tests", ADDRESS));
-
-        verifyNoInteractions(requests, sink);
-    }
-
-    @Test
-    void shouldStartAReviewWhenTheCommentHoldsOnlyTheCommandInAnyCase() {
-        when(requests.requestByComment(anyLong(), anyLong(), any(), any(), any()))
-                .thenReturn(new ReviewRequestOutcomeDTO(ReviewRequestStatus.SUBMITTED, UUID.randomUUID(), null));
-
-        listener.on(command("  /Hephaestus Review \n", ADDRESS));
-
-        verify(requests).requestByComment(anyLong(), anyLong(), any(), any(), any());
+        return new BotCommandReceivedEvent(
+                IntegrationKind.GITLAB, 11L, 22L, "/hephaestus review", 1L, 33L, 44L, address);
     }
 
     @Test
@@ -113,7 +92,7 @@ class ReviewCommandListenerTest extends BaseUnitTest {
                 .thenThrow(new AccessForbiddenException("not linked"));
 
         listening.on(new BotCommandReceivedEvent(
-                IntegrationKind.GITHUB, 11L, 22L, "/hephaestus review", "someone", 1L, 33L, 44L, "acme/widgets#7"));
+                IntegrationKind.GITHUB, 11L, 22L, "/hephaestus review", 1L, 33L, 44L, "acme/widgets#7"));
 
         verify(gitHub)
                 .reply(

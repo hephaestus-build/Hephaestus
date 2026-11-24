@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.productfeedback.notification;
 
+import de.tum.cit.aet.hephaestus.core.event.ContentFree;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -10,15 +11,13 @@ import org.jspecify.annotations.Nullable;
  *
  * @param issueUrl the public issue the email links to; null for a private issue, whose address names the private
  *     repository
- * @param detail the original issue's URL for {@link Kind#DUPLICATE}, or null
  */
 public record ProductFeedbackUpdatedEvent(
         UUID feedbackId,
         long accountId,
         Kind kind,
-        @Nullable String issueUrl,
+        @ContentFree @Nullable String issueUrl,
         boolean publicIssue,
-        @Nullable String detail,
         Instant at) {
 
     public enum Kind {

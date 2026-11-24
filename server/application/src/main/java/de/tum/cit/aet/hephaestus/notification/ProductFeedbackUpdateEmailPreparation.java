@@ -28,7 +28,6 @@ public class ProductFeedbackUpdateEmailPreparation {
                     event.kind(),
                     event.issueUrl(),
                     event.publicIssue(),
-                    event.detail(),
                     event.at(),
                     event.at().plus(MAX_AGE)));
         }

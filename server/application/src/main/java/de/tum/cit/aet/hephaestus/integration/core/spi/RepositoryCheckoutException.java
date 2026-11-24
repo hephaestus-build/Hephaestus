@@ -6,6 +6,7 @@ import java.io.Serial;
  * Why {@link RepositoryCheckouts} made no checkout. The message never names a repository that the workspace cannot
  * see, so it is safe to show to the caller.
  */
+@SourceControlContract
 public class RepositoryCheckoutException extends RuntimeException {
     @Serial
     private static final long serialVersionUID = 1L;

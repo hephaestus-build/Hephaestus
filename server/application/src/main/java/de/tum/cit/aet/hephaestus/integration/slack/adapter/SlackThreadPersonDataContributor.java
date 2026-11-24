@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.adapter;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.ErasesColumns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
@@ -13,6 +14,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** Remove only the subject's participation from a shared conversation. */
+@ErasesColumns("slack_thread.participant_account_ids")
 final class SlackThreadPersonDataContributor implements PersonDataContributor {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;

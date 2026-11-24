@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.BotCommandReceivedEvent;
-import de.tum.cit.aet.hephaestus.integration.core.events.ReviewCommand;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
@@ -40,14 +39,6 @@ public class ReviewCommandListener {
     // Not joined: a review request runs only outside a transaction.
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(BotCommandReceivedEvent command) {
-        // The listener applies the grammar itself rather than trust each publisher.
-        if (!ReviewCommand.matches(command.noteBody())) {
-            log.debug(
-                    "Ignored an unknown bot command: workspaceId={}, itemId={}",
-                    command.workspaceId(),
-                    command.itemId());
-            return;
-        }
         var key = UUID.nameUUIDFromBytes((command.kind() + ":" + command.providerId() + ":" + command.commentId())
                 .getBytes(StandardCharsets.UTF_8));
         var answer = command.replyAddress() == null

@@ -79,6 +79,35 @@ The test records each one in `MIXED_SCOPE_TABLES`, with its reason, and requires
 - `llm_usage_event`: the column is NULL only for an instance product feedback draft or a synthetic instance model probe.
   `ck_llm_usage_event_scope` enforces this source and funding scope.
 
+## Foreign keys across modules
+
+A table belongs to the module of its entity or association.
+A table without either gets its owner in `TableOwnershipArchTest.NATIVE_TABLES`.
+A foreign key to another module's table follows a module edge: the referencing module declares the referenced module in its `@ApplicationModule`.
+It references a plain id column with no JPA association, so name it `sfk_<table>_<column>` (`server/AGENTS.md` § Schema changes).
+
+A reference against the edge is a plain id with no foreign key.
+The higher module then writes both rows in one transaction through the lower module's port.
+`ForeignKeyDirectionDatabaseTest` fails on a table without an owner, and on a foreign key against an edge.
+Main's earlier foreign keys against an edge are listed in `legacy-foreign-keys.txt`. A key that touches a mentoring module has no exception ([System design § Mentoring modules](./system-design#mentoring-modules)).
+
+A column that references a person needs an erasure action that reaches it.
+`PersonalDataMapArchTest` reads the erasure actions from the stores in the `PersonDataRegistry`.
+A store that is not registered erases nothing for the test.
+A registered store reaches a column in one of two ways:
+
+- Its redaction assigns the column.
+- It has no redaction, and one part of its predicate's top-level `OR` compares the column with a scope parameter.
+  For example, `t.author_id = :account`. `JdbcPersonDataStore` binds the scope parameters.
+  A comparison inside a conjunction, a subquery, an `EXISTS`, a `CASE` or a comment does not count.
+
+Custom SQL beside the catalog, such as a contributor's `UPDATE` or `DELETE`, is not parsed.
+Declare each column that it erases with `@ErasesColumns("table.column")` on the catalog or the store.
+A column that only a predicate or an export names has no erasure action.
+
+Otherwise `PersonalDataMapArchTest.PERSON_COLUMNS_OUTSIDE_THE_CATALOG` states what erases or keeps it.
+`PersonalDataMapArchTest` finds these columns in the migrated schema. The [personal-data map](../admin/dsms/personal-data-map) owns the stores.
+
 ## Native objects the JPA diff does not cover
 
 The JPA diff does not cover native `CHECK` constraints or triggers in this repository. For such a
@@ -371,6 +400,25 @@ Empty-database replay cannot prove that existing rows satisfy a new `NOT NULL` o
 and it does not exercise rollback. Preconditions run during replay, but only against the states that
 replay reaches. The JPA diff cannot establish equivalence for objects Hibernate does not model, such
 as triggers, partitioning and partial-index predicates. Verify those through database-level tests.
+
+### Conversion seeds
+
+A change set that converts rows of the previous release ships a conversion seed in the directory that `CUTOVER_SEEDS` names in `scripts/lib/cutover-seeds.ts`.
+A seed is two files:
+
+- `<name>.seed.sql` writes the legacy rows on the previous release's schema.
+- `<name>.expect.sql` names the expected disposition of each seeded row. It raises an exception when a row does not have it.
+
+The format check (`scripts/cutover-seeds.test.ts`) refuses a seed with no expected disposition, and an expected disposition that cannot raise an exception. A comment does not count.
+`readCutoverSeeds` in `scripts/lib/cutover-seeds.ts` reads the seeds and applies the same check.
+
+### Stored transitions
+
+A change that adds stored states registers each state change that the server makes in `StoredTransitionQualificationTest.TRANSITIONS`.
+A transition arranges a row in its source state, runs the server's update to its target state, and queries whether the arranged row reached it.
+The test runs each one on the migrated schema and checks deferred constraints at once.
+It fails when a check, a trigger or a key refuses a registered transition.
+It also fails when the update changes no row, or when the row misses its target state.
 
 ### Previous release on the new schema
 

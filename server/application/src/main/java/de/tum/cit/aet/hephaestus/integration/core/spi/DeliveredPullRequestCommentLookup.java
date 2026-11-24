@@ -6,6 +6,7 @@ import java.util.Set;
  * The synchronized comments on one pull request that feedback delivery in one workspace recorded posting, whatever
  * became of that feedback since. Only a recorded provider identity counts, never a marker or an author.
  */
+@SourceControlContract
 public interface DeliveredPullRequestCommentLookup {
     CommentIds findForPullRequest(long workspaceId, long pullRequestId, ItemKind kind);
 

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.adapter;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.ErasesColumns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
@@ -21,6 +22,7 @@ import tools.jackson.databind.ObjectMapper;
     "slack_channel_consent_event",
     "slack_monitored_channel"
 })
+@ErasesColumns({"slack_message.author_slack_user_id", "slack_participant_consent.slack_user_id"})
 public class IntegrationSlackPersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;

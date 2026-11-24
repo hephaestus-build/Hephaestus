@@ -48,7 +48,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TestPropertySource(properties = "hephaestus.email.from=noreply@hephaestus.test")
 class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
     private static final String ISSUE = "https://github.com/example/feedback/issues/23";
-    private static final String ORIGINAL = "https://github.com/example/feedback/issues/7";
 
     @Autowired
     private AccountRepository accounts;
@@ -127,7 +126,7 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
             // A private issue's address never reaches the reporter's mailbox.
             assertThat(body)
                     .contains(expected, "/product-feedback", "Your product feedback")
-                    .doesNotContain(ISSUE, ORIGINAL, "private-feedback-content", "a maintainer replied", "fixed");
+                    .doesNotContain(ISSUE, "private-feedback-content", "a maintainer replied", "fixed");
             if (kind == Kind.FILED) assertThat(body).contains("The maintainers can see it");
         }
         assertThat(publications(id)).isEmpty();
@@ -153,18 +152,6 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
             assertThat(alternatives.getBodyPart(i).getContent().toString())
                     .contains(ISSUE)
                     .doesNotContain("The maintainers can see it");
-        }
-    }
-
-    @Test
-    void shouldLinkTheOriginalOfAPublicDuplicate() throws Exception {
-        Account reporter = reporter();
-        publish(report(reporter), reporter, Kind.DUPLICATE, true);
-
-        var mixed = (MimeMultipart) sentTo(reporter).getFirst().getContent();
-        var alternatives = (MimeMultipart) mixed.getBodyPart(0).getContent();
-        for (int i = 0; i < alternatives.getCount(); i++) {
-            assertThat(alternatives.getBodyPart(i).getContent().toString()).contains(ISSUE, ORIGINAL);
         }
     }
 
@@ -230,7 +217,7 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
         UUID id = report(reporter);
         new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> events.publishEvent(new ProductFeedbackUpdatedEvent(
-                        id, accountId(reporter), Kind.COMMENTED, ISSUE, true, null, Instant.EPOCH)));
+                        id, accountId(reporter), Kind.COMMENTED, ISSUE, true, Instant.EPOCH)));
 
         assertThat(sentTo(reporter)).isEmpty();
         assertThat(publications(id)).isEmpty();
@@ -259,12 +246,7 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
     }
 
     private static ProductFeedbackUpdatedEvent event(UUID id, Account reporter, Kind kind, boolean publicIssue) {
-        String detail = switch (kind) {
-            case DUPLICATE -> ORIGINAL;
-            default -> null;
-        };
-        return new ProductFeedbackUpdatedEvent(
-                id, accountId(reporter), kind, ISSUE, publicIssue, detail, Instant.now());
+        return new ProductFeedbackUpdatedEvent(id, accountId(reporter), kind, ISSUE, publicIssue, Instant.now());
     }
 
     /** The messages sent to the reporter once the outbox has carried out every due email. */

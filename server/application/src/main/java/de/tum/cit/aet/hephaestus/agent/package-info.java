@@ -14,6 +14,7 @@
             "core::auth-spi",
             "core::auth-types",
             "core::config-audit-spi",
+            "core::event",
             "core::exception",
             "core::lock",
             "core::logging",

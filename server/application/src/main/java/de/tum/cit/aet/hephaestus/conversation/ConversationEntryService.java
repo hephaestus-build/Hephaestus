@@ -4,10 +4,13 @@ import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,6 +47,7 @@ public class ConversationEntryService {
     private final TurnRuns runs;
     private final Clock clock;
     private final ConversationSlackReplies slackReplies;
+    private final PrivacyJournal journal;
 
     public enum SearchScope {
         MAIN,
@@ -204,6 +208,7 @@ public class ConversationEntryService {
             turns.lockById(turnId).ifPresent(this::stop);
         }
         redaction.redact(List.of(entryId));
+        journal.record(PrivacyJournalKind.ENTRY_DELETED, Map.of("workspaceId", workspaceId, "entryId", entryId));
         // An erasure recovery manifest lists this delete after its recovery point, so a rolled-back delete logs
         // nothing.
         // The conversation module does not depend on observability, so the keys are literals; they hold ids, never

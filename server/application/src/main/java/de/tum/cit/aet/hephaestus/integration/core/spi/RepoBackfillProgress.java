@@ -18,6 +18,7 @@ import org.jspecify.annotations.Nullable;
  * @param pullRequestHighWaterMark highest pull-request number reached, if any
  * @param remaining                total items still to backfill (issues + pull requests)
  */
+@SourceControlContract
 public record RepoBackfillProgress(
         boolean initialized,
         boolean complete,

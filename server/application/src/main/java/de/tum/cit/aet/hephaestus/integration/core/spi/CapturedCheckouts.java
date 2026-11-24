@@ -9,6 +9,7 @@ import java.util.function.Predicate;
  * own mirror, fetches the commit from the provider when the mirror lacks it, and keeps the built checkout in its cache
  * beside the mirror.
  */
+@SourceControlContract
 public interface CapturedCheckouts {
     /**
      * Copies the checkout of {@code key} to {@code target}, which must not exist. The copy's commit has the recorded

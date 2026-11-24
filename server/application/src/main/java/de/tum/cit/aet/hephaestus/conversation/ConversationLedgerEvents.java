@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.conversation;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import de.tum.cit.aet.hephaestus.core.event.ContentFree;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +28,7 @@ public final class ConversationLedgerEvents {
             long workspaceId,
             UUID turnId,
             int attempt,
-            @Nullable JsonNode admission,
+            @ContentFree @Nullable JsonNode admission,
             Instant startedAt,
             Instant lostAt) {}
 

@@ -16,6 +16,7 @@ package de.tum.cit.aet.hephaestus.integration.core.spi;
  * deliberately vendor-neutral — see {@link ApiCredentialProvider.InstallationCredential}
  * for the matching credential bundle.
  */
+@SourceControlContract
 public enum AuthMode {
     /**
      * Installation-based App authentication (e.g. GitHub App installation tokens).

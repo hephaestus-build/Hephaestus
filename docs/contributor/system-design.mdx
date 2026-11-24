@@ -175,6 +175,59 @@ Modulith verification therefore does not enforce their persistence encapsulation
 The architecture tests enforce the core, domain and provider boundary.
 [Workspace context](./workspace-context) owns tenant enforcement.
 
+### Mentoring modules
+
+[Proposed ADR 0138](https://github.com/hephaestus-build/Hephaestus/blob/225d54c044378aef8485248a3e9174841eda29d3/docs/decisions/0138-domain-modules-own-rows-and-rules-and-agent-modules-host-runs.md) adds three domain modules for the conversation agent: `relationship`, `learning` and `mentoring`.
+They are layers in this order.
+Each one may depend on the modules before it.
+Only `agent` and `notification` sit above all three.
+
+No other module may depend on them, so `practices` never depends on `mentoring`.
+A mentoring module never depends on `agent` or `notification` either.
+
+A domain module owns rows and rules. Its run kinds, gateway routes and tools live in an `agent` package that depends on it.
+
+These tests apply the module rules:
+
+| Rule | Test |
+| --- | --- |
+| A module declares no dependency against the layers. | `ModulithVerificationTest` |
+| SQL reads no table of another module. The test reads string literals, joined literals and text blocks in the source, and the compiled `@Query` annotations. It also forbids SQL built at run time: plain JDBC, `JdbcClient`, `JdbcOperations` and `EntityManager.createNativeQuery`. | `TableOwnershipArchTest` |
+| No class uses an entity of another module, so no JPA association crosses a module. | `RepositoryOwnershipArchTest` |
+| Every table has an owner module, and a foreign key follows a declared module edge. | `ForeignKeyDirectionDatabaseTest` |
+| A mentoring module uses no source-control contract and no provider adapter. | `DomainNeutralityArchTest` |
+| A mentoring module reads the time only from the injected `Clock`. | `SystemClockArchTest` |
+
+An edge that touches a mentoring module has no exception.
+Main's earlier SQL reads, entity uses and foreign keys against an edge are listed one by one under `server/application/src/test/resources/architecture/`.
+A new one fails, and a fixed one must leave its list.
+A table without an entity gets its owner in `TableOwnershipArchTest.NATIVE_TABLES`.
+
+### Events between modules
+
+The event publication registry stores each event that an `@ApplicationModuleListener` receives, in `event_publication`.
+Erasure reaches a stored event only through the core and activity stores of the [personal-data map](../admin/dsms/personal-data-map).
+Every stored event, in every module, carries content only by reference.
+Every event that crosses the boundary of a mentoring module does too.
+
+A free-form component, such as a `String` or JSON, needs `@ContentFree`: an ID, a key, a fixed code, a public URL or a configuration snapshot.
+`RegistryEventShapeArchTest` finds each listener through merged annotations and checks these events.
+A listener of an interface or a superclass receives each concrete application class that implements it. The test checks each of these classes too, and a payload must be a record.
+Main's source-control domain events still carry provider text from `integration.scm` to other modules in memory. The registry does not store them.
+
+Each pair of a mentoring listener and an event that it handles needs a test that implements `IdempotentListenerIntegrationTest`.
+The harness delivers each event twice, and both events in swapped order. The listener must reach the same state in each case.
+
+### Privacy facts
+
+A producer of a privacy fact calls the `PrivacyJournal` port in the transaction of the fact's cause.
+`PrivacyJournalKind` lists the kinds. Each kind removes data or ends a grant.
+
+A developer's deletion of their own message records `ENTRY_DELETED`.
+The other erasures that the [erasure recovery manifest](../admin/erasure-recovery) lists have no producer yet.
+The server's journal stores no fact yet, so an operator still writes the manifest by hand.
+Tests read the facts that a producer records from `RecordingPrivacyJournal`.
+
 ### Context map
 
 The architecture tier generates the context map from the verified module model. CI retains it in `server-context-map-<attempt>` for fourteen days.
@@ -206,6 +259,7 @@ Do not keep a hand-drawn copy of the graph. The table below owns the relationshi
 | `notification` | Account notifications and their transports | Customer/Supplier: notification-producing domains | [ADR 0044](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0044-email-is-a-notification-transport.md) |
 | `observability` | Structured logging and metric contracts | Shared Kernel: observability | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `practices` | Definitions, reviews, results and feedback | Customer/Supplier: evidence providers and execution | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `relationship` | A person's relationship with Hephaestus, its settings and its change feed | Customer/Supplier: `learning`, `mentoring` and the runtime | [Proposed ADR 0138](https://github.com/hephaestus-build/Hephaestus/blob/225d54c044378aef8485248a3e9174841eda29d3/docs/decisions/0138-domain-modules-own-rows-and-rules-and-agent-modules-host-runs.md) |
 | `productfeedback` | Feedback about Hephaestus and its issue filing | Customer/Supplier: the SCM ProductFeedbackIssues port | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `workspace` | Tenant lifecycle and workspace policies | Customer/Supplier: product modules and provider lifecycle | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 
