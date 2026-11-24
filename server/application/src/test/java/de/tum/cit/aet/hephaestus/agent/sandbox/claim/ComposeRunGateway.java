@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.SandboxReviewClaims;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxModelProxy;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
@@ -190,7 +191,8 @@ public final class ComposeRunGateway implements AutoCloseable {
             factory.registerSingleton("sandboxRunArguments", new WebMvcConfigurer() {
                 @Override
                 public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-                    resolvers.add(new SandboxRunArgumentResolver(runs, Tracer.NOOP));
+                    resolvers.add(new SandboxRunArgumentResolver(
+                            runs, context.getBean(AgentRunAuthority.class), Tracer.NOOP));
                 }
             });
             factory.registerSingleton("agentSandboxes", sandboxes);

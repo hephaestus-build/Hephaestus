@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
@@ -362,7 +363,8 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 "UPDATE person_evidence_copy SET state='ERASED',payload='{}'::jsonb WHERE id=? AND workspace_id=?",
                 copy,
                 job.getWorkspaceId());
-        assertThatThrownBy(() -> files.resume(job)).isInstanceOf(EvidenceReceipts.CopyUnavailableException.class);
+        assertThatThrownBy(() -> files.resume(job, () -> {}))
+                .isInstanceOf(EvidenceReceipts.CopyUnavailableException.class);
     }
 
     private ReviewJob running(String slug) {
@@ -393,7 +395,8 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                 transactions,
                 mapper,
                 telemetry,
-                files);
+                files,
+                context.getBean(AgentRunAuthority.class));
         var reviewRuns = context.getBean(ReviewRunKind.class);
         var terminal = new ReviewJobTerminal(jobs, runs, mock(ReviewCompositionContinuation.class));
         var meters = new SimpleMeterRegistry();
@@ -442,7 +445,8 @@ class ReviewPreparationRecoveryIntegrationTest extends BaseIntegrationTest {
                         results,
                         reviewRuns,
                         runs,
-                        context.getBean(ClusterLock.class)));
+                        context.getBean(ClusterLock.class)),
+                context.getBean(AgentRunAuthority.class));
     }
 
     private static ConfigSnapshot snapshot() {

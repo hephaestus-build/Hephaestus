@@ -205,6 +205,7 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
         UUID absorbedLast = hephaestus(shared, absorbed, "Absorbed two").getId();
         Conversation thread = conversations.openThread(shared.getId(), absorbedFirst.getId());
         UUID inThread = hephaestus(shared, thread, "In the thread").getId();
+        member(shared, unclaimed);
         ConversationTurnService.Submission asked = turns.submit(
                 shared.getId(),
                 absorbed.getId(),
@@ -437,11 +438,20 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
             ConversationTurn.Surface surface,
             String text,
             @Nullable String slackTs) {
+        member(workspace, conversation.getAccountId());
         return turns.submit(
                 workspace.getId(),
                 conversation.getId(),
                 new ConversationTurnService.Question(
                         surface, text, UUID.randomUUID().toString(), slackTs, null));
+    }
+
+    /** Only a member asks Hephaestus in a workspace. */
+    private void member(Workspace workspace, long accountId) {
+        jdbc.update(
+                "INSERT INTO membership(workspace_id, account_id, role) VALUES (?, ?, 'MEMBER') ON CONFLICT DO NOTHING",
+                workspace.getId(),
+                accountId);
     }
 
     /** Claims turns until this one starts. A turn of another test that starts first rolls back with this test. */

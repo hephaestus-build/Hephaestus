@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.gateway;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.micrometer.tracing.Tracer;
@@ -16,15 +17,17 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 class AgentGatewayWebConfiguration implements WebMvcConfigurer {
 
     private final AgentRuns runs;
+    private final AgentRunAuthority authority;
     private final Tracer tracer;
 
-    AgentGatewayWebConfiguration(AgentRuns runs, Tracer tracer) {
+    AgentGatewayWebConfiguration(AgentRuns runs, AgentRunAuthority authority, Tracer tracer) {
         this.runs = runs;
+        this.authority = authority;
         this.tracer = tracer;
     }
 
     @Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-        resolvers.add(new SandboxRunArgumentResolver(runs, tracer));
+        resolvers.add(new SandboxRunArgumentResolver(runs, authority, tracer));
     }
 }

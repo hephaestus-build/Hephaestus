@@ -24,7 +24,38 @@ class StoredTransitionQualificationTest {
      * The registered transitions. Each one arranges a row in its source state, moves it to its target state, and
      * proves that the row reached it.
      */
-    static final List<StoredTransition> TRANSITIONS = List.of();
+    static final List<StoredTransition> TRANSITIONS = List.of(
+            new StoredTransition(
+                    "workspace authority_generation 0 -> 1 when a membership ends (ADR 0134)",
+                    """
+                    INSERT INTO workspace(id,slug,display_name,account_login,account_type,status)
+                        VALUES(997101,'w997101','W997101','w997101','ORG','ACTIVE');
+                    INSERT INTO account(id,display_name) VALUES(997101,'Leaving member');
+                    INSERT INTO membership(workspace_id,account_id,role) VALUES(997101,997101,'MEMBER')""",
+                    "DELETE FROM membership WHERE workspace_id = 997101 AND account_id = 997101",
+                    "SELECT authority_generation = 1 FROM workspace WHERE id = 997101"),
+            new StoredTransition("agent_run LEASED -> ENDED AUTHORITY_CHANGED (ADR 0134)", """
+                    INSERT INTO workspace(id,slug,display_name,account_login,account_type,status)
+                        VALUES(997102,'w997102','W997102','w997102','ORG','ACTIVE');
+                    INSERT INTO agent_run(id,workspace_id,kind,band,concurrency_key,state,attempt,lease_epoch,
+                        leased_until,available_at,created_at,started_at)
+                        VALUES('00000000-0000-4000-8000-000000997102',997102,'TURN','INTERACTIVE',
+                            'conversation:997102','LEASED',0,1,now() + interval '1 minute',now(),now(),now())""", """
+                    UPDATE agent_run SET state = 'ENDED', leased_until = NULL, stop_reason = 'AUTHORITY_CHANGED',
+                        ended_at = clock_timestamp()
+                    WHERE id = '00000000-0000-4000-8000-000000997102' AND lease_epoch = 1 AND state = 'LEASED'""", """
+                    SELECT state = 'ENDED' AND stop_reason = 'AUTHORITY_CHANGED'
+                    FROM agent_run WHERE id = '00000000-0000-4000-8000-000000997102'"""),
+            new StoredTransition("review -> CANCELLED AUTHORITY_CHANGED (ADR 0134)", """
+                    INSERT INTO workspace(id,slug,display_name,account_login,account_type,status)
+                        VALUES(997103,'w997103','W997103','w997103','ORG','ACTIVE');
+                    INSERT INTO item(id,workspace_id,kind,source_id) VALUES(997103,997103,'test.item',997103);
+                    INSERT INTO review(id,workspace_id,item_id,kind,item_version,origin,ordered_at)
+                        VALUES('00000000-0000-4000-8000-000000997103',997103,997103,'ITEM','test:1','REQUEST',now())""", """
+                    UPDATE review SET status = 'CANCELLED', stop_reason = 'AUTHORITY_CHANGED', completed_at = now()
+                    WHERE id = '00000000-0000-4000-8000-000000997103'""", """
+                    SELECT status = 'CANCELLED' AND stop_reason = 'AUTHORITY_CHANGED'
+                    FROM review WHERE id = '00000000-0000-4000-8000-000000997103'"""));
 
     @Test
     void shouldApplyEveryRegisteredTransitionOnTheMigratedSchema() {

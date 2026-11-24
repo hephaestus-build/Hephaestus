@@ -621,8 +621,9 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         };
     }
 
-    /** A question {@code author} asked Hephaestus in {@code where}, with its queued turn. */
+    /** A question {@code author} asked Hephaestus in {@code where} as a member, with its queued turn. */
     private ConversationTurnService.Submission question(Workspace where, User author, String text) {
+        ensureMembership(where, author, Membership.WorkspaceRole.MEMBER);
         Conversation main = conversations.findOrCreateMain(where.getId(), accountId(author));
         return turns.submit(
                 where.getId(),

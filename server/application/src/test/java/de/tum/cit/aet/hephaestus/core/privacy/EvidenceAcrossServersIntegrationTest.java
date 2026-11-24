@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -204,7 +205,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
             String sourceSha = ProvenanceDigest.sha256Hex(SOURCE.getBytes(StandardCharsets.UTF_8));
 
             assertThat(b.folder(recorded)).doesNotExist();
-            b.files.ensureAttemptFolder(recorded);
+            b.files.ensureAttemptFolder(recorded, () -> {});
             assertThat(b.reads.readText(recorded, "repos/reviewed/src/App.java", sourceSha))
                     .contains(SOURCE);
             assertThat(b.reads.containsUtf8AtLines(
@@ -254,7 +255,8 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                                     SandboxLayout.PRACTICE_CONTRACT_VERSION,
                                     UUID.randomUUID(),
                                     recorded.getId(),
-                                    recorded.getAttempt())))
+                                    recorded.getAttempt()),
+                            () -> {}))
                     .isInstanceOf(StaleAttemptException.class);
             assertThat(admitting.builds).isEmpty();
             assertThat(admitting.server.folder(recorded)).doesNotExist();
@@ -292,7 +294,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
 
         try (var captured = a.capture(job, Map.of("practices/program.sh", program, "practices/data.txt", data))) {
             var recorded = record(job, captured, null);
-            b.files.ensureAttemptFolder(recorded);
+            b.files.ensureAttemptFolder(recorded, () -> {});
 
             for (String path : List.of("practices/program.sh", "practices/data.txt", "context/item.json")) {
                 Path original = a.folder(recorded).resolve(path);
@@ -320,7 +322,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
             var recorded = record(job, captured, "0".repeat(64));
 
             var failure = catchThrowableOfType(
-                    CheckoutUnverifiedException.class, () -> b.files.ensureAttemptFolder(recorded));
+                    CheckoutUnverifiedException.class, () -> b.files.ensureAttemptFolder(recorded, () -> {}));
             assertThat(failure.reason()).isEqualTo(CheckoutUnverifiedException.Reason.MISMATCH);
             assertThat(b.folder(recorded)).doesNotExist();
 
@@ -362,7 +364,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         ReviewJob recorded;
         try {
             recorded = record(job, captured, null);
-            b.files.ensureAttemptFolder(recorded);
+            b.files.ensureAttemptFolder(recorded, () -> {});
             assertThat(b.reads.readText(
                             recorded,
                             "context/item.json",
@@ -391,7 +393,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
         assertThat(a.catalog.removeErasedFolders()).isEqualTo(new ErasedFolders(1, 0));
         assertThat(a.folder(recorded)).doesNotExist();
         var c = new Server(temporary.resolve("c"), job);
-        c.files.ensureAttemptFolder(recorded);
+        c.files.ensureAttemptFolder(recorded, () -> {});
         assertThat(c.reads.readText(
                         recorded,
                         "context/item.json",
@@ -838,8 +840,13 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                                     git, snapshots, mock(ReviewRepositoryPreparer.class), new SimpleMeterRegistry())),
                             transactions));
             reads = new EvidenceFileReads(files, new FabricLayout(root.toString()), jobs);
-            receipts =
-                    new AttemptCopyReceipts(evidenceReceipts, captures, files, new FabricLayout(root.toString()), jobs);
+            receipts = new AttemptCopyReceipts(
+                    evidenceReceipts,
+                    captures,
+                    files,
+                    new FabricLayout(root.toString()),
+                    jobs,
+                    mock(AgentRunAuthority.class));
         }
 
         /** Captures the attempt as a review does: the checkout with its recorded refs, and an API record. */

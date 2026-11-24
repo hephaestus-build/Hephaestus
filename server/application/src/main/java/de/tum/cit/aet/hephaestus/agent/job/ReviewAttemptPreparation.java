@@ -12,12 +12,15 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
@@ -72,6 +75,7 @@ public class ReviewAttemptPreparation {
     private final ObjectMapper objectMapper;
     private final ReviewJobTelemetry jobTelemetry;
     private final JobEvidenceFiles evidenceFiles;
+    private final AgentRunAuthority authority;
 
     public ReviewAttemptPreparation(
             ReviewJobRepository jobRepository,
@@ -83,7 +87,8 @@ public class ReviewAttemptPreparation {
             TransactionTemplate transactionTemplate,
             ObjectMapper objectMapper,
             ReviewJobTelemetry jobTelemetry,
-            JobEvidenceFiles evidenceFiles) {
+            JobEvidenceFiles evidenceFiles,
+            AgentRunAuthority authority) {
         this.jobRepository = jobRepository;
         this.handler = handler;
         this.admission = admission;
@@ -94,6 +99,7 @@ public class ReviewAttemptPreparation {
         this.objectMapper = objectMapper;
         this.jobTelemetry = jobTelemetry;
         this.evidenceFiles = evidenceFiles;
+        this.authority = authority;
     }
 
     /** The attempt's job, while {@code fence} still holds it. */
@@ -118,6 +124,9 @@ public class ReviewAttemptPreparation {
             AgentRunFence fence,
             ConfigSnapshot snapshot,
             AtomicReference<PreparationFailure.Stage> stage) {
+        // The route's recheck can be minutes old once the preparation lock is held: every case rechecks before it
+        // captures or restores anything.
+        authority.check(fence, AuthorityBoundary.CONTEXT_READ);
         stage.set(PreparationFailure.Stage.INPUTS);
 
         // Keeping a result, staging one and withholding a practice commit at capture, at practice start or at staging.
@@ -133,13 +142,18 @@ public class ReviewAttemptPreparation {
             ReviewJob current = owned(jobId, fence);
             preparedInputs = switch (evidenceFiles.preparation(current)) {
                 case NEW -> handler.prepareInputs(current);
-                case PUBLISHED -> evidenceFiles.resume(current);
+                // A resume can wait for the folder, then rebuild it from the provider: it rechecks once it holds it.
+                case PUBLISHED ->
+                    evidenceFiles.resume(current, () -> authority.check(fence, AuthorityBoundary.CONTEXT_READ));
                 case INTERRUPTED -> throw new FreshEpochRequired();
                 case UNAVAILABLE ->
                     throw new CheckoutUnverifiedException(
                             CheckoutUnverifiedException.Reason.UNAVAILABLE,
                             "The published review inputs are no longer held");
             };
+        } catch (AuthorityRefusedException refused) {
+            capture.end(ReviewStageTelemetry.Outcome.AUTHORITY_CHANGED);
+            throw refused;
         } catch (RuntimeException failed) {
             capture.end(ReviewStageTelemetry.Outcome.FAILED);
             throw failed;

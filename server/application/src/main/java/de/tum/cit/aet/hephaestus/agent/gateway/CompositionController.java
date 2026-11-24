@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.ReadsContext;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -74,6 +75,7 @@ public class CompositionController {
     }
 
     @PostMapping("/next")
+    @ReadsContext
     public ResponseEntity<NextAnswer> next(SandboxRun run, @Valid @RequestBody NextRequest request) {
         return fenced(run, composing -> {
             var finished = EnumSet.noneOf(FeedbackDestination.class);
@@ -94,6 +96,7 @@ public class CompositionController {
     }
 
     @PostMapping("/tools/{name}")
+    @ReadsContext
     public CompositionSessions.ToolResult tool(
             SandboxRun run, @PathVariable String name, @Valid @RequestBody ToolRequest request) {
         return fenced(run, composing -> {
@@ -119,6 +122,7 @@ public class CompositionController {
     }
 
     @PostMapping("/stop")
+    @ReadsContext
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void stop(SandboxRun run, @Valid @RequestBody StopRequest request) {
         fenced(run, composing -> {
@@ -128,6 +132,7 @@ public class CompositionController {
     }
 
     @PostMapping("/close")
+    @ReadsContext
     public CloseAnswer close(SandboxRun run, @Valid @RequestBody CloseRequest request) {
         return fenced(
                 run,

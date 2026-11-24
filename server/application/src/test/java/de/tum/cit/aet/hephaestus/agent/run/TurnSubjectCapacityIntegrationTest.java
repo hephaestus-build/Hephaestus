@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxOwnerFixtures;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -81,7 +82,8 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
                         capacity.sandboxIdle(),
                         capacity.conversationSandboxIdle(),
                         capacity.modelOutageWindow()),
-                new SimpleMeterRegistry());
+                new SimpleMeterRegistry(),
+                beans.getBean(AuthorityGenerations.class));
     }
 
     @ParameterizedTest

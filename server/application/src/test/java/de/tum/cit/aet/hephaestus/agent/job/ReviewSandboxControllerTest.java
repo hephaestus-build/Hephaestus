@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -66,7 +67,7 @@ class ReviewSandboxControllerTest extends BaseUnitTest {
     }
 
     private void upload(MockHttpServletResponse response) {
-        new ReviewSandboxController(reviews, runs)
+        new ReviewSandboxController(reviews, runs, mock(AgentRunAuthority.class))
                 .result(run, "sha-256=:AA==:", 0, false, new MockHttpServletRequest(), response);
     }
 }

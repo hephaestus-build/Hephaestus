@@ -1,7 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.conversation.sandbox;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoadException;
@@ -63,6 +66,7 @@ public class TurnContextLoads implements AutoCloseable {
     private final Clock clock;
     private final PersonDataCopyFence copies;
     private final FabricLayout layout;
+    private final AgentRunAuthority authority;
     private final Semaphore loading = new Semaphore(LOADS_AT_ONCE);
 
     /** Loads run here, so that an attempt's end can stop waiting for one; each takes a virtual thread. */
@@ -73,12 +77,14 @@ public class TurnContextLoads implements AutoCloseable {
             ObjectProvider<ContextLoader> loaders,
             Clock clock,
             PersonDataCopyFence copies,
-            FabricLayout layout) {
+            FabricLayout layout,
+            AgentRunAuthority authority) {
         this.turns = turns;
         this.loaders = loaders;
         this.clock = clock;
         this.copies = copies;
         this.layout = layout;
+        this.authority = authority;
     }
 
     @Override
@@ -161,6 +167,11 @@ public class TurnContextLoads implements AutoCloseable {
         var admission = layout.spool().capture(turn.workspaceId(), copies::capture);
         try (admission) {
             if (abandoned.getAsBoolean()) throw new CancellationException();
+            // A load can wait for its permit and its capture admission well past the route's recheck: read only under
+            // authority that still holds (ADR 0134).
+            authority.require(
+                    new AgentRunFence(turn.runId(), turn.workspaceId(), turn.attempt()),
+                    AuthorityBoundary.CONTEXT_READ);
             loaded = owner.load(turn.workspaceId(), turn.accountId(), requested, abandoned);
             if (abandoned.getAsBoolean()) throw new CancellationException();
             Optional<String> relative =

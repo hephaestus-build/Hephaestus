@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionIdentity;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
@@ -20,6 +21,8 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxGitHardening;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -64,6 +67,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     private final ReviewRunKind reviewRuns;
     private final AgentRuns runs;
     private final ReviewAttemptMeasurements measurements;
+    private final AgentRunAuthority authority;
 
     public ReviewSandboxRuns(
             ReviewJobClaimService claims,
@@ -75,7 +79,8 @@ public class ReviewSandboxRuns implements SandboxRunKind {
             ReviewRunKind reviewRuns,
             AgentRuns runs,
             AttemptCopyReceipts receipts,
-            ReviewAttemptMeasurements measurements) {
+            ReviewAttemptMeasurements measurements,
+            AgentRunAuthority authority) {
         this.claims = claims;
         this.custody = custody;
         this.jobs = jobs;
@@ -86,6 +91,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         this.runs = runs;
         this.receipts = receipts;
         this.measurements = measurements;
+        this.authority = authority;
     }
 
     @Override
@@ -130,7 +136,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
 
     @Override
     public JsonNode context(SandboxRun run) {
-        ReviewAttemptMeasurements.Measurement measurement = measurements.get(run);
+        ReviewAttemptMeasurements.Measurement measurement = measured(run);
         var context = objectMapper.createObjectNode();
         context.set("command", objectMapper.valueToTree(measurement.spec().command()));
         context.set("env", objectMapper.valueToTree(runnerEnvironment(measurement.spec())));
@@ -146,7 +152,20 @@ public class ReviewSandboxRuns implements SandboxRunKind {
 
     /** The attempt's local archive, held while the replica serves its workspace. */
     SandboxGatewaySessions.Session session(SandboxRun run) {
-        return measurements.get(run).session();
+        return measured(run).session();
+    }
+
+    /**
+     * The attempt's measurement. Preparing it can wait for the evidence folder and rechecks the run's authority there,
+     * without ending the run under the folder's lease and the preparation lock: the run ends here, once both unwound.
+     */
+    private ReviewAttemptMeasurements.Measurement measured(SandboxRun run) {
+        try {
+            return measurements.get(run);
+        } catch (AuthorityRefusedException refused) {
+            authority.require(run.fence(), AuthorityBoundary.CONTEXT_READ);
+            throw refused;
+        }
     }
 
     SandboxGatewaySessions.ReceivedResult receive(SandboxRun run, InputStream input, String contentDigest)

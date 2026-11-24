@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewSandboxController;
 import de.tum.cit.aet.hephaestus.agent.proxy.JobTokenAuthenticationFilter;
 import de.tum.cit.aet.hephaestus.agent.proxy.ResultAdmissionController;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import java.sql.SQLException;
@@ -54,6 +55,19 @@ public class AgentGatewayErrors {
     ProblemDetail stale(StaleRunException stale) {
         var problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
         problem.setTitle("Lease lost");
+        return problem;
+    }
+
+    /**
+     * A run whose authority narrowed answers as a claim that lost its run, so the loop stops: the recheck already ended
+     * the run. The reason names the authority that narrowed.
+     */
+    @ExceptionHandler(AuthorityRefusedException.class)
+    ProblemDetail authorityRefused(AuthorityRefusedException refused) {
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
+        problem.setTitle("Authority changed");
+        problem.setProperty("boundary", refused.refusal().boundary().name());
+        problem.setProperty("reason", refused.refusal().reason().name());
         return problem;
     }
 

@@ -158,13 +158,18 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 && !Instant.parse(capture.path(COPIES_EXPIRE_AT).asString()).isAfter(clock.instant());
     }
 
-    /** Reuses exactly the frozen files; a resumed epoch never captures the providers again. */
-    public PreparedJobInputs resume(ReviewJob job) {
+    /**
+     * Reuses exactly the frozen files; a resumed epoch never captures the providers again. {@code afterLease} runs once
+     * this process holds the folder and before it reads or rebuilds anything: a check that must not go stale while the
+     * resume waits for the folder.
+     */
+    public PreparedJobInputs resume(ReviewJob job, Runnable afterLease) {
         return receipts.withLiveAttempt(job, () -> {
             JsonNode capture = Objects.requireNonNull(job.getCapture());
             var lease = acquireForRebuild(job);
             Path root = directory(layout.jobsRoot(), job);
             try {
+                afterLease.run();
                 var recorded = attemptInputs.list(job);
                 if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) rebuild(job, root, capture, recorded);
                 var paths = new LinkedHashMap<String, Path>();
@@ -413,7 +418,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
      *     attempt's recorded files are missing: a capture failure, never missing evidence
      * @throws AttemptFolderBusyException when another process holds the folder longer than a rebuild waits: retryable
      */
-    public void ensureAttemptFolder(ReviewJob job) {
+    public void ensureAttemptFolder(ReviewJob job, Runnable beforeRebuild) {
         requireNoTransaction();
         Path root = directory(layout.jobsRoot(), job);
         if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
@@ -430,6 +435,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
             }
             var lease = acquireForRebuild(job);
             try (lease) {
+                beforeRebuild.run();
                 rebuild(job, root, capture, files);
             }
         } catch (CheckoutUnverifiedException failure) {
@@ -449,7 +455,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     /**
-     * Requires the folder of the job's running attempt, which {@link #ensureAttemptFolder(ReviewJob)} builds with no
+     * Requires the folder of the job's running attempt, which {@link #ensureAttemptFolder(ReviewJob, Runnable)} builds with no
      * transaction held.
      *
      * @throws AttemptFolderBusyException when the folder is not on this server: retryable, since the caller builds it

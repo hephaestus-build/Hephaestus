@@ -554,7 +554,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                                     sent.readReceipts())),
                             List.of()));
             var sealed = admission.admit(
-                    identity, new SealResultsRequestDTO(3, review.reviewId(), identity.jobId(), identity.attempt()));
+                    identity,
+                    new SealResultsRequestDTO(3, review.reviewId(), identity.jobId(), identity.attempt()),
+                    () -> {});
 
             assertThat(sealed.admitted())
                     .singleElement()
@@ -626,7 +628,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var sealed = admission.admit(
                     review.identity(),
                     new SealResultsRequestDTO(
-                            3, review.reviewId(), review.identity().jobId(), 0));
+                            3, review.reviewId(), review.identity().jobId(), 0),
+                    () -> {});
             assertThat(sealed.admitted())
                     .singleElement()
                     .satisfies(value -> assertThat(value.practiceSlug()).isEqualTo(sibling.getSlug()));
@@ -780,7 +783,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var sealed = admission.admit(
                     review.identity(),
                     new SealResultsRequestDTO(
-                            3, review.reviewId(), review.identity().jobId(), 0));
+                            3, review.reviewId(), review.identity().jobId(), 0),
+                    () -> {});
             assertThat(sealed.admitted()).isEmpty();
             assertThat(sealed.withheld())
                     .singleElement()
@@ -1188,7 +1192,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThatThrownBy(() -> admission.admit(
                             review.identity(),
                             new SealResultsRequestDTO(
-                                    3, review.reviewId(), review.identity().jobId(), 0)))
+                                    3, review.reviewId(), review.identity().jobId(), 0),
+                            () -> {}))
                     .isInstanceOf(AdmissionConflictException.class);
             assertThatThrownBy(() -> admission.stage(
                             new ResultAdmissionService.AdmissionIdentity(
@@ -1214,8 +1219,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var request = new SealResultsRequestDTO(
                     3, review.reviewId(), review.identity().jobId(), 0);
             try (var workers = Executors.newFixedThreadPool(2)) {
-                var first = workers.submit(() -> admission.admit(review.identity(), request));
-                var second = workers.submit(() -> admission.admit(review.identity(), request));
+                var first = workers.submit(() -> admission.admit(review.identity(), request, () -> {}));
+                var second = workers.submit(() -> admission.admit(review.identity(), request, () -> {}));
                 var left = first.get(30, TimeUnit.SECONDS);
                 var right = second.get(30, TimeUnit.SECONDS);
                 assertThat(left.admitted())
@@ -3333,7 +3338,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     new AdmissionRequestDTO(
                             3, request.reviewId(), request.jobId(), request.attempt(), List.of(), List.of(nonResult)));
         return admission.admit(
-                identity, new SealResultsRequestDTO(3, request.reviewId(), request.jobId(), request.attempt()));
+                identity,
+                new SealResultsRequestDTO(3, request.reviewId(), request.jobId(), request.attempt()),
+                () -> {});
     }
 
     private AdmissionRequestDTO request(ClaimedReview review) {

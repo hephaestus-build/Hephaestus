@@ -397,6 +397,28 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepTheStampOnAContinuationAndTakeTheCurrentOneOnAResume() {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:resumed");
+        AgentRunLease lease = claim().orElseThrow();
+        transactions.executeWithoutResult(status -> runs.end(lease.fence(), AgentRunStopReason.COMPLETED));
+        long requested = runs.find(run).orElseThrow().getAuthorizationStamp().workspace();
+        jdbc.update("UPDATE workspace SET authority_generation = authority_generation + 1 WHERE id = ?", workspace);
+
+        Duration window = Duration.ofMinutes(11);
+        AgentRunRef continued = Objects.requireNonNull(transactions.execute(
+                status -> runs.continueAs(run, lease.epoch(), AgentRunKind.REVIEW_COMPOSE, window)));
+        AgentRunRef resumed = Objects.requireNonNull(
+                transactions.execute(status -> runs.resume(run, lease.epoch(), AgentRunKind.REVIEW_COMPOSE, window)));
+
+        assertThat(runs.find(continued).orElseThrow().getAuthorizationStamp().workspace())
+                .as("a continuation is the same work, under the access it was requested with")
+                .isEqualTo(requested);
+        assertThat(runs.find(resumed).orElseThrow().getAuthorizationStamp().workspace())
+                .as("a resume is new work, under the access of now")
+                .isEqualTo(requested + 1);
+    }
+
+    @Test
     void shouldContinueAnEndedRunAsTheNextStepOfItsWorkWithoutSpendingAnAttempt() {
         AgentRunRef run = enqueue(workspace, AgentRunBand.INTERACTIVE, "review:composed");
         AgentRunLease measured = claim().orElseThrow();

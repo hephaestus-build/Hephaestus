@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -250,7 +251,8 @@ class ReviewPublishedPreparationTest extends BaseUnitTest {
                 transactions,
                 mapper,
                 mock(ReviewJobTelemetry.class, Answers.RETURNS_DEEP_STUBS),
-                files);
+                files,
+                mock(AgentRunAuthority.class));
     }
 
     private ReviewAttemptPreparation.PreparedSandbox prepare(JobEvidenceFiles files) {

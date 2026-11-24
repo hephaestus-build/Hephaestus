@@ -136,11 +136,10 @@ public class ConversationTurnService {
     @Transactional
     public Submission submit(long workspaceId, UUID conversationId, Question asked) {
         String requestId = asked.requestId();
-        ConversationService.holdWrite(
-                writeFence,
-                conversations
-                        .findAccountIdByIdAndWorkspaceId(conversationId, workspaceId)
-                        .orElseThrow(() -> new EntityNotFoundException("Conversation", conversationId.toString())));
+        long owner = conversations
+                .findAccountIdByIdAndWorkspaceId(conversationId, workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Conversation", conversationId.toString()));
+        ConversationService.holdWrite(writeFence, owner);
         Conversation conversation = entryService.lock(workspaceId, conversationId);
         Optional<ConversationTurn> earlier = turns.findByWorkspaceIdAndRequestId(workspaceId, requestId);
         if (earlier.isPresent()) {
@@ -156,7 +155,7 @@ public class ConversationTurnService {
         if (turns.countQueuedByWorkspaceIdAndConversationId(workspaceId, conversationId) >= maxFollowUps) {
             throw new ConversationRejectedException(ConversationRejectedException.Reason.FOLLOW_UPS_FULL);
         }
-        UUID runId = runs.enqueue(workspaceId, conversationId);
+        UUID runId = runs.enqueue(workspaceId, conversationId, owner);
         ConversationTurn turn = turns.saveAndFlush(new ConversationTurn(
                 conversation, requestId, asked.surface(), asked.pageContext(), runId, clock.instant()));
         ConversationEntry question = entryService.insert(

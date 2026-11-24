@@ -60,7 +60,9 @@ public final class ReviewStageTelemetry {
         /** The sandbox left a practice without a result and staged the rest; another attempt may continue it. */
         PARTIAL,
         /** The composition stopped for a passing cause, and another attempt continues it. */
-        HANDED_ON;
+        HANDED_ON,
+        /** Access to the workspace narrowed while the stage ran, and a recheck stopped it (ADR 0134). */
+        AUTHORITY_CHANGED;
 
         final String tag = name().toLowerCase(Locale.ROOT);
     }

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.run;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -34,6 +35,9 @@ class AgentRunDeferralIntegrationTest extends BaseIntegrationTest {
     private AgentRuns bean;
 
     @Autowired
+    private AuthorityGenerations generations;
+
+    @Autowired
     private WorkspaceRepository workspaces;
 
     @Autowired
@@ -49,7 +53,7 @@ class AgentRunDeferralIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
-        runs = new AgentRuns(repository, bean.capacity(), meters);
+        runs = new AgentRuns(repository, bean.capacity(), meters, generations);
         workspace = workspaces
                 .save(TestEntities.activeWorkspace("deferral-" + UUID.randomUUID()))
                 .getId();

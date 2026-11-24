@@ -509,6 +509,30 @@ Do the work with no lock held, then check them again before you write or answer.
 The test holds the route in its slow part.
 The probe then renews the lease and locks the named rows with a short lock timeout, and fails when it would wait.
 
+## Authorization recheck
+
+[ADR 0134](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0134-the-authorization-recheck-runs-at-three-boundaries-with-two-authorization-generations.md) owns the rule.
+This section gives the mechanism for runs.
+
+- `AgentRuns.enqueue` writes the run's `authorization_stamp`: the workspace's `authority_generation`, as the caller's transaction reads it.
+  Read the stamp before the authority check that it covers, in the same transaction.
+  `TurnRunsAdapter.enqueue` checks the conversation owner's membership after the stamp for this reason.
+- A continuation keeps the stamp of the run that it continues: it is the same work.
+  `AgentRuns.resume`, which queues completed work again because something asks for it now, takes the stamp of now.
+  A database trigger refuses a change of the stamp.
+- Only a narrowing raises `authority_generation`.
+  The trigger `membership_narrows_authority` raises it when a membership ends, is left, moves or loses a role, whatever wrote the row.
+  `Workspace` maps the column neither insertable nor updatable, so a flush of the entity cannot write back an older value.
+- A sandbox route that reads a source carries `@ReadsContext`.
+  `SandboxRunArgumentResolver` then calls `AgentRunAuthority.require` with the boundary `CONTEXT_READ` before the route runs.
+- When the stamp is older than the current generation, `AgentRunAuthority` ends the run as the reaper does.
+  It locks the domain row, calls `AgentRunHandler.ended` with `AUTHORITY_CHANGED`, and ends the run under the holder's fence.
+  The route answers `409` with the boundary and the reason, so the loop stops.
+- Code that waits or reads again after that check checks again before it reads or answers: a folder rebuild or resume once it holds the folder, a turn's load in its worker, and the answer of `/admit-results`.
+  Where ending the run would take a lock that the caller already holds, it uses `AgentRunAuthority.check`, which refuses without ending the run, and the route ends the run once nothing is held.
+  A review's preparation and its folder resume hold the copy fence, which ending a review run takes, so they use `check`. Elsewhere `require` ends the run at once.
+- `authority_refused_total` counts each refusal by boundary and reason.
+
 ## Reaper
 
 `AgentRunReaper` runs on every server replica, every `hephaestus.agent.capacity.lease-renewal`, without a leader.

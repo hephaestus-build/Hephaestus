@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewSandboxController;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewSandboxRuns;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
@@ -106,6 +107,9 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
     private AgentRuns runs;
 
     @Autowired
+    private AgentRunAuthority authority;
+
+    @Autowired
     private WorkspaceRepository workspaces;
 
     @Autowired
@@ -172,19 +176,20 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
                     "compositionController",
                     new CompositionController(
                             composeKind, compositionSessions, compositionClosing, composerTranscript));
-            factory.registerSingleton("reviewSandboxController", new ReviewSandboxController(reviewRuns, runs));
+            factory.registerSingleton(
+                    "reviewSandboxController", new ReviewSandboxController(reviewRuns, runs, authority));
             factory.registerSingleton(
                     "conversationTurnController",
                     new ConversationTurnController(turnContexts, turnCompletion, turns, usage));
             factory.registerSingleton(
                     "turnContextController",
-                    new TurnContextController(turnContexts, turns, contextLoads, Clock.systemUTC()));
+                    new TurnContextController(turnContexts, turns, contextLoads, authority, Clock.systemUTC()));
             factory.registerSingleton("modelRoute", new ModelRoute());
             factory.registerSingleton("fencedReview", review);
             factory.registerSingleton("sandboxRunArguments", new WebMvcConfigurer() {
                 @Override
                 public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-                    resolvers.add(new SandboxRunArgumentResolver(runs, Tracer.NOOP));
+                    resolvers.add(new SandboxRunArgumentResolver(runs, authority, Tracer.NOOP));
                 }
             });
             factory.registerSingleton("agentSandboxes", sandboxes);

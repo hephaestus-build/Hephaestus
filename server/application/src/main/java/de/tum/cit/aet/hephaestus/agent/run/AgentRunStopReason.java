@@ -15,5 +15,10 @@ public enum AgentRunStopReason {
     /** It waited longer than its {@code start_within} for room to begin, while nothing of its subject was ahead. */
     NOT_STARTED,
     /** Its work timed out or its deadline passed. */
-    DEADLINE
+    DEADLINE,
+    /**
+     * The authority it was requested under narrowed, and a boundary refused it (ADR 0134). It does not go on under the
+     * old authority; new work is requested under the new one.
+     */
+    AUTHORITY_CHANGED
 }

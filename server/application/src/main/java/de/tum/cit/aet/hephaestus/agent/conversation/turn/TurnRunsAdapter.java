@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLeaseLostException;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
+import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -34,6 +36,7 @@ public class TurnRunsAdapter implements TurnRuns {
     public static final Duration START_WAIT = Duration.ofMinutes(3);
 
     private final AgentRuns runs;
+    private final WorkspaceMemberships memberships;
     private final Clock clock;
 
     /** The subject of a conversation's runs: also the subject of its sandbox. */
@@ -43,10 +46,13 @@ public class TurnRunsAdapter implements TurnRuns {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public UUID enqueue(long workspaceId, UUID conversationId) {
-        return runs.enqueue(
+    public UUID enqueue(long workspaceId, UUID conversationId, long ownerAccountId) {
+        UUID run = runs.enqueue(
                         workspaceId, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject(conversationId), START_WAIT)
                 .id();
+        if (memberships.activeRole(workspaceId, ownerAccountId).isEmpty())
+            throw new EntityNotFoundException("Conversation", conversationId.toString());
+        return run;
     }
 
     @Override

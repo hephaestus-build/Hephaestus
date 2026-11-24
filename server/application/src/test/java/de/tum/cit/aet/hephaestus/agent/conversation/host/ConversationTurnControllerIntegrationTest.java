@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.AgentRunController;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.proxy.JobTokenAuthenticationFilter;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
@@ -248,7 +249,8 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
         var runController =
                 new AgentRunController(agentRuns, sandboxes, beans.getBean(TransactionTemplate.class), List.of(kind));
         return MockMvcBuilders.standaloneSetup(served, runController)
-                .setCustomArgumentResolvers(new SandboxRunArgumentResolver(agentRuns, beans.getBean(Tracer.class)))
+                .setCustomArgumentResolvers(new SandboxRunArgumentResolver(
+                        agentRuns, beans.getBean(AgentRunAuthority.class), beans.getBean(Tracer.class)))
                 .defaultRequest(get("/").header(SandboxRunArgumentResolver.RUN_HEADER, turn.getRunId())
                         .header(SandboxRunArgumentResolver.EPOCH_HEADER, turn.getAttempt()))
                 .setControllerAdvice(

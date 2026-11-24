@@ -5,6 +5,8 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorizationStamp;
+import de.tum.cit.aet.hephaestus.core.authority.spi.AuthorityGenerations;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -66,6 +68,7 @@ public class AgentRuns {
     private final AgentRunRepository runs;
     private final AgentCapacityProperties capacity;
     private final MeterRegistry meters;
+    private final AuthorityGenerations generations;
 
     private @Nullable EvaluationObservations evaluation;
 
@@ -77,10 +80,15 @@ public class AgentRuns {
     @PersistenceContext
     private @Nullable EntityManager entityManager;
 
-    AgentRuns(AgentRunRepository runs, AgentCapacityProperties capacity, MeterRegistry meters) {
+    AgentRuns(
+            AgentRunRepository runs,
+            AgentCapacityProperties capacity,
+            MeterRegistry meters,
+            AuthorityGenerations generations) {
         this.runs = runs;
         this.capacity = capacity;
         this.meters = meters;
+        this.generations = generations;
         // Registered at start, so a percentile over a band that has had no claim yet reads a series.
         for (AgentRunKind kind : AgentRunKind.values())
             for (AgentRunBand band : AgentRunBand.values()) claimWait(kind, tag(band));
@@ -100,7 +108,10 @@ public class AgentRuns {
         return runs.countLeased(AgentRunKind.REVIEW.name()) + runs.countLeased(AgentRunKind.REVIEW_COMPOSE.name());
     }
 
-    /** Queues an instance report draft with a deadline that bounds its queue wait and every claim. */
+    /**
+     * Queues an instance report draft with a deadline that bounds its queue wait and every claim. It belongs to no
+     * workspace, so it carries no workspace authority: its stamp is generation 0, and no boundary rechecks it.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public AgentRunRef enqueueReportDraft(String subject, Duration executionWindow) {
         return insert(
@@ -108,6 +119,7 @@ public class AgentRuns {
                 AgentRunKind.DRAFT_REPORT,
                 AgentRunBand.BACKGROUND,
                 subject,
+                new AuthorizationStamp(0),
                 0,
                 0,
                 null,
@@ -115,7 +127,10 @@ public class AgentRuns {
                 executionWindow);
     }
 
-    /** Queues a new run of a subject. Claimers hear of it after the transaction commits. */
+    /**
+     * Queues a new run of a subject. Claimers hear of it after the transaction commits. The run carries the workspace's
+     * authorization generation as the caller's transaction reads it now ({@link AuthorityGenerations#stamp}).
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public AgentRunRef enqueue(
             long workspaceId,
@@ -123,14 +138,25 @@ public class AgentRuns {
             AgentRunBand band,
             String concurrencyKey,
             @Nullable Duration startWithin) {
-        return insert(workspaceId, kind, band, concurrencyKey, 0, 0, startWithin);
+        return insert(
+                workspaceId,
+                kind,
+                band,
+                concurrencyKey,
+                generations.stamp(workspaceId),
+                0,
+                0,
+                startWithin,
+                Duration.ZERO,
+                null);
     }
 
     /**
      * Queues the run that continues work whose earlier run ended. Its epochs go on from {@code lastEpoch}, so the
      * claims of a piece of work keep distinct numbers across its runs. A charged continuation spends one attempt more
      * than the ended run had spent: it is a retry of the same work, so the work's retry limit bounds how often it
-     * continues. A free one continues work that a cause outside it stopped, such as a provider outage.
+     * continues. A free one continues work that a cause outside it stopped, such as a provider outage. Every
+     * continuation keeps the ended run's authorization stamp: it is the same work, under the same authority.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public AgentRunRef continueAfter(
@@ -141,6 +167,7 @@ public class AgentRuns {
                 previous.getKind(),
                 previous.getBand(),
                 previous.getConcurrencyKey(),
+                previous.getAuthorizationStamp(),
                 Math.max(lastEpoch, previous.getLeaseEpoch()),
                 previous.getAttempt() + (charge == Charge.SPEND ? 1 : 0),
                 startWithin(previous),
@@ -162,9 +189,32 @@ public class AgentRuns {
                 kind,
                 previous.getBand(),
                 previous.getConcurrencyKey(),
+                previous.getAuthorizationStamp(),
                 Math.max(lastEpoch, previous.getLeaseEpoch()),
                 previous.getAttempt(),
                 null,
+                Duration.ZERO,
+                executionWindow);
+    }
+
+    /**
+     * Queues completed work again because something asks for it now, such as the repair of a review's delivered
+     * feedback. It continues the ended run's epochs as a continuation does, and spends an attempt when it resumes a run of
+     * the same kind. Unlike a continuation it is new work: it carries the authorization stamp of now.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AgentRunRef resume(AgentRunRef ended, int lastEpoch, AgentRunKind kind, Duration executionWindow) {
+        AgentRun previous = ended(ended);
+        boolean again = previous.getKind() == kind;
+        return insert(
+                previous.getWorkspaceId(),
+                kind,
+                previous.getBand(),
+                previous.getConcurrencyKey(),
+                generations.stamp(previous.getWorkspaceId()),
+                Math.max(lastEpoch, previous.getLeaseEpoch()),
+                previous.getAttempt() + (again ? 1 : 0),
+                again ? startWithin(previous) : null,
                 Duration.ZERO,
                 executionWindow);
     }
@@ -186,6 +236,7 @@ public class AgentRuns {
                 previous.getKind(),
                 previous.getBand(),
                 previous.getConcurrencyKey(),
+                previous.getAuthorizationStamp(),
                 previous.getLeaseEpoch(),
                 previous.getAttempt(),
                 startWithin(previous),
@@ -212,17 +263,7 @@ public class AgentRuns {
             AgentRunKind kind,
             AgentRunBand band,
             String concurrencyKey,
-            int epoch,
-            int spent,
-            @Nullable Duration startWithin) {
-        return insert(workspaceId, kind, band, concurrencyKey, epoch, spent, startWithin, Duration.ZERO, null);
-    }
-
-    private AgentRunRef insert(
-            long workspaceId,
-            AgentRunKind kind,
-            AgentRunBand band,
-            String concurrencyKey,
+            AuthorizationStamp stamp,
             int epoch,
             int spent,
             @Nullable Duration startWithin,
@@ -234,6 +275,7 @@ public class AgentRuns {
                 kind,
                 band,
                 concurrencyKey,
+                stamp,
                 epoch,
                 spent,
                 runs.databaseClock(),

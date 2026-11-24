@@ -1,7 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -11,8 +16,13 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailures;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptServerErrors;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -37,13 +47,103 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
         var controller = new ResultAdmissionController(
                 mock(ResultAdmissionService.class),
                 mock(AttemptCaptureFailures.class),
-                mock(AttemptServerErrors.class));
+                mock(AttemptServerErrors.class),
+                mock(AgentRunAuthority.class));
         var request = new SealResultsRequestDTO(3, UUID.randomUUID(), UUID.randomUUID(), 0);
         assertThatThrownBy(
                         () -> controller.admitResults(request, new TestingAuthenticationToken("mentor", "credential")))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         error -> Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
+    void shouldRefuseToReadTheReviewsSourcesWhenItsRunsAuthorityNarrowed() {
+        var admission = mock(ResultAdmissionService.class);
+        var authority = mock(AgentRunAuthority.class);
+        var id = UUID.randomUUID();
+        var now = Instant.now();
+        var jwt = new AttemptJwt(
+                AttemptJwt.Kind.REVIEW,
+                id,
+                1L,
+                1,
+                LEASE,
+                Set.of("llm_proxy"),
+                "test",
+                now,
+                now.plusSeconds(60),
+                now.plusSeconds(60));
+        var refusal = new AuthorityRefusal(
+                AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED);
+        doThrow(new AuthorityRefusedException(refusal))
+                .when(authority)
+                .require(new AgentRunFence(LEASE, 1L, 1), AuthorityBoundary.CONTEXT_READ);
+        var controller = new ResultAdmissionController(
+                admission, mock(AttemptCaptureFailures.class), mock(AttemptServerErrors.class), authority);
+
+        assertThatThrownBy(() -> controller.admitResults(
+                        new SealResultsRequestDTO(3, UUID.randomUUID(), id, 0),
+                        new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes())))
+                .isInstanceOf(AuthorityRefusedException.class);
+        verifyNoInteractions(admission);
+    }
+
+    @Test
+    void shouldRefuseTheAnswerWhenTheRunsAuthorityNarrowedDuringTheAdmission() {
+        var admission = mock(ResultAdmissionService.class);
+        var authority = mock(AgentRunAuthority.class);
+        var serverErrors = mock(AttemptServerErrors.class);
+        var jwt = reviewToken(UUID.randomUUID());
+        var refusal = new AuthorityRefusal(
+                AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED);
+        // Authority holds when the request arrives, and has narrowed once the admission returns.
+        doNothing()
+                .doThrow(new AuthorityRefusedException(refusal))
+                .when(authority)
+                .require(new AgentRunFence(LEASE, 1L, 1), AuthorityBoundary.CONTEXT_READ);
+        var controller =
+                new ResultAdmissionController(admission, mock(AttemptCaptureFailures.class), serverErrors, authority);
+
+        assertThatThrownBy(() -> controller.admitResults(
+                        new SealResultsRequestDTO(3, UUID.randomUUID(), jwt.id(), 0),
+                        new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes())))
+                .isInstanceOf(AuthorityRefusedException.class);
+        verify(admission).admit(any(), any(), any());
+        verifyNoInteractions(serverErrors);
+    }
+
+    @Test
+    void shouldNotRecordARefusalDuringTheAdmissionAsAServerError() {
+        var admission = mock(ResultAdmissionService.class);
+        var serverErrors = mock(AttemptServerErrors.class);
+        var jwt = reviewToken(UUID.randomUUID());
+        when(admission.admit(any(), any(), any()))
+                .thenThrow(new AuthorityRefusedException(new AuthorityRefusal(
+                        AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED)));
+        var controller = new ResultAdmissionController(
+                admission, mock(AttemptCaptureFailures.class), serverErrors, mock(AgentRunAuthority.class));
+
+        assertThatThrownBy(() -> controller.admitResults(
+                        new SealResultsRequestDTO(3, UUID.randomUUID(), jwt.id(), 0),
+                        new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes())))
+                .isInstanceOf(AuthorityRefusedException.class);
+        verifyNoInteractions(serverErrors);
+    }
+
+    private static AttemptJwt reviewToken(UUID id) {
+        var now = Instant.now();
+        return new AttemptJwt(
+                AttemptJwt.Kind.REVIEW,
+                id,
+                1L,
+                1,
+                LEASE,
+                Set.of("llm_proxy"),
+                "test",
+                now,
+                now.plusSeconds(60),
+                now.plusSeconds(60));
     }
 
     @ParameterizedTest
@@ -66,10 +166,13 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
                 now.plusSeconds(30));
         var identity = ProxyIdentity.of(jwt);
         var authentication = new JobTokenAuthentication(identity, jwt.scopes());
-        when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE), request))
+        when(admission.admit(eq(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE)), eq(request), any()))
                 .thenThrow(conflict);
         assertThatThrownBy(() -> new ResultAdmissionController(
-                                admission, mock(AttemptCaptureFailures.class), mock(AttemptServerErrors.class))
+                                admission,
+                                mock(AttemptCaptureFailures.class),
+                                mock(AttemptServerErrors.class),
+                                mock(AgentRunAuthority.class))
                         .admitResults(request, authentication))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
@@ -94,10 +197,11 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
                 now,
                 now.plusSeconds(60),
                 now.plusSeconds(30));
-        when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE), request))
+        when(admission.admit(eq(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE)), eq(request), any()))
                 .thenThrow(new UncheckedIOException(new IOException("disk temporarily unavailable")));
         var authentication = new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes());
-        assertThatThrownBy(() -> new ResultAdmissionController(admission, failures, mock(AttemptServerErrors.class))
+        assertThatThrownBy(() -> new ResultAdmissionController(
+                                admission, failures, mock(AttemptServerErrors.class), mock(AgentRunAuthority.class))
                         .admitResults(request, authentication))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,

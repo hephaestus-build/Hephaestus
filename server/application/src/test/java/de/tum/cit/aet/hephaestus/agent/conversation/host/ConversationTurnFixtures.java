@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.conversation.host;
 
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.conversation.sandbox.TurnContextLoads;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.conversation.ConversationContextPathBuilder;
@@ -32,7 +33,8 @@ final class ConversationTurnFixtures {
                 beans.getBeanProvider(ContextLoader.class),
                 beans.getBean(Clock.class),
                 beans.getBean(PersonDataCopyFence.class),
-                beans.getBean(FabricLayout.class));
+                beans.getBean(FabricLayout.class),
+                beans.getBean(AgentRunAuthority.class));
     }
 
     static ConversationTurns turns(ApplicationContext beans, AgentSandboxes sandboxes) {

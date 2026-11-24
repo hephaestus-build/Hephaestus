@@ -29242,6 +29242,7 @@ components:
       - EVIDENCE_TOO_LARGE
       - SOURCES_MOVED
       - NOT_RUN
+      - AUTHORITY_CHANGED
     ReviewSummary:
       type: object
       properties:

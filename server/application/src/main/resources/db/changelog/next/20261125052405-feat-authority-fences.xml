@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795549275211-1" author="hephaestus">
+        <comment>A workspace has an authorization generation, which only a narrowing of its authority raises (KR-10, ADR 0134). Every workspace starts at generation 0. The trigger that raises it on every narrowing of a membership is installed with the column, so no narrowing can commit while the generation exists without it: a membership that ends, is left, moves or loses a role, whoever writes it.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE workspace ADD COLUMN authority_generation bigint DEFAULT 0 NOT NULL,
+    ADD CONSTRAINT ck_workspace_authority_generation CHECK (authority_generation >= 0);
+CREATE FUNCTION membership_narrows_authority() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE'
+       OR ROW(NEW.workspace_id, NEW.account_id) IS DISTINCT FROM ROW(OLD.workspace_id, OLD.account_id)
+       OR (OLD.left_at IS NULL AND NEW.left_at IS NOT NULL)
+       OR array_position(ARRAY['OWNER', 'ADMIN', 'MEMBER'], NEW.role::text)
+          > array_position(ARRAY['OWNER', 'ADMIN', 'MEMBER'], OLD.role::text) THEN
+        UPDATE public.workspace SET authority_generation = authority_generation + 1 WHERE id = OLD.workspace_id;
+    END IF;
+    RETURN NULL;
+END $$;
+CREATE TRIGGER membership_narrows_authority AFTER DELETE OR UPDATE OF workspace_id, account_id, role, left_at ON membership
+    FOR EACH ROW EXECUTE FUNCTION membership_narrows_authority();
+]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DROP TRIGGER membership_narrows_authority ON membership;
+DROP FUNCTION membership_narrows_authority();
+ALTER TABLE workspace DROP COLUMN authority_generation;
+]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795549275211-2" author="hephaestus">
+        <comment>Every run carries the generations it was requested under, and keeps them. A run that a boundary refuses ends AUTHORITY_CHANGED. Existing runs were requested at generation 0. The column keeps the default of generation 0 for a writer of the previous release: such a run is refused once any narrowing happened, never allowed. The checks are added without validation, so their row scan runs outside the exclusive schema lock.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_run ADD COLUMN authorization_stamp jsonb DEFAULT jsonb_build_object('workspace', 0) NOT NULL,
+    ADD CONSTRAINT ck_agent_run_authorization_stamp CHECK ((jsonb_typeof(authorization_stamp) = 'object'
+        AND jsonb_typeof(authorization_stamp -> 'workspace') = 'number'
+        AND (authorization_stamp ->> 'workspace') ~ '^[0-9]{1,19}$'
+        AND (authorization_stamp ->> 'workspace')::numeric <= 9223372036854775807) IS TRUE) NOT VALID;
+CREATE FUNCTION guard_authorization_stamp() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.authorization_stamp IS DISTINCT FROM OLD.authorization_stamp THEN
+        RAISE EXCEPTION 'work keeps the authorization stamp it was requested under' USING ERRCODE = '55000';
+    END IF;
+    RETURN NULL;
+END $$;
+CREATE TRIGGER agent_run_authorization_stamp_fixed AFTER UPDATE OF authorization_stamp ON agent_run
+    FOR EACH ROW EXECUTE FUNCTION guard_authorization_stamp();
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_stop_reason;
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_stop_reason CHECK (stop_reason IS NULL
+    OR stop_reason IN ('COMPLETED','HANDED_OFF','FAILED','CANCELLED','ATTEMPTS_EXHAUSTED','NOT_STARTED','DEADLINE',
+                       'AUTHORITY_CHANGED')) NOT VALID;
+]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_stop_reason;
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_stop_reason CHECK (stop_reason IS NULL
+    OR stop_reason IN ('COMPLETED','HANDED_OFF','FAILED','CANCELLED','ATTEMPTS_EXHAUSTED','NOT_STARTED','DEADLINE'));
+DROP TRIGGER agent_run_authorization_stamp_fixed ON agent_run;
+DROP FUNCTION guard_authorization_stamp();
+ALTER TABLE agent_run DROP COLUMN authorization_stamp;
+]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795549275211-3" author="hephaestus">
+        <comment>Validate the run checks while ordinary row writes can continue.</comment>
+        <sql>ALTER TABLE agent_run VALIDATE CONSTRAINT ck_agent_run_stop_reason;
+ALTER TABLE agent_run VALIDATE CONSTRAINT ck_agent_run_authorization_stamp;</sql>
+        <rollback><sql>SELECT 1;</sql></rollback>
+    </changeSet>
+    <changeSet id="1795549275211-4" author="hephaestus">
+        <comment>A review that a boundary stopped because its workspace's access narrowed records AUTHORITY_CHANGED.</comment>
+        <sql>ALTER TABLE review DROP CONSTRAINT ck_review_stop_reason;
+ALTER TABLE review ADD CONSTRAINT ck_review_stop_reason CHECK(stop_reason IS NULL OR stop_reason IN ('TIMED_OUT','EXECUTION_FAILED','PREPARATION_FAILED','PROCESSING_FAILED','PERSON_DATA_ERASED','STALE_ROLLOUT_REVISION','CANCELLED_BY_ADMIN','REPLACED','LEGACY_FAILURE','EXECUTION_INCOMPLETE','RESULT_WITHHELD','READINESS_REFUSED','SUSPECT_LISTING','BUDGET','USAGE_UNVERIFIABLE','DEADLINE','CANCELLED','ENUMERATION_FAILED','ENUMERATION_LIMIT','NO_SCAN_PRACTICES','MODEL_CHANGED','MODEL_UNAVAILABLE','ERROR','LEGACY_SCOPE_UNKNOWN','CONTRACT_CHANGED','NO_SANDBOX_ROOM','COMPOSITION_UNCONFIRMED','PROVIDER_UNAVAILABLE','EVIDENCE_TOO_LARGE','SOURCES_MOVED','NOT_RUN','AUTHORITY_CHANGED')) NOT VALID;</sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+ALTER TABLE review DROP CONSTRAINT ck_review_stop_reason;
+ALTER TABLE review ADD CONSTRAINT ck_review_stop_reason CHECK(stop_reason IS NULL OR stop_reason IN ('TIMED_OUT','EXECUTION_FAILED','PREPARATION_FAILED','PROCESSING_FAILED','PERSON_DATA_ERASED','STALE_ROLLOUT_REVISION','CANCELLED_BY_ADMIN','REPLACED','LEGACY_FAILURE','EXECUTION_INCOMPLETE','RESULT_WITHHELD','READINESS_REFUSED','SUSPECT_LISTING','BUDGET','USAGE_UNVERIFIABLE','DEADLINE','CANCELLED','ENUMERATION_FAILED','ENUMERATION_LIMIT','NO_SCAN_PRACTICES','MODEL_CHANGED','MODEL_UNAVAILABLE','ERROR','LEGACY_SCOPE_UNKNOWN','CONTRACT_CHANGED','NO_SANDBOX_ROOM','COMPOSITION_UNCONFIRMED','PROVIDER_UNAVAILABLE','EVIDENCE_TOO_LARGE','SOURCES_MOVED','NOT_RUN'));
+]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795549275211-5" author="hephaestus">
+        <comment>Validate the review stop reason check while ordinary row writes can continue. A rollback starts here, so it refuses before it changes anything while a run or a review records that its access changed.</comment>
+        <sql>ALTER TABLE review VALIDATE CONSTRAINT ck_review_stop_reason;</sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM public.agent_run WHERE stop_reason = 'AUTHORITY_CHANGED')
+    OR EXISTS (SELECT 1 FROM public.review WHERE stop_reason = 'AUTHORITY_CHANGED') THEN
+  RAISE EXCEPTION 'Restore the verified pre-upgrade backup: runs or reviews record that their access changed';
+ END IF;
+END $$;
+]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

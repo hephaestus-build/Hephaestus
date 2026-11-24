@@ -38,6 +38,7 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -532,7 +533,8 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                 publicationTransactions(publication),
                 mapper,
                 telemetry,
-                files);
+                files,
+                beans.getBean(AgentRunAuthority.class));
         var terminal = SandboxReviewClaims.terminal(beans);
         var results = new ReviewAttemptResults(
                 jobs,
@@ -565,7 +567,13 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                 results,
                 runKinds,
                 runs,
-                new AttemptCopyReceipts(evidenceReceipts, evidenceCaptures, files, layout, jobs),
+                new AttemptCopyReceipts(
+                        evidenceReceipts,
+                        evidenceCaptures,
+                        files,
+                        layout,
+                        jobs,
+                        beans.getBean(AgentRunAuthority.class)),
                 new ReviewAttemptMeasurements(
                         preparation,
                         custody,
@@ -578,7 +586,8 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                         results,
                         runKinds,
                         runs,
-                        beans.getBean(ClusterLock.class)));
+                        beans.getBean(ClusterLock.class)),
+                beans.getBean(AgentRunAuthority.class));
         return new Replica(gateway(kind, localSessions), kind, custody, layout, job.getId(), preparation);
     }
 
@@ -614,13 +623,16 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
             factory.registerSingleton(
                     "agentRunController", new AgentRunController(runs, owner, transactions, List.of(kind)));
             if (kind instanceof ReviewSandboxRuns reviews)
-                factory.registerSingleton("reviewSandboxController", new ReviewSandboxController(reviews, runs));
+                factory.registerSingleton(
+                        "reviewSandboxController",
+                        new ReviewSandboxController(reviews, runs, beans.getBean(AgentRunAuthority.class)));
             factory.registerSingleton("reviewSandboxRuns", kind);
             factory.registerSingleton("sandboxGatewaySessions", sessions);
             factory.registerSingleton("agentSandboxes", owner);
             factory.registerSingleton("agentRuns", runs);
             factory.registerSingleton("reviewJobRepository", jobs);
             factory.registerSingleton("tracer", beans.getBean(Tracer.class));
+            factory.registerSingleton("agentRunAuthority", beans.getBean(AgentRunAuthority.class));
             factory.registerSingleton(
                     "attemptTokenVerifier",
                     new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry()));
@@ -718,16 +730,18 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
     @Import(SandboxGatewayConfiguration.class)
     static class GatewayApplication implements WebMvcConfigurer {
         private final AgentRuns runs;
+        private final AgentRunAuthority authority;
         private final Tracer tracer;
 
-        GatewayApplication(AgentRuns runs, Tracer tracer) {
+        GatewayApplication(AgentRuns runs, AgentRunAuthority authority, Tracer tracer) {
             this.runs = runs;
+            this.authority = authority;
             this.tracer = tracer;
         }
 
         @Override
         public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-            resolvers.add(new SandboxRunArgumentResolver(runs, tracer));
+            resolvers.add(new SandboxRunArgumentResolver(runs, authority, tracer));
         }
     }
 }

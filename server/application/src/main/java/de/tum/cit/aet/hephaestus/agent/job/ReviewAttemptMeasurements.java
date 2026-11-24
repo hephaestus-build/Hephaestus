@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.core.CacheLoads;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -157,6 +158,9 @@ public class ReviewAttemptMeasurements {
                     throw busy;
                 } catch (ResultAdmissionService.StaleAttemptException lost) {
                     throw new StaleRunException(run.fence(), lost);
+                } catch (AuthorityRefusedException refused) {
+                    // The access narrowed: no preparation failed, and the route ends the run with that reason.
+                    throw refused;
                 } catch (RuntimeException failed) {
                     throw preparationFailed(run, job, stage.get(), failed);
                 }

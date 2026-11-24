@@ -1,10 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.ReadsContext;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
@@ -29,7 +32,8 @@ import org.springframework.web.servlet.HandlerMapping;
 /**
  * Resolves a {@link SandboxRun} from the route's {@code {runId}}, the headers {@code X-Agent-Run} and {@code
  * X-Agent-Epoch}, and the authenticated sandbox. A run of another workspace or another subject, a header that disagrees
- * with the route, and a missing one all answer {@code 404}, as every hidden route of the gateway does.
+ * with the route, and a missing one all answer {@code 404}, as every hidden route of the gateway does. A route that
+ * {@link ReadsContext reads a source} first passes the run's authorization recheck ({@link AgentRunAuthority}).
  */
 public final class SandboxRunArgumentResolver implements HandlerMethodArgumentResolver {
 
@@ -37,10 +41,12 @@ public final class SandboxRunArgumentResolver implements HandlerMethodArgumentRe
     public static final String EPOCH_HEADER = "X-Agent-Epoch";
 
     private final AgentRuns runs;
+    private final AgentRunAuthority authority;
     private final Tracer tracer;
 
-    public SandboxRunArgumentResolver(AgentRuns runs, Tracer tracer) {
+    public SandboxRunArgumentResolver(AgentRuns runs, AgentRunAuthority authority, Tracer tracer) {
         this.runs = runs;
+        this.authority = authority;
         this.tracer = tracer;
     }
 
@@ -70,6 +76,8 @@ public final class SandboxRunArgumentResolver implements HandlerMethodArgumentRe
                     .tag("hephaestus.run.epoch", run.fence().epoch())
                     .tag("hephaestus.subject.key", sandbox.subjectKey())
                     .tag("hephaestus.sandbox.name", sandbox.claimName());
+        if (parameter.hasMethodAnnotation(ReadsContext.class))
+            authority.require(run.fence(), AuthorityBoundary.CONTEXT_READ);
         return run;
     }
 

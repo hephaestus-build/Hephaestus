@@ -1,0 +1,33 @@
+---
+title: Stop every role before the authorization recheck
+description: Old and new servers cannot run together once a run can stop because its access narrowed.
+page_type: how-to
+---
+
+From this release on, a run stops when the access of its workspace narrows while it runs.
+A server of an earlier release does not check access again, and it cannot read a review that stopped for this reason.
+So old and new servers cannot run together.
+
+1. Do the [stopped upgrade procedure](../upgrade#stopped-schema-upgrades).
+   Keep every runtime role stopped until the migration completes.
+2. Start only servers of the new release.
+
+## What changes
+
+- The upgrade adds an authorization generation to each workspace. Every workspace starts at generation 0, and so does every run that exists at the upgrade.
+- A narrowing raises the generation of the workspace.
+  The narrowings are a membership that ends, is left, moves to another workspace or loses a role.
+  Claiming an account also counts, because it removes the memberships of the account that it absorbs.
+- A run checks the generation again before it reads a source.
+  If the generation rose after the run was requested, the run stops with the stop reason `AUTHORITY_CHANGED`.
+- A review stops with the stop reason **Authority changed**.
+  Its results stay, and Hephaestus measures its other practices again.
+  A review that had admitted no results shows as cancelled.
+- A narrowing stops every run of its workspace, also the runs that the change did not concern.
+  The person asks again for the answer. A later review runs under the new access.
+
+## Check that it worked
+
+The migration Job completes and the server becomes ready.
+`authority_refused_total` counts the refusals, by `boundary` and `reason`.
+The counter is at 0 after the upgrade, and rises only when access narrows while work runs.

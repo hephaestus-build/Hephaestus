@@ -124,6 +124,16 @@ public class ScanDriver {
             close(state, ReviewStatus.CANCELLED, ReviewStopReason.NO_SANDBOX_ROOM);
             return;
         }
+        // A file refused because access narrowed while it ran ends the scan, as a refused review ends: what it measured
+        // stays. A withheld file does not count as measured: the refused file itself is withheld as not run. Each file
+        // is queued under the access of its queueing, so a narrowing between files stops no file.
+        if (jobs.existsAuthorityRefusal(review.id(), review.workspaceId())) {
+            close(
+                    state,
+                    state.judged() + state.reused() > 0 ? ReviewStatus.PARTIAL : ReviewStatus.CANCELLED,
+                    ReviewStopReason.AUTHORITY_CHANGED);
+            return;
+        }
         if (!clock.instant().isBefore(state.createdAt().plus(limits.scanDeadline()))) {
             close(state, ReviewStatus.PARTIAL, ReviewStopReason.DEADLINE);
             return;

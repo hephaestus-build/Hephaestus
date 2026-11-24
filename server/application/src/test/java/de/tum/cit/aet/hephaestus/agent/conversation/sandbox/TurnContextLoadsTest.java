@@ -6,12 +6,17 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusal;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityRefusedException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
@@ -78,7 +83,13 @@ class TurnContextLoadsTest extends BaseUnitTest {
     @BeforeEach
     void leaseTheAttempt() {
         layout = new FabricLayout(temp.toString());
-        folder = new TurnContextLoads(turns, beans.getBeanProvider(ContextLoader.class), clock, copies, layout);
+        folder = new TurnContextLoads(
+                turns,
+                beans.getBeanProvider(ContextLoader.class),
+                clock,
+                copies,
+                layout,
+                mock(AgentRunAuthority.class));
         lenient().when(copies.capture()).thenAnswer(_ -> {
             captures.incrementAndGet();
             return new PersonDataCopyFence.Lease() {
@@ -119,6 +130,30 @@ class TurnContextLoadsTest extends BaseUnitTest {
     private TurnContextLoads.Load load(TurnAttempt turn, Instant deadline, String path) {
         var refused = folder.admit(turn);
         return refused.isPresent() ? refused.get() : folder.prepare(turn, deadline, path);
+    }
+
+    @Test
+    void shouldReadNothingWhenTheRunsAuthorityNarrowedWhileTheLoadWaited() {
+        var reads = new AtomicInteger();
+        beans.registerSingleton("loader", new Loader(temp) {
+            @Override
+            public Loaded load(long workspaceId, long accountId, String path, BooleanSupplier abandoned) {
+                reads.incrementAndGet();
+                return super.load(workspaceId, accountId, path, abandoned);
+            }
+        });
+        var authority = mock(AgentRunAuthority.class);
+        var refusal = new AuthorityRefusal(
+                AuthorityBoundary.CONTEXT_READ, AuthorityRefusal.Reason.WORKSPACE_AUTHORITY_NARROWED);
+        doThrow(new AuthorityRefusedException(refusal)).when(authority).require(any(), any());
+        try (var refusing = new TurnContextLoads(
+                turns, beans.getBeanProvider(ContextLoader.class), clock, copies, layout, authority)) {
+            assertThatThrownBy(() -> refusing.prepare(turn(), DEADLINE, "repos/github.com/acme/api"))
+                    .isInstanceOf(AuthorityRefusedException.class);
+        }
+
+        assertThat(reads).as("the loader read nothing").hasValue(0);
+        assertThat(captures).as("the capture admission was released").hasValue(0);
     }
 
     @Test

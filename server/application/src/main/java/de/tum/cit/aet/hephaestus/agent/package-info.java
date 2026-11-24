@@ -13,6 +13,8 @@
             "core::auth-reference",
             "core::auth-spi",
             "core::auth-types",
+            "core::authority",
+            "core::authority-spi",
             "core::config-audit-spi",
             "core::event",
             "core::exception",

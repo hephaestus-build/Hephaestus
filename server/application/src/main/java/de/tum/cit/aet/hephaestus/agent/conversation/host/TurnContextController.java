@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.conversation.host;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.sandbox.TurnContextLoads;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunAuthority;
+import de.tum.cit.aet.hephaestus.agent.run.ReadsContext;
+import de.tum.cit.aet.hephaestus.core.authority.AuthorityBoundary;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -50,13 +53,19 @@ public class TurnContextController {
     private final ConversationTurns turns;
     private final ConversationTurnContexts contexts;
     private final TurnContextLoads folder;
+    private final AgentRunAuthority authority;
     private final Clock clock;
 
     public TurnContextController(
-            ConversationTurnContexts contexts, ConversationTurns turns, TurnContextLoads folder, Clock clock) {
+            ConversationTurnContexts contexts,
+            ConversationTurns turns,
+            TurnContextLoads folder,
+            AgentRunAuthority authority,
+            Clock clock) {
         this.turns = turns;
         this.contexts = contexts;
         this.folder = folder;
+        this.authority = authority;
         this.clock = clock;
     }
 
@@ -64,6 +73,7 @@ public class TurnContextController {
 
     /** An item listed in the context index is read on demand, then staged in the sandbox for Pi's read tool. */
     @PostMapping("/document")
+    @ReadsContext
     public ResponseEntity<byte[]> document(SandboxRun run, @Valid @RequestBody LoadRequest request) {
         return turns.read(run, turn -> {
             var bytes = contexts.document(turn, request.path())
@@ -77,6 +87,7 @@ public class TurnContextController {
      * refusal as JSON.
      */
     @PostMapping("/load")
+    @ReadsContext
     public WebAsyncTask<@Nullable ResponseEntity<?>> load(
             SandboxRun run, @Valid @RequestBody LoadRequest request, HttpServletResponse response) {
         Instant deadline = turns.workDeadline(run);
@@ -88,6 +99,8 @@ public class TurnContextController {
 
     private @Nullable ResponseEntity<?> load(
             SandboxRun run, LoadRequest request, HttpServletResponse response, Instant deadline) throws IOException {
+        // The task can start later than the route's recheck, and a capture can take long: both ends read again.
+        authority.require(run.fence(), AuthorityBoundary.CONTEXT_READ);
         var turn = turns.write(run, false, held -> held);
         var admission = turns.write(run, false, ignored -> folder.admit(turn));
         if (admission.isPresent())
@@ -106,6 +119,7 @@ public class TurnContextController {
         if (load instanceof TurnContextLoads.Refused refused)
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(refused.answer());
         try (TurnContextLoads.Prepared prepared = (TurnContextLoads.Prepared) load) {
+            authority.require(run.fence(), AuthorityBoundary.CONTEXT_READ);
             turns.write(run, false, ignored -> Boolean.TRUE);
             archive(prepared, response);
             return null;
