@@ -19,9 +19,10 @@
 A person may want Hephaestus to act on the work: push a fix, open a pull request, create an issue or update a doc.
 Each such action is a write that other people read, in the person's name.
 
-Typed commands on item cards already exist in 1.0 (ADR 0121, proposed in #4862).
-They change Hephaestus's own records, such as Mark card done.
-An action is different. It changes a provider's state, and it can be hard to undo.
+In 1.0, typed commands already exist.
+ADR 0121 decision 8 defines the commands that post or withdraw a copy on the work, as the Hephaestus app.
+ADR 0150 decision 7 defines the card commands, such as Mark card done.
+An action is different. It changes the work itself in the person's name, and it can be hard to undo.
 
 Two risks are real.
 The approved text can differ from the written text, if anything changes between approval and execution.

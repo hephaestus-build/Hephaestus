@@ -66,7 +66,7 @@ Option 8.
    - Its practices do not run in Approve first. An expert's approval or edit would change the treatment.
    - An experiment starts only on an instance with a journal bucket (ADR 0140, proposed in #4867, decision 9).
    - Otherwise the start command returns `journal-bucket-required`. Startup stops while an experiment runs with no bucket.
-2. **Only unprompted contact is drawn, one draw for each decision.**
+2. **Only unprompted delivery decisions are drawn, one draw for each decision.**
    - Two kinds are drawn: the copy on the work and an unprompted message.
    - An agreed check-in, a requested result and a stepping-back message are recorded and never drawn. A check-in fires as agreed.
    - An answer to the person's message is not a decision to contact. It has no record and no draw.

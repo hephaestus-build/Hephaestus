@@ -62,7 +62,8 @@ Option 5.
    - A separate step writes the note's text. Its model input is only the cited text that has the person as its origin.
      So no other part of the entry can supply the note's content.
    - It is never evidence about the person's work, and never about a third party.
-   - It never supports a card or another record, and it never gets a grant.
+   - It never supports a card or another record. It never gets a transfer grant of ADR 0129.
+   - The Slack level **Full** lets a Slack turn of the same workspace read it. ADR 0123 decision 5 owns that list.
    - It never travels. The person's **Keep** turns it into a person-authored record with author kind `PERSON`. Only then can **Take along** transfer it.
 4. **A kept-in-mind item** comes from compaction and stays in its workspace for 400 days. The person can keep it.
 

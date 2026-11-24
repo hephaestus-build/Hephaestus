@@ -87,7 +87,8 @@ Option 6.
    - A requested result and an agreed check-in are never held.
 9. **Quiet hours are kept by the server,** 22:00 to 08:00 by default. They delay only the notification. The message in the conversation never waits.
 10. **At most one notification for each committed message.** A background turn that takes several results writes one message, so they become one notification. Code decides the notification at commit, as an effect.
-    - A background batch holds items of one contact kind. ADR 0120 decision 7 takes every compatible item, and items of another kind are not compatible.
+    - On a private thread, a background batch holds items of one contact kind. ADR 0120 decision 7 takes every compatible item, and items of another kind are not compatible.
+      A composer turn on a shared thread has no contact kind (decision 5). This rule does not apply to it.
       So rule 3 applies to each message as a whole, at the commit and at send, on every channel.
     - Example: a Pause before the commit stops an unprompted batch. Code writes no message, and each item gets its disposition.
       A requested result is in its own batch, so it still arrives.
@@ -95,7 +96,9 @@ Option 6.
       1. `REQUESTED_RESULT`
       2. `AGREED`
       3. `UNPROMPTED`
-    - When a turn ends, the next claim starts at once for the items that decision 8 does not hold. It does not wait for a new event.
+    - When a turn ends, the next claim starts at once. It takes the items that are due and that no gate holds.
+      It does not wait for a new event.
+      The start policy of ADR 0120 decision 4 decides when an item is due.
 11. **The notification text is the notice line, never the message summary.** The push payload stays ids only. On arrival, the service worker fetches the notice line with the person's session. On any failure it shows the kind's fixed text.
     - The notice line is registry copy with parameters, such as "Check ready: 1 problem on PR #42". It is never model text.
     - The fetch never refreshes a credential.
@@ -130,13 +133,14 @@ Option 6.
     - The table exists so that every silence has a reason that code wrote. No product or staff surface shows a person's rows.
     - A person who is not enrolled in a delivery experiment has rows with no probability, no draw and no exposure.
       No dataset exports such a row. ADR 0149 adds those columns for an enrolled person, and decides which datasets they enter.
-19. **A delivery experiment can draw only on unprompted contact,** as ADR 0149 decision 2 decides. A decision that this policy keeps silent is recorded and never drawn.
+19. **A delivery experiment draws only the decisions that ADR 0149 decision 2 names.** These are a copy on the work and an unprompted message.
+    Among the contact kinds of decision 3, only unprompted contact is drawn. A decision that this policy keeps silent is recorded and never drawn.
 
 ### What this changes in other ADRs
 
 - [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) rule 6 keeps its payload: ids only, no text. Only what the client shows changes: it may fetch the notice line, and else shows the fixed text.
 - ADR 0116 rule 7 changes. The server keeps quiet hours for unrequested notifications. New kinds join under rule 7: the requested result, the agreed check-in and the unprompted update.
-- ADR 0120 decision 7 changes for background items only. A compatible item also has the same contact kind.
+- ADR 0120 decision 7 changes for background items on a private thread only. A compatible item also has the same contact kind.
   A claim takes requested results first, and the next claim starts when a turn ends.
 - ADR 0116 rule 7 keeps `CONVERSATION_ANSWER` and its trigger: 30 seconds after the turn ends, if the answer is unread.
 - ADR 0116 rule 8 stays. The send check now also runs the contact policy.
@@ -166,7 +170,7 @@ Not enforced. The implementing issues add the checks below, and review of each i
 - SendRecheckTest fails when a contact queued before a pause is sent after it.
 - OneKindBatchTest fails when a background batch holds items of two contact kinds.
   It also fails when a claim takes another kind while a requested result is in the inbox.
-  It also fails when an item that no gate holds waits for a new event after a turn.
+  It also fails when a due item that no gate holds waits for a new event after a turn.
 - AppOnlyItemRouteTest fails when an item that only the app may show is routed to Slack.
 - HeldResultNotCitedTest fails when an unprompted message cites a result that a delivery experiment holds.
 - DeliveryDecisionTest fails when an unprompted decision has no row, or a model call starts before it.
