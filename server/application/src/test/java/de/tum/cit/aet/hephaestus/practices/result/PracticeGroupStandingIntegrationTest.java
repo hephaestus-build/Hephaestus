@@ -62,7 +62,7 @@ class PracticeGroupStandingIntegrationTest extends BaseIntegrationTest {
         group.setWorkspace(scenario.workspace());
         group.setSlug("hidden");
         group.setName("Hidden");
-        group.setShownToDevelopers(false);
+        group.setShownToPeople(false);
         groups.saveAndFlush(group);
         get("/practice-groups/standings")
                 .expectStatus()
@@ -86,7 +86,7 @@ class PracticeGroupStandingIntegrationTest extends BaseIntegrationTest {
         hidden.setWorkspace(scenario.workspace());
         hidden.setSlug("hidden");
         hidden.setName("Hidden");
-        hidden.setShownToDevelopers(false);
+        hidden.setShownToPeople(false);
         groups.saveAndFlush(hidden);
         get("/practice-groups/standings")
                 .expectStatus()

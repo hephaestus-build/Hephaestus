@@ -1,0 +1,2 @@
+# 1.0 calls the person a review concerns person (#4905).
+in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/recheck removed the required property `developer` from the response with the `202` status

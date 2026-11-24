@@ -12,14 +12,14 @@ import org.springframework.data.repository.Repository;
 /** Workspace-qualified metadata projections for one repeatable-read research snapshot. */
 interface ResearchDatasetRepository extends Repository<Result, UUID> {
     String RESULTS =
-            "SELECT r.id FROM result r WHERE r.workspace_id = :workspaceId AND r.developer_id = ANY(CAST(:accounts AS bigint[])) AND r.recorded_at >= :from AND r.recorded_at < :to";
+            "SELECT r.id FROM result r WHERE r.workspace_id = :workspaceId AND r.person_account_id = ANY(CAST(:accounts AS bigint[])) AND r.recorded_at >= :from AND r.recorded_at < :to";
 
     String FEEDBACK =
-            "SELECT f.id FROM feedback f WHERE f.workspace_id = :workspaceId AND f.developer_id = ANY(CAST(:accounts AS bigint[])) AND f.created_at >= :from AND f.created_at < :to";
+            "SELECT f.id FROM feedback f WHERE f.workspace_id = :workspaceId AND f.person_account_id = ANY(CAST(:accounts AS bigint[])) AND f.created_at >= :from AND f.created_at < :to";
 
     /** Reviews that are parents of a candidate result or feedback piece. */
     String REVIEWS =
-            "SELECT r.review_id FROM result r WHERE r.workspace_id = :workspaceId AND r.id IN (SELECT r.id FROM result r WHERE r.workspace_id = :workspaceId AND r.developer_id = ANY(CAST(:accounts AS bigint[])) AND r.recorded_at >= :from AND r.recorded_at < :to) UNION SELECT f.review_id FROM feedback f WHERE f.workspace_id = :workspaceId AND f.id IN (SELECT f.id FROM feedback f WHERE f.workspace_id = :workspaceId AND f.developer_id = ANY(CAST(:accounts AS bigint[])) AND f.created_at >= :from AND f.created_at < :to)";
+            "SELECT r.review_id FROM result r WHERE r.workspace_id = :workspaceId AND r.id IN (SELECT r.id FROM result r WHERE r.workspace_id = :workspaceId AND r.person_account_id = ANY(CAST(:accounts AS bigint[])) AND r.recorded_at >= :from AND r.recorded_at < :to) UNION SELECT f.review_id FROM feedback f WHERE f.workspace_id = :workspaceId AND f.id IN (SELECT f.id FROM feedback f WHERE f.workspace_id = :workspaceId AND f.person_account_id = ANY(CAST(:accounts AS bigint[])) AND f.created_at >= :from AND f.created_at < :to)";
 
     @WorkspaceAgnostic("The current transaction time reads no workspace-owned table")
     @Query(value = "SELECT now()", nativeQuery = true)
@@ -35,7 +35,7 @@ interface ResearchDatasetRepository extends Repository<Result, UUID> {
     long countFeedback(long workspaceId, Long[] accounts, Instant from, Instant to);
 
     @Query(value = """
-        SELECT r.id, r.review_id AS reviewId, r.practice_id AS practiceId, r.practice_version_id AS practiceVersionId, r.item_id AS itemId, r.developer_id AS developerId,
+        SELECT r.id, r.review_id AS reviewId, r.practice_id AS practiceId, r.practice_version_id AS practiceVersionId, r.item_id AS itemId, r.person_account_id AS developerId,
                r.outcome, r.severity, r.evidence_version AS evidenceVersion, r.item_version IS NOT NULL AS itemVersionRecorded, r.coverage IS NOT NULL AS coverageRecorded,
                r.recorded_at AS recordedAt, r.ended_at AS endedAt, r.end_reason AS endReason,
                (SELECT m.kind FROM result_mark m
@@ -57,7 +57,7 @@ interface ResearchDatasetRepository extends Repository<Result, UUID> {
     List<ProblemRow> problems(long workspaceId, Long[] accounts, Instant from, Instant to);
 
     @Query(value = """
-        SELECT f.id, f.review_id AS reviewId, f.item_id AS itemId, f.developer_id AS developerId, f.destination, f.state, f.stop_reason AS stopReason,
+        SELECT f.id, f.review_id AS reviewId, f.item_id AS itemId, f.person_account_id AS developerId, f.destination, f.state, f.stop_reason AS stopReason,
                f.created_at AS createdAt, f.delivered_at AS deliveredAt, f.replaces_id AS replacesId
           FROM feedback f
          WHERE f.workspace_id = :workspaceId AND f.id IN (
@@ -116,10 +116,10 @@ interface ResearchDatasetRepository extends Repository<Result, UUID> {
               FROM review_item a JOIN reviewed x ON x.id = a.review_id
              WHERE a.workspace_id = :workspaceId),
         linked AS (
-            SELECT r.review_id, r.developer_id FROM result r
+            SELECT r.review_id, r.person_account_id FROM result r
              WHERE r.workspace_id = :workspaceId AND r.review_id IN (SELECT id FROM reviewed)
             UNION ALL
-            SELECT s.review_id, r.developer_id FROM assigned s
+            SELECT s.review_id, r.person_account_id FROM assigned s
               JOIN result r ON r.workspace_id = :workspaceId AND r.id = s.result_id
             UNION ALL
             SELECT s.review_id, s.recorded_developer FROM assigned s
@@ -128,9 +128,9 @@ interface ResearchDatasetRepository extends Repository<Result, UUID> {
                (SELECT count(*) FROM assigned s WHERE s.review_id = x.id) AS assignments,
                (SELECT count(*) FROM assigned s
                  WHERE s.review_id = x.id AND s.result_id IS NULL AND s.recorded_developer IS NULL) AS unattributedAssignments,
-               (SELECT count(*) FROM linked l WHERE l.review_id = x.id AND l.developer_id IS NULL) AS unattributedResults,
-               ARRAY(SELECT DISTINCT l.developer_id FROM linked l
-                      WHERE l.review_id = x.id AND l.developer_id IS NOT NULL) AS developers
+               (SELECT count(*) FROM linked l WHERE l.review_id = x.id AND l.person_account_id IS NULL) AS unattributedResults,
+               ARRAY(SELECT DISTINCT l.person_account_id FROM linked l
+                      WHERE l.review_id = x.id AND l.person_account_id IS NOT NULL) AS developers
           FROM reviewed x
         """, nativeQuery = true)
     List<ReviewSubjectRow> reviewSubjects(long workspaceId, Long[] accounts, Instant from, Instant to);

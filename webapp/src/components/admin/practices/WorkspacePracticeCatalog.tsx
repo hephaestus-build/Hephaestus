@@ -103,7 +103,7 @@ export interface WorkspacePracticeCatalogProps {
 	onFocusFilterChange: (f: FocusFilter) => void;
 	onCreateGroup: (details: GroupDetails) => Promise<boolean>;
 	onUpdateGroup: (slug: string, details: GroupDetails) => Promise<boolean>;
-	onSetGroupShownToDevelopers: (slug: string, shownToDevelopers: boolean) => void;
+	onSetGroupShownToDevelopers: (slug: string, shownToPeople: boolean) => void;
 	onDeleteGroup: (slug: string) => void;
 	onResetGroup: (slug: string) => void;
 	onReorderGroups: (orderedSlugs: string[]) => void;
@@ -239,7 +239,7 @@ export function WorkspacePracticeCatalog({
 				)}
 				renderGroupMeta={(group) => (
 					<>
-						{!group.shownToDevelopers && <StatusBadge def={PROFILE_VISIBILITY_DEFS.HIDDEN} />}
+						{!group.shownToPeople && <StatusBadge def={PROFILE_VISIBILITY_DEFS.HIDDEN} />}
 						<WorkspaceCatalogOriginBadge origin={group.catalogOrigin} kind="group" />
 					</>
 				)}
@@ -425,7 +425,7 @@ function GroupActions({
 	pending: boolean;
 	structurePending: boolean;
 	onRename: () => void;
-	onSetShownToDevelopers: (slug: string, shownToDevelopers: boolean) => void;
+	onSetShownToDevelopers: (slug: string, shownToPeople: boolean) => void;
 	onDelete: (slug: string) => void;
 	onReset: (slug: string) => void;
 }) {
@@ -433,10 +433,8 @@ function GroupActions({
 		<>
 			<Switch
 				className="hidden sm:inline-flex"
-				checked={group.shownToDevelopers}
-				onCheckedChange={(shownToDevelopers) =>
-					onSetShownToDevelopers(group.slug, shownToDevelopers)
-				}
+				checked={group.shownToPeople}
+				onCheckedChange={(shownToPeople) => onSetShownToDevelopers(group.slug, shownToPeople)}
 				disabled={pending}
 				aria-label={`Show ${group.name} on practice profiles`}
 			/>
@@ -460,9 +458,9 @@ function GroupActions({
 					</DropdownMenuItem>
 					<DropdownMenuItem
 						disabled={pending}
-						onClick={() => onSetShownToDevelopers(group.slug, !group.shownToDevelopers)}
+						onClick={() => onSetShownToDevelopers(group.slug, !group.shownToPeople)}
 					>
-						{group.shownToDevelopers ? "Hide from practice profiles" : "Show on practice profiles"}
+						{group.shownToPeople ? "Hide from practice profiles" : "Show on practice profiles"}
 					</DropdownMenuItem>
 					{canResetToCatalog(group.catalogOrigin) && (
 						<DropdownMenuItem disabled={pending} onClick={() => onReset(group.slug)}>

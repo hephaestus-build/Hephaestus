@@ -26,7 +26,7 @@ erDiagram
         BIGINT workspace_id FK,UK "NOT NULL"
         UUID review_id FK "NOT NULL"
         BIGINT item_id FK
-        BIGINT developer_id FK,UK "NOT NULL"
+        BIGINT person_account_id FK,UK "NOT NULL"
         VARCHAR(24) destination "NOT NULL"
         VARCHAR(24) state "NOT NULL"
         VARCHAR(48) stop_reason
@@ -45,7 +45,7 @@ erDiagram
         UUID feedback_id FK,UK "NOT NULL"
         UUID result_id FK,UK "NOT NULL"
         UUID problem_id FK,UK
-        BIGINT developer_id FK "NOT NULL"
+        BIGINT person_account_id FK "NOT NULL"
         INTEGER ordinal "NOT NULL"
     }
 
@@ -142,7 +142,7 @@ erDiagram
         VARCHAR(64) icon
         VARCHAR(32) color
         INTEGER position "NOT NULL"
-        BOOLEAN shown_to_developers "NOT NULL"
+        BOOLEAN shown_to_people "NOT NULL"
         VARCHAR(16) feedback_mode
         VARCHAR(64) catalog_slug
         JSONB catalog_base
@@ -234,7 +234,7 @@ erDiagram
         BIGINT practice_version_id FK
         BIGINT item_id FK,UK "NOT NULL"
         TEXT item_version
-        BIGINT developer_id FK,UK
+        BIGINT person_account_id FK,UK
         VARCHAR(24) outcome "NOT NULL"
         VARCHAR(16) severity
         VARCHAR(255) summary

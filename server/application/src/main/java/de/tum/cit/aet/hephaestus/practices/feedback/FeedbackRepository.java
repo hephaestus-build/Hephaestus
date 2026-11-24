@@ -139,7 +139,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID>, JpaSp
             @Param("delivered") FeedbackState delivered);
 
     @Query(value = """
-        SELECT f.* FROM feedback f WHERE f.workspace_id = :workspaceId AND f.developer_id IN (:developerIds)
+        SELECT f.* FROM feedback f WHERE f.workspace_id = :workspaceId AND f.person_account_id IN (:developerIds)
           AND f.destination = 'PRACTICE_PAGE' AND f.state IN ('READY','DELIVERED')
         ORDER BY f.created_at DESC, f.id DESC
         """, nativeQuery = true)
@@ -147,7 +147,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID>, JpaSp
             @Param("workspaceId") long workspaceId, @Param("developerIds") Collection<Long> developerIds);
 
     @Query(value = """
-        SELECT f.* FROM feedback f WHERE f.workspace_id = :workspaceId AND f.developer_id = :developerId
+        SELECT f.* FROM feedback f WHERE f.workspace_id = :workspaceId AND f.person_account_id = :developerId
           AND f.destination = 'PRACTICE_PAGE' AND f.state IN ('READY','DELIVERED')
           AND EXISTS(SELECT 1 FROM feedback_basis b JOIN result r ON r.id = b.result_id AND r.workspace_id = b.workspace_id
             JOIN practice p ON p.id = r.practice_id AND p.workspace_id = r.workspace_id
@@ -178,7 +178,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID>, JpaSp
             @Param("workspaceId") long workspaceId, @Param("id") UUID id, @Param("previous") UUID previous);
 
     @Query(value = """
-        SELECT f.* FROM feedback f WHERE f.workspace_id=:workspaceId AND f.item_id=:itemId AND f.developer_id=:developerId
+        SELECT f.* FROM feedback f WHERE f.workspace_id=:workspaceId AND f.item_id=:itemId AND f.person_account_id=:developerId
          AND f.destination='ON_WORK' AND EXISTS(SELECT 1 FROM feedback_copy c WHERE c.feedback_id=f.id AND c.workspace_id=f.workspace_id
            AND c.kind='SUMMARY' AND c.state='POSTED' AND c.posted_at IS NOT NULL)
          ORDER BY f.delivered_at DESC NULLS LAST,f.created_at DESC,f.id::text DESC LIMIT 1

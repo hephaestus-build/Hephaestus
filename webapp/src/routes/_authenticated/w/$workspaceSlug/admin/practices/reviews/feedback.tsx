@@ -50,7 +50,7 @@ function FeedbackListRoute() {
 	const developerCountsQuery = useQuery({
 		...countReviewFeedbackByLocationOptions({
 			path: { workspaceSlug },
-			query: { developerId: search.developerId },
+			query: { personId: search.developerId },
 		}),
 		enabled: search.developerId !== undefined,
 	});

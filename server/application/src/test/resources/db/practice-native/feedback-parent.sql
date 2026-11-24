@@ -1,16 +1,16 @@
 BEGIN;
 INSERT INTO account(id,display_name,status) VALUES(978007,'Other developer','ACTIVE');
 INSERT INTO membership(workspace_id,account_id,role) VALUES(978001,978007,'MEMBER');
-INSERT INTO result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,developer_id,outcome,summary,coverage,recorded_at)
+INSERT INTO result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,person_account_id,outcome,summary,coverage,recorded_at)
 VALUES('00000000-0000-0000-0000-000000978021',978001,'00000000-0000-0000-0000-000000978011',978004,978005,978006,
  'native-v1',978003,'MET','The change explains its purpose.',
  '{"source":"host","complete":true,"reads":1,"truncatedReads":0,"failedReads":0,"receipts":[]}',now());
-INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at)
+INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,delivered_at)
 VALUES('00000000-0000-0000-0000-000000978041',978001,'00000000-0000-0000-0000-000000978011',978006,978003,
  'ON_WORK','DELIVERED','Explain the purpose.',now(),now()),
  ('00000000-0000-0000-0000-000000978044',978001,'00000000-0000-0000-0000-000000978011',978006,978003,
  'CONVERSATION','READY','Prepared brief.',now(),NULL);
-INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)
+INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal)
 VALUES('00000000-0000-0000-0000-000000978043',978001,'00000000-0000-0000-0000-000000978041','00000000-0000-0000-0000-000000978021',978003,0),
  ('00000000-0000-0000-0000-000000978046',978001,'00000000-0000-0000-0000-000000978044','00000000-0000-0000-0000-000000978021',978003,0);
 INSERT INTO feedback_copy(id,workspace_id,feedback_id,kind,position,state,external_ref,write_started_at,posted_at,write_key)

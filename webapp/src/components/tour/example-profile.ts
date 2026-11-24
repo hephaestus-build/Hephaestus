@@ -194,12 +194,12 @@ function groupStanding(
 function split(needs: number, mixed: number, well: number, noneYet: number): WorkspaceSplit {
 	return {
 		parts: [
-			{ standing: "DEVELOPING", developers: needs },
-			{ standing: "MIXED", developers: mixed },
-			{ standing: "STRENGTH", developers: well },
+			{ standing: "DEVELOPING", people: needs },
+			{ standing: "MIXED", people: mixed },
+			{ standing: "STRENGTH", people: well },
 		],
 		noneYet,
-		developers: needs + mixed + well + noneYet,
+		people: needs + mixed + well + noneYet,
 	};
 }
 
@@ -476,7 +476,7 @@ export function exampleProfile(now: Date, provider?: ItemProvider): ExampleProfi
 			},
 			tiles: {
 				window: "DAYS_30",
-				developersWithAStandingInWindow: 18,
+				peopleWithAStandingInWindow: 18,
 				includesEarlierReviews: false,
 				yourPractices: practices.length,
 				reviewedWork: { yours: 3, middle: { low: 2, high: 6 } },

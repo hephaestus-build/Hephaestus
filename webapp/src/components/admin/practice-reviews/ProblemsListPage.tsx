@@ -50,7 +50,7 @@ export function ProblemsListPage({
 	record,
 }: ProblemsListPageProps) {
 	const rows = problems.status === "ready" ? problems.rows : [];
-	const filteredDeveloper = search.developerId === undefined ? undefined : rows[0]?.developer;
+	const filteredDeveloper = search.developerId === undefined ? undefined : rows[0]?.person;
 	const reset = () => onSearchChange(clearedProblemFilters());
 
 	return (

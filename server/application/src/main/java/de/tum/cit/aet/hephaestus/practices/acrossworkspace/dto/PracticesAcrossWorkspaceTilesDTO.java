@@ -22,7 +22,7 @@ public record PracticesAcrossWorkspaceTilesDTO(
                         + " 1 to "
                         + (SmallCounts.MINIMUM - 1))
         @Nullable
-        ShownCount developersWithAStandingInWindow,
+        ShownCount peopleWithAStandingInWindow,
 
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,

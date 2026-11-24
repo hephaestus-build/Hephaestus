@@ -71,7 +71,7 @@ export function WorkspaceComparisonTable({
 	empty,
 }: WorkspaceComparisonTableProps) {
 	const rows = state.status === "ready" ? state.rows : [];
-	const nobodyYet = rows.length > 0 && rows.every((row) => row.split.developers === 0);
+	const nobodyYet = rows.length > 0 && rows.every((row) => row.split.people === 0);
 	// Each cell then holds only a hidden track, so the table is described by the one reason.
 	const reasonId = useId();
 	return (

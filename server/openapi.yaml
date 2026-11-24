@@ -10752,7 +10752,7 @@ paths:
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
-        name: shownToDevelopersOnly
+        name: shownToPeopleOnly
         required: false
         schema:
           type: boolean
@@ -13285,7 +13285,7 @@ paths:
           maxLength: 19
           pattern: "^[1-9][0-9]*$"
       - in: query
-        name: developerId
+        name: personId
         required: false
         schema:
           type: integer
@@ -13392,7 +13392,7 @@ paths:
         schema:
           type: string
       - in: query
-        name: developerId
+        name: personId
         required: false
         schema:
           type: string
@@ -13536,7 +13536,7 @@ paths:
         schema:
           type: string
       - in: query
-        name: developerId
+        name: personId
         required: false
         schema:
           type: string
@@ -13665,7 +13665,7 @@ paths:
         schema:
           type: string
       - in: query
-        name: developerId
+        name: personId
         required: false
         schema:
           type: string
@@ -14151,7 +14151,7 @@ paths:
         schema:
           type: string
       - in: query
-        name: developerId
+        name: personId
         required: false
         schema:
           type: integer
@@ -14383,7 +14383,7 @@ paths:
         schema:
           type: string
       - in: query
-        name: developerId
+        name: personId
         required: false
         schema:
           type: integer
@@ -19601,7 +19601,7 @@ components:
           - integer
           format: int32
           minimum: 0
-        shownToDevelopers:
+        shownToPeople:
           type: boolean
         slug:
           type: string
@@ -19614,7 +19614,7 @@ components:
       - icon
       - name
       - position
-      - shownToDevelopers
+      - shownToPeople
       - slug
     CreatePracticeRequest:
       type: object
@@ -24366,7 +24366,7 @@ components:
         position:
           type: integer
           format: int32
-        shownToDevelopers:
+        shownToPeople:
           type: boolean
         slug:
           type: string
@@ -24385,7 +24385,7 @@ components:
       - id
       - name
       - position
-      - shownToDevelopers
+      - shownToPeople
       - slug
       - updatedAt
     PracticeGroupStanding:
@@ -25365,17 +25365,17 @@ components:
       description: The reader's figures over one window beside the middle half of
         the developers with a standing in it
       properties:
-        developersWithAStandingInWindow:
+        includesEarlierReviews:
+          type: boolean
+          description: Whether at least 5 developers counted in the window have a
+            standing read only from earlier reviews
+        peopleWithAStandingInWindow:
           type:
           - "null"
           - integer
           format: int32
           description: "Developers with a standing in the window, the developers the\
             \ tiles compare. Null for 1 to 4"
-        includesEarlierReviews:
-          type: boolean
-          description: Whether at least 5 developers counted in the window have a
-            standing read only from earlier reviews
         practicesGoingWell:
           $ref: "#/components/schemas/WorkspaceTile"
           description: The reader's practices going well
@@ -25394,8 +25394,8 @@ components:
           description: "The practices the reader's profile lists, the denominator\
             \ of the practice tiles"
       required:
-      - developersWithAStandingInWindow
       - includesEarlierReviews
+      - peopleWithAStandingInWindow
       - practicesGoingWell
       - practicesNeedingAttention
       - reviewedWork
@@ -27524,10 +27524,6 @@ components:
             \ Null when the capture record is missing."
         currentness:
           $ref: "#/components/schemas/Currentness"
-        developer:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewDeveloper"
-          - type: "null"
         id:
           type: string
           format: uuid
@@ -27535,6 +27531,10 @@ components:
           $ref: "#/components/schemas/ItemRef"
         outcome:
           $ref: "#/components/schemas/ResultOutcome"
+        person:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewPerson"
+          - type: "null"
         practiceName:
           type: string
         practiceSlug:
@@ -27564,10 +27564,10 @@ components:
       required:
       - capturedAt
       - currentness
-      - developer
       - id
       - item
       - outcome
+      - person
       - practiceName
       - practiceSlug
       - recordedAt
@@ -27729,29 +27729,6 @@ components:
       - status
       - stopReason
       - usage
-    ReviewDeveloper:
-      type: object
-      properties:
-        accountId:
-          type: string
-          pattern: "^[1-9][0-9]*$"
-        avatarUrl:
-          type:
-          - string
-          - "null"
-        displayName:
-          type:
-          - string
-          - "null"
-        providerLogin:
-          type:
-          - string
-          - "null"
-      required:
-      - accountId
-      - avatarUrl
-      - displayName
-      - providerLogin
     ReviewFeedback:
       type: object
       properties:
@@ -27773,14 +27750,6 @@ components:
           format: date-time
         destination:
           $ref: "#/components/schemas/FeedbackDestination"
-        developer:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewDeveloper"
-            description: Null for feedback on a practice page or in a conversation
-              while the workspace has per-person results for admins off
-          - type: "null"
-          description: Null for feedback on a practice page or in a conversation while
-            the workspace has per-person results for admins off
         disagreedAt:
           type:
           - string
@@ -27795,6 +27764,14 @@ components:
           - type: "null"
         location:
           $ref: "#/components/schemas/FeedbackLocation"
+        person:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewPerson"
+            description: Null for feedback on a practice page or in a conversation
+              while the workspace has per-person results for admins off
+          - type: "null"
+          description: Null for feedback on a practice page or in a conversation while
+            the workspace has per-person results for admins off
         replacesId:
           type:
           - string
@@ -27825,11 +27802,11 @@ components:
       - createdAt
       - deliveredAt
       - destination
-      - developer
       - disagreedAt
       - id
       - item
       - location
+      - person
       - replacesId
       - resultCount
       - reviewId
@@ -27927,14 +27904,6 @@ components:
           format: date-time
         destination:
           $ref: "#/components/schemas/FeedbackDestination"
-        developer:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewDeveloper"
-            description: Null for feedback on a practice page or in a conversation
-              while the workspace has per-person results for admins off
-          - type: "null"
-          description: Null for feedback on a practice page or in a conversation while
-            the workspace has per-person results for admins off
         disagreedAt:
           type:
           - string
@@ -27949,6 +27918,14 @@ components:
           - type: "null"
         location:
           $ref: "#/components/schemas/FeedbackLocation"
+        person:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewPerson"
+            description: Null for feedback on a practice page or in a conversation
+              while the workspace has per-person results for admins off
+          - type: "null"
+          description: Null for feedback on a practice page or in a conversation while
+            the workspace has per-person results for admins off
         replacesId:
           type:
           - string
@@ -27990,11 +27967,11 @@ components:
       - decisions
       - deliveredAt
       - destination
-      - developer
       - disagreedAt
       - id
       - item
       - location
+      - person
       - replacesId
       - resultCount
       - reviewId
@@ -28279,6 +28256,29 @@ components:
       - resultsMarkedIncorrect
       - reviews
       - to
+    ReviewPerson:
+      type: object
+      properties:
+        accountId:
+          type: string
+          pattern: "^[1-9][0-9]*$"
+        avatarUrl:
+          type:
+          - string
+          - "null"
+        displayName:
+          type:
+          - string
+          - "null"
+        providerLogin:
+          type:
+          - string
+          - "null"
+      required:
+      - accountId
+      - avatarUrl
+      - displayName
+      - providerLogin
     ReviewPractice:
       type: object
       properties:
@@ -28377,10 +28377,6 @@ components:
             \ Null when the capture record is missing."
         currentness:
           $ref: "#/components/schemas/Currentness"
-        developer:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewDeveloper"
-          - type: "null"
         disagreedAt:
           type:
           - string
@@ -28411,6 +28407,10 @@ components:
           type:
           - string
           - "null"
+        person:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewPerson"
+          - type: "null"
         practiceName:
           type: string
         practiceSlug:
@@ -28453,7 +28453,6 @@ components:
       - acceptedAt
       - capturedAt
       - currentness
-      - developer
       - disagreedAt
       - endLine
       - evidenceHidden
@@ -28462,6 +28461,7 @@ components:
       - item
       - markedIncorrectAt
       - path
+      - person
       - practiceName
       - practiceSlug
       - recordedAt
@@ -28491,10 +28491,6 @@ components:
             \ Null when the capture record is missing."
         currentness:
           $ref: "#/components/schemas/Currentness"
-        developer:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewDeveloper"
-          - type: "null"
         disagreedAt:
           type:
           - string
@@ -28525,6 +28521,10 @@ components:
           type:
           - string
           - "null"
+        person:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewPerson"
+          - type: "null"
         practiceName:
           type: string
         practiceSlug:
@@ -28571,7 +28571,6 @@ components:
       - acceptedAt
       - capturedAt
       - currentness
-      - developer
       - disagreedAt
       - endLine
       - evidenceHidden
@@ -28580,6 +28579,7 @@ components:
       - item
       - markedIncorrectAt
       - path
+      - person
       - practiceName
       - practiceSlug
       - problem
@@ -28664,10 +28664,6 @@ components:
     ReviewQueueItem:
       type: object
       properties:
-        developer:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewDeveloper"
-          - type: "null"
         heldForBudget:
           type: boolean
         item:
@@ -28675,6 +28671,10 @@ components:
         jobId:
           type: string
           format: uuid
+        person:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewPerson"
+          - type: "null"
         progress:
           anyOf:
           - $ref: "#/components/schemas/ReviewProgress"
@@ -28688,10 +28688,10 @@ components:
         status:
           $ref: "#/components/schemas/ReviewJobStatus"
       required:
-      - developer
       - heldForBudget
       - item
       - jobId
+      - person
       - progress
       - reviewId
       - since
@@ -28816,10 +28816,6 @@ components:
             \ Null when the capture record is missing."
         currentness:
           $ref: "#/components/schemas/Currentness"
-        developer:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewDeveloper"
-          - type: "null"
         feedback:
           $ref: "#/components/schemas/ReviewFeedbackCounts"
         id:
@@ -28836,6 +28832,10 @@ components:
           $ref: "#/components/schemas/ReviewOrigin"
         outcome:
           $ref: "#/components/schemas/ResultOutcome"
+        person:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewPerson"
+          - type: "null"
         practiceName:
           type: string
         practiceSlug:
@@ -28873,13 +28873,13 @@ components:
       - acceptedAt
       - capturedAt
       - currentness
-      - developer
       - feedback
       - id
       - item
       - markedIncorrectAt
       - origin
       - outcome
+      - person
       - practiceName
       - practiceSlug
       - problemCount
@@ -28932,10 +28932,6 @@ components:
           - type: "null"
         currentness:
           $ref: "#/components/schemas/Currentness"
-        developer:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewDeveloper"
-          - type: "null"
         disagreements:
           type: array
           items:
@@ -28992,6 +28988,10 @@ components:
           $ref: "#/components/schemas/ReviewOrigin"
         outcome:
           $ref: "#/components/schemas/ResultOutcome"
+        person:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewPerson"
+          - type: "null"
         practiceName:
           type: string
         practiceSlug:
@@ -29037,7 +29037,6 @@ components:
       - capturedAt
       - coverage
       - currentness
-      - developer
       - disagreements
       - endReason
       - endedAt
@@ -29054,6 +29053,7 @@ components:
       - marks
       - origin
       - outcome
+      - person
       - practiceName
       - practiceSlug
       - practiceVersionId
@@ -31376,14 +31376,14 @@ components:
           type: string
           maxLength: 128
           minLength: 0
-        shownToDevelopers:
+        shownToPeople:
           type: boolean
       required:
       - color
       - description
       - icon
       - name
-      - shownToDevelopers
+      - shownToPeople
     UpdatePracticeRequest:
       type: object
       properties:
@@ -32930,13 +32930,6 @@ components:
         \ their total. A split with a part of 1 to 4, or with every developer in one\
         \ part, shows only its total"
       properties:
-        developers:
-          type:
-          - "null"
-          - integer
-          format: int32
-          description: "Every developer the split counts, the parts and none yet together,\
-            \ the reader included when counted. Null for 1 to 4"
         noneYet:
           type:
           - "null"
@@ -32950,15 +32943,22 @@ components:
             \ and Going well in that order"
           items:
             $ref: "#/components/schemas/WorkspaceSplitPart"
+        people:
+          type:
+          - "null"
+          - integer
+          format: int32
+          description: "Every developer the split counts, the parts and none yet together,\
+            \ the reader included when counted. Null for 1 to 4"
       required:
-      - developers
       - noneYet
       - parts
+      - people
     WorkspaceSplitPart:
       type: object
       description: The developers at one verdict in a split
       properties:
-        developers:
+        people:
           type:
           - "null"
           - integer
@@ -32969,7 +32969,7 @@ components:
           $ref: "#/components/schemas/WorkspaceSplitsVerdict"
           description: The verdict the part counts
       required:
-      - developers
+      - people
       - standing
     WorkspaceSplitsVerdict:
       type: string

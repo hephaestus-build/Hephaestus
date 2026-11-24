@@ -18,4 +18,4 @@ public record WorkspaceSplitPartDTO(
                 description = "Developers at the verdict, the reader included when counted. Null when the split"
                         + " shows only its total")
         @Nullable
-        ShownCount developers) {}
+        ShownCount people) {}

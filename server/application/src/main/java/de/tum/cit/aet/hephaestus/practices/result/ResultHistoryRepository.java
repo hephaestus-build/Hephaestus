@@ -17,7 +17,7 @@ public interface ResultHistoryRepository extends Repository<Result, UUID> {
     String NEWEST_FIRST = " ORDER BY r.recorded_at DESC,r.id::text DESC";
 
     @Query(
-            value = HISTORY + " AND r.developer_id=:accountId AND r.recorded_at>=:since" + NEWEST_FIRST,
+            value = HISTORY + " AND r.person_account_id=:accountId AND r.recorded_at>=:since" + NEWEST_FIRST,
             nativeQuery = true)
     List<Result> forDeveloper(long workspaceId, long accountId, Instant since, Pageable page);
 
@@ -26,7 +26,7 @@ public interface ResultHistoryRepository extends Repository<Result, UUID> {
 
     @Query(
             value = HISTORY + " AND r.item_id=:itemId AND r.practice_id=:practiceId"
-                    + " AND r.developer_id IS NOT DISTINCT FROM CAST(:accountId AS bigint)" + NEWEST_FIRST,
+                    + " AND r.person_account_id IS NOT DISTINCT FROM CAST(:accountId AS bigint)" + NEWEST_FIRST,
             nativeQuery = true)
     List<Result> forAssignment(long workspaceId, long itemId, long practiceId, @Nullable Long accountId, Pageable page);
 }

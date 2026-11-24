@@ -225,8 +225,8 @@ class PracticeV1ConversationReceiptDatabaseTest {
     private static TestDatabase prepared(String context) throws Exception {
         var database = NativePracticeFixture.feedbackParent(context);
         PracticeMigrationFixture.execute(database, """
-            INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body)
-            SELECT '00000000-0000-0000-0000-000000998161',workspace_id,review_id,item_id,developer_id,
+            INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body)
+            SELECT '00000000-0000-0000-0000-000000998161',workspace_id,review_id,item_id,person_account_id,
                 'CONVERSATION','READY','Prepared brief.' FROM feedback WHERE id='00000000-0000-0000-0000-000000978044';
             INSERT INTO feedback_copy(id,workspace_id,feedback_id,kind,position,state,write_key,write_marker)
             VALUES('00000000-0000-0000-0000-000000998172',978001,'00000000-0000-0000-0000-000000998161',

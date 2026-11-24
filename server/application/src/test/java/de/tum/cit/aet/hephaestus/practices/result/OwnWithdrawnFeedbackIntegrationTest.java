@@ -216,7 +216,7 @@ class OwnWithdrawnFeedbackIntegrationTest extends BaseIntegrationTest {
         var id = UUID.randomUUID();
         long ws = owner.workspace().getId();
         long developer = Objects.requireNonNull(owner.account().getId());
-        jdbc.sql("INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,"
+        jdbc.sql("INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,"
                         + "created_at,delivered_at)"
                         + " VALUES(:id,:ws,:review,:item,:developer,'ON_WORK','DELIVERED','Review this change.',"
                         + ":at,:at)")
@@ -227,7 +227,7 @@ class OwnWithdrawnFeedbackIntegrationTest extends BaseIntegrationTest {
                 .param("developer", developer)
                 .param("at", Timestamp.from(at))
                 .update();
-        jdbc.sql("INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)"
+        jdbc.sql("INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal)"
                         + " VALUES(:id,:ws,:feedback,:result,:developer,0)")
                 .param("id", FeedbackIds.basis(id, bound.getId(), null))
                 .param("ws", ws)

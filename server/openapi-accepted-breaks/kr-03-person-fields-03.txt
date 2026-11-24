@@ -1,0 +1,2 @@
+# 1.0 calls the person a review concerns person (#4905).
+in API POST /workspaces/{workspaceSlug}/practice-groups removed the required property `shownToDevelopers` from the response with the `201` status

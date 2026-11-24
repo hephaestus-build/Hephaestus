@@ -120,26 +120,27 @@ class FeedbackRetentionIntegrationTest extends BaseIntegrationTest {
 
     private UUID feedback(Scenario scenario, UUID resultId, Instant createdAt, @Nullable Instant deliveredAt) {
         UUID id = UUID.randomUUID();
-        var result = jdbc.queryForMap("SELECT review_id, item_id, developer_id FROM result WHERE id = ?", resultId);
+        var result =
+                jdbc.queryForMap("SELECT review_id, item_id, person_account_id FROM result WHERE id = ?", resultId);
         jdbc.update(
-                "INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,"
+                "INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,"
                         + "delivered_at) VALUES(?,?,?,?,?,'PRACTICE_PAGE',?,'Explain the purpose.',?,?)",
                 id,
                 scenario.workspace().getId(),
                 result.get("review_id"),
                 result.get("item_id"),
-                result.get("developer_id"),
+                result.get("person_account_id"),
                 deliveredAt == null ? "READY" : "DELIVERED",
                 Timestamp.from(createdAt),
                 deliveredAt == null ? null : Timestamp.from(deliveredAt));
         jdbc.update(
-                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)"
+                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal)"
                         + " VALUES(?,?,?,?,?,0)",
                 UUID.randomUUID(),
                 scenario.workspace().getId(),
                 id,
                 resultId,
-                result.get("developer_id"));
+                result.get("person_account_id"));
         return id;
     }
 

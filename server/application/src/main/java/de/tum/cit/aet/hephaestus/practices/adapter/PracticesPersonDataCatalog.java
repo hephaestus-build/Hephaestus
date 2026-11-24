@@ -26,7 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 // The stores delete the person's results and feedback through RESULT_IDS and FEEDBACK_IDS. A basis row names the
 // developer of its feedback (sfk_feedback_basis_feedback_person).
-@ErasesColumns({"result.developer_id", "feedback.developer_id", "feedback_basis.developer_id"})
+@ErasesColumns({"result.person_account_id", "feedback.person_account_id", "feedback_basis.person_account_id"})
 @PersonDataStores({
     "practice_version",
     "feedback_response",
@@ -51,18 +51,19 @@ import tools.jackson.databind.ObjectMapper;
 })
 public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConversationCopySource {
     // Migrated review IDs preserve producer job IDs after runtime retention removes the job pointer.
-    private static final String RESULT_IDS = "SELECT id FROM result WHERE developer_id=:account OR (evidence_version="
-            + Result.MIGRATED_EVIDENCE_VERSION
-            + " AND review_id=ANY(:derivedJobs))"
-            + " OR id IN(SELECT result_id FROM review_item WHERE"
-            + " result_id IS NOT NULL AND (job_id=ANY(:derivedJobs) OR EXISTS(SELECT 1 FROM"
-            + " jsonb_array_elements_text(COALESCE(detail->'custody'->'sourceJobIds','[]'::jsonb)) source(value)"
-            + " WHERE source.value::uuid=ANY(:derivedJobs))))";
+    private static final String RESULT_IDS =
+            "SELECT id FROM result WHERE person_account_id=:account OR (evidence_version="
+                    + Result.MIGRATED_EVIDENCE_VERSION
+                    + " AND review_id=ANY(:derivedJobs))"
+                    + " OR id IN(SELECT result_id FROM review_item WHERE"
+                    + " result_id IS NOT NULL AND (job_id=ANY(:derivedJobs) OR EXISTS(SELECT 1 FROM"
+                    + " jsonb_array_elements_text(COALESCE(detail->'custody'->'sourceJobIds','[]'::jsonb)) source(value)"
+                    + " WHERE source.value::uuid=ANY(:derivedJobs))))";
     /** Replaces an erased administrator's words where a constraint needs text; guard_feedback_history admits it. */
     private static final String REDACTED = "'Erased administrator text'";
 
     private static final String FEEDBACK_IDS =
-            "SELECT id FROM feedback WHERE developer_id=:account OR id IN(SELECT feedback_id FROM feedback_basis WHERE"
+            "SELECT id FROM feedback WHERE person_account_id=:account OR id IN(SELECT feedback_id FROM feedback_basis WHERE"
                     + " result_id IN(" + RESULT_IDS + "))";
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -205,7 +206,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "feedback_basis",
                                 "feedback_basis",
                                 "t.feedback_id IN(" + FEEDBACK_IDS + ")",
-                                "id,workspace_id,feedback_id,developer_id,result_id,problem_id,ordinal",
+                                "id,workspace_id,feedback_id,person_account_id,result_id,problem_id,ordinal",
                                 "id,workspace_id",
                                 "",
                                 -200),
@@ -225,7 +226,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "feedback",
                                 "feedback",
                                 "t.id IN(" + FEEDBACK_IDS + ")",
-                                "id,workspace_id,review_id,item_id,developer_id,destination,state,stop_reason,body,replaces_id,created_at,delivered_at,checks,composition",
+                                "id,workspace_id,review_id,item_id,person_account_id,destination,state,stop_reason,body,replaces_id,created_at,delivered_at,checks,composition",
                                 "id,workspace_id",
                                 "",
                                 -180),
@@ -273,7 +274,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "result",
                                 "result",
                                 "t.id IN(" + RESULT_IDS + ")",
-                                "id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,developer_id,outcome,summary,explanation,severity,evidence,example,coverage,evidence_version,recorded_at,ended_at,end_reason",
+                                "id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,person_account_id,outcome,summary,explanation,severity,evidence,example,coverage,evidence_version,recorded_at,ended_at,end_reason",
                                 "id,workspace_id",
                                 "",
                                 -150),

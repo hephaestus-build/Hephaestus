@@ -24,7 +24,7 @@ public class ConversationPracticeQueryService implements ConversationPracticeQue
         var mode = defaults.rawDefaultFeedbackMode(workspaceId);
         return practices.findAllForCatalog(workspaceId).stream()
                 .filter(practice ->
-                        practice.getGroup() == null || practice.getGroup().isShownToDevelopers())
+                        practice.getGroup() == null || practice.getGroup().isShownToPeople())
                 .filter(practice -> FeedbackModeResolver.effectiveModeOf(practice, mode) != FeedbackMode.OFF)
                 .map(practice -> new ConversationPractice(
                         practice.getSlug(), versions.definitionOf(practice.getCurrentVersion())))

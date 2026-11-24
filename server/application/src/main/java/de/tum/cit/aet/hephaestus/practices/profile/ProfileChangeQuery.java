@@ -88,7 +88,7 @@ public class ProfileChangeQuery {
                 workspaceId, List.of(window.since(), window.until()), history);
         var before = snapshots.getFirst();
         var after = snapshots.getLast();
-        var shown = groups.findByWorkspaceIdAndShownToDevelopersTrueOrderByPositionAscNameAsc(workspaceId);
+        var shown = groups.findByWorkspaceIdAndShownToPeopleTrueOrderByPositionAscNameAsc(workspaceId);
         Map<String, List<Work>> windowWork = new LinkedHashMap<>();
         projected.stream()
                 .collect(Collectors.groupingBy(v -> v.practice().getSlug()))

@@ -184,11 +184,11 @@ class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
         var byId = query(policy).list(ws, ALL, PageRequest.of(0, 32)).getContent().stream()
                 .collect(Collectors.toMap(row -> row.id(), row -> row));
 
-        assertThat(Objects.requireNonNull(byId.get(onWork)).developer())
+        assertThat(Objects.requireNonNull(byId.get(onWork)).person())
                 .as("approving feedback on the work authorizes a comment to that person")
                 .isNotNull();
-        assertThat(Objects.requireNonNull(byId.get(page)).developer()).isNull();
-        assertThat(Objects.requireNonNull(byId.get(conversation)).developer()).isNull();
+        assertThat(Objects.requireNonNull(byId.get(page)).person()).isNull();
+        assertThat(Objects.requireNonNull(byId.get(conversation)).person()).isNull();
     }
 
     @Test
@@ -254,7 +254,7 @@ class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
     private UUID feedback(Result result, FeedbackDestination destination, @Nullable String body) {
         var id = UUID.randomUUID();
         jdbc.sql("""
-            INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at)
+            INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,delivered_at)
             VALUES(:id,:ws,:review,:item,:developer,:destination,'DELIVERED',:body,:at,:at)
             """)
                 .param("id", id)
@@ -272,7 +272,7 @@ class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
 
     private void basis(UUID feedbackId, Result result, int ordinal) {
         jdbc.sql("""
-            INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)
+            INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal)
             VALUES(:id,:ws,:feedback,:result,:developer,:ordinal)
             """)
                 .param("id", UUID.randomUUID())

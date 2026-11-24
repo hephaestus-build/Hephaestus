@@ -59,7 +59,7 @@ export function FeedbackListPage({
 	const rows = feedback.status === "ready" ? feedback.rows : [];
 	// Guarded on the filter being set: see `ResultsListPage`. Unfiltered, row zero is whoever
 	// sorts first, and their name would be shown against a different person's id.
-	const filteredDeveloper = search.developerId === undefined ? undefined : rows[0]?.developer;
+	const filteredDeveloper = search.developerId === undefined ? undefined : rows[0]?.person;
 	const developerName =
 		filteredDeveloper?.displayName ??
 		filteredDeveloper?.providerLogin ??

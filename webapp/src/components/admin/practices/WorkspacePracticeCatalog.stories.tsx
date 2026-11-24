@@ -45,7 +45,7 @@ const nameOf = (practice: Practice) => currentDefinition(practice).name;
 const longNamedGroup = {
 	...reviewReadyGroup,
 	name: "Packaging work so reviewers can understand its purpose without reconstructing context",
-	shownToDevelopers: false,
+	shownToPeople: false,
 };
 
 const groups = [longNamedGroup, issueAuthoringGroup];
@@ -157,11 +157,11 @@ const meta = {
 							),
 						});
 					}}
-					onSetGroupShownToDevelopers={(slug, shownToDevelopers) => {
-						args.onSetGroupShownToDevelopers(slug, shownToDevelopers);
+					onSetGroupShownToDevelopers={(slug, shownToPeople) => {
+						args.onSetGroupShownToDevelopers(slug, shownToPeople);
 						patch({
 							groups: view.groups.map((group) =>
-								group.slug === slug ? { ...group, shownToDevelopers } : group,
+								group.slug === slug ? { ...group, shownToPeople } : group,
 							),
 						});
 					}}

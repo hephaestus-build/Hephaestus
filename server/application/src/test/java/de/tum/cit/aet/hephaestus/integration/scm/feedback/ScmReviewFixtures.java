@@ -157,7 +157,7 @@ public final class ScmReviewFixtures {
             var evidence = mapper.createObjectNode().set("citations", citations);
             jdbc.update(
                     "INSERT INTO"
-                            + " result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,developer_id,outcome,severity,summary,explanation,evidence,evidence_version,recorded_at)"
+                            + " result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,person_account_id,outcome,severity,summary,explanation,evidence,evidence_version,recorded_at)"
                             + " VALUES (?,?,?,?,?,?,?,?,'NOT_MET','MAJOR','Work needs trackable steps','The fixture work"
                             + " contains no trackable steps.',?::jsonb,1,?)",
                     result,
@@ -199,7 +199,7 @@ public final class ScmReviewFixtures {
             UUID copy = FeedbackIds.copy(feedback, FeedbackCopyKind.SUMMARY, 0);
             jdbc.update(
                     "INSERT INTO"
-                            + " feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,checks,created_at,delivered_at)"
+                            + " feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,checks,created_at,delivered_at)"
                             + " VALUES (?,?,?,?,?,'ON_WORK','DELIVERED','Fixture feedback','{}'::jsonb,?,?)",
                     feedback,
                     workspaceId,
@@ -210,7 +210,7 @@ public final class ScmReviewFixtures {
                     Timestamp.from(at));
             jdbc.update(
                     "INSERT INTO"
-                            + " feedback_basis(id,workspace_id,feedback_id,result_id,problem_id,developer_id,ordinal)"
+                            + " feedback_basis(id,workspace_id,feedback_id,result_id,problem_id,person_account_id,ordinal)"
                             + " VALUES (?,?,?,?,?,?,0)",
                     UUID.randomUUID(),
                     workspaceId,

@@ -9,7 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegist
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDeveloperDTO;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPersonDTO;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -83,7 +83,7 @@ public class ProductReferenceQuery {
     }
 
     @Transactional(readOnly = true)
-    public Map<Long, ReviewDeveloperDTO> developers(long workspaceId, Collection<Long> ids) {
+    public Map<Long, ReviewPersonDTO> developers(long workspaceId, Collection<Long> ids) {
         return ids.isEmpty() ? Map.of() : developersOf(workspaceId, rows.memberAccountIds(workspaceId, ids));
     }
 
@@ -92,11 +92,11 @@ public class ProductReferenceQuery {
      * while it does not. The setting is read in the same statement as the members, so naming them costs no read.
      */
     @Transactional(readOnly = true)
-    public Map<Long, ReviewDeveloperDTO> namedDevelopers(long workspaceId, Collection<Long> ids) {
+    public Map<Long, ReviewPersonDTO> namedDevelopers(long workspaceId, Collection<Long> ids) {
         return ids.isEmpty() ? Map.of() : developersOf(workspaceId, rows.namedMemberAccountIds(workspaceId, ids));
     }
 
-    private Map<Long, ReviewDeveloperDTO> developersOf(long workspaceId, Collection<Long> eligible) {
+    private Map<Long, ReviewPersonDTO> developersOf(long workspaceId, Collection<Long> eligible) {
         return accounts(workspaceId, eligible).entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
                     var account = entry.getValue();
@@ -105,7 +105,7 @@ public class ProductReferenceQuery {
                             .filter(Objects::nonNull)
                             .findFirst()
                             .orElse(null);
-                    return new ReviewDeveloperDTO(account.id(), account.displayName(), account.avatarUrl(), login);
+                    return new ReviewPersonDTO(account.id(), account.displayName(), account.avatarUrl(), login);
                 }));
     }
 

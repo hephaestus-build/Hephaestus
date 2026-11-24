@@ -44,7 +44,7 @@ public interface ResultCommunicationRepository extends Repository<Result, UUID> 
     @Query(value = """
         SELECT DISTINCT b.result_id AS resultId,f.id,f.destination,f.state,f.delivered_at AS deliveredAt,s.resolution,s.usefulness,s.comment,s.created_at AS respondedAt
         FROM feedback f JOIN feedback_basis b ON b.feedback_id=f.id AND b.workspace_id=f.workspace_id LEFT JOIN LATERAL (SELECT r.* FROM feedback_response r WHERE r.feedback_id=f.id AND r.workspace_id=f.workspace_id ORDER BY r.created_at DESC,r.id::text DESC LIMIT 1) s ON true
-        WHERE f.workspace_id=:ws AND f.developer_id=:developer AND b.result_id IN (:ids) ORDER BY b.result_id,f.id
+        WHERE f.workspace_id=:ws AND f.person_account_id=:developer AND b.result_id IN (:ids) ORDER BY b.result_id,f.id
         """, nativeQuery = true)
     List<OwnFeedback> ownFeedback(long ws, long developer, Collection<UUID> ids);
 

@@ -146,7 +146,7 @@ public class ResultQueriesImpl implements ResultQueries {
             long workspaceId, Collection<Long> developers, Instant since, boolean currentOnly) {
         if (developers.isEmpty()) return List.of();
         var where = new StringBuilder(
-                " WHERE r.workspace_id=:ws AND r.developer_id IN (:developers) AND r.recorded_at>=:since");
+                " WHERE r.workspace_id=:ws AND r.person_account_id IN (:developers) AND r.recorded_at>=:since");
         var params = new LinkedHashMap<String, Object>();
         params.put("ws", workspaceId);
         params.put("developers", developers);
@@ -161,7 +161,7 @@ public class ResultQueriesImpl implements ResultQueries {
         List<Object[]> rows = session()
                 .createNativeQuery(
                         "SELECT r.id,r.workspace_id,r.review_id,r.practice_id,"
-                                + "r.practice_version_id,r.item_id,r.item_version,r.developer_id,r.outcome,r.severity,"
+                                + "r.practice_version_id,r.item_id,r.item_version,r.person_account_id,r.outcome,r.severity,"
                                 + "r.summary,r.evidence_version,r.recorded_at,r.ended_at,r.end_reason,"
                                 + "r.explanation IS NOT NULL,r.evidence IS NOT NULL,r.coverage IS NOT NULL,"
                                 + "r.source_kinds"
@@ -237,7 +237,7 @@ public class ResultQueriesImpl implements ResultQueries {
                                 + " WHERE rv.workspace_id=:ws AND rv.item_id IN (SELECT listed.item_id FROM review"
                                 + " listed WHERE listed.workspace_id=:ws AND listed.id IN (:reviews)) AND EXISTS(SELECT 1"
                                 + JOIN
-                                + "WHERE r.workspace_id=:ws AND r.review_id=rv.id AND r.developer_id=:developer))"
+                                + "WHERE r.workspace_id=:ws AND r.review_id=rv.id AND r.person_account_id=:developer))"
                                 + " placed WHERE placed.id IN (:reviews)",
                         Object[].class)
                 .setParameter("ws", workspaceId)
@@ -254,8 +254,8 @@ public class ResultQueriesImpl implements ResultQueries {
     public List<Long> developersSince(long workspaceId, Instant since) {
         return session()
                 .createNativeQuery(
-                        "SELECT DISTINCT r.developer_id FROM result r WHERE r.workspace_id=:ws"
-                                + " AND r.developer_id IS NOT NULL AND r.recorded_at>=:since",
+                        "SELECT DISTINCT r.person_account_id FROM result r WHERE r.workspace_id=:ws"
+                                + " AND r.person_account_id IS NOT NULL AND r.recorded_at>=:since",
                         Long.class)
                 .setParameter("ws", workspaceId)
                 .setParameter("since", since)
@@ -317,7 +317,7 @@ public class ResultQueriesImpl implements ResultQueries {
         add(where, params, "i.kind=:itemKind", "itemKind", f.itemKind());
         add(where, params, "p.slug=:practiceSlug", "practiceSlug", f.practiceSlug());
         add(where, params, "g.slug=:groupSlug", "groupSlug", f.groupSlug());
-        add(where, params, "r.developer_id=:developerId", "developerId", f.developerId());
+        add(where, params, "r.person_account_id=:developerId", "developerId", f.developerId());
         add(where, params, "r.recorded_at>=:from", "from", f.from());
         add(where, params, "r.recorded_at<:to", "to", f.to());
         many(

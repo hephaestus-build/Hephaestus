@@ -175,7 +175,7 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
     private UUID feedback(Result result, long developer, String state, String body, @Nullable Instant deliveredAt) {
         var id = UUID.randomUUID();
         jdbc.sql("""
-            INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at)
+            INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,delivered_at)
             VALUES(:id,:ws,:review,:item,:developer,'ON_WORK',:state,:body,:at,:delivered)
             """)
                 .param("id", id)

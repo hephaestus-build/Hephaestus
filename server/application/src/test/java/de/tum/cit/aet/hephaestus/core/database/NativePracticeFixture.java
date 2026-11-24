@@ -50,7 +50,7 @@ final class NativePracticeFixture {
 
     static String insertResult(String outcome, String coverage) {
         return "INSERT INTO"
-                + " result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,developer_id,outcome,summary,coverage,recorded_at)"
+                + " result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,person_account_id,outcome,summary,coverage,recorded_at)"
                 + " SELECT"
                 + " '00000000-0000-0000-0000-000000978021',workspace_id,id,978004,978005,item_id,item_version,978003,'"
                 + outcome + "','Review summary'," + coverage

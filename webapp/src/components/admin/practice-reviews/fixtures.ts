@@ -28,7 +28,7 @@ import type {
 	ReviewBoundResult,
 	ReviewBucket,
 	ReviewDetail,
-	ReviewDeveloper,
+	ReviewPerson,
 	ReviewFeedback,
 	ReviewFeedbackCounts,
 	ReviewFeedbackDetail,
@@ -113,7 +113,7 @@ export const reviewAccounts = {
 	margaret: account("23", "Margaret Hamilton", [["GITHUB", "mhamilton"]], "UNCLAIMED"),
 } satisfies Record<string, AccountRef>;
 
-function developerOf(owner: AccountRef): ReviewDeveloper {
+function developerOf(owner: AccountRef): ReviewPerson {
 	return {
 		accountId: owner.id,
 		displayName: owner.displayName ?? null,
@@ -129,7 +129,7 @@ export const reviewDevelopers = {
 	katherine: developerOf(reviewAccounts.katherine),
 	barbara: developerOf(reviewAccounts.barbara),
 	margaret: developerOf(reviewAccounts.margaret),
-} satisfies Record<keyof typeof reviewAccounts, ReviewDeveloper>;
+} satisfies Record<keyof typeof reviewAccounts, ReviewPerson>;
 
 const { ada, grace, alan, katherine, barbara } = reviewDevelopers;
 
@@ -299,7 +299,7 @@ export const practiceGroups: PracticeGroup[] = Object.entries(groupNames).map(
 		description: null,
 		icon: null,
 		color: null,
-		shownToDevelopers: true,
+		shownToPeople: true,
 		position,
 		feedbackMode: chosenFeedbackMode("AUTOMATIC", "GROUP"),
 		catalogOrigin: OWN_ORIGIN,
@@ -557,7 +557,7 @@ interface ReviewSpec {
 	status: ReviewStatus;
 	stopReason?: NonNullable<ReviewSummary["stopReason"]>;
 	startedAt: string;
-	developer: ReviewDeveloper | null;
+	person: ReviewPerson | null;
 	origin?: ReviewSummary["origin"];
 	event?: string;
 	requestedBy?: AccountRef;
@@ -714,7 +714,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		item: reviewItem,
 		status: "COMPLETE",
 		startedAt: "2026-07-28T13:35:00Z",
-		developer: ada,
+		person: ada,
 		event: "scm.pull_request.ready",
 		withheld: [
 			{
@@ -1053,7 +1053,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		item: gitlabMergeRequest,
 		status: "COMPLETE",
 		startedAt: "2026-07-27T09:10:00Z",
-		developer: alan,
+		person: alan,
 		origin: "BACKFILL",
 		batchId: "0b0b0b0b-1111-4111-8111-111111111111",
 		results: [
@@ -1139,7 +1139,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		item: slackConversation,
 		status: "COMPLETE",
 		startedAt: "2026-07-26T16:00:00Z",
-		developer: grace,
+		person: grace,
 		origin: "REQUEST",
 		requestedBy: reviewAccounts.grace,
 		results: [
@@ -1230,7 +1230,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		item: outlineDocument,
 		status: "COMPLETE",
 		startedAt: "2026-07-25T11:25:00Z",
-		developer: barbara,
+		person: barbara,
 		event: "docs.document.published",
 		results: [
 			{
@@ -1304,7 +1304,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		item: webhookRetryPullRequest,
 		status: "COMPLETE",
 		startedAt: "2026-07-29T08:05:00Z",
-		developer: katherine,
+		person: katherine,
 		event: "scm.pull_request.synchronized",
 		results: [
 			{
@@ -1480,7 +1480,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		item: leagueColumnsPullRequest,
 		status: "RUNNING",
 		startedAt: "2026-07-29T09:40:00Z",
-		developer: grace,
+		person: grace,
 		event: "scm.pull_request.opened",
 		pending: ["thin-controllers", "errors-carry-context"],
 		results: [],
@@ -1492,7 +1492,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		status: "FAILED",
 		stopReason: "EXECUTION_FAILED",
 		startedAt: "2026-07-24T15:02:00Z",
-		developer: alan,
+		person: alan,
 		event: "scm.pull_request.ready",
 		pending: ["product-language"],
 		runtimeExpired: true,
@@ -1504,7 +1504,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		item: pullRequestReviewItem,
 		status: "COMPLETE",
 		startedAt: "2026-07-28T17:05:00Z",
-		developer: grace,
+		person: grace,
 		event: "scm.pull_request_review.submitted",
 		results: [
 			{
@@ -1543,7 +1543,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		status: "PARTIAL",
 		stopReason: "BUDGET",
 		startedAt: "2026-07-27T20:00:00Z",
-		developer: null,
+		person: null,
 		origin: "REQUEST",
 		requestedBy: reviewAccounts.grace,
 		jobs: 4,
@@ -1809,7 +1809,7 @@ function toResult(review: ReviewSpec, spec: ResultSpec): ReviewResult {
 		id: spec.id,
 		reviewId: review.id,
 		item: itemOf(review, spec),
-		developer: spec.aboutTheWork === true ? null : review.developer,
+		person: spec.aboutTheWork === true ? null : review.person,
 		practiceSlug: spec.practiceSlug,
 		practiceName: practiceNameOf(spec.practiceSlug),
 		outcome: spec.outcome,
@@ -1837,7 +1837,7 @@ export function boundResultOf(result: ReviewBoundResult): ReviewBoundResult {
 		id: result.id,
 		reviewId: result.reviewId,
 		item: result.item,
-		developer: result.developer,
+		person: result.person,
 		practiceSlug: result.practiceSlug,
 		practiceName: result.practiceName,
 		outcome: result.outcome,
@@ -1876,7 +1876,7 @@ function toProblemRows(review: ReviewSpec, spec: ResultSpec): ReviewProblem[] {
 			resultId: result.id,
 			reviewId: result.reviewId,
 			item: result.item,
-			developer: result.developer,
+			person: result.person,
 			practiceSlug: result.practiceSlug,
 			practiceName: result.practiceName,
 			group: groupRefOf(result.practiceSlug),
@@ -2165,11 +2165,11 @@ function answerOf(spec: FeedbackSpec): FeedbackAnswer | null {
 			};
 }
 
-function developerOfFeedback(review: ReviewSpec): ReviewDeveloper {
-	if (review.developer === null) {
+function developerOfFeedback(review: ReviewSpec): ReviewPerson {
+	if (review.person === null) {
 		throw new Error(`Review ${review.id} has no developer, so it cannot write feedback`);
 	}
-	return review.developer;
+	return review.person;
 }
 
 function toFeedback(review: ReviewSpec, spec: FeedbackSpec): ReviewFeedback {
@@ -2177,7 +2177,7 @@ function toFeedback(review: ReviewSpec, spec: FeedbackSpec): ReviewFeedback {
 		id: spec.id,
 		reviewId: review.id,
 		item: review.item,
-		developer: developerOfFeedback(review),
+		person: developerOfFeedback(review),
 		destination: spec.destination,
 		state: spec.state,
 		stopReason: spec.stopReason ?? null,
@@ -2465,8 +2465,8 @@ export const reviews: ReviewSummary[] = allReviews
 	.map(toReview)
 	.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-export function reviewDeveloperOf(reviewId: string): ReviewDeveloper | null {
-	return allReviews.find((entry) => entry.id === reviewId)?.developer ?? null;
+export function reviewDeveloperOf(reviewId: string): ReviewPerson | null {
+	return allReviews.find((entry) => entry.id === reviewId)?.person ?? null;
 }
 
 export function reviewRefOf(review: ReviewSummary): ReviewRef {
@@ -3005,7 +3005,7 @@ const queueItem = (
 	index: number,
 	state: "running" | "waiting" | "held",
 	item: ItemRef,
-	developer: ReviewDeveloper | null,
+	person: ReviewPerson | null,
 	minutes: number,
 ): ReviewQueueItem => ({
 	reviewId: `0c0c0c0c-0000-4000-8000-${String(index).padStart(12, "0")}`,
@@ -3014,7 +3014,7 @@ const queueItem = (
 	progress: null,
 	heldForBudget: state === "held",
 	item,
-	developer,
+	person,
 	since: minutesBefore(minutes),
 });
 

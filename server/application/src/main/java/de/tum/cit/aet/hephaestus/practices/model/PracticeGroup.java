@@ -77,9 +77,9 @@ public class PracticeGroup {
     @ColumnDefault("0")
     private int position;
 
-    @Column(name = "shown_to_developers", nullable = false)
+    @Column(name = "shown_to_people", nullable = false)
     @ColumnDefault("true")
-    private boolean shownToDevelopers = true;
+    private boolean shownToPeople = true;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "feedback_mode", length = 16)

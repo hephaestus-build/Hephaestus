@@ -225,7 +225,7 @@ export function reviewsQuery(
 		kind: search.kind,
 		queueState: search.queueState,
 		itemId: search.itemId,
-		developerId: numericId(search.developerId),
+		personId: numericId(search.developerId),
 		sort: search.order,
 	};
 }
@@ -239,7 +239,7 @@ export function feedbackQuery(
 		size,
 		itemId: search.itemId,
 		itemKind: search.itemKind,
-		developerId: search.developerId,
+		personId: search.developerId,
 		state: search.state,
 		destination: search.destination,
 		stopReason:
@@ -263,7 +263,7 @@ export function resultsQuery(
 		size,
 		itemId: search.itemId,
 		itemKind: search.itemKind,
-		developerId: numericId(search.developerId),
+		personId: numericId(search.developerId),
 		outcome: search.outcome,
 		severity: search.severity,
 		currentness: search.currentness,
@@ -285,7 +285,7 @@ export function problemsQuery(
 		resultId: search.resultId,
 		itemId: search.itemId,
 		itemKind: search.itemKind,
-		developerId: numericId(search.developerId),
+		personId: numericId(search.developerId),
 		severity: search.severity,
 		currentness: search.currentness,
 		markedIncorrect: search.markedIncorrect,

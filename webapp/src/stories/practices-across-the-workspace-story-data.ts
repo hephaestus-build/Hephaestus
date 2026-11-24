@@ -42,12 +42,12 @@ export const split = (
 	noneYet: number,
 ): WorkspaceSplit => ({
 	parts: [
-		{ standing: "DEVELOPING", developers: needs },
-		{ standing: "MIXED", developers: mixed },
-		{ standing: "STRENGTH", developers: well },
+		{ standing: "DEVELOPING", people: needs },
+		{ standing: "MIXED", people: mixed },
+		{ standing: "STRENGTH", people: well },
 	],
 	noneYet,
-	developers: needs + mixed + well + noneYet,
+	people: needs + mixed + well + noneYet,
 });
 
 /**
@@ -56,12 +56,12 @@ export const split = (
  */
 export const totalOnly = (developers: number | null): WorkspaceSplit => ({
 	parts: [
-		{ standing: "DEVELOPING", developers: null },
-		{ standing: "MIXED", developers: null },
-		{ standing: "STRENGTH", developers: null },
+		{ standing: "DEVELOPING", people: null },
+		{ standing: "MIXED", people: null },
+		{ standing: "STRENGTH", people: null },
 	],
 	noneYet: null,
-	developers,
+	people: developers,
 });
 
 const practice = (
@@ -325,7 +325,7 @@ export const TILES_BY_WINDOW: Record<
 > = {
 	DAYS_7: {
 		window: "DAYS_7",
-		developersWithAStandingInWindow: 12,
+		peopleWithAStandingInWindow: 12,
 		yourPractices: 18,
 		includesEarlierReviews: false,
 		reviewedWork: figure(3, 1, 4),
@@ -334,7 +334,7 @@ export const TILES_BY_WINDOW: Record<
 	},
 	DAYS_30: {
 		window: "DAYS_30",
-		developersWithAStandingInWindow: 21,
+		peopleWithAStandingInWindow: 21,
 		yourPractices: 18,
 		includesEarlierReviews: false,
 		reviewedWork: figure(11, 6, 14),
@@ -343,7 +343,7 @@ export const TILES_BY_WINDOW: Record<
 	},
 	DAYS_90: {
 		window: "DAYS_90",
-		developersWithAStandingInWindow: 26,
+		peopleWithAStandingInWindow: 26,
 		yourPractices: 18,
 		includesEarlierReviews: false,
 		reviewedWork: figure(29, 17, 38),
@@ -352,7 +352,7 @@ export const TILES_BY_WINDOW: Record<
 	},
 	ALL_TIME: {
 		window: "ALL_TIME",
-		developersWithAStandingInWindow: 28,
+		peopleWithAStandingInWindow: 28,
 		yourPractices: 18,
 		includesEarlierReviews: true,
 		reviewedWork: figure(64, 41, 80),
@@ -366,7 +366,7 @@ export const ACROSS_WORKSPACE_TILES = TILES_BY_WINDOW.DAYS_30;
 /** One developer with a standing: fewer than 5, so the count and every middle half stay hidden. */
 export const ONE_DEVELOPER_TILES: PracticesAcrossWorkspaceTiles = {
 	...ACROSS_WORKSPACE_TILES,
-	developersWithAStandingInWindow: null,
+	peopleWithAStandingInWindow: null,
 	reviewedWork: { yours: 4, middle: null },
 	practicesGoingWell: { yours: 1, middle: null },
 	practicesNeedingAttention: { yours: 0, middle: null },
@@ -375,7 +375,7 @@ export const ONE_DEVELOPER_TILES: PracticesAcrossWorkspaceTiles = {
 /** Nobody has a standing in the window, so no tile has a middle half. */
 export const NOBODY_TILES: PracticesAcrossWorkspaceTiles = {
 	...ACROSS_WORKSPACE_TILES,
-	developersWithAStandingInWindow: 0,
+	peopleWithAStandingInWindow: 0,
 	reviewedWork: { yours: 0, middle: null },
 	practicesGoingWell: { yours: 0, middle: null },
 	practicesNeedingAttention: { yours: 0, middle: null },

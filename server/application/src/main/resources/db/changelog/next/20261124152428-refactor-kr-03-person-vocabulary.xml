@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795479872190-1" author="hephaestus">
+        <comment>Rename the person columns and update the functions that read them in one transaction.</comment>
+        <renameColumn tableName="result" oldColumnName="developer_id" newColumnName="person_account_id"/>
+        <renameColumn tableName="feedback" oldColumnName="developer_id" newColumnName="person_account_id"/>
+        <renameColumn tableName="feedback_basis" oldColumnName="developer_id" newColumnName="person_account_id"/>
+        <renameColumn tableName="practice_group" oldColumnName="shown_to_developers" newColumnName="shown_to_people"/>
+        <sql splitStatements="false"><![CDATA[
+-- The digest keeps its original JSON key so stored approvals still verify.
+CREATE OR REPLACE FUNCTION public.feedback_content_digest(p_id uuid) RETURNS character varying
+    LANGUAGE sql STABLE STRICT
+    AS $$
+ SELECT encode(sha256(convert_to(jsonb_build_object('workspaceId',f.workspace_id,'reviewId',f.review_id,'developerId',f.person_account_id,'destination',f.destination,'itemId',f.item_id,'itemVersion',r.item_version,'body',f.body,
+ 'basis',COALESCE((SELECT jsonb_agg(jsonb_build_object('resultId',b.result_id,'problemId',b.problem_id) ORDER BY b.result_id::text,b.problem_id::text NULLS FIRST) FROM feedback_basis b WHERE b.feedback_id=f.id),'[]'::jsonb),
+ 'copies',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',v.id,'kind',CASE WHEN v.kind IN('LINE_NOTE','FILE_NOTE') THEN 'NOTE' ELSE v.kind END,'position',v.position,'body',CASE WHEN v.kind='CHAT_TURN' THEN NULL ELSE v.body END,'path',v.path,'startLine',v.start_line,'endLine',v.end_line,'side',v.side) ORDER BY v.position) FROM feedback_copy v WHERE v.feedback_id=f.id),'[]'::jsonb))::text,'UTF8')),'hex')::varchar(64)
+ FROM feedback f JOIN review r ON r.id=f.review_id AND r.workspace_id=f.workspace_id WHERE f.id=p_id
+$$;
+
+CREATE OR REPLACE FUNCTION public.conversation_receipt_words(p_workspace_id bigint, p_feedback_id uuid, p_entry_id uuid, p_turn_id uuid)
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+AS $function$
+-- The one rule for the words of a conversation receipt: the text of each show_feedback call of the answer that
+-- names the feedback by a well-formed id in any letter case and whose tool result is no error, in call order.
+-- Only the completed answer of the claiming turn, to the developer of the feedback, counts.
+SELECT NULLIF((
+  SELECT string_agg(block.value->'arguments'->>'text',E'\n\n' ORDER BY block.position)
+  FROM jsonb_array_elements(CASE WHEN jsonb_typeof(e.payload->'message'->'content')='array'
+    THEN e.payload->'message'->'content' ELSE '[]'::jsonb END) WITH ORDINALITY AS block(value,position)
+  WHERE block.value->>'type'='toolCall' AND block.value->>'name'='show_feedback'
+    AND jsonb_typeof(block.value->'arguments'->'text')='string'
+    AND block.value->'arguments'->>'feedbackId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    AND lower(block.value->'arguments'->>'feedbackId')=CAST(p_feedback_id AS text)
+    AND EXISTS(SELECT 1 FROM conversation_entry r
+      WHERE r.workspace_id=e.workspace_id AND r.turn_id=e.turn_id AND r.kind='TOOL_RESULT' AND r.redacted_at IS NULL
+        AND r.payload->'message'->>'toolCallId'=block.value->>'id'
+        AND r.payload->'message'->>'toolName'='show_feedback'
+        AND COALESCE(r.payload->'message'->>'isError','false')<>'true')),'')
+FROM conversation_entry e
+JOIN conversation c ON(c.id,c.workspace_id)=(e.conversation_id,e.workspace_id)
+JOIN conversation_turn t ON(t.id,t.workspace_id)=(e.turn_id,e.workspace_id)
+JOIN feedback f ON(f.id,f.workspace_id)=(p_feedback_id,p_workspace_id) AND f.person_account_id=c.account_id
+WHERE e.id=p_entry_id AND e.workspace_id=p_workspace_id AND e.turn_id=p_turn_id
+  AND e.kind='ANSWER' AND e.redacted_at IS NULL AND t.status='DONE'
+$function$;
+
+CREATE OR REPLACE FUNCTION public.guard_feedback_copy_fence()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE shown_text text;
+BEGIN
+ IF OLD.thread_ref IS NOT NULL AND NEW.thread_ref IS DISTINCT FROM OLD.thread_ref THEN
+  RAISE EXCEPTION 'physical copy thread binding is immutable' USING ERRCODE='55000';
+ END IF;
+ IF OLD.write_started_at IS NOT NULL THEN
+  IF NEW.write_started_at IS DISTINCT FROM OLD.write_started_at OR
+     ROW(NEW.id,NEW.workspace_id,NEW.feedback_id,NEW.position,NEW.write_key,NEW.write_marker,NEW.path,NEW.start_line,NEW.end_line,NEW.side)
+     IS DISTINCT FROM ROW(OLD.id,OLD.workspace_id,OLD.feedback_id,OLD.position,OLD.write_key,OLD.write_marker,OLD.path,OLD.start_line,OLD.end_line,OLD.side) THEN
+   RAISE EXCEPTION 'physical write fence is immutable' USING ERRCODE='55000';
+  END IF;
+  IF NEW.conversation_turn_id IS DISTINCT FROM OLD.conversation_turn_id AND NOT
+     (NEW.conversation_turn_id IS NULL AND NOT EXISTS(SELECT 1 FROM public.conversation_turn WHERE id=OLD.conversation_turn_id AND workspace_id=OLD.workspace_id)) THEN
+   RAISE EXCEPTION 'conversation turn binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NOT NULL AND NEW.conversation_entry_id IS DISTINCT FROM OLD.conversation_entry_id AND NOT
+     (NEW.conversation_entry_id IS NULL AND NOT EXISTS(SELECT 1 FROM public.conversation_entry WHERE id=OLD.conversation_entry_id AND workspace_id=OLD.workspace_id)) THEN
+   RAISE EXCEPTION 'conversation answer binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NULL AND NEW.conversation_entry_id IS NOT NULL AND OLD.posted_at IS NOT NULL THEN
+   RAISE EXCEPTION 'conversation answer binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NULL AND NEW.conversation_entry_id IS NOT NULL AND NOT EXISTS(
+     SELECT 1 FROM public.conversation_entry e JOIN public.conversation c ON(c.id,c.workspace_id)=(e.conversation_id,e.workspace_id)
+     JOIN public.feedback f ON(f.id,f.workspace_id)=(NEW.feedback_id,NEW.workspace_id) AND f.person_account_id=c.account_id
+     WHERE e.id=NEW.conversation_entry_id AND e.workspace_id=NEW.workspace_id AND e.kind='ANSWER' AND e.turn_id=NEW.conversation_turn_id) THEN
+   RAISE EXCEPTION 'conversation answer must be the claiming turn answer to its developer' USING ERRCODE='23514';
+  END IF;
+  IF NEW.body IS DISTINCT FROM OLD.body THEN
+   IF NOT(OLD.kind='CHAT_TURN' AND OLD.body IS NULL AND NEW.body IS NOT NULL AND
+          OLD.posted_at IS NULL AND NEW.posted_at IS NOT NULL AND NEW.posted_at>=OLD.write_started_at AND
+          OLD.state IN('WRITE_STARTED','FAILED') AND NEW.state='POSTED' AND
+          NEW.conversation_entry_id IS NOT NULL AND NEW.conversation_turn_id IS NOT NULL) THEN
+    RAISE EXCEPTION 'physical copy words are immutable' USING ERRCODE='55000';
+   END IF;
+   shown_text := public.conversation_receipt_words(NEW.workspace_id,NEW.feedback_id,NEW.conversation_entry_id,NEW.conversation_turn_id);
+   IF shown_text IS NULL OR shown_text ~ '^[[:space:]]*$' OR NEW.body IS DISTINCT FROM shown_text THEN
+    RAISE EXCEPTION 'conversation receipt must contain the words the completed answer showed' USING ERRCODE='23514';
+   END IF;
+  END IF;
+  IF OLD.kind='CHAT_TURN' AND OLD.posted_at IS NULL AND NEW.posted_at IS NOT NULL AND NEW.body IS NULL THEN
+   RAISE EXCEPTION 'conversation receipt requires actual words' USING ERRCODE='23514';
+  END IF;
+ ELSIF NEW.write_started_at IS NOT NULL AND NEW.kind='CHAT_TURN' THEN
+  IF NEW.body IS NOT NULL OR NEW.state<>'WRITE_STARTED' OR NOT EXISTS(
+     SELECT 1 FROM public.conversation_turn t JOIN public.conversation c ON(c.id,c.workspace_id)=(t.conversation_id,t.workspace_id)
+     JOIN public.feedback f ON(f.id,f.workspace_id)=(NEW.feedback_id,NEW.workspace_id) AND f.person_account_id=c.account_id
+     WHERE t.id=NEW.conversation_turn_id AND t.workspace_id=NEW.workspace_id AND t.status='RUNNING' AND f.destination='CONVERSATION') THEN
+   RAISE EXCEPTION 'conversation fence requires a running conversation turn of its developer' USING ERRCODE='23514';
+  END IF;
+ END IF;
+ IF OLD.kind<>NEW.kind AND NOT(OLD.kind='LINE_NOTE' AND NEW.kind='FILE_NOTE') THEN RAISE EXCEPTION 'copy form cannot change except acknowledged fallback' USING ERRCODE='55000'; END IF;
+ IF OLD.external_ref IS NOT NULL AND NEW.external_ref IS DISTINCT FROM OLD.external_ref OR OLD.external_url IS NOT NULL AND NEW.external_url IS DISTINCT FROM OLD.external_url OR OLD.posted_at IS NOT NULL AND NEW.posted_at IS DISTINCT FROM OLD.posted_at THEN RAISE EXCEPTION 'physical write receipt is immutable' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $function$;
+
+CREATE OR REPLACE FUNCTION public.guard_result_facts() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF (to_jsonb(NEW)-'ended_at'-'end_reason'-'severity'-'person_account_id'-'source_kinds') IS DISTINCT FROM
+    (to_jsonb(OLD)-'ended_at'-'end_reason'-'severity'-'person_account_id'-'source_kinds') THEN
+  RAISE EXCEPTION 'result facts are immutable' USING ERRCODE='55000'; END IF;
+ IF NEW.source_kinds IS DISTINCT FROM OLD.source_kinds AND (OLD.source_kinds IS NOT NULL
+    OR NOT pg_has_role(current_user, (SELECT relowner FROM pg_class WHERE oid=TG_RELID), 'MEMBER')) THEN
+  RAISE EXCEPTION 'result source kinds are recorded once, at insert or by the upgrade' USING ERRCODE='55000'; END IF;
+ IF NEW.person_account_id IS DISTINCT FROM OLD.person_account_id AND NOT EXISTS(
+   SELECT 1 FROM account old_account,account target WHERE old_account.id=OLD.person_account_id
+    AND old_account.status='UNCLAIMED' AND target.id=NEW.person_account_id AND target.status IN ('ACTIVE','BLOCKED')) THEN
+  RAISE EXCEPTION 'result developer can move only from an unclaimed account to its claimed owner' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $$;
+        ]]></sql>
+        <rollback>
+            <renameColumn tableName="practice_group" oldColumnName="shown_to_people" newColumnName="shown_to_developers"/>
+            <renameColumn tableName="feedback_basis" oldColumnName="person_account_id" newColumnName="developer_id"/>
+            <renameColumn tableName="feedback" oldColumnName="person_account_id" newColumnName="developer_id"/>
+            <renameColumn tableName="result" oldColumnName="person_account_id" newColumnName="developer_id"/>
+            <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.feedback_content_digest(p_id uuid) RETURNS character varying
+    LANGUAGE sql STABLE STRICT
+    AS $$
+ SELECT encode(sha256(convert_to(jsonb_build_object('workspaceId',f.workspace_id,'reviewId',f.review_id,'developerId',f.developer_id,'destination',f.destination,'itemId',f.item_id,'itemVersion',r.item_version,'body',f.body,
+ 'basis',COALESCE((SELECT jsonb_agg(jsonb_build_object('resultId',b.result_id,'problemId',b.problem_id) ORDER BY b.result_id::text,b.problem_id::text NULLS FIRST) FROM feedback_basis b WHERE b.feedback_id=f.id),'[]'::jsonb),
+ 'copies',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',v.id,'kind',CASE WHEN v.kind IN('LINE_NOTE','FILE_NOTE') THEN 'NOTE' ELSE v.kind END,'position',v.position,'body',CASE WHEN v.kind='CHAT_TURN' THEN NULL ELSE v.body END,'path',v.path,'startLine',v.start_line,'endLine',v.end_line,'side',v.side) ORDER BY v.position) FROM feedback_copy v WHERE v.feedback_id=f.id),'[]'::jsonb))::text,'UTF8')),'hex')::varchar(64)
+ FROM feedback f JOIN review r ON r.id=f.review_id AND r.workspace_id=f.workspace_id WHERE f.id=p_id
+$$;
+
+CREATE OR REPLACE FUNCTION public.conversation_receipt_words(p_workspace_id bigint, p_feedback_id uuid, p_entry_id uuid, p_turn_id uuid)
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+AS $function$
+-- The one rule for the words of a conversation receipt: the text of each show_feedback call of the answer that
+-- names the feedback by a well-formed id in any letter case and whose tool result is no error, in call order.
+-- Only the completed answer of the claiming turn, to the developer of the feedback, counts.
+SELECT NULLIF((
+  SELECT string_agg(block.value->'arguments'->>'text',E'\n\n' ORDER BY block.position)
+  FROM jsonb_array_elements(CASE WHEN jsonb_typeof(e.payload->'message'->'content')='array'
+    THEN e.payload->'message'->'content' ELSE '[]'::jsonb END) WITH ORDINALITY AS block(value,position)
+  WHERE block.value->>'type'='toolCall' AND block.value->>'name'='show_feedback'
+    AND jsonb_typeof(block.value->'arguments'->'text')='string'
+    AND block.value->'arguments'->>'feedbackId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    AND lower(block.value->'arguments'->>'feedbackId')=CAST(p_feedback_id AS text)
+    AND EXISTS(SELECT 1 FROM conversation_entry r
+      WHERE r.workspace_id=e.workspace_id AND r.turn_id=e.turn_id AND r.kind='TOOL_RESULT' AND r.redacted_at IS NULL
+        AND r.payload->'message'->>'toolCallId'=block.value->>'id'
+        AND r.payload->'message'->>'toolName'='show_feedback'
+        AND COALESCE(r.payload->'message'->>'isError','false')<>'true')),'')
+FROM conversation_entry e
+JOIN conversation c ON(c.id,c.workspace_id)=(e.conversation_id,e.workspace_id)
+JOIN conversation_turn t ON(t.id,t.workspace_id)=(e.turn_id,e.workspace_id)
+JOIN feedback f ON(f.id,f.workspace_id)=(p_feedback_id,p_workspace_id) AND f.developer_id=c.account_id
+WHERE e.id=p_entry_id AND e.workspace_id=p_workspace_id AND e.turn_id=p_turn_id
+  AND e.kind='ANSWER' AND e.redacted_at IS NULL AND t.status='DONE'
+$function$;
+
+CREATE OR REPLACE FUNCTION public.guard_feedback_copy_fence()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE shown_text text;
+BEGIN
+ IF OLD.thread_ref IS NOT NULL AND NEW.thread_ref IS DISTINCT FROM OLD.thread_ref THEN
+  RAISE EXCEPTION 'physical copy thread binding is immutable' USING ERRCODE='55000';
+ END IF;
+ IF OLD.write_started_at IS NOT NULL THEN
+  IF NEW.write_started_at IS DISTINCT FROM OLD.write_started_at OR
+     ROW(NEW.id,NEW.workspace_id,NEW.feedback_id,NEW.position,NEW.write_key,NEW.write_marker,NEW.path,NEW.start_line,NEW.end_line,NEW.side)
+     IS DISTINCT FROM ROW(OLD.id,OLD.workspace_id,OLD.feedback_id,OLD.position,OLD.write_key,OLD.write_marker,OLD.path,OLD.start_line,OLD.end_line,OLD.side) THEN
+   RAISE EXCEPTION 'physical write fence is immutable' USING ERRCODE='55000';
+  END IF;
+  IF NEW.conversation_turn_id IS DISTINCT FROM OLD.conversation_turn_id AND NOT
+     (NEW.conversation_turn_id IS NULL AND NOT EXISTS(SELECT 1 FROM public.conversation_turn WHERE id=OLD.conversation_turn_id AND workspace_id=OLD.workspace_id)) THEN
+   RAISE EXCEPTION 'conversation turn binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NOT NULL AND NEW.conversation_entry_id IS DISTINCT FROM OLD.conversation_entry_id AND NOT
+     (NEW.conversation_entry_id IS NULL AND NOT EXISTS(SELECT 1 FROM public.conversation_entry WHERE id=OLD.conversation_entry_id AND workspace_id=OLD.workspace_id)) THEN
+   RAISE EXCEPTION 'conversation answer binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NULL AND NEW.conversation_entry_id IS NOT NULL AND OLD.posted_at IS NOT NULL THEN
+   RAISE EXCEPTION 'conversation answer binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NULL AND NEW.conversation_entry_id IS NOT NULL AND NOT EXISTS(
+     SELECT 1 FROM public.conversation_entry e JOIN public.conversation c ON(c.id,c.workspace_id)=(e.conversation_id,e.workspace_id)
+     JOIN public.feedback f ON(f.id,f.workspace_id)=(NEW.feedback_id,NEW.workspace_id) AND f.developer_id=c.account_id
+     WHERE e.id=NEW.conversation_entry_id AND e.workspace_id=NEW.workspace_id AND e.kind='ANSWER' AND e.turn_id=NEW.conversation_turn_id) THEN
+   RAISE EXCEPTION 'conversation answer must be the claiming turn answer to its developer' USING ERRCODE='23514';
+  END IF;
+  IF NEW.body IS DISTINCT FROM OLD.body THEN
+   IF NOT(OLD.kind='CHAT_TURN' AND OLD.body IS NULL AND NEW.body IS NOT NULL AND
+          OLD.posted_at IS NULL AND NEW.posted_at IS NOT NULL AND NEW.posted_at>=OLD.write_started_at AND
+          OLD.state IN('WRITE_STARTED','FAILED') AND NEW.state='POSTED' AND
+          NEW.conversation_entry_id IS NOT NULL AND NEW.conversation_turn_id IS NOT NULL) THEN
+    RAISE EXCEPTION 'physical copy words are immutable' USING ERRCODE='55000';
+   END IF;
+   shown_text := public.conversation_receipt_words(NEW.workspace_id,NEW.feedback_id,NEW.conversation_entry_id,NEW.conversation_turn_id);
+   IF shown_text IS NULL OR shown_text ~ '^[[:space:]]*$' OR NEW.body IS DISTINCT FROM shown_text THEN
+    RAISE EXCEPTION 'conversation receipt must contain the words the completed answer showed' USING ERRCODE='23514';
+   END IF;
+  END IF;
+  IF OLD.kind='CHAT_TURN' AND OLD.posted_at IS NULL AND NEW.posted_at IS NOT NULL AND NEW.body IS NULL THEN
+   RAISE EXCEPTION 'conversation receipt requires actual words' USING ERRCODE='23514';
+  END IF;
+ ELSIF NEW.write_started_at IS NOT NULL AND NEW.kind='CHAT_TURN' THEN
+  IF NEW.body IS NOT NULL OR NEW.state<>'WRITE_STARTED' OR NOT EXISTS(
+     SELECT 1 FROM public.conversation_turn t JOIN public.conversation c ON(c.id,c.workspace_id)=(t.conversation_id,t.workspace_id)
+     JOIN public.feedback f ON(f.id,f.workspace_id)=(NEW.feedback_id,NEW.workspace_id) AND f.developer_id=c.account_id
+     WHERE t.id=NEW.conversation_turn_id AND t.workspace_id=NEW.workspace_id AND t.status='RUNNING' AND f.destination='CONVERSATION') THEN
+   RAISE EXCEPTION 'conversation fence requires a running conversation turn of its developer' USING ERRCODE='23514';
+  END IF;
+ END IF;
+ IF OLD.kind<>NEW.kind AND NOT(OLD.kind='LINE_NOTE' AND NEW.kind='FILE_NOTE') THEN RAISE EXCEPTION 'copy form cannot change except acknowledged fallback' USING ERRCODE='55000'; END IF;
+ IF OLD.external_ref IS NOT NULL AND NEW.external_ref IS DISTINCT FROM OLD.external_ref OR OLD.external_url IS NOT NULL AND NEW.external_url IS DISTINCT FROM OLD.external_url OR OLD.posted_at IS NOT NULL AND NEW.posted_at IS DISTINCT FROM OLD.posted_at THEN RAISE EXCEPTION 'physical write receipt is immutable' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $function$;
+
+CREATE OR REPLACE FUNCTION public.guard_result_facts() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF (to_jsonb(NEW)-'ended_at'-'end_reason'-'severity'-'developer_id'-'source_kinds') IS DISTINCT FROM
+    (to_jsonb(OLD)-'ended_at'-'end_reason'-'severity'-'developer_id'-'source_kinds') THEN
+  RAISE EXCEPTION 'result facts are immutable' USING ERRCODE='55000'; END IF;
+ IF NEW.source_kinds IS DISTINCT FROM OLD.source_kinds AND (OLD.source_kinds IS NOT NULL
+    OR NOT pg_has_role(current_user, (SELECT relowner FROM pg_class WHERE oid=TG_RELID), 'MEMBER')) THEN
+  RAISE EXCEPTION 'result source kinds are recorded once, at insert or by the upgrade' USING ERRCODE='55000'; END IF;
+ IF NEW.developer_id IS DISTINCT FROM OLD.developer_id AND NOT EXISTS(
+   SELECT 1 FROM account old_account,account target WHERE old_account.id=OLD.developer_id
+    AND old_account.status='UNCLAIMED' AND target.id=NEW.developer_id AND target.status IN ('ACTIVE','BLOCKED')) THEN
+  RAISE EXCEPTION 'result developer can move only from an unclaimed account to its claimed owner' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -49,13 +49,13 @@ public class ReviewQueriesImpl implements ReviewQueries {
             where.append(" AND EXISTS(SELECT 1 FROM review_job j JOIN agent_run r ON r.id=j.run_id"
                     + " AND r.workspace_id=j.workspace_id WHERE j.workspace_id=q.workspace_id AND"
                     + " j.review_id=q.id AND " + queueStatePredicate(filter.queueState()) + ")");
-        if (filter.developerId() != null || filter.practiceSlug() != null || filter.groupSlug() != null) {
+        if (filter.personId() != null || filter.practiceSlug() != null || filter.groupSlug() != null) {
             var basis = new StringBuilder("EXISTS(SELECT 1 FROM result r JOIN practice p ON p.id=r.practice_id AND"
                     + " p.workspace_id=r.workspace_id LEFT JOIN practice_group g ON g.id=p.group_id AND"
                     + " g.workspace_id=p.workspace_id WHERE r.workspace_id=q.workspace_id AND r.review_id=q.id AND"
                     + " NOT EXISTS(SELECT 1 FROM result_mark m WHERE m.workspace_id=r.workspace_id AND"
                     + " m.result_id=r.id AND m.kind='INCORRECT' AND m.removed_at IS NULL)");
-            add(basis, params, "r.developer_id=:developer", "developer", filter.developerId());
+            add(basis, params, "r.person_account_id=:developer", "developer", filter.personId());
             add(basis, params, "p.slug=:practice", "practice", filter.practiceSlug());
             add(basis, params, "g.slug=:group", "group", filter.groupSlug());
             where.append(" AND " + basis + ")");

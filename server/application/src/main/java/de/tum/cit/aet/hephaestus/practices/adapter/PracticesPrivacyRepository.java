@@ -21,7 +21,7 @@ interface PracticesPrivacyRepository extends Repository<Result, UUID> {
     @Query(value = CONVERSATION_RESULTS + " AND i.source_id IN (:threads)", nativeQuery = true)
     List<UUID> conversationResultIdsForThreads(long ws, Collection<Long> threads);
 
-    @Query(value = CONVERSATION_RESULTS + " AND r.developer_id=:account", nativeQuery = true)
+    @Query(value = CONVERSATION_RESULTS + " AND r.person_account_id=:account", nativeQuery = true)
     List<UUID> conversationResultIdsForDeveloper(long ws, long account);
 
     @Query(
@@ -105,14 +105,15 @@ interface PracticesPrivacyRepository extends Repository<Result, UUID> {
 
     @WorkspaceAgnostic("Locks attribution parents for two globally locked, verified accounts during absorption")
     @Query(
-            value = "SELECT id FROM review WHERE id IN(SELECT review_id FROM result WHERE developer_id IN"
+            value = "SELECT id FROM review WHERE id IN(SELECT review_id FROM result WHERE person_account_id IN"
                     + " (:claimed,:unclaimed)) ORDER BY id::text FOR UPDATE",
             nativeQuery = true)
     List<UUID> lockAccountReviews(long claimed, long unclaimed);
 
     @WorkspaceAgnostic("Locks attribution for two globally locked, verified accounts during absorption")
     @Query(
-            value = "SELECT id FROM result WHERE developer_id IN (:claimed,:unclaimed) ORDER BY id::text FOR UPDATE",
+            value =
+                    "SELECT id FROM result WHERE person_account_id IN (:claimed,:unclaimed) ORDER BY id::text FOR UPDATE",
             nativeQuery = true)
     List<UUID> lockAccountResults(long claimed, long unclaimed);
 
@@ -122,7 +123,7 @@ interface PracticesPrivacyRepository extends Repository<Result, UUID> {
         WITH ranked AS (
          SELECT r.id,ROW_NUMBER() OVER(PARTITION BY r.workspace_id,r.practice_id,r.item_id ORDER BY v.ordered_at DESC,r.recorded_at DESC,v.id::text DESC) AS ordinal
          FROM result r JOIN review v ON v.id=r.review_id AND v.workspace_id=r.workspace_id
-         WHERE r.developer_id IN (:claimed,:unclaimed) AND r.ended_at IS NULL
+         WHERE r.person_account_id IN (:claimed,:unclaimed) AND r.ended_at IS NULL
         ) UPDATE result r SET ended_at=GREATEST(:at,r.recorded_at),end_reason='OUTRANKED'
         FROM ranked WHERE ranked.id=r.id AND ranked.ordinal>1
         """, nativeQuery = true)
@@ -130,7 +131,9 @@ interface PracticesPrivacyRepository extends Repository<Result, UUID> {
 
     @WorkspaceAgnostic("Moves immutable result attribution between two globally locked, verified accounts")
     @Modifying
-    @Query(value = "UPDATE result SET developer_id=:claimed WHERE developer_id=:unclaimed", nativeQuery = true)
+    @Query(
+            value = "UPDATE result SET person_account_id=:claimed WHERE person_account_id=:unclaimed",
+            nativeQuery = true)
     int reassignResults(long claimed, long unclaimed);
 
     @WorkspaceAgnostic("Moves frozen member attribution between two globally locked, verified accounts")
@@ -142,6 +145,6 @@ interface PracticesPrivacyRepository extends Repository<Result, UUID> {
     int reassignMembers(long claimed, long unclaimed);
 
     @WorkspaceAgnostic("Verifies that the absorbed global account no longer owns result attribution")
-    @Query(value = "SELECT EXISTS(SELECT 1 FROM result WHERE developer_id=:account)", nativeQuery = true)
+    @Query(value = "SELECT EXISTS(SELECT 1 FROM result WHERE person_account_id=:account)", nativeQuery = true)
     boolean hasAccountResults(long account);
 }

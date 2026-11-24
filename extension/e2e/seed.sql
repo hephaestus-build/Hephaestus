@@ -306,7 +306,7 @@ BEGIN
         '{"custody":{"complete":true,"copiedIdentities":[],"repositoryIds":[],"sourceJobIds":[]}}'::jsonb)
       ON CONFLICT DO NOTHING;
       INSERT INTO result (id, workspace_id, review_id, practice_id, practice_version_id, item_id, item_version,
-        developer_id, outcome, summary, explanation, evidence, coverage, recorded_at)
+        person_account_id, outcome, summary, explanation, evidence, coverage, recorded_at)
       VALUES (this_result, 20, this_review, 923100 + f.ordinal, 923100 + f.ordinal, target.item_id, version, reader,
         f.outcome, 'Synthetic browser-test result; no model reviewed this work.',
         'Synthetic explanation for deterministic browser validation only.',
@@ -341,7 +341,7 @@ BEGIN
     ) AS feedback(ordinal, destination, state, other_account, body) LOOP
       this_feedback := format('8f1e2026-%s-4b00-8000-%s', lpad(target.number::text, 4, '0'),
         lpad(f.ordinal::text, 12, '0'))::uuid;
-      INSERT INTO feedback (id, workspace_id, review_id, item_id, developer_id, destination, state, body,
+      INSERT INTO feedback (id, workspace_id, review_id, item_id, person_account_id, destination, state, body,
         replaces_id, created_at, delivered_at)
       VALUES (this_feedback, 20, this_review,
         CASE WHEN f.destination = 'PRACTICE_PAGE' THEN NULL ELSE target.item_id END,
@@ -353,7 +353,7 @@ BEGIN
         CASE WHEN f.state = 'FAILED' THEN NULL ELSE fixture_time + f.ordinal * interval '1 minute' END)
       ON CONFLICT (id) DO NOTHING;
       IF f.ordinal IN (1, 2) THEN
-        INSERT INTO feedback_basis (id, workspace_id, feedback_id, result_id, developer_id, ordinal)
+        INSERT INTO feedback_basis (id, workspace_id, feedback_id, result_id, person_account_id, ordinal)
         VALUES (format('8f1e2026-%s-4f00-8000-%s', lpad(target.number::text, 4, '0'),
             lpad(f.ordinal::text, 12, '0'))::uuid, 20, this_feedback,
           format('8f1e2026-%s-4d00-8000-%s', lpad(target.number::text, 4, '0'),

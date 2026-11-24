@@ -336,7 +336,7 @@ class ReviewAttemptsContentSourceIntegrationTest extends BaseIntegrationTest {
         if (state == ReviewItemState.JUDGED) {
             var result = UUID.randomUUID();
             jdbc.sql("""
-                INSERT INTO result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,developer_id,
+                INSERT INTO result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,person_account_id,
                     outcome,evidence,coverage,recorded_at)
                 VALUES(:id,:ws,:review,:practice,:version,:item,:itemVersion,:developer,'MET','{}'::jsonb,'{}'::jsonb,now())
                 """)

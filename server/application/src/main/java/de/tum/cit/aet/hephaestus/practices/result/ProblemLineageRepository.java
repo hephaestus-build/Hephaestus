@@ -40,7 +40,7 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
      */
     @Query(value = """
         WITH named AS (
-          SELECT p.id AS problem_id, p.result_id, p.identity, r.practice_id, r.item_id, r.developer_id,
+          SELECT p.id AS problem_id, p.result_id, p.identity, r.practice_id, r.item_id, r.person_account_id,
             r.practice_version_id AS cited_version, r.recorded_at AS cited_recorded, v.ordered_at AS cited_ordered,
             m.method->>'modelDigest' AS cited_digest, m.method->>'epoch' AS cited_epoch
           FROM problem p
@@ -56,7 +56,7 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
               OR EXISTS (SELECT 1 FROM problem_lineage l WHERE l.workspace_id = p.workspace_id
                 AND l.prior_result_id = p.result_id AND l.prior_problem_id = p.id))),
         usable AS (
-          SELECT r.id, r.practice_id, r.item_id, r.developer_id, r.practice_version_id, r.recorded_at, v.ordered_at,
+          SELECT r.id, r.practice_id, r.item_id, r.person_account_id, r.practice_version_id, r.recorded_at, v.ordered_at,
             COALESCE(r.ended_at <= r.recorded_at, false) AS ended_at_once,
             m.method->>'modelDigest' AS digest, m.method->>'epoch' AS epoch
           FROM result r
@@ -69,18 +69,18 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
             AND NOT EXISTS (SELECT 1 FROM result_mark k WHERE k.result_id = r.id AND k.workspace_id = r.workspace_id
               AND k.kind = 'INCORRECT' AND k.removed_at IS NULL)),
         newest AS (
-          SELECT DISTINCT ON (n.problem_id) n.problem_id, n.practice_id, n.item_id, n.developer_id, n.cited_version,
+          SELECT DISTINCT ON (n.problem_id) n.problem_id, n.practice_id, n.item_id, n.person_account_id, n.cited_version,
             n.cited_digest, n.cited_epoch, n.cited_ordered, n.cited_recorded, l.comparison, u.id AS result_id
           FROM named n
           JOIN usable u ON u.practice_id = n.practice_id AND u.item_id = n.item_id
-            AND u.developer_id IS NOT DISTINCT FROM n.developer_id
+            AND u.person_account_id IS NOT DISTINCT FROM n.person_account_id
           JOIN problem_lineage l ON l.workspace_id = :workspaceId AND l.result_id = u.id
           JOIN problem lp ON lp.workspace_id = l.workspace_id AND lp.id = COALESCE(l.problem_id, l.prior_problem_id)
             AND lp.identity = n.identity
           ORDER BY n.problem_id, u.ordered_at DESC, u.recorded_at DESC, l.id DESC)
         SELECT w.problem_id AS problemId, w.comparison AS comparison, w.result_id AS resultId,
           EXISTS (SELECT 1 FROM usable later WHERE later.practice_id = w.practice_id AND later.item_id = w.item_id
-            AND later.developer_id IS NOT DISTINCT FROM w.developer_id
+            AND later.person_account_id IS NOT DISTINCT FROM w.person_account_id
             AND (later.ordered_at > w.cited_ordered
               OR (later.ordered_at = w.cited_ordered AND later.recorded_at > w.cited_recorded))
             AND (later.practice_version_id IS DISTINCT FROM w.cited_version
@@ -110,7 +110,7 @@ public interface ProblemLineageRepository extends JpaRepository<ProblemLineage, 
           JOIN result cited ON cited.id = p.result_id AND cited.workspace_id = p.workspace_id
           WHERE l.workspace_id = :workspaceId AND l.result_id = :resultId AND l.comparison = 'ABSENT'
             AND proving.practice_id = cited.practice_id AND proving.item_id = cited.item_id
-            AND proving.developer_id IS NOT DISTINCT FROM cited.developer_id)
+            AND proving.person_account_id IS NOT DISTINCT FROM cited.person_account_id)
         """, nativeQuery = true)
     boolean namesAny(
             @Param("workspaceId") long workspaceId,

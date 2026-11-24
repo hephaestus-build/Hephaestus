@@ -86,7 +86,7 @@ public class FeedbackReadService {
                 summary.id(),
                 summary.reviewId(),
                 summary.item(),
-                summary.developer(),
+                summary.person(),
                 summary.destination(),
                 summary.state(),
                 summary.stopReason(),

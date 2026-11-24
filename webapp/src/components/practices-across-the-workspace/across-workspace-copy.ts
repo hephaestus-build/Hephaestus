@@ -94,7 +94,7 @@ const developers = (n: number | null) =>
 	n === null ? FEWER_THAN_SMALLEST_DEVELOPERS : count(n, "developer", "developers", true);
 
 export const tileCohortText = (tiles: PracticesAcrossWorkspaceTiles) =>
-	`${developers(tiles.developersWithAStandingInWindow)} with a standing`;
+	`${developers(tiles.peopleWithAStandingInWindow)} with a standing`;
 
 /**
  * Under a tile with no typical range. The server withholds a range for more than one reason (ADR
@@ -137,7 +137,7 @@ export const SPREAD_HIDDEN = "Their split stays hidden to protect small counts";
 
 /** Whether the server sent this split as its total only. */
 export const spreadHidden = (split: WorkspaceSplit): boolean =>
-	split.developers !== null && split.developers > 0 && split.noneYet === null;
+	split.people !== null && split.people > 0 && split.noneYet === null;
 
 /** The answer the legend's (i) leads with, in the words of `docs/user/practices-across-the-workspace.mdx` § The bars. */
 export function barsLead(scope: StandingScope): string {
@@ -160,7 +160,7 @@ export const BARS_LINES: readonly InfoLine[] = [
 export const NOBODY_YET = "No developer has a standing yet";
 
 /** "24 developers", as the bar prints a split's total. */
-export const splitTotalText = (split: WorkspaceSplit): string => developers(split.developers);
+export const splitTotalText = (split: WorkspaceSplit): string => developers(split.people);
 
 /**
  * The bar's text alternative: the reference group, every count in the registry's words and the
@@ -170,10 +170,10 @@ export function splitDescription(
 	split: WorkspaceSplit,
 	yourStanding: PracticeGroupStandingValue | undefined,
 ): string {
-	if (split.developers === 0) {
+	if (split.people === 0) {
 		return `${NOBODY_YET}.`;
 	}
-	if (split.developers === null) {
+	if (split.people === null) {
 		return `${TOO_FEW_TO_SPLIT}.`;
 	}
 	if (spreadHidden(split)) {
@@ -182,7 +182,7 @@ export function splitDescription(
 	const whole = `${splitTotalText(split)} in this workspace`;
 	const parts = split.parts.map(
 		(part) =>
-			`${part.developers ?? 0} ${definitionFor(PRACTICE_GROUP_STANDING_DEFS, part.standing, UNKNOWN_STANDING_DEF).label}`,
+			`${part.people ?? 0} ${definitionFor(PRACTICE_GROUP_STANDING_DEFS, part.standing, UNKNOWN_STANDING_DEF).label}`,
 	);
 	const noneYet = `${split.noneYet ?? 0} ${NONE_YET_SEGMENT.inSentence}`;
 	const counts = `${whole}: ${[...parts, noneYet].join(", ")}.`;

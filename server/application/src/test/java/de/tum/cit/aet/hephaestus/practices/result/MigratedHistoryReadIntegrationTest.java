@@ -220,7 +220,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
         identities.saveAndFlush(identity);
         var feedbackId = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at,checks) "
+                "INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,delivered_at,checks) "
                         + "VALUES (?,?,?,?,?,'PRACTICE_PAGE','DELIVERED','Legacy feedback',now(),now(),'{}')",
                 feedbackId,
                 scenario.workspace().getId(),
@@ -228,7 +228,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 scenario.item().getId(),
                 scenario.account().getId());
         jdbc.update(
-                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal) VALUES (?,?,?,?,?,0)",
+                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal) VALUES (?,?,?,?,?,0)",
                 UUID.randomUUID(),
                 scenario.workspace().getId(),
                 feedbackId,
@@ -600,7 +600,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
         var id = UUID.randomUUID();
         jdbc.update(
                 """
-            INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at)
+            INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,delivered_at)
             VALUES(?,?,?,?,?,'ON_WORK','DELIVERED','Visible feedback.',now(),now())
             """,
                 id,
@@ -609,7 +609,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 result.getItemId(),
                 result.getDeveloperId());
         jdbc.update("""
-            INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)
+            INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal)
             VALUES(?,?,?,?,?,0)
             """, UUID.randomUUID(), scenario.workspace().getId(), id, result.getId(), result.getDeveloperId());
     }
@@ -627,7 +627,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
         var feedbackId = UUID.randomUUID();
         String body = "Private feedback sentinel";
         jdbc.update(
-                "INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at,checks) "
+                "INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,delivered_at,checks) "
                         + "VALUES (?,?,?,?,?,?,'DELIVERED',?,now(),now(),'{}')",
                 feedbackId,
                 scenario.workspace().getId(),
@@ -637,7 +637,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 destination.name(),
                 body);
         jdbc.update(
-                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal) VALUES (?,?,?,?,?,0)",
+                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal) VALUES (?,?,?,?,?,0)",
                 UUID.randomUUID(),
                 scenario.workspace().getId(),
                 feedbackId,

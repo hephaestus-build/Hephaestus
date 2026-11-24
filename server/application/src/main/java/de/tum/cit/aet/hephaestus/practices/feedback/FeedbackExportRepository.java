@@ -23,7 +23,7 @@ public interface FeedbackExportRepository extends Repository<Feedback, UUID> {
           (SELECT CASE WHEN d.action='WITHDRAW' THEN d.decided_at END FROM (""" + FeedbackVisibilitySql.LATEST + """
           ) d) AS withdrawnAt
         FROM feedback f JOIN workspace w ON w.id=f.workspace_id
-        WHERE f.developer_id=:accountId AND f.delivered_at IS NOT NULL AND f.state IN (:states)
+        WHERE f.person_account_id=:accountId AND f.delivered_at IS NOT NULL AND f.state IN (:states)
         ORDER BY f.delivered_at, f.id
         """, nativeQuery = true)
     List<Received> findReceived(@Param("accountId") long accountId, @Param("states") Collection<String> states);
@@ -34,7 +34,7 @@ public interface FeedbackExportRepository extends Repository<Feedback, UUID> {
         SELECT c.feedback_id AS feedbackId, c.kind AS kind, c.path AS path, c.start_line AS startLine,
           c.end_line AS endLine, c.body AS body, c.posted_at AS postedAt
         FROM feedback_copy c JOIN feedback f ON f.id=c.feedback_id AND f.workspace_id=c.workspace_id
-        WHERE f.developer_id=:accountId AND c.feedback_id IN (:feedbackIds)
+        WHERE f.person_account_id=:accountId AND c.feedback_id IN (:feedbackIds)
           AND c.state='POSTED' AND c.posted_at IS NOT NULL
         ORDER BY c.feedback_id, c.position
         """, nativeQuery = true)
@@ -52,7 +52,7 @@ public interface FeedbackExportRepository extends Repository<Feedback, UUID> {
         FROM feedback_response r
         JOIN feedback f ON f.id=r.feedback_id AND f.workspace_id=r.workspace_id
         JOIN workspace w ON w.id=r.workspace_id
-        WHERE f.developer_id=:accountId
+        WHERE f.person_account_id=:accountId
         ORDER BY r.created_at, r.id::text
         """, nativeQuery = true)
     List<Response> findResponses(@Param("accountId") long accountId);

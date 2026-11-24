@@ -54,9 +54,9 @@ final class CapturedPersonDataContributor implements PersonDataContributor {
             default -> "";
         };
         if (ownerTable.isEmpty() || rows.isEmpty()) return rows;
-        String ownerColumn = store.store().equals(ownerTable) ? "developer_id" : ownerTable + "_id";
+        String ownerColumn = store.store().equals(ownerTable) ? "person_account_id" : ownerTable + "_id";
         Long accountId = frozenScope.accountId();
-        Set<UUID> owned = accountId == null || ownerColumn.equals("developer_id")
+        Set<UUID> owned = accountId == null || ownerColumn.equals("person_account_id")
                 ? Set.of()
                 : ownedReferences(rows, ownerTable, ownerColumn, accountId);
         var keys = selection.rows().getFirst().columns().keySet();
@@ -64,7 +64,7 @@ final class CapturedPersonDataContributor implements PersonDataContributor {
                 .map(row -> {
                     var reference = row.path(ownerColumn);
                     boolean own = accountId != null
-                            && (ownerColumn.equals("developer_id")
+                            && (ownerColumn.equals("person_account_id")
                                     ? reference.asLong() == accountId
                                     : reference.isString() && owned.contains(UUID.fromString(reference.asString())));
                     if (own) return row;
@@ -84,7 +84,7 @@ final class CapturedPersonDataContributor implements PersonDataContributor {
         if (ids.isEmpty()) return Set.of();
         return Set.copyOf(jdbc.query(
                 "SELECT id FROM " + table
-                        + " WHERE developer_id=:account AND id=ANY(:ids) AND workspace_id=ANY(:workspaces)",
+                        + " WHERE person_account_id=:account AND id=ANY(:ids) AND workspace_id=ANY(:workspaces)",
                 Map.of(
                         "account",
                         accountId,

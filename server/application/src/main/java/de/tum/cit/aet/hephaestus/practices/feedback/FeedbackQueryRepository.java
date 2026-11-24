@@ -75,7 +75,7 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
           WHERE (q->>'reviewId' IS NULL OR f.review_id=CAST(q->>'reviewId' AS uuid))
             AND (q->>'itemId' IS NULL OR f.item_id=CAST(q->>'itemId' AS bigint))
             AND (q->>'itemKind' IS NULL OR f.item_kind=q->>'itemKind')
-            AND (q->>'developerId' IS NULL OR f.developer_id=CAST(q->>'developerId' AS bigint))
+            AND (q->>'personId' IS NULL OR f.person_account_id=CAST(q->>'personId' AS bigint))
             AND (q->>'destination' IS NULL OR q->'destination' @> to_jsonb(f.destination))
             AND (q->>'state' IS NULL OR q->'state' @> to_jsonb(f.state))
             AND (q->>'stopReason' IS NULL OR q->'stopReason' @> to_jsonb(f.stop_reason))
@@ -108,7 +108,7 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
         JOIN feedback f ON f.id=c.feedback_id AND f.workspace_id=c.workspace_id
         WHERE c.workspace_id=:workspaceId AND c.feedback_id IN (:feedbackIds)
           AND c.kind='CHAT_TURN' AND c.posted_at IS NOT NULL
-          AND mc.account_id=f.developer_id AND f.destination='CONVERSATION'
+          AND mc.account_id=f.person_account_id AND f.destination='CONVERSATION'
         ORDER BY c.feedback_id,c.position
         """, nativeQuery = true)
     List<FeedbackThread> threadIds(

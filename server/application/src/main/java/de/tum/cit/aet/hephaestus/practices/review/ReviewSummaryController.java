@@ -83,7 +83,7 @@ public class ReviewSummaryController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size,
             @Valid @ParameterObject ReviewFilterParams filter) {
-        perPerson.requirePersonFilterAllowed(workspaceContext.id(), filter.developerId());
+        perPerson.requirePersonFilterAllowed(workspaceContext.id(), filter.personId());
         // The native query orders the rows; the sort here keeps the page's sort metadata truthful.
         Sort.Direction direction = filter.sort() == ReviewListSort.OLDEST ? Sort.Direction.ASC : Sort.Direction.DESC;
         PageRequest pageable = PageRequest.of(page, size, Sort.by(direction, "createdAt", "id"));

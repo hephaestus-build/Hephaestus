@@ -17,7 +17,7 @@ public record ReviewQueueItemDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ItemRefDTO item,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        ReviewDeveloperDTO developer,
+        ReviewPersonDTO person,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant since,
 

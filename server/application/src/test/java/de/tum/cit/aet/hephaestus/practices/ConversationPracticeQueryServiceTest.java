@@ -24,7 +24,7 @@ class ConversationPracticeQueryServiceTest extends BaseUnitTest {
         var group = new PracticeGroup();
         group.setFeedbackMode(FeedbackMode.APPROVE_FIRST);
         var hidden = new PracticeGroup();
-        hidden.setShownToDevelopers(false);
+        hidden.setShownToPeople(false);
         hidden.setFeedbackMode(FeedbackMode.AUTOMATIC);
         var explicit = practice("explicit", FeedbackMode.AUTOMATIC, null);
         var inherited = practice("inherited", null, group);

@@ -51,7 +51,7 @@ class PracticeGroupServiceTest extends BaseUnitTest {
                 false);
         assertThat(saved.getName()).isEqualTo("New name");
         assertThat(saved.getDescription()).isNull();
-        assertThat(saved.isShownToDevelopers()).isFalse();
+        assertThat(saved.isShownToPeople()).isFalse();
     }
 
     @Test

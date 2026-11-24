@@ -136,7 +136,7 @@ function filterResults(rows: readonly ReviewResult[], url: URL) {
 			withinScope(url, row) &&
 			withinDates(url, row.recordedAt) &&
 			inPracticeScope(url, [row.practiceSlug]) &&
-			equals(url, "developerId", row.developer?.accountId) &&
+			equals(url, "personId", row.person?.accountId) &&
 			matches(values(url, "outcome"), row.outcome) &&
 			matches(values(url, "severity"), row.severity) &&
 			equals(url, "currentness", row.currentness) &&
@@ -154,7 +154,7 @@ function filterProblems(rows: readonly ReviewProblem[], url: URL) {
 			equals(url, "path", row.path) &&
 			withinDates(url, row.recordedAt) &&
 			inPracticeScope(url, [row.practiceSlug]) &&
-			equals(url, "developerId", row.developer?.accountId) &&
+			equals(url, "personId", row.person?.accountId) &&
 			matches(values(url, "severity"), row.severity) &&
 			equals(url, "currentness", row.currentness) &&
 			flag(url, "markedIncorrect", row.markedIncorrectAt !== null) &&
@@ -173,7 +173,7 @@ function filterFeedback(rows: readonly ReviewFeedback[], url: URL) {
 			(fromResult === undefined || fromResult.has(row.id)) &&
 			withinDates(url, row.createdAt) &&
 			inPracticeScope(url, feedbackPracticeSlugs(row.id)) &&
-			equals(url, "developerId", row.developer?.accountId) &&
+			equals(url, "personId", row.person?.accountId) &&
 			matches(values(url, "destination"), row.destination) &&
 			matches(values(url, "state"), row.state) &&
 			equals(url, "location", row.location) &&
@@ -194,7 +194,7 @@ function filterReviews(rows: readonly ReviewSummary[], url: URL) {
 				url,
 				row.practices.map((practice) => practice.practiceSlug),
 			) &&
-			equals(url, "developerId", reviewDeveloperOf(row.id)?.accountId) &&
+			equals(url, "personId", reviewDeveloperOf(row.id)?.accountId) &&
 			withinDates(url, row.createdAt),
 	);
 }
