@@ -23,6 +23,7 @@ public record LabelDTO(
 
             @Nullable String value,
             @Nullable Instant instant,
+            // This slot carries work counts. People counts must pass through SmallCounts.
             @Nullable Integer count,
             @Nullable String ownWords) {}
 }
