@@ -1,4 +1,3 @@
-import deepEqual from "fast-deep-equal";
 import { ChevronRight, RotateCcw } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
 import { UnsavedPracticeDraft } from "./unsaved-practice-draft";
@@ -40,6 +39,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { equalDraftValues } from "@/lib/equal-draft-values";
 import { hasText } from "@/lib/text";
 
 import { generateSlug, itemKindHint } from "./constants";
@@ -169,7 +169,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		kindDraftsRef.current = new Map([[draft.kind, kindDraftOf(draft)]]);
 	}
 	const kindDrafts = kindDraftsRef.current;
-	const isDirty = !deepEqual(draft, initialDraft(definitionOptions, initialData));
+	const isDirty = !equalDraftValues(draft, initialDraft(definitionOptions, initialData));
 	const unsavedChanges = useUnsavedChanges({
 		isDirty,
 		disabled: formDisabled,

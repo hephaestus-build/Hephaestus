@@ -1,5 +1,3 @@
-import deepEqual from "fast-deep-equal";
-
 import type {
 	AppliesWhen,
 	PracticeDefinition,
@@ -10,6 +8,7 @@ import type {
 	ScanDefinition,
 } from "@/api/types.gen";
 import { aboutLabel } from "@/components/practice-vocabulary/about-role-labels";
+import { equalDraftValues } from "@/lib/equal-draft-values";
 import { hasText } from "@/lib/text";
 
 /** A current version must contain its definition; absence is a server contract error. */
@@ -61,7 +60,7 @@ export function definitionDifferences(
 ): PracticeDefinitionField[] {
 	return FIELD_ORDER.filter((field) => {
 		const { key } = PRACTICE_DEFINITION_FIELDS[field];
-		return !deepEqual(current[key], offered[key]);
+		return !equalDraftValues(current[key], offered[key]);
 	});
 }
 
