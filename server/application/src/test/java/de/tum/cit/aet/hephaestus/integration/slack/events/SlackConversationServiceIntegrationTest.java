@@ -33,6 +33,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationPoisonHandler;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventConsumerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
@@ -46,6 +48,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversatio
 import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackNoticeActions;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackInteractiveReplyAdapter;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMembershipUnavailableException;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics;
@@ -151,6 +154,12 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
 
     @Autowired
     private DeliveryInbox inbox;
+
+    @Autowired
+    private IntegrationPoisonHandler inboxFailures;
+
+    @Autowired
+    private ProviderEventConsumerProperties consumerProperties;
 
     @Autowired
     private EventPayloadDeserializer eventPayloads;
@@ -383,12 +392,31 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
 
     private void dispatchDm(ProviderEventStore.Claimed claimed) {
         var handler = new SlackConversationDmMessageHandler(service, eventPayloads);
-        assertThat(inbox.dispatch(
-                        claimed.id(),
-                        claimed.leaseEpoch(),
-                        claimed.event().receivedAt(),
-                        () -> handler.onMessage(claimed.event())))
+        assertThat(inbox.dispatch(claimed, () -> handler.onMessage(claimed.event())))
                 .isFalse();
+    }
+
+    private void failMembershipLookup(ProviderEventStore.Claimed claimed) {
+        assertThatThrownBy(() -> dispatchDm(claimed))
+                .isInstanceOfSatisfying(
+                        SlackMembershipUnavailableException.class,
+                        failure -> inboxFailures.handleFailure(claimed, failure));
+    }
+
+    private void assertQueuedForRetry(ProviderEventStore.Claimed claimed, int failures) {
+        assertThat(jdbc.queryForMap("SELECT state, failures FROM provider_event WHERE id = ?", claimed.id()))
+                .containsEntry("state", "QUEUED")
+                .containsEntry("failures", failures);
+        assertNothingStored("100.1");
+        assertThat(ephemeralReplies).isEmpty();
+    }
+
+    private ProviderEventStore.Claimed claimRetry(long eventId) {
+        assertThat(jdbc.update("UPDATE provider_event SET available_at = clock_timestamp() WHERE id = ?", eventId))
+                .isOne();
+        var retry = providerEvents.claim(Duration.ofMinutes(2)).orElseThrow();
+        assertThat(retry.id()).isEqualTo(eventId);
+        return retry;
     }
 
     @ParameterizedTest
@@ -433,42 +461,111 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
                 "payload | {\"ok\":true,\"user\":{\"id\":\"U2\",\"team_id\":\"T1\"}}",
                 "payload | malformed response"
             })
-    void shouldRefuseWhenSlackCannotConfirmMembership(String reason, String response) {
+    void shouldRetryWhenSlackCannotConfirmMembership(String reason, String response) {
         membership.set(slackJson(response));
         var claimed = claimedDm();
 
-        dispatchDm(claimed);
+        failMembershipLookup(claimed);
 
-        assertNothingStored("100.1");
-        assertMembershipRefusal();
+        assertQueuedForRetry(claimed, 1);
         assertLookup("unconfirmed", reason, 1);
-        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
     }
 
     @Test
-    void shouldRefuseWhenSlackReturnsANonBooleanDeletionFlag() {
+    void shouldRetryWhenSlackReturnsANonBooleanDeletionFlag() {
         membership.set(slackJson(FULL_MEMBER.replace("\"deleted\":false", "\"deleted\":\"false\"")));
         var claimed = claimedDm();
 
-        dispatchDm(claimed);
+        failMembershipLookup(claimed);
 
-        assertNothingStored("100.1");
-        assertMembershipRefusal();
+        assertQueuedForRetry(claimed, 1);
         assertLookup("unconfirmed", "payload", 1);
-        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"503, provider", "429, rate_limited"})
+    void shouldRetryWithoutSpendingAnAttemptWhenSlackIsTemporarilyUnavailable(int httpStatus, String reason) {
+        membership.set(new MockResponse.Builder()
+                .code(httpStatus)
+                .addHeader("Retry-After", "60")
+                .build());
+        var claimed = claimedDm();
+
+        failMembershipLookup(claimed);
+
+        assertQueuedForRetry(claimed, 0);
+        assertLookup("unconfirmed", reason, 1);
     }
 
     @Test
-    void shouldRefuseWhenTheSlackMembershipEndpointIsUnavailable() {
-        membership.set(new MockResponse.Builder().code(503).build());
+    void shouldAnswerTheOriginalQuestionWhenSlackRecovers() {
+        lookupResponses.add(new MockResponse.Builder().code(503).build());
         var claimed = claimedDm();
 
-        dispatchDm(claimed);
+        failMembershipLookup(claimed);
+        assertQueuedForRetry(claimed, 0);
+        var retry = claimRetry(claimed.id());
+        dispatchDm(retry);
+        assertThat(providerEvents.complete(retry.id(), retry.leaseEpoch())).isTrue();
+
+        ConversationEntry question = question("100.1");
+        assertThat(question.getText()).isEqualTo("How is my review practice?");
+        var answer = answerPostedAt("100.2");
+        assertThat(answer.getTurnId()).isEqualTo(question.getTurnId());
+        assertThat(turnOf(question).getStatus()).isEqualTo(ConversationTurn.Status.DONE);
+        assertThat(jdbc.queryForObject(
+                        "SELECT payload->>'entryId' FROM agent_action WHERE workspace_id=? AND kind='SLACK_POST' AND idempotency_key=?",
+                        String.class,
+                        workspace.getId(),
+                        ConversationSlackReplies.replyKey(question.getId())))
+                .isEqualTo(question.getId().toString());
+        assertThat(ephemeralReplies).isEmpty();
+    }
+
+    @Test
+    void shouldTellTheSenderOnceWhenTheRetryBudgetEndsAndKeepTheirQuestionForReplay() {
+        membership.set(slackJson("{\"ok\":false,\"error\":\"missing_scope\"}"));
+        var claimed = claimedDm();
+        failMembershipLookup(claimed);
+        assertQueuedForRetry(claimed, 1);
+        jdbc.update(
+                "UPDATE provider_event SET failures = ? WHERE id = ?",
+                consumerProperties.poison().maxAttempts() - 1,
+                claimed.id());
+
+        var last = claimRetry(claimed.id());
+        failMembershipLookup(last);
 
         assertNothingStored("100.1");
-        assertMembershipRefusal();
-        assertLookup("unconfirmed", "provider", 1);
-        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+        assertThat(ephemeralReplies)
+                .singleElement()
+                .asString()
+                .contains(
+                        "channel=" + CHANNEL,
+                        "user=" + SLACK_USER,
+                        "text=" + SlackConversationService.SLACK_MEMBERSHIP_UNAVAILABLE);
+        assertThat(providerEvents.deadLetters(workspace.getId(), 0, 10))
+                .singleElement()
+                .satisfies(dead -> assertThat(dead.id()).isEqualTo(claimed.id()));
+
+        assertThat(providerEvents.replay(workspace.getId(), claimed.id(), developerId))
+                .isPresent();
+        jdbc.update(
+                "UPDATE provider_event SET failures = ? WHERE id = ?",
+                consumerProperties.poison().maxAttempts() - 1,
+                claimed.id());
+        failMembershipLookup(claimRetry(claimed.id()));
+        assertThat(ephemeralReplies).hasSize(1);
+
+        membership.set(slackJson(FULL_MEMBER));
+        assertThat(providerEvents.replay(workspace.getId(), claimed.id(), developerId))
+                .isPresent();
+        var replayed = claimRetry(claimed.id());
+        dispatchDm(replayed);
+        assertThat(providerEvents.complete(replayed.id(), replayed.leaseEpoch()))
+                .isTrue();
+        assertThat(turnOf(question("100.1")).getStatus()).isEqualTo(ConversationTurn.Status.QUEUED);
+        assertThat(ephemeralReplies).hasSize(1);
     }
 
     @Test
@@ -593,14 +690,8 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
         assertThat(claimed.event().payload()).isEqualTo(payload);
         assertThat(jdbc.queryForObject("SELECT state FROM provider_event WHERE id=?", String.class, claimed.id()))
                 .isEqualTo("LEASED");
-        var handler = new SlackConversationDmMessageHandler(service, eventPayloads);
         for (int attempt = 0; attempt < 2; attempt++) {
-            assertThat(inbox.dispatch(
-                            claimed.id(),
-                            claimed.leaseEpoch(),
-                            claimed.event().receivedAt(),
-                            () -> handler.onMessage(claimed.event())))
-                    .isFalse();
+            dispatchDm(claimed);
         }
         assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
 

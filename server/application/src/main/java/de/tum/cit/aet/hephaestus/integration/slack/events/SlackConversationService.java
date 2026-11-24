@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.core.TransientFailures;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
@@ -18,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversatio
 import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackNotice;
 import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackNoticeActions;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackInteractiveReplyAdapter;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMembershipUnavailableException;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
@@ -46,11 +48,14 @@ public class SlackConversationService {
 
     private static final Logger log = LoggerFactory.getLogger(SlackConversationService.class);
     private static final String SUBMISSION_RECEIPT = "slack.conversation.submit";
+    private static final String MEMBERSHIP_REPLY_RECEIPT = "slack.conversation.membership-reply";
 
     static final String NOT_LINKED =
             "Hephaestus cannot reply yet. Check that your Hephaestus account is active, linked to Slack, and a member of this workspace.";
     static final String SLACK_MEMBERSHIP_REQUIRED =
             "Hephaestus can reply only if Slack confirms that you’re a full member of this Slack workspace.";
+    static final String SLACK_MEMBERSHIP_UNAVAILABLE =
+            "Hephaestus couldn’t verify your Slack workspace membership. Ask an admin to check the Slack connection.";
 
     private final SlackWorkspaceResolver workspaceResolver;
     private final SlackMessageService slack;
@@ -126,8 +131,7 @@ public class SlackConversationService {
             log.info("Slack DM diverted by input guard: workspace={} action={}", workspaceId, verdict.action());
             return;
         }
-        if (!slack.isCurrentFullMember(workspaceId, teamId, slackUserId)) {
-            refuseMembership(workspaceId, teamId, channelId, slackUserId);
+        if (!checkMembership(workspaceId, teamId, channelId, slackUserId)) {
             return;
         }
         if (!conversationReadinessQuery.isReady(workspaceId)) {
@@ -303,16 +307,39 @@ public class SlackConversationService {
         return "slack:" + teamId + ":" + channelId + ":" + messageTs;
     }
 
-    private void refuseMembership(long workspaceId, String teamId, String channelId, String slackUserId) {
+    private boolean checkMembership(long workspaceId, String teamId, String channelId, String slackUserId) {
+        try {
+            if (slack.isCurrentFullMember(workspaceId, teamId, slackUserId)) return true;
+        } catch (SlackMembershipUnavailableException unavailable) {
+            if (DeliveryInbox.isLastCountedAttempt() && !TransientFailures.isTransient(unavailable)) {
+                // Keep submission open so an operator can replay the question after the connection is fixed.
+                refuseMembership(workspaceId, teamId, channelId, slackUserId, SLACK_MEMBERSHIP_UNAVAILABLE, false);
+            }
+            throw unavailable;
+        }
+        refuseMembership(workspaceId, teamId, channelId, slackUserId, SLACK_MEMBERSHIP_REQUIRED, true);
+        return false;
+    }
+
+    private void refuseMembership(
+            long workspaceId,
+            String teamId,
+            String channelId,
+            String slackUserId,
+            String text,
+            boolean closesSubmission) {
         // Slack's ephemeral replies have no readback. Commit the receipt before sending, so a replay never repeats it.
         if (!workspaceResolver
-                .whileConnected(workspaceId, teamId, () -> DeliveryInbox.claim(SUBMISSION_RECEIPT))
+                .whileConnected(
+                        workspaceId,
+                        teamId,
+                        () -> (!closesSubmission || DeliveryInbox.claim(SUBMISSION_RECEIPT))
+                                && DeliveryInbox.claim(MEMBERSHIP_REPLY_RECEIPT))
                 .orElse(false)) {
             return;
         }
         try {
-            interactiveReplies.sendEphemeralForWorkspace(
-                    workspaceId, channelId, slackUserId, List.of(), SLACK_MEMBERSHIP_REQUIRED);
+            interactiveReplies.sendEphemeralForWorkspace(workspaceId, channelId, slackUserId, List.of(), text);
         } catch (SlackSendException failed) {
             log.warn("Slack DM membership refusal could not be posted: workspace={}", workspaceId);
         }

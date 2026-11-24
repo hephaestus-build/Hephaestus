@@ -52,5 +52,9 @@ public record ProviderEventConsumerProperties(
             Duration baseDelay,
 
             @DurationUnit(ChronoUnit.MINUTES) @DefaultValue("5m") @DurationMin(seconds = 1)
-            Duration maxDelay) {}
+            Duration maxDelay) {
+        boolean isLastCountedAttempt(int failures) {
+            return failures >= maxAttempts - 1;
+        }
+    }
 }

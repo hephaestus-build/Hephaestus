@@ -47,7 +47,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -435,36 +437,45 @@ public class SlackMessageService implements AutoCloseable {
     /**
      * Confirms full membership from Slack for this admission. Positive results are never cached: a workspace member
      * can leave or become a guest between two deliveries, even if no membership event reached us.
+     * Throws when Slack cannot confirm membership, so the inbox can try the lookup again.
      */
     public boolean isCurrentFullMember(long workspaceId, String teamId, String subject) {
-        var status = lookupMembership(workspaceId, teamId, subject);
+        MembershipStatus status;
+        @Nullable Throwable cause = null;
+        try {
+            var token = resolveToken(workspaceId);
+            status = token.isEmpty()
+                    ? MembershipStatus.CREDENTIAL
+                    : membershipStatus(
+                            callHonoringRateLimit(
+                                    SlackBackoff.interactive(time, rateLimitTracker, workspaceId),
+                                    () -> readMembership(token.get(), subject)),
+                            teamId,
+                            subject);
+        } catch (CredentialUnreadableException | MissingCredentialKeyException unreadable) {
+            status = MembershipStatus.CREDENTIAL;
+        } catch (SlackApiException unavailable) {
+            var response = unavailable.getResponse();
+            status = response != null && response.code() == 429
+                    ? MembershipStatus.RATE_LIMITED
+                    : MembershipStatus.PROVIDER;
+            if (response != null) {
+                // The inbox classifies HTTP outages by status. Keep the provider body and headers out of the failure.
+                cause = new RestClientResponseException(
+                        "Slack membership HTTP failure", HttpStatusCode.valueOf(response.code()), "", null, null, null);
+            }
+        } catch (IOException unavailable) {
+            status = MembershipStatus.TRANSPORT;
+            cause = unavailable;
+        } catch (JacksonException malformed) {
+            status = MembershipStatus.PAYLOAD;
+        }
         metrics.recordMembershipLookup(status);
         if (status.unconfirmed()) {
             log.warn("Slack DM membership lookup failed: workspace={} reason={}", workspaceId, status.reason());
+            throw new SlackMembershipUnavailableException(status, cause);
         }
         return status == MembershipStatus.CONFIRMED;
-    }
-
-    private MembershipStatus lookupMembership(long workspaceId, String teamId, String subject) {
-        try {
-            var token = resolveToken(workspaceId);
-            if (token.isEmpty()) return MembershipStatus.CREDENTIAL;
-            var response = callHonoringRateLimit(
-                    SlackBackoff.interactive(time, rateLimitTracker, workspaceId),
-                    () -> readMembership(token.get(), subject));
-            return membershipStatus(response, teamId, subject);
-        } catch (CredentialUnreadableException | MissingCredentialKeyException unreadable) {
-            return MembershipStatus.CREDENTIAL;
-        } catch (SlackApiException unavailable) {
-            var response = unavailable.getResponse();
-            return response != null && response.code() == 429
-                    ? MembershipStatus.RATE_LIMITED
-                    : MembershipStatus.PROVIDER;
-        } catch (IOException unavailable) {
-            return MembershipStatus.TRANSPORT;
-        } catch (JacksonException malformed) {
-            return MembershipStatus.PAYLOAD;
-        }
     }
 
     private static MembershipStatus membershipStatus(JsonNode response, String teamId, String subject) {

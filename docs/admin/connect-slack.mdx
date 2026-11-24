@@ -87,9 +87,12 @@ After that, the server ignores the client ID and secret of the chart for account
    Hephaestus checks full membership in the connected Slack team before it accepts a question.
    The member must also link their Slack account.
    The workspace must have a ready **Ask Hephaestus** model ([Assign models](/user/ai-models#assign-models)).
-   If Slack cannot confirm membership, Hephaestus refuses the question.
-   If full members see this refusal, look for Slack DM membership lookup failures in the server log.
+   Hephaestus refuses the question if Slack reports that the sender is ineligible.
+   If the lookup fails, the provider event inbox keeps the question and tries again.
+   If the retry budget runs out, Hephaestus tells the sender that it could not verify membership.
+   Look for Slack DM membership lookup failures in the server log.
    Check that the Slack connection has the `users:read` scope.
+   After you fix the Slack connection, [replay the failed webhook event](./webhook-replay) if it is in the dead-letter list.
 5. Activate one channel, as [Integrations](/user/integrations) describes.
    The channel shows **Activating** until Slack confirms the announcement of Hephaestus in the channel.
    Hephaestus reads no message of the channel before that confirmation.
