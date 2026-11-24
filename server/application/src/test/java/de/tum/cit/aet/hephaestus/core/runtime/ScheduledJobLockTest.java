@@ -45,6 +45,7 @@ class ScheduledJobLockTest {
             Map.entry("BackupScheduleMonitor#sample", "LOCAL"),
             Map.entry("DatabaseSizeMonitor#sample", "LOCAL"),
             Map.entry("OverduePublicationMeter#measure", "LOCAL"),
+            Map.entry("RepositoryReadersMeter#measure", "LOCAL"),
             Map.entry("FeedbackDeliveryFreshness#sample", "LOCAL"),
             Map.entry("AgentRunReaper#reap", "ROW"),
             Map.entry("ConversationTurnQueueSampler#sample", "LOCAL"),

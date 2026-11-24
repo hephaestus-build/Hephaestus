@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -24,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RecentSyncResult;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryReadersProvider.ReadersRead;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -62,8 +64,10 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -421,6 +425,49 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
 
         verify(syncTargetProvider).reconcileSyncTargetIdentity(SYNC_TARGET_ID, NATIVE_ID, REPO_NAME);
         verify(syncTargetProvider).updateSyncTimestamp(eq(SYNC_TARGET_ID), eq(SyncType.REPOSITORY_VISIBILITY), any());
+        verify(syncTargetProvider).recordRepositoryNotPublic(any());
+    }
+
+    /**
+     * The shared repository row holds the last read of any workspace. This workspace's proof follows the answer that its
+     * own read stored, and a public answer carries the generation taken before the read began.
+     */
+    @ParameterizedTest(name = "stored row public={0}, this read public={1}")
+    @CsvSource({"true,false", "false,true"})
+    void shouldProveVisibilityFromThisReadsAnswerNotTheSharedRow(boolean sharedRowPublic, boolean readPublic) {
+        Repository shared = new Repository();
+        shared.setId(REPOSITORY_ID);
+        shared.setNativeId(NATIVE_ID);
+        shared.setNameWithOwner(REPO_NAME);
+        shared.setVisibility(sharedRowPublic ? Repository.Visibility.PUBLIC : Repository.Visibility.PRIVATE);
+        shared.setPrivate(!sharedRowPublic);
+        Repository read = new Repository();
+        read.setId(REPOSITORY_ID);
+        read.setNativeId(NATIVE_ID);
+        read.setNameWithOwner(REPO_NAME);
+        read.setVisibility(readPublic ? Repository.Visibility.PUBLIC : Repository.Visibility.PRIVATE);
+        read.setPrivate(!readPublic);
+        lenient()
+                .when(repositoryRepository.findByNativeIdAndProviderId(NATIVE_ID, PROVIDER_ID))
+                .thenReturn(Optional.of(shared));
+        ReadersRead begun = new ReadersRead(SYNC_TARGET_ID, NATIVE_ID, PROVIDER_ID, 7L, Instant.EPOCH);
+        when(syncTargetProvider.beginReadersProof(eq(SYNC_TARGET_ID), eq(NATIVE_ID), eq(PROVIDER_ID), any()))
+                .thenReturn(begun);
+        when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any(), any()))
+                .thenReturn(Optional.of(read));
+
+        service.syncSyncTarget(syncTarget(null, null));
+
+        InOrder order = inOrder(syncTargetProvider, repositorySyncService);
+        order.verify(syncTargetProvider).beginReadersProof(eq(SYNC_TARGET_ID), eq(NATIVE_ID), eq(PROVIDER_ID), any());
+        order.verify(repositorySyncService).syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any(), any());
+        if (readPublic) {
+            order.verify(syncTargetProvider).recordRepositoryPublic(begun);
+            verify(syncTargetProvider, never()).recordRepositoryNotPublic(any());
+        } else {
+            order.verify(syncTargetProvider).recordRepositoryNotPublic(begun);
+            verify(syncTargetProvider, never()).recordRepositoryPublic(any());
+        }
     }
 
     @Test

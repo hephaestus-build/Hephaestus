@@ -27,6 +27,9 @@ import de.tum.cit.aet.hephaestus.workspace.metrics.WorkspaceMetrics;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
@@ -58,6 +61,9 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
 
     private final ReviewScopeRepositoryRepository practiceReviewRepositoryTargetRepository;
     private final MeterRegistry meterRegistry;
+
+    @PersistenceContext
+    private @Nullable EntityManager entityManager;
 
     public WorkspaceSyncTargetProvider(
             WorkspaceRepository workspaceRepository,
@@ -197,6 +203,72 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public ReadersRead beginReadersProof(
+            Long syncTargetId, long repositoryNativeId, long providerId, Instant requestedAt) {
+        long generation = repositoryToMonitorRepository
+                .findById(syncTargetId)
+                .map(rtm -> rtm.getReaders().getProofGeneration())
+                .orElse(-1L);
+        return new ReadersRead(syncTargetId, repositoryNativeId, providerId, generation, requestedAt);
+    }
+
+    @Override
+    @Transactional
+    public void recordRepositoryPublic(ReadersRead read) {
+        // The read asked the provider of this monitor's workspace connection about exactly this repository.
+        boolean sameRepository =
+                repositoryToMonitorRepository
+                        .findByNativeIdOnSourceProvider(read.repositoryNativeId(), read.providerId())
+                        .stream()
+                        .anyMatch(monitor -> read.syncTargetId().equals(monitor.getId()));
+        if (!sameRepository) {
+            return;
+        }
+        locked(read.syncTargetId(), null)
+                .filter(rtm -> rtm.getNativeId() == read.repositoryNativeId())
+                .ifPresent(rtm -> rtm.getReaders().confirmedPublic(read.generation(), read.requestedAt()));
+    }
+
+    @Override
+    @Transactional
+    public void recordRepositoryNotPublic(ReadersRead read) {
+        locked(read.syncTargetId(), null)
+                .filter(rtm -> rtm.getNativeId() == read.repositoryNativeId())
+                .ifPresent(rtm -> rtm.getReaders().confirmedNotPublic());
+    }
+
+    @Override
+    @Transactional
+    public void recordRepositoryPrivatized(long repositoryNativeId) {
+        repositoryToMonitorRepository.narrowRepositoryMonitors(repositoryNativeId);
+    }
+
+    /**
+     * The monitored repository, row-locked for this transaction and read again from the database, so its proof is the
+     * one that other replicas committed, also when this transaction already holds the entity. With a workspace, a
+     * monitor of another workspace is neither locked nor returned.
+     */
+    private Optional<RepositoryToMonitor> locked(Long syncTargetId, @Nullable Long workspaceId) {
+        EntityManager entities = Objects.requireNonNull(entityManager);
+        entities.flush();
+        List<RepositoryToMonitor> found = entities.createQuery(
+                        "SELECT m FROM RepositoryToMonitor m WHERE m.id = :id"
+                                + " AND (:workspaceId IS NULL OR m.workspace.id = :workspaceId)",
+                        RepositoryToMonitor.class)
+                .setParameter("id", syncTargetId)
+                .setParameter("workspaceId", workspaceId)
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultList();
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        RepositoryToMonitor rtm = found.getFirst();
+        entities.refresh(rtm);
+        return Optional.of(rtm);
+    }
+
+    @Override
     public void updateSyncError(Long syncTargetId, SyncPass pass, @Nullable String error) {
         switch (pass) {
             case RECENT -> repositoryToMonitorRepository.updateRecentSyncError(syncTargetId, error);
@@ -223,9 +295,11 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     }
 
     @Override
+    @Transactional
     public void recordRepositoryUnavailable(Long scopeId, Long syncTargetId) {
         Instant now = Instant.now();
         repositoryToMonitorRepository.recordUnavailable(scopeId, syncTargetId, now, now.plus(Duration.ofDays(1)));
+        locked(syncTargetId, scopeId).ifPresent(rtm -> rtm.getReaders().unavailable());
     }
 
     @Override
@@ -499,7 +573,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
         if (syncTargetId == null) {
             return;
         }
-        repositoryToMonitorRepository.findById(syncTargetId).ifPresent(rtm -> {
+        locked(syncTargetId, null).ifPresent(rtm -> {
             boolean dirty = false;
 
             // Replace an ID proven to belong to another provider instance's repository of the same name:
@@ -520,6 +594,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                             resolvedNativeId);
                 } else {
                     rtm.setNativeId(resolvedNativeId);
+                    rtm.getReaders().identityChanged();
                     dirty = true;
                 }
             }

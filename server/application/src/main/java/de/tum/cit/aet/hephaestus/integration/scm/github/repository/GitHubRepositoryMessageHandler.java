@@ -137,6 +137,11 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
 
         log.info("Processing repository deletion: repoName={}, installationId={}", safeFullName, installationId);
 
+        // The mirror row stays while another workspace monitors the repository. A deleted repository is visible to no
+        // one, so the row stops showing it public, which narrows every workspace's monitor in the same write.
+        handleVisibilityChanged(
+                event.repository() == null ? null : event.repository().id(), fullName, safeFullName, true);
+
         provisioningListener.onRepositoriesRemoved(
                 installationId,
                 List.of(new ProvisioningListener.RepositoryRemoval(
@@ -289,5 +294,10 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
                                 "Repository not found locally for visibility update: repoName={}, private={}",
                                 safeFullName,
                                 isPrivate));
+        // The event is an answer of its own: it narrows also when the row already held the repository private, and so
+        // wrote nothing, or when no row is stored.
+        if (isPrivate && nativeId != null) {
+            syncTargetProvider.recordRepositoryPrivatized(nativeId);
+        }
     }
 }

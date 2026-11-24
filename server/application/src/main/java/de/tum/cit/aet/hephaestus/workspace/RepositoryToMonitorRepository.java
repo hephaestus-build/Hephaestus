@@ -15,6 +15,27 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryToMonitor, Long> {
+
+    @WorkspaceAgnostic(
+            "Bounded by the at most eight combinations of class, proof state and reason; returns counts only,"
+                    + " for the instance-wide operator gauge")
+    @Query("""
+            SELECT new de.tum.cit.aet.hephaestus.workspace.RepositoryReadersCount(
+                m.readers.visibilityClass, m.readers.proofState, m.readers.proofReason, COUNT(m))
+            FROM RepositoryToMonitor m
+            GROUP BY m.readers.visibilityClass, m.readers.proofState, m.readers.proofReason
+            """)
+    List<RepositoryReadersCount> countByReadersProof();
+
+    /**
+     * Narrows every monitor of the repository with this native id in one statement, as the mirror row's trigger does:
+     * a public proof falls back to waiting, and every monitor's generation moves on.
+     */
+    @WorkspaceAgnostic("Bounded by the monitors of one repository: whether it is public is a fact about the repository,"
+            + " so its loss narrows every workspace's monitor of it")
+    @Query(value = "SELECT public.narrow_repository_monitors(:nativeId)", nativeQuery = true)
+    int narrowRepositoryMonitors(@Param("nativeId") long nativeId);
+
     boolean existsByWorkspaceIdAndNameWithOwner(Long workspaceId, String nameWithOwner);
 
     Optional<RepositoryToMonitor> findByWorkspaceIdAndNameWithOwner(Long workspaceId, String nameWithOwner);
