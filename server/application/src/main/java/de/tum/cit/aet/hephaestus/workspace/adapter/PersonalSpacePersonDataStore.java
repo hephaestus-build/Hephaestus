@@ -56,6 +56,14 @@ final class PersonalSpacePersonDataStore implements PersonDataContributor {
                 """, Map.of("ids", new SqlArrayValue("bigint", ids)), (rs, row) -> mapper.readTree(rs.getString(1)));
     }
 
+    /** Runs before every store's erasure, the conversation copy store's sandbox deletion included. */
+    @Override
+    public void prepareErasure(PersonDataSelection selection) {
+        selection
+                .rows()
+                .forEach(row -> spaces.suspend(Long.parseLong(row.columns().get("id"))));
+    }
+
     @Override
     public long erase(PersonDataSelection selection, PersonScope frozenScope) {
         if (selection.rows().isEmpty() || frozenScope.accountId() == null) return 0;

@@ -262,8 +262,9 @@ class ConversationSandboxErasureIntegrationTest extends AbstractWorkspaceIntegra
         assertNoAcknowledgement(request.getId());
         assertSandbox(copy, "DELETING");
         assertThat(copiedPerson).exists();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM workspace WHERE id=?", Integer.class, spaceId))
-                .isOne();
+        assertThat(jdbc.queryForObject("SELECT status FROM workspace WHERE id=?", String.class, spaceId))
+                .as("the space is closed to requests and run claims, and kept")
+                .isEqualTo("SUSPENDED");
         claims.failDelete = false;
         transactions.executeWithoutResult(status -> service.requestErasure(request.getId(), administratorId, true));
 

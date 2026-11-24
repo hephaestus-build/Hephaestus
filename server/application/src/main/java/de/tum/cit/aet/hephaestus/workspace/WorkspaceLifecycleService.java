@@ -255,6 +255,17 @@ public class WorkspaceLifecycleService {
         slugReservations.reserve(namespaceReservation.slugToken(space.getSlug()));
     }
 
+    /**
+     * Closes a personal space before its erasure removes anything (ADR 0126): the space is {@code SUSPENDED}, so no
+     * request enters it and no queued run is claimed, and no new sandbox starts between the deletion of the space's
+     * sandboxes and {@link #erasePersonalSpace}. It writes no status-change audit row, which would outlive the space.
+     * A repeated call changes nothing.
+     */
+    @Transactional
+    public void suspendPersonalSpaceForErasure(long workspaceId) {
+        workspaceRepository.suspendPersonalSpace(workspaceId);
+    }
+
     /** Runs every cleanup owner in its order, then removes the memberships, which the owners' rows may reference. */
     private void deleteWorkspaceData(long workspaceId) {
         sweepAdmission.admitWorkspacePurge(workspaceId);
