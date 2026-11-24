@@ -12,19 +12,26 @@
 			"state": "ACTIVE",
 			"authorKind": "PERSON",
 			"text": "I split a large change into commits that each build on their own.",
-			"practiceKey": "software-engineering/atomic-commits",
+			"practiceKeys": ["software-engineering/atomic-commits"],
 			"createdAt": "2026-09-02T08:15:00Z",
 			"revisedAt": "2026-11-20T16:42:10.123Z"
 		},
 		{
 			"portableId": "c3a5e7f9-2b4d-4a6c-8e0f-1b3d5f7a9c02",
-			"revision": 1,
+			"revision": 2,
+			"origin": {
+				"instanceId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+				"portableId": "1d2c3b4a-5f6e-4d7c-9b8a-0f1e2d3c4b5a"
+			},
 			"kind": "GOAL",
 			"state": "CLOSED",
+			"closeReason": "ACHIEVED",
 			"authorKind": "HEPHAESTUS",
 			"text": "Write a test that fails before each bug fix.",
+			"practiceKeys": [],
+			"helpPreference": "HINT",
 			"createdAt": "2026-10-01T10:00:00Z",
-			"revisedAt": "2026-10-01T10:00:00Z"
+			"revisedAt": "2026-11-02T10:00:00Z"
 		}
 	],
 	"growthPoints": [
@@ -32,7 +39,6 @@
 			"portableId": "d4b6f8a0-3c5e-4b7d-9f1a-2c4e6a8b0d03",
 			"revision": 1,
 			"practiceKey": "software-engineering/atomic-commits",
-			"comparabilityClass": "v1:3b9c1f0e7a2d4c6b8e0f1a3c5e7b9d1f2a4c6e8b0d2f4a6c8e0b2d4f6a8c0e2a",
 			"outcome": "MET",
 			"madeBy": "REVIEW",
 			"occurredWeek": "2026-W47"
@@ -41,18 +47,37 @@
 			"portableId": "e5c7a9b1-4d6f-4c8e-8a2b-3d5f7b9c1e04",
 			"revision": 2,
 			"practiceKey": "software-engineering/descriptive-pull-requests",
-			"comparabilityClass": "v2:0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
 			"outcome": "NOT_MET",
 			"madeBy": "SELF_REPORT",
 			"occurredWeek": "2026-W01"
+		},
+		{
+			"portableId": "a7e9c1d3-6f8b-4e0a-8c4d-5f7b9d1e3a06",
+			"revision": 1,
+			"origin": {
+				"instanceId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+				"portableId": "2e3d4c5b-6a7f-4e8d-8c9b-1a2f3e4d5c6b"
+			},
+			"practiceKey": "software-engineering/atomic-commits",
+			"outcome": "MET",
+			"madeBy": "IMPORT",
+			"occurredWeek": "2025-W12"
 		}
 	],
 	"tombstones": [
 		{
 			"kind": "PORTABLE_RECORD",
+			"reason": "DELETED",
 			"portableId": "f6d8b0c2-5e7a-4d9f-9b3c-4e6a8c0d2f05",
 			"revision": 2,
-			"deletedAt": "2026-11-18T09:05:00Z"
+			"at": "2026-11-18T09:05:00Z"
+		},
+		{
+			"kind": "PORTABLE_RECORD",
+			"reason": "WITHDRAWN",
+			"portableId": "08f0d2e4-7a9c-4b1d-9e5f-6a8c0e2f4b07",
+			"revision": 1,
+			"at": "2026-11-19T12:00:00Z"
 		}
 	]
 }

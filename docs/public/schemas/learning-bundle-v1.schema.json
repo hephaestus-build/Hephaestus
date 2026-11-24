@@ -2,7 +2,7 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://docs.hephaestus.build/schemas/learning-bundle-v1.schema.json",
 	"title": "Hephaestus learning bundle, format version 1",
-	"description": "A portable download of one person's learning. It carries only the person's own words, text that the person confirmed word for word, and closed fields. It names no workspace, no piece of work and no other person. A new format version gets a new schema file, so this file never changes after release.",
+	"description": "A portable download of one person's learning. It carries only the person's own words, text that the person confirmed word for word, and closed fields. It names no workspace, no piece of work and no other person. A later format version gets its own file, so this file does not change after release. A reader also refuses a bundle that this schema cannot check: a file larger than 33554432 bytes (refused before it is parsed), an object with a duplicate key, a portableId that occurs more than once across records, growthPoints and tombstones, a record whose revisedAt is before its createdAt, an occurredWeek that its year does not have, and text with an unpaired surrogate.",
 	"type": "object",
 	"additionalProperties": false,
 	"required": [
@@ -37,21 +37,21 @@
 			"$ref": "#/$defs/timestamp"
 		},
 		"records": {
-			"description": "The person's records that may leave the instance. A portableId occurs at most once in the bundle.",
+			"description": "The person's records that may leave the instance.",
 			"type": "array",
 			"maxItems": 10000,
 			"items": { "$ref": "#/$defs/record" }
 		},
 		"growthPoints": {
-			"description": "The person's growth points for practices with a portable identity. A portableId occurs at most once in the bundle.",
+			"description": "The person's growth points for practices with a portable identity.",
 			"type": "array",
-			"maxItems": 200000,
+			"maxItems": 100000,
 			"items": { "$ref": "#/$defs/growthPoint" }
 		},
 		"tombstones": {
-			"description": "Records and growth points that an earlier bundle could carry and that the person deleted since. A portableId occurs at most once in the bundle.",
+			"description": "Records and growth points that an earlier bundle from this instance could carry and that this bundle does not.",
 			"type": "array",
-			"maxItems": 200000,
+			"maxItems": 100000,
 			"items": { "$ref": "#/$defs/tombstone" }
 		}
 	},
@@ -64,16 +64,27 @@
 			"description": "An RFC 3339 time in UTC.",
 			"type": "string",
 			"format": "date-time",
-			"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+			"pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{1,9})?Z$"
 		},
 		"portableId": {
 			"description": "Stable across downloads from one instance. It never changes for the life of the record or the growth point.",
 			"$ref": "#/$defs/uuid"
 		},
 		"revision": {
-			"description": "Grows by one with each change. A later revision of one portableId replaces an earlier one.",
+			"description": "Grows with each change. A later revision of one portableId replaces an earlier one.",
 			"type": "integer",
-			"minimum": 1
+			"minimum": 1,
+			"maximum": 2147483647
+		},
+		"origin": {
+			"description": "Where an imported item first came from. An instance that imported the item copies it unchanged into each later bundle, so an import recognizes the item again through any number of instances.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["instanceId", "portableId"],
+			"properties": {
+				"instanceId": { "$ref": "#/$defs/uuid" },
+				"portableId": { "$ref": "#/$defs/uuid" }
+			}
 		},
 		"practiceKey": {
 			"description": "The portable identity of a practice, in the form <domain>/<slug>. A practice of one workspace has no portable identity and never appears.",
@@ -93,12 +104,14 @@
 				"state",
 				"authorKind",
 				"text",
+				"practiceKeys",
 				"createdAt",
 				"revisedAt"
 			],
 			"properties": {
 				"portableId": { "$ref": "#/$defs/portableId" },
 				"revision": { "$ref": "#/$defs/revision" },
+				"origin": { "$ref": "#/$defs/origin" },
 				"kind": {
 					"enum": ["PREFERENCE", "CONTEXT", "LESSON", "REFLECTION", "CORRECTION", "GOAL"]
 				},
@@ -106,49 +119,62 @@
 					"description": "A record that waits for the person's review has no confirmed revision and never appears.",
 					"enum": ["ACTIVE", "CLOSED"]
 				},
+				"closeReason": {
+					"description": "Why the person closed the record. Present exactly when the state is CLOSED.",
+					"enum": ["ACHIEVED", "DROPPED", "REPLACED", "ARCHIVED"]
+				},
 				"authorKind": {
-					"description": "PERSON: the person wrote the text. HEPHAESTUS: Hephaestus wrote the text and the person confirmed it word for word.",
+					"description": "PERSON: the person wrote the text. HEPHAESTUS: Hephaestus wrote the text and the person confirmed it word for word. A record that Hephaestus noted and the person did not keep never appears.",
 					"enum": ["PERSON", "HEPHAESTUS"]
 				},
 				"text": {
 					"type": "string",
 					"minLength": 1,
-					"maxLength": 20000
+					"maxLength": 8000,
+					"pattern": "^[^\\u0000]*$"
 				},
-				"practiceKey": { "$ref": "#/$defs/practiceKey" },
+				"practiceKeys": {
+					"description": "The portable practices that the record names. Links to a practice of one workspace are left out.",
+					"type": "array",
+					"maxItems": 20,
+					"uniqueItems": true,
+					"items": { "$ref": "#/$defs/practiceKey" }
+				},
+				"helpPreference": {
+					"description": "For a goal only: the help that the person chose for this goal.",
+					"enum": ["EXPLAIN", "HINT", "ASK_FIRST", "STEPPED_BACK"]
+				},
 				"createdAt": { "$ref": "#/$defs/timestamp" },
 				"revisedAt": {
 					"description": "When the person confirmed this revision.",
 					"$ref": "#/$defs/timestamp"
 				}
-			}
+			},
+			"allOf": [
+				{
+					"if": { "properties": { "state": { "const": "CLOSED" } } },
+					"then": { "required": ["closeReason"] },
+					"else": { "not": { "required": ["closeReason"] } }
+				},
+				{
+					"if": { "not": { "properties": { "kind": { "const": "GOAL" } } } },
+					"then": { "not": { "required": ["helpPreference"] } }
+				}
+			]
 		},
 		"growthPoint": {
-			"description": "One outcome for one piece of work and one practice. It does not identify the piece of work.",
+			"description": "One outcome for one piece of work and one practice. It does not identify the piece of work or the workspace.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": [
-				"portableId",
-				"revision",
-				"practiceKey",
-				"comparabilityClass",
-				"outcome",
-				"madeBy",
-				"occurredWeek"
-			],
+			"required": ["portableId", "revision", "practiceKey", "outcome", "madeBy", "occurredWeek"],
 			"properties": {
 				"portableId": { "$ref": "#/$defs/portableId" },
 				"revision": { "$ref": "#/$defs/revision" },
+				"origin": { "$ref": "#/$defs/origin" },
 				"practiceKey": { "$ref": "#/$defs/practiceKey" },
-				"comparabilityClass": {
-					"description": "Outcomes count together only within one class of one practice.",
-					"type": "string",
-					"maxLength": 96,
-					"pattern": "^v[0-9]+:[0-9a-f]{64}$"
-				},
 				"outcome": { "enum": ["MET", "NOT_MET"] },
 				"madeBy": {
-					"description": "Only REVIEW counts in totals.",
+					"description": "Only REVIEW counts in totals. An IMPORT point carries its origin.",
 					"enum": ["REVIEW", "SELF_REPORT", "IMPORT"]
 				},
 				"occurredWeek": {
@@ -156,21 +182,30 @@
 					"type": "string",
 					"pattern": "^[0-9]{4}-W(0[1-9]|[1-4][0-9]|5[0-3])$"
 				}
-			}
+			},
+			"if": { "properties": { "madeBy": { "const": "IMPORT" } } },
+			"then": { "required": ["origin"] }
 		},
 		"tombstone": {
-			"description": "A deleted record or growth point. It keeps no content.",
+			"description": "A record or growth point that an earlier bundle could carry and this one does not. It keeps no content.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["kind", "portableId", "revision", "deletedAt"],
+			"required": ["kind", "reason", "portableId", "revision", "at"],
 			"properties": {
 				"kind": { "const": "PORTABLE_RECORD" },
+				"reason": {
+					"description": "DELETED: the person deleted it. WITHDRAWN: it still exists but may no longer leave the instance, for example after a recall or a narrower export policy. A reader removes the item in both cases, and only the person's deletion is reported as a deletion.",
+					"enum": ["DELETED", "WITHDRAWN"]
+				},
 				"portableId": { "$ref": "#/$defs/portableId" },
 				"revision": {
-					"description": "The last revision before the deletion.",
+					"description": "The last revision that a bundle could carry.",
 					"$ref": "#/$defs/revision"
 				},
-				"deletedAt": { "$ref": "#/$defs/timestamp" }
+				"at": {
+					"description": "When it was deleted or withdrawn.",
+					"$ref": "#/$defs/timestamp"
+				}
 			}
 		}
 	}

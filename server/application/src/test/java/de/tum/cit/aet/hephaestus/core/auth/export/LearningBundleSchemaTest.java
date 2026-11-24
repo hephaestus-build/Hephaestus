@@ -33,43 +33,114 @@ class LearningBundleSchemaTest extends BaseUnitTest {
         assertThat(SCHEMA.validate(fixture())).isEmpty();
     }
 
+    /** Each case changes one value of the valid fixture, so the named keyword at the named place is the refusal. */
     @ParameterizedTest
     @MethodSource("refusedBundles")
-    void shouldRefuseTheBundleWhenItLeavesTheFormat(Consumer<ObjectNode> change) {
+    void shouldRefuseTheBundleWhenItLeavesTheFormat(Consumer<ObjectNode> change, String keyword, String location) {
         ObjectNode bundle = fixture();
         change.accept(bundle);
 
         List<Error> errors = SCHEMA.validate(bundle);
 
-        assertThat(errors).isNotEmpty();
+        assertThat(errors).anySatisfy(error -> {
+            assertThat(error.getKeyword()).isEqualTo(keyword);
+            assertThat(error.getInstanceLocation().toString()).isEqualTo(location);
+        });
     }
 
     static Stream<Arguments> refusedBundles() {
         return Stream.of(
-                refused("an unknown format version", b -> b.put("formatVersion", 2)),
-                refused("no issuing instance", b -> b.remove("instanceId")),
-                refused("the source workspace", b -> b.put("workspace", "client-a")),
-                refused("a record that waits for review", b -> record(b).put("state", "NEEDS_REVIEW")),
-                refused("a record without a revision number", b -> record(b).put("revision", 0)),
-                refused("a practice of one workspace", b -> growthPoint(b).put("practiceKey", "local/42")),
+                refused("an unknown format version", b -> b.put("formatVersion", 2), "const", "/formatVersion"),
+                refused("no issuing instance", b -> b.remove("instanceId"), "required", ""),
+                refused("the source workspace", b -> b.put("workspace", "client-a"), "additionalProperties", ""),
+                refused("an id that is not a UUID", b -> b.put("bundleId", "bundle-1"), "pattern", "/bundleId"),
+                refused(
+                        "a time that is not UTC",
+                        b -> b.put("generatedAt", "2026-11-24T22:30:00+01:00"),
+                        "pattern",
+                        "/generatedAt"),
+                refused(
+                        "a month that does not exist",
+                        b -> b.put("generatedAt", "2026-13-01T00:00:00Z"),
+                        "pattern",
+                        "/generatedAt"),
+                refused(
+                        "a record that waits for review",
+                        b -> record(b, 0).put("state", "NEEDS_REVIEW"),
+                        "enum",
+                        "/records/0/state"),
+                refused(
+                        "a record without a revision number",
+                        b -> record(b, 0).put("revision", 0),
+                        "minimum",
+                        "/records/0/revision"),
+                refused(
+                        "a revision number past the integer range",
+                        b -> record(b, 0).put("revision", 2_147_483_648L),
+                        "maximum",
+                        "/records/0/revision"),
+                refused(
+                        "a closed record without its reason",
+                        b -> record(b, 1).remove("closeReason"),
+                        "required",
+                        "/records/1"),
+                refused(
+                        "an active record with a close reason",
+                        b -> record(b, 0).put("closeReason", "DROPPED"),
+                        "not",
+                        "/records/0"),
+                refused(
+                        "a help preference on a record that is not a goal",
+                        b -> record(b, 0).put("helpPreference", "HINT"),
+                        "not",
+                        "/records/0"),
+                refused(
+                        "a NUL character in a record text",
+                        b -> record(b, 0).put("text", "before\u0000after"),
+                        "pattern",
+                        "/records/0/text"),
+                refused(
+                        "a practice of one workspace",
+                        b -> growthPoint(b, 0).put("practiceKey", "local/42"),
+                        "not",
+                        "/growthPoints/0/practiceKey"),
                 refused(
                         "the piece of work of a growth point",
-                        b -> growthPoint(b).put("workRef", "github/acme/api#12")),
-                refused("text in a tombstone", b -> tombstone(b).put("text", "deleted words")),
-                refused("a time that is not UTC", b -> b.put("generatedAt", "2026-11-24T22:30:00+01:00")),
-                refused("an id that is not a UUID", b -> b.put("bundleId", "bundle-1")));
+                        b -> growthPoint(b, 0).put("workRef", "github/acme/api#12"),
+                        "additionalProperties",
+                        "/growthPoints/0"),
+                refused(
+                        "the comparability class of a workspace's own practice text",
+                        b -> growthPoint(b, 0).put("comparabilityClass", "v1:" + "a".repeat(64)),
+                        "additionalProperties",
+                        "/growthPoints/0"),
+                refused(
+                        "an imported growth point without its origin",
+                        b -> growthPoint(b, 2).remove("origin"),
+                        "required",
+                        "/growthPoints/2"),
+                refused(
+                        "text in a tombstone",
+                        b -> tombstone(b).put("text", "deleted words"),
+                        "additionalProperties",
+                        "/tombstones/0"),
+                refused(
+                        "a tombstone without its reason",
+                        b -> tombstone(b).remove("reason"),
+                        "required",
+                        "/tombstones/0"));
     }
 
-    private static Arguments refused(String name, Consumer<ObjectNode> change) {
-        return Arguments.of(Named.of(name, change));
+    private static Arguments refused(String name, Consumer<ObjectNode> change, String keyword, String location) {
+        return Arguments.of(Named.of(name, change), keyword, location);
     }
 
-    private static ObjectNode record(ObjectNode bundle) {
-        return (ObjectNode) bundle.withArray("records").get(0);
+    private static ObjectNode record(ObjectNode bundle, int index) {
+        return (ObjectNode) bundle.withArray("records").get(index);
     }
 
-    private static ObjectNode growthPoint(ObjectNode bundle) {
-        return (ObjectNode) bundle.withArray("growthPoints").get(0);
+    private static ObjectNode growthPoint(ObjectNode bundle, int index) {
+        return (ObjectNode) bundle.withArray("growthPoints").get(index);
     }
 
     private static ObjectNode tombstone(ObjectNode bundle) {
