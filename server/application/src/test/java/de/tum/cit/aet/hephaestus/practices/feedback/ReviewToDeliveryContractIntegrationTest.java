@@ -963,7 +963,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             UUID jobId = review.identity().jobId();
             Path request = Files.createTempFile("lost-server-request", ".json");
             Files.write(request, mapper.writeValueAsBytes(request(review)));
-            var postgres = PostgreSQLTestContainer.getInstance();
+            var database = PostgreSQLTestContainer.application();
             var builder = new ProcessBuilder(
                             Path.of(System.getProperty("java.home"), "bin", "java")
                                     .toString(),
@@ -978,9 +978,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             request.toString(),
                             Long.toString(KILLED_SERVER_LEASE.toSeconds()))
                     .redirectErrorStream(true);
-            builder.environment().put("LOST_SERVER_JDBC_URL", postgres.getJdbcUrl());
-            builder.environment().put("LOST_SERVER_JDBC_USER", postgres.getUsername());
-            builder.environment().put("LOST_SERVER_JDBC_PASSWORD", postgres.getPassword());
+            builder.environment().put("LOST_SERVER_JDBC_URL", database.jdbcUrl());
+            builder.environment().put("LOST_SERVER_JDBC_USER", database.username());
+            builder.environment().put("LOST_SERVER_JDBC_PASSWORD", database.password());
             Process lost = builder.start();
             Duration renewEvery = agentRuns.capacity().leaseRenewal();
             try {

@@ -23,10 +23,26 @@ class MigratedSchemaWaitIntegrationTest {
 
     @Test
     void shouldStartWithoutMigratingWhenTheSchemaIsCurrent() {
-        TestDatabase database = PostgreSQLTestContainer.createMigratedDatabase("hephaestus_wait_current");
+        TestDatabase database = PostgreSQLTestContainer.createApplicationDatabase("hephaestus_wait_current");
 
         try (ConfigurableApplicationContext context = start(database)) {
             assertThat(context.getBean(MigratedSchemaWait.class)).isNotNull();
+        }
+    }
+
+    @Test
+    void shouldRefuseToStartAsTheSchemaOwnerOrSuperuser() {
+        var database = PostgreSQLTestContainer.createApplicationDatabase("hephaestus_wait_privileged");
+        for (var privileged : new TestDatabase[] {
+            PostgreSQLTestContainer.asOwner(database),
+            new TestDatabase(
+                    database.jdbcUrl(),
+                    PostgreSQLTestContainer.administrator().username(),
+                    PostgreSQLTestContainer.administrator().password())
+        }) {
+            assertThatThrownBy(() -> start(privileged).close())
+                    .rootCause()
+                    .hasMessageContaining("must use the restricted hephaestus_app role");
         }
     }
 

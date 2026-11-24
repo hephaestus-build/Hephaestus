@@ -4,6 +4,7 @@ import { appendFileSync, readFileSync, readdirSync } from "node:fs";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { applyDatabaseRoles, databaseRolePasswords } from "./lib/database-roles.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { stopEveryRoleEntries } from "./lib/migration-guide.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
@@ -59,6 +60,7 @@ const READINESS_TIMEOUT_MS = 2000;
 const runId = `upgrade-${randomUUID().slice(0, 8)}`;
 const network = runId;
 const postgres = `${runId}-postgres`;
+const credentials = databaseRolePasswords();
 let application = `${runId}-previous`;
 
 function docker(...args: string[]): string {
@@ -77,22 +79,26 @@ async function fetchWithTimeout(input: string, init?: RequestInit): Promise<Resp
 	return fetch(input, { ...init, signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) });
 }
 
-function databaseEnvironment(database: string): string[] {
+function databaseEnvironment(database: string, role: "owner" | "app"): string[] {
+	const password =
+		role === "owner" ? credentials.DATABASE_OWNER_PASSWORD : credentials.DATABASE_APP_PASSWORD;
 	return [
 		"--env",
 		"SPRING_LIQUIBASE_CONTEXTS=prod",
 		"--env",
 		`SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${database}`,
 		"--env",
-		"SPRING_DATASOURCE_USERNAME=root",
+		`SPRING_DATASOURCE_USERNAME=hephaestus_${role}`,
 		"--env",
-		"SPRING_DATASOURCE_PASSWORD=root",
+		`SPRING_DATASOURCE_PASSWORD=${password}`,
+		...(role === "owner"
+			? ["--env", `SPRING_LIQUIBASE_PASSWORD=${credentials.DATABASE_OWNER_PASSWORD}`]
+			: []),
 	];
 }
 
 /**
- * The candidate migrates as production does: the migrate run mode first, then a start that only waits for the
- * schema. The previous release may predate the run mode, so it keeps migrating at start.
+ * Both releases support the migrate run mode. Each runtime starts as the application role on the schema it prepared.
  */
 function migrate(image: string, database = "hephaestus") {
 	return spawnSync(
@@ -106,7 +112,8 @@ function migrate(image: string, database = "hephaestus") {
 			network,
 			"--env",
 			"SPRING_PROFILES_ACTIVE=e2e,migrate",
-			...databaseEnvironment(database),
+			...databaseEnvironment(database, "owner"),
+			...(image === previousImage ? ["--env", "HEPHAESTUS_SYNC_NATS_ENABLED=false"] : []),
 			// The migration opens the values that the previous release sealed, as the chart's migration Job does.
 			"--env",
 			`HEPHAESTUS_SECURITY_ENCRYPTION_KEY=${SYSTEM_KEY}`,
@@ -118,11 +125,12 @@ function migrate(image: string, database = "hephaestus") {
 	);
 }
 
-function migrateCandidate(image: string, database = "hephaestus"): void {
+function migrateRelease(image: string, database = "hephaestus"): void {
+	applyDatabaseRoles(postgres, database, credentials);
 	const result = migrate(image, database);
 	if (result.status !== 0) {
 		throw new Error(
-			`The candidate's migration exited with ${String(result.status ?? result.signal)}:\n${result.stdout}${result.stderr}`,
+			`Migration with ${image} exited with ${String(result.status ?? result.signal)}:\n${result.stdout}${result.stderr}`,
 		);
 	}
 }
@@ -166,7 +174,6 @@ function startApplication(
 	name: string,
 	image: string,
 	database = "hephaestus",
-	migratesAtStart = true,
 	worker?: Worker,
 ): number {
 	docker(
@@ -181,8 +188,8 @@ function startApplication(
 		"--env",
 		"SPRING_PROFILES_ACTIVE=e2e",
 		"--env",
-		`SPRING_LIQUIBASE_ENABLED=${String(migratesAtStart)}`,
-		...databaseEnvironment(database),
+		"SPRING_LIQUIBASE_ENABLED=false",
+		...databaseEnvironment(database, "app"),
 		// Only the released baseline still has a broker client. The candidate opens no broker connection.
 		...(image === previousImage ? ["--env", "HEPHAESTUS_SYNC_NATS_ENABLED=false"] : []),
 		...workerEnvironment(worker),
@@ -608,8 +615,8 @@ async function assertFreshSchemaEqualsUpgraded(image: string): Promise<void> {
 	docker("exec", postgres, "createdb", "--username=root", "hephaestus_fresh");
 	const fresh = `${runId}-fresh`;
 	try {
-		migrateCandidate(image, "hephaestus_fresh");
-		await waitUntilReady(fresh, startApplication(fresh, image, "hephaestus_fresh", false));
+		migrateRelease(image, "hephaestus_fresh");
+		await waitUntilReady(fresh, startApplication(fresh, image, "hephaestus_fresh"));
 	} finally {
 		spawnSync("docker", ["rm", "--force", fresh], { stdio: "ignore" });
 	}
@@ -651,14 +658,14 @@ function printLogs(name: string): void {
 /**
  * Starts the previous release on a schema that is ahead of it, as a rollout or a rollback does, and smokes it:
  * readiness, the core reads, a new workspace, which writes the workspace and its practice catalog, and a review model
- * bound to a workspace. The e2e profile validates every entity against the schema at start. Its own migration finds
- * nothing to apply. A sandbox claims its own run when it pulls, and no cluster runs here, so no review runs.
+ * bound to a workspace. The e2e profile validates every entity against the schema at start. A sandbox claims its own
+ * run when it pulls, and no cluster runs here, so no review runs.
  */
 async function assertPreviousReleaseRuns(database: string, schema: string): Promise<void> {
 	const name = `${runId}-previous-on-${database}`;
 	try {
 		withFixture(database, () => seedReview(database));
-		const port = startApplication(name, previousImage, database, true, {
+		const port = startApplication(name, previousImage, database, {
 			agentImage: previousAgentImage,
 		});
 		await waitUntilReady(name, port, ["/readyz", "/actuator/health/readiness"]);
@@ -801,6 +808,7 @@ async function assertPartialMigration(
 			EXECUTE FUNCTION upgrade_test.stop_migration();`,
 		database,
 	);
+	applyDatabaseRoles(postgres, database, credentials);
 	let stopped: ReturnType<typeof migrate>;
 	try {
 		stopped = migrate(candidateImage, database);
@@ -833,7 +841,7 @@ async function assertPartialMigration(
 	if (stopEveryRole.length === 0) {
 		await assertPreviousReleaseRuns(database, `the partly migrated schema`);
 	}
-	migrateCandidate(candidateImage, database);
+	migrateRelease(candidateImage, database);
 	const completed = appliedChangeCount(database) - before;
 	if (completed !== pending) {
 		throw new Error(`The repeated migration applied ${completed} of ${pending} new change sets`);
@@ -873,6 +881,7 @@ try {
 		}
 	}
 
+	migrateRelease(previousImage);
 	let port = startApplication(application, previousImage);
 	// A previous release without the management port answers readiness only on the actuator path.
 	await waitUntilReady(application, port, ["/readyz", "/actuator/health/readiness"]);
@@ -908,9 +917,9 @@ try {
 		"--template=hephaestus",
 		PARTIAL_DATABASE,
 	);
-	migrateCandidate(candidateImage);
+	migrateRelease(candidateImage);
 	application = `${runId}-candidate`;
-	port = startApplication(application, candidateImage, "hephaestus", false);
+	port = startApplication(application, candidateImage);
 	await waitUntilReady(application, port);
 	api = await apiOf(port);
 	const upgradedData = dataFingerprint(preserved);

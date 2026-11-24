@@ -71,6 +71,8 @@ class ClientSessionMigratedSchemaTest {
         registry.add("spring.datasource.url", DATABASE::jdbcUrl);
         registry.add("spring.datasource.username", DATABASE::username);
         registry.add("spring.datasource.password", DATABASE::password);
+        registry.add("spring.liquibase.user", DATABASE::username);
+        registry.add("spring.liquibase.password", DATABASE::password);
     }
 
     @Autowired

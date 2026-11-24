@@ -26,6 +26,8 @@ const server = path.join(import.meta.dirname, "../server");
  */
 const GENERATED = [
 	{ name: "POSTGRES_PASSWORD", bytes: 24, newDatabaseOnly: true },
+	{ name: "SPRING_LIQUIBASE_PASSWORD", bytes: 24, newDatabaseOnly: false },
+	{ name: "SPRING_DATASOURCE_PASSWORD", bytes: 24, newDatabaseOnly: false },
 	{ name: "HEPHAESTUS_SECURITY_ENCRYPTION_KEY", bytes: 16, newDatabaseOnly: true },
 	{ name: "HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY", bytes: 16, newDatabaseOnly: true },
 	{ name: "WEBHOOK_SECRET", bytes: 32, newDatabaseOnly: false },

@@ -588,18 +588,27 @@ export default defineConfig({
 			// `dev-env.ts` is the one writer of `server/.env`: it creates the file and adds its generated values before
 			// Compose or Spring Boot read it.
 			"dev:env": run("node scripts/dev-env.ts"),
-			"dev:compose": run("node ../scripts/dev-env.ts && docker compose up -d --wait", {
-				cwd: "server",
-			}),
-			"dev:compose:e2e": run("node ../scripts/dev-env.ts && docker compose up -d --wait postgres", {
-				cwd: "server",
-			}),
+			"dev:compose": run(
+				"node ../scripts/dev-env.ts && docker compose up -d --wait postgres mailpit && docker compose run --rm -T postgres-roles",
+				{
+					cwd: "server",
+				},
+			),
+			"dev:compose:e2e": run(
+				"node ../scripts/dev-env.ts && docker compose up -d --wait postgres && docker compose run --rm -T postgres-roles",
+				{
+					cwd: "server",
+				},
+			),
 			"dev:compose:down": run("node ../scripts/dev-env.ts && docker compose down", {
 				cwd: "server",
 			}),
-			"dev:reset": run("node ../scripts/dev-env.ts reset && docker compose up -d --wait", {
-				cwd: "server",
-			}),
+			"dev:reset": run(
+				"node ../scripts/dev-env.ts reset && docker compose up -d --wait postgres mailpit && docker compose run --rm -T postgres-roles",
+				{
+					cwd: "server",
+				},
+			),
 			"dev:server": run("node scripts/dev-kubernetes.ts run", {
 				dependsOn: ["dev:compose"],
 			}),

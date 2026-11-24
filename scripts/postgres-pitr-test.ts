@@ -6,9 +6,11 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { databaseMigration } from "./lib/database-migration.ts";
+import { applyDatabaseRoles, databaseRolePasswords } from "./lib/database-roles.ts";
 import { conversationBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
 
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
+const credentials = databaseRolePasswords();
 const migrate = databaseMigration(6 * 60 * 1000);
 // The throwaway database lives for this run only.
 const password = randomBytes(16).toString("hex");
@@ -66,7 +68,7 @@ function docker(...args: string[]): string {
 }
 
 function mc(role: "writer" | "reader", ...args: string[]): string {
-	const credentials =
+	const minioCredentials =
 		role === "writer" ? "backup-writer:local-writer-secret" : "restore-reader:local-reader-secret";
 	return docker(
 		"run",
@@ -76,7 +78,7 @@ function mc(role: "writer" | "reader", ...args: string[]): string {
 		"--user",
 		"0",
 		"-e",
-		`MC_HOST_local=https://${credentials}@minio:9000`,
+		`MC_HOST_local=https://${minioCredentials}@minio:9000`,
 		"-v",
 		`${certificates}:/certs:ro`,
 		minioClientImage,
@@ -178,13 +180,13 @@ function startObjectStore(): void {
 	mc("writer", "admin", "policy", "attach", "local", "restore-reader", "--user", "restore-reader");
 }
 
-function sql(query: string): string {
+function sql(query: string, user = "root"): string {
 	return docker(
 		"exec",
 		container,
 		"psql",
 		"-U",
-		"root",
+		user,
 		"-d",
 		"hephaestus",
 		"-v",
@@ -320,7 +322,8 @@ try {
 	}
 	startObjectStore();
 	const sourcePort = start();
-	migrate(sourcePort, password);
+	applyDatabaseRoles(container, "hephaestus", credentials);
+	migrate(sourcePort, credentials.DATABASE_OWNER_PASSWORD);
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "stanza-create");
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "check");
 	sql("UPDATE instance_settings SET silent_mode_engaged = FALSE WHERE id = 1");
@@ -394,8 +397,9 @@ try {
 	}
 	if (
 		sql(
-			`SELECT practice_delivery_status || ':' || ${conversationBindingsEnabled} FROM workspace WHERE slug = 'restore-probe'`,
-		) !== "PAUSED:false"
+			`SELECT current_user || ':' || practice_delivery_status || ':' || ${conversationBindingsEnabled} FROM workspace WHERE slug = 'restore-probe'`,
+			"hephaestus_app",
+		) !== "hephaestus_app:PAUSED:false"
 	) {
 		throw new Error("restored workspace did not pause feedback delivery and conversation");
 	}

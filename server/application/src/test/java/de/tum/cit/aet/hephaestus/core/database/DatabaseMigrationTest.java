@@ -291,12 +291,15 @@ class DatabaseMigrationTest {
 
     private static String[] arguments(TestDatabase database) {
         // The production profile and only the data source. On the command line, it outranks the SPRING_DATASOURCE_*
-        // that the database job exports for its own PostgreSQL. The boot smoke covers DATABASE_*.
+        // and SPRING_LIQUIBASE_* that the database job exports for its own PostgreSQL. The boot smoke covers
+        // DATABASE_*.
         return new String[] {
             "--spring.profiles.active=prod," + DatabaseMigration.PROFILE,
             "--spring.datasource.url=" + database.jdbcUrl(),
             "--spring.datasource.username=" + database.username(),
             "--spring.datasource.password=" + database.password(),
+            "--spring.liquibase.user=" + database.username(),
+            "--spring.liquibase.password=" + database.password(),
             "--spring.main.banner-mode=off"
         };
     }
@@ -310,6 +313,8 @@ class DatabaseMigrationTest {
                                 "--spring.datasource.url=" + database.jdbcUrl(),
                                 "--spring.datasource.username=" + database.username(),
                                 "--spring.datasource.password=" + database.password(),
+                                "--spring.liquibase.user=" + database.username(),
+                                "--spring.liquibase.password=" + database.password(),
                                 "--spring.liquibase.enabled=true",
                                 // The run mode's contexts: a database migrated under another holds other change sets.
                                 "--spring.liquibase.contexts=prod",
