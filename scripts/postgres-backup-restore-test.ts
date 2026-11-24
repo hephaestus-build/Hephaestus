@@ -125,7 +125,7 @@ try {
 		throw new Error(`source is not sized from its 2 GiB limit: ${sized}`);
 	}
 
-	await applyDatabaseRoles(source, "hephaestus", credentials);
+	applyDatabaseRoles(source, "hephaestus", credentials);
 	migrate(sourcePort, credentials.DATABASE_OWNER_PASSWORD);
 	if (sql(source, "SELECT extversion FROM pg_extension WHERE extname='pg_partman'") !== "5.5.0") {
 		throw new Error("source pg_partman is not 5.5.0");
@@ -174,7 +174,7 @@ try {
 	start(target, volume, "/var/lib/postgresql", targetImage ?? `${id}:18`);
 	docker("exec", target, "dropdb", "-U", "root", "hephaestus");
 	docker("exec", target, "createdb", "-U", "root", "hephaestus");
-	await applyDatabaseRoles(target, "hephaestus", credentials);
+	applyDatabaseRoles(target, "hephaestus", credentials);
 	const restore = spawnSync(
 		"docker",
 		[

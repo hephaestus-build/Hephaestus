@@ -322,7 +322,7 @@ try {
 	}
 	startObjectStore();
 	const sourcePort = start();
-	await applyDatabaseRoles(container, "hephaestus", credentials);
+	applyDatabaseRoles(container, "hephaestus", credentials);
 	migrate(sourcePort, credentials.DATABASE_OWNER_PASSWORD);
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "stanza-create");
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "check");

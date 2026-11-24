@@ -1,6 +1,8 @@
+import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
-import { run } from "./process.ts";
+
+import { CAPTURE_LIMIT_BYTES } from "./process.ts";
 
 const files = path.resolve(import.meta.dirname, "../../deploy/chart/hephaestus/files");
 
@@ -11,14 +13,25 @@ export function databaseRolePasswords() {
 	};
 }
 
-export async function applyDatabaseRoles(
+// Synchronous like every drill's own docker calls, so the drills' spawnSync fixtures see these commands too.
+function docker(args: string[], env: Record<string, string | undefined>): void {
+	const result = spawnSync("docker", args, {
+		encoding: "utf8",
+		env: { ...process.env, ...env },
+		maxBuffer: CAPTURE_LIMIT_BYTES,
+	});
+	if (result.status !== 0) {
+		throw new Error(`docker ${args.join(" ")} failed:\n${result.stdout}${result.stderr}`);
+	}
+}
+
+export function applyDatabaseRoles(
 	container: string,
 	database: string,
 	env: Record<string, string | undefined> = {},
-): Promise<void> {
-	await run("docker", ["cp", files, `${container}:/tmp`]);
-	await run(
-		"docker",
+): void {
+	docker(["cp", files, `${container}:/tmp`], {});
+	docker(
 		[
 			"exec",
 			"--env",
@@ -33,6 +46,6 @@ export async function applyDatabaseRoles(
 			"-d",
 			database,
 		],
-		{ env },
+		env,
 	);
 }
