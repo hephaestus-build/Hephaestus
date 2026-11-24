@@ -173,7 +173,7 @@ public final class PostgreSQLTestContainer {
         return asApplication(database);
     }
 
-    public static synchronized TestDatabase copyDatabase(String name, TestDatabase source) {
+    static synchronized TestDatabase copyDatabase(String name, TestDatabase source) {
         validateDatabaseName(name);
         String templateName = source.jdbcUrl().substring(source.jdbcUrl().lastIndexOf('/') + 1);
         validateDatabaseName(templateName);

@@ -2,8 +2,8 @@ package de.tum.cit.aet.hephaestus.core.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
+import de.tum.cit.aet.hephaestus.testconfig.TestDatabaseCleanup;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -106,8 +106,8 @@ class GuardTriggerTimingDatabaseTest {
         }
     }
 
-    private static TestDatabase freshDatabase() throws Exception {
-        return PostgreSQLTestContainer.createDatabase(
+    private static TestDatabase freshDatabase() {
+        return TestDatabaseCleanup.createDatabase(
                 "guard_trigger_timing_" + UUID.randomUUID().toString().replace("-", ""));
     }
 

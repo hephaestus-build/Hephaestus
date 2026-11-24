@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
  * A foreign key follows a module edge: the module of the referencing table declares the module of the referenced
  * table (ADR 0138). A reference against the edge is a plain id with no foreign key, and the higher module writes both
  * rows through the lower module's port. Every table has an owner module, so a table without an entity is registered in
- * {@link ModulithVerificationTest#NATIVE_TABLES}. An edge that touches a mentoring module has no exception. Main's earlier
+ * {@link TableOwners#NATIVE_TABLES}. An edge that touches a mentoring module has no exception. Main's earlier
  * keys against an edge are listed one by one in {@code legacy-foreign-keys.txt}.
  */
 @Tag("database")
@@ -38,8 +38,8 @@ class ForeignKeyDirectionDatabaseTest {
     @Test
     void shouldGiveEveryTableAnOwnerAndPointEveryForeignKeyAlongAModuleEdge() throws SQLException {
         var database = PostgreSQLTestContainer.createMigratedDatabase("foreign_key_direction");
-        var keys =
-                keys(database, ModulithVerificationTest.tableOwners(), ModulithVerificationTest.declaredDependencies());
+        var owners = TableOwners.byTable(ModulithVerificationTest.applicationModules());
+        var keys = keys(database, owners, ModulithVerificationTest.declaredDependencies());
         assertThat(keys.refused())
                 .as("Register an owner for each table, and store a reference against a mentoring edge as a plain id")
                 .isEmpty();

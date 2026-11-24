@@ -2,11 +2,12 @@ package de.tum.cit.aet.hephaestus.testconfig;
 
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
 import java.util.Objects;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
-/** Releases copies of practice fixtures at the end of each test invocation. */
+/** Releases fixture databases at the end of each test invocation. */
 public final class TestDatabaseCleanup implements BeforeEachCallback, AfterEachCallback {
 
     private static final ExtensionContext.Namespace NAMESPACE =
@@ -24,10 +25,19 @@ public final class TestDatabaseCleanup implements BeforeEachCallback, AfterEachC
         TEST_STORE.remove();
     }
 
-    /** Copies a fixture template and lets JUnit drop the copy when it closes the test's store. */
+    /** Creates an empty fixture database for the current test. */
+    public static TestDatabase createDatabase(String name) {
+        return releaseAfterTest(name, () -> PostgreSQLTestContainer.createDatabase(name));
+    }
+
+    /** Copies a fixture template for the current test. */
     public static TestDatabase copyDatabase(String name, TestDatabase template) {
-        var store = Objects.requireNonNull(TEST_STORE.get(), "A fixture copy requires an active test");
-        var database = PostgreSQLTestContainer.copyDatabase(name, template);
+        return releaseAfterTest(name, () -> PostgreSQLTestContainer.copyDatabase(name, template));
+    }
+
+    private static TestDatabase releaseAfterTest(String name, Supplier<TestDatabase> create) {
+        var store = Objects.requireNonNull(TEST_STORE.get(), "A fixture database requires an active test");
+        var database = create.get();
         store.put(name, (AutoCloseable) () -> PostgreSQLTestContainer.dropDatabase(name));
         return database;
     }
