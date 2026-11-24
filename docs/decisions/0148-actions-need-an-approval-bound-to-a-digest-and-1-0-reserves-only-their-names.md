@@ -49,7 +49,14 @@ Option 6. Decision 1 applies in 1.0. Decisions 2 to 11 bind the 1.x design.
 
 1. **1.0 reserves the action kind names:** `PUSH_CHANGE`, `OPEN_PULL_REQUEST`, `CREATE_ISSUE`, `UPDATE_DOC`, `REQUEST_REVIEW`, `REVIEW_REMINDER` and `COMMENT`. No other concept uses them. The enums that will carry them are open, so 1.x adds them without a break.
 2. **The principal is the requesting person.** The server checks the person's own provider permission on the target at execution. The installation token stays in the server.
-3. **An action proposal shows the exact payload, the target and the expected version,** with **Push commit** and **Discard**.
+3. **An action proposal shows the exact payload, the target and the expected version.** It has **Discard** and an approve button that names the action:
+   - `PUSH_CHANGE`: **Push commit**
+   - `OPEN_PULL_REQUEST`: **Open pull request**
+   - `CREATE_ISSUE`: **Create issue**
+   - `UPDATE_DOC`: **Update document**
+   - `REQUEST_REVIEW`: **Request review**
+   - `REVIEW_REMINDER`: **Send reminder**
+   - `COMMENT`: **Post comment**
 4. **The approval binds a digest of payload, target and expected version.** At execution, the server checks the principal and the target version again. A substantive change needs a new approval.
 5. **No model turn runs while the person decides.** The approval is a state change of the action proposal.
 6. **Standing authorization is narrow, revocable and on the person's own work only.** It never pushes to the person's branch. It makes a suggested change or a pull request from a new branch. It is defined only after a first action kind ships with the rules above.
@@ -74,8 +81,10 @@ No ADR changes in 1.0. In 1.x, each action is an outbox action under [ADR 0081](
 
 ## Confirmation
 
-Not enforced. 1.0 has no action code.
-Review catches a 1.0 change that adds an action table, an action operation or an action task state.
+Not enforced. 1.0 has no approval-bound action flow.
+The outbox of `agent_action` and `ActionExecutor` stays as it is. Email, feedback and Slack writes use it.
+
+Review catches a 1.0 change that adds a reserved action kind, an approval table, an approval operation or an approval task state.
 When actions ship, a test fails when an execution's digest differs from the approved digest. Another test fails when an action runs with rights that the person does not have.
 
 ## Revisit trigger

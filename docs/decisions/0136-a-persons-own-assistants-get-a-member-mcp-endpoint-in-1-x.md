@@ -52,7 +52,9 @@ Option 5. The rules below bind the 1.x design.
 5. **A host never causes an effect.** A turn that a host starts only answers. It posts nothing, sends nothing and changes no record.
 6. **A grant to learning records is a snapshot by default.** Future records reach the host only when the person ticks that option.
 7. **The MCP tools are in the compatibility policy** of [ADR 0103](0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md). A tool grows only by addition.
-8. **1.0 reserves only the names** of the external host audience and the grant path. No other concept may use them.
+8. **1.0 reserves only two names.** No other concept may use them.
+   - The member endpoint is `/api/user/mcp`. Its token audience is the URI of that endpoint, as ADR 0110 binds the audience of the workspace endpoint.
+   - The grant path is `/api/user/mcp/grants`.
 
 ## Consequences
 
