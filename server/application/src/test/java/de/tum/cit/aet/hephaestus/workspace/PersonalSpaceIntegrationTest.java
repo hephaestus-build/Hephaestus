@@ -181,9 +181,12 @@ class PersonalSpaceIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isInstanceOf(EntityNotFoundException.class);
     }
 
-    /** An instance admin's preview and export of an account name its team workspaces, never its personal space. */
+    /**
+     * An instance admin's preview and export of an account select its team memberships, and name its personal space only
+     * by the space's slug and creation time.
+     */
     @Test
-    void shouldLeaveThePersonalSpaceOutOfAnAccountsSelectedPersonData() {
+    void shouldSelectTeamMembershipsAndNameThePersonalSpaceOnlyByItsSlugAndCreationTime() {
         long teamId = workspaces
                 .save(WorkspaceTestFixtures.activeWorkspace("team-of-the-subject"))
                 .getId();

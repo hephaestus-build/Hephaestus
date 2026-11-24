@@ -15,8 +15,8 @@ import tools.jackson.databind.ObjectMapper;
  * its own stores. Erasure disposes of the space with its owner's membership, as the erasure of the account does.
  */
 final class PersonalSpacePersonDataStore implements PersonDataContributor {
-    /** After the membership store, which leaves a personal space's membership to this store. */
-    static final int ORDER = 551;
+    /** After the stores whose rows may live inside the space, and before the account store. */
+    static final int ORDER = 990;
 
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
