@@ -238,6 +238,14 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
             nativeQuery = true)
     Optional<PersonalSpaceRow> lockPersonalSpace(@Param("accountId") long accountId);
 
+    /** Suspends a personal space: the request filter and the run claim admit only an active workspace. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+            value =
+                    "UPDATE workspace SET status = 'SUSPENDED' WHERE id = :id AND kind = 'PERSONAL' AND status = 'ACTIVE'",
+            nativeQuery = true)
+    int suspendPersonalSpace(@Param("id") long id);
+
     /** Ends a personal space once its cleanup owners removed what lives in it. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "DELETE FROM workspace WHERE id = :id AND kind = 'PERSONAL'", nativeQuery = true)

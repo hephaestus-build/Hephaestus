@@ -19,4 +19,9 @@ class PersonalSpaceErasureAdapter implements AccountErasureContributor {
     public void eraseAccount(long accountId) {
         lifecycle.erasePersonalSpace(accountId);
     }
+
+    /** Closes the space before a person-data erasure removes anything from it. */
+    void suspend(long workspaceId) {
+        lifecycle.suspendPersonalSpaceForErasure(workspaceId);
+    }
 }
