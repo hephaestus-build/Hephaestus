@@ -46,8 +46,9 @@ public interface AccountExportRepository extends JpaRepository<AccountExport, Lo
 
     /**
      * Expires one batch of READY exports past their retention window: flips them to EXPIRED and frees the payload in one
-     * UPDATE, without loading the BYTEA blobs into the persistence context. The owner function takes at most 100 exports
-     * and skips one that another transaction holds. Returns the number of exports it expired.
+     * UPDATE, without loading the BYTEA blobs into the persistence context. The owner function takes at most
+     * {@link ExportRetentionSweeper#BATCH} exports and skips one that another transaction holds. Returns the number of
+     * exports it expired.
      */
     @Query(
             value =

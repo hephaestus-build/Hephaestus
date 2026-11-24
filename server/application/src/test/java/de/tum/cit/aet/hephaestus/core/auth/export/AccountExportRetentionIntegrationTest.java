@@ -29,9 +29,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /** Retention expires the exports of every account in bounded batches, and skips an export that another session holds. */
 class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
 
-    /** The exports that one call of the owner function expires at most. */
-    private static final int BATCH = 100;
-
     @Autowired
     private AccountExportService accountExportService;
 
@@ -102,18 +99,23 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
     void shouldExpireAtMostOneBatchInATransactionAndTheRestInTheNextRun() {
         long accountId = Objects.requireNonNull(
                 accountRepository.save(new Account("Export Retention Batch")).getId());
-        // Older than any other test's export, so the first batch takes these.
         List<Long> ids = PostgreSQLTestContainer.ownerJdbc()
-                .query("""
+                .query(
+                        """
                         INSERT INTO account_export(account_id, status, expires_at, payload)
                         SELECT ?, 'READY', TIMESTAMPTZ '2000-01-01 00:00:00+00' + n * INTERVAL '1 second', ?
                         FROM generate_series(1, ?) n RETURNING id
-                        """, (rs, row) -> rs.getLong(1), accountId, "{\"pii\":true}".getBytes(UTF_8), BATCH + 1);
+                        """,
+                        (rs, row) -> rs.getLong(1),
+                        accountId,
+                        "{\"pii\":true}".getBytes(UTF_8),
+                        ExportRetentionSweeper.BATCH + 1);
 
-        assertThat(accountExportService.expireRetention()).isEqualTo(BATCH);
+        assertThat(accountExportService.expireRetention()).isEqualTo(ExportRetentionSweeper.BATCH);
         assertThat(readyAmong(ids)).isEqualTo(1);
 
-        new ExportRetentionSweeper(accountExportService, new PrivacyJobMetrics(new SimpleMeterRegistry())).sweep();
+        new ExportRetentionSweeper(accountExportService, new PrivacyJobMetrics(new SimpleMeterRegistry()), clock)
+                .sweep();
 
         assertThat(readyAmong(ids)).isZero();
     }

@@ -12,6 +12,7 @@ DECLARE
     counted integer;
     clash record;
     absorbed record;
+    bound timestamp with time zone;
 BEGIN
     IF rule = 'WORKSPACE_PURGE' THEN
         -- subject_id is the purged workspace. A soft purge keeps the workspace row, so no cascade fires.
@@ -34,10 +35,11 @@ BEGIN
         END IF;
         -- One call expires at most 100 exports, by expiry and key. It skips an export that another transaction holds,
         -- such as an erasure, instead of waiting for it. The job commits each call and calls again; its next run retries
-        -- a skipped export (ExportRetentionSweeper).
+        -- a skipped export (ExportRetentionSweeper). The bound is a variable, so the ready-expiry index can range on it.
+        bound := LEAST(cutoff, clock_timestamp());
         UPDATE public.account_export x SET status = 'EXPIRED', payload = NULL
         FROM (SELECT d.id FROM public.account_export d
-              WHERE d.status = 'READY' AND d.expires_at < LEAST(cutoff, clock_timestamp())
+              WHERE d.status = 'READY' AND d.expires_at < bound
               ORDER BY d.expires_at, d.id
               LIMIT 100
               FOR UPDATE SKIP LOCKED) due
