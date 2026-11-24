@@ -86,7 +86,9 @@ export const Default: Story = {
 		// The legend's (i) says each developer counts once, and what a dotted bar means.
 		const bars = within(await openTip(canvas, "About the bars"));
 		await expect(bars.getByText(/each once\./u)).toBeVisible();
-		await expect(bars.getByText(/split hidden, so no part shows fewer than 3\./u)).toBeVisible();
+		await expect(
+			bars.getByText(/split hidden\. Shown from 5 people, to protect individuals\./u),
+		).toBeVisible();
 		await closeTip();
 		const table = groupsTable(canvas);
 		await expect(
@@ -135,7 +137,7 @@ export const GroupOpen: Story = {
 	},
 };
 
-/** The reader is the only developer: fewer than 3, so the split, the count and the band stay hidden. */
+/** The reader is the only developer: fewer than 5, so the split, the count and the band stay hidden. */
 export const OneDeveloper: Story = {
 	args: {
 		state: { status: "ready", overview: ONE_DEVELOPER_WORKSPACE },
@@ -145,22 +147,22 @@ export const OneDeveloper: Story = {
 		await expect(groupsTable(canvas).queryByRole("img")).toBeNull();
 		await expect(
 			groupsTable(canvas).getByText(
-				"Fewer than 3 developers have a standing here, so the split stays hidden.",
+				"Fewer than 5 developers have a standing here, so the split stays hidden.",
 			),
 		).toBeVisible();
-		await expect(canvas.getByText(/Fewer than 3 developers with a standing/u)).toBeVisible();
+		await expect(canvas.getByText(/Fewer than 5 developers with a standing/u)).toBeVisible();
 		await expect(canvas.queryByText(/Typical range:/u)).toBeNull();
 	},
 };
 
-/** Two developers, the reader one of them: still fewer than 3, so the split stays hidden. */
+/** Two developers, the reader one of them: still fewer than 5, so the split stays hidden. */
 export const TwoDevelopers: Story = {
 	args: { state: { status: "ready", overview: TWO_DEVELOPERS_WORKSPACE } },
 	play: async ({ canvas }) => {
 		await expect(groupsTable(canvas).queryByRole("img")).toBeNull();
 		await expect(
 			groupsTable(canvas).getByText(
-				"Fewer than 3 developers have a standing here, so the split stays hidden.",
+				"Fewer than 5 developers have a standing here, so the split stays hidden.",
 			),
 		).toBeVisible();
 	},

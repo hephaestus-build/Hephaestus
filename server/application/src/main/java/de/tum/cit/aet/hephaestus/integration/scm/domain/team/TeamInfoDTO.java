@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.team;
 
+import de.tum.cit.aet.hephaestus.core.PeopleCount;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelInfoDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryInfoDTO;
@@ -49,7 +50,11 @@ public record TeamInfoDTO(
         @NonNull @Schema(description = "Members of the team (excluding bots)")
         List<UserInfoDTO> members,
 
-        @NonNull @Schema(description = "Total count of team memberships")
+        @PeopleCount(exactBecause = "Counts only the members listed beside it")
+        @NonNull
+        @Schema(
+                description = "Members listed in `members`. Hidden members and bots are neither listed nor counted, so"
+                        + " the count gives no unnamed person back by subtraction")
         Integer membershipCount,
 
         @NonNull @Schema(description = "Count of repository permissions")
@@ -79,6 +84,11 @@ public record TeamInfoDTO(
                 .filter(permission ->
                         monitoredRepoIds.contains(permission.getRepository().getId()))
                 .toList();
+        List<UserInfoDTO> members = team.getMemberships().stream()
+                .map(m -> m.getUser())
+                .filter(u -> u != null && !User.Type.BOT.equals(u.getType()) && !hiddenMemberIds.contains(u.getId()))
+                .map(UserInfoDTO::fromUser)
+                .toList();
         return new TeamInfoDTO(
                 team.getId(),
                 team.getName(),
@@ -96,13 +106,8 @@ public record TeamInfoDTO(
                                         permission.getRepository().getId())))
                         .toList(),
                 scopeLabels.stream().map(LabelInfoDTO::fromLabel).toList(),
-                team.getMemberships().stream()
-                        .map(m -> m.getUser())
-                        .filter(u ->
-                                u != null && !User.Type.BOT.equals(u.getType()) && !hiddenMemberIds.contains(u.getId()))
-                        .map(UserInfoDTO::fromUser)
-                        .toList(),
-                team.getMemberships().size(),
+                members,
+                members.size(),
                 monitored.size());
     }
 }

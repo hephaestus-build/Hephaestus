@@ -3,7 +3,6 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { toast } from "@/lib/toast";
 
 import {
-	getPublicActivityHiddenCountQueryKey,
 	getUsersWithTeamsOptions,
 	listHiddenContributorsQueryKey,
 	updateActivityAutomationMutation,
@@ -210,9 +209,6 @@ function WorkspaceActivity() {
 		onSuccess: async (_data, { request, subject }) => {
 			const submitted = { path: { workspaceSlug: request.path.workspaceSlug } };
 			await invalidateWorkspaceReads(queryClient, submitted.path.workspaceSlug, HIDING_READS);
-			void queryClient.invalidateQueries({
-				queryKey: getPublicActivityHiddenCountQueryKey(submitted),
-			});
 			void queryClient.invalidateQueries({ queryKey: listHiddenContributorsQueryKey(submitted) });
 			const description = inWorkspace(submitted.path.workspaceSlug);
 			if (request.query.hidden) {

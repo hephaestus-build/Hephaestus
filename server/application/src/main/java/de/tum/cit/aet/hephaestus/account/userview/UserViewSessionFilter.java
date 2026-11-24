@@ -68,7 +68,6 @@ public class UserViewSessionFilter extends OncePerRequestFilter {
                     "/workspaces/{workspaceSlug}/practices/feedback/practice-page",
                     "/workspaces/{workspaceSlug}/practices/standings",
                     "/workspaces/{workspaceSlug}/practices/{practiceSlug}/guidance",
-                    "/workspaces/{workspaceSlug}/practices/workspace-overview",
                     "/workspaces/{workspaceSlug}/practices/items/{itemId}/trace",
                     "/workspaces/{workspaceSlug}/practices/results/{resultId}",
                     "/workspaces/{workspaceSlug}/conversation",

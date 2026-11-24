@@ -200,7 +200,6 @@ export { getProvenanceKeys } from "./sdk/getProvenanceKeys.gen.js";
 export { getProviders } from "./sdk/getProviders.gen.js";
 export { getPublicActivity } from "./sdk/getPublicActivity.gen.js";
 export { getPublicActivityChoice } from "./sdk/getPublicActivityChoice.gen.js";
-export { getPublicActivityHiddenCount } from "./sdk/getPublicActivityHiddenCount.gen.js";
 export { getPublicActivityOnboarding } from "./sdk/getPublicActivityOnboarding.gen.js";
 export { getPublicActivityPerson } from "./sdk/getPublicActivityPerson.gen.js";
 export { getPublicActivityPersonWork } from "./sdk/getPublicActivityPersonWork.gen.js";

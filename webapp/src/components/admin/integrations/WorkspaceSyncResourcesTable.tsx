@@ -755,6 +755,8 @@ export function WorkspaceSyncResourcesTable({
 	const attentionCount = resources.filter((r) => isAttention(r, syncIntervalSeconds, now)).length;
 	const freshCount = resources.length - attentionCount;
 	const totalItems = resources.reduce((sum, r) => sum + (r.itemCount ?? 0), 0);
+	// An integration that withholds its counts sends none, which is not zero records.
+	const reportsRecords = resources.some((r) => r.itemCount !== undefined);
 
 	// The facet ToggleGroup only mounts while there is something to attend to, but `facet` state is
 	// independent: a sync that clears the last attention row unmounts the toggle without resetting
@@ -846,8 +848,9 @@ export function WorkspaceSyncResourcesTable({
 						</>
 					) : (
 						<>
-							{resources.length} {resources.length === 1 ? resourceNoun : resourceNounPlural} ·{" "}
-							{formatNumber(totalItems)} {totalItems === 1 ? "record" : "records"}
+							{resources.length} {resources.length === 1 ? resourceNoun : resourceNounPlural}
+							{reportsRecords &&
+								` · ${formatNumber(totalItems)} ${totalItems === 1 ? "record" : "records"}`}
 						</>
 					)}
 				</p>

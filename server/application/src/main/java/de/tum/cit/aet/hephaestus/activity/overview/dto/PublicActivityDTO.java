@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.activity.overview.dto;
 
+import de.tum.cit.aet.hephaestus.core.PeopleCount;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
@@ -24,19 +25,12 @@ public record PublicActivityDTO(
         @NonNull List<PublicActivityPersonDTO> people,
         @NonNull ActivityCoverageDTO coverage,
         @NonNull PublicActivityHighlightsDTO highlights,
-        @NonNull List<PublicActivityRepositoryDTO> repositories,
-
-        @Schema(
-                requiredMode = RequiredMode.REQUIRED,
-                description = "Contributors in the period who are counted but not named, because they have no"
-                        + " account that chose to show and the workspace does not list such contributors")
-        int unlistedContributors) {
+        @NonNull List<PublicActivityRepositoryDTO> repositories) {
     public static PublicActivityDTO from(
             String workspaceName,
             @Nullable IdentityProviderType providerType,
             boolean allowSearchEngines,
-            ActivityPeopleDTO activity,
-            int unlistedContributors) {
+            ActivityPeopleDTO activity) {
         var loginsById = activity.people().stream()
                 .collect(Collectors.toMap(
                         row -> row.person().id(), row -> row.person().login()));
@@ -52,8 +46,7 @@ public record PublicActivityDTO(
                         logins(loginsById, activity.highlights().firstContributors())),
                 activity.repositories().stream()
                         .map(repository -> new PublicActivityRepositoryDTO(repository.key(), repository.name()))
-                        .toList(),
-                unlistedContributors);
+                        .toList());
     }
 
     private static List<String> logins(Map<Long, String> loginsById, List<Long> ids) {
@@ -94,7 +87,13 @@ public record PublicActivityDTO(
             @Schema(requiredMode = RequiredMode.REQUIRED) long pullRequestsOpened,
             @Schema(requiredMode = RequiredMode.REQUIRED) long pullRequestsMerged,
             @Schema(requiredMode = RequiredMode.REQUIRED) long pullRequestsReviewed,
-            @Schema(requiredMode = RequiredMode.REQUIRED) long peopleHelped,
+
+            @PeopleCount(
+                    exactBecause = "Human authors of the pull requests this named person reviewed in public"
+                            + " repositories, which the provider shows to anyone")
+            @Schema(requiredMode = RequiredMode.REQUIRED)
+            long peopleHelped,
+
             @Schema(requiredMode = RequiredMode.REQUIRED) long issuesOpened,
             @Schema(requiredMode = RequiredMode.REQUIRED) long activeWeeks) {
         public static PublicActivityCountsDTO from(ActivityCountsDTO counts) {

@@ -6937,59 +6937,6 @@ paths:
       summary: List a contributor's work one page at a time
       tags:
       - Activity
-  /workspaces/{workspaceSlug}/activity/public-hidden-count:
-    get:
-      operationId: getPublicActivityHiddenCount
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PublicActivityHiddenCount"
-          description: Hidden contributors counted
-        "400":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A request parameter is not valid
-        "403":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: The caller is not a member of the workspace
-        "404":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: "Workspace, contributor, team or repository not found"
-        "4XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-        "5XX":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: A problem. Its type names the kind.
-      summary: Count hidden public contributors without identifying them
-      tags:
-      - Activity
   /workspaces/{workspaceSlug}/activity/work:
     get:
       description: "One member's activity when login is given, otherwise everyone's\
@@ -15405,7 +15352,7 @@ paths:
       - Practice Standings
   /workspaces/{workspaceSlug}/practices/tiles:
     get:
-      description: A middle half shows when at least 3 developers besides the reader
+      description: A middle half shows when at least 5 developers besides the reader
         are counted in the window and its ends do not meet.
       operationId: getPracticeWorkspaceTiles
       parameters:
@@ -15448,9 +15395,9 @@ paths:
       - practices-across-workspace
   /workspaces/{workspaceSlug}/practices/workspace-overview:
     get:
-      description: "Counts developers, never names them. Every split shows all its\
-        \ parts, however few developers they count. The splits count every developer's\
-        \ current standing once and take no window."
+      description: "Counts developers, never names them. A split shows all its parts\
+        \ or only its total, and a count of 1 to 4 developers shows as null. The splits\
+        \ count every developer's current standing once and take no window."
       operationId: getPracticeWorkspaceOverview
       parameters:
       - description: Workspace slug
@@ -17665,7 +17612,9 @@ components:
           format: int64
         memberCount:
           type: integer
-          format: int64
+          format: int32
+          description: Members the workspace's member list shows. Absent for 1 to
+            4
         ownerLogin:
           type: string
         providerType:
@@ -17679,7 +17628,6 @@ components:
       - createdAt
       - displayName
       - id
-      - memberCount
       - status
       - workspaceSlug
     AiChoice:
@@ -25355,13 +25303,14 @@ components:
             $ref: "#/components/schemas/WorkspaceGroupSplit"
         includesEarlierReviews:
           type: boolean
-          description: "Whether a counted standing was read only from earlier reviews,\
-            \ which carry no current proof"
+          description: "Whether at least 5 counted developers have a standing read\
+            \ only from earlier reviews, which carry no current proof"
         openFeedback:
           $ref: "#/components/schemas/WorkspaceTile"
-          description: "The reader's open feedback, counted by the rule the practice\
-            \ profile shows it open by, beside the middle half of the developers the\
-            \ page counts: both open now"
+          description: "The reader's open feedback, open now, counted by the rule\
+            \ the practice profile shows it open by. It has no middle half: whether\
+            \ another person's card is open follows a delivery rule that staff can\
+            \ change for one person"
       required:
       - groups
       - includesEarlierReviews
@@ -25376,12 +25325,12 @@ components:
           - "null"
           - integer
           format: int32
-          description: "Developers with a standing in a practice group shown in the\
-            \ window, the developers the tiles compare. Null for fewer than 3"
+          description: "Developers with a standing in the window, the developers the\
+            \ tiles compare. Null for 1 to 4"
         includesEarlierReviews:
           type: boolean
-          description: Whether a counted standing in the window was read only from
-            earlier reviews
+          description: Whether at least 5 developers counted in the window have a
+            standing read only from earlier reviews
         practicesGoingWell:
           $ref: "#/components/schemas/WorkspaceTile"
           description: The reader's practices going well
@@ -26105,12 +26054,6 @@ components:
         to:
           type: string
           format: date-time
-        unlistedContributors:
-          type: integer
-          format: int32
-          description: "Contributors in the period who are counted but not named,\
-            \ because they have no account that chose to show and the workspace does\
-            \ not list such contributors"
         workspaceName:
           type: string
       required:
@@ -26121,7 +26064,6 @@ components:
       - people
       - repositories
       - to
-      - unlistedContributors
       - workspaceName
     PublicActivityChoice:
       type: object
@@ -26162,14 +26104,6 @@ components:
       - pullRequestsMerged
       - pullRequestsOpened
       - pullRequestsReviewed
-    PublicActivityHiddenCount:
-      type: object
-      properties:
-        hiddenPeople:
-          type: integer
-          format: int64
-      required:
-      - hiddenPeople
     PublicActivityHighlights:
       type: object
       properties:
@@ -30363,8 +30297,7 @@ components:
       - REVOKED
     SlackMonitoredChannel:
       type: object
-      description: An allow-listed Slack channel with its consent state and person
-        opt-out count
+      description: An allow-listed Slack channel with its consent state
       properties:
         channelName:
           type:
@@ -30389,11 +30322,6 @@ components:
           type: string
           description: Internal allow-list row id
           pattern: "^[1-9][0-9]*$"
-        optedOutMemberCount:
-          type: integer
-          format: int64
-          description: Number of workspace members who have opted out of ingestion
-            (workspace-wide)
         slackChannelId:
           type: string
           description: Slack channel id (stable C…/G… id; the natural key)
@@ -30406,7 +30334,6 @@ components:
       - consentState
       - createdAt
       - id
-      - optedOutMemberCount
       - slackChannelId
       - slackTeamId
     SlackMonitoredChannelConsentState:
@@ -30700,8 +30627,9 @@ components:
           type: array
           description: "Per-entity-class breakdown behind itemCount. One entry per\
             \ class the integration actually mirrors — 6 for an SCM repository, 1\
-            \ for a Slack channel or Outline collection. Never null; empty when the\
-            \ resource has never synced."
+            \ for an Outline collection, none for a Slack channel. Never null; empty\
+            \ when the resource has never synced or the integration withholds its\
+            \ counts."
           items:
             $ref: "#/components/schemas/SyncResourceCount"
         externalId:
@@ -30779,7 +30707,8 @@ components:
         membershipCount:
           type: integer
           format: int32
-          description: Total count of team memberships
+          description: "Members listed in `members`. Hidden members and bots are neither\
+            \ listed nor counted, so the count gives no unnamed person back by subtraction"
         name:
           type: string
           description: Name of the team
@@ -32941,7 +32870,7 @@ components:
       type: object
       description: "How the developers with a standing split across one practice group\
         \ or one practice, counted in developers: a part per verdict, none yet, and\
-        \ their total. A split with a part of 1 or 2, or with every developer in one\
+        \ their total. A split with a part of 1 to 4, or with every developer in one\
         \ part, shows only its total"
       properties:
         developers:
@@ -32950,14 +32879,14 @@ components:
           - integer
           format: int32
           description: "Every developer the split counts, the parts and none yet together,\
-            \ the reader included when counted. Null for fewer than 3"
+            \ the reader included when counted. Null for 1 to 4"
         noneYet:
           type:
           - "null"
           - integer
           format: int32
-          description: Developers with a standing in a group shown but none here.
-            Null when the split shows only its total
+          description: Developers the page counts who have no verdict here. Null when
+            the split shows only its total
         parts:
           type: array
           description: "Developers at each verdict, Needs attention, Mixed feedback\
@@ -33016,10 +32945,10 @@ components:
         middle:
           anyOf:
           - $ref: "#/components/schemas/WorkspaceRange"
-            description: "The workspace's middle half; absent while fewer than 3 other\
+            description: "The workspace's middle half; absent while fewer than 5 other\
               \ developers are counted, or when its ends meet"
           - type: "null"
-          description: "The workspace's middle half; absent while fewer than 3 other\
+          description: "The workspace's middle half; absent while fewer than 5 other\
             \ developers are counted, or when its ends meet"
         yours:
           type: integer

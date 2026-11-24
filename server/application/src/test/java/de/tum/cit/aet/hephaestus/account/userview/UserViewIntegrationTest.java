@@ -450,6 +450,20 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(userViewRowsFor(viewed)).isZero();
     }
 
+    /** The aggregate page would mark the viewed person and leave them out of its comparison. */
+    @Test
+    void shouldRefuseTheWorkspaceOverviewAndRecordNothingWhenAnAdminViewsTheUser() {
+        client.get()
+                .uri("/workspaces/acme/practices/workspace-overview")
+                .headers(viewHeaders(token(), accountId(viewed)))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+
+        assertThat(userViewRowsFor(viewed)).isZero();
+    }
+
     @Test
     void shouldRefuseToDeleteTheMessageAndRecordNothingWhenAnAdminViewsTheUser() {
         ConversationTurnService.Submission own = question(workspace, viewed, "Viewed user's question");

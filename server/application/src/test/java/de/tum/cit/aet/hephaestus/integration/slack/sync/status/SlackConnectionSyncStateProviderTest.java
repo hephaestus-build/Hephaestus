@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncDetails;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResourceState;
-import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
@@ -45,9 +44,6 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
     @Mock
     private SlackMonitoredChannelRepository monitoredChannelRepository;
 
-    @Mock
-    private SlackMessageRepository messageRepository;
-
     private final SlackRateLimitTracker rateLimitTracker = new SlackRateLimitTracker(new SimpleMeterRegistry());
 
     private SlackConnectionSyncStateProvider provider;
@@ -55,7 +51,6 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
     private SlackConnectionSyncStateProvider providerWith(String cron, Clock clock) {
         return new SlackConnectionSyncStateProvider(
                 monitoredChannelRepository,
-                messageRepository,
                 new SlackSyncProperties(cron, 10, 15, Duration.ZERO, true, 5, true, 10),
                 rateLimitTracker,
                 clock);
@@ -153,7 +148,6 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
 
         when(monitoredChannelRepository.findByWorkspaceIdAndConsentStateNot(WS, ConsentState.REVOKED))
                 .thenReturn(List.of(channel));
-        when(messageRepository.countGroupedByChannelId(WS)).thenReturn(List.of(channelCount("C1", 42L)));
 
         List<SyncResourceState> resources = provider.resources(REF, CONNECTION_ID);
 
@@ -165,7 +159,9 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
         assertThat(resource.type()).isEqualTo(SyncResourceState.Type.CHANNEL);
         assertThat(resource.state()).isEqualTo("ACTIVE");
         assertThat(resource.lastSyncedAt()).isEqualTo(syncedAt);
-        assertThat(resource.itemCount()).isEqualTo(42L);
+        // A falling message count would tell an admin who opted out, so no count leaves.
+        assertThat(resource.itemCount()).isNull();
+        assertThat(resource.counts()).isEmpty();
         assertThat(resource.upstreamCount()).isNull();
         assertThat(resource.lastError()).isEqualTo("History sync failed (SlackApiException)");
     }
@@ -181,27 +177,12 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
 
         when(monitoredChannelRepository.findByWorkspaceIdAndConsentStateNot(WS, ConsentState.REVOKED))
                 .thenReturn(List.of(channel));
-        when(messageRepository.countGroupedByChannelId(WS)).thenReturn(List.of());
 
         List<SyncResourceState> resources = provider.resources(REF, CONNECTION_ID);
 
         assertThat(resources.get(0).name()).isEqualTo("C2");
         assertThat(resources.get(0).state()).isEqualTo("PENDING");
         assertThat(resources.get(0).lastSyncedAt()).isNull();
-        assertThat(resources.get(0).itemCount()).isEqualTo(0L);
-    }
-
-    private SlackMessageRepository.ChannelItemCount channelCount(String channelId, long count) {
-        return new SlackMessageRepository.ChannelItemCount() {
-            @Override
-            public String getSlackChannelId() {
-                return channelId;
-            }
-
-            @Override
-            public Long getItemCount() {
-                return count;
-            }
-        };
+        assertThat(resources.get(0).itemCount()).isNull();
     }
 }

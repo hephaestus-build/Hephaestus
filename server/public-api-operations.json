@@ -17,7 +17,6 @@
   "GET /workspaces",
   "GET /workspaces/{workspaceSlug}",
   "GET /workspaces/{workspaceSlug}/activity/hidden-contributors",
-  "GET /workspaces/{workspaceSlug}/activity/public-hidden-count",
   "GET /workspaces/{workspaceSlug}/integrations/dead-letters",
   "GET /workspaces/{workspaceSlug}/practices/feedback/on-work",
   "GET /workspaces/{workspaceSlug}/practices/items/{itemId}/own-trace",

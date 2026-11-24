@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Navigate, stripSearchParams } from "@tanstack/react-router";
+import { createFileRoute, Navigate, redirect, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 
 import type {
@@ -36,6 +36,7 @@ import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { pageHead } from "@/lib/page-title";
 import { keepSameSubject } from "@/runtime/tanstack-query/keep-same-subject";
 import { prefetchPageRead } from "@/runtime/tanstack-query/prefetch-page-read";
+import { getUserViewSession } from "@/runtime/user-view/session";
 
 import { overviewRead, tilesRead } from "./-practices-across-the-workspace-reads";
 
@@ -62,7 +63,13 @@ export const Route = createFileRoute(
 	},
 	// The loader reads the validated window from here: parsing the address in the split loader would
 	// pull the search schema and the page's copy out of the entry chunk into chunks of their own.
-	beforeLoad: ({ search }) => ({ figuresWindow: search.window }),
+	beforeLoad: ({ search, params }) => {
+		// A read-only user view never reads these counts: the server refuses them, so go home first.
+		if (getUserViewSession() !== undefined) {
+			throw redirect({ to: "/w/$workspaceSlug", params });
+		}
+		return { figuresWindow: search.window };
+	},
 	// No loader deps: a window change is a search change on this page, which reads the other window
 	// itself and shows the current figures marked stale meanwhile.
 	loader: ({ context, params }) => {

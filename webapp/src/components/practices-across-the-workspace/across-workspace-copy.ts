@@ -16,6 +16,7 @@ import {
 	type StandingScope,
 } from "@/components/practice-vocabulary/practice-group-standing-defs";
 import { NEUTRAL_GREY } from "@/components/practice-vocabulary/standing-counts";
+import { FEWER_THAN_SMALLEST, SHOWN_FROM_SMALLEST } from "@/lib/small-counts";
 
 import type { InfoLine } from "@/components/common/InfoTip";
 
@@ -85,12 +86,12 @@ export const GROUPS_LOAD_ERROR = "We could not load the practice groups";
 /** The window's figures failed; the bars, which read no window, stay. */
 export const FIGURES_LOAD_ERROR = "We could not load your figures";
 
-/** What a count of one or two developers reads as: the server sends none, so a small team stays unnamed. */
-export const FEWER_THAN_THREE = "Fewer than 3 developers";
+/** What a count of one to four developers reads as: the server sends none, so a small team stays unnamed. */
+const FEWER_THAN_SMALLEST_DEVELOPERS = `${FEWER_THAN_SMALLEST} developers`;
 
 /** Digits always: a count of developers sits beside other figures, never in running prose. */
 const developers = (n: number | null) =>
-	n === null ? FEWER_THAN_THREE : count(n, "developer", "developers", true);
+	n === null ? FEWER_THAN_SMALLEST_DEVELOPERS : count(n, "developer", "developers", true);
 
 export const tileCohortText = (tiles: PracticesAcrossWorkspaceTiles) =>
 	`${developers(tiles.developersWithAStandingInWindow)} with a standing`;
@@ -125,11 +126,11 @@ export const NONE_YET_SEGMENT = {
 	colorClass: NEUTRAL_GREY,
 } as const;
 
-/** Under the empty track of a split that counts fewer than 3: the server sends no count of them. */
-export const TOO_FEW_TO_SPLIT = `${FEWER_THAN_THREE} have a standing here, so the split stays hidden`;
+/** Under the empty track of a split that counts fewer than 5: the server sends no count of them. */
+export const TOO_FEW_TO_SPLIT = `${FEWER_THAN_SMALLEST_DEVELOPERS} have a standing here, so the split stays hidden`;
 
 /**
- * Under a split the server sends as a total only: a part of 1 or 2, or everyone in one part, would
+ * Under a split the server sends as a total only: a part of 1 to 4, or everyone in one part, would
  * tell members where someone stands. Which of the two it is stays unsaid, since saying it would tell.
  */
 export const SPREAD_HIDDEN = "Their split stays hidden to protect small counts";
@@ -152,7 +153,7 @@ export const BARS_LINES: readonly InfoLine[] = [
 		second: { term: "Gray:", text: "no standing, not okay." },
 	},
 	{ term: "You:", text: "somewhere in your part." },
-	{ term: "Dotted:", text: "split hidden, so no part shows fewer than 3." },
+	{ term: "Dotted:", text: `split hidden. ${SHOWN_FROM_SMALLEST}.` },
 ];
 
 /** Under the empty track of a split that counts nobody: no developer has a standing yet. */

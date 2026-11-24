@@ -5,7 +5,6 @@ import { HttpResponse, http, type JsonBodyType, type PathParams } from "msw";
 import { assert, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-	getPublicActivityHiddenCountQueryKey,
 	getWorkspaceQueryKey,
 	getPublicActivityPolicyQueryKey,
 	listWorkspacesQueryKey,
@@ -478,9 +477,6 @@ describe("the public activity page setting", () => {
 					return HttpResponse.json(settings);
 				},
 			),
-			http.get("*/workspaces/acme/activity/public-hidden-count", () =>
-				HttpResponse.json({ hiddenPeople: 3 }),
-			),
 		);
 	});
 
@@ -507,9 +503,8 @@ describe("the public activity page setting", () => {
 			const page = within(screen.getByRole("region", { name: "Public activity page" }));
 			page.getByText("On for this workspace.");
 			expect(page.queryByText(/Anyone can see it/u)).toBeNull();
-			// Search engines stay off until the admin turns them on, and the count of hidden people shows.
+			// Search engines stay off until the admin turns them on.
 			await screen.findByRole("switch", { name: "Allow search engines" });
-			await screen.findByText("3");
 
 			listed.resolve(
 				HttpResponse.json([workspaceListItem("acme", { publishesPublicActivity: true })]),
@@ -938,34 +933,6 @@ describe("the public activity page setting", () => {
 			accepted.resolve();
 		}
 	});
-
-	it("leaves out a refused hidden-people count, also through a later outage", async () => {
-		settings = { enabled: true, allowSearchEngines: false, contributorsWithoutAccount: false };
-		const count = serveRead("*/workspaces/acme/activity/public-hidden-count", {
-			status: 200,
-			body: { hiddenPeople: 3 },
-		});
-		const queryClient = renderSettingsRoute(false);
-		const page = within(
-			await screen.findByRole("region", { name: "Public activity page" }, ROUTE_RENDER_WAIT),
-		);
-		await page.findByText("People left out of the page");
-
-		count.answer = { status: 403 };
-		await reread(queryClient, getPublicActivityHiddenCountQueryKey(ACME));
-		expect(count.count).toBe(2);
-		await waitFor(() => expect(page.queryByText("People left out of the page")).toBeNull());
-
-		count.answer = { status: 503 };
-		await reread(queryClient, getPublicActivityHiddenCountQueryKey(ACME));
-		expect(count.count).toBe(3);
-		expect(page.queryByText("People left out of the page")).toBeNull();
-
-		count.answer = { status: 200, body: { hiddenPeople: 5 } };
-		await reread(queryClient, getPublicActivityHiddenCountQueryKey(ACME));
-		await page.findByText("5");
-		expect(count.count).toBe(4);
-	});
 });
 
 const HIDDEN_GRACE = {
@@ -1000,9 +967,6 @@ function renderTwoWorkspaces() {
 			HttpResponse.json(ownMembership("ADMIN")),
 		),
 		http.get("*/workspaces/:workspaceSlug/connections/catalog", () => HttpResponse.json([])),
-		http.get("*/workspaces/:workspaceSlug/activity/public-hidden-count", () =>
-			HttpResponse.json({ hiddenPeople: 0 }),
-		),
 	);
 	return renderRouteAtWithRouter("/w/acme/admin/settings");
 }

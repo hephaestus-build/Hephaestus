@@ -18,7 +18,6 @@ const publicActivity = {
 		allowSearchEngines: false,
 		contributorsWithoutAccount: false,
 		live: false,
-		hiddenPeople: undefined,
 		pending: undefined,
 	},
 	onEnabledChange: fn(),

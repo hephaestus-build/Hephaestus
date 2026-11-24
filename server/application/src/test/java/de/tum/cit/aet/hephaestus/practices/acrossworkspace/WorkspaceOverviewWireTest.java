@@ -19,7 +19,7 @@ import tools.jackson.databind.json.JsonMapper;
 class WorkspaceOverviewWireTest extends BaseUnitTest {
     @Test
     void shouldCarryOnlyCountsAndTheReadersOwnStandingWhenSerialized() {
-        var split = SmallCounts.shown(WorkspaceSplits.split(List.of(
+        var split = WorkspaceSplits.shown(WorkspaceSplits.split(List.of(
                 PracticeStanding.DEVELOPING,
                 PracticeStanding.DEVELOPING,
                 PracticeStanding.DEVELOPING,

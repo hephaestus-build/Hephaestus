@@ -2,7 +2,7 @@ import { focusManager } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, afterEach, beforeEach, describe, expect, it, onTestFinished } from "vitest";
 
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { writeGetStartedRecord } from "@/components/onboarding/get-started-record";
@@ -11,6 +11,7 @@ import { FIGURES_LOAD_ERROR } from "@/components/practices-across-the-workspace/
 import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { clearUserView, USER_VIEW_STORAGE_KEY } from "@/runtime/user-view/session";
 import {
 	ACROSS_WORKSPACE,
 	EARLIER_REVIEWS_WORKSPACE,
@@ -102,13 +103,38 @@ async function renderPage(path = PAGE) {
 }
 
 describe("Practices across the workspace", () => {
+	it("sends a read-only user view home before it reads any count", async () => {
+		server.use(http.get("*/user", () => HttpResponse.json(currentUser)));
+		sessionStorage.setItem(
+			USER_VIEW_STORAGE_KEY,
+			JSON.stringify({
+				operatorAccountId: currentUser.id,
+				workspaceSlug: "acme",
+				workspaceName: "Acme",
+				accountId: "7",
+				providerLogin: "ada",
+				name: "Ada",
+				unclaimed: false,
+				reason: "Support request",
+			}),
+		);
+		onTestFinished(clearUserView);
+
+		const { router } = renderRouteAtWithRouter(PAGE);
+
+		// The workspace home: practices are on, so it is the Practice profile.
+		await waitFor(() => expect(router.state.location.pathname).toBe(PROFILE), ROUTE_RENDER_WAIT);
+		expect(overviewReads()).toStrictEqual([]);
+		expect(tileWindows()).toStrictEqual([]);
+	});
+
 	it("draws each group's developers once by standing and marks the reader, from one overview read", async () => {
 		await renderPage();
 		const table = within(screen.getByRole("table", { name: "All practice groups" }));
 		table.getByRole("img", {
 			name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
 		});
-		// A split with a part of one or two shows only its total, with no You bracket (ADR 0112).
+		// A split with a part of 1 to 4 shows only its total, with no You bracket.
 		table.getByRole("img", {
 			name: "28 developers in this workspace. Their split stays hidden to protect small counts.",
 		});
@@ -170,7 +196,7 @@ describe("Practices across the workspace", () => {
 			),
 		);
 		practices.getByRole("img", {
-			name: "28 developers in this workspace: 9 Needs attention, 4 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
+			name: "28 developers in this workspace: 9 Needs attention, 5 Mixed feedback, 7 Going well, 7 none yet. You are in the Needs attention part.",
 		});
 		expect(overviewReads()).toHaveLength(1);
 		expect(profileReads()).toStrictEqual([]);
