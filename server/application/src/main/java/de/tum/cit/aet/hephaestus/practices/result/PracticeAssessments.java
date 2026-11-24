@@ -97,6 +97,11 @@ public class PracticeAssessments implements AssessmentPort {
                         entry -> project(entry.getValue())));
     }
 
+    @Override
+    public boolean hasRecordedObservations(long workspaceId, long accountId, Instant after, Instant through) {
+        return history.recordedBetween(workspaceId, accountId, after, through);
+    }
+
     private static ReviewCheck project(ReviewAssignmentQuery.Recorded review) {
         var reason = review.stopReason();
         var counts = review.counts();

@@ -39,6 +39,7 @@ public record FeedbackHistoryEntry(
     }
 
     @Override
+    @RawObservationAccess
     public @Nullable JsonNode publicHistory() {
         return publicHistory == null ? null : publicHistory.deepCopy();
     }

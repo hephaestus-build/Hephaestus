@@ -373,6 +373,15 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldFindRecordedObservationsWithoutFeedbackInTheDigestWindow() {
+        data.result(scenario, ResultOutcome.NOT_MET, week.start());
+        assertThat(facts.anythingIn(workspaceId, accountId, week)).isFalse();
+
+        var previous = WeeklyDigestWindow.previousWeek(week.start(), BERLIN);
+        assertThat(facts.anythingIn(workspaceId, accountId, previous)).isTrue();
+    }
+
+    @Test
     void shouldWriteNothingWhenHephaestusWouldNotAnswerTheDeveloper() {
         save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
         when(admission.refusal(workspaceId, accountId)).thenReturn(Optional.of(ConversationRefusal.NO_AI));

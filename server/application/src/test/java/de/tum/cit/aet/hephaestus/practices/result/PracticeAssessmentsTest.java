@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.DeveloperPracticeStandings;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery.AssignmentCounts;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
@@ -23,9 +24,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class PracticeAssessmentsTest extends BaseUnitTest {
     private final ResultHistoryQuery history = mock(ResultHistoryQuery.class);
@@ -64,8 +68,9 @@ class PracticeAssessmentsTest extends BaseUnitTest {
                 .isEmpty();
     }
 
-    @Test
-    void shouldReportCouldNotCheckWhenCaptureWasTooLargeAndNoPracticeRan() {
+    @ParameterizedTest
+    @CsvSource({"PARTIAL, EVIDENCE_TOO_LARGE", "FAILED, PREPARATION_FAILED"})
+    void shouldReportCouldNotCheckWhenCaptureFailedAndNoPracticeRan(ReviewStatus status, ReviewStopReason reason) {
         var review = UUID.randomUUID();
         var pair = new AssessmentPort.ReviewedItem(review, 41);
         var asked = new ReviewAssignmentQuery.ReviewedItem(review, 41);
@@ -73,14 +78,42 @@ class PracticeAssessmentsTest extends BaseUnitTest {
                 .thenReturn(Map.of(
                         asked,
                         new ReviewAssignmentQuery.Recorded(
-                                ReviewStatus.PARTIAL,
-                                ReviewStopReason.EVIDENCE_TOO_LARGE,
-                                new ReviewAssignmentQuery.AssignmentCounts(1, 0, 0, 1, 0))));
+                                status, reason, new ReviewAssignmentQuery.AssignmentCounts(1, 0, 0, 1, 0))));
 
         assertThat(port.reviewChecks(1, 2, List.of(pair)))
                 .hasEntrySatisfying(
                         pair,
                         check -> assertThat(check.checkStatus()).isEqualTo(AssessmentPort.CheckStatus.COULD_NOT_CHECK));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("reviewsThatCannotShowCouldNotCheck")
+    void shouldOmitCouldNotCheckWithoutAFinishedCaptureFailure(
+            String scenario, ReviewStatus status, ReviewStopReason reason, @Nullable AssignmentCounts counts) {
+        var review = UUID.randomUUID();
+        var pair = new AssessmentPort.ReviewedItem(review, 41);
+        var asked = new ReviewAssignmentQuery.ReviewedItem(review, 41);
+        when(assignments.recordedForDeveloper(1, 2, Set.of(asked)))
+                .thenReturn(Map.of(asked, new ReviewAssignmentQuery.Recorded(status, reason, counts)));
+
+        assertThat(port.reviewChecks(1, 2, List.of(pair)))
+                .hasEntrySatisfying(
+                        pair,
+                        check -> assertThat(check.checkStatus()).as(scenario).isNull());
+    }
+
+    private static List<Arguments> reviewsThatCannotShowCouldNotCheck() {
+        var failure = ReviewStopReason.PREPARATION_FAILED;
+        var finished = ReviewStatus.FAILED;
+        var withheld = new AssignmentCounts(1, 0, 0, 1, 0);
+        return List.of(
+                Arguments.of("one practice was judged", finished, failure, new AssignmentCounts(2, 1, 0, 1, 0)),
+                Arguments.of("one outcome was reused", finished, failure, new AssignmentCounts(2, 0, 1, 1, 0)),
+                Arguments.of("one assignment is pending", finished, failure, new AssignmentCounts(2, 0, 0, 1, 1)),
+                Arguments.of("the counts are unavailable", finished, failure, null),
+                Arguments.of("the review can still run", ReviewStatus.RUNNING, failure, withheld),
+                Arguments.of(
+                        "the practice was held", ReviewStatus.PARTIAL, ReviewStopReason.READINESS_REFUSED, withheld));
     }
 
     @ParameterizedTest

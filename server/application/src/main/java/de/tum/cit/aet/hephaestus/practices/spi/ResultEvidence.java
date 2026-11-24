@@ -5,6 +5,7 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@RawObservationAccess
 public record ResultEvidence(
         List<EvidenceCitation> citations,
         @Nullable SearchWarrant search,

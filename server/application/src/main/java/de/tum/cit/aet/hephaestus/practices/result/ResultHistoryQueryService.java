@@ -63,6 +63,14 @@ public class ResultHistoryQueryService implements ResultHistoryQuery {
 
     @Override
     @Transactional(readOnly = true)
+    public boolean recordedBetween(long workspaceId, long developerAccountId, Instant after, Instant through) {
+        return memberships.isActiveVisibleMember(workspaceId, developerAccountId)
+                && results.existsByWorkspaceIdAndDeveloperIdAndRecordedAtGreaterThanAndRecordedAtLessThanEqual(
+                        workspaceId, developerAccountId, after, through);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ResultHistoryEntry> forItem(long workspaceId, long itemId, long practiceId, int limit) {
         limit(limit);
         if (items.find(workspaceId, itemId).isEmpty()) return List.of();

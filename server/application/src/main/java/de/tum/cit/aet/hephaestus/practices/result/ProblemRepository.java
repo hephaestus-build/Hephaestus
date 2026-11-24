@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
+import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -11,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import tools.jackson.databind.JsonNode;
 
+@RawObservationAccess
 public interface ProblemRepository extends JpaRepository<Problem, UUID> {
     Optional<Problem> findByIdAndWorkspaceId(UUID id, long workspaceId);
 

@@ -758,6 +758,17 @@ Each document obeys these rules:
 - It never contains the diff of a pull request. It gives the files, their line counts, and `filesCoverage` when file changes were not captured.
   Hephaestus reads the code and the diff in a repository that it loads into the [context folder](#context-loaders).
 
+Conversation code reads observations through `AssessmentPort`.
+Mark a type that holds or reads stored observations with `@RawObservationAccess`.
+If a caller uses the reader through an interface, mark that interface.
+
+A query on a marked table can read only columns marked `@RawObservationAccess.Metadata`.
+This mark identifies operational metadata that a typed projection can read.
+A field marked `@RawObservationAccess` lets the Java check detect a read through an accessor.
+
+`AssessmentBoundaryArchitectureTest` and `AssessmentQueryArchitectureTest` use these marks to check conversation dependencies and queries.
+The checks cover each conversation class, the classes it uses, and those classes' immediate calls.
+
 ### The stage
 
 The loop sets the `stage` of each partial answer from the tool call in progress.

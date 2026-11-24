@@ -13,6 +13,12 @@ import tools.jackson.databind.JsonNode;
 public interface AssessmentPort {
     ObservationHistory observations(long workspaceId, long accountId, Instant since, int limit);
 
+    /**
+     * Whether a recorded observation warrants preparing a digest for this account.
+     * Digest preparation checks which records can be shown.
+     */
+    boolean hasRecordedObservations(long workspaceId, long accountId, Instant after, Instant through);
+
     Optional<AssessmentRecord> assessment(long workspaceId, long accountId, AssessmentKind kind, UUID id);
 
     default Optional<Observation> observation(long workspaceId, long accountId, UUID observationId) {

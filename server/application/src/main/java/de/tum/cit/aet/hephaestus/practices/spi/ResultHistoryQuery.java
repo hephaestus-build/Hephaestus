@@ -14,6 +14,8 @@ public interface ResultHistoryQuery {
 
     List<ResultHistoryEntry> forDeveloper(long workspaceId, long developerAccountId, Instant since, int limit);
 
+    boolean recordedBetween(long workspaceId, long developerAccountId, Instant after, Instant through);
+
     List<ResultHistoryEntry> forItem(long workspaceId, long itemId, long practiceId, int limit);
 
     Optional<ResultHistoryEntry> find(long workspaceId, UUID resultId, long viewerAccountId, SourceUsePurpose purpose);
