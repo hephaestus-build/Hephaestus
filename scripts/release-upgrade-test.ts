@@ -113,6 +113,7 @@ function migrate(image: string, database = "hephaestus") {
 			"--env",
 			"SPRING_PROFILES_ACTIVE=e2e,migrate",
 			...databaseEnvironment(database, "owner"),
+			...(image === previousImage ? ["--env", "HEPHAESTUS_SYNC_NATS_ENABLED=false"] : []),
 			// The migration opens the values that the previous release sealed, as the chart's migration Job does.
 			"--env",
 			`HEPHAESTUS_SECURITY_ENCRYPTION_KEY=${SYSTEM_KEY}`,
@@ -124,8 +125,8 @@ function migrate(image: string, database = "hephaestus") {
 	);
 }
 
-async function migrateRelease(image: string, database = "hephaestus"): Promise<void> {
-	await applyDatabaseRoles(postgres, database, credentials);
+function migrateRelease(image: string, database = "hephaestus"): void {
+	applyDatabaseRoles(postgres, database, credentials);
 	const result = migrate(image, database);
 	if (result.status !== 0) {
 		throw new Error(
@@ -614,7 +615,7 @@ async function assertFreshSchemaEqualsUpgraded(image: string): Promise<void> {
 	docker("exec", postgres, "createdb", "--username=root", "hephaestus_fresh");
 	const fresh = `${runId}-fresh`;
 	try {
-		await migrateRelease(image, "hephaestus_fresh");
+		migrateRelease(image, "hephaestus_fresh");
 		await waitUntilReady(fresh, startApplication(fresh, image, "hephaestus_fresh"));
 	} finally {
 		spawnSync("docker", ["rm", "--force", fresh], { stdio: "ignore" });
@@ -807,7 +808,7 @@ async function assertPartialMigration(
 			EXECUTE FUNCTION upgrade_test.stop_migration();`,
 		database,
 	);
-	await applyDatabaseRoles(postgres, database, credentials);
+	applyDatabaseRoles(postgres, database, credentials);
 	let stopped: ReturnType<typeof migrate>;
 	try {
 		stopped = migrate(candidateImage, database);
@@ -840,7 +841,7 @@ async function assertPartialMigration(
 	if (stopEveryRole.length === 0) {
 		await assertPreviousReleaseRuns(database, `the partly migrated schema`);
 	}
-	await migrateRelease(candidateImage, database);
+	migrateRelease(candidateImage, database);
 	const completed = appliedChangeCount(database) - before;
 	if (completed !== pending) {
 		throw new Error(`The repeated migration applied ${completed} of ${pending} new change sets`);
@@ -880,7 +881,7 @@ try {
 		}
 	}
 
-	await migrateRelease(previousImage);
+	migrateRelease(previousImage);
 	let port = startApplication(application, previousImage);
 	// A previous release without the management port answers readiness only on the actuator path.
 	await waitUntilReady(application, port, ["/readyz", "/actuator/health/readiness"]);
@@ -916,7 +917,7 @@ try {
 		"--template=hephaestus",
 		PARTIAL_DATABASE,
 	);
-	await migrateRelease(candidateImage);
+	migrateRelease(candidateImage);
 	application = `${runId}-candidate`;
 	port = startApplication(application, candidateImage);
 	await waitUntilReady(application, port);

@@ -367,8 +367,8 @@ async function main(): Promise<void> {
 		// The base image migrates a database of its own: this image's schema may have renamed what the base reads.
 		const base: Subject = { image: baseImage, database: "hephaestus_base" };
 		docker("exec", postgres, "createdb", "--username=root", base.database);
-		await applyDatabaseRoles(postgres, image.database, credentials);
-		await applyDatabaseRoles(postgres, base.database, credentials);
+		applyDatabaseRoles(postgres, image.database, credentials);
+		applyDatabaseRoles(postgres, base.database, credentials);
 		migrate(chart, image, "migrate");
 		migrate(chart, base, "migrate-base");
 
