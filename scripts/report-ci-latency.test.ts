@@ -17,6 +17,7 @@ import {
 	isLatencySample,
 	latencyBudget,
 	queueTierFailures,
+	carriesFullVerification,
 	renderLatencyBudget,
 	selectLatencyRuns,
 } from "./report-ci-latency.ts";
@@ -124,6 +125,12 @@ void test("PR latency includes the shards and database checks while browser runs
 		1,
 		"a drill failure counts in the merge-group revert criterion",
 	);
+});
+
+void test("a pull request that carries ci:full is not a fast-tier sample", () => {
+	assert.equal(carriesFullVerification([{ name: "ci:full" }, { name: "server" }]), true);
+	assert.equal(carriesFullVerification([{ name: "ci:images" }]), false);
+	assert.equal(carriesFullVerification([]), false);
 });
 
 void test("a release candidate's evidence run is not a latency sample", () => {
