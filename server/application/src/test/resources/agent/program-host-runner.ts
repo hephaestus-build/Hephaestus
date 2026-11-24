@@ -22,6 +22,7 @@ import {
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 
 import {
+	type AgentSession,
 	createBashToolDefinition,
 	createFindToolDefinition,
 	createGrepToolDefinition,
@@ -32,7 +33,6 @@ import {
 	truncateLine,
 	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import * as realCodingAgent from "@earendil-works/pi-coding-agent";
 
 import { isJsonObject } from "../../../../../../docker/agents/practice-scripts/lib/core/json.ts";
 import {
@@ -151,74 +151,6 @@ export function codingAgentExports(
 			},
 		},
 	};
-}
-
-/** A real SDK export whose every failed call, construction or rejected promise is reported. */
-function observed(value: unknown, failed: () => void): unknown {
-	if (typeof value !== "function") {
-		return value;
-	}
-	const settle = (call: () => unknown): unknown => {
-		try {
-			const result = call();
-			return result instanceof Promise ? settleLater(result, failed) : result;
-		} catch (error) {
-			failed();
-			throw error;
-		}
-	};
-	return new Proxy(value, {
-		apply: (target, self, args) => settle(() => Reflect.apply(target, self, args) as unknown),
-		construct: (target, args, newTarget) => {
-			const built = settle(() => Reflect.construct(target, args, newTarget) as unknown);
-			assert.ok(typeof built === "object" && built !== null);
-			return built;
-		},
-	});
-}
-
-async function settleLater(result: Promise<unknown>, failed: () => void): Promise<unknown> {
-	try {
-		return await result;
-	} catch (error) {
-		failed();
-		throw error;
-	}
-}
-
-/**
- * For pi-session-dispatch.spec.ts: builds a second Pi session past the factory, beside its session, with an SDK entry
- * point that the stand-in does not replace. A failure is swallowed, so the review goes on with the factory's session.
- */
-async function buildBeside(
-	how: string | undefined,
-	opened: realCodingAgent.AgentSession,
-	place: { cwd: string; agentDir: string },
-): Promise<void> {
-	const sdk = await import("@earendil-works/pi-coding-agent");
-	try {
-		if (how === "construct") {
-			new sdk.AgentSession({
-				agent: opened.agent,
-				sessionManager: opened.sessionManager,
-				settingsManager: opened.settingsManager,
-				resourceLoader: opened.resourceLoader,
-				modelRuntime: opened.modelRuntime,
-				cwd: place.cwd,
-			}).dispose();
-		} else if (how === "services") {
-			const { session } = await sdk.createAgentSessionFromServices({
-				services: await sdk.createAgentSessionServices({
-					cwd: place.cwd,
-					agentDir: nodePath.join(place.cwd, ".pi-beside"),
-				}),
-				sessionManager: realCodingAgent.SessionManager.inMemory(place.cwd),
-			});
-			session.dispose();
-		}
-	} catch {
-		// A runner that falls back to its factory session after a failed build keeps reviewing.
-	}
 }
 
 export function mockPiCodingAgent(
@@ -538,8 +470,157 @@ export function stagedRequest(cwd: string): Record<string, unknown> {
 	return { ...requests[0], results: outcomes("results"), nonResults: outcomes("nonResults") };
 }
 
+/**
+ * pi-session-dispatch.spec.ts runs the runner on the real SDK, so that every way to build a session is the real one. It
+ * counts each Pi session where the SDK constructs it, which of them a call to the factory returned, and each model
+ * session of the composer's. The counts are written as the process exits.
+ */
+async function runOnRealSdk(cwd: string): Promise<void> {
+	mkdirSync(nodePath.join(cwd, "captured"), { recursive: true });
+	const capture = (name: string, value: unknown) => {
+		appendFileSync(nodePath.join(cwd, "captured", `${name}.jsonl`), `${JSON.stringify(value)}\n`);
+	};
+	// The staged workspace has no history to derive a change from.
+	await mockChange({ writeChangeView: () => undefined });
+	const proxy = process.env.LLM_PROXY_URL;
+	assert.ok(proxy !== undefined && proxy !== "");
+	// The proxy accepts each practice and its staged outcome, and the model refuses each call, so each practice session
+	// ends after its first request.
+	mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
+		const url = input instanceof Request ? input.url : String(input);
+		assert.ok(url.startsWith(proxy), `the runner reached only the proxy, not ${url}`);
+		const request: unknown = typeof init?.body === "string" ? parseJson(init.body) : {};
+		if (url.endsWith("/start-practice")) {
+			return Response.json({ practiceSlug: field(request, "practiceSlug"), current: true });
+		}
+		if (url.endsWith("/stage-result")) {
+			const outcomes: unknown[] = [field(request, "results"), field(request, "nonResults")].flatMap(
+				(list): unknown[] => (Array.isArray(list) ? (list satisfies unknown[]) : []),
+			);
+			const outcome: unknown = outcomes[0];
+			return Response.json({
+				practiceSlug: field(outcome, "practiceSlug"),
+				digest: "a".repeat(64),
+			});
+		}
+		if (url.endsWith("/admit-results")) {
+			return Response.json({
+				contractVersion: 4,
+				admissionDigest: "a".repeat(64),
+				admitted: [],
+				withheld: [],
+			});
+		}
+		capture("model-asked", true);
+		return Response.json({ error: { message: "refused" } }, { status: 400 });
+	});
+
+	const sdk = await import("@earendil-works/pi-coding-agent");
+	const built: object[] = [];
+	const returned = new WeakSet<object>();
+	const sessionPrototype: object = sdk.AgentSession.prototype;
+	const installToolHooks: unknown = Reflect.get(sessionPrototype, "_installAgentToolHooks");
+	assert.ok(
+		typeof installToolHooks === "function",
+		"a Pi session installs its tool hooks as it is built",
+	);
+	Reflect.set(
+		sessionPrototype,
+		"_installAgentToolHooks",
+		function recordBuild(this: object, ...args: unknown[]) {
+			built.push(this);
+			return Reflect.apply(installToolHooks, this, args) as unknown;
+		},
+	);
+	process.on("exit", () => {
+		const factorySessions = built.filter((session) => returned.has(session)).length;
+		capture("session-use", { factory: factorySessions, direct: built.length - factorySessions });
+	});
+
+	const factory = await import("../../../main/resources/agent/pi-session.ts");
+	mock.module(new URL("../../../main/resources/agent/pi-session.ts", import.meta.url).href, {
+		exports: {
+			...factory,
+			openRunSession: async (...args: Parameters<typeof factory.openRunSession>) => {
+				const opened = await factory.openRunSession(...args);
+				returned.add(opened.session);
+				await buildBeside(process.env.PI_HOST_BUILD_BESIDE, opened.session, args[0]);
+				return opened;
+			},
+		},
+	});
+	const composerModel = await import("../../../main/resources/agent/review-composer-model.ts");
+	mock.module(
+		new URL("../../../main/resources/agent/review-composer-model.ts", import.meta.url).href,
+		{
+			exports: {
+				...composerModel,
+				ModelSession: new Proxy(composerModel.ModelSession, {
+					construct: (target, args, newTarget) => {
+						capture("model-sessions", true);
+						const made: unknown = Reflect.construct(target, args, newTarget);
+						assert.ok(typeof made === "object" && made !== null);
+						return made;
+					},
+				}),
+			},
+		},
+	);
+
+	const { deriveChangeView } = await import("../../../main/resources/agent/pi-change-view.ts");
+	deriveChangeView(cwd);
+	const { runReviewJob } = await import("../../../main/resources/agent/pi-runner.ts");
+	await runReviewJob();
+}
+
+/**
+ * A runner that also builds a second Pi session past the factory, beside its factory session, and goes on with the
+ * factory's session if that build fails.
+ */
+async function buildBeside(
+	how: string | undefined,
+	opened: AgentSession,
+	place: { cwd: string; agentDir: string },
+): Promise<void> {
+	if (how === undefined) {
+		return;
+	}
+	const sdk = await import("@earendil-works/pi-coding-agent");
+	const agentDir = nodePath.join(place.cwd, ".pi-beside");
+	try {
+		if (how === "construct") {
+			new sdk.AgentSession({
+				agent: opened.agent,
+				sessionManager: opened.sessionManager,
+				settingsManager: opened.settingsManager,
+				resourceLoader: opened.resourceLoader,
+				modelRuntime: opened.modelRuntime,
+				cwd: place.cwd,
+			}).dispose();
+			return;
+		}
+		// "restore" continues the most recent stored session, as a runner that resumes one would.
+		const sessionManager =
+			how === "restore"
+				? sdk.SessionManager.continueRecent(place.cwd, agentDir)
+				: sdk.SessionManager.inMemory(place.cwd);
+		const { session } = await sdk.createAgentSessionFromServices({
+			services: await sdk.createAgentSessionServices({ cwd: place.cwd, agentDir }),
+			sessionManager,
+		});
+		session.dispose();
+	} catch {
+		// The review goes on with the factory's session.
+	}
+}
+
+const realSdkCwd = process.env.PI_HOST_REAL_SDK;
+if (realSdkCwd !== undefined && realSdkCwd !== "") {
+	await runOnRealSdk(realSdkCwd);
+}
+
 const scenario = process.env.PI_HOST_SCENARIO;
-if (scenario !== undefined && scenario !== "") {
+if (scenario !== undefined && scenario !== "" && (realSdkCwd === undefined || realSdkCwd === "")) {
 	const firstCompletion = process.env.PI_HOST_FIRST_COMPLETION;
 	if (firstCompletion !== undefined) {
 		const released = Promise.withResolvers<undefined>();
@@ -650,31 +731,10 @@ if (scenario !== undefined && scenario !== "") {
 		execute: (id: string, input: unknown) => Promise<unknown>;
 	}
 	let sessionCount = 0;
-	// The real SDK stays beneath the stand-in, so a runner that builds a Pi session any other way builds a real one, and
-	// each real session is counted where it is constructed. A real build can fail on the stand-in's parts before it
-	// constructs anything, and a runner can fall back from it; the harness cannot see what that build would have made in
-	// a sandbox, so each failed call into the real SDK is counted with them.
-	const realSession: object = realCodingAgent.AgentSession.prototype;
-	const installToolHooks: unknown = Reflect.get(realSession, "_installAgentToolHooks");
-	assert.ok(typeof installToolHooks === "function", "a Pi session installs its tool hooks as it is built");
-	Reflect.set(realSession, "_installAgentToolHooks", function recordBuild(this: object, ...args: unknown[]) {
-		capture("real-sessions", true);
-		return Reflect.apply(installToolHooks, this, args) as unknown;
-	});
-	const standIn = codingAgentExports(cwd, manager);
-	const failedCall = () => {
-		capture("real-sessions", "failed call");
-	};
 	mockPiCodingAgent(cwd, manager, {
-		...Object.fromEntries(
-			Object.entries(realCodingAgent)
-				.filter(([name]) => !(name in standIn))
-				.map(([name, value]) => [name, observed(value, failedCall)]),
-		),
 		async createAgentSession(options: { customTools: CustomTool[] }) {
 			sessionCount += 1;
 			const session = sessionCount;
-			capture("built-sessions", session);
 			const handlers = new Set<(event: unknown) => void>();
 			const emit = (event: unknown) => {
 				for (const handler of handlers) {
@@ -851,8 +911,6 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 			return {
 				extensionsResult: { errors: [] },
 				session: {
-					// Which build this is: the factory's wrapper records the builds that it returned.
-					hostSession: session,
 					state: { messages: [] },
 					agent,
 					systemPrompt: "",
@@ -1044,38 +1102,6 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 			};
 		},
 	});
-	// The sessions that the factory returned, and any model session of its own that the runner builds:
-	// pi-session-dispatch.spec.ts reads them beside every build.
-	const factory = await import("../../../main/resources/agent/pi-session.ts");
-	mock.module(new URL("../../../main/resources/agent/pi-session.ts", import.meta.url).href, {
-		exports: {
-			...factory,
-			openRunSession: async (...args: Parameters<typeof factory.openRunSession>) => {
-				const opened = await factory.openRunSession(...args);
-				const session: unknown = Reflect.get(opened.session, "hostSession");
-				capture("sessions", session);
-				await buildBeside(process.env.PI_HOST_BUILD_BESIDE, opened.session, args[0]);
-				return opened;
-			},
-		},
-	});
-	const composerModel = await import("../../../main/resources/agent/review-composer-model.ts");
-	mock.module(
-		new URL("../../../main/resources/agent/review-composer-model.ts", import.meta.url).href,
-		{
-			exports: {
-				...composerModel,
-				ModelSession: new Proxy(composerModel.ModelSession, {
-					construct: (target, args, newTarget) => {
-						capture("model-sessions", true);
-						const built: unknown = Reflect.construct(target, args, newTarget);
-						assert.ok(typeof built === "object" && built !== null);
-						return built;
-					},
-				}),
-			},
-		},
-	);
 	const { deriveChangeView } = await import("../../../main/resources/agent/pi-change-view.ts");
 	deriveChangeView(cwd);
 	const { runReviewJob } = await import("../../../main/resources/agent/pi-runner.ts");

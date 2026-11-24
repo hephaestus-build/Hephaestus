@@ -404,20 +404,20 @@ It runs these cases:
 - `REVIEW`'s runner, which is the measurement that starts the staged review runner.
   The spec runs the measurement's whole path in a temporary image layout, with stand-in programs.
   The measurement must build no session at all, through the factory or past it.
-- The staged review runner, through the harness of the review specs.
-  The harness's stand-in SDK replaces the session builder that the factory calls. The real SDK serves every other export.
-  The harness counts each real session that the SDK constructs.
-  A real SDK call can fail on the stand-in's parts before it constructs a session. The runner can then go on without it.
-  The harness cannot see what that call builds in a sandbox.
-  Thus, it counts each failed call into the real SDK as a build past the factory.
+- The staged review runner, through the harness of the review specs, on the real SDK.
+  The harness stands in for the proxy's practice, staging and admission endpoints. The model refuses each call.
+  The runner must open a factory session that asks the model.
+  It must build no other Pi session and no `ModelSession`.
 - `REVIEW_COMPOSE` is the one exemption, named by its kind. It keeps its own model client until the publication cutover (CF-18). The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
-- Seven fixtures break the rule and must fail it:
+- Eight fixtures break the rule and must fail it:
   - A runner imports `ModelSession` at run time and builds one.
   - A turn builds a second Pi session while its factory call is open.
   - A turn constructs a Pi session itself after its factory session.
   - A turn's factory call fails.
   - A runner opens no session.
-  - Two staged review runners build a second Pi session beside their factory session. One constructs it, and one uses the SDK's services. Their reviews still complete.
+  - Three staged review runners build a second Pi session beside their factory session.
+    Then they go on with the factory's session.
+    One constructs it, one uses the SDK's services, and one continues the most recent stored session.
 
 The server makes its own model calls only through the proxy's gateways, such as `ProductFeedbackModelGateway` for a report draft.
 `ModelEgressConfig` refuses a model request on every client built from the application's Spring builders, unless the proxy sent it.
@@ -440,7 +440,7 @@ Server code builds every client from the application's Spring builders. A vendor
 The proxy's integration tests send through the guarded client, so a proxy request without its mark fails them.
 `ModelCallBoundaryArchTest` has three rules:
 
-- It fails when server code calls an OkHttp client's constructor.
+- It fails when server code calls the constructor of `OkHttpClient` or of `OkHttpClient.Builder`.
 - It fails when server code calls the send API of Reactor Netty's client directly.
   It also fails on a method reference to a method of that client.
 - It fails when a class outside the proxy reads the provider key of a resolved model (`ProxyCredential`).

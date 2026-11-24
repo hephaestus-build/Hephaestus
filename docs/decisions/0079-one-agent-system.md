@@ -775,6 +775,6 @@ Three checks hold this. [The session factory](../contributor/unified-pi-runtime.
 
 - `ModelEgressConfig` guards every HTTP client that server code builds from the application's Spring builders. Such a client refuses a model request that the proxy did not send. The guard tells a model request by the shape of its JSON body, whatever content type the request declares. A vendor SDK's own transport, such as Slack's, is outside this check.
 - `ModelCallBoundaryArchTest` forbids server-built OkHttp clients, direct Reactor Netty requests, and reads of a resolved model's provider key outside the proxy.
-- `pi-session-dispatch.spec.ts` runs each run kind. A kind fails it when it builds a Pi session past `openRunSession` or a composer `ModelSession`. `REVIEW_COMPOSE` is exempt until CF-18.
+- `pi-session-dispatch.spec.ts` runs each run kind in the cases that the guide names. In those cases, a kind fails it when it builds a Pi session past `openRunSession` or a composer `ModelSession`. `REVIEW_COMPOSE` is exempt until CF-18.
 
 This replaces the last sentence of the update "the JVM composer is gone" of 2026-11-10.

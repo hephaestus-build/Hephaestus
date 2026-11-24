@@ -47,26 +47,37 @@ function breach(kind: string, use: Use): string | null {
 /** A runner that ends its run without opening any session. */
 const noSession: KindRunner = async () => ({ leaseLost: false, outcome: "completed" });
 
-/** Runs the staged review runner through the review specs' harness and reads what it built. */
-async function stagedReview(env: Record<string, string>): Promise<Use> {
+/**
+ * Runs the staged review runner on the real SDK, through the review specs' harness, behind a model that refuses each
+ * call, and reads what it built.
+ */
+async function stagedReview(env: Record<string, string>): Promise<Use & { asked: number }> {
 	const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-session-review-")));
 	try {
 		stagePractices(cwd, [{ slug: "measured" }]);
-		const exit = await runRunner(cwd, {}, env);
-		// The review went on to its end, whatever else the runner built.
-		assert.equal(exit.status, 0, exit.stderr);
-		const returned = new Set(capturedLines(cwd, "sessions"));
-		const standIns = capturedLines(cwd, "built-sessions");
+		// The refused calls leave the model unreachable, so the runner ends as it does then; the counts are what matter.
+		const exit = await runRunner(cwd, {}, { PI_HOST_REAL_SDK: cwd, ...env });
+		const [sessions] = capturedLines(cwd, "session-use");
+		assert.ok(isSessionUse(sessions), exit.stderr);
 		return {
-			factory: returned.size,
-			direct:
-				standIns.filter((session) => !returned.has(session)).length +
-				capturedLines(cwd, "real-sessions").length,
+			...sessions,
 			modelSession: capturedLines(cwd, "model-sessions").length,
+			asked: capturedLines(cwd, "model-asked").length,
 		};
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
+}
+
+function isSessionUse(value: unknown): value is { factory: number; direct: number } {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"factory" in value &&
+		typeof value.factory === "number" &&
+		"direct" in value &&
+		typeof value.direct === "number"
+	);
 }
 
 if (process.env[CHILD] === undefined) {
@@ -84,15 +95,18 @@ if (process.env[CHILD] === undefined) {
 	});
 
 	void test("the review runner that REVIEW starts opens its sessions through openRunSession", async () => {
-		assert.equal(breach("REVIEW", await stagedReview({})), null);
+		const staged = await stagedReview({});
+		assert.equal(breach("REVIEW", staged), null);
+		// The factory's session asked the model, so the review went on past it.
+		assert.ok(staged.asked > 0, "the review asked the model nothing");
 	});
 
-	for (const how of ["construct", "services"]) {
+	for (const how of ["construct", "services", "restore"]) {
 		void test(`a review runner that also builds a Pi session by ${how} breaks the rule, though its review goes on`, async () => {
-			assert.match(
-				breach("REVIEW", await stagedReview({ PI_HOST_BUILD_BESIDE: how })) ?? "",
-				/past the factory/u,
-			);
+			const staged = await stagedReview({ PI_HOST_BUILD_BESIDE: how });
+			assert.match(breach("REVIEW", staged) ?? "", /past the factory/u);
+			// The extra session came beside the factory's, which then asked the model.
+			assert.ok(staged.asked > 0, "the review asked the model nothing");
 		});
 	}
 } else {
