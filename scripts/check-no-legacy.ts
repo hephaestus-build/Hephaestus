@@ -47,7 +47,7 @@ const allowed: readonly (Omit<Finding, "line"> & { count: number; reason: string
 	{
 		rule: "retired-name",
 		file: "docs/contributor/practice-feedback-language.mdx",
-		text: `| **Hephaestus** | The application. It also answers in a person's conversation. It is an AI mentor. | agent, \`${RETIRED_NAME}\`, mentor, the mentor, your mentor, assistant |`,
+		text: `| **Hephaestus** | The application. It also answers in a person's conversation. | agent, \`${RETIRED_NAME}\`, mentor, the mentor, your mentor, assistant |`,
 		count: 1,
 		reason: "The vocabulary names the retired word to forbid it.",
 	},
@@ -356,5 +356,7 @@ if (import.meta.main) {
 		process.exitCode = 1;
 	} else {
 		console.log("No legacy paths.");
+		const { checkProductCopy } = await import("./check-prose.ts");
+		await checkProductCopy();
 	}
 }

@@ -1,0 +1,9 @@
+extends: existence
+message: "Use current product language in place of '%s'. See Practice feedback language."
+level: error
+ignorecase: true
+tokens:
+  - view as user
+  - per-person results for admins
+  - nudg(?:e|es|ed|ing)
+  - AI mentor

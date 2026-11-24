@@ -1,12 +1,12 @@
 ---
 title: Conversation core
-description: How threads, inbox items, turns and effects make Hephaestus an AI mentor, with the structural views, lifecycles and flows of the core.
+description: How threads, inbox items, turns and effects support conversations with Hephaestus.
 page_type: explanation
 ---
 
 > **Code decides when Hephaestus speaks and who may read it. A model only chooses the words.**
 
-Hephaestus is an AI mentor. The conversation core is where that thesis becomes code.
+The conversation core lets Hephaestus answer questions, keep agreements, and return task results.
 
 The core gives Hephaestus one model for every input. Each input to a thread is an inbox item. One turn at a time consumes the inbox items of a thread.
 Two rules keep it correct. A turn commits all its writes in one transaction, and a turn reads only what every reader of its output may read.

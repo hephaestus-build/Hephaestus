@@ -1,18 +1,252 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	globSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseSync } from "vite-plus";
 import { parse } from "yaml";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
-import { asArray, asRecord, asString, asStringArray, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, asString, asStringArray, isRecord, parseJson } from "./lib/json.ts";
 import { steRoot } from "./lib/ste-words.ts";
 import { prepareVale, valeAlerts, type Vale, type ValeAlert } from "./lib/vale.ts";
 
 export const enforcedList = ".vale/enforced-paths.json";
+
+interface Copy {
+	file: string;
+	line: number | string;
+	source: string;
+	message: string;
+}
+
+interface CopyFragment {
+	location: number | string;
+	text: string;
+}
+
+function staticString(value: unknown): string | undefined {
+	if (!isRecord(value)) {
+		return undefined;
+	}
+	if (value.type === "Literal" && typeof value.value === "string") {
+		return value.value;
+	}
+	if (value.type !== "BinaryExpression" || value.operator !== "+") {
+		return undefined;
+	}
+	const left = staticString(value.left);
+	const right = staticString(value.right);
+	return left !== undefined && right !== undefined ? left + right : undefined;
+}
+
+function uiCopy(file: string, source: string): CopyFragment[] {
+	const parsed = parseSync(file, source);
+	const error = parsed.errors[0];
+	if (error !== undefined) {
+		throw new Error(`${file}: cannot read product text: ${error.message}`);
+	}
+	const fragments: CopyFragment[] = [];
+	function visit(value: unknown): void {
+		if (Array.isArray(value)) {
+			for (const item of value) {
+				visit(item);
+			}
+			return;
+		}
+		if (!isRecord(value)) {
+			return;
+		}
+		let text: unknown;
+		if (value.type === "JSXText") {
+			text = value.value;
+		} else if (value.type === "TemplateElement" && isRecord(value.value)) {
+			text = value.value.cooked;
+		} else {
+			text = staticString(value);
+		}
+		if (typeof value.start === "number" && typeof text === "string") {
+			fragments.push({ location: value.start, text });
+			return;
+		}
+		for (const item of Object.values(value)) {
+			visit(item);
+		}
+	}
+	visit(parsed.program);
+	return fragments;
+}
+
+function serverCopy(source: string): CopyFragment[] {
+	// Consume comments and character literals before looking for strings or text blocks.
+	const tokens =
+		/\/\/[^\n]*|\/\*[\s\S]*?\*\/|'(?:\\.|[^'\\])'|"""(?<block>[\s\S]*?)"""|"(?<literal>(?:\\.|[^"\\\n])*)"/gu;
+	const fragments: CopyFragment[] = [];
+	let endOfString = 0;
+	for (const match of source.matchAll(tokens)) {
+		const text = match.groups?.block ?? match.groups?.literal;
+		if (text === undefined) {
+			continue;
+		}
+		const previous = fragments.at(-1);
+		if (previous !== undefined && source.slice(endOfString, match.index).trim() === "+") {
+			previous.text += text;
+		} else {
+			fragments.push({ location: match.index, text });
+		}
+		endOfString = match.index + match[0].length;
+	}
+	return fragments;
+}
+
+export function productCopyFindings(
+	vale: Pick<Vale, "binary" | "config">,
+	root: string,
+	files: readonly string[],
+): Copy[] {
+	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-product-copy-"));
+	try {
+		const docs: string[] = [];
+		const sources = new Map<string, string>();
+		const fragments: (CopyFragment & { file: string })[] = [];
+		for (const file of files) {
+			const target = path.join(root, file);
+			const source = readFileSync(target, "utf8");
+			sources.set(file, source);
+			if (/\.mdx?$/u.test(file)) {
+				docs.push(target);
+				continue;
+			}
+			let copy: CopyFragment[];
+			if (file.endsWith(".properties")) {
+				copy = catalogProse(source).map(({ field, text }) => ({ location: field, text }));
+			} else {
+				copy = file.endsWith(".java") ? serverCopy(source) : uiCopy(file, source);
+			}
+			for (const fragment of copy) {
+				const text = fragment.text.replaceAll(/\s+/gu, " ").trim();
+				if (text !== "") {
+					fragments.push({ file, location: fragment.location, text });
+				}
+			}
+		}
+		const lineAt = (file: string, offset: number) =>
+			(sources.get(file) ?? "").slice(0, offset).split("\n").length;
+		const findings: Copy[] = [];
+		for (let offset = 0; offset < docs.length; offset += 50) {
+			for (const [target, alerts] of valeAlerts(vale, docs.slice(offset, offset + 50), "error")) {
+				const file = path.relative(root, target).replaceAll("\\", "/");
+				const lines = sources.get(file)?.split("\n") ?? [];
+				for (const alert of alerts) {
+					findings.push({
+						file,
+						line: alert.Line,
+						source: lines[alert.Line - 1]?.trim() ?? "",
+						message: alert.Message,
+					});
+				}
+			}
+		}
+		if (fragments.length > 0) {
+			const target = path.join(directory, "copy.txt");
+			// Blank lines keep unrelated literals and JSX nodes in separate paragraphs.
+			writeFileSync(target, fragments.map(({ text }) => text).join("\n\n"));
+			const alerts = [...valeAlerts(vale, [target], "error").values()].flat();
+			for (const alert of alerts) {
+				const fragment = fragments[Math.floor((alert.Line - 1) / 2)];
+				if (fragment === undefined) {
+					throw new Error("Vale returned an unknown copy line.");
+				}
+				findings.push({
+					file: fragment.file,
+					line:
+						typeof fragment.location === "number"
+							? lineAt(fragment.file, fragment.location)
+							: fragment.location,
+					source: fragment.text,
+					message: alert.Message,
+				});
+			}
+		}
+		return findings;
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+}
+
+export function productCopyPaths(root: string): string[] {
+	return globSync(
+		[
+			"docs/{user,admin,contributor}/**/*.{md,mdx}",
+			"{webapp,extension}/src/**/*.{ts,tsx}",
+			"server/application/src/main/java/**/*.java",
+			"server/application/src/main/resources/messages*.properties",
+		],
+		{
+			cwd: root,
+			exclude: ["**/api/**", "**/mocks/**", "**/*.gen.*", "**/*.{test,spec,stories}.*"],
+		},
+	)
+		.map((file) => file.replaceAll("\\", "/"))
+		.toSorted();
+}
+
+export function matchAllowedText(findings: readonly Copy[], labels: readonly string[]) {
+	const allowances = new Map<string, number>();
+	for (const label of labels) {
+		allowances.set(label, (allowances.get(label) ?? 0) + 1);
+	}
+	const unexpected = findings.filter(({ file, source }) => {
+		const label = `${file}: ${source}`;
+		const count = allowances.get(label) ?? 0;
+		if (count === 0) {
+			return true;
+		}
+		allowances.set(label, count - 1);
+		return false;
+	});
+	const unused = [...allowances.entries()].filter(([, count]) => count > 0);
+	return { unexpected, unused };
+}
+
+export async function checkProductCopy(): Promise<void> {
+	const root = fileURLToPath(steRoot);
+	const vale = await prepareVale("product-copy");
+	try {
+		const labels = asStringArray(
+			parseJson(readFileSync(path.join(root, ".vale/product-copy-allowlist.json"), "utf8")),
+			"allowed product copy",
+		);
+		const { unexpected, unused } = matchAllowedText(
+			productCopyFindings(vale, root, productCopyPaths(root)),
+			labels,
+		);
+		for (const { file, line, message } of unexpected) {
+			console.error(`${file}:${line}: ${message}`);
+		}
+		for (const [label, count] of unused) {
+			console.error(
+				`Remove ${count} unused product copy allowance(s) from .vale/product-copy-allowlist.json: ${label}`,
+			);
+		}
+		console.log(
+			`Product copy: ${unexpected.length} retired term findings, ${unused.length} unused allowance entries.`,
+		);
+		process.exitCode = unexpected.length === 0 && unused.length === 0 ? 0 : 1;
+	} finally {
+		await vale.dispose();
+	}
+}
 
 export function parsePaths(source: string): readonly string[] {
 	const paths = asStringArray(parseJson(source), "enforced STE paths");
@@ -325,7 +559,7 @@ function proseFieldAlerts(
 	}
 }
 
-if (process.argv[1] === import.meta.filename) {
+if (import.meta.main) {
 	const args = process.argv.slice(2);
 	const base = isSet(process.env.PR_BASE_SHA) ? process.env.PR_BASE_SHA : "origin/main";
 	const paths = args.length > 0 ? parsePaths(JSON.stringify(args)) : [...checkRatchet(base)];

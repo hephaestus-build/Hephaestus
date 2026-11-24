@@ -131,6 +131,9 @@ Approve first requires an admin decision before feedback leaves on the work.
 Automatic permits that delivery after the normal policy checks.
 The two active modes permit eligible practice-page and conversation feedback without public approval.
 
+The 1.0 design adds **On request**.
+It shows a result only to the person who asked for it, in the places that [ADR 0137](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0137-on-request-is-a-feedback-mode.md) permits.
+
 A practice can inherit feedback mode from its group, then from its workspace.
 A null setting means inherit. It does not mean Off.
 Changing a setting does not approve an older proposal.
@@ -335,6 +338,9 @@ The same name is the source capture code that causes it.
 | **Subject**                    | The thing that one sandbox serves: a review or a conversation. Its key, such as `review:<id>`, is the concurrency key of its runs. It is not the item that a review covers. | agent_run.concurrency_key, agent_sandbox.subject_key |
 | **Run**                        | One leased unit of agent work for a subject, such as the measurement of a review or one turn. One run of a subject runs at a time, and its sandbox is its only writer. | agent_run |
 | **Run kind**                   | What a run drives. A `REVIEW` run measures a review. A `REVIEW_COMPOSE` run composes the review's feedback after its `REVIEW` run ended, and it continues that run's epochs. | AgentRunKind |
+| **`TURN`** | A conversation run. In the 1.0 design, a person's message starts an interactive turn and an inbox event can start a background turn. | AgentRunKind |
+| **`TASK`** | A planned run kind for a task that a turn commits. The task can return a result to the thread. | ADR 0120 |
+| **`DIGEST`** | The run kind that writes the weekly digest in the current release. The 1.0 design uses a background turn for agreed contact. | AgentRunKind |
 | **Lease epoch**                | The fencing number of a run. Each claim raises it, and the database refuses a write that names an older one. | agent_run.lease_epoch |
 | **Band**                       | The priority of a run and of its model calls: interactive, batch or background. An interactive call gets a grant first, and a batch call yields at grant time. Work that waits rises one band at a time, but never into the interactive band. | agent_run.band, llm_call_permit.band |
 | **Sandbox**                    | The one agent-sandbox `Sandbox` of a subject: one container with the driver, the tools and the workspace. It is a cache. The server deletes it when no run needs it, and rebuilds its context from PostgreSQL. | agent_sandbox |
@@ -390,6 +396,7 @@ The conversation agent, the composer and the review agent are agents. Hephaestus
 | **Work place** | The shared thread of one pull request or merge request. An issue has none in 1.0. | ADR 0121 |
 | **Channel thread** | The shared thread of one Slack thread where a person mentioned Hephaestus. Its turns read the Slack thread itself, public repository data and channel-readable catalog entries only. | ADR 0123 |
 | **Conversation agent** | The sandboxed agent that runs the turns of one account's private threads in a workspace. It answers, starts tasks and writes messages from Hephaestus. It never writes on the work. | ADR 0121 |
+| **Delegated agent** | An agent that carries out a task assigned by the conversation agent. In the orchestrator-workers pattern, the conversation agent keeps control of the conversation and the delegated agent returns the task result. | ADR 0120 |
 | **Composer** | The sandboxed agent that runs the turns of every shared thread. It reads only scoped projections of its exact place, never private data. On a work place it writes the copy on the work and replies to it. In a channel thread it writes one answer. The server projects the practice-page copy of results in the eligible set from the composed copy. The **Feedback composer** is its current form. | ADR 0121 |
 | **Graded work** | A workspace mode in which a fixed renderer writes every copy on the work from the eligible set, with no model. | ADR 0121 |
 | **Typed command** | The person's confirmed act from a card that changes a shared place. It carries IDs and enumerated values only, never a reason or free text. Its confirmation binds the facts of its preview. | ADR 0121 |

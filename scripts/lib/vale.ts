@@ -56,7 +56,7 @@ export interface Vale {
 	dispose: () => Promise<void>;
 }
 
-export async function prepareVale(): Promise<Vale> {
+export async function prepareVale(profile: "ste" | "product-copy" = "ste"): Promise<Vale> {
 	const binary = await installValeBinary({
 		cache: toolCache("ste"),
 		version: asString(toolchain.version, "Vale version"),
@@ -73,7 +73,15 @@ export async function prepareVale(): Promise<Vale> {
 		await rm(directory, { recursive: true, force: true });
 	};
 	try {
-		await generateWordStyles(directory);
+		if (profile === "ste") {
+			await generateWordStyles(directory);
+		} else {
+			const styles = path.join(root, ".vale", "styles").split(path.sep).join("/");
+			await writeFile(
+				path.join(directory, "vale.ini"),
+				`StylesPath = ${styles}\n[*.{md,mdx,txt}]\nBasedOnStyles = ProductCopy\n`,
+			);
+		}
 		return { binary, config: path.join(directory, "vale.ini"), dispose };
 	} catch (error) {
 		await dispose();

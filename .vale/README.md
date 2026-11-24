@@ -52,6 +52,14 @@ It uses the BSD-2-Clause license and does not enter the application bundle.
 Only JSX text and quoted JSX attributes are decoded.
 JavaScript strings keep their literal meaning.
 
+## Retired product terms
+
+`gate:no-legacy` runs Vale on docs, UI literals, Java strings, and server message catalogs.
+`product-copy-allowlist.json` records exact text for controls that still ship, internal protocol strings, and the category definition in the language guide.
+An allowance covers one occurrence in one file.
+The gate rejects unused allowances.
+Remove the control allowances with [the admin access change](https://github.com/hephaestus-build/Hephaestus/issues/4966).
+
 ## Product voice
 
 The [writing standard](../docs/contributor/simplified-technical-english.mdx) defines the product voice.
