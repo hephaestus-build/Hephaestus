@@ -70,10 +70,20 @@ class LearningBundleSchemaTest extends BaseUnitTest {
                         "enum",
                         "/records/0/state"),
                 refused(
-                        "a record without a revision number",
+                        "a revision number of zero",
                         b -> record(b, 0).put("revision", 0),
                         "minimum",
                         "/records/0/revision"),
+                refused(
+                        "a record without a revision number",
+                        b -> record(b, 0).remove("revision"),
+                        "required",
+                        "/records/0"),
+                refused(
+                        "the source workspace of a record",
+                        b -> record(b, 0).put("workspace", "client-a"),
+                        "additionalProperties",
+                        "/records/0"),
                 refused(
                         "a revision number past the integer range",
                         b -> record(b, 0).put("revision", 2_147_483_648L),
@@ -104,6 +114,16 @@ class LearningBundleSchemaTest extends BaseUnitTest {
                         b -> growthPoint(b, 0).put("practiceKey", "local/42"),
                         "not",
                         "/growthPoints/0/practiceKey"),
+                refused(
+                        "the stored key of a practice of one workspace",
+                        b -> growthPoint(b, 0).put("practiceKey", "local/42/12"),
+                        "pattern",
+                        "/growthPoints/0/practiceKey"),
+                refused(
+                        "an id in upper case",
+                        b -> b.put("instanceId", "0C9E8D7F-6A5B-4C3D-8E2F-1A0B9C8D7E6F"),
+                        "pattern",
+                        "/instanceId"),
                 refused(
                         "the piece of work of a growth point",
                         b -> growthPoint(b, 0).put("workRef", "github/acme/api#12"),

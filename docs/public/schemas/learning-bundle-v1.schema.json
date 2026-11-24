@@ -2,7 +2,7 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"$id": "https://docs.hephaestus.build/schemas/learning-bundle-v1.schema.json",
 	"title": "Hephaestus learning bundle, format version 1",
-	"description": "A portable download of one person's learning. It carries only the person's own words, text that the person confirmed word for word, and closed fields. It names no workspace, no piece of work and no other person. A later format version gets its own file, so this file does not change after release. A reader also refuses a bundle that this schema cannot check: a file larger than 33554432 bytes (refused before it is parsed), an object with a duplicate key, a portableId that occurs more than once across records, growthPoints and tombstones, a record whose revisedAt is before its createdAt, an occurredWeek that its year does not have, and text with an unpaired surrogate.",
+	"description": "A portable download of one person's learning. It carries only the person's own words, text that the person confirmed word for word, and closed fields. It names no workspace, no piece of work and no other person. A later format version gets its own file, so this file does not change after release. A reader also refuses a bundle that this schema cannot check: a file larger than 33554432 bytes (refused before it is parsed), an object with a duplicate key, a portableId that occurs more than once across records, growthPoints and tombstones, a date or time that does not exist (such as February 30), a record whose revisedAt is before its createdAt, an occurredWeek that its year does not have, and text with an unpaired surrogate. A writer puts in records only text that names no other person, and in a HEPHAESTUS record only the exact text that the person confirmed. A reader treats authorKind, madeBy and origin as claims of the issuing instance, never as proof.",
 	"type": "object",
 	"additionalProperties": false,
 	"required": [
@@ -71,7 +71,7 @@
 			"$ref": "#/$defs/uuid"
 		},
 		"revision": {
-			"description": "Grows with each change. A later revision of one portableId replaces an earlier one.",
+			"description": "Grows whenever any value that a bundle carries for the item changes, also its state, its close reason or its restoration after a withdrawal. A reader keeps the highest revision of one portableId. On equal revisions, a tombstone wins over the item.",
 			"type": "integer",
 			"minimum": 1,
 			"maximum": 2147483647
@@ -199,7 +199,7 @@
 				},
 				"portableId": { "$ref": "#/$defs/portableId" },
 				"revision": {
-					"description": "The last revision that a bundle could carry.",
+					"description": "Higher than every revision of the item that a bundle could carry before it was deleted or withdrawn.",
 					"$ref": "#/$defs/revision"
 				},
 				"at": {
