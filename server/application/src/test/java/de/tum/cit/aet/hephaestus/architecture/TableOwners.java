@@ -26,6 +26,7 @@ final class TableOwners {
             "shedlock", "core",
             "auth_rate_limit_bucket", "core",
             "account_public_activity_hidden_by_default", "core",
+            "client_input", "core",
             "workspace_agent_binding", "agent");
 
     /** Each mapped table and its owner module. */
