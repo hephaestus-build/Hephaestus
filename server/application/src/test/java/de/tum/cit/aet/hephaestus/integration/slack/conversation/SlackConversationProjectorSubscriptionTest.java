@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.conversation.ConversationEntry;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerNotifications;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSlackMessages;
@@ -16,7 +15,6 @@ import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -54,12 +52,8 @@ class SlackConversationProjectorSubscriptionTest extends BaseUnitTest {
         var notifications = mock(ConversationLedgerNotifications.class);
         var turnId = UUID.randomUUID();
         var actionId = UUID.randomUUID();
-        var question = mock(ConversationEntry.class);
         var questionId = UUID.randomUUID();
-        when(question.getId()).thenReturn(questionId);
-        when(messages.slackTurn(1L, 2L, turnId))
-                .thenReturn(Optional.of(new ConversationSlackMessages.SlackTurn(
-                        mock(ConversationTurn.class), 2L, "D1", null, question, List.of(), false)));
+        when(messages.endedSlackQuestion(1L, 2L, turnId)).thenReturn(Optional.of(questionId));
         when(replies.forQuestion(1L, questionId)).thenReturn(Optional.of(actionId));
         var started = new CountDownLatch(1);
         var release = new CountDownLatch(1);

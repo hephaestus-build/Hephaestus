@@ -235,6 +235,21 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     Optional<ConversationEntry> findByWorkspaceIdAndTurnIdAndKind(
             Long workspaceId, UUID turnId, ConversationEntry.Kind kind);
 
+    /** The question of the account's ended turn on a surface, read with its owner check in one statement. */
+    @Query("""
+            SELECT q.id FROM ConversationEntry q, ConversationTurn t, Conversation c
+            WHERE t.id = :turnId AND t.workspaceId = :workspaceId AND t.surface = :surface AND t.status IN :ended
+              AND c.id = t.conversationId AND c.workspaceId = t.workspaceId AND c.accountId = :accountId
+              AND q.turnId = t.id AND q.workspaceId = t.workspaceId AND q.kind = :kind
+            """)
+    Optional<UUID> findQuestionOfEndedTurn(
+            @Param("workspaceId") long workspaceId,
+            @Param("accountId") long accountId,
+            @Param("turnId") UUID turnId,
+            @Param("surface") ConversationTurn.Surface surface,
+            @Param("ended") Collection<ConversationTurn.Status> ended,
+            @Param("kind") ConversationEntry.Kind kind);
+
     /** The user question or real system digest entry that starts this conversation work. */
     default ConversationEntry findStimulus(Long workspaceId, UUID turnId) {
         return findByWorkspaceIdAndTurnIdAndKind(workspaceId, turnId, ConversationEntry.Kind.USER)

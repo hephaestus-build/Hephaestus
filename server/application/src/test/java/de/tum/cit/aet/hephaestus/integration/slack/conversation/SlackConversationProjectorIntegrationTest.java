@@ -208,8 +208,10 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     /**
-     * The projector reads the ended turn with the developer's account bound as the owner of a read-only transaction,
-     * as the conversation tables' owner policy needs, and wakes the outbox for its post.
+     * The projector finds the ended turn's question with the developer's account bound as the owner of a read-only
+     * transaction, as the conversation tables' owner policy needs, and wakes the outbox for its post. One statement
+     * checks the owner and finds the question, so an absorption cannot commit between two of its reads, and it reads no
+     * content.
      */
     @Test
     void shouldReadTheEndedTurnAsItsDeveloperInAReadOnlyTransactionWhenASlackTurnEnds() {
@@ -227,26 +229,37 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
 
         assertThat(ConversationStatements.of(measured))
                 .as("the projector's reads of the conversation tables")
-                .isNotEmpty()
-                .allSatisfy(statement -> {
+                .singleElement()
+                .satisfies(statement -> {
                     assertThat(statement.owner()).as(statement.sql()).isEqualTo(account);
                     assertThat(statement.readOnly()).as(statement.sql()).isTrue();
+                    assertThat(statement.sql()).as("no content").doesNotContain("text", "payload");
                 });
         verify(wakes).runNow(action(asked));
     }
 
     /**
      * A change that names no account, as a payload without one reads, or that names another account than the turn's,
-     * as after an absorption, wakes no post. Polling claims it.
+     * wakes no post. Neither does a change whose conversation an absorption moved to another account after the change
+     * was published. Polling claims the post.
      */
-    @ParameterizedTest(name = "no account: {0}")
-    @ValueSource(booleans = {true, false})
-    void shouldWakeNoPostWhenTheChangeNamesNoAccountOrAnother(boolean noAccount) {
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"no account", "another account", "owner moved after the change"})
+    void shouldWakeNoPostWhenTheChangeNamesNoAccountOrNotTheTurnsOwner(String change) {
         var asked = ask(main, ConversationTurn.Surface.SLACK);
         var running = claims.claim(asked.turn());
         end(running, "Your reviews are quick.");
         var ended = event(asked.turn());
-        long named = noAccount ? 0 : ended.accountId() + 1;
+        long named = switch (change) {
+            case "no account" -> 0L;
+            case "another account" -> ended.accountId() + 1;
+            default -> ended.accountId();
+        };
+        if (change.equals("owner moved after the change")) {
+            // An absorption moves the conversation to the claiming account; its turns and messages follow it.
+            long claiming = accountId(persistUser("slack-outbox-claiming"));
+            jdbc.update("UPDATE conversation SET account_id = ? WHERE id = ?", claiming, main.getId());
+        }
         var wakes = mock(ActionExecutor.class);
 
         new SlackConversationProjector(messages, replies, wakes, owners, transactionManager)

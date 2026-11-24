@@ -25,8 +25,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Wakes the one outbox executor for a completed answer; Slack never sees a partial model answer. It reads the turn as
- * the account that the change names, in a read-only transaction, and wakes the executor after that transaction. A
+ * Wakes the one outbox executor for a completed answer; Slack never sees a partial model answer. It finds the turn's
+ * question as the account that the change names, in a read-only transaction, reads no content, and wakes the executor
+ * after that transaction. A
  * change that names no account, or a turn that belongs to another account, wakes nothing: a wake-up sends nothing
  * itself, and the executor's poll claims the post.
  */
@@ -88,13 +89,12 @@ public class SlackConversationProjector implements ConversationLedgerNotificatio
         }
         Optional<UUID> post = Objects.requireNonNull(reads.execute(status -> {
             owners.ofJob(accountId);
-            return messages.slackTurn(change.workspaceId(), accountId, change.turnId())
-                    .flatMap(turn -> replies.forQuestion(
-                            change.workspaceId(), turn.question().getId()));
+            return messages.endedSlackQuestion(change.workspaceId(), accountId, change.turnId())
+                    .flatMap(question -> replies.forQuestion(change.workspaceId(), question));
         }));
         if (post.isEmpty()) {
             log.debug(
-                    "Slack post not woken, no post of the account's Slack turn: workspaceId={}, turnId={}",
+                    "Slack post not woken, no post of an ended Slack turn of the account: workspaceId={}, turnId={}",
                     change.workspaceId(),
                     change.turnId());
         }
