@@ -31,17 +31,17 @@ function queueTimelinePage(nodes: unknown[], hasPreviousPage: boolean, startCurs
 	});
 }
 
-void test("a cancelled integration sibling does not turn a unit failure into a queue-tier catch", () => {
+void test("a cancelled browser sibling does not turn a unit failure into a queue-tier catch", () => {
 	const failedJobs = failedJobNames([
 		{ name: "Test (unit) / App Server: Unit and architecture", conclusion: "failure" },
-		{ name: "Test (providers) / App Server: Integration (providers)", conclusion: "cancelled" },
+		{ name: "Browser tests / Webapp", conclusion: "cancelled" },
 	]);
 	assert.equal(queueTierFailures([{ conclusion: "failure", failedJobs }]).queueTierFailed, 0);
-	const integrationFailure = failedJobNames([
-		{ name: "Test (providers) / App Server: Integration (providers)", conclusion: "failure" },
+	const browserFailure = failedJobNames([
+		{ name: "Browser tests / Webapp", conclusion: "failure" },
 	]);
 	assert.equal(
-		queueTierFailures([{ conclusion: "failure", failedJobs: integrationFailure }]).queueTierFailed,
+		queueTierFailures([{ conclusion: "failure", failedJobs: browserFailure }]).queueTierFailed,
 		1,
 	);
 });
@@ -122,7 +122,7 @@ void test("PR latency includes the shards and database checks while browser runs
 		queueTierFailures([{ conclusion: "failure", failedJobs: database.map((job) => job.name) }])
 			.queueTierFailed,
 		1,
-		"database failures still count in the merge-group revert criterion",
+		"a drill failure counts in the merge-group revert criterion",
 	);
 });
 
@@ -140,7 +140,7 @@ void test("the revert criterion counts groups a queue-tier job failed, apart fro
 		{ conclusion: "success", failedJobs: [] },
 		{
 			conclusion: "failure",
-			failedJobs: ["Test / App Server: Integration (providers)", "CI Status Gate"],
+			failedJobs: ["Browser tests / Extension", "CI Status Gate"],
 		},
 		{ conclusion: "failure", failedJobs: ["Build / App Server: PostgreSQL drills"] },
 		// A fast-tier failure, and a hung prerequisite, are not the queue tier's catch.
@@ -161,15 +161,19 @@ void test("the revert criterion counts groups a queue-tier job failed, apart fro
 		...Array.from({ length: 14 }, () => ({ conclusion: "success", failedJobs: [] })),
 	];
 	assert.equal(queueTierFailures(enough).queueTierShare, 2 / 20);
-	assert.equal(
-		queueTierFailures([
-			{
-				conclusion: "failure",
-				failedJobs: ["Test (providers) / App Server: Integration (providers)"],
-			},
-		]).queueTierFailed,
-		1,
-	);
+	// Every server pull request runs the shards and the database tests, so the merge group's failure of
+	// one of them is not a gap between the tiers.
+	for (const name of [
+		"Test (providers) / App Server: Integration (providers)",
+		"Server tests / Integration (3 of 8)",
+		"Build / Database migrations",
+	]) {
+		assert.deepEqual(
+			queueTierFailures([{ conclusion: "failure", failedJobs: [name] }]),
+			{ groups: 1, queueTierFailed: 0, fastTierFailed: 1, queueTierShare: null },
+			name,
+		);
+	}
 });
 
 void test("native worker failures survive fail-fast cancellation; regrouping and reporter-only failures do not", () => {
@@ -177,7 +181,7 @@ void test("native worker failures survive fail-fast cancellation; regrouping and
 		...Array.from({ length: 20 }, () => ({ conclusion: "success", failedJobs: [] })),
 		{
 			conclusion: "cancelled",
-			failedJobs: ["Server tests / Integration (1 of 8)", "CI Status Gate"],
+			failedJobs: ["Browser tests / Webapp", "CI Status Gate"],
 		},
 		{ conclusion: "cancelled", failedJobs: ["Security / Dependencies, secrets and policy"] },
 		{ conclusion: "cancelled", failedJobs: [] },
@@ -372,7 +376,7 @@ void test(
 					{
 						run_id: 1,
 						run_attempt: 1,
-						name: "Server tests / Integration (1 of 8)",
+						name: "Browser tests / Webapp",
 						conclusion: "failure",
 					},
 					{ run_id: 1, run_attempt: 1, name: "CI Status Gate", conclusion: "cancelled" },

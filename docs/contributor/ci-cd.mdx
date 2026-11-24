@@ -1002,6 +1002,8 @@ Google's presubmit applies the same split. It runs only fast, reliable tests bef
 
 When both tiers ran on each pull request, a merged change paid for the queue tier twice.
 The queue tier is most of a run's runner time, and GitHub's runner concurrency limit is shared by the queue and every pull request.
+The server suites are the exception: a server pull request runs the shards and the database tests.
+Its merge group runs them again ([Server suites on pull requests](#server-suites-on-pull-requests)).
 
 A queue-tier failure removes the entry from the queue, and the failure comment links the run.
 So does an image build or scan failure, because a pull request builds images only for the `ci:images` label, Kubernetes qualification or release evidence.
@@ -1074,7 +1076,7 @@ Almost every module depends on `core`. Thus, the pull request runs every shard, 
 A PR outside the [light tier](#light-tier-for-stacked-layers) that changes `db/**` runs database tests and PostgreSQL drills, including on a draft.
 The light tier defers these checks to the merge group.
 If it changes only `server/application/src/main/resources/db/**` and its release or schema notes,
-it runs `review` without Unit or Architecture. The notes can be changesets, `.migration/*.md` files or generated ERD files.
+it runs `review` and the numbered shards without Unit or Architecture. The notes can be changesets, `.migration/*.md` files or generated ERD files.
 Generated-artifact drift, quality and security checks stay selected.
 A migration with a Java, build or configuration change keeps Unit and Architecture too.
 
@@ -1161,8 +1163,13 @@ Locally, these commands run the queue tier's suites:
 - `vp run --filter webapp test:e2e` and `vp run test:extension:e2e` for the browser suites.
 
 **Revert criterion.** [`report:ci-latency`](#full-verification-latency) reports the share of merge
-groups in the last 14 days in which a queue-tier job failed. It counts the groups in which only
-fast-tier jobs failed apart, and it gives no share for fewer than 20 groups. If the queue-tier share exceeds 10 %, the queue tier is catching too much that a pull request
+groups in the last 14 days in which a queue-tier job failed.
+These jobs are the browser suites and the drills, which a server pull request can skip.
+A shard or database failure in a merge group counts with the fast tier.
+The pull request ran those suites, so the cause is the merged result or a flaky test.
+The report gives no share for fewer than 20 groups.
+
+If the queue-tier share exceeds 10 %, the queue tier is catching too much that a pull request
 should have caught. Then run the queue tier on pull requests again: change `queue-tier` in
 `detect-changes` to `true` for every event.
 That brings back the runner contention of the old CI shape, so revisit the [status check timeout](#merge-policy) with it.

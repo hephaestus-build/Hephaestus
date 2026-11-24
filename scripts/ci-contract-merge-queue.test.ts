@@ -218,15 +218,18 @@ void describe("ci-contract: merge-queue", () => {
 			const jobs = callee.get("jobs");
 			assert.ok(isMap(jobs));
 			for (const entry of jobs.items) {
-				if (
-					isMap(entry.value) &&
-					/inputs\.(?:queue_tier|full_integration) == 'true'/u.test(String(entry.value.get("if")))
-				) {
+				const condition = isMap(entry.value) ? String(entry.value.get("if")) : "";
+				if (/inputs\.(?:queue_tier|full_integration) == 'true'/u.test(condition)) {
 					const name = `${caller} / ${String(entry.value.get("name"))}`;
 					guarded.push(String(entry.key));
-					assert.ok(
+					// Every server pull request runs the shards (`full_integration`) and the database tests
+					// (`database_tier`), so only the other guarded jobs count toward the revert criterion.
+					const everyServerPullRequest =
+						/inputs\.(?:full_integration|database_tier) == 'true'/u.test(condition);
+					assert.equal(
 						QUEUE_TIER_JOBS.some((pattern) => pattern.test(name)),
-						`report-ci-latency.ts does not count ${name} as queue tier`,
+						!everyServerPullRequest,
+						`report-ci-latency.ts counts ${name} as queue tier: ${String(!everyServerPullRequest)} expected`,
 					);
 				}
 			}

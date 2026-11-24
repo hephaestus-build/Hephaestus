@@ -43,9 +43,10 @@ Two path groups need attention:
 
 A PR outside the [light tier](../../../docs/contributor/ci-cd.mdx#light-tier-for-stacked-layers) uses the fast tier.
 For PRs and merge groups, `server` or `test-config` must match to select server suites.
-A selected PR runs `review`. A selected merge group also runs the numbered integration shards.
-Database tests, drills and browser suites have their own path conditions.
-Migration changes also select database tests and drills on PRs outside the light tier.
+A selected PR outside the light tier runs `review`, the numbered integration shards and the database tests.
+The PR's own CI is the server check: do not validate the server suites again on another machine before you queue.
+Drills and browser suites have their own path conditions.
+Migration changes also select the drills on PRs outside the light tier.
 
 Use the `ci:full` label to reproduce a queue-tier failure.
 It enables the queue tier but keeps path selection

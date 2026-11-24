@@ -91,14 +91,11 @@ export function isLatencySample(jobs: readonly { name: string }[]) {
 // pull request the drills. The browser suites run only in the queue tier.
 const QUEUE_ONLY_JOBS = [/^Browser tests \/ Webapp$/u, /^Browser tests \/ Extension$/u];
 
-// The merge group's queue-tier failure classes, including checks that also run on a pull request.
-// ci-contract*.test.ts ties this list to the jobs that carry the tier guard.
-export const QUEUE_TIER_JOBS = [
-	...QUEUE_ONLY_JOBS,
-	/^Server tests \/ Integration \((?!review\))/u,
-	/^Build \/ Database migrations$/u,
-	/^Build \/ PostgreSQL drill/u,
-];
+// The jobs that a pull request outside the light tier can skip while its merge group runs them: the
+// browser suites, and the drills unless it changes a migration. The shards and the database tests run on
+// every server pull request, so their merge-group failures come from the merged result, not from a gap
+// that the revert criterion asks about. ci-contract-merge-queue.test.ts ties this list to the tier guards.
+export const QUEUE_TIER_JOBS = [...QUEUE_ONLY_JOBS, /^Build \/ PostgreSQL drill/u];
 
 /**
  * A PR that exercised server tests without browser suites.

@@ -1994,9 +1994,10 @@ jobs:
           message: >-
             The [combined merge-queue CI run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             failed, so this pull request left the queue. Inspect the run before re-queueing it.
-            A pull request does not run the browser suites or the drills, so their failures first show
-            here; add the `ci:full` label to reproduce one on the pull request. An integration or database
-            failure here comes from the merged result, because the pull request runs those suites too.
+            A pull request does not run the browser suites, or the drills without a migration change, so their failures first show
+            here; add the `ci:full` label to reproduce one on the pull request. A server pull request runs
+            the integration and database suites too, so their failure here usually comes from the merged
+            result, a flaky test, or a stack layer that ran only the light tier.
             An image build or scan failure also first shows here; add the `ci:images` label to build
             the images on the pull request.
 
