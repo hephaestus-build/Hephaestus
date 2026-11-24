@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAiChoiceExport;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountConversationExport;
@@ -308,13 +309,15 @@ class AccountExportServiceTest extends BaseUnitTest {
             return e;
         });
 
-        AccountExportService service = new AccountExportService(repo, events, logger, clock, mockOwnerScope());
+        AccountExportService service =
+                new AccountExportService(repo, activeAccounts(), events, logger, clock, mockOwnerScope());
 
         AccountExport created = service.requestExport(PersonActFixture.self(ACCOUNT_ID));
 
         assertThat(created.getId()).isEqualTo(1234L);
         assertThat(created.getStatus()).isEqualTo(AccountExport.Status.PENDING);
         verify(logger).event(AuthEvent.EventType.EXPORT_REQUESTED, AuthEvent.Result.SUCCESS);
+        verify(draft).recordInCurrentTransaction();
         verify(events).publishEvent(new AccountExportRequested(1234L, ACCOUNT_ID));
     }
 
@@ -325,7 +328,8 @@ class AccountExportServiceTest extends BaseUnitTest {
         AuthEventLogger logger = mock(AuthEventLogger.class);
         when(repo.existsByAccountIdAndStatusIn(eq(ACCOUNT_ID), any())).thenReturn(true);
 
-        AccountExportService service = new AccountExportService(repo, events, logger, clock, mockOwnerScope());
+        AccountExportService service =
+                new AccountExportService(repo, activeAccounts(), events, logger, clock, mockOwnerScope());
 
         assertThatExceptionOfType(ResponseStatusException.class)
                 .isThrownBy(() -> service.requestExport(PersonActFixture.self(ACCOUNT_ID)))
@@ -339,6 +343,7 @@ class AccountExportServiceTest extends BaseUnitTest {
         var scope = new OwnerScope(mock(JdbcTemplate.class));
         var service = new AccountExportService(
                 mock(AccountExportRepository.class),
+                mock(AccountRepository.class),
                 mock(ApplicationEventPublisher.class),
                 mock(AuthEventLogger.class),
                 clock,
@@ -356,9 +361,20 @@ class AccountExportServiceTest extends BaseUnitTest {
         return scope;
     }
 
+    private static AccountRepository activeAccounts() {
+        var accounts = mock(AccountRepository.class);
+        when(accounts.lockStatusForShare(ACCOUNT_ID)).thenReturn(Optional.of(Account.Status.ACTIVE.name()));
+        return accounts;
+    }
+
     private AccountExportService newService(AccountExportRepository repo) {
         return new AccountExportService(
-                repo, mock(ApplicationEventPublisher.class), mock(AuthEventLogger.class), clock, mockOwnerScope());
+                repo,
+                mock(AccountRepository.class),
+                mock(ApplicationEventPublisher.class),
+                mock(AuthEventLogger.class),
+                clock,
+                mockOwnerScope());
     }
 
     private static void setId(Object entity, Long id) {
