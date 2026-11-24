@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationContextChanges;
 import de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository;
 import de.tum.cit.aet.hephaestus.conversation.ConversationRedaction;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationSandboxCopies;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.ErasesColumns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonConversationCopySource;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
@@ -23,6 +24,8 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
+// The conversation store deletes the person's conversations through OWN_CONVERSATIONS.
+@ErasesColumns("conversation.account_id")
 @PersonDataStores({
     ConversationEntryRepository.COPIES_PERSON_DATA_STORE,
     "conversation_entry_feedback_copy",

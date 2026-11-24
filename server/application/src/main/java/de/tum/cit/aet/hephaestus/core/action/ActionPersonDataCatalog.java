@@ -33,7 +33,8 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @PersonDataStores({"agent_action"})
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@ErasesColumns("agent_action.native_recipient")
+// A row whose subject or native recipient is the person is deleted through the OWNED subquery.
+@ErasesColumns({"agent_action.native_recipient", "agent_action.subject_account_id"})
 public class ActionPersonDataCatalog implements PersonDataCatalog, AccountErasureContributor {
     /** The rows that belong to the person: addressed to the account, or to one of the exact frozen native identities. */
     private static final String OWNED = """
