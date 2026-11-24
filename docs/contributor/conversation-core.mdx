@@ -12,7 +12,7 @@ The core gives Hephaestus one model for every input. Each input to a thread is a
 Two rules keep it correct. A turn commits all its writes in one transaction, and a turn reads only what every reader of its output may read.
 
 :::note
-This page describes the proposed design of the conversation core. Its decisions are proposed ADRs, and the code does not have all of it yet.
+This page describes the accepted design of the conversation core. Its decisions are accepted ADRs, and the code does not have all of it yet.
 A box or a state with the keyword `«planned»` is a part that the design adds.
 [System design](./system-design.mdx) and [Conversation runtime](./unified-pi-runtime.mdx) describe what the server does today.
 :::
@@ -957,7 +957,7 @@ These rules always hold. Each one has the ADR decision that states it and the te
 ## Counters
 
 Nine counters fence stale work.
-ADRs 0128 and 0134 are proposed in #4863, and ADRs 0135 and 0140 are proposed in #4867.
+ADRs 0128 and 0134 are in #4863, and ADRs 0135 and 0140 are in #4867.
 
 | Counter | Owner | What bumps it | What it fences |
 | --- | --- | --- | --- |
