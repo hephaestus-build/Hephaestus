@@ -31,6 +31,8 @@ class WorkspaceLifecycleServiceTest extends BaseUnitTest {
                 workspaces,
                 mock(MembershipRepository.class),
                 mock(WorkspaceSlugHistoryRepository.class),
+                mock(WorkspaceSlugReservationRepository.class),
+                mock(WorkspaceNamespaceReservation.class),
                 List.of(),
                 List.of(),
                 List.of(),

@@ -25,7 +25,9 @@ import tools.jackson.databind.ObjectMapper;
  * Redacts the tool results that may copy anyone's data ({@link ConversationEntryRepository#COPIES_PERSON_DATA}) in each
  * workspace where another person's Hephaestus conversation may have read this person's data, together with answers derived
  * from those results. A tool result that copies no
- * one's, such as a {@code show_feedback} result, stays: the app reads it to show the feedback Hephaestus showed.
+ * one's, such as a {@code show_feedback} result, stays: the app reads it to show the feedback Hephaestus showed. Before
+ * any step of the erasure, it deletes the physical sandbox copies of those workspaces and of the person's personal space,
+ * and a failed deletion stops the erasure until a retry deletes them.
  *
  * <p>The selection freezes every workspace of the person, not entries, so tool results written after the preview are
  * redacted too. This step runs last, after every step that erases a source that a context folder result ({@code read},
@@ -86,8 +88,9 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
                 SELECT person.workspace_id FROM (%s) person
                 WHERE person.workspace_id IS NOT NULL
                 """.formatted(PERSON_WORKSPACES), parameters(person, mapper), (rs, row) -> rs.getLong(1)));
-        // A personal space has one member, so no other person's conversation there can have read this person's data.
-        if (person.accountId() != null) found.addAll(memberships.teamWorkspaceIds(person.accountId()));
+        // The person's personal space too: no other person's conversation runs there, but its sandboxes hold the
+        // person's own copies, and the space's erasure step relies on this store to delete them.
+        if (person.accountId() != null) found.addAll(memberships.workspaceIds(person.accountId()));
         List<Long> workspaces = List.copyOf(found);
         var copies = sandboxCopies.snapshot(Set.copyOf(workspaces));
         return new PersonDataSelection(workspaces.stream()

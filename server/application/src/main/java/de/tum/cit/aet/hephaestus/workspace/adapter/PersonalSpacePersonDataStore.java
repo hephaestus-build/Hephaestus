@@ -12,7 +12,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * The person's own personal space. Export names it by its slug and creation time; what lives inside it is exported by
- * its own stores. Erasure disposes of the space with its owner's membership, as the erasure of the account does.
+ * its own stores. Erasure ends the space with everything in it, as the erasure of the account does.
  */
 final class PersonalSpacePersonDataStore implements PersonDataContributor {
     /** After the stores whose rows may live inside the space, and before the account store. */

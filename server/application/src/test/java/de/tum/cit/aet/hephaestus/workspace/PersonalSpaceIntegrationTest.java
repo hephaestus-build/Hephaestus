@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +58,9 @@ class PersonalSpaceIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private WorkspaceNamespaceReservation namespaceReservation;
 
     @Autowired
     private TransactionTemplate transactions;
@@ -200,8 +204,8 @@ class PersonalSpaceIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(memberships.export(memberships.select(subject), subject))
                 .singleElement()
                 .satisfies(row -> assertThat(row.get("workspace_id").asLong()).isEqualTo(teamId));
-        // Other modules' person-data stores read the same team workspaces through the workspace module.
-        assertThat(workspaceMemberships.teamWorkspaceIds(ownerId)).containsExactly(teamId);
+        // The conversation copy store deletes the sandboxes of both, the personal space's too.
+        assertThat(workspaceMemberships.workspaceIds(ownerId)).containsExactlyInAnyOrder(teamId, spaceId);
         // The personal space store names the space by its slug and creation time, and nothing else of it.
         var spaces = personData.contributors().stream()
                 .filter(store -> store.store().equals("workspace"))
@@ -217,14 +221,37 @@ class PersonalSpaceIntegrationTest extends AbstractWorkspaceIntegrationTest {
         });
     }
 
-    /** The erasure of the account disposes of the personal space and its membership. */
+    /**
+     * The erasure of the account ends a personal space that hosted a turn, with everything in it. Its address stays
+     * reserved only as a keyed token, and a team's reservation stays as it is (#5094).
+     */
     @Test
-    void shouldDisposeOfThePersonalSpaceWhenTheAccountIsErased() {
+    void shouldEndThePersonalSpaceAndKeepOnlyATokenOfItsAddressWhenTheAccountIsErased() {
+        UUID conversation = PersonalSpaceFixtures.insertFinishedTurn(jdbc, spaceId, ownerId);
+        String teamSlug = workspaces
+                .save(WorkspaceTestFixtures.activeWorkspace("team-beside-the-space"))
+                .getWorkspaceSlug();
+        assertThat(reserved(slug)).isTrue();
+
         personDataService.eraseForAccount(ownerId);
 
         assertThat(workspaces.findById(spaceId)).isEmpty();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM membership WHERE workspace_id = ?", Long.class, spaceId))
+        for (String table :
+                List.of("membership", "conversation", "conversation_turn", "conversation_entry", "agent_run"))
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM " + table + " WHERE workspace_id = ?", Long.class, spaceId))
+                    .as(table)
+                    .isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM conversation WHERE id = ?", Long.class, conversation))
                 .isZero();
+        assertThat(reserved(slug)).isFalse();
+        assertThat(reserved(namespaceReservation.slugToken(slug))).isTrue();
+        assertThat(reserved(teamSlug)).isTrue();
+    }
+
+    private boolean reserved(String reservation) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM workspace_slug_reservation WHERE slug = ?)", Boolean.class, reservation));
     }
 
     private static void assertRefused(Runnable write, String reason) {
