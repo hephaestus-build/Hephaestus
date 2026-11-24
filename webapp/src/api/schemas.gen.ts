@@ -2,7 +2,8 @@
 
 export const AboutRoleSchema = {
 	type: "string",
-	enum: ["AUTHOR", "REVIEWER", "ASSIGNEE", "MERGER"],
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["AUTHOR", "REVIEWER", "ASSIGNEE", "MERGER"],
 } as const;
 
 export const AcceptPracticeReleaseRequestSchema = {

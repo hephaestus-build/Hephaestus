@@ -1,9 +1,14 @@
 package de.tum.cit.aet.hephaestus;
 
+import static de.tum.cit.aet.hephaestus.config.NamedEnumModelConverter.CLOSED_PUBLIC_ENUMS;
+import static de.tum.cit.aet.hephaestus.config.NamedEnumModelConverter.OPEN_ENUM_NOTE;
+
+import de.tum.cit.aet.hephaestus.config.NamedEnumModelConverter;
 import de.tum.cit.aet.hephaestus.core.UserViewRead;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
+import de.tum.cit.aet.hephaestus.core.web.OpenWireCode;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlugValidator;
@@ -176,6 +181,11 @@ public class OpenAPIConfiguration {
     }
 
     @Bean
+    NamedEnumModelConverter namedEnumModelConverter(JsonMapper mapper) {
+        return new NamedEnumModelConverter(mapper, type -> type.isAnnotationPresent(OpenWireCode.class));
+    }
+
+    @Bean
     public OpenApiCustomizer schemaCustomizer(
             @Value("${spring.application.version:0.0.0-development}") String appVersion) {
         return openApi -> {
@@ -194,16 +204,8 @@ public class OpenAPIConfiguration {
 
     private static final String COMPONENTS = "#/components/schemas/";
 
-    /**
-     * The enums that the public contract keeps closed. A new value changes what an observation means, so it waits for
-     * a major release (compatibility policy § Open enums).
-     */
-    static final Set<String> CLOSED_ENUMS = Set.of("ResultOutcome", "Severity");
-
-    static final String OPEN_ENUM_NOTE = "Extensible enum: a client accepts a value that the examples do not name.";
-
     /** Each public operation as {@code METHOD /path}, from server/public-api-operations.json in the JAR. */
-    private static Set<String> readPublicOperations() {
+    static Set<String> readPublicOperations() {
         try (var in = new ClassPathResource("openapi/public-api-operations.json").getInputStream()) {
             return Set.copyOf(JsonMapper.shared().readValue(in, new TypeReference<List<String>>() {}));
         } catch (IOException e) {
@@ -218,21 +220,18 @@ public class OpenAPIConfiguration {
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
     static void openPublicResponseEnums(OpenAPI openApi, Set<String> operations) {
-        if (openApi.getPaths() == null || openApi.getComponents() == null) return;
-        Map<String, Schema> schemas = openApi.getComponents().getSchemas();
+        if (openApi.getPaths() == null) return;
+        var components = openApi.getComponents();
+        Map<String, Schema> schemas =
+                components == null || components.getSchemas() == null ? Map.of() : components.getSchemas();
         Set<Schema> closed = Collections.newSetFromMap(new IdentityHashMap<>());
-        CLOSED_ENUMS.stream().map(schemas::get).filter(Objects::nonNull).forEach(closed::add);
+        CLOSED_PUBLIC_ENUMS.stream().map(schemas::get).filter(Objects::nonNull).forEach(closed::add);
         Set<Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         Deque<Schema> pending = new ArrayDeque<>();
         openApi.getPaths()
                 .forEach((path, item) -> item.readOperationsMap().forEach((method, operation) -> {
-                    if (operation.getResponses() == null || !operations.contains(method.name() + " " + path)) return;
-                    operation.getResponses().values().stream()
-                            .filter(response -> response.getContent() != null)
-                            .flatMap(response -> response.getContent().values().stream())
-                            .map(media -> media.getSchema())
-                            .filter(Objects::nonNull)
-                            .forEach(pending::add);
+                    if (operations.contains(method.name() + " " + path))
+                        OpenApiResponseSchemas.visit(openApi, operation, pending::add);
                 }));
         while (!pending.isEmpty()) {
             Schema schema = pending.pop();
@@ -241,13 +240,25 @@ public class OpenAPIConfiguration {
                 Schema target = schemas.get(schema.get$ref().substring(COMPONENTS.length()));
                 if (target != null) pending.add(target);
             }
-            if (schema.getEnum() != null && !closed.contains(schema)) open(schema);
-            if (schema.getProperties() != null)
-                pending.addAll(schema.getProperties().values());
-            Stream.of(schema.getItems(), schema.getNot())
+            if ((schema.getEnum() != null || schema.getConst() instanceof String) && !closed.contains(schema))
+                open(schema);
+            Stream.of(schema.getProperties(), schema.getPatternProperties(), schema.getDependentSchemas())
+                    .filter(Objects::nonNull)
+                    .forEach(properties -> pending.addAll(properties.values()));
+            Stream.of(
+                            schema.getItems(),
+                            schema.getNot(),
+                            schema.getContains(),
+                            schema.getPropertyNames(),
+                            schema.getContentSchema(),
+                            schema.getUnevaluatedProperties(),
+                            schema.getUnevaluatedItems(),
+                            schema.getIf(),
+                            schema.getThen(),
+                            schema.getElse())
                     .filter(Objects::nonNull)
                     .forEach(pending::add);
-            Stream.of(schema.getAllOf(), schema.getAnyOf(), schema.getOneOf())
+            Stream.of(schema.getAllOf(), schema.getAnyOf(), schema.getOneOf(), schema.getPrefixItems())
                     .filter(Objects::nonNull)
                     .forEach(pending::addAll);
             if (schema.getAdditionalProperties() instanceof Schema values) pending.add(values);
@@ -256,14 +267,13 @@ public class OpenAPIConfiguration {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static void open(Schema schema) {
-        List<Object> known = ((List<Object>) schema.getEnum())
-                .stream().filter(Objects::nonNull).toList();
-        boolean nullable = schema.getEnum().contains(null);
-        schema.setEnum(null);
-        schema.setExamples(new ArrayList<>(known));
-        String description = schema.getDescription();
-        schema.setDescription(
-                description == null || description.isBlank() ? OPEN_ENUM_NOTE : OPEN_ENUM_NOTE + " " + description);
+        List<Object> allowed = schema.getEnum();
+        List<Object> known = allowed == null
+                ? List.of(Objects.requireNonNull(schema.getConst()))
+                : allowed.stream().filter(Objects::nonNull).toList();
+        boolean nullable = allowed != null && allowed.contains(null);
+        schema.setConst(null);
+        NamedEnumModelConverter.openWireSchema(schema, known);
         if (nullable && schema.getTypes() == null) schema.setTypes(new LinkedHashSet<>(List.of("string", "null")));
     }
 
@@ -476,7 +486,11 @@ public class OpenAPIConfiguration {
         components.getSchemas().keySet().forEach(original -> {
             String candidate = original.endsWith("DTO") ? original.substring(0, original.length() - 3) : original;
             Schema<?> taken = components.getSchemas().get(candidate);
-            if (!candidate.equals(original) && taken != null && taken.getEnum() != null) {
+            if (!candidate.equals(original)
+                    && taken != null
+                    && (taken.getEnum() != null
+                            || (taken.getDescription() != null
+                                    && taken.getDescription().startsWith(OPEN_ENUM_NOTE)))) {
                 throw new IllegalStateException("The enum " + candidate + " takes the name of " + original
                         + ". Give the enum @Schema(name = ...).");
             }
@@ -533,14 +547,7 @@ public class OpenAPIConfiguration {
                                 .filter(Objects::nonNull)
                                 .forEach(schemas::add);
                     }
-                    if (operation.getResponses() != null) {
-                        operation.getResponses().values().stream()
-                                .filter(response -> response.getContent() != null)
-                                .flatMap(response -> response.getContent().values().stream())
-                                .map(media -> media.getSchema())
-                                .filter(Objects::nonNull)
-                                .forEach(schemas::add);
-                    }
+                    OpenApiResponseSchemas.visit(openApi, operation, schemas::add);
                 }));
         return schemas;
     }
@@ -586,17 +593,8 @@ public class OpenAPIConfiguration {
 
         paths.forEach((path, pathItem) -> {
             pathItem.readOperations().forEach(operation -> {
-                if (operation.getResponses() != null) {
-                    operation.getResponses().forEach((code, response) -> {
-                        if (response.getContent() != null) {
-                            response.getContent().forEach((type, media) -> {
-                                if (media.getSchema() != null) {
-                                    normalizeSchemaReferences(media.getSchema(), schemaNames);
-                                }
-                            });
-                        }
-                    });
-                }
+                OpenApiResponseSchemas.visit(
+                        openApi, operation, schema -> normalizeSchemaReferences(schema, schemaNames));
 
                 if (operation.getRequestBody() != null
                         && operation.getRequestBody().getContent() != null) {

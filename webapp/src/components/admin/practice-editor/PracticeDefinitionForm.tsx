@@ -12,10 +12,7 @@ import type {
 import { CodeEditor } from "@/components/common/CodeEditor";
 import { DocLink } from "@/components/common/DocLink";
 import { FormErrorSummary } from "@/components/common/FormErrorSummary";
-import {
-	ABOUT_ROLE_LABELS,
-	type AboutRole,
-} from "@/components/practice-vocabulary/about-role-labels";
+import { aboutLabel, type AboutRole } from "@/components/practice-vocabulary/about-role-labels";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
@@ -671,8 +668,8 @@ function AboutField({ itemType, about, onChange, error }: AboutFieldProps) {
 		...roles.map((role) => ({
 			value: role,
 			label: itemType.aboutRoles.includes(role)
-				? ABOUT_ROLE_LABELS[role]
-				: `${ABOUT_ROLE_LABELS[role]} (not available for this kind of work)`,
+				? aboutLabel(role)
+				: `${aboutLabel(role)} (not available for this kind of work)`,
 		})),
 	];
 	return (
