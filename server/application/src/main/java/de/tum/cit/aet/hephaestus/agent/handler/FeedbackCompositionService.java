@@ -225,7 +225,7 @@ public class FeedbackCompositionService {
                                     SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW)
                             .orElse(null);
                     if (result == null
-                            || !copies.of(result).complete()
+                            || !result.copyAuthorityComplete()
                             || !Long.valueOf(developer).equals(result.developerAccountId())
                             || result.outcome() != ResultOutcome.NOT_MET
                             || !practice.practiceSlug().equals(result.practiceSlug())
@@ -258,7 +258,13 @@ public class FeedbackCompositionService {
         var readCopies = new ArrayList<HistoryCopy>();
         if (said != null)
             said.entries().stream().map(entry -> copies.of(entry.feedback())).forEach(readCopies::add);
-        retained.stream().map(copies::of).forEach(readCopies::add);
+        retained.stream()
+                .map(entry -> new HistoryCopy(
+                        entry.copyAuthorityComplete(),
+                        entry.copiedIdentities(),
+                        entry.repositoryIds(),
+                        entry.sourceJobIds()))
+                .forEach(readCopies::add);
         Map<Long, ItemRefDTO> items = withHistory && !retained.isEmpty()
                 ? references.items(
                         job.getWorkspaceId(),

@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedResults;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.RuntimeNonResultDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.StageResponseDTO;
@@ -39,6 +40,7 @@ import java.util.function.BiConsumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 import tools.jackson.databind.json.JsonMapper;
 
 class PracticeResultStagingTest extends BaseUnitTest {
@@ -62,7 +64,9 @@ class PracticeResultStagingTest extends BaseUnitTest {
             receipts,
             mock(ReviewCompositionBasisRepository.class),
             mapper,
-            new PracticeCatalogInjector(mapper));
+            new PracticeCatalogInjector(mapper),
+            mock(ReviewJobRepository.class),
+            mock(ApplicationEventPublisher.class));
 
     @BeforeEach
     void setup() {

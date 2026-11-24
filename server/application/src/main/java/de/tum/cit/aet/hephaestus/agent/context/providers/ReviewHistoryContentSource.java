@@ -34,7 +34,11 @@ public class ReviewHistoryContentSource {
 
     public List<ResultHistoryEntry> previousResults(ReviewAssignmentSnapshot assignment) {
         return results.forAssignment(assignment.item().workspaceId(), assignment.id(), 20).stream()
-                .filter(entry -> copies.record(copies.of(entry)))
+                .filter(entry -> copies.record(new HistoryCopy(
+                        entry.copyAuthorityComplete(),
+                        entry.copiedIdentities(),
+                        entry.repositoryIds(),
+                        entry.sourceJobIds())))
                 .toList();
     }
 

@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasis;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.StageResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
@@ -22,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSealed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import java.time.Instant;
 import java.util.Base64;
@@ -31,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +55,8 @@ public class PracticeResultStaging {
     private final ReviewCompositionBasisRepository bases;
     private final ObjectMapper mapper;
     private final PracticeCatalogInjector catalog;
+    private final ReviewJobRepository jobs;
+    private final ApplicationEventPublisher events;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public StageResponseDTO stage(
@@ -176,7 +181,16 @@ public class PracticeResultStaging {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void retainSealBasis(AdmissionIdentity identity, ReviewJob job, String digest, List<StagedPractice> staged) {
+    public void finishSeal(AdmissionIdentity identity, ReviewJob job, String digest, List<StagedPractice> staged) {
+        retainSealBasis(identity, job, digest, staged);
+        jobs.saveAndFlush(job);
+        var review = assignments.review(job);
+        if (review.kind() == ReviewKind.ITEM && review.origin() != ReviewOrigin.TRIAL)
+            events.publishEvent(new ReviewSealed(job.getReviewId(), job.getWorkspaceId()));
+    }
+
+    private void retainSealBasis(
+            AdmissionIdentity identity, ReviewJob job, String digest, List<StagedPractice> staged) {
         var basis = bases.findByWorkspaceIdAndJobId(job.getWorkspaceId(), job.getId())
                 .orElse(null);
         if (basis == null) {

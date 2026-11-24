@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackBas
 import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackService;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
-import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.profile.OverviewWindow;
 import de.tum.cit.aet.hephaestus.practices.profile.ProfileChangeQuery;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileChangeDTO;
@@ -22,7 +21,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ProfileChangeType;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -296,16 +294,13 @@ public class WeeklyDigestFacts {
             return List.of();
         }
         List<UUID> ids = reached.stream().map(Feedback::getId).toList();
-        Map<UUID, List<Result>> evidence = basis.visibleEvidence(workspaceId, ids);
-        Map<Long, Practice> practices = basis.practices(
-                workspaceId,
-                evidence.values().stream().flatMap(Collection::stream).toList());
+        Map<UUID, Long> practiceIds = basis.visiblePracticeIds(workspaceId, ids);
+        Map<Long, Practice> practices = basis.practicesById(workspaceId, Set.copyOf(practiceIds.values()));
         Map<UUID, Instant> withdrawnAt = visibility.withdrawnAt(workspaceId, ids);
         List<Row> rows = new ArrayList<>();
         for (Feedback feedback : reached) {
-            List<Result> support = evidence.get(feedback.getId());
-            Practice practice =
-                    support == null ? null : practices.get(support.getFirst().getPracticeId());
+            Long practiceId = practiceIds.get(feedback.getId());
+            Practice practice = practiceId == null ? null : practices.get(practiceId);
             if (practice != null) {
                 rows.add(new Row(feedback, practice, withdrawnAt.get(feedback.getId())));
             }
