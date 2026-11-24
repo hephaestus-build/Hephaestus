@@ -14,7 +14,7 @@
 		"mdast-util-from-markdown": "2.0.3",
 		"mdast-util-gfm-strikethrough": "2.0.0",
 		"micromark-extension-gfm-strikethrough": "2.1.0",
-		"minimatch": "11.0.3",
+		"minimatch": "11.0.9",
 		"zod": "4.6.7"
 	},
 	"engines": {
