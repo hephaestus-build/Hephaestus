@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery.ResearchQuestion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
+import de.tum.cit.aet.hephaestus.practices.research.ResearchDatasetAssembler.ReviewDisclosure;
+import de.tum.cit.aet.hephaestus.practices.research.ResearchDatasetAssembler.ReviewEvent;
+import de.tum.cit.aet.hephaestus.practices.research.ResearchPseudonyms.Kind;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.BasisRow;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.DecisionRow;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.FeedbackRow;
@@ -16,19 +19,25 @@ import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.ResultRow;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.ReviewPracticeRow;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.ReviewRow;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.ReviewSubjectRow;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewUsageAttempt;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewUsageSnapshot;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.YearMonth;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.assertj.core.groups.Tuple;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import tools.jackson.databind.json.JsonMapper;
 
 class ResearchDatasetAssemblerTest extends BaseUnitTest {
@@ -39,6 +48,7 @@ class ResearchDatasetAssemblerTest extends BaseUnitTest {
     private static final Instant FROM = Instant.parse("2026-04-01T00:00:00Z");
     private static final Instant TO = Instant.parse("2026-10-01T00:00:00Z");
     private static final Instant AT = Instant.parse("2026-06-15T12:30:00Z");
+    private static final YearMonth RELEASE_PERIOD = YearMonth.of(2026, 6);
     private static final String BUNDLED_DIGEST = "v6:" + "a".repeat(64);
     private static final String CUSTOM_DIGEST = "v6:" + "b".repeat(64);
     private static final String PUBLIC_CRITERIA = "Keep each pull request focused on one change.";
@@ -61,6 +71,120 @@ class ResearchDatasetAssemblerTest extends BaseUnitTest {
     private final UUID unsupported = UUID.randomUUID();
     private final UUID outsiderFeedback = UUID.randomUUID();
     private final UUID job = UUID.randomUUID();
+
+    @ParameterizedTest
+    @CsvSource({
+        "true, true,  SAFE,                   true,  true",
+        "true, false, SAFE,                   true,  false",
+        "false,true,  SAFE,                   false, false",
+        "false,false, SAFE,                   false, false",
+        "true, true,  QUOTES_PRIVATE_MESSAGE, false, false",
+        "true, true,  NAMES_BYSTANDER,        false, false",
+        "true, true,  PRIVATE_CHECK,          false, false",
+        "true, true,  ,                      false, false"
+    })
+    void shouldProjectOnlyPermittedFieldsWhenReviewEventsHaveDifferentGrants(
+            boolean subjectConsented,
+            boolean reviewerConsented,
+            @Nullable ReviewDisclosure disclosure,
+            boolean keepsRow,
+            boolean keepsReviewer) {
+        Map<Long, Long> grants = new HashMap<>();
+        if (subjectConsented) grants.put(PARTICIPANT, 77_001L);
+        if (reviewerConsented) grants.put(OUTSIDER, 77_002L);
+        var keys = key(1);
+        var projection = ResearchDatasetAssembler.projectReviewEvents(
+                List.of(new ReviewEvent(review, PARTICIPANT, OUTSIDER, ResultOutcome.MET, AT, disclosure)),
+                grants,
+                RELEASE_PERIOD,
+                keys);
+
+        if (keepsRow) {
+            String subjectKey = keys.key(Kind.PARTICIPANT, PARTICIPANT);
+            String reviewerKey = keepsReviewer ? keys.key(Kind.PARTICIPANT, OUTSIDER) : null;
+            assertThat(projection.rows()).singleElement().satisfies(row -> {
+                assertThat(row.key()).isEqualTo(keys.key(Kind.REVIEW, review));
+                assertThat(row.subject()).isEqualTo(subjectKey);
+                assertThat(row.reviewer()).isEqualTo(reviewerKey);
+                assertThat(row.outcome()).isEqualTo(ResultOutcome.MET);
+                assertThat(row.period()).isEqualTo("2026-06");
+            });
+            assertThat(projection.participantKeys())
+                    .containsExactlyInAnyOrderEntriesOf(
+                            reviewerKey == null
+                                    ? Map.of(PARTICIPANT, subjectKey)
+                                    : Map.of(PARTICIPANT, subjectKey, OUTSIDER, reviewerKey));
+        } else {
+            assertThat(projection.rows()).isEmpty();
+            assertThat(projection.participantKeys()).isEmpty();
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "2026-05-31T23:59:59.999999999Z, 0",
+        "2026-06-01T00:00:00Z,           1",
+        "2026-06-30T23:59:59.999999999Z, 1",
+        "2026-07-01T00:00:00Z,           0"
+    })
+    void shouldCoarsenReviewTimesWhenEventsFallInTheUtcReleasePeriod(String timestamp, int expectedRows) {
+        var rows = ResearchDatasetAssembler.projectReviewEvents(
+                        List.of(new ReviewEvent(
+                                review,
+                                PARTICIPANT,
+                                null,
+                                ResultOutcome.MET,
+                                Instant.parse(timestamp),
+                                ReviewDisclosure.SAFE)),
+                        Map.of(PARTICIPANT, 77_001L),
+                        RELEASE_PERIOD,
+                        key(1))
+                .rows();
+
+        assertThat(rows).hasSize(expectedRows).allSatisfy(row -> {
+            assertThat(row.period()).isEqualTo("2026-06");
+            assertThat(row.reviewer()).isNull();
+        });
+    }
+
+    @Test
+    void shouldSerializeOnlySafeFieldsWhenTheSnapshotContainsUnsafeReviewEvents() {
+        var keys = key(1);
+        var projection = ResearchDatasetAssembler.projectReviewEvents(
+                List.of(
+                        new ReviewEvent(review, PARTICIPANT, OUTSIDER, ResultOutcome.MET, AT, ReviewDisclosure.SAFE),
+                        new ReviewEvent(
+                                mixedReview,
+                                SECOND,
+                                OUTSIDER,
+                                ResultOutcome.NOT_MET,
+                                AT,
+                                ReviewDisclosure.NAMES_BYSTANDER),
+                        new ReviewEvent(
+                                legacyReview,
+                                PARTICIPANT,
+                                null,
+                                ResultOutcome.MET,
+                                AT,
+                                ReviewDisclosure.PRIVATE_CHECK)),
+                Map.of(PARTICIPANT, 77_001L, SECOND, 77_003L),
+                RELEASE_PERIOD,
+                keys);
+        var mapper = JsonMapper.builder().build();
+
+        assertThat(projection.participantKeys()).containsOnlyKeys(PARTICIPANT);
+        assertThat(mapper.readTree(mapper.writeValueAsString(projection.rows())))
+                .isEqualTo(mapper.readTree(
+                        """
+                        [{
+                          "key": "%s",
+                          "subject": "%s",
+                          "reviewer": null,
+                          "outcome": "MET",
+                          "period": "2026-06"
+                        }]
+                        """.formatted(keys.key(Kind.REVIEW, review), keys.key(Kind.PARTICIPANT, PARTICIPANT))));
+    }
 
     private ResearchSnapshot snapshot(Map<UUID, ReviewUsageSnapshot> usage) {
         return new ResearchSnapshot(

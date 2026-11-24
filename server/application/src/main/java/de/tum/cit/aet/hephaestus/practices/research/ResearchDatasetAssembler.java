@@ -8,11 +8,13 @@ import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.ResultRow;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.ReviewPracticeRow;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.ReviewRow;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.ReviewSubjectRow;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewUsageAttempt;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewUsageSnapshot;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -56,6 +58,56 @@ final class ResearchDatasetAssembler {
      *     that the file names; what the protected mapping stores
      */
     record Assembled(ResearchDataset dataset, Map<Long, String> participantKeys) {}
+
+    enum ReviewDisclosure {
+        SAFE,
+        QUOTES_PRIVATE_MESSAGE,
+        NAMES_BYSTANDER,
+        PRIVATE_CHECK
+    }
+
+    record ReviewEvent(
+            UUID id,
+            long subjectId,
+            @Nullable Long reviewerId,
+            ResultOutcome outcome,
+            Instant occurredAt,
+            @Nullable ReviewDisclosure disclosure) {}
+
+    record ProjectedReview(
+            String key, String subject, @Nullable String reviewer, ResultOutcome outcome, String period) {}
+
+    /** Only the rows enter the dataset. The participant keys stay in the protected account mapping. */
+    record ProjectedReviews(List<ProjectedReview> rows, Map<Long, String> participantKeys) {}
+
+    /**
+     * Projects review events from one UTC calendar month. The grants are covering consent decisions for
+     * this dataset, keyed by account as in {@link ResearchSnapshot}. Missing disclosure evidence drops
+     * the event.
+     */
+    static ProjectedReviews projectReviewEvents(
+            List<ReviewEvent> events, Map<Long, Long> grants, YearMonth period, ResearchPseudonyms keys) {
+        Set<Long> authorised = Map.copyOf(grants).keySet();
+        List<ProjectedReview> projected = new ArrayList<>();
+        Map<Long, String> participantKeys = new HashMap<>();
+        String periodLabel = period.toString();
+        for (ReviewEvent event : events) {
+            if (event.disclosure() != ReviewDisclosure.SAFE
+                    || !authorised.contains(event.subjectId())
+                    || !period.equals(YearMonth.from(event.occurredAt().atOffset(ZoneOffset.UTC)))) {
+                continue;
+            }
+            Long reviewer = event.reviewerId();
+            String subjectKey =
+                    participantKeys.computeIfAbsent(event.subjectId(), id -> keys.key(Kind.PARTICIPANT, id));
+            String reviewerKey = reviewer != null && authorised.contains(reviewer)
+                    ? participantKeys.computeIfAbsent(reviewer, id -> keys.key(Kind.PARTICIPANT, id))
+                    : null;
+            projected.add(new ProjectedReview(
+                    keys.key(Kind.REVIEW, event.id()), subjectKey, reviewerKey, event.outcome(), periodLabel));
+        }
+        return new ProjectedReviews(sortedBy(projected, ProjectedReview::key), Map.copyOf(participantKeys));
+    }
 
     /**
      * @param bundled slug → the definition this release ships under that slug, from the bundled loader
