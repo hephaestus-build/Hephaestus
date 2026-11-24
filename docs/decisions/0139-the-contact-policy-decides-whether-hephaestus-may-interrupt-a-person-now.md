@@ -96,7 +96,7 @@ Option 6.
       1. `REQUESTED_RESULT`
       2. `AGREED`
       3. `UNPROMPTED`
-    - The start policy of ADR 0120 decision 4 decides if a waiting item can start a turn now.
+    - The start policy of ADR 0120 decision 4 decides if an item in the inbox can start a turn now.
       When a turn ends and such an item waits, the next claim starts at once. It does not wait for a new event.
 11. **The notification text is the notice line, never the message summary.** The push payload stays ids only. On arrival, the service worker fetches the notice line with the person's session. On any failure it shows the kind's fixed text.
     - The notice line is registry copy with parameters, such as "Check ready: 1 problem on PR #42". It is never model text.
