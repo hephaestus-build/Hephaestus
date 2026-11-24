@@ -449,6 +449,15 @@ The test runs each one on the migrated schema and checks deferred constraints at
 It fails when a check, a trigger or a key refuses a registered transition.
 It also fails when the update changes no row, or when the row misses its target state.
 
+### Migration order from 1.0.0-rc.1
+
+The release upgrade test applies the candidate image's first migration to a copy of the seeded 1.0.0-rc.1 database.
+It checks the identities of the baseline and first migration change sets in the history.
+Then it runs the full migration from that prefix and compares its history with an uninterrupted upgrade.
+On a second copy, a test change set references a column before the migration adds it.
+Liquibase must name the test change set and the missing column.
+The test also checks that the later change sets did not run.
+
 ### Previous release on the new schema
 
 After each upgrade, the driver runs the release that the upgrade started from in two ways:
