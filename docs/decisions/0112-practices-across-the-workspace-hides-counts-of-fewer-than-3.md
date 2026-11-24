@@ -1,6 +1,6 @@
 # ADR 0112: Practices across the workspace hides counts of fewer than 3 people
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md)
 **Date:** 2026-11-18
 **Amended:** 2026-11-23 by NP-04 (to be filed). The threshold is 5, and **Open feedback** has no typical range. ADR 0051 records the population change.
 **Authors:** Hephaestus maintainers

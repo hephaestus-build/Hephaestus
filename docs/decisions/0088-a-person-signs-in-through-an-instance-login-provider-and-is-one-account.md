@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-10
 **Authors:** Felix T.J. Dietrich
+**Amended by:** [ADR 0125](0125-hephaestus-is-never-a-performance-instrument.md)
 
 **Supersedes:** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md), [ADR 0019](0019-workspace-membership-keyed-on-account.md)
 
