@@ -813,7 +813,7 @@ The hosts' own Alertmanager notifies no one unless its site configuration names 
 
 | Check | Fails when | Response |
 | --- | --- | --- |
-| The API of each host answers | `https://<host>/api/readyz` does not answer 200 in three tries over 40 seconds | Read the server and PostgreSQL Pods (`kubectl -n hephaestus get pods`) and the [alert response](../admin/production-operations-runbook#alert-response). A server stopped on purpose also fails this check. Record why in the issue. |
+| The server of each host is ready | `https://<host>/readyz` does not answer the server's `{"status":"UP"}` in three tries over 40 seconds | Read the server and PostgreSQL Pods (`kubectl -n hephaestus get pods`) and the [alert response](../admin/production-operations-runbook#alert-response). A server stopped on purpose also fails this check. Record why in the issue. |
 | Staging follows main | The Staging channel is frozen for 24 hours or more, or deploy-state cannot date the freeze | Promote Staging without **freeze** when the hold is over. Otherwise record in the issue why the hold continues. Continuous staging shows a held run as a warning with the freeze age. |
 
 ### Kernel updates on the project's hosts

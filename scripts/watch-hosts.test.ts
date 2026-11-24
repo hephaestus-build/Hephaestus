@@ -4,22 +4,30 @@ import { test } from "node:test";
 import { parseChannel } from "./reconcile-deployment.ts";
 import { apiAnswers, freezeVerdict } from "./watch-hosts.ts";
 
-await test("the API answers when one readiness request returns 200, and is down after three failures", async () => {
+const reply = (status: number, body: string) => ({ status, text: async () => body });
+
+await test("the server is ready when one readiness request returns its health body, and down after three failures", async () => {
 	const requests: string[] = [];
-	const answers = [503, 200];
+	const answers = [reply(503, "no available server"), reply(200, '{"status":"UP"}')];
 	assert.deepEqual(
 		await apiAnswers(
 			"example.org",
 			async (url) => {
 				requests.push(url);
-				return { status: answers.shift() ?? 503 };
+				return answers.shift() ?? reply(503, "");
 			},
 			3,
 			0,
 		),
 		{ ok: true },
 	);
-	assert.deepEqual(requests, ["https://example.org/api/readyz", "https://example.org/api/readyz"]);
+	assert.deepEqual(requests, ["https://example.org/readyz", "https://example.org/readyz"]);
+
+	// The web app of an older release answers every path with its page while the server is stopped.
+	assert.deepEqual(
+		await apiAnswers("example.org", async () => reply(200, "<!doctype html>"), 2, 0),
+		{ ok: false, last: "HTTP 200 without the server's health body" },
+	);
 
 	let calls = 0;
 	assert.deepEqual(
@@ -30,7 +38,7 @@ await test("the API answers when one readiness request returns 200, and is down 
 				if (calls === 3) {
 					throw new Error("The operation was aborted due to timeout");
 				}
-				return { status: 503 };
+				return reply(503, "no available server");
 			},
 			3,
 			0,

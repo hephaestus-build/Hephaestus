@@ -7,7 +7,7 @@ import {
 	heldHours,
 } from "./automatic-promotion.ts";
 import { requiredEnv } from "./lib/env.ts";
-import { asRecord, parseJson } from "./lib/json.ts";
+import { asRecord, isRecord, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 import { parseChannel, type Channel } from "./reconcile-deployment.ts";
 
@@ -17,9 +17,25 @@ import { parseChannel, type Channel } from "./reconcile-deployment.ts";
  * own Alertmanager reaches no one unless its site configuration names a receiver.
  */
 
-export type Fetch = (url: string, init: { signal: AbortSignal }) => Promise<{ status: number }>;
+export type Fetch = (
+	url: string,
+	init: { signal: AbortSignal },
+) => Promise<{ status: number; text: () => Promise<string> }>;
 
-/** The API answers when one of `attempts` readiness requests, `pause` ms apart, returns 200. */
+/** Whether a readiness body is the server's own `{"status":"UP"}`, not a page that a proxy served. */
+function serverUp(body: string): boolean {
+	try {
+		const parsed: unknown = JSON.parse(body);
+		return isRecord(parsed) && parsed.status === "UP";
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The server is ready when one of `attempts` requests to its public readiness path, `pause` ms apart,
+ * returns 200 with its health body. A web app in front of a stopped server also answers 200, with HTML.
+ */
 export async function apiAnswers(
 	host: string,
 	fetch: Fetch,
@@ -29,13 +45,14 @@ export async function apiAnswers(
 	let last = "";
 	for (let attempt = 1; attempt <= attempts; attempt += 1) {
 		try {
-			const response = await fetch(`https://${host}/api/readyz`, {
+			const response = await fetch(`https://${host}/readyz`, {
 				signal: AbortSignal.timeout(10_000),
 			});
-			if (response.status === 200) {
+			const body = await response.text();
+			if (response.status === 200 && serverUp(body)) {
 				return { ok: true };
 			}
-			last = `HTTP ${response.status}`;
+			last = `HTTP ${response.status}${response.status === 200 ? " without the server's health body" : ""}`;
 		} catch (error) {
 			last = error instanceof Error ? error.message : String(error);
 		}
@@ -78,8 +95,8 @@ if (import.meta.main) {
 		for (const { host, result } of results) {
 			console.log(
 				result.ok
-					? `${host}: the API is ready`
-					: `::error title=${host} API down::https://${host}/api/readyz did not answer 200 in 3 tries over 40 s (last: ${result.last}).`,
+					? `${host}: the server is ready`
+					: `::error title=${host} server down::https://${host}/readyz did not report the server ready in 3 tries over 40 s (last: ${result.last}).`,
 			);
 		}
 		process.exitCode = results.every(({ result }) => result.ok) ? 0 : 1;
