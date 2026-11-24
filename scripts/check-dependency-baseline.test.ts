@@ -195,22 +195,23 @@ await test("the names a lockfile installs come from both documents, scoped and a
 	]);
 });
 
+const readFixture = () => LOCKFILE;
+
 await test("a lockfile that installs a retired package fails, whatever the counts", () => {
 	const files = ["pnpm-lock.yaml", "image/pnpm-lock.yaml"];
-	const read = () => LOCKFILE;
-	assert.deepEqual(retiredInLockfiles({ "is-even": "Owned." }, read, files), []);
+	assert.deepEqual(retiredInLockfiles({ "is-even": "Owned." }, readFixture, files), []);
 	assert.deepEqual(
-		retiredInLockfiles({ "left-pad": "String.prototype.padStart." }, read, files),
+		retiredInLockfiles({ "left-pad": "String.prototype.padStart." }, readFixture, files),
 		files.map((file) => `${file} installs left-pad, which is retired: String.prototype.padStart.`),
 	);
 	// The root importer declares `vite` as an alias of Vite+ core: the installed name is what counts.
 	assert.equal(
-		retiredInLockfiles({ "@voidzero-dev/vite-plus-core": "Aliased." }, read, files).length,
+		retiredInLockfiles({ "@voidzero-dev/vite-plus-core": "Aliased." }, readFixture, files).length,
 		files.length,
 	);
-	assert.deepEqual(retiredInLockfiles({ vite: "Only an alias here." }, read, files), []);
+	assert.deepEqual(retiredInLockfiles({ vite: "Only an alias here." }, readFixture, files), []);
 	// The env document's config dependencies run during an install, so they count too.
-	assert.equal(retiredInLockfiles({ pnpm: "Env." }, read, files).length, files.length);
+	assert.equal(retiredInLockfiles({ pnpm: "Env." }, readFixture, files).length, files.length);
 });
 
 await test("a retired package bundled inside another one, or linked from the workspace, still fails", () => {
