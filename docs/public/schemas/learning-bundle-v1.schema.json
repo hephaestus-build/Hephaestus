@@ -1,0 +1,177 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://docs.hephaestus.build/schemas/learning-bundle-v1.schema.json",
+	"title": "Hephaestus learning bundle, format version 1",
+	"description": "A portable download of one person's learning. It carries only the person's own words, text that the person confirmed word for word, and closed fields. It names no workspace, no piece of work and no other person. A new format version gets a new schema file, so this file never changes after release.",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"format",
+		"formatVersion",
+		"bundleId",
+		"instanceId",
+		"generatedAt",
+		"records",
+		"growthPoints",
+		"tombstones"
+	],
+	"properties": {
+		"format": {
+			"description": "Identifies the file as a Hephaestus learning bundle.",
+			"const": "hephaestus.learning-bundle"
+		},
+		"formatVersion": {
+			"description": "The format version. A reader refuses a version that it does not know.",
+			"const": 1
+		},
+		"bundleId": {
+			"description": "New for each download. With instanceId, it lets an import recognize a bundle that it already read.",
+			"$ref": "#/$defs/uuid"
+		},
+		"instanceId": {
+			"description": "The stable id of the Hephaestus instance that issued the bundle.",
+			"$ref": "#/$defs/uuid"
+		},
+		"generatedAt": {
+			"description": "When the instance generated the bundle.",
+			"$ref": "#/$defs/timestamp"
+		},
+		"records": {
+			"description": "The person's records that may leave the instance. A portableId occurs at most once in the bundle.",
+			"type": "array",
+			"maxItems": 10000,
+			"items": { "$ref": "#/$defs/record" }
+		},
+		"growthPoints": {
+			"description": "The person's growth points for practices with a portable identity. A portableId occurs at most once in the bundle.",
+			"type": "array",
+			"maxItems": 200000,
+			"items": { "$ref": "#/$defs/growthPoint" }
+		},
+		"tombstones": {
+			"description": "Records and growth points that an earlier bundle could carry and that the person deleted since. A portableId occurs at most once in the bundle.",
+			"type": "array",
+			"maxItems": 200000,
+			"items": { "$ref": "#/$defs/tombstone" }
+		}
+	},
+	"$defs": {
+		"uuid": {
+			"type": "string",
+			"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+		},
+		"timestamp": {
+			"description": "An RFC 3339 time in UTC.",
+			"type": "string",
+			"format": "date-time",
+			"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"
+		},
+		"portableId": {
+			"description": "Stable across downloads from one instance. It never changes for the life of the record or the growth point.",
+			"$ref": "#/$defs/uuid"
+		},
+		"revision": {
+			"description": "Grows by one with each change. A later revision of one portableId replaces an earlier one.",
+			"type": "integer",
+			"minimum": 1
+		},
+		"practiceKey": {
+			"description": "The portable identity of a practice, in the form <domain>/<slug>. A practice of one workspace has no portable identity and never appears.",
+			"type": "string",
+			"maxLength": 160,
+			"pattern": "^[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*$",
+			"not": { "pattern": "^local/" }
+		},
+		"record": {
+			"description": "A record in the person's own words, at its confirmed revision.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"portableId",
+				"revision",
+				"kind",
+				"state",
+				"authorKind",
+				"text",
+				"createdAt",
+				"revisedAt"
+			],
+			"properties": {
+				"portableId": { "$ref": "#/$defs/portableId" },
+				"revision": { "$ref": "#/$defs/revision" },
+				"kind": {
+					"enum": ["PREFERENCE", "CONTEXT", "LESSON", "REFLECTION", "CORRECTION", "GOAL"]
+				},
+				"state": {
+					"description": "A record that waits for the person's review has no confirmed revision and never appears.",
+					"enum": ["ACTIVE", "CLOSED"]
+				},
+				"authorKind": {
+					"description": "PERSON: the person wrote the text. HEPHAESTUS: Hephaestus wrote the text and the person confirmed it word for word.",
+					"enum": ["PERSON", "HEPHAESTUS"]
+				},
+				"text": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 20000
+				},
+				"practiceKey": { "$ref": "#/$defs/practiceKey" },
+				"createdAt": { "$ref": "#/$defs/timestamp" },
+				"revisedAt": {
+					"description": "When the person confirmed this revision.",
+					"$ref": "#/$defs/timestamp"
+				}
+			}
+		},
+		"growthPoint": {
+			"description": "One outcome for one piece of work and one practice. It does not identify the piece of work.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"portableId",
+				"revision",
+				"practiceKey",
+				"comparabilityClass",
+				"outcome",
+				"madeBy",
+				"occurredWeek"
+			],
+			"properties": {
+				"portableId": { "$ref": "#/$defs/portableId" },
+				"revision": { "$ref": "#/$defs/revision" },
+				"practiceKey": { "$ref": "#/$defs/practiceKey" },
+				"comparabilityClass": {
+					"description": "Outcomes count together only within one class of one practice.",
+					"type": "string",
+					"maxLength": 96,
+					"pattern": "^v[0-9]+:[0-9a-f]{64}$"
+				},
+				"outcome": { "enum": ["MET", "NOT_MET"] },
+				"madeBy": {
+					"description": "Only REVIEW counts in totals.",
+					"enum": ["REVIEW", "SELF_REPORT", "IMPORT"]
+				},
+				"occurredWeek": {
+					"description": "The ISO 8601 week of the outcome.",
+					"type": "string",
+					"pattern": "^[0-9]{4}-W(0[1-9]|[1-4][0-9]|5[0-3])$"
+				}
+			}
+		},
+		"tombstone": {
+			"description": "A deleted record or growth point. It keeps no content.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["kind", "portableId", "revision", "deletedAt"],
+			"properties": {
+				"kind": { "const": "PORTABLE_RECORD" },
+				"portableId": { "$ref": "#/$defs/portableId" },
+				"revision": {
+					"description": "The last revision before the deletion.",
+					"$ref": "#/$defs/revision"
+				},
+				"deletedAt": { "$ref": "#/$defs/timestamp" }
+			}
+		}
+	}
+}

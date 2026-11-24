@@ -156,6 +156,10 @@ tasks.processResources {
     exclude("agent/work/**")
     exclude("agent/*.ts")
     from(rootProject.file("../docs/contributor/practice-feedback-language.mdx")) { into("agent") }
+    // One copy of the learning bundle schema: the docs site publishes it, and the JAR carries it.
+    from(rootProject.file("../docs/public/schemas/learning-bundle-v1.schema.json")) {
+        into("learning-bundle")
+    }
     // The spec writes the enums that these operations return as open (ADR 0103 rule 3).
     from(rootProject.file("public-api-operations.json")) { into("openapi") }
     // The built web app, which the server serves (ADR 0100). Run `vp run build:webapp` first; the
