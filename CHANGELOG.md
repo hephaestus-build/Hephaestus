@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.0.0-rc.15
+
+### Minor Changes
+
+- Counts of people now show only from 5 people, to protect individuals.
+  **Practices across the workspace** shows a count, a split or a typical range only from 5 developers, up from 3.
+  A split with a part of 1 to 4 developers, or with every developer in one part, shows only its total.
+  The page now counts everyone whose work was reviewed in the period and who has a standing in a practice.
+  Hidden members, members who left, the review scope and the groups the page shows no longer change who it counts.
+  **Open feedback** shows only your own figure, without a typical range.
+  A suspended account, and a change to a practice's reviewer, criteria or group, can still change the counts.
+  The page says that standings rest on earlier reviews only when at least 5 developers have such standings.
+  The public activity page no longer counts the contributors it does not name, and its period no longer moves when a person hides.
+  Its people helped count now includes every human author of a reviewed pull request, whatever that author or the workspace chose.
+  Workspace settings no longer count the people that the public activity page leaves out.
+  The Slack channel list no longer counts members who opted out, and the sync view no longer counts each channel's stored messages.
+  The instance console counts the members each workspace's member list shows, and withholds a count of 1 to 4.
+  In the API, the public-hidden-count operation, the Slack channel's `optedOutMemberCount` and the public page's `unlistedContributors` are removed, and the instance workspace's `memberCount` can be absent.
+- A new alert, `HephaestusAgentAttemptsLost`, warns you when more than 1 % of the attempts of one run kind lose their holder in six hours, for example reviews or conversation turns whose sandbox or server stopped mid-attempt. A lost attempt repeats its work, or fails the run when it has no attempt left, so a rising share costs model spend and time. No operator action is needed: a Prometheus that already loads the chart's rule file picks it up, and the runbook has a row for it.
+- Generated API clients read the role in a practice definition as a string. Existing role codes stay the same.
+
+### Patch Changes
+
+- The one-host installer has a temporary security exception for CVE-2026-39821 in the k3s local storage provisioner. The exception expires on December 21, 2026. The provisioner still needs a fixed upstream release.
+- The maintenance barrier now lasts exactly as long as a database migration: every change set runs on the session that holds it, so it ends with the migration, also when the migration's session is killed. While it is up, servers also reserve no sync job, start no repository lookup for a product feedback filing and start no provider resource registration or removal. The database refuses a new lease on each of these and on runs, outbox actions and provider events, and an action that must run at once answers `503` with `Retry-After` before it waits on any table. A sync request during the migration gets `503`, and a reserved sync that has not started ends as cancelled. The migration logs when the barrier goes up and comes down, each server reports the gauge `maintenance_barrier_raised`, and the critical alert `HephaestusMaintenanceBarrierStuck` fires when it stays up for 30 minutes. Servers of 1.0.0-rc.14 and earlier do not check the barrier, so a stopped upgrade still stops every role ([Work during a migration](https://docs.hephaestus.build/admin/runtime-roles#work-during-a-migration)).
+- While a database migration runs, servers claim no queued practice review, conversation turn, outbox action or provider event, and record no new sandbox request. Work that started before the migration finishes. A test email or another action that must run at once answers that Hephaestus is updating. Servers of 1.0.0-rc.14 and earlier do not check this, so a stopped upgrade still stops every role. When the migration ends, also when it fails, the servers take the waiting work again ([Work during a migration](https://docs.hephaestus.build/admin/runtime-roles#work-during-a-migration)).
+- The server image no longer contains the Slack Bolt app framework, which Hephaestus did not use. Slack messages, App Home and webhook verification work as before with the same Slack SDK release.
+- The server runs on Spring Boot 4.1.3, Spring Security 7.1.3 and Spring Framework 7.0.11. These releases fix the Spring security advisories of 19 November 2026. Install the new release. No other operator step is necessary.
+
+  Two advisories applied to Hephaestus. With CVE-2026-59330, passkey sign-in could accept a cloned security key. With CVE-2026-59333, the address check of the gateway could accept an address of the other IP family as a private address. The gateway still verified the credential of each call. For the other advisories, Hephaestus does not use the affected function, or its configuration stops the attack. For example, the Actuator endpoints that CVE-2026-59414 concerns are available only on the management port.
+
+- The release's software bill of materials lists the GitLab icons that the web app ships, with the upstream release they come from and its MIT license. The web app now ships that license with the icons. The web app looks and works as before.
+
 ## 1.0.0-rc.14
 
 ### Patch Changes
