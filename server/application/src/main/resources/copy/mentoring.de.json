@@ -29,6 +29,7 @@
   "problem.conversation-turn-stopped": "Hephaestus hat die Antwort beendet.",
   "problem.csrf-token-rejected": "Lade die Seite neu und versuche es noch einmal.",
   "problem.feedback-withheld": "Hephaestus hat dieses Feedback zurückgehalten.",
+  "problem.idempotency-key-in-flight": "Deine Nachricht wird noch gesendet. Warte kurz und versuche es dann noch einmal.",
   "problem.journal-pending": "Wir haben die Änderung angenommen und speichern noch den Eintrag für die Wiederherstellung. Versuche es gleich noch einmal.",
   "problem.llm-call-pool-in-use": "Ein Modell nutzt diesen Pool noch.",
   "problem.llm-call-pool-slug-conflict": "Ein anderer Pool nutzt diese Adresse. Wähle eine andere Adresse.",
