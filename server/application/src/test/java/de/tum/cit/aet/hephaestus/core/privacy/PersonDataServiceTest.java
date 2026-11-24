@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
@@ -52,9 +53,8 @@ class PersonDataServiceTest extends BaseUnitTest {
     @BeforeEach
     void createService() {
         service = new PersonDataService(
-                resolver,
+                new PersonDataScopeResolver(resolver, List.of(evidence), mock(OwnerScope.class)),
                 registry,
-                List.of(evidence),
                 requests,
                 suppression,
                 mock(PersonDataWriteFence.class),

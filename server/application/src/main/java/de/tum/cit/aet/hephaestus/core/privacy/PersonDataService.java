@@ -8,9 +8,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -26,7 +24,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -54,9 +51,8 @@ import tools.jackson.databind.ObjectMapper;
 @WorkspaceAgnostic("Verified instance-admin rights requests span all of a person's workspaces")
 public class PersonDataService {
     private static final Logger log = LoggerFactory.getLogger(PersonDataService.class);
-    private final PersonIdentityResolver resolver;
+    private final PersonDataScopeResolver scopes;
     private final PersonDataRegistry registry;
-    private final List<PersonEvidenceErasure> evidenceStores;
     private final PersonDataRequestRepository requests;
     private final IdentityRestrictionService suppression;
     private final PersonDataWriteFence writeFence;
@@ -77,7 +73,7 @@ public class PersonDataService {
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public Snapshot preview(Long administratorId, @Nullable Long accountId, List<PersonIdentity> identities) {
-        PersonScope scope = withEvidenceJobs(resolver.resolve(accountId, identities));
+        PersonScope scope = scopes.resolve(accountId, identities);
         PersonDataRequest request = new PersonDataRequest();
         request.setAdministratorAccountId(administratorId);
         request.setScopeJson(mapper.writeValueAsString(scope));
@@ -195,7 +191,7 @@ public class PersonDataService {
     public void eraseForAccount(long accountId) {
         TransactionTemplate tx = new TransactionTemplate(transactions);
         UUID requestId = tx.execute(status -> {
-            PersonScope person = withEvidenceJobs(resolver.resolve(accountId, List.of()));
+            PersonScope person = scopes.resolve(accountId, List.of());
             copyFence.holdForErasure();
             writeFence.holdForErasure(person.identities());
             var accountStatus = jdbc.queryForObject(
@@ -373,26 +369,9 @@ public class PersonDataService {
 
     private void requireUnchanged(PersonDataRequest r, Map<String, PersonDataSelection> selected) {
         PersonScope scope = scope(r);
-        if (!scope.equals(withEvidenceJobs(resolver.resolve(scope.accountId(), scope.identities())))
+        if (!scope.equals(scopes.resolve(scope.accountId(), scope.identities()))
                 || !registry.unchanged(scope, selected))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The preview scope changed. Create a new preview.");
-    }
-
-    private PersonScope withEvidenceJobs(PersonScope resolved) {
-        var derivedJobs = Stream.concat(
-                        resolved.derivedJobIds().stream(),
-                        evidenceStores.stream().flatMap(store -> store.jobsContaining(resolved).stream()))
-                .distinct()
-                .sorted()
-                .toList();
-        return new PersonScope(
-                resolved.accountId(),
-                resolved.identities(),
-                resolved.userIds(),
-                resolved.conversationIds(),
-                resolved.outlineDocumentIds(),
-                resolved.scmArtifactIds(),
-                derivedJobs);
     }
 
     private PersonScope scope(PersonDataRequest r) {
@@ -427,6 +406,7 @@ public class PersonDataService {
         if (request.getState() != PersonDataRequest.State.ERASING) return null;
         if (!Objects.equals(request.getAdministratorAccountId(), actor.administratorAccountId())
                 || !scope(request).equals(person)) throw new IllegalStateException("Erasure admission changed");
+        scopes.bind(person);
         return request;
     }
 

@@ -34,6 +34,7 @@
 		"---Upgrade---",
 		"upgrade",
 		"upgrade-to-1-0",
+		"./upgrade-notes",
 		"backup-restore",
 		"erasure-recovery",
 		"maintenance",

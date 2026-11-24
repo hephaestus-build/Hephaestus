@@ -2,39 +2,34 @@ package de.tum.cit.aet.hephaestus.core.auth.export;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 
-/**
- * Regression coverage for {@link AccountExportService#expireRetention()} — the work behind the hourly
- * {@link ExportRetentionSweeper}. {@code expireReadyBefore} is a bulk
- * {@code @Modifying(flushAutomatically = true)} UPDATE that needs an active transaction, and the
- * scheduler reaches it with none of its own, so the method's {@code @Transactional} is load-bearing.
- *
- * <p>The test drives {@code expireRetention()} with NO ambient transaction ({@link BaseIntegrationTest}
- * is not {@code @Transactional}) and asserts the committed database state. Dropping {@code @Transactional}
- * therefore resurfaces the {@code TransactionRequiredException} and fails the build, rather than letting
- * the sweep regress silently — a {@code @Transactional} test would mask it by supplying the transaction
- * the scheduler never does.
- */
+/** Retention updates expired exports across accounts in a single sweep. */
 class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AccountExportService accountExportService;
 
     @Autowired
-    private AccountExportRepository accountExportRepository;
+    private AccountRepository accountRepository;
 
     @Autowired
-    private AccountRepository accountRepository;
+    private JdbcTemplate jdbc;
 
     /** The same clock the service reads — fixtures are positioned relative to it. */
     @Autowired
@@ -47,41 +42,46 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void expireRetention_expiresReadyExportPastRetention_andNullsPayload() {
-        Long id = persistReadyExport(Instant.now(clock).minus(Duration.ofHours(1)));
+        Instant past = Instant.now(clock).minus(Duration.ofHours(1));
+        Long first = persistReadyExport(past);
+        Long second = persistReadyExport(past);
 
-        int expired = accountExportService.expireRetention();
+        assertThat(accountExportService.expireRetention()).isGreaterThanOrEqualTo(2);
 
-        assertThat(expired).isEqualTo(1);
-        AccountExport swept = accountExportRepository.findById(id).orElseThrow();
-        assertThat(swept.getStatus()).isEqualTo(AccountExport.Status.EXPIRED);
-        assertThat(swept.getPayload()).as("PII payload freed on expiry").isNull();
+        for (long id : new long[] {first, second}) {
+            assertThat(PostgreSQLTestContainer.ownerJdbc()
+                            .queryForMap(
+                                    "SELECT status, payload IS NULL AS cleared FROM account_export WHERE id = ?", id))
+                    .containsEntry("status", "EXPIRED")
+                    .containsEntry("cleared", true);
+        }
     }
 
     @Test
-    void expireRetention_leavesReadyExportWithinRetention_untouched() {
+    void shouldRefuseAnUnknownRuleAndKeepTheDownloadWindowEvenWithALaterCutoff() {
         Long id = persistReadyExport(Instant.now(clock).plus(Duration.ofHours(1)));
 
-        int expired = accountExportService.expireRetention();
+        assertThatThrownBy(() -> jdbc.queryForObject(
+                        "SELECT public.person_row_sweep('UNKNOWN', clock_timestamp())", Integer.class))
+                .isInstanceOf(DataAccessException.class);
+        jdbc.queryForObject(
+                "SELECT public.person_row_sweep('EXPIRED_EXPORTS', 'infinity'::timestamptz)", Integer.class);
 
-        assertThat(expired).isZero();
-        AccountExport kept = accountExportRepository.findById(id).orElseThrow();
-        assertThat(kept.getStatus()).isEqualTo(AccountExport.Status.READY);
-        assertThat(kept.getPayload()).isNotNull();
+        assertThat(PostgreSQLTestContainer.ownerJdbc()
+                        .queryForMap(
+                                "SELECT status, payload IS NOT NULL AS retained FROM account_export WHERE id = ?", id))
+                .containsEntry("status", "READY")
+                .containsEntry("retained", true);
     }
 
     private Long persistReadyExport(Instant expiresAt) {
         Account account = new Account("Export Retention Subject");
-        account.setPrimaryEmail("export-retention@test.local");
-        account.setPrimaryEmailVerifiedAt(clock.instant());
-        Long accountId = accountRepository.save(account).getId();
-        assertThat(accountId).isNotNull();
-
-        AccountExport export = new AccountExport(accountId);
-        export.setStatus(AccountExport.Status.READY);
-        export.setExpiresAt(expiresAt);
-        export.setPayload("{\"pii\":true}".getBytes(UTF_8));
-        Long exportId = accountExportRepository.save(export).getId();
-        assertThat(exportId).isNotNull();
-        return exportId;
+        long accountId = Objects.requireNonNull(accountRepository.save(account).getId());
+        return Objects.requireNonNull(PostgreSQLTestContainer.ownerJdbc()
+                .queryForObject(
+                        """
+                        INSERT INTO account_export(account_id, status, expires_at, payload)
+                        VALUES (?, 'READY', ?, ?) RETURNING id
+                        """, Long.class, accountId, Timestamp.from(expiresAt), "{\"pii\":true}".getBytes(UTF_8)));
     }
 }

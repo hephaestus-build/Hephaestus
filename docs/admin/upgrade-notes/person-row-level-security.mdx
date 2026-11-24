@@ -1,0 +1,25 @@
+---
+title: Stop every role before enabling person row-level security
+description: Wait for active run and action leases before PostgreSQL starts each account's row policies.
+page_type: how-to
+---
+
+Use this procedure when the migration reports a live run or action lease.
+
+1. Keep the server stopped as in the [stopped upgrade procedure](../upgrade#stopped-schema-upgrades).
+2. Wait for the last live lease to expire. Use the migration login to check the expiry time.
+
+   ```sql
+   SELECT greatest(
+       (SELECT max(leased_until) FROM agent_run),
+       (SELECT max(leased_until) FROM agent_action)
+   ) AS last_lease_expiry;
+   ```
+
+   Continue if the result is empty or the time has passed.
+3. Do phase 2 again.
+4. Do phase 3 when the migration completes.
+
+## Check that it worked
+
+The migration Job completes and the server becomes ready.

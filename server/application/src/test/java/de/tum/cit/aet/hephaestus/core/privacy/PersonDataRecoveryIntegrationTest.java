@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
@@ -357,9 +358,8 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     private PersonDataService advisedService(
             PersonDataRegistry registry, List<PersonEvidenceErasure> evidence, PrivacyJournal journal) {
         var unadvised = new PersonDataService(
-                resolver,
+                new PersonDataScopeResolver(resolver, evidence, new OwnerScope(jdbc)),
                 registry,
-                evidence,
                 beans.getBean(PersonDataRequestRepository.class),
                 new IdentityRestrictionService(
                         jdbc,

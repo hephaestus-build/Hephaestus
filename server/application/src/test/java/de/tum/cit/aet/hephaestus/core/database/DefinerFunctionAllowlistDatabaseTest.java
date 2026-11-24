@@ -31,7 +31,9 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 class DefinerFunctionAllowlistDatabaseTest {
 
     /** Every definer function the application role may call, each a narrow job that crosses a boundary on purpose. */
-    private static final Set<String> ALLOWED = Set.of("public.maintain_auth_event_partitions()");
+    private static final Set<String> ALLOWED = Set.of(
+            "public.maintain_auth_event_partitions()",
+            "public.person_row_sweep(rule text, cutoff timestamp with time zone)");
 
     /** A fresh install: the roles first, then the owner migrates the empty database. */
     private static final TestDatabase INSTALLED = install();

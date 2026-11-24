@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.auth.export.AccountExport;
 import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportService;
 import de.tum.cit.aet.hephaestus.core.auth.export.dto.ExportCreatedDTO;
 import de.tum.cit.aet.hephaestus.core.auth.export.dto.ExportStatusDTO;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonAct;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,8 +53,7 @@ public class AccountExportController {
     @Operation(summary = "Request a data export (async)", operationId = "requestDataExport")
     @ApiResponse(responseCode = "202", description = "Export requested; status URL in the Location header")
     public ResponseEntity<ExportCreatedDTO> requestExport() {
-        Long accountId = CurrentAccount.requireId();
-        AccountExport export = exportService.requestExport(accountId);
+        AccountExport export = exportService.requestExport(PersonAct.fromPrincipal());
         URI location = publicApiUrls.uri("/user/exports/{id}", Objects.requireNonNull(export.getId()));
         return ResponseEntity.accepted()
                 .location(location)
@@ -65,9 +65,8 @@ public class AccountExportController {
     @GetMapping("/{id}")
     @Operation(summary = "Get data-export status", operationId = "getDataExportStatus")
     public ResponseEntity<ExportStatusDTO> status(@PathVariable Long id) {
-        Long accountId = CurrentAccount.requireId();
         ExportStatusDTO status = exportService
-                .status(id, accountId)
+                .status(id, PersonAct.fromPrincipal())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The export was not found."));
         return ResponseEntity.ok(status);
     }
@@ -75,9 +74,8 @@ public class AccountExportController {
     @GetMapping("/{id}/download")
     @Operation(summary = "Download the data-export bundle", operationId = "downloadDataExport")
     public ResponseEntity<byte[]> download(@PathVariable Long id) {
-        Long accountId = CurrentAccount.requireId();
         byte[] payload = exportService
-                .downloadPayload(id, accountId)
+                .downloadPayload(id, PersonAct.fromPrincipal())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The export is not available."));
         ContentDisposition disposition = ContentDisposition.attachment()
                 .filename("hephaestus-export-" + id + ".json")

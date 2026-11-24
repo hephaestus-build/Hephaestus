@@ -13,8 +13,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
-import de.tum.cit.aet.hephaestus.core.auth.export.AccountExport;
-import de.tum.cit.aet.hephaestus.core.auth.export.AccountExportRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -23,11 +21,13 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.observability.ShippedLogEncoder;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,9 +55,6 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IssuedJwtRepository issuedJwtRepository;
-
-    @Autowired
-    private AccountExportRepository accountExportRepository;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -340,7 +337,7 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
                 UUID.randomUUID(), accountId, clock.instant(), clock.instant().plus(Duration.ofHours(1)));
         issuedJwtRepository.save(jwt);
 
-        accountExportRepository.save(new AccountExport(accountId));
+        PostgreSQLTestContainer.ownerJdbc().update("INSERT INTO account_export(account_id) VALUES (?)", accountId);
     }
 
     /**
@@ -360,7 +357,9 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
                 count("account_feature", accountId),
                 count("identity", accountId),
                 count("issued_jwt", accountId),
-                count("account_export", accountId));
+                Objects.requireNonNull(PostgreSQLTestContainer.ownerJdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM account_export WHERE account_id = ?", Integer.class, accountId)));
     }
 
     private int count(String table, Long accountId) {
