@@ -7,15 +7,19 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
+import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
+import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackModeQuery;
@@ -34,6 +38,8 @@ import java.util.UUID;
 import java.util.stream.LongStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -54,6 +60,8 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
     private final ReviewRepository reviews = mock(ReviewRepository.class);
     private final ReviewItemRepository items = mock(ReviewItemRepository.class);
     private final ProductItemQuery itemQuery = mock(ProductItemQuery.class);
+    private final ResultSourceAuthorization sourceAccess = mock(ResultSourceAuthorization.class);
+    private final AccountMembershipQuery memberships = mock(AccountMembershipQuery.class);
     private final ReviewAssignmentQueryService service = new ReviewAssignmentQueryService(
             reviews,
             mock(ReviewPracticeRepository.class),
@@ -61,7 +69,9 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
             mock(PracticeVersionRepository.class),
             itemQuery,
             json,
-            mock(FeedbackModeQuery.class));
+            mock(FeedbackModeQuery.class),
+            memberships,
+            sourceAccess);
 
     private void itemReview() {
         when(reviews.findByWorkspaceIdAndIdIn(eq(WORKSPACE), anyCollection()))
@@ -265,5 +275,24 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
                         pair,
                         new ReviewAssignmentQuery.Recorded(
                                 ReviewStatus.PARTIAL, ReviewStopReason.EXECUTION_INCOMPLETE, null)));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"5, true, true", "6, true, false", "5, false, false"})
+    void shouldReadStatusOnlyWhenTheWorkIsReadableAndTheReviewNamesTheDeveloper(
+            long ownerId, boolean workReadable, boolean visible) {
+        var pair = new ReviewAssignmentQuery.ReviewedItem(REVIEW, ITEM);
+        when(memberships.isActiveVisibleMember(WORKSPACE, DEVELOPER)).thenReturn(true);
+        when(reviews.findByWorkspaceIdAndIdIn(WORKSPACE, Set.of(REVIEW))).thenReturn(List.of(partialReview()));
+        when(items.findByWorkspaceIdAndReviewedItems(WORKSPACE, new UUID[] {REVIEW}, new Long[] {ITEM}))
+                .thenReturn(List.of(
+                        recorded(row(1, json.createObjectNode().put("developerId", ownerId)), ReviewItemState.JUDGED)));
+        lenient()
+                .when(sourceAccess.permitsItem(WORKSPACE, ITEM, SourceUsePurpose.CONVERSATIONAL_MENTORING))
+                .thenReturn(workReadable);
+
+        assertThat(service.recordedForDeveloper(WORKSPACE, DEVELOPER, List.of(pair))
+                        .containsKey(pair))
+                .isEqualTo(visible);
     }
 }

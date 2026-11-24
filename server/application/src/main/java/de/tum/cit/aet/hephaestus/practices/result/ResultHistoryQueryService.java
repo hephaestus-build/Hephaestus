@@ -38,8 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ResultHistoryQueryService implements ResultHistoryQuery {
-    private static final int MAX_LIMIT = 1000;
-
     private final ResultRepository results;
     private final ProblemRepository problems;
     private final ResultMarkRepository marks;
