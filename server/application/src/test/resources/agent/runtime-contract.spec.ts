@@ -27,6 +27,7 @@ import {
 	SYSTEM_AND_TOOLS,
 	TOOL_ROUND_TRIP,
 } from "./runtime-contract.ts";
+import { secondLoop } from "./runtime-second-loop.ts";
 
 const pi: RunLoop = async (place, descriptor) => {
 	const { session } = await openRunSession(place, descriptor);
@@ -36,7 +37,10 @@ const pi: RunLoop = async (place, descriptor) => {
 /** A contract case that hangs, such as on an event that a Pi build no longer sends, fails instead. */
 const CASE_TIME = { timeout: 30_000 };
 
-for (const [loopName, loop] of [["Pi", pi]] as const) {
+for (const [loopName, loop] of [
+	["Pi", pi],
+	["the second loop", secondLoop],
+] as const) {
 	for (const contractCase of CONTRACT) {
 		void test(`${loopName}: ${contractCase.name}`, CASE_TIME, async () => {
 			await contractCase.run(loop);
