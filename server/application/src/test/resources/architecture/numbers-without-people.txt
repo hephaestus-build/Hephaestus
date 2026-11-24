@@ -252,6 +252,10 @@ PublicActivityReviewBreakdownDTO.approvals
 PublicActivityReviewBreakdownDTO.changeRequests
 PublicActivityReviewBreakdownDTO.commentReviews
 PublicActivityWorkSummaryDTO.number
+PublicUsageFiguresDTO.feedbackDelivered
+PublicUsageFiguresDTO.practiceReviews
+PublicUsageFiguresDTO.reviewedWork
+PublicUsageFiguresDTO.workspaces  # instance totals of workspaces, after the floors and rounding of ADR 0153
 RateLimitSnapshotDTO.limit
 RateLimitSnapshotDTO.remaining
 ReadReceipt.endLine

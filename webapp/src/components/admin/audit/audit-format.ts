@@ -75,6 +75,8 @@ export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
 	LOGIN_PROVIDER_DELETED: "Login provider deleted",
 	SILENT_MODE_CHANGED: "Silent mode changed",
 	PUBLIC_ACTIVITY_CHANGED: "Public activity publication changed",
+	PUBLIC_USAGE_CHANGED: "Hephaestus in numbers turned on or off",
+	PUBLIC_USAGE_WITHDRAWN: "Figures withdrawn from Hephaestus in numbers",
 	PRODUCT_FEEDBACK_DESTINATIONS_CHANGED: "Product feedback destinations changed",
 	PRODUCT_FEEDBACK_CLEANUP_CONFIRMED: "Product feedback cleanup step confirmed",
 	PRODUCT_FEEDBACK_FILED_BY_ADMIN: "Saved product feedback sent into filing",

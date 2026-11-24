@@ -124,6 +124,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "pull_request_closing_issue",
             "pull_request_requested_team",
             "release_start",
+            // Rounded instance totals of a half-year that passed the floors of 5 people and 5 workspaces (ADR 0153).
+            "usage_release",
             "provider_event_step", // Event ids and step names contain no person data.
             "repository_to_monitor",
             "attempt_public_key",

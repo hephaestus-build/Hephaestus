@@ -154,6 +154,9 @@ public class AuthEvent {
         // Instance emergency brake: GLOBAL, so the workspace-scoped config trail cannot carry it.
         SILENT_MODE_CHANGED,
         PUBLIC_ACTIVITY_CHANGED,
+        // The public usage page: turned on or off, or a released period or figure withdrawn for good (ADR 0153).
+        PUBLIC_USAGE_CHANGED,
+        PUBLIC_USAGE_WITHDRAWN,
         // Where instance product feedback is filed: GLOBAL, and it changes where personal data goes.
         PRODUCT_FEEDBACK_DESTINATIONS_CHANGED,
         // An admin confirmed that a maintainer finished an erased report's manual step on GitHub.

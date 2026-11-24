@@ -169,6 +169,12 @@
       "sourceType": "de.tum.cit.aet.hephaestus.core.settings.PublicActivityPolicyService"
     },
     {
+      "name": "hephaestus.public-usage.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Turns on Hephaestus in numbers, the public page of instance totals released once each half-year, until an instance admin changes the switch with PUT /api/admin/settings/public-usage.",
+      "sourceType": "de.tum.cit.aet.hephaestus.core.settings.PublicUsagePolicyService"
+    },
+    {
       "name": "hephaestus.public-activity.repository-visibility-max-age",
       "type": "java.time.Duration",
       "description": "How recently a sync must have confirmed that a repository is public for its work to appear on public activity pages. Must be positive. Accepts 48h, 2d, PT48H.",

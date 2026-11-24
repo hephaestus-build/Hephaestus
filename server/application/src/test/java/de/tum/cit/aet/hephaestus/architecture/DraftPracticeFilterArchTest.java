@@ -29,17 +29,22 @@ class DraftPracticeFilterArchTest {
     private static final String THROUGH_RESULTS =
             "reads practices through results, and a draft has none: a trial records no result";
 
-    private static final Map<String, String> EXEMPT = Map.of(
-            "ResultQueriesImpl.java", THROUGH_RESULTS,
-            "FeedbackRepository.java", THROUGH_RESULTS,
-            "FeedbackQueryRepository.java", THROUGH_RESULTS,
-            "DeliveredWorkFeedbackRepository.java", THROUGH_RESULTS,
-            "ResearchDatasetRepository.java", THROUGH_RESULTS,
-            "ProfileOverviewRepository.java", THROUGH_RESULTS,
-            "ReviewLineageRepository.java", THROUGH_RESULTS,
-            "ReviewQueriesImpl.java", THROUGH_RESULTS,
-            "ScanMembershipQueriesImpl.java", "reads practices through scan memberships, and no scan selects a draft",
-            "PracticesPrivacyRepository.java", "deletes every practice of a purged workspace, drafts too");
+    private static final Map<String, String> EXEMPT = Map.ofEntries(
+            Map.entry("ResultQueriesImpl.java", THROUGH_RESULTS),
+            Map.entry("FeedbackRepository.java", THROUGH_RESULTS),
+            Map.entry("FeedbackQueryRepository.java", THROUGH_RESULTS),
+            Map.entry("DeliveredWorkFeedbackRepository.java", THROUGH_RESULTS),
+            Map.entry("ResearchDatasetRepository.java", THROUGH_RESULTS),
+            Map.entry("ProfileOverviewRepository.java", THROUGH_RESULTS),
+            Map.entry("ReviewLineageRepository.java", THROUGH_RESULTS),
+            Map.entry("ReviewQueriesImpl.java", THROUGH_RESULTS),
+            Map.entry(
+                    "ScanMembershipQueriesImpl.java",
+                    "reads practices through scan memberships, and no scan selects a draft"),
+            Map.entry("PracticesPrivacyRepository.java", "deletes every practice of a purged workspace, drafts too"),
+            Map.entry(
+                    "UsageReleaseRepository.java",
+                    "counts the review items of reviews that are not trials, and only a trial reviews a draft"));
 
     @Test
     void shouldNameThePracticeStateInEveryNativeReadOfPractices() throws IOException {

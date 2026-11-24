@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.core.auth.web.PublicActivityReadRequestMatcher;
+import de.tum.cit.aet.hephaestus.core.auth.web.PublicUsageReadRequestMatcher;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
@@ -387,6 +388,7 @@ public class SecurityConfig {
             requests.requestMatchers(api.matcher(HttpMethod.GET, "/workspaces/providers"))
                     .permitAll();
             requests.requestMatchers(PublicActivityReadRequestMatcher.MATCHER).permitAll();
+            requests.requestMatchers(PublicUsageReadRequestMatcher.MATCHER).permitAll();
             // The web app's page and files (ADR 0100). permitAll, not ignoring, so they carry the security headers.
             requests.requestMatchers(WebAppRequests.MATCHER).permitAll();
             // A broken sign-in page is a fault too, so a reader need not be signed in to report one.
@@ -418,7 +420,9 @@ public class SecurityConfig {
         @Override
         protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
                 throws ServletException, IOException {
-            if (PublicActivityReadRequestMatcher.MATCHER.matches(request) || WebAppRequests.MATCHER.matches(request)) {
+            if (PublicActivityReadRequestMatcher.MATCHER.matches(request)
+                    || PublicUsageReadRequestMatcher.MATCHER.matches(request)
+                    || WebAppRequests.MATCHER.matches(request)) {
                 CsrfFilter.skipRequest(request);
             }
             chain.doFilter(request, response);

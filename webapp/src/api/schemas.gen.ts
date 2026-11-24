@@ -873,6 +873,8 @@ export const AuthEventEventTypeSchema = {
 		"LOGIN_PROVIDER_DELETED",
 		"SILENT_MODE_CHANGED",
 		"PUBLIC_ACTIVITY_CHANGED",
+		"PUBLIC_USAGE_CHANGED",
+		"PUBLIC_USAGE_WITHDRAWN",
 		"PRODUCT_FEEDBACK_DESTINATIONS_CHANGED",
 		"PRODUCT_FEEDBACK_CLEANUP_CONFIRMED",
 		"PRODUCT_FEEDBACK_FILED_BY_ADMIN",
@@ -11201,6 +11203,132 @@ export const PublicActivityWorkspaceSettingsSchema = {
 	required: ["allowSearchEngines", "contributorsWithoutAccount", "enabled"],
 } as const;
 
+export const PublicUsageSchema = {
+	type: "object",
+	description: "Every released half-year of the public usage page, newest first (ADR 0153).",
+	properties: {
+		periods: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/PublicUsagePeriod",
+			},
+		},
+	},
+	required: ["periods"],
+} as const;
+
+export const PublicUsageFiguresSchema = {
+	type: "object",
+	description:
+		"The figures of one released half-year. Each is rounded down, and null when it is not published. No figure counts\n one workspace or one person.",
+	properties: {
+		feedbackDelivered: {
+			type: "integer",
+			format: "int64",
+			description: "practice feedback delivered in the period",
+		},
+		practiceReviews: {
+			type: "integer",
+			format: "int64",
+			description: "practices checked in the reviews of the period, one per practice and review",
+		},
+		reviewedPeople: {
+			type: "integer",
+			format: "int32",
+			description: "distinct people with an observation recorded in the period",
+		},
+		reviewedWork: {
+			type: "integer",
+			format: "int64",
+			description: "distinct pull requests and merge requests with a judged or reused observation",
+		},
+		workspaces: {
+			type: "integer",
+			format: "int64",
+			description: "workspaces with at least one practice review in the period",
+		},
+	},
+} as const;
+
+export const PublicUsagePeriodSchema = {
+	type: "object",
+	description: "One released half-year of the public usage page.",
+	properties: {
+		figures: {
+			$ref: "#/components/schemas/PublicUsageFigures",
+		},
+		firstDay: {
+			type: "string",
+			format: "date",
+			description: "the first day of the period, 1 April or 1 October",
+		},
+		lastDay: {
+			type: "string",
+			format: "date",
+			description: "the last day of the period, 30 September or 31 March",
+		},
+		period: {
+			type: "string",
+			description: "the key of the period, such as <code>2026-04</code>",
+			example: "2026-04",
+		},
+		releasedOn: {
+			type: "string",
+			format: "date",
+			description: "the day the server released the period, in UTC",
+		},
+		status: {
+			$ref: "#/components/schemas/PublicUsageStatus",
+		},
+	},
+	required: ["figures", "firstDay", "lastDay", "period", "releasedOn", "status"],
+} as const;
+
+export const PublicUsagePolicySchema = {
+	type: "object",
+	description:
+		"The instance admin's view of the public usage page: whether it is on, and each withdrawal.",
+	properties: {
+		allowed: {
+			type: "boolean",
+		},
+		withdrawals: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/PublicUsageWithdrawal",
+			},
+		},
+		withdrawalsUnreadable: {
+			type: "boolean",
+			description:
+				"whether a stored withdrawal could not be read. The page then hides every figure, and\n     <code>withdrawals</code> lists only the ones that could be read, so the list is not a complete copy to restore from.",
+		},
+	},
+	required: ["allowed", "withdrawals", "withdrawalsUnreadable"],
+} as const;
+
+export const PublicUsageStatusSchema = {
+	type: "string",
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: ["PUBLISHED", "NOT_ENOUGH_ACTIVITY", "NOT_PUBLISHED"],
+} as const;
+
+export const PublicUsageWithdrawalSchema = {
+	type: "object",
+	description: "A withdrawn period, or one withdrawn figure of it.",
+	properties: {
+		figure: {
+			$ref: "#/components/schemas/UsageFigure",
+		},
+		period: {
+			type: "string",
+			example: "2026-04",
+			pattern: "\\d{4}-(04|10)",
+		},
+	},
+	required: ["period"],
+} as const;
+
 export const RateLimitSnapshotSchema = {
 	type: "object",
 	description:
@@ -17529,6 +17657,16 @@ export const UpdateProductFeedbackSharingSchema = {
 	required: ["allowPublic", "mention"],
 } as const;
 
+export const UpdatePublicUsagePolicySchema = {
+	type: "object",
+	properties: {
+		allowed: {
+			type: "boolean",
+		},
+	},
+	required: ["allowed"],
+} as const;
+
 export const UpdateReviewBatchStatusRequestSchema = {
 	type: "object",
 	properties: {
@@ -17816,6 +17954,18 @@ export const UpdateWorkspaceTokenRequestSchema = {
 		},
 	},
 	required: ["personalAccessToken"],
+} as const;
+
+export const UsageFigureSchema = {
+	type: "string",
+	description: "Extensible enum: a client accepts a value that the examples do not name.",
+	examples: [
+		"WORKSPACES",
+		"REVIEWED_PEOPLE",
+		"REVIEWED_WORK",
+		"PRACTICE_REVIEWS",
+		"FEEDBACK_DELIVERED",
+	],
 } as const;
 
 export const UsageFundingSourceSchema = {
@@ -18156,6 +18306,27 @@ export const WeeklyDigestFeedbackSchema = {
 		"replaced",
 		"withdrawn",
 	],
+} as const;
+
+export const WithdrawPublicUsageSchema = {
+	type: "object",
+	description:
+		"A withdrawal request: one figure of a period, or the whole period, said explicitly. A body that names neither, such\n as one with a misspelled field, is refused, so a typo can never withdraw a whole period for good.",
+	properties: {
+		figure: {
+			$ref: "#/components/schemas/UsageFigure",
+		},
+		period: {
+			type: "string",
+			example: "2026-04",
+			pattern: "\\d{4}-(04|10)",
+		},
+		wholePeriod: {
+			type: "boolean",
+			description: "true withdraws every figure of the period",
+		},
+	},
+	required: ["period"],
 } as const;
 
 export const WithheldScanReportItemSchema = {

@@ -108,6 +108,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 defaults.gitlabPreflight(),
                 defaults.mcpCall(),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
+                defaults.publicUsage(),
                 defaults.browserReports());
         var limited = filter(configured);
         limited.doFilter(
@@ -120,6 +121,20 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 blocked,
                 mock(FilterChain.class));
         assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    void shouldKeepThePublicUsageBudgetApartFromPublicActivity() throws Exception {
+        var limited = filter(props());
+        limited.doFilter(
+                new MockHttpServletRequest("GET", "/api/public/usage"),
+                new MockHttpServletResponse(),
+                mock(FilterChain.class));
+        limited.doFilter(
+                new MockHttpServletRequest("GET", "/api/public/usage/2026-04"),
+                new MockHttpServletResponse(),
+                mock(FilterChain.class));
+        assertThat(store).containsOnlyKeys("public-usage:ip:127.0.0.1");
     }
 
     @Test
@@ -164,6 +179,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new AuthRateLimitProperties.Limit(10, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(30, Duration.ofMinutes(10)),
                 new AuthRateLimitProperties.Limit(120, Duration.ofMinutes(1)),
+                new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(2, Duration.ofMinutes(1)));
     }
@@ -211,6 +227,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
+                new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)));
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/refresh");

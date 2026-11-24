@@ -323,6 +323,14 @@
 		]
 	},
 	{
+		"operation": "GET /admin/settings/public-usage",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"operator"
+		]
+	},
+	{
 		"operation": "GET /admin/users",
 		"access": "internal"
 	},
@@ -380,6 +388,21 @@
 	{
 		"operation": "GET /product-feedback/sharing",
 		"access": "internal"
+	},
+	{
+		"operation": "GET /public/usage",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"operator"
+		]
+	},
+	{
+		"operation": "GET /public/usage/{period}",
+		"access": "public",
+		"callers": [
+			"operator"
+		]
 	},
 	{
 		"operation": "GET /public/workspaces/{slug}/activity",
@@ -1275,6 +1298,13 @@
 		]
 	},
 	{
+		"operation": "POST /admin/settings/public-usage/withdrawals",
+		"access": "public",
+		"callers": [
+			"operator"
+		]
+	},
+	{
 		"operation": "POST /auth/client/logout",
 		"access": "public",
 		"callers": [
@@ -1595,6 +1625,14 @@
 		"access": "public",
 		"callers": [
 			"webapp"
+		]
+	},
+	{
+		"operation": "PUT /admin/settings/public-usage",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"operator"
 		]
 	},
 	{

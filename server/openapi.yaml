@@ -174,6 +174,13 @@ tags:
 - name: public-activity
 - name: public-activity-onboarding
 - name: public-activity-settings
+- name: public-usage
+- description: The instance admin's switch of the public usage page (ADR 0153 decision
+    16). Withdrawals live with the releases.
+  name: public-usage-settings
+- description: "Withdraws a released half-year, or one figure of it, from the public\
+    \ usage page for good (ADR 0153)."
+  name: public-usage-withdrawal
 - name: review-batch
 - name: review-request
 - name: review-schedule
@@ -3329,6 +3336,93 @@ paths:
       summary: Allow or stop public activity pages
       tags:
       - public-activity-settings
+  /admin/settings/public-usage:
+    get:
+      operationId: getPublicUsagePolicy
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUsagePolicy"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Get the instance public usage policy
+      tags:
+      - public-usage-settings
+    put:
+      operationId: updatePublicUsagePolicy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePublicUsagePolicy"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUsagePolicy"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: Turn the public usage page on or off
+      tags:
+      - public-usage-settings
+  /admin/settings/public-usage/withdrawals:
+    post:
+      operationId: withdrawPublicUsage
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawPublicUsage"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUsagePolicy"
+          description: OK
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      summary: "Withdraw a released period or one of its figures from the public usage\
+        \ page, for good"
+      tags:
+      - public-usage-withdrawal
   /admin/settings/silent-mode:
     patch:
       operationId: adminUpdateSilentMode
@@ -4614,6 +4708,80 @@ paths:
       summary: Move the report's public issue to the private repository
       tags:
       - my-product-feedback
+  /public/usage:
+    get:
+      operationId: getPublicUsage
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUsage"
+          description: "Released periods, newest first"
+        "304":
+          description: The released periods have not changed
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: If-Match names another version
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      security: []
+      summary: Read the released half-years of Hephaestus in numbers
+      tags:
+      - public-usage
+  /public/usage/{period}:
+    get:
+      operationId: getPublicUsagePeriod
+      parameters:
+      - in: path
+        name: period
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicUsagePeriod"
+          description: The released period
+        "304":
+          description: The released period has not changed
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: If-Match names another version
+        "4XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+        "5XX":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A problem. Its type names the kind.
+      security: []
+      summary: Read one released half-year of Hephaestus in numbers
+      tags:
+      - public-usage
   /public/workspaces/{slug}/activity:
     get:
       operationId: getPublicActivity
@@ -17804,6 +17972,8 @@ components:
       - LOGIN_PROVIDER_DELETED
       - SILENT_MODE_CHANGED
       - PUBLIC_ACTIVITY_CHANGED
+      - PUBLIC_USAGE_CHANGED
+      - PUBLIC_USAGE_WITHDRAWN
       - PRODUCT_FEEDBACK_DESTINATIONS_CHANGED
       - PRODUCT_FEEDBACK_CLEANUP_CONFIRMED
       - PRODUCT_FEEDBACK_FILED_BY_ADMIN
@@ -26418,6 +26588,116 @@ components:
       - allowSearchEngines
       - contributorsWithoutAccount
       - enabled
+    PublicUsage:
+      type: object
+      description: "Every released half-year of the public usage page, newest first\
+        \ (ADR 0153)."
+      properties:
+        periods:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicUsagePeriod"
+      required:
+      - periods
+    PublicUsageFigures:
+      type: object
+      description: |-
+        The figures of one released half-year. Each is rounded down, and null when it is not published. No figure counts
+         one workspace or one person.
+      properties:
+        feedbackDelivered:
+          type: integer
+          format: int64
+          description: practice feedback delivered in the period
+        practiceReviews:
+          type: integer
+          format: int64
+          description: "practices checked in the reviews of the period, one per practice\
+            \ and review"
+        reviewedPeople:
+          type: integer
+          format: int32
+          description: distinct people with an observation recorded in the period
+        reviewedWork:
+          type: integer
+          format: int64
+          description: distinct pull requests and merge requests with a judged or
+            reused observation
+        workspaces:
+          type: integer
+          format: int64
+          description: workspaces with at least one practice review in the period
+    PublicUsagePeriod:
+      type: object
+      description: One released half-year of the public usage page.
+      properties:
+        figures:
+          $ref: "#/components/schemas/PublicUsageFigures"
+        firstDay:
+          type: string
+          format: date
+          description: "the first day of the period, 1 April or 1 October"
+        lastDay:
+          type: string
+          format: date
+          description: "the last day of the period, 30 September or 31 March"
+        period:
+          type: string
+          description: "the key of the period, such as <code>2026-04</code>"
+          example: 2026-04
+        releasedOn:
+          type: string
+          format: date
+          description: "the day the server released the period, in UTC"
+        status:
+          $ref: "#/components/schemas/PublicUsageStatus"
+      required:
+      - figures
+      - firstDay
+      - lastDay
+      - period
+      - releasedOn
+      - status
+    PublicUsagePolicy:
+      type: object
+      description: "The instance admin's view of the public usage page: whether it\
+        \ is on, and each withdrawal."
+      properties:
+        allowed:
+          type: boolean
+        withdrawals:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicUsageWithdrawal"
+        withdrawalsUnreadable:
+          type: boolean
+          description: |-
+            whether a stored withdrawal could not be read. The page then hides every figure, and
+                 <code>withdrawals</code> lists only the ones that could be read, so the list is not a complete copy to restore from.
+      required:
+      - allowed
+      - withdrawals
+      - withdrawalsUnreadable
+    PublicUsageStatus:
+      type: string
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
+      - PUBLISHED
+      - NOT_ENOUGH_ACTIVITY
+      - NOT_PUBLISHED
+    PublicUsageWithdrawal:
+      type: object
+      description: "A withdrawn period, or one withdrawn figure of it."
+      properties:
+        figure:
+          $ref: "#/components/schemas/UsageFigure"
+        period:
+          type: string
+          example: 2026-04
+          pattern: "\\d{4}-(04|10)"
+      required:
+      - period
     RateLimitSnapshot:
       type: object
       description: "Vendor API rate-limit observation, read from in-memory trackers\
@@ -31502,6 +31782,13 @@ components:
       required:
       - allowPublic
       - mention
+    UpdatePublicUsagePolicy:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+      required:
+      - allowed
     UpdateReviewBatchStatusRequest:
       type: object
       properties:
@@ -31732,6 +32019,16 @@ components:
           minLength: 1
       required:
       - personalAccessToken
+    UsageFigure:
+      type: string
+      description: "Extensible enum: a client accepts a value that the examples do\
+        \ not name."
+      examples:
+      - WORKSPACES
+      - REVIEWED_PEOPLE
+      - REVIEWED_WORK
+      - PRACTICE_REVIEWS
+      - FEEDBACK_DELIVERED
     UsageFundingSource:
       type: string
       description: "Extensible enum: a client accepts a value that the examples do\
@@ -32028,6 +32325,23 @@ components:
       - practiceSlug
       - replaced
       - withdrawn
+    WithdrawPublicUsage:
+      type: object
+      description: |-
+        A withdrawal request: one figure of a period, or the whole period, said explicitly. A body that names neither, such
+         as one with a misspelled field, is refused, so a typo can never withdraw a whole period for good.
+      properties:
+        figure:
+          $ref: "#/components/schemas/UsageFigure"
+        period:
+          type: string
+          example: 2026-04
+          pattern: "\\d{4}-(04|10)"
+        wholePeriod:
+          type: boolean
+          description: true withdraws every figure of the period
+      required:
+      - period
     WithheldScanReportItem:
       allOf:
       - type: object

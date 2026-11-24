@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabPrefligh
 import de.tum.cit.aet.hephaestus.integration.slack.interactivity.SlackInteractivityController;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationPreferencesController;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
+import de.tum.cit.aet.hephaestus.practices.usage.PublicUsageController;
 import de.tum.cit.aet.hephaestus.productfeedback.InstanceFeedbackController;
 import de.tum.cit.aet.hephaestus.productfeedback.MyProductFeedbackController;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRegistryController;
@@ -338,7 +339,10 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
             // find the slug opted in and ACTIVE; every read then binds that workspace's id.
             // ActivityControllerIntegrationTest proves the not-found answers and that two public workspaces never
             // see each other's rows.
-            PublicActivityController.class);
+            PublicActivityController.class,
+            // Hephaestus in numbers: instance totals that passed the disclosure rules of ADR 0153, read from the global
+            // usage_release table. PublicUsageControllerIntegrationTest proves the switch and the withdrawals.
+            PublicUsageController.class);
 
     @Nested
     class RepositoryWorkspaceFilteringTests {

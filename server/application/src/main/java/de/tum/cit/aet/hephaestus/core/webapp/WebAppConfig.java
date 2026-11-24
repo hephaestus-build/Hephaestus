@@ -12,6 +12,8 @@ package de.tum.cit.aet.hephaestus.core.webapp;
  * @param deploymentEnvironment The name of this deployment, such as {@code production}.
  * @param commit                The source commit of the release, or empty.
  * @param browserFaultReports   Whether the web app reports the faults that readers meet.
+ * @param publicUsage           Whether Hephaestus in numbers is on (ADR 0153), so the footer links to it without a
+ *                              read of the page's figures.
  */
 record WebAppConfig(
         String version,
@@ -21,7 +23,22 @@ record WebAppConfig(
         String xsrfCookieName,
         String deploymentEnvironment,
         String commit,
-        boolean browserFaultReports) {
+        boolean browserFaultReports,
+        boolean publicUsage) {
+
+    /** The same record, with Hephaestus in numbers on. */
+    WebAppConfig withPublicUsage() {
+        return new WebAppConfig(
+                version,
+                clientUrl,
+                serverUrl,
+                workspaceSubdomains,
+                xsrfCookieName,
+                deploymentEnvironment,
+                commit,
+                browserFaultReports,
+                true);
+    }
 
     record WorkspaceSubdomains(boolean enabled, String baseDomain) {}
 }

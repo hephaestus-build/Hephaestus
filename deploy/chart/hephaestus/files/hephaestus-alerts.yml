@@ -67,6 +67,20 @@ groups:
         annotations:
           summary: The outbox could not record an action's result or end, so its email, issue or record did not move on
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The release runs each hour. A failure fires; a run that finds nothing due is a success. The second operand counts
+      # a series that is new in the window, because the failure series appears with its first failure.
+      - alert: HephaestusUsageReleaseFailing
+        expr: >-
+          sum(
+            increase(practice_usage_release_runs_total{job="hephaestus",outcome="failure"}[2h]) > 0
+            or (practice_usage_release_runs_total{job="hephaestus",outcome="failure"} > 0
+              unless practice_usage_release_runs_total{job="hephaestus",outcome="failure"} offset 2h)
+          ) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Hephaestus in numbers could not release its due half-years; the page keeps showing the last release
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusProductFeedbackMoveRefused
         expr: sum(increase(product_feedback_steps_total{job="hephaestus",step="transition",outcome="refused"}[1h])) > 0
         labels:

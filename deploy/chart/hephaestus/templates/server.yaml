@@ -136,6 +136,8 @@ spec:
               value: {{ $config.publicActivity.enabled | quote }}
             - name: HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE
               value: {{ $config.publicActivity.repositoryVisibilityMaxAge | quote }}
+            - name: HEPHAESTUS_PUBLIC_USAGE_ENABLED
+              value: {{ $config.publicUsage.enabled | quote }}
             - name: HEPHAESTUS_LLM_DISPLAY_CURRENCY
               value: {{ $config.llmDisplayCurrency | quote }}
             {{- include "hephaestus.env.modelEgress" . | nindent 12 }}

@@ -6,10 +6,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -30,6 +34,19 @@ public class InstanceSettings {
 
     @Column(name = "public_activity_allowed")
     private @Nullable Boolean publicActivityAllowed;
+
+    /** Whether the public usage page answers (ADR 0153). Null: the configured default decides. */
+    @Column(name = "public_usage_allowed")
+    private @Nullable Boolean publicUsageAllowed;
+
+    /**
+     * What an instance admin withdrew from the public usage page, in the stored form of {@code PublicUsageState}. Only
+     * ever grows: a withdrawal is final.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "public_usage_withdrawn", nullable = false, columnDefinition = "jsonb")
+    @ColumnDefault("jsonb_build_array()")
+    private List<String> publicUsageWithdrawn = new ArrayList<>();
 
     @Version
     @Column(name = "version", nullable = false)

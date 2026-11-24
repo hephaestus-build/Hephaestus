@@ -368,6 +368,14 @@ erDiagram
         TIMESTAMPTZ updated_at "NOT NULL"
     }
 
+    UsageRelease {
+        DATE period_start PK
+        JSONB figures "NOT NULL"
+        DATE period_end "NOT NULL"
+        TIMESTAMPTZ computed_at "NOT NULL"
+        SMALLINT schema_version "NOT NULL"
+    }
+
     WorkspacePracticeRepository {
         BIGINT workspace_id PK,FK
         VARCHAR(255) directory "NOT NULL"

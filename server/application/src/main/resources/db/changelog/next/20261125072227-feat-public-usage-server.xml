@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795528092509-1" author="hephaestus">
+        <comment>Hephaestus in numbers: one row for each released half-year, with only the figures that passed the disclosure rules (ADR 0153).</comment>
+        <createTable tableName="usage_release">
+            <column name="period_start" type="date">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="usage_releasePK"/>
+            </column>
+            <column name="figures" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="period_end" type="date">
+                <constraints nullable="false"/>
+            </column>
+            <column name="computed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="schema_version" type="SMALLINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <rollback><sql splitStatements="false"><![CDATA[
+DO $usage_release_rollback$
+BEGIN
+    LOCK TABLE usage_release IN ACCESS EXCLUSIVE MODE;
+    IF EXISTS (SELECT 1 FROM usage_release) THEN
+        RAISE EXCEPTION 'Released public usage periods exist; they are never computed again, so keep the table, and follow Roll back an upgrade in the admin guide Publish Hephaestus in numbers';
+    END IF;
+    DROP TABLE usage_release;
+END
+$usage_release_rollback$;
+        ]]></sql></rollback>
+    </changeSet>
+    <changeSet id="1795528092509-2" author="hephaestus">
+        <comment>Whether an instance admin turned Hephaestus in numbers on; null leaves the configured default.</comment>
+        <addColumn tableName="instance_settings">
+            <column name="public_usage_allowed" type="BOOLEAN"/>
+        </addColumn>
+        <rollback><sql splitStatements="false"><![CDATA[
+DO $public_usage_allowed_rollback$
+BEGIN
+    IF EXISTS (SELECT 1 FROM instance_settings WHERE public_usage_allowed IS NOT NULL) THEN
+        RAISE EXCEPTION 'An instance admin chose whether to publish Hephaestus in numbers; keep the column, and follow Roll back an upgrade in the admin guide Publish Hephaestus in numbers';
+    END IF;
+    ALTER TABLE instance_settings DROP COLUMN public_usage_allowed;
+END
+$public_usage_allowed_rollback$;
+        ]]></sql></rollback>
+    </changeSet>
+    <changeSet id="1795528092509-3" author="hephaestus">
+        <comment>The periods and figures an instance admin withdrew from Hephaestus in numbers, for good.</comment>
+        <addColumn tableName="instance_settings">
+            <column defaultValueComputed="jsonb_build_array()" name="public_usage_withdrawn" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback><sql splitStatements="false"><![CDATA[
+DO $public_usage_withdrawn_rollback$
+BEGIN
+    IF EXISTS (SELECT 1 FROM instance_settings WHERE public_usage_withdrawn <> '[]'::jsonb) THEN
+        RAISE EXCEPTION 'Withdrawals from Hephaestus in numbers exist and are final; keep the column, and follow Roll back an upgrade in the admin guide Publish Hephaestus in numbers';
+    END IF;
+    ALTER TABLE instance_settings DROP COLUMN public_usage_withdrawn;
+END
+$public_usage_withdrawn_rollback$;
+        ]]></sql></rollback>
+    </changeSet>
+    <changeSet id="1795528092509-4" author="hephaestus">
+        <comment>A released half-year of Hephaestus in numbers starts on 1 April or 1 October and lasts six months, so two periods never overlap (ADR 0153).</comment>
+        <sql>ALTER TABLE usage_release ADD CONSTRAINT ck_usage_release_period CHECK (EXTRACT(DAY FROM period_start) = 1 AND EXTRACT(MONTH FROM period_start) IN (4, 10) AND period_end = (period_start + INTERVAL '6 months')::date);
+ALTER TABLE usage_release ADD CONSTRAINT ck_usage_release_figures CHECK (schema_version &gt;= 1 AND jsonb_typeof(figures) = 'object');
+ALTER TABLE instance_settings ADD CONSTRAINT ck_instance_settings_public_usage_withdrawn CHECK (jsonb_typeof(public_usage_withdrawn) = 'array' AND NOT jsonb_path_exists(public_usage_withdrawn, '$[*] ? (@.type() != "string")'));</sql>
+        <rollback><sql splitStatements="false"><![CDATA[
+DO $usage_release_checks_rollback$
+BEGIN
+    LOCK TABLE usage_release IN ACCESS EXCLUSIVE MODE;
+    IF EXISTS (SELECT 1 FROM usage_release) THEN
+        RAISE EXCEPTION 'Released public usage periods exist; they are never computed again, so keep the table, and follow Roll back an upgrade in the admin guide Publish Hephaestus in numbers';
+    END IF;
+    ALTER TABLE instance_settings DROP CONSTRAINT ck_instance_settings_public_usage_withdrawn;
+    ALTER TABLE usage_release DROP CONSTRAINT ck_usage_release_figures;
+    ALTER TABLE usage_release DROP CONSTRAINT ck_usage_release_period;
+END
+$usage_release_checks_rollback$;
+        ]]></sql></rollback>
+    </changeSet>
+    <changeSet id="1795528092509-5" author="hephaestus">
+        <comment>A released half-year is never computed again: the database refuses to change or delete it (ADR 0153).</comment>
+        <sql splitStatements="false">CREATE FUNCTION guard_usage_release() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'A released usage period is never changed or deleted: %', OLD.period_start USING ERRCODE = 'restrict_violation';
+END
+$$;
+CREATE TRIGGER usage_release_no_delete BEFORE DELETE ON usage_release FOR EACH ROW EXECUTE FUNCTION guard_usage_release();
+CREATE TRIGGER usage_release_no_update AFTER UPDATE ON usage_release FOR EACH ROW EXECUTE FUNCTION guard_usage_release();</sql>
+        <rollback><sql splitStatements="false"><![CDATA[
+DO $usage_release_guard_rollback$
+BEGIN
+    LOCK TABLE usage_release IN ACCESS EXCLUSIVE MODE;
+    IF EXISTS (SELECT 1 FROM usage_release) THEN
+        RAISE EXCEPTION 'Released public usage periods exist; they are never computed again, so keep the table, and follow Roll back an upgrade in the admin guide Publish Hephaestus in numbers';
+    END IF;
+    DROP TRIGGER usage_release_no_update ON usage_release;
+    DROP TRIGGER usage_release_no_delete ON usage_release;
+    DROP FUNCTION guard_usage_release();
+END
+$usage_release_guard_rollback$;
+        ]]></sql></rollback>
+    </changeSet>
+    <changeSet id="1795528092509-6" author="hephaestus">
+        <comment>Turning Hephaestus in numbers on or off, and each withdrawal from it, lands on the auth event trail. NOT VALID adds the wider check without a scan of the ledger; the next change set validates it.</comment>
+        <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type, ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'ACCOUNT_STATUS_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'INSTALLATION_EVENT_REPLAYED', 'GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED', 'WORKSPACE_OWNER_CHANGE', 'WORKSPACE_DELETION', 'PROVIDER_RESOURCE_RELEASE', 'PRACTICE_REPOSITORY_CHANGE', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'PUBLIC_USAGE_CHANGED', 'PUBLIC_USAGE_WITHDRAWN', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED', 'MCP_CLIENT_APPROVED', 'MCP_CLIENT_REFUSED', 'MCP_CLIENT_REVOKED')) NOT VALID</sql>
+        <rollback><sql splitStatements="false"><![CDATA[
+DO $public_usage_auth_rollback$
+BEGIN
+    LOCK TABLE usage_release IN ACCESS EXCLUSIVE MODE;
+    IF EXISTS (SELECT 1 FROM usage_release)
+        OR EXISTS (SELECT 1 FROM instance_settings WHERE public_usage_allowed IS NOT NULL OR public_usage_withdrawn <> '[]'::jsonb)
+        OR EXISTS (SELECT 1 FROM auth_event WHERE event_type IN ('PUBLIC_USAGE_CHANGED', 'PUBLIC_USAGE_WITHDRAWN')) THEN
+        RAISE EXCEPTION 'Hephaestus in numbers holds releases, a saved choice, withdrawals or their audit events; keep the schema, and follow Roll back an upgrade in the admin guide Publish Hephaestus in numbers';
+    END IF;
+    ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+    ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'ACCOUNT_STATUS_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'INSTALLATION_EVENT_REPLAYED', 'GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED', 'WORKSPACE_OWNER_CHANGE', 'WORKSPACE_DELETION', 'PROVIDER_RESOURCE_RELEASE', 'PRACTICE_REPOSITORY_CHANGE', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED', 'MCP_CLIENT_APPROVED', 'MCP_CLIENT_REFUSED', 'MCP_CLIENT_REVOKED'));
+END
+$public_usage_auth_rollback$;
+        ]]></sql></rollback>
+    </changeSet>
+    <changeSet id="1795528092509-7" author="hephaestus">
+        <comment>Validates the wider auth event check apart from its change, so the ledger is not locked during the scan.</comment>
+        <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE auth_event VALIDATE CONSTRAINT ck_auth_event_event_type</sql>
+        <rollback><sql splitStatements="false"><![CDATA[
+DO $public_usage_validate_rollback$
+BEGIN
+    SET LOCAL lock_timeout = '5s';
+    LOCK TABLE usage_release IN ACCESS EXCLUSIVE MODE;
+    IF EXISTS (SELECT 1 FROM usage_release)
+        OR EXISTS (SELECT 1 FROM instance_settings WHERE public_usage_allowed IS NOT NULL OR public_usage_withdrawn <> '[]'::jsonb)
+        OR EXISTS (SELECT 1 FROM auth_event WHERE event_type IN ('PUBLIC_USAGE_CHANGED', 'PUBLIC_USAGE_WITHDRAWN')) THEN
+        RAISE EXCEPTION 'Hephaestus in numbers holds releases, a saved choice, withdrawals or their audit events; keep the schema, and follow Roll back an upgrade in the admin guide Publish Hephaestus in numbers';
+    END IF;
+    ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type, ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'ACCOUNT_STATUS_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'INSTALLATION_EVENT_REPLAYED', 'GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED', 'WORKSPACE_OWNER_CHANGE', 'WORKSPACE_DELETION', 'PROVIDER_RESOURCE_RELEASE', 'PRACTICE_REPOSITORY_CHANGE', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'PUBLIC_USAGE_CHANGED', 'PUBLIC_USAGE_WITHDRAWN', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED', 'MCP_CLIENT_APPROVED', 'MCP_CLIENT_REFUSED', 'MCP_CLIENT_REVOKED')) NOT VALID;
+END
+$public_usage_validate_rollback$;
+        ]]></sql></rollback>
+    </changeSet>
+</databaseChangeLog>
