@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.database;
 
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
+import de.tum.cit.aet.hephaestus.testconfig.TestDatabaseCleanup;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
@@ -51,7 +52,7 @@ public final class PracticeMigrationFixture {
             }
             NATIVE_TEMPLATES.put(context, template);
         }
-        return PostgreSQLTestContainer.copyDatabase(
+        return TestDatabaseCleanup.copyDatabase(
                 "native_model_" + UUID.randomUUID().toString().replace("-", ""), template);
     }
 

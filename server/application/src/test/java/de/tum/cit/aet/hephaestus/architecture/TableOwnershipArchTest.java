@@ -6,19 +6,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaCodeUnitAccess;
-import com.tngtech.archunit.core.domain.JavaField;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
-import jakarta.persistence.CollectionTable;
-import jakarta.persistence.Entity;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.Table;
 import java.io.IOException;
-import java.lang.annotation.Annotation;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -28,7 +22,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -48,19 +41,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * A module reads only its own tables, and another module's through that module's interface (ADR 0138). The test reads
  * every SQL string in the production source, whichever API runs it, and the compiled value of each query
  * annotation, its count query included. The tables of a module are the tables of its entities, its join
- * tables, and the tables without an entity that {@link #NATIVE_TABLES} assigns. An edge that touches a mentoring
+ * tables, and the tables without an entity that {@link ModulithVerificationTest#NATIVE_TABLES} assigns. An edge that touches a mentoring
  * module has no exception. Main's earlier reads are listed one by one in {@code legacy-native-table-reads.txt}.
  */
 class TableOwnershipArchTest extends HephaestusArchitectureTest {
     private static final Path SOURCES = Path.of("src/main/java");
-
-    /** The owner module of each table that no entity or association maps. */
-    static final Map<String, String> NATIVE_TABLES = Map.of(
-            "event_publication", "core",
-            "shedlock", "core",
-            "auth_rate_limit_bucket", "core",
-            "account_public_activity_hidden_by_default", "core",
-            "workspace_agent_binding", "agent");
 
     private static final Pattern KEYWORD =
             Pattern.compile("\\b(?:from|join|into|update|using|table)\\s+", Pattern.CASE_INSENSITIVE);
@@ -74,7 +59,7 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
     @Test
     void shouldReadNoTableOfAnotherModuleInSql() throws IOException {
         var modules = ModulithVerificationTest.applicationModules();
-        var owners = tableOwners();
+        var owners = ModulithVerificationTest.tableOwners();
         // A query annotation built from constants is whole only in the compiled class.
         Map<String, List<String>> compiled = new TreeMap<>();
         for (var module : modules) {
@@ -334,52 +319,6 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
             Integer one = jdbc.queryForObject("SELECT 1", Integer.class);
             return one == null ? 0 : one;
         }
-    }
-
-    /** Each mapped table and its owner module. */
-    static Map<String, String> tableOwners() {
-        Map<String, String> owners = new TreeMap<>(NATIVE_TABLES);
-        for (var module : ModulithVerificationTest.applicationModules()) {
-            String name = module.getIdentifier().toString();
-            for (JavaClass type : module.getBasePackage().stream().toList()) {
-                if (type.isAnnotatedWith(Entity.class)) owners.put(table(type), name);
-                for (JavaField field : type.getFields())
-                    associationTable(field, JoinTable.class, JoinTable::name)
-                            .ifPresent(table -> owners.put(table, name));
-                for (JavaField field : type.getFields())
-                    associationTable(field, CollectionTable.class, CollectionTable::name)
-                            .ifPresent(table -> owners.put(table, name));
-                for (JavaMethod method : type.getMethods()) {
-                    if (method.isAnnotatedWith(JoinTable.class))
-                        owners.put(
-                                unquoted(method.getAnnotationOfType(JoinTable.class)
-                                        .name()),
-                                name);
-                }
-            }
-        }
-        owners.remove("");
-        return owners;
-    }
-
-    private static <A extends Annotation> Optional<String> associationTable(
-            JavaField field, Class<A> annotation, Function<A, String> name) {
-        return field.isAnnotatedWith(annotation)
-                ? Optional.of(unquoted(name.apply(field.getAnnotationOfType(annotation))))
-                : Optional.empty();
-    }
-
-    private static String table(JavaClass entity) {
-        String table = entity.isAnnotatedWith(Table.class)
-                ? entity.getAnnotationOfType(Table.class).name()
-                : "";
-        // A reserved word such as "user" is quoted in the mapping, and the database names it without quotes.
-        if (!table.isBlank()) return unquoted(table);
-        return entity.getSimpleName().replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase(Locale.ROOT);
-    }
-
-    private static String unquoted(String name) {
-        return name.replace("\"", "").toLowerCase(Locale.ROOT);
     }
 
     /** The reads of other modules' tables in one source file, from its string literals and text blocks. */
