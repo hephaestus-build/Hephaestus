@@ -348,6 +348,10 @@ Lint refuses `setTimeout` in a TypeScript test, also when it is imported from `n
 The PMD test rules refuse `Thread.sleep` and `TimeUnit.sleep` in a Java test.
 Wait with fake timers, `vi.waitFor`, `expect.poll`, Awaitility or a latch.
 
+A browser test waits for what proves the page is ready: an element, a response, or `settled(page)` from `webapp/e2e/screenshots/settled.ts`.
+Lint refuses `networkidle`.
+A poll or a request that never ends can hold that state off for the whole test, and the timeout then names no cause.
+
 When the elapsed time is the behavior under test, suppress the rule on that line and write the reason:
 `// oxlint-disable-next-line no-restricted-globals -- <reason>`, `// oxlint-disable-next-line no-restricted-imports -- <reason>` on the import, or `// NOPMD - <reason>`.
 In main code, PMD refuses an empty catch block that has no comment.

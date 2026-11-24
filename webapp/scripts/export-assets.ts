@@ -354,8 +354,15 @@ async function captureReadmeImage(
 	await page.goto(
 		`${storybookUrl}/iframe.html?id=${capture.storyId}&viewMode=story&globals=${globals}`,
 	);
-	await page.waitForLoadState("networkidle");
+	// A story has no data to wait for: its fonts and images are what the capture needs.
 	await page.evaluate(async () => document.fonts.ready);
+	await page.waitForFunction(
+		() => [...document.images].every((image) => image.complete),
+		undefined,
+		{
+			timeout: 60_000,
+		},
+	);
 	await page.addStyleTag({
 		content:
 			"*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" +

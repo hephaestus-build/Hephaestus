@@ -15,6 +15,7 @@ import { THEME_COOKIE } from "@/runtime/theme/theme-cookie";
 import { asReturningReader } from "./first-visit.ts";
 import { useFixtureApi } from "./fixture-api.ts";
 import { BASE_URL } from "./server.ts";
+import { settled } from "./settled.ts";
 import { handlers, NOW, WORKSPACE } from "./workspace.ts";
 
 const OUTPUT = path.resolve(import.meta.dirname, "../../../docs/public/img/user");
@@ -127,7 +128,7 @@ for (const shot of shots) {
 				const page = await open(browser, shot, colorScheme, unanswered);
 				await page.goto(shot.route);
 				await expect(shot.ready(page)).toBeVisible();
-				await page.waitForLoadState("networkidle");
+				await settled(page);
 				const image = await captureWebp(page);
 				// Checked after the capture, so a request made while the screen settled counts too.
 				expect([...unanswered], "requests that workspace.ts does not answer").toEqual([]);
