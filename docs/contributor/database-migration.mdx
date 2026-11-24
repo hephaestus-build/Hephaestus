@@ -140,6 +140,28 @@ To add one:
 That test fails if the application role can call a definer function that the list does not name.
 It also fails if a listed function has another owner or another search path, or if `PUBLIC` can call it.
 
+### Crossing owners
+
+On a table with row-level security, `hephaestus_app` reads and changes only the rows of the owner that the transaction binds.
+A job that must reach the rows of many people uses an owner function, never a role that bypasses row-level security.
+
+- `mentoring_due_work` gives the due rows of one kind: kind, key, workspace, account and due time, oldest first.
+  The job then binds the account of each row with `OwnerScope.ofJob` and reads the row as its owner.
+- `person_row_sweep` changes or deletes rows of many people by one closed rule.
+
+Each branch of these functions tests its name as `work_kind = 'NAME'` or `rule = 'NAME'`.
+To add a kind or a rule:
+
+1. In a new change set, add its branch to the function with `CREATE OR REPLACE FUNCTION`.
+2. Add its constant to `DueWorkKind` or `RowSweepRule`.
+3. In its comment, name the work item that owns it and the tables that it uses.
+4. In each trigger that the branch fires, name the tables with the schema.
+
+`OwnerFunctionsDatabaseTest` makes sure that the branches of the installed functions and the registry are the same set.
+It also calls each registered kind and rule, and makes sure that the function refuses all others.
+The functions search only `pg_catalog` and `pg_temp`, and a trigger runs with the search path of the function that fires it.
+An unqualified table name in such a trigger can find a temporary table, or no table.
+
 ### Trigger timing
 
 A trigger that only validates an UPDATE is an AFTER UPDATE row trigger.
