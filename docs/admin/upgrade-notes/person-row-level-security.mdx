@@ -4,20 +4,47 @@ description: Wait for active run and action leases before PostgreSQL starts each
 page_type: how-to
 ---
 
-Use this procedure when the migration reports a live run or action lease.
+Do this check after you stop every role and before you start the migration.
+The migration also refuses to enable the policies while a run or action has a live lease.
 
-1. Keep the server stopped as in the [stopped upgrade procedure](../upgrade#stopped-schema-upgrades).
-2. Wait for the last live lease to expire. Use the migration login to check the expiry time.
+## Check for live leases
+
+1. Keep every role stopped as in the [stopped upgrade procedure](../upgrade#stopped-schema-upgrades).
+2. Connect to the source database with `psql`.
+   On a source through 1.0.0-rc.5, use the login in `DATABASE_USERNAME` until you move the database logins.
+   After the move, use `hephaestus_owner`, the migration login from 1.0.0-rc.8.
+3. Run the query. It checks the lease tables and columns that exist in the source release.
 
    ```sql
-   SELECT greatest(
-       (SELECT max(leased_until) FROM agent_run),
-       (SELECT max(leased_until) FROM agent_action)
-   ) AS last_lease_expiry;
+   \set ON_ERROR_STOP on
+   SELECT format(
+       'SELECT %L AS lease_table, max(%I) AS last_lease_expiry
+        FROM public.%I HAVING max(%I) > statement_timestamp();',
+       table_name, column_name, table_name, column_name
+   )
+   FROM (VALUES
+       ('agent_run', 'leased_until'),
+       ('agent_action', 'leased_until'),
+       ('review_job', 'leased_until'),
+       ('mentor_turn', 'leased_until'),
+       ('feedback_send', 'lease_expires_at')
+   ) AS lease(table_name, column_name)
+   WHERE EXISTS (
+       SELECT FROM pg_catalog.pg_attribute
+       WHERE attrelid = to_regclass(format('public.%I', table_name))
+         AND attname = column_name AND attnum > 0 AND NOT attisdropped
+   )
+   \gexec
    ```
 
-   Continue if the result is empty or the time has passed.
-3. Do phase 2 again.
+4. If a result shows an expiry time, wait for it to pass.
+5. Repeat the check until every result is empty.
+
+## When the migration reports a live lease
+
+1. Keep every role stopped.
+2. Do [Check for live leases](#check-for-live-leases).
+3. If the live lease was the only error, do phase 2 again.
 4. Do phase 3 when the migration completes.
 
 ## Check that it worked

@@ -441,6 +441,14 @@ A focused migration test runs the seed and its expected disposition from both sc
 The format check (`scripts/cutover-seeds.test.ts`) refuses a seed with no expected disposition, and an expected disposition that cannot raise an exception. A comment does not count.
 `readCutoverSeeds` in `scripts/lib/cutover-seeds.ts` reads the seeds and applies the same check.
 
+### Mentoring cutover notes
+
+Give each change set that requires a mentoring cutover step the Liquibase label `mentoring-cutover`.
+Write the operator procedure in `docs/admin/upgrade-notes/<slug>.mdx`.
+Use the changelog filename's slug, without its timestamp.
+Link to the procedure from the migration fragment so the [1.0 upgrade guide](../admin/upgrade-to-1-0.mdx) lists it in order.
+The release checks that each labeled change set has its note.
+
 ### Stored transitions
 
 A change that adds stored states registers each state change that the server makes in `StoredTransitionQualificationTest.TRANSITIONS`.

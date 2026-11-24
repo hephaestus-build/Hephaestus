@@ -2,7 +2,12 @@
 import { statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+
 import { parse } from "yaml";
+
+import { attribute, changelogParser, elements } from "./lib/changelog-xml.ts";
+import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
+import { asRecord } from "./lib/json.ts";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 
@@ -344,6 +349,29 @@ export function headingAnchors(source: string): Set<string> {
 	);
 }
 
+/** A mentoring cutover change set needs an operator note with the stable slug of its changelog. */
+export function mentoringUpgradeNoteProblems(
+	file: string,
+	source: string,
+	hasPage: (page: string) => boolean,
+): string[] {
+	const document = asRecord(changelogParser.parse(source), file);
+	const changeLog = elements(document, "databaseChangeLog")[0] ?? {};
+	const slug = path.basename(file, ".xml").replace(/^\d{14}-/u, "");
+	const page = `admin/upgrade-notes/${slug}`;
+	return elements(changeLog, "changeSet")
+		.filter(
+			(changeSet) =>
+				attribute(changeSet, "labels")
+					.split(",")
+					.some((label) => label.trim() === "mentoring-cutover") && !hasPage(page),
+		)
+		.map(
+			(changeSet) =>
+				`${file}: Change set ${attribute(changeSet, "id")} needs docs/${page}.mdx. See docs/contributor/database-migration.mdx#mentoring-cutover-notes.`,
+		);
+}
+
 async function pagesOf(directory: string): Promise<string[]> {
 	const entries = await readdir(path.resolve(repositoryRoot, directory), {
 		recursive: true,
@@ -406,6 +434,19 @@ if (import.meta.main) {
 		return source === undefined ? undefined : headingAnchors(source);
 	};
 	problems.push(...migrationNoteProblems(notes, anchorsOf));
+	const changelogs = await readdir(path.join(repositoryRoot, NEXT_CHANGELOG_DIRECTORY));
+	for (const name of changelogs.toSorted()) {
+		if (name.endsWith(".xml")) {
+			const file = `${NEXT_CHANGELOG_DIRECTORY}/${name}`;
+			problems.push(
+				...mentoringUpgradeNoteProblems(
+					file,
+					await readFile(path.join(repositoryRoot, file), "utf8"),
+					(page) => served.has(page),
+				),
+			);
+		}
+	}
 	if (problems.length > 0) {
 		process.stderr.write(
 			`${problems.join("\n")}\nThe rules: docs/contributor/documentation-guide.mdx.\n`,
