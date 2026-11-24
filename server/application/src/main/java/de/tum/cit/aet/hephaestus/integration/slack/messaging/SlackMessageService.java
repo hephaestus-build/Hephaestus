@@ -66,8 +66,10 @@ public class SlackMessageService implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(SlackMessageService.class);
     private static final JsonMapper MEMBERSHIP_JSON = JsonMapper.builder().build();
     private static final List<String> REQUIRED_NON_MEMBER_FLAGS =
-            List.of("deleted", "is_restricted", "is_ultra_restricted", "is_bot", "is_app_user");
+            List.of("is_restricted", "is_ultra_restricted", "is_bot", "is_app_user");
+    // Slack may omit the deleted field for an active user.
     private static final List<String> OPTIONAL_NON_MEMBER_FLAGS = List.of(
+            "deleted",
             "is_stranger",
             "is_external",
             "is_invited_user",
@@ -489,7 +491,7 @@ public class SlackMessageService implements AutoCloseable {
     }
 
     private JsonNode readMembership(String token, String subject) throws IOException, SlackApiException {
-        // The SDK's User type maps missing membership flags to false. Admission needs an explicit false.
+        // The SDK's User type maps missing flags to false. Admission needs explicit values for the required flags.
         var form = new FormBody.Builder().add("user", subject);
         try (var response = slack.methods(token).runPostFormWithToken(form, "users.info", token)) {
             if (!response.isSuccessful()) throw new SlackApiException(response, "");

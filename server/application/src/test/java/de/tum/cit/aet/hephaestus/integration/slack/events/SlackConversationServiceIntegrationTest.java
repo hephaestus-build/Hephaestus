@@ -328,8 +328,10 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
         return entryRepository.findById(answerId).orElseThrow();
     }
 
-    @Test
-    void shouldStoreAQuestionInTheMainConversationWhenTheDeveloperWritesATopLevelDm() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldStoreAQuestionWhenTheFullMemberWritesATopLevelDm(boolean includesDeleted) {
+        if (!includesDeleted) membership.set(slackJson(FULL_MEMBER.replace("\"deleted\":false,", "")));
         var claimed = claimedDm();
         dispatchDm(claimed);
         assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
@@ -440,6 +442,19 @@ class SlackConversationServiceIntegrationTest extends AbstractWorkspaceIntegrati
         assertNothingStored("100.1");
         assertMembershipRefusal();
         assertLookup("unconfirmed", reason, 1);
+        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+    }
+
+    @Test
+    void shouldRefuseWhenSlackReturnsANonBooleanDeletionFlag() {
+        membership.set(slackJson(FULL_MEMBER.replace("\"deleted\":false", "\"deleted\":\"false\"")));
+        var claimed = claimedDm();
+
+        dispatchDm(claimed);
+
+        assertNothingStored("100.1");
+        assertMembershipRefusal();
+        assertLookup("unconfirmed", "payload", 1);
         assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
     }
 
