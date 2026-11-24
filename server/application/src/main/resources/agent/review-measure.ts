@@ -13,16 +13,13 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import type { KindRunner, RunContext, RunOutcome } from "./driver.ts";
 import { takeProgramFailure } from "./gateway-capabilities.ts";
+import { PI_SDK, VOLUME } from "./sandbox-paths.ts";
 
-/** Where the image keeps the review programs and the Pi SDK. */
-const SDK = "/opt/pi-sdk";
-/** The sandbox's /workspace volume, over the image's read-only root. */
-const WORKSPACE = "/workspace";
 /**
  * The runner at /workspace/.run-pi.js resolves the Pi SDK through this link, so the kind makes it before the workspace
  * fills.
  */
-const SDK_LINK = "/workspace/node_modules";
+const SDK_LINK = path.join(VOLUME, "node_modules");
 /** gateway-run.ts's exit after it could not upload the result. */
 const EXIT_UPLOAD_FAILED = 43;
 /**
@@ -196,12 +193,12 @@ export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 	const env = measureEnvironment(run, context);
 	// A sandbox also serves its review's next attempt. Each attempt's /workspace starts from its own captured workspace,
 	// never from what an earlier attempt extracted or wrote there.
-	await emptyDirectory(WORKSPACE);
+	await emptyDirectory(VOLUME);
 	if (!existsSync(SDK_LINK)) {
-		symlinkSync(`${SDK}/node_modules`, SDK_LINK);
+		symlinkSync(`${PI_SDK}/node_modules`, SDK_LINK);
 	}
 	takeProgramFailure();
-	const prepared = await runToEnd("node", [`${SDK}/gateway-init.js`], env, signal);
+	const prepared = await runToEnd("node", [`${PI_SDK}/gateway-init.js`], env, signal);
 	if (prepared === EXIT_WORKSPACE_UNPREPARED) {
 		return { leaseLost: false, outcome: "completed" };
 	}
@@ -209,7 +206,12 @@ export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 		// The server keeps why with the attempt, as no sandbox log reaches it.
 		return { leaseLost: false, outcome: "handed_on", cause: takeProgramFailure() };
 	}
-	const exit = await runToEnd("node", [`${SDK}/gateway-run.js`, ...context.command], env, signal);
+	const exit = await runToEnd(
+		"node",
+		[`${PI_SDK}/gateway-run.js`, ...context.command],
+		env,
+		signal,
+	);
 	if (signal.aborted) {
 		return { leaseLost: true };
 	}

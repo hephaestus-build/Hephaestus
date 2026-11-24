@@ -40,14 +40,14 @@ Java paths below start at `server/application/src/main/java/de/tum/cit/aet/hepha
 
 **Six claim and lease systems, with four kinds of clock:**
 
-| Work | Claim and lease | Clock | Renewed by |
-|---|---|---|---|
-| Review | `agent/job/ReviewJobRepository` (`SKIP LOCKED`), `ReviewJobClaimService`: `lease_id`, `leased_until` | Database, in SQL | The worker and the review loop |
-| Conversation turn | `mentor/MentorTurnRepository` (`SKIP LOCKED`), `MentorTurnService` | A database reading plus a JVM duration | `agent/mentor/host/HephTurnDispatcher` |
-| Feedback send | `practices/feedback/FeedbackSendRepository` (compare-and-set): `lease_owner`, `lease_expires_at` | JVM, 2 minutes | Nothing |
-| Product feedback filing | `productfeedback/ProductFeedbackFilingRepository` (`SKIP LOCKED` and an advisory lock), `FilingService` | JVM | Nothing |
-| Worker liveness | `worker_registry`: `agent/job/WorkerLivenessReporter`, `agent/sandbox/kubernetes/KubernetesLiveWorkers` | Database heartbeat | Each worker |
-| Call permit | `llm_call_permit`: `agent/proxy/LlmCallPermits` | Database heartbeat | The worker that makes the call |
+| Work                    | Claim and lease                                                                                         | Clock                                  | Renewed by                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------------------------------------- |
+| Review                  | `agent/job/ReviewJobRepository` (`SKIP LOCKED`), `ReviewJobClaimService`: `lease_id`, `leased_until`    | Database, in SQL                       | The worker and the review loop         |
+| Conversation turn       | `mentor/MentorTurnRepository` (`SKIP LOCKED`), `MentorTurnService`                                      | A database reading plus a JVM duration | `agent/mentor/host/HephTurnDispatcher` |
+| Feedback send           | `practices/feedback/FeedbackSendRepository` (compare-and-set): `lease_owner`, `lease_expires_at`        | JVM, 2 minutes                         | Nothing                                |
+| Product feedback filing | `productfeedback/ProductFeedbackFilingRepository` (`SKIP LOCKED` and an advisory lock), `FilingService` | JVM                                    | Nothing                                |
+| Worker liveness         | `worker_registry`: `agent/job/WorkerLivenessReporter`, `agent/sandbox/kubernetes/KubernetesLiveWorkers` | Database heartbeat                     | Each worker                            |
+| Call permit             | `llm_call_permit`: `agent/proxy/LlmCallPermits`                                                         | Database heartbeat                     | The worker that makes the call         |
 
 Composition has no lease of its own. It runs under the review's lease, and `ReviewJobExecutor.renewLeases` keeps that lease while the job composes.
 `agent/composer/CompositionCapacity` is a JVM semaphore.
@@ -203,15 +203,15 @@ See [Decision](#decision).
 
 ADR 0068 rejected [kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) on 2026-10-28. The v1 target of 2026-11-08 said "not now". Each reason has a changed fact:
 
-| Earlier reason | What changed |
-|---|---|
-| A cluster-scoped controller with a ClusterRole over all namespaces | Hephaestus moves to a real cluster. A platform manifest installs the controller once, outside the chart. The CRDs are namespaced. |
-| Built for stateful, idle singletons | A conversation sandbox is now such a singleton. |
-| Only its warm pool was needed | No warm pool is needed. The sandbox pulls its work after it starts, so nothing waits for injection at claim time. |
-| Claim-time environment slows a cold start | The only claim-time value is the token, as claim `env` (the template sets `envVarsInjectionPolicy: Allowed`). The work, the context and the checkout come after the start, from the gateway. |
-| Default egress to the internet | The template sets `networkPolicyManagement: Unmanaged`. The controller then creates no policy, and our NetworkPolicy allows egress only to the gateway. |
-| `sandboxd` needs ingress | The sandbox pulls. It listens on no port, and it needs no router. |
-| No Java client | The server writes one kind of object, `SandboxClaim`, through the generic resource API of its Kubernetes client. |
+| Earlier reason                                                     | What changed                                                                                                                                                                                 |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A cluster-scoped controller with a ClusterRole over all namespaces | Hephaestus moves to a real cluster. A platform manifest installs the controller once, outside the chart. The CRDs are namespaced.                                                            |
+| Built for stateful, idle singletons                                | A conversation sandbox is now such a singleton.                                                                                                                                              |
+| Only its warm pool was needed                                      | No warm pool is needed. The sandbox pulls its work after it starts, so nothing waits for injection at claim time.                                                                            |
+| Claim-time environment slows a cold start                          | The only claim-time value is the token, as claim `env` (the template sets `envVarsInjectionPolicy: Allowed`). The work, the context and the checkout come after the start, from the gateway. |
+| Default egress to the internet                                     | The template sets `networkPolicyManagement: Unmanaged`. The controller then creates no policy, and our NetworkPolicy allows egress only to the gateway.                                      |
+| `sandboxd` needs ingress                                           | The sandbox pulls. It listens on no port, and it needs no router.                                                                                                                            |
+| No Java client                                                     | The server writes one kind of object, `SandboxClaim`, through the generic resource API of its Kubernetes client.                                                                             |
 
 The upstream project now has a stable shape:
 
@@ -270,14 +270,14 @@ flowchart LR
 
 ### Runtime components
 
-| Component | What it is |
-|---|---|
-| Webhook | The edge role. It has no database ([ADR 0066](0066-the-webhook-receiver-has-no-database.md)). |
-| NATS JetStream | Provider events. |
-| Server, N replicas | One JAR with three concerns. Product: the API, sync, selection, capture and admission. Control: the claim, priority, the sandbox lifecycle, the reaper, the outbox and the schedules. Gateway: a separate port, 8081, for sandboxes only. |
-| PostgreSQL | The only truth. |
-| agent-sandbox controller | Upstream, pinned, installed by the platform manifest. |
-| Sandboxes | One for each subject that needs one. |
+| Component                | What it is                                                                                                                                                                                                                                |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Webhook                  | The edge role. It has no database ([ADR 0066](0066-the-webhook-receiver-has-no-database.md)).                                                                                                                                             |
+| NATS JetStream           | Provider events.                                                                                                                                                                                                                          |
+| Server, N replicas       | One JAR with three concerns. Product: the API, sync, selection, capture and admission. Control: the claim, priority, the sandbox lifecycle, the reaper, the outbox and the schedules. Gateway: a separate port, 8081, for sandboxes only. |
+| PostgreSQL               | The only truth.                                                                                                                                                                                                                           |
+| agent-sandbox controller | Upstream, pinned, installed by the platform manifest.                                                                                                                                                                                     |
+| Sandboxes                | One for each subject that needs one.                                                                                                                                                                                                      |
 
 There is no worker role.
 
@@ -294,11 +294,11 @@ There is no worker role.
 
 A **subject** is the thing that a sandbox serves. Its key is the concurrency key of its runs:
 
-| Kind | Subject key | Lifetime |
-|---|---|---|
-| `review` | `review:<id>` | `shutdownTime` is the review's deadline. The sandbox measures, then composes. |
+| Kind           | Subject key         | Lifetime                                                                                                                                                     |
+| -------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `review`       | `review:<id>`       | `shutdownTime` is the review's deadline. The sandbox measures, then composes.                                                                                |
 | `conversation` | `conversation:<id>` | While the conversation is in use. The reaper deletes it after the idle limit. `shutdownTime` is a ceiling from the capacity home, so its token also expires. |
-| `action` | `action:<id>` | Short. One action task, such as a product feedback draft. |
+| `action`       | `action:<id>`       | Short. One action task, such as a product feedback draft.                                                                                                    |
 
 Each kind has one `SandboxTemplate` and one `SandboxWarmPool` with `replicas: 0`.
 A v1beta1 claim requires `warmPoolRef`, so the server creates a sandbox with a `SandboxClaim` that names the pool of its kind. The pool holds no started sandbox.
@@ -494,14 +494,14 @@ Every route is on the server's port 8081 and needs the sandbox token.
 Each call after `next` names its run and epoch in the headers `X-Agent-Run` and `X-Agent-Epoch`.
 The gateway checks that the run's `concurrency_key` equals the token's `subject_key`, and then checks the fence in PostgreSQL.
 
-| Route | Purpose |
-|---|---|
-| `POST /internal/agent/next` | The sandbox asks for its subject's next run. The answer is the run, the epoch, the deadline and the context descriptor. |
-| `GET /internal/agent/runs/{id}/context/...` | Documents, the checkout archive and the conversation ledger. |
-| `POST /internal/agent/runs/{id}/lease` | Renew the lease. |
-| The LLM proxy routes | The existing routes. Each call is checked against the run and the epoch, and it takes a permit in the run's band. |
-| `POST /internal/agent/runs/{id}/results`, `/actions` and `/end` | Proposals. Admission stays in the server. |
-| Turn deltas | The sandbox streams the deltas of a turn to the server's live hub, by the existing mechanism. |
+| Route                                                           | Purpose                                                                                                                 |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `POST /internal/agent/next`                                     | The sandbox asks for its subject's next run. The answer is the run, the epoch, the deadline and the context descriptor. |
+| `GET /internal/agent/runs/{id}/context/...`                     | Documents, the checkout archive and the conversation ledger.                                                            |
+| `POST /internal/agent/runs/{id}/lease`                          | Renew the lease.                                                                                                        |
+| The LLM proxy routes                                            | The existing routes. Each call is checked against the run and the epoch, and it takes a permit in the run's band.       |
+| `POST /internal/agent/runs/{id}/results`, `/actions` and `/end` | Proposals. Admission stays in the server.                                                                               |
+| Turn deltas                                                     | The sandbox streams the deltas of a turn to the server's live hub, by the existing mechanism.                           |
 
 Capture stays a server step. The gateway serves only captured bytes and archives that the server built with its own credentials.
 
@@ -517,12 +517,13 @@ Capture stays a server step. The gateway serves only captured bytes and archives
   The spike measured the time from a claim to the first model token on k3s v1.37 (n = 40).
   The image was pre-pulled, and a stub provider sent its first token after 300 ms:
 
-  | Runtime | p50 | p95 |
-  |---|---|---|
+  | Runtime                  | p50    | p95    |
+  | ------------------------ | ------ | ------ |
   | runc, `hostUsers: false` | 0.87 s | 1.00 s |
-  | gVisor | 2.20 s | 2.83 s |
+  | gVisor                   | 2.20 s | 2.83 s |
 
   A real provider adds its own first-token time minus 0.3 s. That is not measured yet. A cold pull of the agent image costs 6.6–7.0 s alone, so the image must be on the node before the claim.
+
 - **Reviews.** The `review_measure` run measures and stages each practice (ADR 0063). The server admits and seals. The `review_compose` run then composes in the same sandbox, and the outbox delivers.
 
 ## Consequences
@@ -558,6 +559,7 @@ Capture stays a server step. The gateway serves only captured bytes and archives
   - The run's budget and the permit pool bound model spend.
 
   The egress and isolation gate tests these bounds on each upgrade.
+
 - **The server runs as several replicas.** That needs provider events in order for each item across replicas. Until then the server cannot leave `Recreate`.
 - **A server restart cuts streams.** The loop retries a model call whose connection broke, under the replay bound of ADR 0068's update of 2026-11-08.
 - **Cold start is a product number.** The spike meets the target with margin on both runtimes, but only with a pre-pulled image. A regression shows directly in a conversation.
@@ -771,4 +773,4 @@ Old active reviews have no checkpoint. Their first upgrade requires the one-time
 
 `ModelSession` is removed. The product feedback draft stays the outbox action `DRAFT_REPORT`. Its one tool-free call is written and read by the model proxy's draft gateway (`ProductFeedbackModelGateway`), so no server code outside the proxy speaks a model protocol.
 
-Every HTTP client that server code builds from the application's Spring builders refuses a model request that the proxy did not send (`ModelEgressConfig`). A model request is told by its shape: a POST whose JSON body names a model and carries what the model reads. Gemini's `contents` and a request nested in a batch count too. A vendor SDK's own transport, such as Slack's, is outside this check. This replaces the last sentence of the update "the JVM composer is gone" of 2026-11-10.
+Every HTTP client that server code builds from the application's Spring builders refuses a model request that the proxy did not send (`ModelEgressConfig`). A model request is told by its shape: a POST whose body parses as JSON, whatever content type it declares, and names a model and carries what the model reads. Gemini's `contents` and a request nested in a batch count too. A vendor SDK's own transport, such as Slack's, is outside this check. This replaces the last sentence of the update "the JVM composer is gone" of 2026-11-10.

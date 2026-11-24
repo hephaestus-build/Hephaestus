@@ -388,23 +388,23 @@ The factory adds nothing that the descriptor does not name:
 
 `pi-session-dispatch.spec.ts` checks by behaviour that every run kind opens its sessions through `openRunSession`:
 
-- It runs each in-process runner of the registry (`TURN`, `DIGEST`, `REVIEW_COMPOSE`).
-  A recording factory, a recording `ModelSession` and a recording SDK session builder count what each runner builds.
+- It runs each in-process runner of the registry (`TURN`, `DIGEST`, `REVIEW_COMPOSE`) with the real factory.
+  The model refuses each call, so a turn ends after its first request.
+  The spec counts the calls to the factory, each `ModelSession` built, and each Pi session that an SDK function returns outside the factory.
+  It tells a Pi session by its type, not by the name of the function that built it.
 - `REVIEW`'s runner is the measurement that starts the staged review runner.
-  The spec runs the measurement in the same way and checks that it builds no session of its own.
-  It runs the staged review runner through the harness of the review specs.
-  There the factory opens real sessions, and the spec counts the same three things.
-- A kind must open a session through the factory. It must build no `ModelSession` and no Pi session past the factory.
-- In-process, the recording factory ends a run at its first call.
-  A build after that call is not counted there.
+  The spec runs the measurement's whole path in a temporary image layout, with stand-in programs, and checks that it builds no session of its own.
+- The spec also runs the staged review runner through the harness of the review specs.
+  There the harness's stand-in SDK builds the session, and the spec counts the same three things.
+- A kind must open a session through the factory. It must build no `ModelSession` and no Pi session past the factory, also after its factory session.
 - `REVIEW_COMPOSE` is the one exemption, named by its kind. It keeps its own model client until the publication cutover (CF-18). The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
 - Three fixture runners break the rule and must fail it.
-  One builds a `ModelSession`, one builds a Pi session itself, and one opens no session.
+  One builds a `ModelSession`, one builds a second Pi session itself after its factory session, and one opens no session.
 
 The server makes its own model calls only through the proxy's gateways, such as `ProductFeedbackModelGateway` for a report draft.
 `ModelEgressConfig` refuses a model request on every client built from the application's Spring builders, unless the proxy sent it.
 A model request is told by its shape, not by its address.
-Its POST body is JSON that names a model and carries what the model reads, or that carries Gemini's `contents`.
+Its POST body parses as JSON, whatever content type it declares. It names a model and carries what the model reads, or it carries Gemini's `contents`.
 A lookup that only names a model, such as Ollama's `/api/show`, passes.
 A request that nests one, such as a batch of requests, is a model request too.
 

@@ -11,7 +11,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.http.client.reactive.ClientHttpRequest;
 import org.springframework.http.client.reactive.ClientHttpRequestDecorator;
 import org.springframework.web.reactive.function.BodyInserter;
@@ -51,12 +50,12 @@ public class ModelEgressConfig {
      */
     static final Object PROXY_MARK = new Object();
 
-    /** Whether the request asks a model for an answer. */
-    static boolean isModelRequest(@Nullable HttpMethod method, @Nullable MediaType type, byte[] body) {
+    /**
+     * Whether the request asks a model for an answer. Its declared content type does not decide: a client sends a
+     * String body as {@code text/plain} unless told otherwise, and a model reads the JSON all the same.
+     */
+    static boolean isModelRequest(@Nullable HttpMethod method, byte[] body) {
         if (!HttpMethod.POST.equals(method) || body.length == 0) return false;
-        if (type != null
-                && !type.isCompatibleWith(MediaType.APPLICATION_JSON)
-                && !type.getSubtype().endsWith("+json")) return false;
         JsonNode request;
         try {
             request = JSON.readTree(body);
@@ -88,7 +87,7 @@ public class ModelEgressConfig {
     @Bean
     RestClientCustomizer modelEgressRestClient() {
         return builder -> builder.requestInterceptor((request, body, execution) -> {
-            if (isModelRequest(request.getMethod(), request.getHeaders().getContentType(), body))
+            if (isModelRequest(request.getMethod(), body))
                 throw refused(request.getURI());
             return execution.execute(request, body);
         });
@@ -97,7 +96,7 @@ public class ModelEgressConfig {
     @Bean
     RestTemplateCustomizer modelEgressRestTemplate() {
         return template -> template.getInterceptors().add((request, body, execution) -> {
-            if (isModelRequest(request.getMethod(), request.getHeaders().getContentType(), body))
+            if (isModelRequest(request.getMethod(), body))
                 throw refused(request.getURI());
             return execution.execute(request, body);
         });
@@ -138,7 +137,7 @@ public class ModelEgressConfig {
                 byte[] bytes = new byte[joined.readableByteCount()];
                 joined.read(bytes);
                 DataBufferUtils.release(joined);
-                if (isModelRequest(HttpMethod.POST, getHeaders().getContentType(), bytes))
+                if (isModelRequest(HttpMethod.POST, bytes))
                     return Mono.error(refused(url));
                 return super.writeWith(Mono.just(bufferFactory().wrap(bytes)));
             });

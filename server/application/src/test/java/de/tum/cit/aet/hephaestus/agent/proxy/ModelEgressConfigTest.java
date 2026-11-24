@@ -95,6 +95,23 @@ class ModelEgressConfigTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRefuseAModelRequestWhoseBodyIsSentAsPlainText() {
+        model.enqueue(new MockResponse.Builder().body("{}").build());
+        context.run(app -> {
+            // With no content type, the client declares a String body text/plain.
+            var send = app.getBean(RestClient.Builder.class)
+                    .build()
+                    .post()
+                    .uri(model.url("/api/chat").uri())
+                    .body(CHAT);
+
+            assertThatThrownBy(() -> send.retrieve().body(String.class))
+                    .hasMessageContaining("A model request must go through the model proxy");
+            assertThat(model.getRequestCount()).isZero();
+        });
+    }
+
+    @Test
     void shouldRefuseAModelRequestThatARestTemplateSendsPastTheProxy() {
         model.enqueue(new MockResponse.Builder().body("{}").build());
         context.run(app -> {
