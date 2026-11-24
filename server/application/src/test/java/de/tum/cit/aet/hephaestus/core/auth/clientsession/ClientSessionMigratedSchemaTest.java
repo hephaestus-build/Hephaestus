@@ -8,6 +8,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
 import de.tum.cit.aet.hephaestus.testconfig.TestCacheConfiguration;
@@ -26,6 +28,8 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -57,7 +61,8 @@ import org.springframework.transaction.support.TransactionTemplate;
     TestCacheConfiguration.class,
     ClientSessionPruner.class,
     AccountPurger.class,
-    ClientSessionMigratedSchemaTest.ClockConfiguration.class
+    ClientSessionMigratedSchemaTest.ClockConfiguration.class,
+    ClientSessionMigratedSchemaTest.PrivacyJournalConfiguration.class
 })
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @ActiveProfiles("test")
@@ -306,6 +311,14 @@ class ClientSessionMigratedSchemaTest {
                 now.plusSeconds(60),
                 null));
     }
+
+    /** The account purge records its fact through the journal that the privacy module provides in production. */
+    @TestConfiguration
+    @ComponentScan(
+            basePackageClasses = PersonDataService.class,
+            useDefaultFilters = false,
+            includeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = PrivacyJournal.class))
+    static class PrivacyJournalConfiguration {}
 
     @TestConfiguration
     static class ClockConfiguration {
