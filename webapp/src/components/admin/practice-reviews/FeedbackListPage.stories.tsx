@@ -233,14 +233,11 @@ export const DeveloperSummary: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByRole("heading", { name: "Feedback for Grace Hopper" });
 		const table = canvas.getByRole("table", { name: "Feedback for Grace Hopper by where it goes" });
-		await expect(
-			within(table).getByRole("cell", { name: "In conversation in Slack" }),
-		).toBeVisible();
 		await expect(within(table).getByRole("cell", { name: "In conversation" })).toBeVisible();
 		const [count] = within(table).getAllByRole("link");
 		await expect(
 			parseSearch(new URL(String(count?.getAttribute("href")), window.location.origin).search),
-		).toMatchObject({ developerId: "9", location: "APP" });
+		).toMatchObject({ developerId: "9", location: "CONVERSATION" });
 	},
 };
 
@@ -265,7 +262,7 @@ export const DeveloperSummaryFailed: Story = {
 
 /**
  * Every row says where its feedback went, by provider, in a short label beside the provider's mark:
- * on GitHub or GitLab, with Hephaestus in Slack, or in the next conversation.
+ * on GitHub or GitLab, or in conversation. It does not say where the developer read a conversation piece.
  */
 export const EveryRowNamesItsLocation: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
@@ -274,7 +271,6 @@ export const EveryRowNamesItsLocation: Story = {
 		const table = within(canvas.getByRole("table", { name: "Feedback" }));
 		await expect(table.getAllByText("On GitHub").length).toBeGreaterThan(0);
 		await expect(table.getAllByText("On GitLab").length).toBeGreaterThan(0);
-		await expect(table.getAllByText("In conversation in Slack").length).toBeGreaterThan(0);
 		await expect(table.getAllByText("In conversation").length).toBeGreaterThan(0);
 	},
 };

@@ -17,9 +17,7 @@ const LOCATION_COUNTS: [FeedbackLocation, number][] = [
 	["GITHUB", 4],
 	["GITLAB", 2],
 	["OTHER_WORK", 1],
-	["APP", 2],
-	["SLACK", 1],
-	["NEXT_CONVERSATION", 2],
+	["CONVERSATION", 5],
 	["PRACTICE_PAGES", 3],
 ];
 const EVERY_LOCATION: ReasonCount[] = LOCATION_COUNTS.map(([reason, count]) => ({
@@ -54,8 +52,6 @@ export const Default: Story = {
 			"On GitHub",
 			"On GitLab",
 			"On the work",
-			"In conversation in the app",
-			"In conversation in Slack",
 			"In conversation",
 			"On the practice page",
 		]) {
@@ -75,13 +71,19 @@ export const OneLocation: Story = {
 	args: {
 		state: {
 			status: "ready",
-			counts: [{ reason: "SLACK", description: FEEDBACK_LOCATION_DEFS.SLACK.label, count: 2 }],
+			counts: [
+				{
+					reason: "CONVERSATION",
+					description: FEEDBACK_LOCATION_DEFS.CONVERSATION.label,
+					count: 2,
+				},
+			],
 		},
 	},
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
 		const table = canvas.getByRole("table");
-		within(table).getByRole("cell", { name: "In conversation in Slack" });
+		within(table).getByRole("cell", { name: "In conversation" });
 		await expect(within(table).queryByRole("cell", { name: "On GitHub" })).toBeNull();
 	},
 };

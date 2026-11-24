@@ -160,7 +160,7 @@ export function feedbackLocation(
 			return "OTHER_WORK";
 		}
 		case "CONVERSATION": {
-			return "NEXT_CONVERSATION";
+			return "CONVERSATION";
 		}
 		case "PRACTICE_PAGE": {
 			return "PRACTICE_PAGES";

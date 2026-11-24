@@ -597,7 +597,7 @@ export const richReviewFixture = (() => {
 				{
 					ON_WORK: "GITLAB",
 					PRACTICE_PAGE: "PRACTICE_PAGES",
-					CONVERSATION: "NEXT_CONVERSATION",
+					CONVERSATION: "CONVERSATION",
 				} as const
 			)[destination],
 			body,

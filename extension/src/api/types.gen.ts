@@ -2166,9 +2166,7 @@ export type FeedbackLocation =
 	| "GITHUB"
 	| "GITLAB"
 	| "OTHER_WORK"
-	| "APP"
-	| "SLACK"
-	| "NEXT_CONVERSATION"
+	| "CONVERSATION"
 	| "PRACTICE_PAGES";
 
 export type FeedbackMode = "OFF" | "APPROVE_FIRST" | "AUTOMATIC";

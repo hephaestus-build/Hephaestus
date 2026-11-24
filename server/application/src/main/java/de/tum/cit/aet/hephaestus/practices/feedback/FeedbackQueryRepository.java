@@ -44,8 +44,7 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
             CASE f.destination
               WHEN 'PRACTICE_PAGE' THEN 'PRACTICE_PAGES'
               WHEN 'ON_WORK' THEN CASE WHEN provider.type IN ('GITHUB','GITLAB') THEN provider.type ELSE 'OTHER_WORK' END
-              WHEN 'CONVERSATION' THEN CASE WHEN conversation.surface='SLACK' THEN 'SLACK'
-                WHEN conversation.surface IS NOT NULL THEN 'APP' ELSE 'NEXT_CONVERSATION' END
+              WHEN 'CONVERSATION' THEN 'CONVERSATION'
             END AS location,
             (SELECT d.action='WITHDRAW' FROM (""" + FeedbackVisibilitySql.LATEST + """
             ) d) AS withdrawn,
@@ -62,10 +61,6 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
           LEFT JOIN repository repo ON repo.id=CASE i.kind WHEN 'scm.repository' THEN i.source_id
             WHEN 'scm.file' THEN holder.source_id ELSE work.repository_id END
           LEFT JOIN identity_provider provider ON provider.id=repo.provider_id
-          LEFT JOIN LATERAL (SELECT e.surface FROM feedback_copy c
-            JOIN conversation_entry e ON e.id=c.conversation_entry_id AND e.workspace_id=c.workspace_id
-            WHERE c.workspace_id=f.workspace_id AND c.feedback_id=f.id AND c.kind='CHAT_TURN' AND c.state='POSTED'
-            ORDER BY c.position,c.id LIMIT 1) conversation ON true
           WHERE f.workspace_id=:workspaceId
         )
         """;

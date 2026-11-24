@@ -493,7 +493,6 @@ interface FeedbackSpec {
 	id: string;
 	body?: string;
 	destination: Destination;
-	conversation?: "APP" | "SLACK";
 	state: FeedbackState;
 	stopReason?: StopReason;
 	composedAt: string;
@@ -1208,7 +1207,6 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 				id: "22222222-4444-4444-4444-444444444444",
 				body: "You described the rollback in terms of what a customer would see rather than which tables move. That is the version somebody paged at 2am can act on.",
 				destination: "CONVERSATION",
-				conversation: "SLACK",
 				state: "DELIVERED",
 				composedAt: "2026-07-26T16:06:00Z",
 				deliveredAt: "2026-07-26T18:40:00Z",
@@ -1724,9 +1722,7 @@ const LOCATION_ORDER: ReviewFeedback["location"][] = [
 	"GITHUB",
 	"GITLAB",
 	"OTHER_WORK",
-	"APP",
-	"SLACK",
-	"NEXT_CONVERSATION",
+	"CONVERSATION",
 	"PRACTICE_PAGES",
 ];
 
@@ -1917,9 +1913,7 @@ function locationOf(review: ReviewSpec, spec: FeedbackSpec): ReviewFeedback["loc
 			return provider === "GITHUB" || provider === "GITLAB" ? provider : "OTHER_WORK";
 		}
 		case "CONVERSATION": {
-			return spec.state === "DELIVERED" || spec.state === "UNCONFIRMED"
-				? (spec.conversation ?? "APP")
-				: "NEXT_CONVERSATION";
+			return "CONVERSATION";
 		}
 	}
 }
@@ -2928,7 +2922,7 @@ export const practiceReviewOverview: ReviewOverview = {
 
 export const deliveredByLocationCounts: ReasonCount[] = [
 	{ reason: "GITHUB", description: FEEDBACK_LOCATION_DEFS.GITHUB.label, count: 8 },
-	{ reason: "SLACK", description: FEEDBACK_LOCATION_DEFS.SLACK.label, count: 2 },
+	{ reason: "CONVERSATION", description: FEEDBACK_LOCATION_DEFS.CONVERSATION.label, count: 2 },
 	{ reason: "PRACTICE_PAGES", description: FEEDBACK_LOCATION_DEFS.PRACTICE_PAGES.label, count: 4 },
 ];
 

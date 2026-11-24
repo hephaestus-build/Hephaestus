@@ -4360,7 +4360,7 @@ export const FeedbackItemSchema = {
 
 export const FeedbackLocationSchema = {
 	type: "string",
-	enum: ["GITHUB", "GITLAB", "OTHER_WORK", "APP", "SLACK", "NEXT_CONVERSATION", "PRACTICE_PAGES"],
+	enum: ["GITHUB", "GITLAB", "OTHER_WORK", "CONVERSATION", "PRACTICE_PAGES"],
 } as const;
 
 export const FeedbackModeSchema = {

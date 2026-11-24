@@ -15,7 +15,7 @@ describe("deliveredByLocation", () => {
 		);
 		expect(rows.map((row) => [row.key, row.count])).toStrictEqual([
 			["GITHUB", 8],
-			["SLACK", 2],
+			["CONVERSATION", 2],
 			["PRACTICE_PAGES", 4],
 		]);
 		expect(rows[0]?.target).toStrictEqual({

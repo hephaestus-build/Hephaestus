@@ -1,7 +1,6 @@
 import type { ReviewFeedback, ItemRef } from "@/api/types.gen";
-import { HephaestusMarkIcon } from "@/components/brand/HephaestusMark";
 import type { StatusDefs } from "@/components/common/status-def";
-import { GitHubIcon, GitLabIcon, SlackIcon } from "@/components/icons/brand";
+import { GitHubIcon, GitLabIcon } from "@/components/icons/brand";
 import { itemName } from "@/lib/item-kinds";
 
 import { FEEDBACK_DESTINATION_DEFS } from "./feedback-destination-defs";
@@ -29,25 +28,13 @@ export const FEEDBACK_LOCATION_DEFS: StatusDefs<FeedbackLocation> = {
 		description:
 			"Posted on the work the feedback is about, at a provider the record does not name as GitHub or GitLab.",
 	},
-	APP: {
-		label: "In conversation in the app",
-		icon: HephaestusMarkIcon,
-		badgeVariant: "outline",
-		description: "Raised in an answer in the developer’s conversation in the app.",
-	},
-	SLACK: {
-		label: "In conversation in Slack",
-		icon: SlackIcon,
-		badgeVariant: "outline",
-		description: "Raised in an answer in the developer’s conversation in a Slack direct message.",
-	},
-	NEXT_CONVERSATION: {
+	CONVERSATION: {
 		// The destination's own word and mark, so the Destination filter and the destination tag agree.
 		label: FEEDBACK_DESTINATION_DEFS.CONVERSATION.label,
 		icon: FEEDBACK_DESTINATION_DEFS.CONVERSATION.icon,
 		badgeVariant: "outline",
 		description:
-			"For the developer’s conversation with Hephaestus. No answer raised it yet, or the answer that raised it is gone.",
+			"For the developer’s conversation with Hephaestus. The review does not say whether it was raised in the app or in Slack.",
 	},
 	PRACTICE_PAGES: {
 		// The destination's own word and mark, so the Destination filter and the destination tag agree.
@@ -60,7 +47,7 @@ export const FEEDBACK_LOCATION_DEFS: StatusDefs<FeedbackLocation> = {
 
 /**
  * The location in words, where a reader asks where one piece of feedback went: "Comment on GitHub
- * pull request #12", "Conversation in Slack", "Card on their practice pages". The work's
+ * pull request #12", "For their conversation with Hephaestus", "Card on their practice pages". The work's
  * own noun comes from the provider, so a GitLab one reads "merge request !425".
  */
 export function feedbackLocationSentence(
@@ -79,14 +66,8 @@ export function feedbackLocationSentence(
 		case "OTHER_WORK": {
 			return work === undefined ? "Comment on the work" : `Comment on ${lowerFirst(work)}`;
 		}
-		case "APP": {
-			return "Conversation in the app";
-		}
-		case "SLACK": {
-			return "Conversation in Slack";
-		}
-		case "NEXT_CONVERSATION": {
-			return "For a conversation";
+		case "CONVERSATION": {
+			return "For their conversation with Hephaestus";
 		}
 		case "PRACTICE_PAGES": {
 			return "Card on their practice pages";
