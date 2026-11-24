@@ -92,6 +92,7 @@ export function ConversationComposer({
 		<form onSubmit={handleSubmit}>
 			<InputGroup>
 				<InputGroupTextarea
+					dir="auto"
 					ref={textareaRef}
 					aria-label={label}
 					aria-describedby={describedBy}

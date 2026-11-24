@@ -1,5 +1,6 @@
 import { definePlugin } from "@oxlint/plugins";
 
+import { conversationCatalogCopy } from "./rules/conversation-catalog-copy.ts";
 import { focusOutlineInForcedColors } from "./rules/focus-outline-in-forced-colors.ts";
 import { newTabLinkSaysSo } from "./rules/new-tab-link-says-so.ts";
 import { noContextProvider } from "./rules/no-context-provider.ts";
@@ -24,6 +25,7 @@ import { uiTextVoice } from "./rules/ui-text-voice.ts";
 export default definePlugin({
 	meta: { name: "hephaestus" },
 	rules: {
+		"conversation-catalog-copy": conversationCatalogCopy,
 		"ui-text-voice": uiTextVoice,
 		"new-tab-link-says-so": newTabLinkSaysSo,
 		"no-context-provider": noContextProvider,

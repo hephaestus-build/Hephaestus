@@ -4,6 +4,7 @@ import type { ConversationTurn } from "@/api/types.gen";
 import { HephaestusMark } from "@/components/brand/HephaestusMark";
 import { Button } from "@/components/ui/button";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import { conversationLabel, conversationMessage } from "@/lib/conversation-copy";
 import { hasText } from "@/lib/text";
 import { useSpinDelay } from "@/lib/use-spin-delay";
 
@@ -15,23 +16,27 @@ type ShownTurn = Pick<ConversationTurn, "status" | "surface" | "partial" | "wait
 function turnStatusLabel(turn: ShownTurn, waiting: boolean): string {
 	if (waiting) {
 		return turn.waitingFor === "CAPACITY"
-			? "Hephaestus is answering other questions. Yours starts when one finishes."
-			: "Waiting to start…";
+			? conversationMessage("waitForCapacity")
+			: conversationMessage("waitingToStart");
 	}
 	if (turn.surface === "SLACK") {
-		return "Answering in Slack…";
+		return conversationMessage("answeringInSlack");
 	}
 	// The host words the stage from the tool in flight (`partial.stage`); the app shows it as it is.
 	if (turn.partial === undefined) {
-		return "Thinking…";
+		return conversationMessage("conversation.stage.thinking");
 	}
-	return turn.partial.activity === "WRITING" ? "Writing…" : turn.partial.stage;
+	if (turn.partial.activity === "WRITING") {
+		return conversationMessage("writing");
+	}
+	const { stage, stageLabel } = turn.partial;
+	return stageLabel === undefined ? stage : conversationLabel(stageLabel);
 }
 
 /** From this many seconds, the line counts the wait and says the developer can leave. */
 const LEAVE_NOTE_AFTER_SECONDS = 10;
 
-export const LEAVE_NOTE = "You can leave. The answer stays here.";
+export const LEAVE_NOTE = conversationMessage("leaveNote");
 
 /**
  * Whole seconds since `since`, once they reach {@link LEAVE_NOTE_AFTER_SECONDS}; before that, and
@@ -63,7 +68,12 @@ export function useWaitedSeconds(
 }
 
 function formatWaited(seconds: number): string {
-	return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+	return seconds < 60
+		? conversationMessage("waitedSeconds", { seconds })
+		: conversationMessage("waitedMinutes", {
+				minutes: Math.floor(seconds / 60),
+				seconds: seconds % 60,
+			});
 }
 
 /**
@@ -113,7 +123,11 @@ export function ConversationTurnStatus({ turn, stop }: ConversationTurnStatusPro
 			)}
 			<Marker>
 				<MarkerIcon>
-					<HephaestusMark size={16} pad={1} />
+					<HephaestusMark
+						size={16}
+						pad={1}
+						state={turn.status === "QUEUED" ? "quiet" : "working"}
+					/>
 				</MarkerIcon>
 				<MarkerContent aria-hidden>
 					<span key={label} className="shimmer shimmer-once">
@@ -128,7 +142,7 @@ export function ConversationTurnStatus({ turn, stop }: ConversationTurnStatusPro
 				</MarkerContent>
 				{stop && (
 					<Button variant="outline" size="xs" aria-label={stop.label} onClick={stop.onStop}>
-						Stop
+						{conversationMessage("stop")}
 					</Button>
 				)}
 			</Marker>

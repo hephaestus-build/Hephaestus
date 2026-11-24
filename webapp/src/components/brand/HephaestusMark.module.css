@@ -1,5 +1,21 @@
 .icon {
 	/* Owned here, not by a utility — webapp/DESIGN.md § Styling. */
-	width: var(--mark-size);
-	height: var(--mark-size);
+	inline-size: var(--mark-size);
+	block-size: var(--mark-size);
+}
+
+.icon[data-state="quiet"] .antenna {
+	visibility: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.icon[data-state="working"] .antenna {
+		animation: antenna 700ms ease-in-out 2 alternate;
+	}
+}
+
+@keyframes antenna {
+	to {
+		opacity: 0.4;
+	}
 }

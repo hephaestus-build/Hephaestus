@@ -1,0 +1,4 @@
+{
+	"checkInTime": "{time} ({zone})",
+	"workspaceOnHost": "\u2068{workspace}\u2069 on \u2068{host}\u2069"
+}

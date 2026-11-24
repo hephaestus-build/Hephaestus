@@ -1,0 +1,13 @@
+{
+	"checkInTime": "{time} ({zone})",
+	"waitForCapacity": "Hephaestus is answering other questions. Yours starts when one finishes.",
+	"waitingToStart": "Waiting to start…",
+	"answeringInSlack": "Answering in Slack…",
+	"conversation.stage.thinking": "Thinking…",
+	"writing": "Writing…",
+	"leaveNote": "You can leave. The answer stays here.",
+	"waitedSeconds": "{seconds, plural, other {# s}}",
+	"waitedMinutes": "{minutes, plural, other {# min}} {seconds, plural, other {# s}}",
+	"stop": "Stop",
+	"streamedAnswer": "Answer from Hephaestus"
+}

@@ -594,6 +594,20 @@ vp run --filter webapp chromatic:ci        # Visual regression in CI
 - CI runs Chromatic for same-repository pull requests that change the webapp – review visual diffs before merging.
 - Reference [ui.shadcn.com](https://ui.shadcn.com/) for composition patterns. A new widget builds on the Base UI primitives already wrapped under `src/components/ui/**`.
 
+### Conversation components
+
+Add new web app conversation components under `webapp/src/components/conversation/live`.
+In the extension, use a `conversation` subdirectory of `extension/src/components`.
+Put their display text in that client's message catalog.
+Use the formatting module for ICU MessageFormat and check-in times.
+Pass the check-in's time zone to the formatter.
+Use logical CSS properties, `dir="auto"` for free text blocks, and `bdi` for inline names.
+
+Give each component a Storybook story.
+The preview runs axe against every story.
+Test keyboard actions and any live text that changes while a person reads it.
+Check that the component fits at 320 px, with text at 200%, and in forced colors.
+
 ### OpenAPI client
 
 `webapp/src/api/**` is generated from `server/openapi.yaml` and is the only way the webapp talks to

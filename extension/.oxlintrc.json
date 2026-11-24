@@ -24,6 +24,11 @@
 
 	"overrides": [
 		{
+			"files": ["src/components/conversation/**/*.{ts,tsx}"],
+			"excludeFiles": ["**/*.stories.tsx", "**/*.test.{ts,tsx}"],
+			"rules": { "hephaestus/conversation-catalog-copy": "error" }
+		},
+		{
 			// The configs reach the webapp's lint loader and the root manifest, across the tree boundary
 			// no alias spans.
 			"files": ["vite.config.ts", "wxt.config.ts"],

@@ -1,12 +1,12 @@
 {
 	"pnpm-lock.yaml": {
 		"envPackages": 15,
-		"packages": 1936,
+		"packages": 1934,
 		"importers": {
 			".": {
 				"direct": {
 					"prod": 0,
-					"dev": 47
+					"dev": 46
 				},
 				"transitive": {
 					"prod": 0,
@@ -25,12 +25,12 @@
 			},
 			"extension": {
 				"direct": {
-					"prod": 7,
+					"prod": 8,
 					"dev": 25
 				},
 				"transitive": {
-					"prod": 10,
-					"all": 886
+					"prod": 14,
+					"all": 890
 				}
 			},
 			"scripts/api-generator": {
@@ -45,12 +45,12 @@
 			},
 			"webapp": {
 				"direct": {
-					"prod": 30,
+					"prod": 27,
 					"dev": 44
 				},
 				"transitive": {
-					"prod": 217,
-					"all": 1178
+					"prod": 214,
+					"all": 1176
 				}
 			}
 		}

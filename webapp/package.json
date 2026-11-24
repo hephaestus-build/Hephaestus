@@ -43,6 +43,7 @@
 		"cn": "0.2.6",
 		"date-fns": "4.4.0",
 		"dompurify": "3.4.17",
+		"intl-messageformat": "12.2.0",
 		"lucide-react": "1.41.0",
 		"mdast-util-from-markdown": "2.0.3",
 		"monaco-editor": "0.56.0",

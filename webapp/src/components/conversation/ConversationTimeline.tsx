@@ -11,6 +11,7 @@ import {
 
 import type { ConversationEntry, ConversationTurn } from "@/api/types.gen";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { StreamAnnouncements } from "@/components/conversation/live/StreamAnnouncements";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -525,8 +526,8 @@ function useOpeningWindow(
  * and empty while the first page loads. Every later day closes the row before it, so a row on screen
  * keeps its content when older rows arrive above it.
  *
- * The log announces new rows, not a row whose words change: it is busy while Hephaestus writes, and the
- * status line speaks from its own live region outside the log, so the finished answer is read once.
+ * The log announces new messages. While an answer streams, a live region announces its completed paragraphs.
+ * The same region announces the final paragraph when the stored answer replaces the stream.
  */
 export function ConversationTimeline(props: ConversationTimelineProps) {
 	const { label, state, developer, lead, empty, livePaused = false, jumpTo, workspaceName } = props;
@@ -537,6 +538,26 @@ export function ConversationTimeline(props: ConversationTimelineProps) {
 	const subjects = subjectsOf(rows, developer);
 	const last = rows.at(-1);
 	const liveTurn = last?.kind === "live" ? last.turn : undefined;
+	const [streamed, setStreamed] = useState<string[]>([]);
+	if (liveTurn !== undefined && streamed.at(-1) !== liveTurn.id) {
+		// A follow-up can start as the answer before it is stored.
+		setStreamed([...streamed.slice(-1), liveTurn.id]);
+	}
+	const answers = streamed.map((turnId) => {
+		const stored = rows.flatMap((row) =>
+			row.kind === "entry" && row.entry.kind === "ANSWER" && row.entry.turnId === turnId
+				? [row.entry.text]
+				: [],
+		);
+		const partial = liveTurn?.id === turnId ? liveTurn.partial?.text : undefined;
+		const complete = stored.length > 0;
+		return { turnId, text: complete ? stored.join("\n\n") : (partial ?? ""), complete };
+	});
+	const lastWasStreamed =
+		last?.kind === "entry" &&
+		last.entry.kind === "ANSWER" &&
+		last.entry.turnId !== undefined &&
+		streamed.includes(last.entry.turnId);
 	const question = rows.find(
 		(row) =>
 			row.kind === "entry" &&
@@ -578,6 +599,7 @@ export function ConversationTimeline(props: ConversationTimelineProps) {
 							<MessageScrollerContent
 								ref={content}
 								aria-busy={liveTurn !== undefined}
+								aria-live={liveTurn !== undefined || lastWasStreamed ? "off" : undefined}
 								className="gap-4"
 							>
 								{rows.map((row, index) => {
@@ -626,6 +648,7 @@ export function ConversationTimeline(props: ConversationTimelineProps) {
 					{statusLabel}
 				</p>
 				<LeaveNote turn={liveTurn} />
+				<StreamAnnouncements answers={answers} />
 				<KeepsEndInView read={state.status === "ready"}>
 					<div role="status">
 						{livePaused && (

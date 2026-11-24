@@ -1106,7 +1106,9 @@ it("shows what the live stream reports: Hephaestus's answer as it arrives and a 
 			links: [],
 		});
 	});
-	await screen.findByText("You opened two pull requests this week.");
+	const answer = "You opened two pull requests this week.";
+	await within(screen.getByRole("log")).findByText(answer);
+	await within(screen.getByRole("status", { name: "Answer from Hephaestus" })).findByText(answer);
 	const slackText = await screen.findByText("Asking from Slack now");
 	const slackMessage = slackText.closest<HTMLElement>("[data-slot=message]");
 	assert.isNotNull(slackMessage);
