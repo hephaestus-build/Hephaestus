@@ -137,6 +137,21 @@ class PersonTableRlsTest extends BaseIntegrationTest {
                 .containsExactlyInAnyOrder(retained, fresh);
     }
 
+    @Test
+    void shouldRefuseNewReceiptsAfterWorkspacePurge() {
+        long account = account();
+        long workspace = receiptWorkspace("receipt-purged");
+        jdbc.update("UPDATE workspace SET status = 'PURGED' WHERE id = ?", workspace);
+
+        assertThatThrownBy(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                    owners.ofJob(account);
+                    insertReceipt(jdbc, workspace, account, UUID.randomUUID(), 0);
+                }))
+                .isInstanceOf(DataAccessException.class)
+                .rootCause()
+                .hasMessageContaining("row-level security");
+    }
+
     private long receiptWorkspace(String slug) {
         return Objects.requireNonNull(jdbc.queryForObject("""
             INSERT INTO workspace(slug,display_name,account_login,account_type,status)

@@ -20,7 +20,11 @@ CREATE INDEX idx_client_input_created ON client_input(created_at);
 ALTER TABLE public.client_input ENABLE ROW LEVEL SECURITY;
 CREATE POLICY client_input_owner ON public.client_input TO hephaestus_app
     USING (account_id = public.current_owner_account())
-    WITH CHECK (account_id = public.current_owner_account());
+    WITH CHECK (account_id = public.current_owner_account() AND EXISTS (
+        SELECT FROM public.workspace
+        WHERE id = client_input.workspace_id AND status <> 'PURGED'
+        FOR SHARE
+    ));
 
 CREATE FUNCTION public.prune_client_inputs() RETURNS integer
     LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
