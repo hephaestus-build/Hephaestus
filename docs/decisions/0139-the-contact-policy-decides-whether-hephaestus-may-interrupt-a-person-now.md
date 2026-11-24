@@ -96,8 +96,8 @@ Option 6.
       1. `REQUESTED_RESULT`
       2. `AGREED`
       3. `UNPROMPTED`
-    - When a turn ends, the next claim starts at once. It takes the items that are due and that no gate holds.
-      It does not wait for a new event.
+    - When a turn ends, an item that is due and that no gate holds starts the next claim at once.
+      It does not wait for a new event. An item that is due later waits for its due time.
       The start policy of ADR 0120 decision 4 decides when an item is due.
 11. **The notification text is the notice line, never the message summary.** The push payload stays ids only. On arrival, the service worker fetches the notice line with the person's session. On any failure it shows the kind's fixed text.
     - The notice line is registry copy with parameters, such as "Check ready: 1 problem on PR #42". It is never model text.
@@ -134,7 +134,7 @@ Option 6.
     - A person who is not enrolled in a delivery experiment has rows with no probability, no draw and no exposure.
       No dataset exports such a row. ADR 0149 adds those columns for an enrolled person, and decides which datasets they enter.
 19. **A delivery experiment draws only the decisions that ADR 0149 decision 2 names.** These are a copy on the work and an unprompted message.
-    Among the contact kinds of decision 3, only unprompted contact is drawn. A decision that this policy keeps silent is recorded and never drawn.
+    Among the contact kinds of decision 3, the experiment draws only unprompted contact. It never draws a decision that this policy keeps silent, and the policy records that decision.
 
 ### What this changes in other ADRs
 
