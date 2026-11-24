@@ -293,6 +293,7 @@
 	"docs/decisions/0150-an-outcome-renders-from-rows-as-an-item-card-or-a-citation-token.md",
 	"docs/decisions/0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md",
 	"docs/decisions/0152-a-distress-hold-on-contact-is-a-decision-for-after-1-0.md",
+	"docs/decisions/0153-a-public-page-shows-instance-reach-released-once-each-half-year.md",
 	"docs/user/accessibility.mdx",
 	"docs/user/activity.mdx",
 	"docs/user/ai-code-review.mdx",
