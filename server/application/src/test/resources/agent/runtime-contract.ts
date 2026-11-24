@@ -244,6 +244,9 @@ async function ask(run: Run, question: string): Promise<void> {
 	await run.session.waitForIdle();
 }
 
+const providerFailure = (): AssistantMessage =>
+	fauxAssistantMessage([], { stopReason: "error", errorMessage: "503 overloaded" });
+
 /** The scripted call ID: an observed ID must equal it, since two missing or reused IDs compare equal. */
 const callIdFor = (text: string): string => `echo-${text}`;
 
@@ -484,10 +487,283 @@ export const BLOCKED_TOOL: ContractCase = {
 	},
 };
 
+export const CONTEXT_HOOK: ContractCase = {
+	name: "context hooks decide in turn what the model sees, and the log keeps only the run's own messages",
+	run: async (loop) => {
+		const seen: string[] = [];
+		const run = await start(loop, {
+			steps: [fauxAssistantMessage("answer")],
+			extensions: [
+				(pi) => {
+					pi.on("context", (event) => ({
+						messages: [
+							...event.messages,
+							{ role: "user", content: "situation", timestamp: Date.now() },
+						],
+					}));
+				},
+				(pi) => {
+					pi.on("context", (event) => {
+						const last = event.messages.at(-1);
+						seen.push(
+							last?.role === "user" && typeof last.content === "string" ? last.content : "",
+						);
+					});
+				},
+			],
+		});
+		try {
+			await ask(run, "question");
+			assert.deepEqual(seen, ["situation"]);
+			assert.equal(textOf(run.requests[0]?.messages.at(-1)), "situation");
+			const logged = loggedMessages(run.log).map((message) => textOf(message));
+			assert.ok(!logged.includes("situation"));
+		} finally {
+			run.close();
+		}
+	},
+};
+
+export const RETRY: ContractCase = {
+	name: "a transient provider failure is retried by the loop, and the run settles with the answer",
+	run: async (loop) => {
+		const run = await start(loop, {
+			steps: [providerFailure(), fauxAssistantMessage("answer")],
+			settings: {
+				compaction: { enabled: false },
+				retry: { enabled: true, maxRetries: 2, baseDelayMs: 1 },
+			},
+		});
+		try {
+			await ask(run, "question");
+			assert.equal(run.requests.length, 2);
+			assert.deepEqual(
+				run.events
+					.filter((event) => event.type.startsWith("auto_retry_"))
+					.map((event) => [event.type, event.attempt, event.success]),
+				[
+					["auto_retry_start", 1, undefined],
+					["auto_retry_end", 1, true],
+				],
+			);
+			const answers = loggedMessages(run.log).filter((message) => message.role === "assistant");
+			assert.equal(textOf(answers.at(-1)), "answer");
+			assert.deepEqual(
+				settled(run.events).map((event) => event.aborted),
+				[false],
+			);
+		} finally {
+			run.close();
+		}
+	},
+};
+
+export const ABORT: ContractCase = {
+	name: "an abort ends the model call or a retry's wait, and the run settles as aborted",
+	run: async (loop) => {
+		await abortDuringAnswer(loop);
+		await abortDuringRetry(loop);
+	},
+};
+
+async function abortDuringAnswer(loop: RunLoop): Promise<void> {
+	const run = await start(loop, {
+		steps: [fauxAssistantMessage("word ".repeat(100))],
+		tokensPerSecond: 50,
+	});
+	try {
+		const streaming = Promise.withResolvers<undefined>();
+		const stop = run.session.subscribe((event) => {
+			if (event.type === "message_update") {
+				stop();
+				streaming.resolve(undefined);
+			}
+		});
+		const prompted = run.session.prompt("question");
+		await streaming.promise;
+		await run.session.abort();
+		await prompted;
+		await run.session.waitForIdle();
+		assert.deepEqual(
+			settled(run.events).map((event) => event.aborted),
+			[true],
+		);
+		const answer = loggedMessages(run.log).at(-1);
+		assert.ok(answer?.role === "assistant" && answer.stopReason === "aborted");
+	} finally {
+		run.close();
+	}
+}
+
+/** An abort while the loop waits to retry a provider failure ends the retry as unsuccessful. */
+async function abortDuringRetry(loop: RunLoop): Promise<void> {
+	const run = await start(loop, {
+		steps: [providerFailure(), fauxAssistantMessage("answer")],
+		settings: {
+			compaction: { enabled: false },
+			retry: { enabled: true, maxRetries: 2, baseDelayMs: 60_000 },
+		},
+	});
+	try {
+		const waiting = Promise.withResolvers<undefined>();
+		const stop = run.session.subscribe((event) => {
+			if (event.type === "auto_retry_start") {
+				stop();
+				waiting.resolve(undefined);
+			}
+		});
+		const prompted = run.session.prompt("question");
+		await waiting.promise;
+		await run.session.abort();
+		await prompted;
+		await run.session.waitForIdle();
+		assert.equal(run.requests.length, 1);
+		assert.deepEqual(
+			run.events.filter((event) => event.type === "auto_retry_end").map((event) => event.success),
+			[false],
+		);
+		assert.deepEqual(
+			settled(run.events).map((event) => event.aborted),
+			[true],
+		);
+	} finally {
+		run.close();
+	}
+}
+
+export const SETTLE_ENTRIES: ContractCase = {
+	name: "a settle hook learns that the run completed, and a later run sees the context edits it returned",
+	run: async (loop) => {
+		const outcomes: unknown[] = [];
+		let log: SessionManager | null = null;
+		const run = await start(loop, {
+			steps: [toolCall("hi"), fauxAssistantMessage("done")],
+			extensions: [
+				(pi) => {
+					pi.on("agent_before_settle", (event) => {
+						outcomes.push(event.outcome);
+						const result = log
+							?.getEntries()
+							.find((entry) => entry.type === "message" && entry.message.role === "toolResult");
+						return result === undefined
+							? undefined
+							: {
+									entries: [
+										{
+											type: "context_edit",
+											targetId: result.id,
+											replacement: { content: [{ type: "text", text: "a note" }] },
+										},
+									],
+								};
+					});
+				},
+			],
+		});
+		log = run.log;
+		try {
+			await ask(run, "question");
+			assert.deepEqual(outcomes, ["completed"]);
+		} finally {
+			run.close();
+		}
+		// A conversation's next turn rebuilds its log from the stored entries: the model sees the edit, not the result
+		// it replaced.
+		const stored = SessionManager.inMemory(undefined, undefined, run.log.getEntries());
+		const next = await start(loop, { steps: [fauxAssistantMessage("again")], log: stored });
+		try {
+			await ask(next, "next");
+			const seen = next.requests[0]?.messages ?? [];
+			const result = seen.find((message) => message.role === "toolResult");
+			assert.equal(textOf(result), "a note");
+			assert.equal(textOf(seen.at(-1)), "next");
+		} finally {
+			next.close();
+		}
+	},
+};
+
+export const REASONING: ContractCase = {
+	name: "the model is asked to reason at the descriptor's thinking level",
+	run: async (loop) => {
+		const run = await start(loop, {
+			steps: [fauxAssistantMessage("answer")],
+			thinkingLevel: "low",
+		});
+		try {
+			await ask(run, "question");
+			assert.equal(run.requests[0]?.reasoning, "low");
+		} finally {
+			run.close();
+		}
+	},
+};
+
+export const RETRY_EXHAUSTED: ContractCase = {
+	name: "a provider failure that the retries do not cure ends the run with the failure, once",
+	run: async (loop) => {
+		const unauthorized = fauxAssistantMessage([], {
+			stopReason: "error",
+			errorMessage: "401 unauthorized",
+		});
+		// Retries that run out, and a retry that meets a failure no retry cures while another retry is left.
+		for (const [steps, maxRetries] of [
+			[[providerFailure(), providerFailure()], 1],
+			[[providerFailure(), unauthorized], 2],
+		] as const) {
+			const outcomes: unknown[] = [];
+			const run = await start(loop, {
+				steps: [...steps],
+				settings: {
+					compaction: { enabled: false },
+					retry: { enabled: true, maxRetries, baseDelayMs: 1 },
+				},
+				extensions: [
+					(pi) => {
+						pi.on("agent_before_settle", (event) => {
+							outcomes.push(event.outcome);
+						});
+					},
+				],
+			});
+			try {
+				await ask(run, "question");
+				assert.equal(run.requests.length, 2);
+				// The review runner accounts an unsuccessful retry from these events.
+				const retries = run.events.filter((event) => event.type.startsWith("auto_retry_"));
+				assert.deepEqual(
+					retries.map((event) => [event.type, event.attempt, event.maxAttempts, event.success]),
+					[
+						["auto_retry_start", 1, maxRetries, undefined],
+						["auto_retry_end", 1, undefined, false],
+					],
+				);
+				assert.equal(typeof retries[0]?.delayMs, "number");
+				const answer = loggedMessages(run.log).at(-1);
+				assert.ok(answer?.role === "assistant" && answer.stopReason === "error");
+				// A conversation writes its context edits only for a completed run.
+				assert.deepEqual(outcomes, ["error"]);
+				assert.deepEqual(
+					settled(run.events).map((event) => event.aborted),
+					[false],
+				);
+			} finally {
+				run.close();
+			}
+		}
+	},
+};
+
 export const CONTRACT: readonly ContractCase[] = [
 	SYSTEM_AND_TOOLS,
 	TOOL_ROUND_TRIP,
 	SESSION_LOG,
 	HOOK_ORDER,
 	BLOCKED_TOOL,
+	CONTEXT_HOOK,
+	RETRY,
+	ABORT,
+	SETTLE_ENTRIES,
+	REASONING,
+	RETRY_EXHAUSTED,
 ];

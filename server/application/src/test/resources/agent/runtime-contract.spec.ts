@@ -1,18 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+	type AssistantMessage,
+	type AssistantMessageEventStream,
+	createAssistantMessageEventStream,
+} from "@earendil-works/pi-ai";
 import { SessionManager, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 
 import { openRunSession, type RunDescriptor } from "../../../main/resources/agent/pi-session.ts";
 import {
+	ABORT,
 	BLOCKED_TOOL,
+	CONTEXT_HOOK,
 	CONTRACT,
 	type ContractCase,
 	HOOK_ORDER,
+	REASONING,
+	RETRY,
+	RETRY_EXHAUSTED,
 	type RunEvent,
 	type RunLoop,
 	type RunSession,
 	SESSION_LOG,
+	SETTLE_ENTRIES,
 	SYSTEM_AND_TOOLS,
 	TOOL_ROUND_TRIP,
 } from "./runtime-contract.ts";
@@ -127,6 +138,26 @@ function relayed(
 		});
 }
 
+const NO_RETRY = { compaction: { enabled: false }, retry: { enabled: false } };
+
+/** An unauthorized request read as a transient failure, which Pi then retries. */
+function asTransient(message: AssistantMessage): AssistantMessage {
+	return message.errorMessage?.includes("401") === true
+		? { ...message, errorMessage: "503 overloaded" }
+		: message;
+}
+
+function unauthorizedAsTransient(stream: AssistantMessageEventStream): AssistantMessageEventStream {
+	const answers = createAssistantMessageEventStream();
+	void (async () => {
+		for await (const event of stream) {
+			answers.push(event.type === "error" ? { ...event, error: asTransient(event.error) } : event);
+		}
+		answers.end(asTransient(await stream.result()));
+	})();
+	return answers;
+}
+
 const BROKEN: [ContractCase, string, RunLoop][] = [
 	[
 		SYSTEM_AND_TOOLS,
@@ -224,6 +255,95 @@ const BROKEN: [ContractCase, string, RunLoop][] = [
 					]
 				: [name, handler],
 		),
+	],
+	[CONTEXT_HOOK, "the context hooks' messages are ignored", ignoring("context")],
+	[
+		RETRY,
+		"the loop does not retry",
+		changed((descriptor) => ({ ...descriptor, settings: NO_RETRY })),
+	],
+	[
+		RETRY,
+		"the retry's end is not reported",
+		rewired((session) => ({
+			subscribe: relayed(session, (event, emit) => {
+				if (event.type !== "auto_retry_end") {
+					emit(event);
+				}
+			}),
+		})),
+	],
+	[
+		RETRY_EXHAUSTED,
+		"the settle hook hears that a failed run completed",
+		rehooked((name, handler) =>
+			name === "agent_before_settle" && typeof handler === "function"
+				? [
+						name,
+						(event: unknown, context: unknown): unknown =>
+							Reflect.apply(handler, undefined, [
+								{ ...(typeof event === "object" ? event : {}), outcome: "completed" },
+								context,
+							]),
+					]
+				: [name, handler],
+		),
+	],
+	[
+		RETRY_EXHAUSTED,
+		"a failure that no retry cures is retried",
+		changed((descriptor) => ({
+			...descriptor,
+			modelRuntime: new Proxy(descriptor.modelRuntime, {
+				get: (target, property): unknown =>
+					property === "streamSimple"
+						? (...call: Parameters<typeof target.streamSimple>) =>
+								unauthorizedAsTransient(target.streamSimple(...call))
+						: (Reflect.get(target, property) as unknown),
+			}),
+		})),
+	],
+	[
+		RETRY_EXHAUSTED,
+		"an unsuccessful retry is reported as a success",
+		rewired((session) => ({
+			subscribe: relayed(session, (event, emit) => {
+				emit(event.type === "auto_retry_end" ? { ...event, success: true } : event);
+			}),
+		})),
+	],
+	[ABORT, "an abort does nothing", rewired(() => ({ abort: async () => undefined }))],
+	[
+		ABORT,
+		"a retry cancelled during its wait is reported as a success",
+		rewired((session) => ({
+			subscribe: relayed(session, (event, emit) => {
+				emit(event.type === "auto_retry_end" ? { ...event, success: true } : event);
+			}),
+		})),
+	],
+	[SETTLE_ENTRIES, "the settle hook's entries are ignored", ignoring("agent_before_settle")],
+	[
+		SETTLE_ENTRIES,
+		"a reopened log loses its context edits",
+		changed((descriptor) => {
+			const entries = descriptor.sessionManager.getEntries();
+			return entries.some((entry) => entry.type === "context_edit")
+				? {
+						...descriptor,
+						sessionManager: SessionManager.inMemory(
+							undefined,
+							undefined,
+							entries.filter((entry) => entry.type !== "context_edit"),
+						),
+					}
+				: descriptor;
+		}),
+	],
+	[
+		REASONING,
+		"the thinking level is dropped",
+		changed((descriptor) => ({ ...descriptor, thinkingLevel: undefined })),
 	],
 ];
 
