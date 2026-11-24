@@ -7,10 +7,12 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaModifier;
 import de.tum.cit.aet.hephaestus.core.event.ContentFree;
 import de.tum.cit.aet.hephaestus.testconfig.IdempotentListenerIntegrationTest;
+import java.lang.annotation.Annotation;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
@@ -22,6 +24,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -173,11 +176,20 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
         return tested;
     }
 
-    /** Whether a JUnit annotation can switch off the tests of a class: {@link Disabled} or any execution condition. */
-    private static boolean hasExecutionCondition(Class<?> test) {
-        for (var annotation : test.getAnnotations()) {
-            Class<?> type = annotation.annotationType();
+    /**
+     * Whether a JUnit annotation can switch off the tests of a class: {@link Disabled} or any execution condition,
+     * directly or through a composed annotation, as JUnit finds them.
+     */
+    private static boolean hasExecutionCondition(AnnotatedElement element) {
+        return hasExecutionCondition(element, new HashSet<>());
+    }
+
+    private static boolean hasExecutionCondition(AnnotatedElement element, Set<Class<?>> seen) {
+        for (var annotation : element.getAnnotations()) {
+            Class<? extends Annotation> type = annotation.annotationType();
             if (type == Disabled.class || type.getPackageName().equals(DisabledIf.class.getPackageName())) return true;
+            if (!type.getPackageName().startsWith("java.") && seen.add(type) && hasExecutionCondition(type, seen))
+                return true;
         }
         return false;
     }
@@ -318,6 +330,33 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
     @SuppressWarnings("unused") // Read by ArchUnit only.
     private abstract static class AbstractHarness
             implements IdempotentListenerIntegrationTest<TwoHandlersOfOneEvent, Typed> {}
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
+    @DisabledIf("switchedOff")
+    private @interface SwitchedOff {}
+
+    /** A fixture that a composed condition switches off, so it enrols no listener. */
+    @SwitchedOff
+    static final class ComposedDisabledHarness
+            implements IdempotentListenerIntegrationTest<StoredTextListener, String> {
+        static boolean switchedOff() {
+            return true;
+        }
+
+        @Override
+        public Events<String> newEvents() {
+            return new Events<>("a", "b");
+        }
+
+        @Override
+        public void deliver(String event) {}
+
+        @Override
+        public Object stateAfter(Events<String> events) {
+            return 0;
+        }
+    }
 
     /** A fixture that a condition switches off, so it enrols no listener. */
     @DisabledIf("switchedOff")
