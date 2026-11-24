@@ -1,7 +1,7 @@
 # ADR 0120: A conversation thread has one inbox and runs one turn at a time
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Amends:** [ADR 0079](0079-one-agent-system.md) § Interactive and proactive work.
@@ -141,18 +141,18 @@ Option 6.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- `CommitAgainstCancelTest` fails when a won cancel leaves an executable action, or a won commit loses its effects.
-- `ClaimAgainstAdmitTest` fails when a claim and a message admission on two replicas deadlock, or both win.
-- `StopSettlementAfterDeadlineTest` fails when a holder settles after its Stop deadline.
-- `SilentCommitReleasesCustodyTest` fails when a `NO_REPLY` commit leaves a required item claimed.
-- `RequiredDispositionWithoutModelTest` fails when a required kind misses its disposition while the model breaker is open.
-- `DebitAtCallAdmissionTest` fails when a crash after a model call skips the debit on a claimed item.
-- `GateHoldsOnlyItsItemsTest` fails when a gate on one item delays another item's due time.
-- `RequiredItemEndsWithDispositionTest` fails when a required item ends `EXPIRED` or `STOPPED`, or ends without its disposition.
-- `TaskCancelAgainstEndTest` fails when a cancel and a task end both win, or an end commits without its inbox event.
-- `TaskReadsRouteScopeTest` fails when a task reads a source that a reader of its result route may not read.
+- CommitAgainstCancelTest fails when a won cancel leaves an executable action, or a won commit loses its effects.
+- ClaimAgainstAdmitTest fails when a claim and a message admission on two replicas deadlock, or both win.
+- StopSettlementAfterDeadlineTest fails when a holder settles after its Stop deadline.
+- SilentCommitReleasesCustodyTest fails when a `NO_REPLY` commit leaves a required item claimed.
+- RequiredDispositionWithoutModelTest fails when a required kind misses its disposition while the model breaker is open.
+- DebitAtCallAdmissionTest fails when a crash after a model call skips the debit on a claimed item.
+- GateHoldsOnlyItsItemsTest fails when a gate on one item delays another item's due time.
+- RequiredItemEndsWithDispositionTest fails when a required item ends `EXPIRED` or `STOPPED`, or ends without its disposition.
+- TaskCancelAgainstEndTest fails when a cancel and a task end both win, or an end commits without its inbox event.
+- TaskReadsRouteScopeTest fails when a task reads a source that a reader of its result route may not read.
 
 ## Revisit trigger
 

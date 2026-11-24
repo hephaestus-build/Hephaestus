@@ -1,7 +1,7 @@
 # ADR 0123: Slack is a channel into the one conversation
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:** [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) (one route for each turn), [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md) (the audience rule and shared threads), [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md) (delivery keys and readback)
@@ -119,16 +119,16 @@ Option 4.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- `AppCanaryNotInSlackTest` fails when text from an app-only entry of a mixed thread reaches a Slack answer.
-- `AppCheckInNotInSlackTurnTest` and `AppSummaryNotInSlackTurnTest` fail when app-only context reaches a Slack turn.
-- `RestoreBatchedSlackAnswerTest` fails when a restore gives a second answer to a covered message.
-- `SlackClaimCoverageBoundTest` fails when a Slack turn claims more than 10 source keys.
-- `SlackGrantReadsTest` fails when a Slack turn reads more than language and answer length at Notice. It also fails on a record outside the closed list at Full.
-- `SlackCardUpdateKeyTest` fails when a card update and a delete of one post share a key.
-- `InterleavedMentionsTest` fails when one channel turn holds another person's pending mention.
-- `ChannelMessageDeletedBeforeClaimTest` fails when a mention that Slack deleted before its claim gets an answer.
+- AppCanaryNotInSlackTest fails when text from an app-only entry of a mixed thread reaches a Slack answer.
+- AppCheckInNotInSlackTurnTest and AppSummaryNotInSlackTurnTest fail when app-only context reaches a Slack turn.
+- RestoreBatchedSlackAnswerTest fails when a restore gives a second answer to a covered message.
+- SlackClaimCoverageBoundTest fails when a Slack turn claims more than 10 source keys.
+- SlackGrantReadsTest fails when a Slack turn reads more than language and answer length at Notice. It also fails on a record outside the closed list at Full.
+- SlackCardUpdateKeyTest fails when a card update and a delete of one post share a key.
+- InterleavedMentionsTest fails when one channel turn holds another person's pending mention.
+- ChannelMessageDeletedBeforeClaimTest fails when a mention that Slack deleted before its claim gets an answer.
 - A channel fixture fails when a catalog entry that is not channel-readable appears in a channel answer.
 
 ## Revisit trigger

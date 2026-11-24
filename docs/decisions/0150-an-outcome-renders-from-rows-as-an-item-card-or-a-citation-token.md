@@ -1,7 +1,7 @@
 # ADR 0150: An outcome renders from rows, as an item card or a citation token
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:** [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-and-its-answers-stream.md) (the conversation), [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) (admitted and sealed observations), [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) (private practice feedback has one reader)
@@ -68,13 +68,13 @@ Option 4.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- `CardWithoutModelTest` fails when an item card update needs a turn.
-- `KnownCheckWithoutTokenTest` fails if the server exposes or edits a rejected unit.
+- CardWithoutModelTest fails when an item card update needs a turn.
+- KnownCheckWithoutTokenTest fails if the server exposes or edits a rejected unit.
   It covers a verdict without an exact check name and a verdict beside a token.
   It also covers a wrong token and a valid server-rendered citation.
-- `PostedClaimTest` fails when a message says "posted" for a copy that was not delivered at its commit.
+- PostedClaimTest fails when a message says "posted" for a copy that was not delivered at its commit.
 
 ## Revisit trigger
 

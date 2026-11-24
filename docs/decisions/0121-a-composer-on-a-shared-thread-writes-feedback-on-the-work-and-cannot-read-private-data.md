@@ -1,7 +1,7 @@
 # ADR 0121: A composer on a shared thread writes feedback on the work, and it cannot read private data
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Amends:** [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) decisions 2, 11 and 12. [ADR 0079](0079-one-agent-system.md) § Interactive and proactive work and its update of 2026-11-09 on the review run kinds.
@@ -119,13 +119,13 @@ Option 4.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- The composer isolation tests fail when a private row is visible to a composer turn. They also fail when an ID of another place or workspace resolves. `PackagedIsolationTest` runs them on the packaged server.
-- `ComposerTokenContradictionTest` fails when a body states an outcome that contradicts its token.
-- `ExclusionBumpsEligibleSetTest` fails when a confirmed exclusion of a Major problem does not change the set and its generation first.
-- `PreviewDriftTest` and `RepeatedConfirmationTest` fail when a stale or repeated confirmation writes.
-- `ExclusionRefusedInPreviewTest` fails when the preview allows a Major exclusion while `allowSevereExclusion` is off.
+- The composer isolation tests fail when a private row is visible to a composer turn. They also fail when an ID of another place or workspace resolves. PackagedIsolationTest runs them on the packaged server.
+- ComposerTokenContradictionTest fails when a body states an outcome that contradicts its token.
+- ExclusionBumpsEligibleSetTest fails when a confirmed exclusion of a Major problem does not change the set and its generation first.
+- PreviewDriftTest and RepeatedConfirmationTest fail when a stale or repeated confirmation writes.
+- ExclusionRefusedInPreviewTest fails when the preview allows a Major exclusion while `allowSevereExclusion` is off.
 - A gateway test fails when a tool of one place kind answers a lease of another place kind.
 
 ## Revisit trigger

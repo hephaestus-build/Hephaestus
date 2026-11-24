@@ -1,8 +1,10 @@
 # ADR 0151: Each external write has one delivery key, and is read back, never retried blindly
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
+
+**Amends:** [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) decision 10 (each action gains a `delivery_key`)
 
 **Builds on:** [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) (runs, leases and the outbox), [ADR 0120](0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) (the commit rule)
 
@@ -81,13 +83,13 @@ Option 3.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- `FirstWritePredicatePerOperationTest` fails when an operation uses another operation's predicate.
-- `CrashBetweenStartAndCopyFenceTest` fails when a crash leaves the action or one of its parts started alone.
-- `UncertainLaneWaitsForProofTest` fails when a newer generation passes an uncertain write without proof.
-- `RestoreTwoGenerationsTest` fails when a restore reuses a marker that exists.
-- `NoReadbackTransportAtMostOnceTest` fails when an uncertain email or push runs again.
+- FirstWritePredicatePerOperationTest fails when an operation uses another operation's predicate.
+- CrashBetweenStartAndCopyFenceTest fails when a crash leaves the action or one of its parts started alone.
+- UncertainLaneWaitsForProofTest fails when a newer generation passes an uncertain write without proof.
+- RestoreTwoGenerationsTest fails when a restore reuses a marker that exists.
+- NoReadbackTransportAtMostOnceTest fails when an uncertain email or push runs again.
 
 ## Revisit trigger
 

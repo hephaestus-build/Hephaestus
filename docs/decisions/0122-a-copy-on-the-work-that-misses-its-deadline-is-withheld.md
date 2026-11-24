@@ -1,7 +1,7 @@
 # ADR 0122: A copy on the work that misses its deadline is withheld
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Amends:** [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) decision 14. [ADR 0079](0079-one-agent-system.md) § Update — 2026-11-11: compose deadlines.
@@ -105,11 +105,11 @@ Example: a review waits 20 minutes for capacity and seals 25 minutes after submi
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- `ExpiredReadyWithStoppedExecutorTest` fails when a `READY` Automatic copy past its deadline is not withheld while the executor is stopped.
-- `RequestNewCopyFromCardTest` and `PostExactWordsTest` fail when a control needs a turn or changes the body.
-- `WithheldDispositionTest` fails when a withheld copy outside a silent draw writes no `DELIVERY_WITHHELD` inbox event.
+- ExpiredReadyWithStoppedExecutorTest fails when a `READY` Automatic copy past its deadline is not withheld while the executor is stopped.
+- RequestNewCopyFromCardTest and PostExactWordsTest fail when a control needs a turn or changes the body.
+- WithheldDispositionTest fails when a withheld copy outside a silent draw writes no `DELIVERY_WITHHELD` inbox event.
   It also fails when a message follows `ITEM_CLOSED` or `REPLACED`.
 
 ## Revisit trigger

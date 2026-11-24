@@ -1,7 +1,7 @@
 # ADR 0131: A person has one conversation in each workspace, and its answers stream
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Supersedes:** [ADR 0082](0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md)
@@ -120,12 +120,13 @@ ADR 0082 is superseded. Each of its decisions lives here now:
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- `OneConversationPerWorkspaceTest` fails when one account has two main threads in one workspace.
-- `WorkThreadKeyTest` fails when two replies on one card open two work threads.
-- `EntryRevisionTest` fails when an entry that Hephaestus wrote changes, or a Slack edit of a person's entry loses the earlier revision.
-- `NoStaffConversationReadTest` fails when a staff route returns an entry of another account.
+- OneConversationPerWorkspaceTest fails when one account has two main threads in one workspace.
+- WorkThreadKeyTest fails when two replies on one card open two work threads.
+- EntryRevisionTest fails when an entry that Hephaestus wrote changes.
+  It also fails when a Slack edit of a person's entry loses the earlier revision.
+- NoStaffConversationReadTest fails when a staff route returns an entry of another account.
 - The tests of ADR 0082 that cover its decisions 4, 8, 10, 12 and 15 to 20 stay.
 
 ## Revisit trigger
