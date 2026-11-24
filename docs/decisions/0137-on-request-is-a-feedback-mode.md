@@ -1,7 +1,7 @@
 # ADR 0137: On request is a feedback mode
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Amends:** [ADR 0086](0086-a-practice-review-stages-seals-then-composes-and-each-stage-records-why-it-stops.md) (the feedback modes that bound delivery)
@@ -90,16 +90,16 @@ Option 5.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- `OnRequestNeverOnWorkTest` fails when an On request practice appears in a copy on the work, also after Request review.
-- `OnRequestNotStartedTest` fails when an On request outcome appears in a message that Hephaestus starts.
-- `DestinationGuardrailTest` fails when a copy that puts a problem outside the allowed destinations is admitted.
-- `OnRequestNoGrowthTest` fails when an On request seal writes a growth point.
-- `PracticeFileVersionOneTest` fails when a version 1 practice file no longer loads.
-- `OnRequestProjectionTest` fails when an item card, a practice page or a feed change carries an On request result before a request. It also fails outside the current destinations and authority.
-- `RemoveOverrideTest` fails when **Remove override** leaves the practice's own destinations, in either console.
-- `OnRequestSelectionTest` fails when a push leaves out an On request practice, or withholds it with `FEEDBACK_MODE_OFF`.
+- OnRequestNeverOnWorkTest fails when an On request practice appears in a copy on the work, also after Request review.
+- OnRequestNotStartedTest fails when an On request outcome appears in a message that Hephaestus starts.
+- DestinationGuardrailTest fails when a copy that puts a problem outside the allowed destinations is admitted.
+- OnRequestNoGrowthTest fails when an On request seal writes a growth point.
+- PracticeFileVersionOneTest fails when a version 1 practice file no longer loads.
+- OnRequestProjectionTest fails when a card, a practice page or a feed change shows an On request result before a request. It also fails outside the current destinations and authority.
+- RemoveOverrideTest fails when **Remove override** leaves the practice's own destinations, in either console.
+- OnRequestSelectionTest fails when a push leaves out an On request practice, or withholds it with `FEEDBACK_MODE_OFF`.
 - Stories in both admin consoles show the mode and the destinations, with their empty, loading and error states.
 
 ## Revisit trigger

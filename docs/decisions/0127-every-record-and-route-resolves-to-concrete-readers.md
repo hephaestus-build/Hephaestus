@@ -1,7 +1,7 @@
 # ADR 0127: Every record and route resolves to concrete readers
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:** [ADR 0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) (workspace tenancy in SQL), [ADR 0126](0126-a-person-has-one-relationship-and-a-personal-space.md) (the relationship and the personal space)
@@ -87,7 +87,7 @@ Option 4.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
 - A row-level security test fails when a person table has no policy. It also fails when a query as another account returns a row.
 - A pool test fails when a pooled connection keeps the owner of an earlier transaction.
@@ -96,7 +96,7 @@ Not enforced yet. The implementation adds these tests:
 - An architecture test fails when a class other than the research export job calls `research_export_rows`.
 - A research test fails when `research_export_rows` returns a row for a release that is not approved.
 - A count test fails when `person_row_counts` returns a count of 1 to 4 people.
-- `ReadersTest` fails when a `covers` check widens a set, or unknown readers do not refuse.
+- ReadersTest fails when a `covers` check widens a set, or unknown readers do not refuse.
 
 ## Revisit trigger
 

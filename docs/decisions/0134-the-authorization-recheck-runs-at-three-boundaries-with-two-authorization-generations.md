@@ -1,7 +1,7 @@
 # ADR 0134: The authorization recheck runs at three boundaries, with two authorization generations
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Amends:** [ADR 0079](0079-one-agent-system.md) § Data model (runs and actions carry an authorization stamp), [ADR 0083](0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md) decision 11 (the model request also rechecks authority)
@@ -86,11 +86,11 @@ Option 5.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- `AuthorityFenceTest` fails when a revoked membership allows the next context read, model request or queued send. Each refusal carries its reason.
+- AuthorityFenceTest fails when a revoked membership allows the next context read, model request or queued send. Each refusal carries its reason.
 - A test with a recording adapter fails when a write whose authority ended after it was queued reaches the provider.
-- `AuthorityBearingRegistryTest` fails when a setting that carries authority has no case for each boundary.
+- AuthorityBearingRegistryTest fails when a setting that carries authority has no case for each boundary.
 - An integration test changes a contact setting during a stream. It fails when the turn stops or the scope epoch changes.
 - An integration test fails when a narrowing does not evict on the next feed frame and close the stream. It also fails when an answer delta of the old scope epoch reaches the client after the eviction.
 - An integration test runs Forget during a streaming answer that read the forgotten record. It fails when a later frame, commit or send of that turn uses the record.

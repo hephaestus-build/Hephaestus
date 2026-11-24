@@ -1,7 +1,7 @@
 # ADR 0128: A derived record keeps its basis, and revocation travels by generation
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:** [ADR 0127](0127-every-record-and-route-resolves-to-concrete-readers.md) (readers and the definer functions), [ADR 0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md) (a tombstone is not an erasure)
@@ -78,9 +78,9 @@ Option 4.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
-- `CascadeTableTest` fails when a registered dependent kind has no cell for a registered cause.
+- CascadeTableTest fails when a registered dependent kind has no cell for a registered cause.
 - An integration test fails when an answer basis that cites an erased entry is not stale on the next read.
 - An integration test fails when the deletion of a source entry writes no `DELETED_SOURCE` row in `source_tombstone`.
 - An integration test fails when another person's erasure deletes a person-authored record.

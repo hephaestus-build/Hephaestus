@@ -1,7 +1,7 @@
 # ADR 0126: A person has one relationship and a personal space
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:** [ADR 0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) (SQL tenancy), [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) (one account), ADR 0124 (proposed in #4866)
@@ -77,7 +77,7 @@ Option 4.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
 - A guard test fails when a staff route answers for a workspace of kind `PERSONAL`.
 - A provisioning test fails when two parallel first needs create two personal spaces.

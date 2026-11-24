@@ -1,7 +1,7 @@
 # ADR 0130: A practice has a portable identity, and growth counts independent pieces of work
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Amends:** [ADR 0056](0056-one-practice-model-for-items-and-scans.md) (a practice version gains an identity and a comparability class)
@@ -79,11 +79,11 @@ Option 5.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
 - A build check fails on two catalog entries with one key and different classes.
 - A unit test fails when an edit that changes the review digest keeps the comparability class.
-- `OnePointPerWorkTest` fails when one person, piece of work and practice get two points at projection, transfer, absorption or import.
+- OnePointPerWorkTest fails when one person, piece of work and practice get two points at projection, transfer, absorption or import.
 - An integration test fails when an On request seal or an Off observation writes a growth point.
 - A drill seed fails when existing practice versions have no identity after the upgrade.
 

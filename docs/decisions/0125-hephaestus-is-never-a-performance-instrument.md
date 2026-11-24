@@ -1,7 +1,7 @@
 # ADR 0125: Hephaestus is never a performance instrument
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Supersedes:** [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md)
@@ -112,7 +112,7 @@ Option 4.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
 - A generated staff route test fails when a staff route returns an account ID beside an outcome.
 - `SmallCountsTest` fails when a count of 1 to 4 people shows, or a split with such a cell shows a cell.

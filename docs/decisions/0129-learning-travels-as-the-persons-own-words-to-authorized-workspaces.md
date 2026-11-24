@@ -1,7 +1,7 @@
 # ADR 0129: Learning travels as the person's own words to authorized workspaces
 
-**Status:** Proposed
-**Date:** 2026-11-23
+**Status:** Accepted
+**Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
 **Builds on:** [ADR 0126](0126-a-person-has-one-relationship-and-a-personal-space.md) (the personal space), [ADR 0128](0128-a-derived-record-keeps-its-basis-and-revocation-travels-by-generation.md) (provenance and revocation), [ADR 0130](0130-a-practice-has-a-portable-identity-and-growth-counts-independent-pieces-of-work.md) (portable practice identity)
@@ -91,7 +91,7 @@ Option 5.
 
 ## Confirmation
 
-Not enforced yet. The implementation adds these tests:
+Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
 - An integration test fails when a record of a Closed workspace reaches another workspace, or its entry offers **Take along**.
 - An integration test fails when a plain local save creates a copy in the personal space.
