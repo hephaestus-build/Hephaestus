@@ -1,0 +1,23 @@
+{
+	"candidate": "",
+	"lockDigest": "",
+	"signer": "",
+	"checks": {
+		"freeze": "",
+		"deterministic-ci": "",
+		"packaged-isolation": "",
+		"reference-model": "",
+		"rubric-judge": "",
+		"judge-spot-check-rule": "",
+		"release-evaluation": "",
+		"contact-simulation": "",
+		"restore-and-recovery": "",
+		"upgrade": "",
+		"red-team": "",
+		"first-week": "",
+		"timing-and-capacity": "",
+		"speech": "",
+		"operator-confirmations": "",
+		"release-history": ""
+	}
+}

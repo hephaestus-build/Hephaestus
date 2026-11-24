@@ -9,6 +9,12 @@ on:
         description: Promote the latest immutable vX.Y.Z-rc.N on the exact main commit, without rebuilding images
         required: true
         type: string
+      release-plan:
+        description: Completed release-plan.json for v1.0.0
+        type: string
+      release-plan-signature:
+        description: SSH signature for the v1.0.0 release plan
+        type: string
   workflow_run: # zizmor: ignore[dangerous-triggers] The guard authenticates the completed run before privileged jobs start.
     workflows: ["CI/CD"]
     types: [completed]
@@ -322,6 +328,25 @@ jobs:
             node scripts/resolve-release-images.ts "$SOURCE_TAG" release-images.tsv
           fi
 
+      - name: Verify the maintainer's release check
+        if: needs.release.outputs.tag_name == 'v1.0.0'
+        env:
+          CANDIDATE: ${{ needs.release.outputs.candidate }}
+          RELEASE_PLAN: ${{ inputs.release-plan }}
+          RELEASE_PLAN_SIGNATURE: ${{ inputs.release-plan-signature }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CANDIDATE" ] || [ -z "$RELEASE_PLAN" ] || [ -z "$RELEASE_PLAN_SIGNATURE" ]; then
+            echo "::error::Promote v1.0.0 from a candidate with a signed release plan"
+            exit 1
+          fi
+          mkdir "$RUNNER_TEMP/release-check"
+          plan="$RUNNER_TEMP/release-check/release-plan.json"
+          printf '%s' "$RELEASE_PLAN" > "$plan"
+          printf '%s' "$RELEASE_PLAN_SIGNATURE" > "$plan.sig"
+          node scripts/verify-release-check.ts "$CANDIDATE" \
+            "$RUNNER_TEMP/candidate/release-${CANDIDATE}.chart.json" "$plan" "$plan.sig"
+
       - name: Verify Node-only agent sandbox
         id: sandbox-contract
         background: true
@@ -604,12 +629,16 @@ jobs:
           # with the release, under the name provenance tools look for.
           provenance="$RUNNER_TEMP/release-${TAG_NAME}.intoto.jsonl"
           cp "$ATTESTATION" "$provenance"
+          release_check=()
+          if [ "$TAG_NAME" = v1.0.0 ]; then
+            release_check=("$RUNNER_TEMP/release-check/release-plan.json" "$RUNNER_TEMP/release-check/release-plan.json.sig")
+          fi
           # --clobber so a re-run over a resumed draft replaces its assets instead of failing on
           # every name that already exists.
           gh release upload "$TAG_NAME" \
             "$provenance" "$JOINT" "${JOINT}.sigstore.json" \
             "$K3S_BUNDLE" "${K3S_BUNDLE}.sigstore.json" \
-            "$EXTENSION_PACKAGE" "${EXTENSION_PACKAGE}.sigstore.json" evidence/* \
+            "$EXTENSION_PACKAGE" "${EXTENSION_PACKAGE}.sigstore.json" evidence/* "${release_check[@]}" \
             --clobber \
             --repo "${{ github.repository }}"
 
@@ -736,10 +765,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_SHA: ${{ needs.release.outputs.sha }}
           TAG_NAME: ${{ needs.release.outputs.tag_name }}
+          RELEASE_PLAN: ${{ inputs.release-plan }}
+          RELEASE_PLAN_SIGNATURE: ${{ inputs.release-plan-signature }}
         run: |
           set -euo pipefail
           mkdir evidence
           gh release download "$TAG_NAME" --repo "${{ github.repository }}" --dir evidence
+          if [ "$TAG_NAME" = v1.0.0 ]; then
+            # The tag-images job verified these exact dispatch inputs against the immutable candidate.
+            # Publication must retain the same bytes, including on a retry over an existing draft.
+            cmp evidence/release-plan.json <(printf '%s' "$RELEASE_PLAN")
+            cmp evidence/release-plan.json.sig <(printf '%s' "$RELEASE_PLAN_SIGNATURE")
+          fi
           lock="release-${TAG_NAME}.chart.json"
           cosign verify-blob \
             --bundle "evidence/$lock.sigstore.json" \
