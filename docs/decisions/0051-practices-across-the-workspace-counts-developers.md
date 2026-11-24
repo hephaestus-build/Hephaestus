@@ -9,6 +9,9 @@
 [ADR 0047](0047-the-practice-profile-has-one-reader.md) (the Practice profile has one reader)
 **Amended by:** [ADR 0065](0065-standing-counts-the-newest-observation-of-each-item.md)
 
+*Amendment of 2026-11-23 (NP-04):* hidden and departed members stay in aggregate populations, because hiding is a display choice, not a privacy control.
+Erasure and a restriction of processing are the privacy controls.
+
 ## Context
 
 A developer who reads their own Practice profile cannot tell if a practice group is hard for the whole workspace.

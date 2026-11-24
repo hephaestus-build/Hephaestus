@@ -7,6 +7,7 @@ import static de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding.NO_OPPORT
 import static de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding.STRENGTH;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.SmallCounts;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceRangeDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
 import java.util.ArrayList;
@@ -48,28 +49,28 @@ class WorkspaceSplitsTest {
     }
 
     @Test
-    void shouldShowAMiddleHalfOnlyForThreeDevelopersOrMore() {
+    void shouldShowAMiddleHalfOnlyForFiveDevelopersOrMore() {
         assertThat(WorkspaceSplits.middleHalf(List.of())).isNull();
         assertThat(WorkspaceSplits.middleHalf(List.of(5))).isNull();
-        assertThat(WorkspaceSplits.middleHalf(List.of(2, 6))).isNull();
-        assertThat(WorkspaceSplits.middleHalf(List.of(2, 4, 6))).isEqualTo(new WorkspaceRangeDTO(3, 5));
+        assertThat(WorkspaceSplits.middleHalf(List.of(2, 4, 6, 8))).isNull();
+        assertThat(WorkspaceSplits.middleHalf(List.of(2, 4, 6, 8, 10))).isEqualTo(new WorkspaceRangeDTO(4, 8));
         assertThat(WorkspaceSplits.middleHalf(List.of(1, 2, 3, 4, 5, 6))).isEqualTo(new WorkspaceRangeDTO(2, 5));
     }
 
     @Test
     void shouldWithholdARangeWhoseEndsMeet() {
-        assertThat(WorkspaceSplits.middleHalf(List.of(0, 0, 0))).isNull();
-        assertThat(WorkspaceSplits.middleHalf(List.of(3, 4, 4))).isNull();
+        assertThat(WorkspaceSplits.middleHalf(List.of(0, 0, 0, 0, 0))).isNull();
+        assertThat(WorkspaceSplits.middleHalf(List.of(3, 4, 4, 4, 5))).isNull();
     }
 
     /**
-     * Every set of 3 to 5 other values from 0 to {@value #MOST_VALUE}, grouped by the range shown: each range fits at
+     * Every set of 5 to 7 other values from 0 to {@value #MOST_VALUE}, grouped by the range shown: each range fits at
      * least two sets, so no range tells a member every other developer's value. Ranges near the top are left out,
      * because the loop's own ceiling, not the data, would pin them.
      */
     @Test
     void shouldLeaveNoRangeThatFixesEveryOtherValue() {
-        for (int others = SmallCounts.MINIMUM; others <= 5; others++) {
+        for (int others = SmallCounts.MINIMUM; others <= SmallCounts.MINIMUM + 2; others++) {
             Map<WorkspaceRangeDTO, Set<List<Integer>>> setsByRange = new HashMap<>();
             collect(others, 0, new ArrayList<>(), setsByRange);
             int counted = others;

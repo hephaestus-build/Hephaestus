@@ -741,7 +741,7 @@ void describe("ci-contract: release", () => {
 			["security-scan"],
 			"The required Security workflow must not wait for the informational dependency report",
 		);
-		assert.equal(security.getIn(["jobs", "security-scan", "if"]), "inputs.should_skip != 'true'");
+		assert.equal(security.hasIn(["jobs", "security-scan", "if"]), false);
 		const orchestratorSource = await readFile(".github/workflows/cicd.yml", "utf8");
 		const orchestrator = parseDocument(orchestratorSource);
 		assert.equal(

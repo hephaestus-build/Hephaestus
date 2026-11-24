@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core;
 
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
@@ -42,6 +43,7 @@ public final class TransientFailures {
                     || cause instanceof SQLRecoverableException
                     || cause instanceof TransientDataAccessException
                     || cause instanceof DataAccessResourceFailureException
+                    || cause instanceof MaintenanceInProgressException
                     || cause instanceof WebClientRequestException) {
                 return true;
             }

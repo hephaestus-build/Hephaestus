@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
+import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
 import java.util.Collection;
@@ -69,6 +70,11 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     /** Spaces on both ends: a text block drops the trailing space of the {@code RETURNING} before it. */
     String COLUMNS = " id, workspace_id AS \"workspaceId\", subject_key AS \"subjectKey\", kind,"
             + " claim_name AS \"claimName\", state, shutdown_at AS \"shutdownAt\" ";
+
+    /** Takes the maintenance barrier for the transaction; false while a migration runs or waits. Reads no table. */
+    @WorkspaceAgnostic("Reads a database-wide advisory lock and no table")
+    @Query(value = "SELECT " + MaintenanceBarrier.LIFTED, nativeQuery = true)
+    boolean maintenanceBarrierLifted();
 
     /** Requests the subject's sandbox; empty when the subject already has a live one. */
     @Query(value = """

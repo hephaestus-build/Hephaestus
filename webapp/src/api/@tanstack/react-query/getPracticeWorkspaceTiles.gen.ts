@@ -18,7 +18,7 @@ export const getPracticeWorkspaceTilesQueryKey = (
 /**
  * The reader's figures over one window beside the workspace's middle half
  *
- * A middle half shows when at least 3 developers besides the reader are counted in the window and its ends do not meet.
+ * A middle half shows when at least 5 developers besides the reader are counted in the window and its ends do not meet.
  */
 export const getPracticeWorkspaceTilesOptions = (options: Options<GetPracticeWorkspaceTilesData>) =>
 	queryOptions<

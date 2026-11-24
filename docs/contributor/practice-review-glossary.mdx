@@ -53,7 +53,7 @@ The product calls a `Result` an observation, and the `Membership` that it concer
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | **Item**                | One thing that an observation can concern or a review can cover. Its kind states what it is.                                                                  | item, item.kind                                     |
 | **Version**             | One fixed state of an item. Its domain defines what identifies that state.                                                                                    | item_version                                        |
-| **Event**               | A recorded change to an item, such as a pull request merged.                                                                                                  | item_event                                          |
+| **Event**               | A recorded change to an item, such as a pull request merged. A planned [inbox event](#mentoring-terms-planned) is a different term.                           | item_event                                          |
 | **Review**              | One operation that checks practices against an item at a version and can record observations.                                                                 | review                                              |
 | **Scan**                | A review of the items held by another item at a version. The holder is a repository on its monitored default branch.                                          | review.kind = SCAN                                  |
 | **Scan exclusion**      | A listed file that cannot supply scan text. It stays in the inventory and has no eligible practice/file pairs.                                                | inventory_receipt.exclusions                        |
@@ -280,6 +280,7 @@ The same name is the source capture code that causes it.
 | **Browser fault**              | A failure that a reader met in the browser and that the browser reported, such as an error that no code caught. It is not an SCM issue, and "fault" here is not the blame in a no-fault attempt. | browser.fault, browser_faults_total |
 | **Attempt token**              | The signed credential of one attempt, of a review or of a conversation turn. It names the attempt and its workspace, and nothing else. | AttemptJwt |
 | **Lease**                      | A running attempt's own identity, valid until a time on the database clock. Each claim sets a new one. The active step renews it by that identity: the review loop during execution and result upload, or the server before and after the loop runs. The sandbox driver renews a turn run's lease. Every write of the attempt names it. When it expires, the server recovers the attempt. | agent_run.lease_epoch, agent_run.leased_until |
+| **Maintenance barrier** | The state while a database migration runs. No server starts new work. No claim takes a new lease on a run, an action, a provider event or a sync. No sandbox is requested. Work in flight keeps its lease and finishes. The barrier is the migration's advisory lock, on the session that runs the migration. | MaintenanceBarrier, refuse_lease_during_migration |
 | **Model assignment**           | A workspace's choice of a model for an execution purpose and AI tier.                                     | workspace model configuration  |
 | **Source contract**            | The definition of a source's identity, meaning, capture facts and permitted uses.                         | reads.contract                 |
 | **Source kind**                | A stable name for a logical source of captured material.                                                  | SourceKind                     |
@@ -344,6 +345,65 @@ The [data model](./practice-feedback-schema.mdx) owns durable keys and guards.
 `USAGE_UNVERIFIABLE` stops a scan because the cost of earlier model calls cannot be verified.
 It does not mean that the scan used up its budget.
 An execution that made no model call adds no usage row.
+
+## Mentoring terms (planned)
+
+These terms name the runtime of the accepted design in [Mentoring framework](./mentoring-framework.mdx).
+The current release does not have them.
+The last column names the proposed ADR that decides each term, and the pull request that holds it.
+When a part ships, its row moves to the runtime terms.
+
+The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) owns the product terms of the same design.
+The conversation agent, the composer and the review agent are agents. Hephaestus is not an agent.
+
+| Term | Meaning | Proposed in |
+| --- | --- | --- |
+| **Turn** (planned) | One run on one thread. It takes a frozen batch of inbox items and commits all of its writes or none. It can run with no person's question. | ADR 0120 (#4862) |
+| **Interactive turn** | A turn whose batch holds a person's message. It gets priority. Only an answer to the owner in the app streams. A Slack answer or a channel answer posts as one complete message. | ADR 0120 (#4862) |
+| **Background turn** | A turn whose batch holds no person's message. It commits one message from Hephaestus, or none. | ADR 0120 (#4862) |
+| **Inbox item** | One input of a thread: a person's message or an inbox event. It holds IDs only. | ADR 0120 (#4862) |
+| **Inbox event** | An inbox item that no person typed, such as a finished review, a finished task, a due check-in or a withheld copy. **Event** alone keeps its review meaning. | ADR 0120 (#4862) |
+| **Custody** | Who answers for an inbox item until it ends. A required item ends only with its disposition, at its deadline at the latest. A message is never a required item. | ADR 0120 (#4862) |
+| **Start policy** | The table in code that decides whether and when an inbox item starts a turn. No model decides it. | ADR 0120 (#4862) |
+| **Commit rule** | A turn writes its entries, consumes its inbox items, and inserts its effects and tasks in one transaction, or it writes nothing. | ADR 0120 (#4862) |
+| **Steering** | A compatible message that enters an interactive turn at the next tool-result boundary. | ADR 0120 (#4862) |
+| **Route** | The one output place of a turn, `APP`, `SLACK_DM`, `WORK` or `CHANNEL`, with its readers. It is fixed when the turn is claimed. | ADR 0120 (#4862) |
+| **Task** | Background work that only a turn's commit inserts. It reads only what every reader of its result route may read. Each task kind names the routes that may request it and show its result. A done or failed task inserts one inbox event. A cancelled task inserts none. | ADR 0120 (#4862) |
+| **Audience** | Who may read what the turns of a thread write: private (one account) or shared (the workspace). | ADR 0121 (#4862) |
+| **Private thread** | A thread of one account: the main thread, a message thread under one message, or the work thread of one item. | ADR 0131 (#4862) |
+| **Work thread** | The private thread about one item. The person opens it from the item card, or from the extension on the item's page. | ADR 0131 (#4862) |
+| **Shared thread** | A thread of the workspace: the work place of one pull request or merge request, or a channel thread. It has no personal records. | ADR 0121 (#4862) |
+| **Work place** | The shared thread of one pull request or merge request. An issue has none in 1.0. | ADR 0121 (#4862) |
+| **Channel thread** | The shared thread of one Slack thread where a person mentioned Hephaestus. Its turns read the Slack thread itself, public repository data and channel-readable catalog entries only. | ADR 0123 (#4862) |
+| **Conversation agent** | The sandboxed agent that runs the turns of one account's private threads in a workspace. It answers, starts tasks and writes messages from Hephaestus. It never writes on the work. | ADR 0121 (#4862) |
+| **Composer** | The sandboxed agent that runs the turns of every shared thread. It reads only scoped projections of its exact place, never private data. On a work place it writes the copy on the work and replies to it. In a channel thread it writes one answer. The server projects the practice-page copy of results in the eligible set from the composed copy. The **Feedback composer** is its current form. | ADR 0121 (#4862) |
+| **Graded work** | A workspace mode in which a fixed renderer writes every copy on the work from the eligible set, with no model. | ADR 0121 (#4862) |
+| **Typed command** | The person's confirmed act from a card that changes a shared place. It carries IDs only, and its confirmation binds the facts of its preview. | ADR 0121 (#4862) |
+| **The composer's guardrails** | The composer's checks on each tool call and at commit: destination rules, observation reference validation, required Critical and Major problems and Markdown sanitization. | ADR 0121 (#4862) |
+| **Copy deadline** | Two hours after the seal. Then every copy on the work that is still pending and not staged is withheld, in both feedback modes. An Automatic copy whose first write has not started is withheld too. Nothing is posted in its place. | ADR 0122 (#4862) |
+| **Citation token** | A reference in an entry to a result at a version. The server renders the outcome from current rows, so the model never writes it. | ADR 0150 (#4862) |
+| **Authorization recheck** | A check of current access before a consequential read or write: at context read, at model request and at each send outside the app. | ADR 0134 (#4863) |
+| **Contact policy** | The code that decides whether Hephaestus may interrupt a person now, on a channel. It has no model. | ADR 0139 (#4865) |
+| **Notification budget** | The limits that the person's initiative level sets on unprompted notifications. Requested and agreed contact are exempt. The contact policy adds the checks of channel, activity and quiet hours. | ADR 0139 (#4865) |
+| **Delivery decision** | One append-only record for each decision to reach a person, except an answer to their message, written in code before any model runs. For an enrolled person it also holds the probability, the draw and the exposure. | ADR 0139 (#4865) |
+| **Silent draw** | A delivery experiment's draw to stay silent on one unprompted decision. A copy on the work settles withheld with `STUDY_SILENCE`, and no composer turn starts. An unprompted message's inbox item is dropped with the same reason. It never applies to a Critical problem. | ADR 0149 (#4868) |
+| **Held result** | A result that a silent draw holds back. The item card and the practice page still show it, with no label that names the draw. Scheduled turns and unprompted messages leave it out until the hold ends, as ADR 0149 lists. | ADR 0149 (#4868) |
+| **Practice opportunity** | The first admitted review of a new item version, for one person and one practice. A hold ends at the next one. | ADR 0149 (#4868) |
+| **Research steward** | The instance role that approves every research release and holds the stop switch of each practice in a delivery experiment. The steward never sees a person or an outcome, and the account that created the experiment cannot be its steward. | ADR 0149 (#4868) |
+| **Run fingerprint** | The configuration digest of one run, with its runtime fingerprint. The digest covers the practice versions, feedback modes, destinations, help defaults, model assignment and prompt digest. | ADR 0149 (#4868) |
+| **Period lock** | A lock that freezes the settings behind the run fingerprint for one workspace, until an admin unlocks it | ADR 0149 (#4868) |
+| **Experiment pseudonym** | One pseudonym for each person and delivery experiment. Its key is stored encrypted. Closing the experiment destroys the key for good. | ADR 0141 (#4868) |
+| **Release evaluation cases** | 20 to 50 cases from real failures that run on the reference local model before each release, scored pass^k. | ADR 0142 (#4868) |
+| **Contact simulation** | The offline run of simulated people over weeks that counts breaches of the contact rules. It checks timing and frequency only. | ADR 0142 (#4868) |
+| **Release check** | The manual checklist that a maintainer runs and signs on the packaged artifact of a release candidate. | ADR 0142 (#4868) |
+| **Scenario replay** | A research tool that replays a pseudonymized past project in time order, with recorded or frozen reactions and switches for goals, memory and history. It is not an evaluation layer and not a release gate. | ADR 0142 (#4868) |
+| **Scenario** | One Ichnaea case that holds a world and a timeline for the packaged server. The must-pass scenarios, the release cases, the contact simulation and scenario replay share its format. | ADR 0142 (#4868) |
+| **Settle barrier** | The server's signal that a scenario step is done: no work of the scenario can run at the current virtual time. Every observation up to the step's watermark has arrived. Future due times and declared blocked states come back to the driver. Unexplained active work past a bound is a capture failure. | ADR 0142 (#4868) |
+| **Observation stream** | The ordered events that the server emitted during a scenario, and what reached each fake. Scorers read only this stream. | ADR 0142 (#4868) |
+
+[Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx) owns the mechanics of threads, inbox items and turns.
+The planned **Turn** widens the runtime **Turn**: a turn can run without a person's question, and a thread is the unit of order.
+The runtime table keeps its row until ADR 0120 is accepted.
 
 ## Standard terms
 

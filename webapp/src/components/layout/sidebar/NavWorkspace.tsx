@@ -12,16 +12,22 @@ import {
 export function NavWorkspace({
 	workspaceSlug,
 	practicesEnabled,
+	readOnly = false,
 }: {
 	workspaceSlug: string;
 	practicesEnabled: boolean;
+	/**
+	 * A read-only user view: it never reads Practices across the workspace, whose counts would mark the
+	 * viewed person and leave them out of the comparison.
+	 */
+	readOnly?: boolean;
 }) {
 	const matchRoute = useMatchRoute();
 	return (
 		<SidebarGroup>
 			<SidebarGroupLabel>Workspace</SidebarGroupLabel>
 			<SidebarMenu aria-label="Workspace">
-				{practicesEnabled && (
+				{practicesEnabled && !readOnly && (
 					<SidebarMenuItem>
 						<SidebarMenuButton
 							tooltip="Practices across the workspace"

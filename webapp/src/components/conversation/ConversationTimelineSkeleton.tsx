@@ -1,8 +1,8 @@
 import { cn } from "cn";
-import { useSpinDelay } from "spin-delay";
 
 import { Message, MessageContent } from "@/components/ui/message";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSpinDelay } from "@/lib/use-spin-delay";
 
 /**
  * Line widths of each stand-in message, the developer's and Hephaestus's in turn: a share of the text

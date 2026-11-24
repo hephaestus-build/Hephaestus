@@ -71,7 +71,7 @@ export const SavingShow: Story = {
 		const hide = canvas.getByRole("button", { name: "Hide me" });
 		await expect(show).toHaveAttribute("aria-disabled", "true");
 		await expect(hide).toHaveAttribute("aria-disabled", "true");
-		// The spinner waits out spin-delay's second, as every pending button does.
+		// The spinner waits out the spinner delay, as every pending button does.
 		await waitFor(async () => expect(show.querySelector("svg.animate-spin")).not.toBeNull(), {
 			timeout: 3000,
 		});
@@ -88,7 +88,7 @@ export const SavingHide: Story = {
 		const hide = canvas.getByRole("button", { name: "Hide me" });
 		await expect(show).toHaveAttribute("aria-disabled", "true");
 		await expect(hide).toHaveAttribute("aria-disabled", "true");
-		// The spinner waits out spin-delay's second, as every pending button does.
+		// The spinner waits out the spinner delay, as every pending button does.
 		await waitFor(async () => expect(hide.querySelector("svg.animate-spin")).not.toBeNull(), {
 			timeout: 3000,
 		});

@@ -12,7 +12,7 @@ import type {
 /**
  * How the workspace's developers split across practice groups and practices, the reader marked
  *
- * Counts developers, never names them. Every split shows all its parts, however few developers they count. The splits count every developer's current standing once and take no window.
+ * Counts developers, never names them. A split shows all its parts or only its total, and a count of 1 to 4 developers shows as null. The splits count every developer's current standing once and take no window.
  */
 export const getPracticeWorkspaceOverview = <ThrowOnError extends boolean = false>(
 	options: Options<GetPracticeWorkspaceOverviewData, ThrowOnError>,

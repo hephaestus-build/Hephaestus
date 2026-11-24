@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795466732154-1" author="hephaestus">
+        <comment>The maintenance barrier refuses every new lease while a database migration holds its advisory lock. The migration's own session passes.</comment>
+        <sql splitStatements="false">
+CREATE FUNCTION refuse_lease_during_migration() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NOT pg_try_advisory_xact_lock_shared(hashtext('hephaestus'), hashtext('database-migration')) THEN
+        RAISE EXCEPTION 'A database migration runs, so % takes no new lease', TG_TABLE_NAME
+            USING ERRCODE = '55P03', HINT = 'Claim the work again after the migration ends.';
+    END IF;
+    RETURN NEW;
+END
+$$;
+CREATE TRIGGER agent_run_maintenance_barrier AFTER UPDATE OF lease_epoch, state ON agent_run FOR EACH ROW
+    WHEN (NEW.lease_epoch > OLD.lease_epoch OR (NEW.state = 'LEASED' AND OLD.state != 'LEASED'))
+    EXECUTE FUNCTION refuse_lease_during_migration();
+CREATE TRIGGER agent_run_maintenance_barrier_insert BEFORE INSERT ON agent_run FOR EACH ROW
+    WHEN (NEW.leased_until IS NOT NULL) EXECUTE FUNCTION refuse_lease_during_migration();
+CREATE TRIGGER agent_action_maintenance_barrier AFTER UPDATE OF lease_epoch, state ON agent_action FOR EACH ROW
+    WHEN (NEW.lease_epoch > OLD.lease_epoch OR (NEW.state = 'EXECUTING' AND OLD.state != 'EXECUTING'))
+    EXECUTE FUNCTION refuse_lease_during_migration();
+CREATE TRIGGER agent_action_maintenance_barrier_insert BEFORE INSERT ON agent_action FOR EACH ROW
+    WHEN (NEW.leased_until IS NOT NULL) EXECUTE FUNCTION refuse_lease_during_migration();
+CREATE TRIGGER provider_event_maintenance_barrier AFTER UPDATE OF lease_epoch, state ON provider_event FOR EACH ROW
+    WHEN (NEW.lease_epoch > OLD.lease_epoch OR (NEW.state = 'LEASED' AND OLD.state != 'LEASED'))
+    EXECUTE FUNCTION refuse_lease_during_migration();
+CREATE TRIGGER provider_event_maintenance_barrier_insert BEFORE INSERT ON provider_event FOR EACH ROW
+    WHEN (NEW.leased_until IS NOT NULL) EXECUTE FUNCTION refuse_lease_during_migration();
+CREATE TRIGGER sync_job_maintenance_barrier AFTER UPDATE OF status ON sync_job FOR EACH ROW
+    WHEN ((NEW.status = 'RUNNING' AND OLD.status != 'RUNNING')
+          OR (NEW.status = 'PENDING' AND OLD.status NOT IN ('PENDING', 'RUNNING')))
+    EXECUTE FUNCTION refuse_lease_during_migration();
+CREATE TRIGGER sync_job_maintenance_barrier_insert BEFORE INSERT ON sync_job FOR EACH ROW
+    WHEN (NEW.status IN ('PENDING', 'RUNNING')) EXECUTE FUNCTION refuse_lease_during_migration();
+CREATE TRIGGER provider_resource_repair_maintenance_barrier AFTER UPDATE OF attempt_epoch, state
+    ON provider_resource_repair FOR EACH ROW
+    WHEN (NEW.attempt_epoch > OLD.attempt_epoch
+          OR (NEW.state = 'CHECKING' AND OLD.state != 'CHECKING')
+          OR (NEW.state = 'REGISTERING' AND OLD.state != 'REGISTERING')
+          OR (NEW.state = 'DISPATCHING' AND OLD.state NOT IN ('CHECKING', 'DISPATCHING')))
+    EXECUTE FUNCTION refuse_lease_during_migration();
+CREATE TRIGGER provider_resource_repair_maintenance_barrier_insert BEFORE INSERT ON provider_resource_repair FOR EACH ROW
+    WHEN (NEW.state IN ('REGISTERING', 'CHECKING', 'DISPATCHING')) EXECUTE FUNCTION refuse_lease_during_migration();
+CREATE TRIGGER product_feedback_filing_maintenance_barrier AFTER UPDATE OF attempt, next_attempt_at
+    ON product_feedback_filing FOR EACH ROW
+    WHEN (NEW.attempt > OLD.attempt AND NEW.next_attempt_at > OLD.next_attempt_at AND NEW.state = OLD.state
+          AND NEW.drafting_started_at IS NOT DISTINCT FROM OLD.drafting_started_at)
+    EXECUTE FUNCTION refuse_lease_during_migration();
+        </sql>
+        <rollback>
+DROP TRIGGER agent_run_maintenance_barrier ON agent_run;
+DROP TRIGGER agent_run_maintenance_barrier_insert ON agent_run;
+DROP TRIGGER agent_action_maintenance_barrier ON agent_action;
+DROP TRIGGER agent_action_maintenance_barrier_insert ON agent_action;
+DROP TRIGGER provider_event_maintenance_barrier ON provider_event;
+DROP TRIGGER provider_event_maintenance_barrier_insert ON provider_event;
+DROP TRIGGER sync_job_maintenance_barrier ON sync_job;
+DROP TRIGGER sync_job_maintenance_barrier_insert ON sync_job;
+DROP TRIGGER provider_resource_repair_maintenance_barrier ON provider_resource_repair;
+DROP TRIGGER provider_resource_repair_maintenance_barrier_insert ON provider_resource_repair;
+DROP TRIGGER product_feedback_filing_maintenance_barrier ON product_feedback_filing;
+DROP FUNCTION refuse_lease_during_migration();
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

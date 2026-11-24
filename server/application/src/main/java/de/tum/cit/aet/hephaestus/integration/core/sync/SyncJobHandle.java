@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataAccessException;
 
 /** Internal state and persistence adapter behind the runner-facing {@link SyncExecutionHandle}. */
 public final class SyncJobHandle implements SyncExecutionHandle {
@@ -148,7 +149,23 @@ public final class SyncJobHandle implements SyncExecutionHandle {
         // Outside the lock: this is a database round-trip, and holding writeLock across it would block
         // the runner thread's next progress call behind the sweep's write (and vice versa).
         if (write != null) {
+            persist(write);
+        }
+    }
+
+    /**
+     * A progress write that the database refused, as while a migration holds the job table, stays pending for the next
+     * flush. It never reaches the runner: progress is a report about the sync, not part of it.
+     */
+    private boolean persist(Write write) {
+        try {
             write.apply(writer, jobId);
+            return true;
+        } catch (DataAccessException refused) {
+            synchronized (writeLock) {
+                pendingWrite = true;
+            }
+            return false;
         }
     }
 
@@ -172,8 +189,7 @@ public final class SyncJobHandle implements SyncExecutionHandle {
             pendingWrite = false;
             write = currentWrite();
         }
-        write.apply(writer, jobId);
-        return true;
+        return persist(write);
     }
 
     private Write currentWrite() {

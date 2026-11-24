@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import de.tum.cit.aet.hephaestus.core.ShownCount;
+import de.tum.cit.aet.hephaestus.core.SmallCounts;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -7,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.dto.AdminWorkspaceViewDTO;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +39,14 @@ public class WorkspaceAdminService {
         return workspaceRepository.findAll().stream().map(this::toView).toList();
     }
 
+    /**
+     * The members the workspace's member list shows, from 5. An instance admin cannot open that list in a workspace
+     * that is not active, so a small count there would name nobody yet tell about few people.
+     */
+    private @Nullable ShownCount memberCount(Workspace ws) {
+        return SmallCounts.count(Math.toIntExact(membershipRepository.countViewableMembers(ws.getId())));
+    }
+
     private AdminWorkspaceViewDTO toView(Workspace ws) {
         IdentityProviderType providerType = connectionService
                 .findActiveProviderKind(ws.getId())
@@ -53,7 +64,7 @@ public class WorkspaceAdminService {
                 ws.getAccountLogin(),
                 providerType,
                 owner != null ? owner.displayName() : null,
-                membershipRepository.countByWorkspace_Id(ws.getId()),
+                memberCount(ws),
                 ws.getCreatedAt());
     }
 }

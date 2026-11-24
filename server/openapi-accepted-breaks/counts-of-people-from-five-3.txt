@@ -1,0 +1,4 @@
+# NP-04 (to be filed): no view shows a count of fewer than 5 people.
+# An admin could change their own Slack opt-out and compare the count, so the channel carries none.
+# .changeset/counts-of-people-from-five.md tells API clients.
+in API GET /workspaces/{workspaceSlug}/slack/channels removed the required property `items/optedOutMemberCount` from the response with the `200` status

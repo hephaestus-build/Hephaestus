@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.Arrival;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore.Claimed;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -17,6 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +35,9 @@ class ProviderEventStoreIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private DataSource dataSource;
+
     @BeforeEach
     void clean() {
         databaseTestUtils.cleanDatabase();
@@ -45,6 +51,56 @@ class ProviderEventStoreIntegrationTest extends BaseIntegrationTest {
                 delivery,
                 Map.of("X-GitHub-Event", "issues"),
                 ("{\"delivery\":\"" + delivery + "\"}").getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void shouldClaimNoEventWhileAMigrationRunsAndClaimItOnceTheMigrationEnds() throws Exception {
+        assertThat(store.store(List.of(arrival("github.?.?.installation", "barrier"))))
+                .isEqualTo(1);
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThat(store.claim(LEASE)).isEmpty();
+        }
+
+        assertThat(store.claim(LEASE))
+                .map(ProviderEventStoreIntegrationTest::delivery)
+                .contains("barrier");
+    }
+
+    @Test
+    void shouldRefuseANewEventLeaseOfAnyStatementShapeWhileAMigrationRuns() throws Exception {
+        store.store(List.of(arrival("github.?.?.installation", "shape")));
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThatThrownBy(
+                            () -> jdbc.update("UPDATE provider_event e SET state = 'LEASED', attempt = e.attempt + 1,"
+                                    + " lease_epoch = (e.lease_epoch + 1),"
+                                    + " leased_until = clock_timestamp() + interval '1 minute'"
+                                    + " WHERE e.delivery_key = 'shape'"))
+                    .hasMessageContaining("takes no new lease");
+            // A lease at the same epoch is still a new lease.
+            assertThatThrownBy(() -> jdbc.update("UPDATE provider_event SET state = 'LEASED',"
+                            + " leased_until = clock_timestamp() + interval '1 minute'"
+                            + " WHERE delivery_key = 'shape' AND state = 'QUEUED'"))
+                    .hasMessageContaining("takes no new lease");
+            assertThat(jdbc.queryForObject(
+                            "SELECT state FROM provider_event WHERE delivery_key = 'shape'", String.class))
+                    .isEqualTo("QUEUED");
+        }
+        assertThat(store.claim(LEASE))
+                .map(ProviderEventStoreIntegrationTest::delivery)
+                .contains("shape");
+    }
+
+    @Test
+    void shouldLetAnEventClaimedBeforeAMigrationRenewAndCompleteWhileTheMigrationRuns() throws Exception {
+        store.store(List.of(arrival("github.?.?.installation", "in-flight")));
+        Claimed claimed = store.claim(LEASE).orElseThrow();
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThat(store.renew(claimed.id(), claimed.leaseEpoch(), LEASE)).isTrue();
+            assertThat(store.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+        }
     }
 
     @Test

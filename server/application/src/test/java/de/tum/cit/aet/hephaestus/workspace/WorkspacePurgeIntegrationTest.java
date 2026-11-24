@@ -665,16 +665,14 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             assertThat(slackMonitoredChannelRepository.countByWorkspaceId(a.getId()))
                     .isZero();
             assertThat(slackDmConversations(a)).isZero();
-            assertThat(slackParticipantConsentRepository.countByWorkspaceIdAndIngestionOptedOutTrue(a.getId()))
-                    .isZero();
+            assertThat(slackOptOuts(a)).isZero();
 
             assertThat(slackMessageRepository.countByWorkspaceId(b.getId())).isEqualTo(1);
             assertThat(slackThreadRepository.countByWorkspaceId(b.getId())).isEqualTo(1);
             assertThat(slackMonitoredChannelRepository.countByWorkspaceId(b.getId()))
                     .isEqualTo(1);
             assertThat(slackDmConversations(b)).isEqualTo(1);
-            assertThat(slackParticipantConsentRepository.countByWorkspaceIdAndIngestionOptedOutTrue(b.getId()))
-                    .isEqualTo(1);
+            assertThat(slackOptOuts(b)).isEqualTo(1);
         }
 
         @Test
@@ -796,6 +794,13 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             return new DerivedConversation(
                     workspace.getId(), practiceResultIds, prepared.getId(), delivered.getId(), message.getId());
         }
+    }
+
+    private long slackOptOuts(Workspace workspace) {
+        return Objects.requireNonNull(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM slack_participant_consent WHERE workspace_id = ? AND ingestion_opted_out",
+                Long.class,
+                workspace.getId()));
     }
 
     private long slackDmConversations(Workspace workspace) {

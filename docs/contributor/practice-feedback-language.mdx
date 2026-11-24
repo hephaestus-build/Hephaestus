@@ -287,8 +287,9 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Instance** | One running deployment that hosts workspaces. |  |
 | **Integration** | One connected provider: GitHub, GitLab, Slack or Outline. |  |
 | **Ask Hephaestus** | The product area where a developer talks with Hephaestus: its menu item, page and panel. | `Heph`, Mentor, Conversations (as the area), chat, AI assistant |
-| **Mentor** | A person who guides a less experienced developer, such as a reviewer or an experienced colleague. Use it only for people. |  |
-| **Hephaestus** | The application. It also answers in a developer's conversation. | agent, AI mentor, `Heph`, mentor, assistant |
+| **Mentor** | A person who guides a less experienced developer, such as a reviewer or an experienced colleague. Use it only for people. “Mentor” alone never names Hephaestus. |  |
+| **Hephaestus** | The application. It also answers in a developer's conversation. It is an AI mentor. | agent, `Heph`, mentor, the mentor, your mentor, assistant |
+| **AI mentor** | The product category of Hephaestus: Hephaestus is an AI mentor. Always write it with “AI”. | mentor (alone, for the product), coach, companion |
 | **Guided tour** | The chapters on the Practice profile that explain how work becomes feedback and how to read the page. It never opens by itself: a person starts it from the page or from a step of Get started. | product tour, walkthrough, onboarding wizard |
 | **Practice profile** | The developer's private page for practice standing, changes and feedback. | practice dashboard, standings page |
 | **Practice page** | The page for one practice within the developer's Practice profile. |  |
@@ -310,7 +311,7 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Workspace address** | A workspace's own host. Sign-in stays on the instance host. | subdomain, vanity URL, tenant URL |
 | **Short name** | The part of a workspace's URL after `/w/`, such as `/w/my-team`. Use slug only in contributor documentation, code and API contracts. | slug, URL slug |
 | **Open work** | Open requests and assigned issues that need the developer or another person. | backlog, inbox, to-do |
-| **Needs you** | Open work that requires an action from the developer now. | inbox, to-do, action items |
+| **Needs you** | The Activity section of open work that waits for the developer: review requests, and the developer's pull requests that reviewers returned or approved. | inbox, to-do, action items |
 | **Covered** | A review request settled for now by another reviewer's decision, under the provider's approval state. | dismissed, done, resolved |
 | **Reviewed by you** | A provider review request that the developer already approved or returned for changes. | done, completed, handled |
 | **Requested from your team** | A GitHub review request to one of the developer's teams rather than to that developer. | team inbox, shared queue |
@@ -323,8 +324,9 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Adopt** | What an instance admin does to a GitHub App installation that waits under `ADMIN_ONLY`: Hephaestus creates its workspace, with the admin as the owner. The other decision is **Decline**, which an admin can follow with Adopt later. | approve (in controls), accept, claim |
 
 The workspace page never names developers, but small counts can disclose a person's standing.
-It has no minimum count that prevents that disclosure.
-Hidden members and repositories do not contribute to those counts.
+So it shows a count only from 5 developers, and a split shows all its parts or only its total.
+Hidden repositories do not contribute to those counts.
+Hidden and departed members do, because hiding is a display choice and not a privacy control.
 The [Practice profile guide](/user/practice-profile) owns the user procedures and visibility details.
 
 ### Research terms
@@ -356,7 +358,46 @@ A destination matches a delivery strategy only by the place where feedback appea
 | **Weekly digest** | A message that Hephaestus writes into a developer's conversation at most once a week, when the developer turned it on. It links to feedback that reached the developer and says what changed on the Practice profile. It is not a destination and delivers no feedback. | summary, report, newsletter, recap |
 
 The [review glossary](./practice-review-glossary.mdx#runtime-terms) defines the turn, the conversation sandbox, the context folder, the context document and the context loader.
-[ADR 0057](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0057-one-heph-conversation-per-developer.md) owns the decisions behind these terms.
+[ADR 0082](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md) owns the decisions behind these terms.
+The planned private threads come from ADR 0120 and ADR 0131, proposed in pull request #4862.
+
+### Mentoring (planned)
+
+These terms name parts of the accepted design in [Mentoring framework](./mentoring-framework.mdx).
+The current release does not have them.
+The last column names the proposed ADR that decides each term, and the pull request that holds it. A dash marks a term that no ADR decides yet.
+When a part ships, its row moves to the table of its area.
+The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) owns the runtime terms of the same design.
+
+| Term | Meaning | Avoid for this concept | Proposed in |
+| --- | --- | --- | --- |
+| **Copy on the work** | The copy of one piece of feedback that Hephaestus posts on the pull request or merge request. | comment on the work, feedback on the work (for the copy) | ADR 0121 (#4862) |
+| **Personal space** | A workspace that only its owner can enter. Records that travel with the person live here. | private workspace, home | ADR 0126 (#4863) |
+| **Item card** | The projection of rows about one item, for its owner. It shows the problems with their cited lines, the delivery state of each copy, the task status and "Could not check". No model writes it. | live card, result card, PR card | ADR 0150 (#4862) |
+| **Mark card done** | The person's action that closes an item card. Its reverse opens it again. A review of a newer version that finds a new or changed problem also opens it. A duplicate seal does not. | Done (alone), dismiss | ADR 0150 (#4862) |
+| **Mute card notifications** | The person's action that stops messages and notifications about one item card | Mute (alone) | ADR 0150 (#4862) |
+| **Request a new copy** | The item card's action after the copy on the work was withheld. It starts a new composition with a new deadline. | retry, fallback | ADR 0122 (#4862) |
+| **Task status card** | The state of one task, with its estimate and **Cancel** | progress line, job line | ADR 0120 (#4862) |
+| **Message from Hephaestus** | A message that Hephaestus writes without a person's question: a requested result, a check-in or an unprompted update. It is written complete and never streamed. | proactive message, nudge | ADR 0131 (#4862) |
+| **Private check** | A review of the person's own draft that only that person sees. It writes no observation and no copy on the work. | rehearsal, pre-review | ADR 0120 (#4862) |
+| **Check-in** | An agreed contact with a scope: what it is about, where it appears, when it fires and how it stops | reminder, nudge | ADR 0133 (#4865) |
+| **Weekly reflection** | A check-in that names one change in the week's work and asks one question. For a person who turns it on, it replaces the weekly digest. | recap, weekly summary | ADR 0133 (#4865) |
+| **Goal** | A personal record of what the person wants to get better at, in their own words | objective, target | ADR 0132 (#4865) |
+| **Goal follow-up** | A check-in that brings one useful next step about a named goal, at most once a day | goal reminder | ADR 0133 (#4865) |
+| **Personal record** | A goal, lesson, preference or context of the account owner | memory (for the record), note | ADR 0132 (#4865) |
+| **Noted record** | A personal record that Hephaestus wrote from the person's own messages. It stays in its workspace and is never evidence. | inferred memory, profile fact | ADR 0132 (#4865) |
+| **What Hephaestus keeps in mind** | The one list of everything that Hephaestus remembers about the person, with **Forget**, **Not right** and **Keep** | memories page, profile | ADR 0132 (#4865) |
+| **Keep** | The person's act on a line of **What Hephaestus keeps in mind** that turns it into a person-authored record, under record retention | Save (alone) | ADR 0132 (#4865) |
+| **Take along** | The person's confirmed act that transfers a person-authored record to their personal space | Keep and take along, export | ADR 0129 (#4863) |
+| **Help settings** | How the person likes help: answer length, command first, language, form of address and help style. They apply in every workspace. | preferences (alone), persona | ADR 0132 (#4865) |
+| **Help style** | **Give me a hint first** or **Just tell me** |  | ADR 0132 (#4865) |
+| **Help mode** | What Hephaestus does now on one practice: explain, hint, ask first, or step back. The UI shows it in words. | level, tier | ADR 0130 (#4863) |
+| **Our work** | The private page of the person's relationship with Hephaestus, organized around goals: the goals, the check-ins and where help stepped back. Only the account reads it, and its name makes no record readable to the workspace. | mentor page, dashboard | ADR 0121 (#4862) |
+| **Who runs this server** | The Settings entry that names the instance operator and links its statement | data controller (in UI) | ADR 0125 (#4863) |
+| **Monthly practice outcome** | The one value for each practice that workspace admins see each month, from observations on the work, over at least 5 people | team score, usage report | ADR 0125 (#4863) |
+| **Slack detail level** | **Full** or **Notice** for what Slack shows. At both levels, a Slack turn reads the person's language and answer length. **Full** needs the export notice, and also lets a Slack turn read the person's goals, noted records and other help settings of that workspace. | Slack privacy mode | ADR 0123 (#4862) |
+| **Delivery experiment** | A comparison of a delivery rule by random assignment, for each enrolled person and each unprompted decision | A/B test, study, trial (for the experiment), micro-randomized trial (in product text) | ADR 0149 (#4868) |
+| **Experiment enrollment** | A person's own choice to take part in one delivery experiment, apart from research use. **Enroll** and **Withdraw** change it. | study consent | ADR 0149 (#4868) |
 
 ### Member onboarding and AI choices
 

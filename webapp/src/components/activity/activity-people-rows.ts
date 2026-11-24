@@ -46,18 +46,15 @@ export interface PeopleRows {
 	to: Date;
 	/** The people whose first contribution is in the period, by `person.id`. */
 	highlights: { firstContributors: readonly (number | string)[] };
-	/** Contributors in the period that the public page counts but does not name. */
-	unlisted?: number;
+	/**
+	 * Whether the list may leave out contributors without counting them, as the public page does: an
+	 * empty list then does not mean that nobody contributed.
+	 */
+	unnamedNotCounted?: boolean;
 }
 
 /** The public page's people: a public login stands for a person, as no id leaves the server. */
-export function publicPeopleRows({
-	people,
-	from,
-	to,
-	highlights,
-	unlistedContributors,
-}: PublicActivity): PeopleRows {
+export function publicPeopleRows({ people, from, to, highlights }: PublicActivity): PeopleRows {
 	return {
 		people: people.map(({ login, name, avatarUrl, profileUrl, counts, weeks }) => ({
 			person: { id: login, login, name, avatarUrl, htmlUrl: profileUrl },
@@ -67,7 +64,7 @@ export function publicPeopleRows({
 		from,
 		to,
 		highlights: { firstContributors: highlights.firstContributors },
-		unlisted: unlistedContributors,
+		unnamedNotCounted: true,
 	};
 }
 

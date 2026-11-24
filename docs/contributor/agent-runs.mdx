@@ -114,6 +114,28 @@ The capped claims of one kind take an advisory lock in turn, so the cap holds ac
 A claim leases a turn for `hephaestus.agent.capacity.turn-lease-ttl` (60 seconds), and any other run for `lease-ttl`.
 A person waits for a turn, so a lost turn is taken back sooner.
 
+No claim leases a run while a database migration runs ([Work during a migration](/admin/runtime-roles#work-during-a-migration)).
+Each claim query adds `MaintenanceBarrier.LIFTED`, which takes the migration's advisory lock shared for its transaction, without waiting.
+A start that records itself first, such as a sandbox request or an action that runs at once, runs `LIFTED` as the first statement of that transaction.
+The statement reads no table, so a migration's table lock cannot keep the refusal waiting, and the lock lasts until the record commits.
+A sandbox whose row committed before the migration can reach Kubernetes during it, as work in flight. It leases nothing until the migration ends.
+The due read of the `next` wait adds the condition too. A wake that races the barrier makes one claim, which the barrier refuses.
+The run gauges do not add it: a due run still counts as due.
+
+The database enforces the barrier on every new lease, whatever statement takes it.
+The trigger function `refuse_lease_during_migration()` refuses these transitions:
+
+- a run, an outbox action or a provider event that raises `lease_epoch` or enters its leased state, or that is inserted leased;
+- a sync job that enters `RUNNING`, that enters `PENDING` from an ended state, or that is inserted `PENDING` or `RUNNING`;
+- a provider resource repair that raises `attempt_epoch`, or enters or is inserted in `REGISTERING`, `CHECKING` or `DISPATCHING`, except the hand-over from `CHECKING` to `DISPATCHING`;
+- a product feedback lookup: `attempt` rises and `next_attempt_at` moves out, in the same state and with the same `drafting_started_at`.
+
+Other writes pass, such as a renewal, an end, or an outbox hand-over that counts a filing's attempt.
+The barrier guards these leases only.
+A scheduled job that reads a provider and writes its result in one later transaction holds no lease, so it can run during a migration. The follow-up of a filed issue and the destination snapshot refresh are examples.
+The migration's own session holds the lock, so it passes.
+`MaintenanceBarrierDatabaseTest` finds each lease table by its column convention and requires the triggers, or a recorded reason why its rows are not leased.
+
 ## Subject outcomes
 
 `ReviewJobTerminal` owns the mapping from a review job's terminal state to its run reason.

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.oauth;
 
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -274,6 +275,18 @@ public class OAuthCallbackController {
             Map<String, String> callbackParams = new HashMap<>(allParams == null ? Map.of() : allParams);
             callbackParams.remove("state");
             result = strategy.finalizeConnect(ref, callbackParams);
+        } catch (MaintenanceInProgressException updating) {
+            // The exchange never ran, so nothing reached the provider: the person starts again after the update.
+            log.info("OAuth callback for kind={} arrived during a database migration", kind);
+            return workspaceRedirect(
+                    failure(
+                            kind.name(),
+                            "maintenance",
+                            "Hephaestus was updating, so the connection did not finish. Start it again in a few"
+                                    + " minutes.",
+                            HttpStatus.SERVICE_UNAVAILABLE,
+                            wantsJson),
+                    binding);
         } catch (RuntimeException e) {
             log.warn(
                     "Strategy.finalizeConnect threw for kind={} workspace={}: {}",

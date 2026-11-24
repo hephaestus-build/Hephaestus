@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect.GitLabResourceAdapter;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -36,6 +38,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,6 +85,9 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager manager;
+
+    @Autowired
+    private DataSource dataSource;
 
     @PersistenceContext
     private @Nullable EntityManager entities;
@@ -270,6 +276,28 @@ class GitLabProjectHookRepairIntegrationTest extends BaseIntegrationTest {
         assertThat(gitlab.get(8L)).containsOnlyKeys(41L);
         assertThat(configOf(owner).projectHooks()).containsExactly(new ConnectionConfig.GitLabProjectHook(8L, 41L));
         assertThat(configOf(owner).webhookOwnershipHash()).isEqualTo(HASH);
+    }
+
+    @Test
+    void shouldRegisterNoHookWhileAMigrationRuns() throws Exception {
+        Connection owner = owner(Map.of(7L, 40L));
+        Resource registration = new Resource(
+                IntegrationKind.GITLAB,
+                ORIGIN,
+                ResourceType.REGISTRATION,
+                GitLabResourceAdapter.projectParent(groupId, 8L),
+                MARKER,
+                HASH);
+        long repairs = rows.count();
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThatThrownBy(() ->
+                            registrations.beginRegistration(owner.getWorkspace().getId(), owner.getId(), registration))
+                    .isInstanceOf(MaintenanceInProgressException.class);
+        }
+
+        assertThat(rows.count()).as("no registration is recorded").isEqualTo(repairs);
+        assertThat(gitlab.get(8L)).as("no hook reaches GitLab").isNullOrEmpty();
     }
 
     @Test

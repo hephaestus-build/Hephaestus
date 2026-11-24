@@ -30,7 +30,6 @@ dependencies {
     implementation("org.springframework.security:spring-security-webauthn")
     implementation(libs.spring.boot.starter.oauth2.client)
     implementation(libs.spring.boot.starter.oauth2.resource.server)
-    implementation(libs.spring.boot.starter.security)
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.restclient)
@@ -42,7 +41,6 @@ dependencies {
     implementation(libs.spring.boot.webclient)
     implementation(libs.springdoc.openapi.starter.webmvc.ui)
     implementation(libs.spring.boot.starter.liquibase)
-    implementation(libs.spring.boot.starter.logging)
     developmentOnly(libs.spring.boot.docker.compose)
     implementation(libs.spring.boot.starter.mail)
     implementation(libs.angus.mail)
@@ -83,7 +81,7 @@ dependencies {
     }
     testImplementation(libs.vertx.core)
     testImplementation(libs.fabric8.kubernetes.server.mock)
-    implementation(libs.bolt) {
+    implementation(libs.slack.api.client) {
         exclude(group = "com.squareup.okhttp3", module = "okhttp")
     }
     implementation(libs.okhttp.jvm)
@@ -104,7 +102,6 @@ dependencies {
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
     annotationProcessor(libs.therapi.scribe)
     testCompileOnly(libs.lombok)
-    testCompileOnly(libs.immutables.value.annotations)
     // PostgreSQL test types carry Checker Framework annotations that javac must resolve.
     testCompileOnly(libs.checker.qual)
     // The native Kubernetes transport fixture exposes Vert.x types with these class-file
@@ -116,7 +113,6 @@ dependencies {
     errorprone(libs.errorprone.core)
     errorprone(libs.nullaway)
     testImplementation("org.junit.platform:junit-platform-launcher")
-    testImplementation(libs.postgresql)
     constraints {
         implementation(libs.archunit.core)
         implementation(libs.bcprov)

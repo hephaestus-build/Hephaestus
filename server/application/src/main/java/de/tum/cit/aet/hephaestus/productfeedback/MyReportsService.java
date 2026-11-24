@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.EditProductFeedbackDraftDTO;
@@ -241,6 +242,9 @@ class MyReportsService {
     /** Moves the person's own public issue to the private repository. Copies made while it was public can remain. */
     public MyProductFeedbackDTO makePrivate(long accountId, UUID id) {
         var target = Objects.requireNonNull(transactions.execute(status -> {
+            // First, before the report's tables: a migration that holds one cannot keep the refusal waiting, and no
+            // migration starts until this read commits. The insert of the move's action checks the barrier again.
+            if (!filings.maintenanceBarrierLifted()) throw new MaintenanceInProgressException();
             owned(accountId, id);
             ProductFeedbackFiling filing =
                     filings.findById(id).orElseThrow(() -> conflict("This report has no filing."));

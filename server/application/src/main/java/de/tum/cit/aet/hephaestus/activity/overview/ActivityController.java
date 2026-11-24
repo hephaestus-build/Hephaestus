@@ -18,7 +18,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -76,19 +75,6 @@ public class ActivityController {
     private final ActivityPeopleService peopleService;
     private final ActivityAutomationService automationService;
     private final PublicActivityObjectionService publicObjections;
-
-    public record PublicActivityHiddenCountDTO(
-            @Schema(requiredMode = RequiredMode.REQUIRED) long hiddenPeople) {}
-
-    @GetMapping("/public-hidden-count")
-    @RequireAtLeastWorkspaceAdmin
-    @Operation(
-            operationId = "getPublicActivityHiddenCount",
-            summary = "Count hidden public contributors without identifying them")
-    @ApiResponse(responseCode = "200", description = "Hidden contributors counted")
-    public PublicActivityHiddenCountDTO getPublicActivityHiddenCount(WorkspaceContext workspaceContext) {
-        return new PublicActivityHiddenCountDTO(publicObjections.hiddenPeople(workspaceContext.id()));
-    }
 
     @GetMapping("/hidden-contributors")
     @RequireAtLeastWorkspaceAdmin

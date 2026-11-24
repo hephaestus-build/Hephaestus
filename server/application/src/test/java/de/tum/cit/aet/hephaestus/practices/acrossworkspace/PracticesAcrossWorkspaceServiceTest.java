@@ -10,7 +10,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
@@ -38,7 +37,6 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.result.StandingScale;
 import de.tum.cit.aet.hephaestus.practices.result.trend.PracticeTrendService;
 import de.tum.cit.aet.hephaestus.practices.result.trend.TrendProperties;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewTestData;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
@@ -55,7 +53,6 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -82,6 +79,8 @@ class PracticesAcrossWorkspaceServiceTest {
     private static final long QUIET = 9L;
     private static final long HIDDEN = 10L;
     private static final long STEADY = 11L;
+    private static final long CAREFUL = 12L;
+    private static final long THOROUGH = 13L;
 
     private final Instant now = Instant.parse("2026-10-20T10:00:00Z");
     private final Clock clock = Clock.fixed(now, ZoneOffset.UTC);
@@ -93,8 +92,6 @@ class PracticesAcrossWorkspaceServiceTest {
     private final ResultVisibilityPolicy visibility = mock(ResultVisibilityPolicy.class);
     private final PracticeRepository practices = mock(PracticeRepository.class);
     private final PracticeGroupService groups = mock(PracticeGroupService.class);
-    private final PracticeReviewCoverageService scope = mock(PracticeReviewCoverageService.class);
-    private final AccountMembershipQuery memberships = mock(AccountMembershipQuery.class);
     private final PersonProcessingSuppression suppression = mock(PersonProcessingSuppression.class);
     private final PracticePageFeedbackService feedback = mock(PracticePageFeedbackService.class);
     private final EvidenceAuthorization evidence = mock(EvidenceAuthorization.class);
@@ -107,9 +104,7 @@ class PracticesAcrossWorkspaceServiceTest {
             standings,
             groupStandings,
             groups,
-            scope,
             results,
-            memberships,
             suppression,
             currentDeveloper,
             feedback,
@@ -134,7 +129,6 @@ class PracticesAcrossWorkspaceServiceTest {
         when(practices.findByWorkspaceId(1L)).thenReturn(List.of(reviewed, off, nobody, unreviewed));
         when(groups.listGroups(context, true)).thenReturn(List.of(group, peopleOnly));
         when(currentDeveloper.currentDeveloperId()).thenReturn(Optional.of(READER));
-        when(scope.eligibleAccountIds(1L)).thenReturn(new LinkedHashSet<>(List.of(READER, QUIET)));
         when(results.developersSince(eq(1L), any(Instant.class))).thenAnswer(i -> {
             Instant since = i.getArgument(1);
             return data.stream()
@@ -161,8 +155,6 @@ class PracticesAcrossWorkspaceServiceTest {
         when(visibility.permitsStandingAt(eq(1L), anyCollection(), any())).thenAnswer(i -> ids(i.getArgument(1)));
         when(visibility.permitsAt(eq(1L), anyCollection(), any(), any())).thenAnswer(i -> ids(i.getArgument(1)));
         when(visibility.permitsHistory(eq(1L), anyCollection(), any())).thenAnswer(i -> ids(i.getArgument(1)));
-        when(memberships.isActiveVisibleMember(1L, PROLIFIC)).thenReturn(true);
-        when(memberships.isActiveVisibleMember(1L, HIDDEN)).thenReturn(false);
         when(suppression.suppressedAccountIds(anyCollection())).thenReturn(Set.of());
         when(feedback.countOpen(eq(1L), anyCollection())).thenReturn(Map.of(READER, 2, QUIET, 1));
         when(evidence.asOneRead(anyLong(), any()))
@@ -208,7 +200,7 @@ class PracticesAcrossWorkspaceServiceTest {
                         .standing());
         assertThat(row.split().developers()).isNull();
 
-        // Counted: the reader, the quiet member and the member who joined through their results; never the hidden one.
+        // Counted: everyone whose work was reviewed, the hidden member too. Hiding is a display choice of staff.
         assertThat(overview.openFeedback().yours()).isEqualTo(2);
         // Two others besides the reader are too few for a typical range.
         assertThat(overview.openFeedback().middle()).isNull();
@@ -234,8 +226,8 @@ class PracticesAcrossWorkspaceServiceTest {
         var overview = service.read(context);
 
         var row = overview.groups().getFirst();
-        assertThat(row.split().developers()).isZero();
-        assertThat(row.split().noneYet()).isZero();
+        assertThat(row.split().developers()).hasToString("0");
+        assertThat(row.split().noneYet()).hasToString("0");
         assertThat(row.yourStanding()).isNull();
         // Two others besides the reader are too few for a typical range.
         assertThat(overview.openFeedback().middle()).isNull();
@@ -248,7 +240,11 @@ class PracticesAcrossWorkspaceServiceTest {
         result(reviewed, QUIET, 11, 70, ResultOutcome.MET);
         result(reviewed, STEADY, 12, 80, ResultOutcome.MET);
         result(reviewed, STEADY, 13, 85, ResultOutcome.MET);
-        when(memberships.isActiveVisibleMember(1L, STEADY)).thenReturn(true);
+        result(reviewed, CAREFUL, 14, 70, ResultOutcome.MET);
+        result(reviewed, CAREFUL, 15, 75, ResultOutcome.MET);
+        result(reviewed, THOROUGH, 16, 70, ResultOutcome.MET);
+        result(reviewed, THOROUGH, 17, 75, ResultOutcome.MET);
+        result(reviewed, THOROUGH, 18, 80, ResultOutcome.MET);
 
         var recent = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_30);
         var quarter = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_90);
@@ -256,8 +252,8 @@ class PracticesAcrossWorkspaceServiceTest {
         // One developer in the last 30 days is too few to count or to give a typical range.
         assertThat(recent.developersWithAStandingInWindow()).isNull();
         assertThat(recent.reviewedWork().middle()).isNull();
-        // Over 90 days, three developers besides the reader give one.
-        assertThat(quarter.developersWithAStandingInWindow()).isEqualTo(4);
+        // Over 90 days, five developers besides the reader give one, and six with a standing show as a count.
+        assertThat(quarter.developersWithAStandingInWindow()).hasToString("6");
         assertThat(quarter.reviewedWork().middle()).isNotNull();
         assertThat(quarter.yourPractices()).isEqualTo(2);
         assertThat(quarter.practicesGoingWell().yours()).isEqualTo((int)
@@ -269,21 +265,62 @@ class PracticesAcrossWorkspaceServiceTest {
     @Test
     void shouldNotCountADeveloperWhoseOnlyObservationsWereSealedInFeedbackModeOff() {
         result(reviewed, READER, 1, 5, ResultOutcome.MET);
-        // Two more counted developers keep the count at 3 or more, which the page shows (ADR 0112).
+        // Four more counted developers keep the count at 5 or more, which the page shows.
         result(reviewed, QUIET, 2, 5, ResultOutcome.MET);
         result(reviewed, STEADY, 3, 5, ResultOutcome.MET);
-        when(memberships.isActiveVisibleMember(1L, STEADY)).thenReturn(true);
+        result(reviewed, CAREFUL, 4, 5, ResultOutcome.MET);
+        result(reviewed, THOROUGH, 5, 5, ResultOutcome.MET);
         result(reviewed, PROLIFIC, 10, 5, ResultOutcome.MET, FeedbackMode.OFF);
 
         var tiles = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_30);
 
-        assertThat(tiles.developersWithAStandingInWindow()).isEqualTo(3);
+        assertThat(tiles.developersWithAStandingInWindow()).hasToString("5");
         var prolific =
                 standings.getStandingSnapshots(1L, PROLIFIC, List.of(now)).getFirst();
         assertThat(Objects.requireNonNull(prolific.practices().get(reviewed.getSlug()))
                         .dto()
                         .standing())
                 .isEqualTo(PracticeStanding.NOT_OBSERVED);
+    }
+
+    @Test
+    void shouldSayStandingsRestOnEarlierReviewsOnlyWhenFiveDevelopersHaveThem() {
+        List<Long> earlier = List.of(READER, QUIET, PROLIFIC, STEADY);
+        for (int index = 0; index < earlier.size(); index++) {
+            result(reviewed, earlier.get(index), 20 + index, 5, ResultOutcome.MET, null, true);
+        }
+
+        // Four developers on earlier reviews: saying so would describe a group small enough to name.
+        assertThat(service.read(context).includesEarlierReviews()).isFalse();
+
+        result(reviewed, CAREFUL, 30, 5, ResultOutcome.MET, null, true);
+
+        assertThat(service.read(context).includesEarlierReviews()).isTrue();
+        assertThat(service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_30)
+                        .includesEarlierReviews())
+                .isTrue();
+    }
+
+    /** Which groups the page shows is a display choice: it changes the rows, never who is counted. */
+    @Test
+    void shouldCountADeveloperWhoseOnlyVerdictSitsInAGroupThePageDoesNotShow() {
+        PracticeGroup hidden = group("hidden-group", 2);
+        Practice hiddenPractice = practice(5, "hidden-practice", hidden, 0, ReviewedByKind.HEPHAESTUS);
+        when(practices.findByWorkspaceId(1L)).thenReturn(List.of(reviewed, off, nobody, unreviewed, hiddenPractice));
+        List<Long> shown = List.of(READER, PROLIFIC, QUIET, STEADY, CAREFUL);
+        for (int index = 0; index < shown.size(); index++) {
+            result(reviewed, shown.get(index), 40 + index, 5, ResultOutcome.MET);
+        }
+        result(hiddenPractice, THOROUGH, 50, 5, ResultOutcome.MET);
+
+        var overview = service.read(context);
+        var tiles = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_30);
+
+        assertThat(overview.groups())
+                .extracting(WorkspaceGroupSplitDTO::groupSlug)
+                .doesNotContain("hidden-group");
+        assertThat(overview.groups().getFirst().split().developers()).hasToString("6");
+        assertThat(tiles.developersWithAStandingInWindow()).hasToString("6");
     }
 
     private static Set<UUID> ids(Collection<ResultFacts> rows) {
@@ -301,6 +338,17 @@ class PracticesAcrossWorkspaceServiceTest {
             int daysAgo,
             ResultOutcome outcome,
             @Nullable FeedbackMode sealedFeedbackMode) {
+        result(practice, developer, item, daysAgo, outcome, sealedFeedbackMode, false);
+    }
+
+    private void result(
+            Practice practice,
+            long developer,
+            long item,
+            int daysAgo,
+            ResultOutcome outcome,
+            @Nullable FeedbackMode sealedFeedbackMode,
+            boolean earlierReview) {
         var base = ReviewTestData.view(
                 item,
                 UUID.randomUUID(),
@@ -320,6 +368,7 @@ class PracticesAcrossWorkspaceServiceTest {
                 .outcome(recorded.outcome())
                 .severity(recorded.severity())
                 .recordedAt(recorded.recordedAt())
+                .evidenceVersion(earlierReview ? Result.MIGRATED_EVIDENCE_VERSION : Result.CAPTURED_EVIDENCE_VERSION)
                 .build();
         data.add(new ResultView(
                 row.facts(),

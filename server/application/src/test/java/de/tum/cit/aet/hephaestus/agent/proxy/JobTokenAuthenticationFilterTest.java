@@ -228,7 +228,19 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"8.8.8.8", "deadbeef", "localhost", "2001:db8::1", "fec0::1"})
+    @ValueSource(
+            strings = {
+                "8.8.8.8",
+                "deadbeef",
+                "localhost",
+                "2001:db8::1",
+                "fec0::1",
+                // The first bytes of a private range of the other family.
+                "a00::1",
+                "c0a8::1",
+                "253.0.0.1",
+                "254.128.0.1"
+            })
     void rejectsNonprivateLiteralsAndHostnamesBeforeCredentialVerification(String address) throws Exception {
         var request = request("/internal/llm/admit-results", "Bearer valid-token");
         request.setRemoteAddr(address);

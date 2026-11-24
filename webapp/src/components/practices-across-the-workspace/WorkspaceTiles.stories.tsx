@@ -43,13 +43,13 @@ export const AllTime: Story = {
 			canvas.getByRole("img", { name: "Your value: 64. Typical range here: 41 to 80." }),
 		).toBeVisible();
 		await expect(canvas.getByText("so far")).toBeVisible();
-		await expect(
-			canvas.getByRole("img", { name: "Your value: 3. Typical range here: 1 to 4." }),
-		).toBeVisible();
+		// Open feedback has your figure only: whether another person's feedback is open follows settings an
+		// admin can change for one person, so the server sends no range for it.
+		await expect(canvas.getByRole("img", { name: "Your value: 3." })).toBeVisible();
 	},
 };
 
-/** One developer counted: fewer than 3, so no tile has a typical range. */
+/** One developer counted: fewer than 5, so no tile has a typical range. */
 export const OneDeveloper: Story = {
 	args: { tiles: ONE_DEVELOPER_TILES },
 	play: async ({ canvas }) => {
@@ -61,7 +61,8 @@ export const OneDeveloper: Story = {
 export const NobodyYet: Story = {
 	args: { tiles: NOBODY_TILES },
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByText(NO_TYPICAL_RANGE)).toHaveLength(3);
+		// The three windowed tiles, and open feedback, which never has a range.
+		await expect(canvas.getAllByText(NO_TYPICAL_RANGE)).toHaveLength(4);
 		await expect(canvas.getAllByRole("img", { name: "Your value: 0." })).toHaveLength(3);
 	},
 };

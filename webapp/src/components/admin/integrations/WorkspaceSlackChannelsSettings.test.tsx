@@ -21,7 +21,6 @@ const pending: SlackMonitoredChannel = {
 	slackChannelId: "C01PENDING01",
 	channelName: "team-intro",
 	consentState: "PENDING",
-	optedOutMemberCount: 0,
 };
 
 const active: SlackMonitoredChannel = {
@@ -30,7 +29,6 @@ const active: SlackMonitoredChannel = {
 	slackChannelId: "C02ACTIVE002",
 	channelName: "team-standup",
 	consentState: "ACTIVE",
-	optedOutMemberCount: 2,
 	consentAnnouncedAt: new Date("2026-02-01T00:00:00Z"),
 };
 
@@ -40,7 +38,6 @@ const revoked: SlackMonitoredChannel = {
 	slackChannelId: "C03REVOKED03",
 	channelName: "team-legacy",
 	consentState: "REVOKED",
-	optedOutMemberCount: 0,
 };
 
 const activating: SlackMonitoredChannel = {
@@ -49,7 +46,6 @@ const activating: SlackMonitoredChannel = {
 	slackChannelId: "C05ACTIVAT05",
 	channelName: "team-announcements",
 	consentState: "ACTIVATING",
-	optedOutMemberCount: 0,
 };
 
 const failed: SlackMonitoredChannel = {
@@ -58,7 +54,6 @@ const failed: SlackMonitoredChannel = {
 	slackChannelId: "C06FAILED006",
 	channelName: "team-alerts",
 	consentState: "FAILED",
-	optedOutMemberCount: 0,
 };
 
 function setup(overrides: Partial<WorkspaceSlackChannelsSettingsProps> = {}) {

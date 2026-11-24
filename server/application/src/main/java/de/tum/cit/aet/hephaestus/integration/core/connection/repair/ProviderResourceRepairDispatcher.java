@@ -135,6 +135,8 @@ public class ProviderResourceRepairDispatcher {
     }
 
     private @Nullable Attempt claim(UUID id) {
+        // A removal writes to the provider across transactions, so it does not start during a migration.
+        if (!repairs.maintenanceBarrierLifted()) return null;
         ProviderResourceRepair repair = repairs.findById(id).orElse(null);
         if (repair == null) return null;
         coordination.coordinate(List.of(repair.resource()));

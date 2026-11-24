@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.web;
 
+import de.tum.cit.aet.hephaestus.core.PeopleCount;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
@@ -20,6 +21,7 @@ public record OffsetPageDTO<T>(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "The most rows a page holds")
         int size,
 
+        @PeopleCount(exactBecause = "Rows of a list the reader can page through in full, each one named")
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Rows in the whole list")
         long totalElements,
 

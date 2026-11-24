@@ -1006,7 +1006,7 @@ The [image selection rules](./ci-cd.mdx#the-preview-label) apply to drafts too.
 `ci:full` selects the queue tier on a draft too.
 `CI Status Gate` still reports, so required checks resolve on a draft.
 Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run,
-with the images that such a run builds ([The `ci:images` label](./ci-cd.mdx#the-preview-label)). That run is never skipped as a duplicate of the draft's run.
+with the images that such a run builds ([The `ci:images` label](./ci-cd.mdx#the-preview-label)).
 
 A re-run replays the event of its run, including the draft state.
 Re-run the ready run to use its ready state.
@@ -1105,9 +1105,14 @@ Any other difference, or a failure to read the evidence, runs the whole fast tie
 
 A rename-only head runs `Security`, which holds the order guard, `Server package` and `Generated API`.
 `Generated API` replays the migration chain in its new order and checks the ERD.
-Database tests and drills wait for the merge group. Every other leg skips, as it does for a duplicate.
 `CI Status Gate` fails a rename-only head unless those three legs passed.
-The merge group still runs every selected check.
+
+Database tests and drills wait for the merge group, which still runs every selected check.
+The rest of the fast tier is reduced, not empty.
+Quality, the server tests, the browser suites and the cluster legs skip.
+`Release notes` runs on every pull request.
+`Workflow lint` still runs its Zizmor step when the head changes CI configuration.
+A ready head that matches the server image, Kubernetes or all-images paths can still build the server image after `Server package`.
 
 ### Reproduce a queue-tier failure
 
@@ -1155,7 +1160,6 @@ An unreadable pull request also runs the full tier.
 
 When the layer below merges and the layer is retargeted to the default branch, `CI / Retarget` runs the head's CI/CD run again.
 The new attempt reads the new base and runs the ordinary pull-request tier.
-A re-run is never skipped as a duplicate, because the earlier run of the same tree may have run only the light tier.
 A push to the retargeted pull request runs the ordinary pull-request tier as well.
 
 A push can follow the retarget within seconds, for example when a stack tool rebases the layer.

@@ -1,5 +1,4 @@
 import { cn } from "cn";
-import { useSpinDelay } from "spin-delay";
 
 import type { PracticeGuidanceDto, PracticeStanding } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
@@ -7,6 +6,7 @@ import { LabelledBlock, LevelLead } from "@/components/practice-profile/practice
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { hasText } from "@/lib/text";
+import { useSpinDelay } from "@/lib/use-spin-delay";
 
 import { PracticeFigure } from "./PracticeFigure";
 import { PRACTICE_VISUAL_WIDTH } from "./PracticeVisual";

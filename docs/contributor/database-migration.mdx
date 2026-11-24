@@ -122,6 +122,24 @@ The draft is one `<databaseChangeLog>` with only change sets.
 Promotion writes these into this branch's changelog with the usual ids and author.
 It replays the whole chain on a disposable database and refreshes the ERD, as above.
 
+### Definer functions
+
+A `SECURITY DEFINER` function runs with the rights of its owner.
+A function that `hephaestus_owner` owns can use every table that the owner can use, also if `hephaestus_app` cannot.
+The owner can bypass the row policies on its tables, except on a table that forces row-level security.
+The chart's default privileges give `hephaestus_app` EXECUTE on each routine that `hephaestus_owner` creates in `public`.
+When a migration adds a definer function, the server can call it immediately.
+
+Add a definer function only for a narrow job that must cross such a boundary.
+To add one:
+
+1. Set `SET search_path = pg_catalog, pg_temp` on the function.
+2. Revoke EXECUTE from `PUBLIC`, as `maintain_auth_event_partitions` does.
+3. Add its schema-qualified signature to `DefinerFunctionAllowlistDatabaseTest`.
+
+That test fails if the application role can call a definer function that the list does not name.
+It also fails if a listed function has another owner or another search path, or if `PUBLIC` can call it.
+
 ### Trigger timing
 
 A trigger that only validates an UPDATE is an AFTER UPDATE row trigger.

@@ -1,4 +1,3 @@
-import deepEqual from "fast-deep-equal";
 import { ChevronRight, RotateCcw } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
 import { UnsavedPracticeDraft } from "./unsaved-practice-draft";
@@ -12,10 +11,7 @@ import type {
 import { CodeEditor } from "@/components/common/CodeEditor";
 import { DocLink } from "@/components/common/DocLink";
 import { FormErrorSummary } from "@/components/common/FormErrorSummary";
-import {
-	ABOUT_ROLE_LABELS,
-	type AboutRole,
-} from "@/components/practice-vocabulary/about-role-labels";
+import { aboutLabel, type AboutRole } from "@/components/practice-vocabulary/about-role-labels";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
@@ -43,6 +39,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { equalDraftValues } from "@/lib/equal-draft-values";
 import { hasText } from "@/lib/text";
 
 import { generateSlug, itemKindHint } from "./constants";
@@ -172,7 +169,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		kindDraftsRef.current = new Map([[draft.kind, kindDraftOf(draft)]]);
 	}
 	const kindDrafts = kindDraftsRef.current;
-	const isDirty = !deepEqual(draft, initialDraft(definitionOptions, initialData));
+	const isDirty = !equalDraftValues(draft, initialDraft(definitionOptions, initialData));
 	const unsavedChanges = useUnsavedChanges({
 		isDirty,
 		disabled: formDisabled,
@@ -671,8 +668,8 @@ function AboutField({ itemType, about, onChange, error }: AboutFieldProps) {
 		...roles.map((role) => ({
 			value: role,
 			label: itemType.aboutRoles.includes(role)
-				? ABOUT_ROLE_LABELS[role]
-				: `${ABOUT_ROLE_LABELS[role]} (not available for this kind of work)`,
+				? aboutLabel(role)
+				: `${aboutLabel(role)} (not available for this kind of work)`,
 		})),
 	];
 	return (

@@ -401,7 +401,7 @@ export default defineConfig({
 				"node --test scripts/kubernetes-chart.test.ts scripts/kubernetes-chart-render*.test.ts",
 			),
 			"test:tooling": run(
-				`node --test ${nodeTestFiles} scripts/*.test.ts scripts/api-generator/*.test.ts docs/src/lib/*.test.ts server/application/src/test/resources/integration/scm/sarif/*.test.ts`,
+				`node --import ./scripts/fixtures/tooling-docker-tripwire.ts --test ${nodeTestFiles} scripts/*.test.ts scripts/api-generator/*.test.ts docs/src/lib/*.test.ts server/application/src/test/resources/integration/scm/sarif/*.test.ts`,
 			),
 
 			// The Prometheus alert rules that operators load: promtool's checks and unit tests, in Docker.

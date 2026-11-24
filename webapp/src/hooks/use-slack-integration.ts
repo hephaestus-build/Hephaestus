@@ -79,7 +79,8 @@ export function useSlackIntegration(workspaceSlug: string) {
 		retryConnection: retryLoad,
 		resourceNoun: "channel",
 		resourceNounPlural: "channels",
-		expectedClassKeys: ["messages"],
+		// Slack sends no message counts: in a quiet channel, a falling count would tell who opted out.
+		expectedClassKeys: [],
 	});
 
 	// Slack answers this from the token itself. A failed read claims nothing, also over an earlier answer.

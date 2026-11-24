@@ -1,9 +1,9 @@
 import type { ErrorComponentProps } from "@tanstack/react-router";
-import { useSpinDelay } from "spin-delay";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSpinDelay } from "@/lib/use-spin-delay";
 
 /*
  * The code editor's states while Monaco is not ready. They live apart from `CodeEditor`, so their

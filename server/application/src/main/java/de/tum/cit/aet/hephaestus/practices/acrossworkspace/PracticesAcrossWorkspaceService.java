@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
+import de.tum.cit.aet.hephaestus.core.SmallCounts;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
@@ -19,7 +19,6 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.StandingScale;
 import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeGroupStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.result.trend.PracticeTrendService;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
@@ -54,9 +53,7 @@ public class PracticesAcrossWorkspaceService {
     private final PracticeStandingService standings;
     private final PracticeGroupStandingService groupStandings;
     private final PracticeGroupService practiceGroups;
-    private final PracticeReviewCoverageService scope;
     private final ResultRepository results;
-    private final AccountMembershipQuery memberships;
     private final PersonProcessingSuppression suppression;
     private final CurrentDeveloperLookup currentDeveloper;
     private final PracticePageFeedbackService feedback;
@@ -94,7 +91,7 @@ public class PracticesAcrossWorkspaceService {
                         Objects.requireNonNull(practice.getCurrentVersion().getName()),
                         current.readerCounted() ? standingIn(yours, practice.getSlug()) : null,
                         current.readerCounted() ? basisIn(yours, practice.getSlug()) : null,
-                        SmallCounts.shown(WorkspaceSplits.split(current.withAStanding().stream()
+                        WorkspaceSplits.shown(WorkspaceSplits.split(current.withAStanding().stream()
                                 .map(developer -> standingIn(current.snapshotOf(developer), practice.getSlug()))
                                 .toList()))));
             }
@@ -106,24 +103,20 @@ public class PracticesAcrossWorkspaceService {
                     group.getColor(),
                     current.readerCounted() && yourGroup != null ? yourGroup.standing() : null,
                     current.readerCounted() && yourGroup != null ? yourGroup.basis() : null,
-                    SmallCounts.shown(WorkspaceSplits.split(current.withAStanding().stream()
+                    WorkspaceSplits.shown(WorkspaceSplits.split(current.withAStanding().stream()
                             .map(developer -> groupStanding(current.groupStandingOf(developer, group.getSlug())))
                             .toList())),
                     practiceSplits));
         }
 
-        // Open now for everyone, whatever window the tiles read, so the tile never sets a moment beside a span.
-        Map<Long, Integer> openFeedback = feedback.countOpen(workspaceId, members.read());
+        // The reader's own open feedback, open now whatever window the tiles read. No range beside it: whether a card
+        // is open follows the live delivery gate, which a staff change to one person's membership or scope moves.
         @Nullable Long reader = members.reader();
+        int yourOpenFeedback = reader == null
+                ? 0
+                : feedback.countOpen(workspaceId, Set.of(reader)).getOrDefault(reader, 0);
         return new PracticesAcrossWorkspaceDTO(
-                new WorkspaceTileDTO(
-                        reader == null ? 0 : openFeedback.getOrDefault(reader, 0),
-                        WorkspaceSplits.middleHalf(members.counted().stream()
-                                .filter(developer -> !developer.equals(reader))
-                                .map(developer -> openFeedback.getOrDefault(developer, 0))
-                                .toList())),
-                current.includesEarlierReviews(),
-                rows);
+                new WorkspaceTileDTO(yourOpenFeedback, null), current.includesEarlierReviews(), rows);
     }
 
     /** The reader's figures over the window beside the middle half of the developers with a standing in it. */
@@ -150,7 +143,7 @@ public class PracticesAcrossWorkspaceService {
                 .toList();
         return new PracticesAcrossWorkspaceTilesDTO(
                 window,
-                SmallCounts.shown(inWindow.withAStanding().size()),
+                SmallCounts.count(inWindow.withAStanding().size()),
                 yours.practices().size(),
                 inWindow.includesEarlierReviews(),
                 tile(yours, others, PracticesAcrossWorkspaceService::reviewedWork),
@@ -159,8 +152,7 @@ public class PracticesAcrossWorkspaceService {
     }
 
     /**
-     * The developers the page counts, and the reader, who need not be one of them. Hidden members, members who left,
-     * accounts that are not active and suppressed people are never counted.
+     * The developers the page counts, and the reader, who need not be one of them.
      *
      * @param counted every developer the page counts, each once
      */
@@ -174,16 +166,18 @@ public class PracticesAcrossWorkspaceService {
         }
     }
 
+    /**
+     * Everyone whose work was reviewed in the period. Hiding a member, the review scope, membership and suspension are
+     * staff choices: one that changed who is counted would let staff compare two reads and learn where a named person
+     * stands. Only an erasure or a processing suppression, which the person asks for, removes someone. Bots are never
+     * reviewed, so they are never counted.
+     */
     private Members members(Long workspaceId, Instant since) {
-        Set<Long> counted = new LinkedHashSet<>(scope.eligibleAccountIds(workspaceId));
-        // Review eligibility leaves out members who chose No AI. Their standing from earlier reviews still counts
-        // (ADR 0051), so a member with results in the read joins on the membership terms alone.
-        List<Long> recorded = results.developersSince(workspaceId, since).stream()
-                .filter(developer ->
-                        !counted.contains(developer) && memberships.isActiveVisibleMember(workspaceId, developer))
-                .toList();
-        Set<Long> suppressed = recorded.isEmpty() ? Set.of() : suppression.suppressedAccountIds(recorded);
-        recorded.stream().filter(developer -> !suppressed.contains(developer)).forEach(counted::add);
+        List<Long> reviewed = results.developersSince(workspaceId, since);
+        Set<Long> suppressed = reviewed.isEmpty() ? Set.of() : suppression.suppressedAccountIds(reviewed);
+        Set<Long> counted = reviewed.stream()
+                .filter(developer -> !suppressed.contains(developer))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         return new Members(counted, currentDeveloper.currentDeveloperId().orElse(null));
     }
 
@@ -211,12 +205,17 @@ public class PracticesAcrossWorkspaceService {
                     : groupStandings.getOrDefault(developer, Map.of()).get(groupSlug);
         }
 
+        /**
+         * Whether the page says that some standings rest on earlier reviews. It is a fact about the developers who
+         * have that basis, so it needs as many of them as a count does: one known developer would be identified.
+         */
         boolean includesEarlierReviews() {
-            return withAStanding.stream()
-                    .anyMatch(developer -> groupStandings.getOrDefault(developer, Map.of()).values().stream()
-                            .map(PracticeGroupStandingDTO::basis)
+            return SmallCounts.enough(withAStanding.stream()
+                    .filter(developer -> snapshotOf(developer).practices().values().stream()
+                            .map(practice -> practice.dto().basis())
                             .filter(Objects::nonNull)
-                            .anyMatch(StandingBasis::isEarlierReviews));
+                            .anyMatch(StandingBasis::isEarlierReviews))
+                    .count());
         }
     }
 
@@ -226,10 +225,13 @@ public class PracticesAcrossWorkspaceService {
                 developer,
                 groupStandings.summarize(groups, snapshot).stream()
                         .collect(Collectors.toMap(PracticeGroupStandingDTO::groupSlug, group -> group))));
-        // With a standing: a verdict in a group the page shows, the same verdicts the group standings are read off.
+        // With a standing: a verdict in any practice review is admitted for. Which groups the page shows, and which
+        // group a practice sits in, are display choices of staff, so they change the rows and never who is counted.
         List<Long> withAStanding = members.counted().stream()
-                .filter(developer -> byDeveloper.getOrDefault(developer, Map.of()).values().stream()
-                        .anyMatch(group -> StandingScale.isVerdict(group.standing())))
+                .filter(developer ->
+                        snapshots.getOrDefault(developer, StandingSnapshot.EMPTY).practices().values().stream()
+                                .anyMatch(practice ->
+                                        StandingScale.isVerdict(practice.dto().standing())))
                 .toList();
         return new Cohort(
                 snapshots,

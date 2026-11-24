@@ -11,7 +11,6 @@ const active: SlackMonitoredChannel = {
 	slackChannelId: "C02ACTIVE002",
 	channelName: "team-standup",
 	consentState: "ACTIVE",
-	optedOutMemberCount: 0,
 	consentAnnouncedAt: new Date("2026-02-01T00:00:00Z"),
 	createdAt: new Date("2026-01-01T00:00:00Z"),
 };

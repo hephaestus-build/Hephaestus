@@ -9,8 +9,9 @@
 	// rule someone will reach for is wrong here — the entry pins that decision across a category
 	// change in an oxlint release.
 
-	// Only the file-naming rule is enabled from the house plugin here; the rest read a Storybook
-	// story, a Testing Library query, a query key or the clock, and nothing out here renders.
+	// Only the file-naming rule and the Ichnaea statistics rule are enabled from the house plugin
+	// here; the rest read a Storybook story, a Testing Library query, a query key or the clock, and
+	// nothing out here renders.
 	"jsPlugins": ["./webapp/tools/oxlint/index.ts"],
 
 	"plugins": ["typescript", "unicorn", "oxc", "import", "promise", "jsdoc"],
@@ -219,6 +220,10 @@
 		"typescript/no-require-imports": "error",
 		"typescript/no-var-requires": "error",
 		"typescript/no-namespace": "error",
+		// Ichnaea's report is the one place that states the eval's numbers. Not
+		// `no-restricted-imports`: the override for test files below sets that rule again and would
+		// drop this entry there, and it does not read `require()`.
+		"hephaestus/no-ichnaea-statistics": "error",
 
 		// -- Types -----------------------------------------------------------------------------------
 		// An object shape is an `interface`; a `type` alias is for a union or a computed type.

@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.Resource;
 import de.tum.cit.aet.hephaestus.testconfig.MockSecurityContextUtils;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import de.tum.cit.aet.hephaestus.testconfig.SecurityRetentionDeletionProof;
 import de.tum.cit.aet.hephaestus.testconfig.WithMockUser;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -40,6 +41,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
+import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -86,6 +88,9 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private DataSource dataSource;
 
     @Autowired
     private ProviderResourceRepairAdminService admin;
@@ -372,6 +377,39 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
         assertThat(projected.content())
                 .singleElement()
                 .satisfies(row -> assertThat(row.replacementInUse()).isTrue());
+    }
+
+    @Test
+    void shouldStartNoRemovalWhileAMigrationRunsAndLetAStartedOneHandOver() throws Exception {
+        UUID waiting = pending();
+        var before = rows.findById(waiting).orElseThrow();
+        UUID started = pending();
+        jdbc.update("UPDATE provider_resource_repair SET state = 'CHECKING' WHERE id = ?", started);
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            dispatcher.dispatch(waiting);
+            var unchanged = rows.findById(waiting).orElseThrow();
+            assertThat(unchanged.getState()).isEqualTo(before.getState());
+            assertThat(unchanged.getAttemptEpoch()).isEqualTo(before.getAttemptEpoch());
+            assertThat(provider.removals).as("no removal reaches the provider").isEmpty();
+            assertThatThrownBy(() ->
+                            jdbc.update("UPDATE provider_resource_repair SET state = 'CHECKING' WHERE id = ?", waiting))
+                    .hasMessageContaining("takes no new lease");
+            assertThatThrownBy(() -> jdbc.update(
+                            "UPDATE provider_resource_repair SET state = 'DISPATCHING' WHERE id = ?", waiting))
+                    .as("a dispatch without an admitted attempt")
+                    .hasMessageContaining("takes no new lease");
+            assertThatThrownBy(() -> jdbc.update(
+                            "UPDATE provider_resource_repair SET state = 'REGISTERING' WHERE id = ?", waiting))
+                    .as("a new registration")
+                    .hasMessageContaining("takes no new lease");
+            assertThat(jdbc.update("UPDATE provider_resource_repair SET state = 'DISPATCHING' WHERE id = ?", started))
+                    .as("a removal that started before the migration hands over")
+                    .isOne();
+        }
+
+        dispatcher.dispatch(waiting);
+        assertThat(rows.findById(waiting).orElseThrow().getAttemptEpoch()).isGreaterThan(before.getAttemptEpoch());
     }
 
     @Test

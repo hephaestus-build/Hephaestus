@@ -1,4 +1,3 @@
-import { loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -14,12 +13,13 @@ function EditorProof() {
 	const [name, setName] = useState("Original draft");
 	const [open, setOpen] = useState(false);
 	const [readOnly, setReadOnly] = useState(false);
+	const [language, setLanguage] = useState("typescript");
 	const [diagnostics, setDiagnostics] = useState<number>();
 	const [models, setModels] = useState<number>();
+	const [editors, setEditors] = useState<number>();
 	const [otherPresent, setOtherPresent] = useState(false);
 	const [markers, setMarkers] = useState<number>();
 	async function checkWorker() {
-		await loader.init();
 		const model = monaco.editor
 			.getModels()
 			.find(({ uri }) => uri.authority === "hephaestus-editor");
@@ -59,6 +59,13 @@ function EditorProof() {
 			>
 				Fail next editor construction
 			</button>
+			<label>
+				Language
+				<select value={language} onChange={(event) => setLanguage(event.target.value)}>
+					<option value="typescript">TypeScript</option>
+					<option value="javascript">JavaScript</option>
+				</select>
+			</label>
 			<button type="button" onClick={() => setOpen(true)}>
 				Open editor
 			</button>
@@ -70,6 +77,7 @@ function EditorProof() {
 					value={script}
 					onChange={setScript}
 					readOnly={readOnly}
+					language={language}
 					ariaLabel="Practice script"
 					className="h-100 w-175"
 				/>
@@ -120,12 +128,14 @@ function EditorProof() {
 				type="button"
 				onClick={() => {
 					setModels(monaco.editor.getModels().length);
+					setEditors(monaco.editor.getEditors().length);
 					setOtherPresent(monaco.editor.getModel(OTHER_MODEL) !== null);
 				}}
 			>
 				Count models
 			</button>
 			<output aria-label="Model count">{models}</output>
+			<output aria-label="Editor count">{editors}</output>
 			<output aria-label="Other model">{otherPresent ? "present" : "absent"}</output>
 		</main>
 	);

@@ -1,9 +1,9 @@
 import { cn } from "cn";
 import type { ReactNode } from "react";
-import { useSpinDelay } from "spin-delay";
 
 import { Card, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSpinDelay } from "@/lib/use-spin-delay";
 
 /**
  * The stand-ins show only after a second. The provider options usually arrive sooner, and a

@@ -203,7 +203,6 @@ void describe("ci-contract: server", () => {
 			for (const name of ["server-database", "postgres-drill"]) {
 				assert.equal(
 					jobRuns(build, name, event, {}, false, {
-						should_skip: "false",
 						contracts_changed: contracts,
 						queue_tier: output("queue-tier"),
 						migrations_changed: output("migrations-changed"),
@@ -215,7 +214,6 @@ void describe("ci-contract: server", () => {
 			if (only) {
 				assert.equal(
 					jobRuns(build, "server-api", event, {}, false, {
-						should_skip: "false",
 						contracts_changed: contracts,
 					}),
 					true,
@@ -278,7 +276,7 @@ void describe("ci-contract: server", () => {
 			assert.equal(jobRuns(caller, "Build", "pull_request", results), packaged);
 			assert.equal(jobRuns(caller, "Test", "pull_request", results), packaged);
 			const inputs = Object.fromEntries(
-				["should_skip", "contracts_changed", "queue_tier", "migrations_changed"].map((name) => [
+				["contracts_changed", "queue_tier", "migrations_changed"].map((name) => [
 					name,
 					expandExpressions(caller.getIn(["jobs", "Build", "with", name]), {
 						github: { event_name: "pull_request" },

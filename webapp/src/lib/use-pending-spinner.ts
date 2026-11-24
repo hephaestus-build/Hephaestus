@@ -1,4 +1,4 @@
-import { useSpinDelay } from "spin-delay";
+import { useSpinDelay } from "./use-spin-delay";
 
 export const PENDING_SPINNER_DELAY_MS = 1000;
 export const PENDING_SPINNER_MIN_MS = 500;

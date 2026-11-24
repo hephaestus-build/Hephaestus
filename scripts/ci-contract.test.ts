@@ -391,41 +391,6 @@ void describe("ci-contract: tooling", () => {
 		assert.ok(source.includes("path: process.env.PREVIEW_COMMENT_PATH"));
 	});
 
-	void test("runs duplicate checks only for ordinary pull requests", async () => {
-		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-		const steps = workflow.getIn(["jobs", "detect-changes", "steps"]);
-		assert.ok(isSeq(steps));
-		const duplicate = steps.items.find((item) => isMap(item) && item.get("id") === "skip_check");
-		assert.ok(isMap(duplicate));
-		const candidateIndex = steps.items.findIndex(
-			(item) => isMap(item) && item.get("id") === "release_candidate",
-		);
-		assert.ok(candidateIndex !== -1 && candidateIndex < steps.items.indexOf(duplicate));
-		const condition = asString(duplicate.get("if"), "duplicate check event condition");
-		const parsed = new Parser(new Lexer(condition).lex().tokens, ["github", "steps"], []).parse();
-		for (const [event, candidate, expected] of [
-			["pull_request", "false", true],
-			["pull_request", "true", false],
-			["push", "false", false],
-			["workflow_dispatch", "false", false],
-			["merge_group", "false", false],
-		] as const) {
-			const context: unknown = JSON.parse(
-				JSON.stringify({
-					github: { event_name: event },
-					steps: { release_candidate: { outputs: { "release-candidate": candidate } } },
-				}),
-				data.reviver,
-			);
-			assert.ok(context instanceof data.Dictionary);
-			assert.equal(
-				new Evaluator(parsed, context).evaluate().coerceString(),
-				String(expected),
-				`${event}, release candidate ${candidate}`,
-			);
-		}
-	});
-
 	void test("separates pre-merge validation from post-merge artifact production", async () => {
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		for (const event of ["workflow_dispatch", "push", "pull_request", "merge_group"]) {

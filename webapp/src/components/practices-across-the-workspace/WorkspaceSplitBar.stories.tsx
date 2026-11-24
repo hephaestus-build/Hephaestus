@@ -53,7 +53,7 @@ export const Default: Story = {
 export const Dark: Story = { globals: { theme: "dark" } };
 
 /**
- * A part would hold 1 or 2, or everyone sits in one part: the server sends the total only, and the
+ * A part would hold 1 to 4, or everyone sits in one part: the server sends the total only, and the
  * bar is one dotted track that says why without saying which.
  */
 export const SpreadHidden: Story = {
@@ -71,13 +71,13 @@ export const SpreadHidden: Story = {
 	},
 };
 
-/** Fewer than 3 developers in total: the server sends no cell and no total, so the track stays empty. */
+/** Fewer than 5 developers in total: the server sends no cell and no total, so the track stays empty. */
 export const TooFewToSplit: Story = {
 	args: { split: totalOnly(null), yourStanding: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("img")).toBeNull();
 		await expect(
-			canvas.getByText("Fewer than 3 developers have a standing here, so the split stays hidden."),
+			canvas.getByText("Fewer than 5 developers have a standing here, so the split stays hidden."),
 		).toBeVisible();
 	},
 };

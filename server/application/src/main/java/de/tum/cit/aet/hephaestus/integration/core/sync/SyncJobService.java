@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.sync;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -25,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.SmartLifecycle;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -67,6 +69,15 @@ public class SyncJobService implements SmartLifecycle {
     private final Map<Long, SyncJobHandle> activeHandles = new ConcurrentHashMap<>();
 
     private final AtomicBoolean running = new AtomicBoolean(true);
+
+    /**
+     * Outcomes that the database refused to record, such as while a migration held the table past the lock timeout.
+     * The heartbeat records them again, so a PENDING job that never ran frees its connection's slot within a minute,
+     * not at the abandonment threshold.
+     */
+    private final Map<Long, Unsettled> unsettled = new ConcurrentHashMap<>();
+
+    private record Unsettled(SyncJobStatus status, @Nullable String summary, SyncJobHandle handle) {}
 
     /**
      * Source of "now" handed to every {@link SyncJobHandle} for its write-throttle window. Held here
@@ -114,11 +125,16 @@ public class SyncJobService implements SmartLifecycle {
     /** Creates a PENDING job after reaping a stale predecessor and enforcing the active-job guard. */
     public Started beginJob(SyncJobRequest request) {
         long connectionId = request.connectionId();
+        // Before the reap reads the job table, which a migration may hold: the refusal does not wait for it.
+        if (!Boolean.TRUE.equals(transactionTemplate.execute(status -> syncJobRepository.maintenanceBarrierLifted())))
+            throw new MaintenanceInProgressException();
         reapAbandonedForConnection(connectionId);
 
         SyncJob job;
         try {
             job = transactionTemplate.execute(status -> {
+                // The PENDING row reserves the connection's one active slot, so none is reserved during a migration.
+                if (!syncJobRepository.maintenanceBarrierLifted()) throw new MaintenanceInProgressException();
                 var workspace = workspaceQueries
                         .findStateForUpdate(request.workspaceId())
                         .orElseThrow(
@@ -194,7 +210,20 @@ public class SyncJobService implements SmartLifecycle {
         SyncJobHandle handle = started.handle();
         boolean registered = false;
         try {
-            MarkRunningResult start = markRunning(jobId);
+            MarkRunningResult start;
+            try {
+                start = markRunning(jobId);
+            } catch (DataAccessException e) {
+                // The claim could not be written, as while a migration holds the table: nothing was attempted.
+                log.warn("Sync job {} could not start: {}", jobId, e.getClass().getName());
+                settle(jobId, SyncJobStatus.CANCELLED, DATABASE_BUSY, handle);
+                return;
+            }
+            if (start.barred()) {
+                // A database migration ran, so nothing was attempted: the honest record is CANCELLED, as at shutdown.
+                settle(jobId, SyncJobStatus.CANCELLED, MIGRATION_RAN, handle);
+                return;
+            }
             if (!start.started()) {
                 return;
             }
@@ -207,25 +236,32 @@ public class SyncJobService implements SmartLifecycle {
                 // Shutdown began before the body ran. Nothing was attempted, so this runner can
                 // honestly report CANCELLED itself — no interrupt, no outcome written by a canceller.
                 handle.refreshCancellation(true);
-                completeJob(jobId, SyncJobStatus.CANCELLED, null, handle);
+                settle(jobId, SyncJobStatus.CANCELLED, null, handle);
                 return;
             }
-            body.accept(handle);
-            SyncJobStatus finalStatus = handle.cancelledReported()
-                    ? SyncJobStatus.CANCELLED
-                    : handle.warningsReported() ? SyncJobStatus.SUCCEEDED_WITH_WARNINGS : SyncJobStatus.SUCCEEDED;
-            completeJob(jobId, finalStatus, null, handle);
-        } catch (Exception e) {
-            if (handle.cancelledReported()) {
-                log.info(
-                        "Sync job {} aborted after its runner observed cancellation: {}",
-                        jobId,
-                        e.getClass().getName());
-                completeJob(jobId, SyncJobStatus.CANCELLED, null, handle);
-                return;
+            SyncJobStatus outcome;
+            @Nullable String summary = null;
+            try {
+                body.accept(handle);
+                outcome = handle.cancelledReported()
+                        ? SyncJobStatus.CANCELLED
+                        : handle.warningsReported() ? SyncJobStatus.SUCCEEDED_WITH_WARNINGS : SyncJobStatus.SUCCEEDED;
+            } catch (Exception e) {
+                if (handle.cancelledReported()) {
+                    log.info(
+                            "Sync job {} aborted after its runner observed cancellation: {}",
+                            jobId,
+                            e.getClass().getName());
+                    outcome = SyncJobStatus.CANCELLED;
+                } else {
+                    log.warn("Sync job {} failed: {}", jobId, e.getClass().getName(), e);
+                    outcome = SyncJobStatus.FAILED;
+                    summary = truncate(summarize(e));
+                }
             }
-            log.warn("Sync job {} failed: {}", jobId, e.getClass().getName(), e);
-            completeJob(jobId, SyncJobStatus.FAILED, truncate(summarize(e)), handle);
+            // The runner's outcome, kept apart from the write that records it: a refused write is retried, never
+            // turned into a failure of the sync.
+            settle(jobId, outcome, summary, handle);
         } finally {
             if (registered) {
                 activeHandles.remove(jobId);
@@ -344,6 +380,17 @@ public class SyncJobService implements SmartLifecycle {
     @Scheduled(fixedDelay = 60, initialDelay = 60, timeUnit = TimeUnit.SECONDS)
     @WorkspaceAgnostic("Refreshes only leases registered in this JVM; job ids are globally unique")
     public void refreshLeases() {
+        unsettled.forEach((jobId, outcome) -> {
+            try {
+                completeJob(jobId, outcome.status(), outcome.summary(), outcome.handle());
+                unsettled.remove(jobId);
+            } catch (DataAccessException e) {
+                log.warn(
+                        "Sync job {} outcome still not recorded: {}",
+                        jobId,
+                        e.getClass().getName());
+            }
+        });
         if (activeHandles.isEmpty()) {
             return;
         }
@@ -493,20 +540,44 @@ public class SyncJobService implements SmartLifecycle {
         return WebServerApplicationContext.GRACEFUL_SHUTDOWN_PHASE + 1;
     }
 
-    private record MarkRunningResult(boolean started, boolean cancelRequested) {}
+    /** Why a sync that a database migration kept from starting ended, for the admin who reads its history. */
+    static final String MIGRATION_RAN = "Hephaestus was updating its database, so this sync did not start.";
+
+    /** Why a sync whose claim the database refused to write ended, as while a migration held the job table. */
+    static final String DATABASE_BUSY = "Hephaestus could not start this sync because its database was busy.";
+
+    /** {@code barred}: the job is still PENDING because a database migration runs ({@link SyncJobRepository#markRunning}). */
+    private record MarkRunningResult(boolean started, boolean cancelRequested, boolean barred) {}
 
     private MarkRunningResult markRunning(long jobId) {
         MarkRunningResult result = transactionTemplate.execute(status -> {
             if (syncJobRepository.markRunning(jobId) == 0) {
-                return new MarkRunningResult(false, false);
+                boolean pending = syncJobRepository
+                        .findById(jobId)
+                        .map(job -> job.getStatus() == SyncJobStatus.PENDING)
+                        .orElse(false);
+                return new MarkRunningResult(false, false, pending);
             }
             boolean cancelRequested = syncJobRepository.findCancelFlags(List.of(jobId)).stream()
                     .findFirst()
                     .map(SyncJobRepository.CancelFlagProjection::isCancelRequested)
                     .orElse(false);
-            return new MarkRunningResult(true, cancelRequested);
+            return new MarkRunningResult(true, cancelRequested, false);
         });
-        return result == null ? new MarkRunningResult(false, false) : result;
+        return result == null ? new MarkRunningResult(false, false, false) : result;
+    }
+
+    /** {@link #completeJob}, and when the database refuses the write, a retry at the next heartbeat. */
+    private void settle(long jobId, SyncJobStatus status, @Nullable String summary, SyncJobHandle handle) {
+        try {
+            completeJob(jobId, status, summary, handle);
+        } catch (DataAccessException e) {
+            unsettled.put(jobId, new Unsettled(status, summary, handle));
+            log.warn(
+                    "Sync job {} outcome not recorded, retried at the next heartbeat: {}",
+                    jobId,
+                    e.getClass().getName());
+        }
     }
 
     /**

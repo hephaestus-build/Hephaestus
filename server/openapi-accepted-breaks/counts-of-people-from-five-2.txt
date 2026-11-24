@@ -1,0 +1,4 @@
+# NP-04 (to be filed): no view shows a count of fewer than 5 people.
+# A count of the people left out of the public page would tell an admin who hid themselves.
+# .changeset/counts-of-people-from-five.md tells API clients.
+in API GET /workspaces/{workspaceSlug}/activity/public-hidden-count api path removed without deprecation

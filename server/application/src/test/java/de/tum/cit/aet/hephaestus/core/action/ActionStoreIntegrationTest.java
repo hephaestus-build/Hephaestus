@@ -2,11 +2,16 @@ package de.tum.cit.aet.hephaestus.core.action;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
@@ -15,14 +20,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 /**
@@ -48,6 +58,20 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private DataSource dataSource;
+
+    @Autowired
+    private ApplicationContext context;
+
+    private ActionExecutor executor() {
+        return new ActionExecutor(
+                store,
+                context.getBean(ObjectMapper.class),
+                List.copyOf(context.getBeansOfType(ActionAdapter.class).values()),
+                new SimpleMeterRegistry());
+    }
 
     @Test
     void shouldKeepOneActionPerIdempotencyKey() {
@@ -83,6 +107,103 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         assertThat(claimOwn(List.of(create, edit)))
                 .extracting(ActionStore.Claim::id)
                 .containsExactly(edit);
+    }
+
+    @Test
+    void shouldTakeNoActionWhileAMigrationRunsAndTakeItOnceTheMigrationEnds() throws Exception {
+        String lane = "barrier:" + UUID.randomUUID();
+        UUID queued = actions.enqueue(request(lane, lane + ":queued", null, 3));
+        String started = "barrier-now:" + UUID.randomUUID();
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThat(store.claim(1000, LEASE, admission())).isEmpty();
+            assertThat(store.claim(queued, LEASE, admission())).isEmpty();
+            assertThatThrownBy(() -> store.start(request(started, started, null, 1), LEASE))
+                    .isInstanceOf(MaintenanceInProgressException.class);
+            assertThatThrownBy(() -> executor().runNow(request(started, started, null, 1)))
+                    .as("a caller that waits for the result hears that Hephaestus is updating")
+                    .isInstanceOf(MaintenanceInProgressException.class);
+        }
+
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_action WHERE idempotency_key = ?", Long.class, started))
+                .isZero();
+        assertThat(store.claim(queued, LEASE, admission()))
+                .map(ActionStore.Claim::id)
+                .contains(queued);
+    }
+
+    /**
+     * A migration that waits for work in flight already refuses new starts. The refusal is the barrier's own
+     * exception, never an empty answer that a caller would read as an idempotency conflict.
+     */
+    @Test
+    void shouldRefuseAnImmediateActionWhileAMigrationWaitsForWorkInFlight() throws Exception {
+        String key = "barrier-queued:" + UUID.randomUUID();
+        String lock = "(hashtext('hephaestus'), hashtext('database-migration'))";
+        try (Connection inFlight = dataSource.getConnection();
+                var statement = inFlight.createStatement()) {
+            inFlight.setAutoCommit(true);
+            statement.execute("SELECT pg_advisory_lock_shared" + lock);
+            var migration = CompletableFuture.runAsync(() -> {
+                try (var _ = RunningMigration.start(dataSource)) {
+                    // The migration got its turn.
+                } catch (SQLException e) {
+                    throw new IllegalStateException(e);
+                }
+            });
+            await().atMost(Duration.ofSeconds(20))
+                    .until(() -> Boolean.TRUE.equals(jdbc.queryForObject(
+                            "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"
+                                    + " AND mode = 'ExclusiveLock' AND objsubid = 2 AND database ="
+                                    + " (SELECT oid FROM pg_database WHERE datname = current_database())"
+                                    + " AND objid = hashtext('database-migration')::oid)",
+                            Boolean.class)));
+
+            assertThatThrownBy(() -> store.start(request(key, key, null, 1), LEASE))
+                    .isInstanceOf(MaintenanceInProgressException.class);
+
+            statement.execute("SELECT pg_advisory_unlock_shared" + lock);
+            migration.get(20, TimeUnit.SECONDS);
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_action WHERE idempotency_key = ?", Long.class, key))
+                .isZero();
+    }
+
+    @Test
+    void shouldRefuseANewActionLeaseOfAnyStatementShapeWhileAMigrationRuns() throws Exception {
+        String lane = "barrier-shape:" + UUID.randomUUID();
+        UUID id = actions.enqueue(request(lane, lane + ":queued", null, 3));
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThatThrownBy(() -> jdbc.update(
+                            "UPDATE agent_action c SET state = 'EXECUTING', lease_epoch = (c.lease_epoch + 1),"
+                                    + " attempts = c.attempts + 1,"
+                                    + " leased_until = clock_timestamp() + interval '1 minute' WHERE c.id = ?",
+                            id))
+                    .hasMessageContaining("takes no new lease");
+            assertThatThrownBy(() -> jdbc.update("""
+                            INSERT INTO agent_action (id, kind, lane_key, idempotency_key, state, payload, max_attempts,
+                              next_attempt_at, created_at, updated_at, lease_epoch, attempts, leased_until)
+                            VALUES (?, 'EMAIL', ?, ?, 'EXECUTING', '{}', 3, now(), now(), now(), 1, 1,
+                              now() + interval '1 minute')
+                            """, UUID.randomUUID(), lane + ":other", lane + ":inserted"))
+                    .hasMessageContaining("takes no new lease");
+        }
+        assertThat(row(id).get("state")).isEqualTo("ADMITTED");
+    }
+
+    @Test
+    void shouldLetAnActionClaimedBeforeAMigrationWriteAndSettleWhileTheMigrationRuns() throws Exception {
+        UUID id = actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), null, 3));
+        var claim = claimOwn(List.of(id)).getFirst();
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThat(store.beginWrite(id, claim.epoch(), MARGIN)).isTrue();
+            assertThat(store.settle(
+                            id, claim.epoch(), new ActionResult.Done("in-flight"), ActionStoreIntegrationTest::ignore))
+                    .isPresent();
+        }
     }
 
     @Test

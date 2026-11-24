@@ -25,7 +25,7 @@ const row = (
 const ROWS: ComparisonRow[] = [
 	row("explain", "Explain the change", split(6, 7, 9, 6), "STRENGTH", "CURRENT_REVIEWS"),
 	row("scope", "Scope the change", totalOnly(28), "NOT_OBSERVED"),
-	row("history", "Keep the history readable", split(4, 5, 12, 7), "MIXED", "EARLIER_REVIEWS"),
+	row("history", "Keep the history readable", split(5, 5, 11, 7), "MIXED", "EARLIER_REVIEWS"),
 ];
 
 /** Practice groups or practices, each beside its split, the reader marked where counted. */
@@ -49,7 +49,7 @@ export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByRole("img", {
-				name: "28 developers in this workspace: 4 Needs attention, 5 Mixed feedback, 12 Going well, 7 none yet. You are in the Mixed feedback part.",
+				name: "28 developers in this workspace: 5 Needs attention, 5 Mixed feedback, 11 Going well, 7 none yet. You are in the Mixed feedback part.",
 			}),
 		).toBeVisible();
 		// Only the row whose own standing rests on earlier reviews says so.

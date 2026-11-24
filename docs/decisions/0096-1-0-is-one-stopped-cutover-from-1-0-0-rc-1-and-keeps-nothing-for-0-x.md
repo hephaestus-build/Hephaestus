@@ -151,3 +151,35 @@ Each line links the section of ADR 0070 that priced the option.
   - F-14: keep the public operations that no client calls.
   - F-15: run an interrupted Heph turn again without the developer.
   - F-16: a rolling upgrade that skips a 1.x release.
+
+## Update — 2026-11-23: a maintenance barrier refuses new claims while the migration runs
+
+A migration that runs while a run or an action holds a lease can convert a row that the holder still writes.
+Rule 1 stops every role, but nothing in the database refused a role that still ran.
+
+- **The maintenance barrier.** The barrier is the advisory lock that each migration holds already.
+  The migration takes it before Liquibase reads its history, and runs every change set on the session that holds it.
+  The barrier thus lasts exactly as long as the migration's session. If that session ends, the migration ends with it.
+  The migration logs when the barrier goes up and when it comes down. Each server shows it in a gauge.
+  While the barrier is up, no server starts new work.
+  A start takes the lock shared for the transaction that records it, without waiting, before it writes.
+  A sandbox whose row committed before the migration can still start during it. It leases nothing until the migration ends.
+  While the barrier is up, a database trigger refuses every new lease that a statement takes.
+  It guards runs, actions, provider events, syncs, product feedback lookups and provider resource registrations and removals.
+  The migration's own session passes it.
+  A holder still renews, requeues and ends its lease, so the work in flight finishes.
+  The barrier applies to every migration, not only to the cutover.
+  Enforced by: `MaintenanceBarrierDatabaseTest`, which finds each lease table by its columns and requires the triggers.
+  Also by `DatabaseMigrationTest#shouldRunEachChangeSetOnTheSessionThatHoldsTheBarrierAndEndWithIt`.
+  The barrier tests of the run, action, provider-event, sync, sandbox dispatch and `next` paths cover each start.
+  The barrier does not stop enqueues, scheduled jobs or the lease reaper. A server of 1.0.0-rc.14 or earlier does not check it at all.
+  Thus, rule 1 still applies.
+- **The lease precondition.** The barrier refuses new leases only. A lease that a stopped role left can still be live when the migration starts.
+  The first change set that converts the rows of a retired run kind opens with a precondition.
+  It halts the migration while any run or action holds a live lease.
+  Its message names the upgrade guide.
+  Not enforced yet. The pull request that adds the first conversion adds it.
+- **A removal and its conversion ship in one pull request.** A run kind that 1.0 retires is converted in the pull request that deletes it.
+  A run of a retired kind that no conversion moves ends with the stop reason `RETIRED_AT_CUTOVER`.
+  Not enforced yet. Review of each removal pull request checks it.
+- **The waiver of the rolling rules ends at 1.0.0** (rule 8). The release carries the *Stop every role* migration entry, through the `release-1-0-0` changeset ([Cut 1.0.0](../contributor/release-management.mdx#cut-100)).
