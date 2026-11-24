@@ -121,6 +121,8 @@ class SystemSecretSealingChangeDatabaseTest {
             "--spring.datasource.url=" + database.jdbcUrl(),
             "--spring.datasource.username=" + database.username(),
             "--spring.datasource.password=" + database.password(),
+            "--spring.liquibase.user=" + database.username(),
+            "--spring.liquibase.password=" + database.password(),
             "--hephaestus.security.encryption-key=" + key,
             "--spring.main.banner-mode=off"
         });
