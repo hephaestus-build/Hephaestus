@@ -478,7 +478,6 @@ de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamSettin
 de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamSettingsService -> de.tum.cit.aet.hephaestus.workspace.Workspace x26
 de.tum.cit.aet.hephaestus.integration.scm.workspace.team.TeamService -> de.tum.cit.aet.hephaestus.workspace.Workspace x12
 de.tum.cit.aet.hephaestus.integration.slack.capture.ThreadCaptureSource -> de.tum.cit.aet.hephaestus.integration.core.connection.Connection x1
-de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationProjector -> de.tum.cit.aet.hephaestus.conversation.ConversationEntry x1
 de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackPostAdapter -> de.tum.cit.aet.hephaestus.conversation.ConversationEntry x2
 de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackPostAdapter -> de.tum.cit.aet.hephaestus.conversation.ConversationTurn x13
 de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackWeeklyDigestPointer -> de.tum.cit.aet.hephaestus.conversation.Conversation x3
