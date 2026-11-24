@@ -23,7 +23,7 @@ config:
 ---
 erDiagram
     accTitle: The core data model of a practice review
-    accDescr: A workspace owns its items, practices and reviews. A practice has fixed versions. A review of an item records results. Each result concerns one practice and one item, at most one pinned practice version and at most one developer, and lists problems. Feedback comes from a review and addresses one developer. Feedback basis rows link feedback to one or more results, and each can name one problem. Feedback appears as copies.
+    accDescr: A workspace owns its items, practices and reviews. A practice has fixed versions. A review of an item records results. Each result concerns one practice and one item, at most one pinned practice version and at most one person, and lists problems. Feedback comes from a review and addresses one person. Feedback basis rows link feedback to one or more results, and each can name one problem. Feedback appears as copies.
     Workspace ||--o{ Review : owns
     Workspace ||--o{ Item : owns
     Workspace ||--o{ Practice : owns
@@ -44,7 +44,7 @@ erDiagram
 ```
 
 Every table here except `Workspace` carries `workspace_id NOT NULL`, so each row belongs to exactly one workspace.
-The product calls a `Result` an observation, and the `Membership` that it concerns the developer ([product vocabulary](./practice-feedback-language.mdx#observations)).
+The product calls a `Result` an observation, and the `Membership` that it concerns the person ([product vocabulary](./practice-feedback-language.mdx#observations)).
 [Database schema](./database-schema.mdx) has the full, generated schema.
 
 ## Review terms
@@ -62,7 +62,7 @@ The product calls a `Result` an observation, and the `Membership` that it concer
 | **Continuing** | A Queued review whose earlier attempts ended some of its practices. On a slow provider a review can take many attempts, and each ends some practices. The ended practices keep their results private until the last attempt admits them ([ADR 0063](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0063-each-practice-is-staged-when-it-ends.md)), so a person sees a count, not observations. | ReviewProgressDTO |
 | **Practice status**     | Where one practice stands in its review. Queued until capture decides it is Ready or Withheld. A scan's practice is Running from the first file that a server captures for it. A practice that nothing measured ends Withheld with its review's stop reason, and never Done.           | review_practice.status                              |
 | **Review scope**        | The repositories and people that a workspace permits Hephaestus to review.                                                                                    | review_scope_repository, membership.review_selected |
-| **Role**                | The developer's role a practice concerns: author, reviewer, assignee or merger. The editor label is About.                                                    | definition.about                                    |
+| **Role**                | The person's role a practice concerns:    author, reviewer, assignee or merger. The editor label is About.                                                    | definition.about                                    |
 | **Review on**           | The events and recorded state that select a practice for automatic review.                                                                                    | definition.reviewOn                                 |
 | **Applies when**        | The conditions that establish whether a practice applies on every review origin.                                                                              | definition.appliesWhen                              |
 | **Reviewed by**         | Who reviews a practice: Hephaestus, people or nobody.                                                                                                         | definition.reviewedBy                               |
@@ -70,7 +70,7 @@ The product calls a `Result` an observation, and the `Membership` that it concer
 | **Candidate**           | The proposed observation that a script returns before server admission.                                                                                       | Candidate                                           |
 | **Admission**           | The server checks that decide whether a candidate can become an observation.                                                                                  | result admission                                    |
 | **Feedback mode**       | How the workspace permits feedback: Off, Approve first or Automatic.                                                                                          | feedback_mode                                       |
-| **Publication context** | What other reviews communicated on the same work to the same developer, as one history read issued it. A public piece keeps the context it was composed from. | publicationContext                                  |
+| **Publication context** | What other reviews communicated on the same work to the same person, as one history read issued it.    A public piece keeps the context it was composed from. | publicationContext                                  |
 | **Evidence**            | The material that a review captured and read.                                                                                                                 | result.evidence                                     |
 | **Citation**            | A pointer into captured source text at an item version, with its quote and available coordinates.                                                             | citation                                            |
 | **Coverage**            | What an observation read and what it did not read.                                                                                                            | result.coverage                                     |
@@ -134,7 +134,7 @@ The two active modes permit eligible practice-page and conversation feedback wit
 A practice can inherit feedback mode from its group, then from its workspace.
 A null setting means inherit. It does not mean Off.
 Changing a setting does not approve an older proposal.
-Delivery pause and the developer's external-feedback preference remain separate checks.
+Delivery pause and the person's external-feedback preference remain separate checks.
 The [user guide](/user/practice-reviews) owns their scope and controls.
 
 ## Assessment records
@@ -145,7 +145,7 @@ The port omits observations when it cannot establish who can read them.
 The conversation context reports a capture failure as **Could not check**.
 
 A **private check outcome** records what a requested check found for its requester on one version of the work.
-A **self-report** records what a person says about their own work.
+A **self-report** records what a person says about their own work. It is marked as such and never counts in a total.
 These two record kinds are planned.
 
 The planned composer's **guardrails** check the destination, the observation references, the required problems and the Markdown in each copy on the work.
@@ -161,7 +161,7 @@ The planned composer's **guardrails** check the destination, the observation ref
 The checkout's diff and tree are always readable through Git.
 A source used only to check Applies when does not become a runtime read source.
 The server records no observation for the refused candidate.
-This refusal establishes neither missing evidence nor a defect in the developer's work.
+This refusal establishes neither missing evidence nor a defect in the person's work.
 The [operations guide](/admin/practice-review-operations#the-trace-line) gives the operator's next step.
 
 ## Readiness reasons
@@ -325,7 +325,7 @@ The same name is the source capture code that causes it.
 | **Interactive reserve**        | The part of a call pool's limit that only interactive calls, such as a conversation turn's, may use: a quarter, rounded up. | LlmCallLimit.reserve |
 | **Call permit**                | One model call's share of its call pool, held as a lease by the server that makes the call. | llm_call_permit |
 | **Context folder**             | The read-only files that one agent may read for one person, in one workspace, for one purpose. | INDEX.md, inputs/context/, repos/ |
-| **Context document**           | One JSON document about the developer or the workspace in the context folder of a conversation.            | inputs/context/*.json          |
+| **Context document**           | One JSON document about the person or the workspace in the context folder of a conversation.               | inputs/context/*.json          |
 | **Context loader**             | The integration part that stages a heavy item, such as a repository, into a context folder on request. | ContextLoader, load_context |
 | **Sandbox namespace**          | The Kubernetes namespace that an operator creates for the sandboxes of one release alone.   | sandbox.namespace              |
 | **Sandbox isolation gate** | A platform check of the installed sandbox templates against the required isolation boundary. Operators run it before enabling work. | scripts/sandbox-isolation.ts |
@@ -364,60 +364,73 @@ An execution that made no model call adds no usage row.
 
 These terms name the runtime of the accepted design in [Mentoring framework](./mentoring-framework.mdx).
 The current release does not have them.
-The last column names the proposed ADR that decides each term, and the pull request that holds it.
+The last column names the ADR that decides each term.
 When a part ships, its row moves to the runtime terms.
 
 The [product vocabulary](./practice-feedback-language.mdx#mentoring-planned) owns the product terms of the same design.
 The conversation agent, the composer and the review agent are agents. Hephaestus is not an agent.
 
-| Term | Meaning | Proposed in |
+| Term | Meaning | Decided in |
 | --- | --- | --- |
-| **Turn** (planned) | One run on one thread. It takes a frozen batch of inbox items and commits all of its writes or none. It can run with no person's question. | ADR 0120 (#4862) |
-| **Interactive turn** | A turn whose batch holds a person's message. It gets priority. Only an answer to the owner in the app streams. A Slack answer or a channel answer posts as one complete message. | ADR 0120 (#4862) |
-| **Background turn** | A turn whose batch holds no person's message. It commits one message from Hephaestus, or none. | ADR 0120 (#4862) |
-| **Inbox item** | One input of a thread: a person's message or an inbox event. It holds IDs only. | ADR 0120 (#4862) |
-| **Inbox event** | An inbox item that no person typed, such as a finished review, a finished task, a due check-in or a withheld copy. **Event** alone keeps its review meaning. | ADR 0120 (#4862) |
-| **Custody** | Who answers for an inbox item until it ends. A required item ends only with its disposition, at its deadline at the latest. A message is never a required item. | ADR 0120 (#4862) |
-| **Start policy** | The table in code that decides whether and when an inbox item starts a turn. No model decides it. | ADR 0120 (#4862) |
-| **Commit rule** | A turn writes its entries, consumes its inbox items, and inserts its effects and tasks in one transaction, or it writes nothing. | ADR 0120 (#4862) |
-| **Steering** | A compatible message that enters an interactive turn at the next tool-result boundary. | ADR 0120 (#4862) |
-| **Route** | The one output place of a turn, `APP`, `SLACK_DM`, `WORK` or `CHANNEL`, with its readers. It is fixed when the turn is claimed. | ADR 0120 (#4862) |
-| **Task** | Background work that only a turn's commit inserts. It reads only what every reader of its result route may read. Each task kind names the routes that may request it and show its result. A done or failed task inserts one inbox event. A cancelled task inserts none. | ADR 0120 (#4862) |
-| **Audience** | Who may read what the turns of a thread write: private (one account) or shared (the workspace). | ADR 0121 (#4862) |
-| **Private thread** | A thread of one account: the main thread, a message thread under one message, or the work thread of one item. | ADR 0131 (#4862) |
-| **Work thread** | The private thread about one item. The person opens it from the item card, or from the extension on the item's page. | ADR 0131 (#4862) |
-| **Shared thread** | A thread of the workspace: the work place of one pull request or merge request, or a channel thread. It has no personal records. | ADR 0121 (#4862) |
-| **Work place** | The shared thread of one pull request or merge request. An issue has none in 1.0. | ADR 0121 (#4862) |
-| **Channel thread** | The shared thread of one Slack thread where a person mentioned Hephaestus. Its turns read the Slack thread itself, public repository data and channel-readable catalog entries only. | ADR 0123 (#4862) |
-| **Conversation agent** | The sandboxed agent that runs the turns of one account's private threads in a workspace. It answers, starts tasks and writes messages from Hephaestus. It never writes on the work. | ADR 0121 (#4862) |
-| **Composer** | The sandboxed agent that runs the turns of every shared thread. It reads only scoped projections of its exact place, never private data. On a work place it writes the copy on the work and replies to it. In a channel thread it writes one answer. The server projects the practice-page copy of results in the eligible set from the composed copy. The **Feedback composer** is its current form. | ADR 0121 (#4862) |
-| **Graded work** | A workspace mode in which a fixed renderer writes every copy on the work from the eligible set, with no model. | ADR 0121 (#4862) |
-| **Typed command** | The person's confirmed act from a card that changes a shared place. It carries IDs only, and its confirmation binds the facts of its preview. | ADR 0121 (#4862) |
-| **The composer's guardrails** | The composer's checks on each tool call and at commit: destination rules, observation reference validation, required Critical and Major problems and Markdown sanitization. | ADR 0121 (#4862) |
-| **Copy deadline** | Two hours after the seal. Then every copy on the work that is still pending and not staged is withheld, in both feedback modes. An Automatic copy whose first write has not started is withheld too. Nothing is posted in its place. | ADR 0122 (#4862) |
-| **Citation token** | A reference in an entry to a result at a version. The server renders the outcome from current rows, so the model never writes it. | ADR 0150 (#4862) |
-| **Authorization recheck** | A check of current access before a consequential read or write: at context read, at model request and at each send outside the app. | ADR 0134 (#4863) |
-| **Contact policy** | The code that decides whether Hephaestus may interrupt a person now, on a channel. It has no model. | ADR 0139 (#4865) |
-| **Notification budget** | The limits that the person's initiative level sets on unprompted notifications. Requested and agreed contact are exempt. The contact policy adds the checks of channel, activity and quiet hours. | ADR 0139 (#4865) |
-| **Delivery decision** | One append-only record for each decision to reach a person, except an answer to their message, written in code before any model runs. For an enrolled person it also holds the probability, the draw and the exposure. | ADR 0139 (#4865) |
-| **Silent draw** | A delivery experiment's draw to stay silent on one unprompted decision. A copy on the work settles withheld with `STUDY_SILENCE`, and no composer turn starts. An unprompted message's inbox item is dropped with the same reason. It never applies to a Critical problem. | ADR 0149 (#4868) |
-| **Held result** | A result that a silent draw holds back. The item card and the practice page still show it, with no label that names the draw. Scheduled turns and unprompted messages leave it out until the hold ends, as ADR 0149 lists. | ADR 0149 (#4868) |
-| **Practice opportunity** | The first admitted review of a new item version, for one person and one practice. A hold ends at the next one. | ADR 0149 (#4868) |
-| **Research steward** | The instance role that approves every research release and holds the stop switch of each practice in a delivery experiment. The steward never sees a person or an outcome, and the account that created the experiment cannot be its steward. | ADR 0149 (#4868) |
-| **Run fingerprint** | The configuration digest of one run, with its runtime fingerprint. The digest covers the practice versions, feedback modes, destinations, help defaults, model assignment and prompt digest. | ADR 0149 (#4868) |
-| **Period lock** | A lock that freezes the settings behind the run fingerprint for one workspace, until an admin unlocks it | ADR 0149 (#4868) |
-| **Experiment pseudonym** | One pseudonym for each person and delivery experiment. Its key is stored encrypted. Closing the experiment destroys the key for good. | ADR 0141 (#4868) |
-| **Release evaluation cases** | 20 to 50 cases from real failures that run on the reference local model before each release, scored pass^k. | ADR 0142 (#4868) |
-| **Contact simulation** | The offline run of simulated people over weeks that counts breaches of the contact rules. It checks timing and frequency only. | ADR 0142 (#4868) |
-| **Release check** | The manual checklist that a maintainer runs and signs on the packaged artifact of a release candidate. | ADR 0142 (#4868) |
-| **Scenario replay** | A research tool that replays a pseudonymized past project in time order, with recorded or frozen reactions and switches for goals, memory and history. It is not an evaluation layer and not a release gate. | ADR 0142 (#4868) |
-| **Scenario** | One Ichnaea case that holds a world and a timeline for the packaged server. The must-pass scenarios, the release cases, the contact simulation and scenario replay share its format. | ADR 0142 (#4868) |
-| **Settle barrier** | The server's signal that a scenario step is done: no work of the scenario can run at the current virtual time. Every observation up to the step's watermark has arrived. Future due times and declared blocked states come back to the driver. Unexplained active work past a bound is a capture failure. | ADR 0142 (#4868) |
-| **Observation stream** | The ordered events that the server emitted during a scenario, and what reached each fake. Scorers read only this stream. | ADR 0142 (#4868) |
+| **Turn** (planned) | One run on one thread. It takes a frozen batch of inbox items and commits all of its writes or none. It can run with no person's question. | ADR 0120 |
+| **Interactive turn** | A turn whose batch holds a person's message. It gets priority. Only an answer to the owner in the app streams. A Slack answer or a channel answer posts as one complete message. | ADR 0120 |
+| **Background turn** | A turn whose batch holds no person's message. It commits one message from Hephaestus, or none. | ADR 0120 |
+| **Inbox item** | One input of a thread: a person's message or an inbox event. It holds IDs only. | ADR 0120 |
+| **Inbox event** | An inbox item that no person typed, such as a finished review, a finished task, a due check-in or a withheld copy. **Event** alone keeps its review meaning. | ADR 0120 |
+| **Custody** | Who answers for an inbox item until it ends. A required item ends only with its disposition, at its deadline at the latest. A message is never a required item. | ADR 0120 |
+| **Start policy** | The table in code that decides whether and when an inbox item starts a turn. No model decides it. | ADR 0120 |
+| **Commit rule** | A turn writes its entries, consumes its inbox items, and inserts its effects and tasks in one transaction, or it writes nothing. | ADR 0120 |
+| **Steering** | A compatible message that enters an interactive turn at the next tool-result boundary. | ADR 0120 |
+| **Route** | The one output place of a turn, `APP`, `SLACK_DM`, `WORK` or `CHANNEL`, with its readers. It is fixed when the turn is claimed. | ADR 0120 |
+| **Task** | Background work that only a turn's commit inserts. It reads only what every reader of its result route may read. Each task kind names the routes that may request it and show its result. A done or failed task inserts one inbox event. A cancelled task inserts none. | ADR 0120 |
+| **Audience** | Who may read what the turns of a thread write: private (one account) or shared (the workspace). | ADR 0121 |
+| **Private thread** | A thread of one account: the main thread, a message thread under one message, or the work thread of one item. | ADR 0131 |
+| **Work thread** | The private thread about one item. The person opens it from the item card, or from the extension on the item's page. | ADR 0131 |
+| **Shared thread** | A thread of the workspace: the work place of one pull request or merge request, or a channel thread. It has no personal records. | ADR 0121 |
+| **Work place** | The shared thread of one pull request or merge request. An issue has none in 1.0. | ADR 0121 |
+| **Channel thread** | The shared thread of one Slack thread where a person mentioned Hephaestus. Its turns read the Slack thread itself, public repository data and channel-readable catalog entries only. | ADR 0123 |
+| **Conversation agent** | The sandboxed agent that runs the turns of one account's private threads in a workspace. It answers, starts tasks and writes messages from Hephaestus. It never writes on the work. | ADR 0121 |
+| **Composer** | The sandboxed agent that runs the turns of every shared thread. It reads only scoped projections of its exact place, never private data. On a work place it writes the copy on the work and replies to it. In a channel thread it writes one answer. The server projects the practice-page copy of results in the eligible set from the composed copy. The **Feedback composer** is its current form. | ADR 0121 |
+| **Graded work** | A workspace mode in which a fixed renderer writes every copy on the work from the eligible set, with no model. | ADR 0121 |
+| **Typed command** | The person's confirmed act from a card that changes a shared place. It carries IDs and enumerated values only, never a reason or free text. Its confirmation binds the facts of its preview. | ADR 0121 |
+| **The composer's guardrails** | The composer's checks on each tool call and at commit: destination rules, observation reference validation, required Critical and Major problems and Markdown sanitization. | ADR 0121 |
+| **Copy deadline** | Two hours after the seal. Then every copy on the work that is still pending and not staged is withheld, in both feedback modes. An Automatic copy whose first write has not started is withheld too. Nothing is posted in its place. | ADR 0122 |
+| **Citation token** | A reference in an entry to a result at a version. The server renders the outcome from current rows, so the model never writes it. | ADR 0150 |
+| **Counts as** | What an item kind is for a claim about work. Its adapter declares it. `WORK` is reviewed work. `ACCOUNT` is the person's own account of work elsewhere. `CONTEXT` is never reviewed and never gets an observation. | ADR 0124 |
+| **Authorization recheck** | A check of current access before a consequential read or write: at context read, at model request and at each send outside the app. | ADR 0134 |
+| **Contact policy** | The code that decides whether Hephaestus may interrupt a person now, on a channel. It has no model. | ADR 0139 |
+| **Notification budget** | The limits that the person's initiative level sets on unprompted notifications. Requested and agreed contact are exempt. The contact policy adds the checks of channel, activity and quiet hours. | ADR 0139 |
+| **Delivery decision** | One append-only record for each decision to reach a person, except an answer to their message, written in code before any model runs. For an enrolled person it also holds the probability, the draw and the exposure. | ADR 0139 |
+| **Silent draw** | A delivery experiment's draw to stay silent on one unprompted decision. A copy on the work settles withheld with `STUDY_SILENCE`, and no composer turn starts. An unprompted message's inbox item is dropped with the same reason. It never applies to a Critical problem. | ADR 0149 |
+| **Held result** | A result that a silent draw holds back. The item card and the practice page still show it, with no label that names the draw. Scheduled turns and unprompted messages leave it out until the hold ends, as ADR 0149 lists. | ADR 0149 |
+| **Practice opportunity** | The first admitted review of a new item version, for one person and one practice. A hold ends at the next one. | ADR 0149 |
+| **Research steward** | The instance role that approves every research release and holds the stop switch of each practice in a delivery experiment. The steward never sees a person or an outcome, and the account that created the experiment cannot be its steward. | ADR 0149 |
+| **Run fingerprint** | The configuration digest of one run, with its runtime fingerprint. The digest covers the practice versions, feedback modes, destinations, help defaults, model assignment and prompt digest. | ADR 0149 |
+| **Period lock** | A lock that freezes the settings behind the run fingerprint for one workspace, until an admin unlocks it | ADR 0149 |
+| **Experiment pseudonym** | One pseudonym for each person and delivery experiment. Its key is stored encrypted. Closing the experiment destroys the key for good. | ADR 0141 |
+| **Release evaluation cases** | 20 to 50 cases from real failures that run on the reference local model before each release, scored pass^k. | ADR 0142 |
+| **Contact simulation** | The offline run of simulated people over weeks that counts breaches of the contact rules. It checks timing and frequency only. | ADR 0142 |
+| **Release check** | The manual checklist that a maintainer runs and signs on the packaged artifact of a release candidate. | ADR 0142 |
+| **Scenario replay** | A research tool that replays a pseudonymized past project in time order, with recorded or frozen reactions and switches for goals, memory and history. It is not an evaluation layer and not a release gate. | ADR 0142 |
+| **Scenario** | The world and the timeline that Hephaestus holds inside an Ichnaea case, for the packaged server. The must-pass scenarios, the release cases, the contact simulation and scenario replay share its format. | ADR 0142 |
+| **Settle barrier** | The server's signal that a scenario step is done: no work of the scenario can run at the current virtual time. Every observation up to the step's watermark has arrived. Future due times and declared blocked states come back to the driver. Unexplained active work past a bound is a capture failure. | ADR 0142 |
+| **Observation stream** | The ordered events that the server emitted during a scenario, and what reached each fake. Scorers read only this stream. | ADR 0142 |
 
 [Conversation core](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/contributor/conversation-core.mdx) owns the mechanics of threads, inbox items and turns.
 The planned **Turn** widens the runtime **Turn**: a turn can run without a person's question, and a thread is the unit of order.
-The runtime table keeps its row until ADR 0120 is accepted.
+The runtime table keeps its row until the planned turn ships.
+
+### Shared rules (planned)
+
+Several issues build on each of these rules.
+Each row is the one definition of its rule, and names the issue that implements it.
+
+| Rule | Meaning | Decided in | Implemented in |
+| --- | --- | --- | --- |
+| **Observations render as item cards** | A client shows an observation only from its data, as an admitted card or assessment part. Text from Hephaestus can discuss and cite an observation, but it never writes an outcome. | ADR 0150 | #4919 |
+| **`PrivacyJournal` port** | The port that records a privacy fact, such as an erasure or a revoked grant, in the transaction of its cause. A restore applies the journal again. [Privacy facts](./system-design.mdx#privacy-facts) owns the contract for producers. | ADR 0140 | #4954 |
+| **Authorization context** | One fixed value with the cause, destination, scope, contact and authorization generations that an act relied on, and its hash. Feedback on the work carries it. Three acts on the work carry it too: Request review, Mark incorrect and Disagree on a copy on the work. | ADR 0134, ADR 0135 | #4914 |
+| **Sync envelope** | The epochs on every snapshot and feed frame: one feed epoch, and one scope epoch for each scope. A change to an access list or a narrower scope raises the scope epoch and sends `EVICT` with its targets. After a narrowing, the next feed frame is that eviction, before any frame of the new epoch. | ADR 0134, ADR 0135 | #4916 |
 
 ## Standard terms
 
@@ -466,12 +479,12 @@ An OSCAL finding is closer to a Hephaestus observation than to one located probl
 This correspondence does not provide an OSCAL exporter.
 
 [ISO/IEC 17000](https://www.iso.org/standard/73029.html) supplies conformity-assessment vocabulary.
-A practice review corresponds to an assessment activity, not a certification of a developer or repository.
+A practice review corresponds to an assessment activity, not a certification of a person or repository.
 Do not claim an ISO clause mapping that the implementation does not establish.
 
 [PROV-DM](https://www.w3.org/TR/prov-dm/) separates entities, activities and attribution.
 Captured versions and practice versions correspond to entities. Reviews correspond to activities.
-A provider actor and an observation's developer have different attribution roles.
+A provider actor and an observation's person have different attribution roles.
 This is a design comparison, not a PROV export contract.
 
 Task, process and self-regulation are research descriptions of feedback content.

@@ -21,7 +21,7 @@ It still applies when you guard the operator on the same path, such as behind `i
 
 ## Sources
 
-- [To panic! or not to panic!](https://doc.rust-lang.org/book/ch09-03-to-panic-or-not-to-panic.html), Klabnik, Nichols and Krycho, The Rust Programming Language. The book says to return an error for expected failure, such as malformed data. It allows a panic in tests or where your code makes sure a value is valid.
+- [To `panic!` or not to `panic!`](https://doc.rust-lang.org/book/ch09-03-to-panic-or-not-to-panic.html), Klabnik, Nichols and Krycho, The Rust Programming Language. The book says to return an error for expected failure, such as malformed data. It allows a panic in tests or where your code makes sure a value is valid.
 - [The basics](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/thebasics/), The Swift Programming Language, Swift project. Force unwrap only when a missing value is a programmer error, and otherwise use optional binding or a fallback value.
 - [Error handling](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/errorhandling/), The Swift Programming Language, Swift project. Use `try!` only when the call cannot throw, such as loading an image that ships with the app.
 - [Go code review comments](https://go.dev/wiki/CodeReviewComments#dont-panic), the Go project. Do not use panic for normal error handling, and return an error instead.

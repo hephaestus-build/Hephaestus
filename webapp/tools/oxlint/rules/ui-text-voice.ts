@@ -1,7 +1,7 @@
 import { defineRule, type ESTree } from "@oxlint/plugins";
 import { decodeHTMLStrict } from "entities";
 
-import { wordAlerts } from "../../../../scripts/lib/ste-words.ts";
+import { voiceAlerts, wordAlerts } from "../../../../scripts/lib/ste-words.ts";
 
 // Names of the JSX props and object keys whose string values are UI text. Object keys cover the
 // vocabulary registries, option lists and form schemas. A suffix match catches the compound names
@@ -119,6 +119,7 @@ export const uiTextVoice = defineRule({
 			word: 'Write "{{to}}" instead of "{{from}}". Keep the same meaning.',
 			sentence: "Split this sentence. Write no more than 25 words per sentence.",
 			semicolon: "Write two sentences instead of a semicolon.",
+			voice: 'Remove "{{found}}". The product voice does not apologize, plead or exclaim.',
 			// One glyph for every apostrophe, so a contraction or possessive never mixes forms.
 			apostrophe: 'Write the apostrophe in "{{found}}" as ’.',
 		},
@@ -127,6 +128,9 @@ export const uiTextVoice = defineRule({
 		function check(node: ESTree.Node, text: string): void {
 			for (const alert of wordAlerts(text, "voice")) {
 				context.report({ node, messageId: "word", data: alert });
+			}
+			for (const found of voiceAlerts(text)) {
+				context.report({ node, messageId: "voice", data: { found } });
 			}
 			if (text.includes(";")) {
 				context.report({ node, messageId: "semicolon" });

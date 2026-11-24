@@ -31,24 +31,24 @@ Thus no input can get lost, no input can start two answers, and no output can re
 
 The core has six concepts, two rules and four policy tables: place kinds, routes, start policy and collisions. Each concept has one table.
 
+The [review glossary](./practice-review-glossary.mdx#mentoring-terms-planned) defines the inbox item, the turn, the task, the inbox event, the start policy and the commit rule. This page says how they work.
+
 | Concept | What it is | Table |
 | --- | --- | --- |
 | Thread | The unit of order. Every thread has one inbox and one audience: private or shared. A private thread also has one transcript. A shared thread has none. | `conversation` |
-| Inbox item | One input for a thread: a message or an inbox event. It has a dedupe key, a start policy, a custody and IDs only. | `inbox_item` `«planned»` |
-| Turn | One leased model run on one thread. It consumes inbox items. A turn that holds a person's message is interactive. Every other turn is a background turn. | `agent_run` (kind `TURN`) and `conversation_turn` |
+| Inbox item | Each has a dedupe key, a start policy and a custody. | `inbox_item` `«planned»` |
+| Turn | A turn that holds a person's message is interactive. Every other turn is a background turn. | `agent_run` (kind `TURN`) and `conversation_turn` |
 | Entry | One row of the append-only transcript of a private thread | `conversation_entry` |
 | Effect | One write that other people or other systems read, with one delivery key | `agent_action`, and `feedback` with `feedback_copy` for a copy on the work |
-| Task | Background work that a turn requests. It runs as its own run. When it is done or fails, it inserts an inbox event for the thread that requested it. | `task` `«planned»` |
+| Task | It runs as its own run. | `task` `«planned»` |
 
-An **inbox event** is an inbox item that no person typed, such as a finished review, a finished task or a due schedule. "Event" alone keeps its glossary meaning: one change to an item.
 The table `conversation` holds every thread, shared threads too. In the product, "conversation" means only the person's private threads in one workspace.
 
-**The commit rule.** A turn writes its entries, consumes its inbox items, and inserts its effects and tasks in one transaction. If the transaction fails, the turn writes nothing.
-No tool call writes outside this transaction.
+**The commit rule.** No tool call writes outside the turn's one transaction.
 One application transaction coordinator owns the commit and calls each owner's port for the ordered locks and staged writes (ADR 0138, proposed in #4867).
 
 **The audience rule.** A turn reads only the sources that every reader of its output may read.
-A private turn changes a shared place only through a typed command that the person confirms. A command carries IDs and enumerated values, never a reason.
+A private turn changes a shared place only through a [typed command](./practice-review-glossary.mdx#mentoring-terms-planned) that the person confirms.
 The rule has one stated exception: the person's Slack grant (see [Routes](#routes)).
 
 Three words name who reads, and they do not conflict. The audience of a thread decides which agent runs its turns. The reader set of a route names who reads one turn's output.
@@ -101,8 +101,7 @@ The full matrix of run kind, target and client comes from the run descriptors, a
 
 ### Start policy
 
-The start policy is a table in code (ADR 0120 decision 4). For each kind of inbox item, it names the thread, the custody and the route.
-It also says whether and when the item starts a turn.
+For each kind of inbox item, the start policy also names the thread, the custody and the route (ADR 0120 decision 4).
 A gate, such as active hours, holds items, never a whole thread. A workspace or a person can make the policy quieter, never louder.
 
 Ingest routes each input. The model does not route. A message goes to the thread that its surface names.
@@ -128,7 +127,7 @@ flowchart LR
         direction TB
         places["Work place, channel thread"] --> composer["Composer"]
     end
-    card -- "Bridge: typed command, IDs only, after a preview" --> places
+    card -- "Bridge: typed command, IDs and enumerated values, after a preview" --> places
     composer --> outside["Copy on the work, answer in a channel"]
 ```
 
@@ -255,7 +254,7 @@ A solid line is a foreign key. A dashed line is a plain ID or a projection. `thr
 ```mermaid
 erDiagram
     accTitle: Core tables of the conversation core
-    accDescr: A conversation is a thread. It has inbox items, entries and turns. Each turn has one TURN run and consumes inbox items. A thread requests tasks. Feedback has copies, and a conversation copy points to its entry. Outbox actions write feedback on the work, each with one delivery key. The item card is a projection of feedback. A delivery decision names the results that it covers.
+    accDescr: A conversation is a thread. It has inbox items, entries and turns. Each turn has one TURN run and consumes inbox items. A thread requests tasks. Feedback has copies, and a conversation copy points to its entry. Outbox actions write feedback on the work, each with one delivery key. The item card shows the feedback of its item to one account. A delivery decision names the results that it covers.
     conversation ||--o{ conversation_turn : "conversation_id"
     agent_run ||--o| conversation_turn : "run_id"
     conversation ||--o{ inbox_item : "thread_id"
@@ -968,7 +967,7 @@ ADRs 0128 and 0134 are in #4863, and ADRs 0135 and 0140 are in #4867.
 | Workspace authorization generation | The workspace (ADR 0134 decision 1) | A membership change, or a change of the Slack binding | The same three boundaries, for every run and action of the workspace |
 | Slack level epoch | The person's Slack route (ADR 0123 decision 5) | A change of the Slack detail level | A queued Slack effect or a Full-derived run, before the model call, the commit and the send |
 | Revocation generation | A revoked source (ADR 0128 decision 2) | The revocation of that source | A derived record that cites it. It is stale at the next read and never shapes an answer. |
-| Scope epoch | The account stream (ADR 0134 decision 7, ADR 0135 decision 5) | An authority narrowing | Every stream frame carries it. The gateway drops an answer delta of an older epoch, and the next feed frame evicts what the client holds. |
+| Scope epoch | The account stream (ADR 0134 decision 7, ADR 0135 decision 5) | An authority narrowing | Every stream frame carries it, as the [sync envelope](./practice-review-glossary.mdx#shared-rules-planned) says. The gateway drops an answer delta of an older epoch. |
 | Feed epoch | The change feed (ADR 0135 decision 5) | A restore replaces every feed epoch (ADR 0140) | A client resume across a restore. The client gets `must-refetch` and reads again. |
 | Card revision | The item card (ADR 0150 decision 2) | Each change of the rows behind the card | A Slack card post. An update goes only to a post with a lower revision (ADR 0123 decision 6). |
 

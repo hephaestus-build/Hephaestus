@@ -16,6 +16,25 @@ export const contractions = Object.entries(asRecord(list.contractions, "contract
 export const substitutions = Object.entries(asRecord(list.substitutions, "substitutions")).map(
 	([from, to]) => ({ from, to: asString(to, from) }),
 );
+/** Words that the product voice never uses, beside the exclamation mark. A support reply may say "please". */
+export const apologies = ["sorry", "oops"];
+export const pleading = "please";
+/** An exclamation mark. One before a digit is a reference, such as the GitLab merge request `!88`. */
+export const exclamation = String.raw`!(?!\d)`;
+/**
+ * The same mark for Vale. Go's regexp has no lookahead, so this pattern consumes the character after
+ * the mark. Its own Vale rule keeps that character from hiding a word from the other rules.
+ */
+export const exclamationForVale = String.raw`!(?:\D|$)`;
+
+/** The words and marks of `apologies`, `pleading` and the exclamation mark, in order, in UI text. */
+export function voiceAlerts(text: string): string[] {
+	const words = [...apologies, pleading].join("|");
+	return [...text.matchAll(new RegExp(`\\b(?:${words})\\b|${exclamation}`, "giu"))].map(
+		([found]) => found,
+	);
+}
+
 /** The one family that the user-facing voice spells out: "can't" is misread as "can". */
 export const negativeContractions = contractions.filter(({ from }) => /n['’]t$/iu.test(from));
 

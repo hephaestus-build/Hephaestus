@@ -17,6 +17,15 @@ export function uiRuleName(message: string): string {
 	if (message.includes("semicolon")) {
 		return "STE.Semicolons";
 	}
+	if (/^Remove "please"/iu.test(message)) {
+		return "STE.Please";
+	}
+	if (message.startsWith('Remove "!"')) {
+		return "STE.Exclamation";
+	}
+	if (message.startsWith("Remove")) {
+		return "STE.ProductVoice";
+	}
 	if (message.startsWith("Write the apostrophe")) {
 		return "UI.Apostrophe";
 	}

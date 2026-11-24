@@ -52,10 +52,10 @@ Hephaestus evaluates itself with [Ichnaea](https://github.com/hephaestus-build/i
 
 | Part | Owner | What it does |
 | --- | --- | --- |
-| Scenario | Hephaestus, inside an Ichnaea case | The people, workspaces and records, and a timeline of provider events, messages and changes |
+| [Scenario](./practice-review-glossary.mdx#mentoring-terms-planned) | Hephaestus, inside an Ichnaea case | Holds the people, workspaces and records |
 | System under test | Hephaestus | The packaged server, with fakes for GitHub, GitLab, Slack, Outline, web push and the model, on a controlled clock |
-| Settle barrier | Hephaestus | Ends a step when no work of the scenario can run at the current virtual time. It returns future due times. |
-| Observation stream | Hephaestus | The ordered events that the server emitted, and what reached each fake |
+| [Settle barrier](./practice-review-glossary.mdx#mentoring-terms-planned) | Hephaestus | Ends each step of a scenario |
+| [Observation stream](./practice-review-glossary.mdx#mentoring-terms-planned) | Hephaestus | The only input of the scorers |
 | Detectors and rubric | Hephaestus | Exact checks for leaks, reads and sends, and the one rubric |
 | Plans, decisions and reports | Ichnaea | Arms, replicates, pass^k, paired decisions and reports |
 
