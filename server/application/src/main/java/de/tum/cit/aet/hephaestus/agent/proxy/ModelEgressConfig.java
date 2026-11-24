@@ -74,9 +74,25 @@ public class ModelEgressConfig {
         if (node.isObject()) {
             boolean readsInput = node.has("messages") || node.has("input") || node.has("prompt");
             if ((node.path("model").isString() && readsInput) || node.has("contents")) return true;
+            // A deployment-scoped request, such as Azure OpenAI's, names its model in the address, not in the body.
+            if (isChat(node.path("messages"))) return true;
         }
         for (JsonNode child : node) if (asksModel(child, depth + 1)) return true;
         return false;
+    }
+
+    /**
+     * Whether a value is a model's conversation: messages that each name a role, and at least one that carries content.
+     * An assistant message that calls tools may omit its content.
+     */
+    private static boolean isChat(JsonNode messages) {
+        if (!messages.isArray() || messages.isEmpty()) return false;
+        boolean content = false;
+        for (JsonNode message : messages) {
+            if (!message.path("role").isString()) return false;
+            content |= message.has("content");
+        }
+        return content;
     }
 
     private static IllegalStateException refused(URI uri) {

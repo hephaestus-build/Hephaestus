@@ -80,6 +80,8 @@ class ModelEgressConfigTest extends BaseUnitTest {
                 "/v2/chat | {\"model\":\"command\",\"messages\":[{\"role\":\"user\",\"content\":\"the prompt\"}]}",
                 "/v1/fim/completions | {\"model\":\"codestral\",\"prompt\":\"the prompt\"}",
                 "/v1beta/models/gemini-pro:generateContent | {\"contents\":[{\"parts\":[{\"text\":\"the prompt\"}]}]}",
+                "/openai/deployments/d/chat/completions | {\"messages\":[{\"role\":\"user\",\"content\":\"the prompt\"}]}",
+                "/openai/deployments/d/chat/completions | {\"messages\":[{\"role\":\"user\",\"content\":\"the prompt\"},{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"c\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"c\",\"content\":\"done\"}]}",
                 "/v1/messages/batches | {\"requests\":[{\"custom_id\":\"a\",\"params\":{\"model\":\"m\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"the prompt\"}]}}]}",
             })
     void shouldRefuseAModelRequestThatABlockingClientSendsPastTheProxy(String path, String body) {

@@ -32,14 +32,15 @@ interface Use {
 
 /** Why a kind's use breaks the rule, or null. */
 function breach(kind: string, use: Use): string | null {
+	// The exemption covers the composer's own model client only: no kind builds a Pi session past the factory.
+	if (use.direct > 0) {
+		return `${kind} built a Pi session past the factory`;
+	}
 	if (kind === OWN_CLIENT_UNTIL_CUTOVER) {
 		return null;
 	}
 	if (use.modelSession > 0) {
 		return `${kind} built a model session of its own`;
-	}
-	if (use.direct > 0) {
-		return `${kind} built a Pi session past the factory`;
 	}
 	return use.factory === 0 ? `${kind} opened no session through the factory` : null;
 }
@@ -48,12 +49,12 @@ function breach(kind: string, use: Use): string | null {
 const noSession: KindRunner = async () => ({ leaseLost: false, outcome: "completed" });
 
 /**
- * How the staged review ends with each model: an answering model's result is staged and admitted; a model that refuses
- * each call leaves it unreachable, and the runner exits before admission.
+ * How the staged review ends with each model: an answering model's result is staged and taken to admission; a model
+ * that refuses each call leaves it unreachable, and the runner exits before admission.
  */
 const ENDS = {
-	answers: { status: 0, admissions: 1 },
-	refuses: { status: 76, admissions: 0 },
+	answers: { status: 0, admissions: [1], staged: ["result"] },
+	refuses: { status: 76, admissions: [], staged: [] },
 };
 
 /**
@@ -69,7 +70,9 @@ async function stagedReview(
 		stagePractices(cwd, [{ slug: "measured" }]);
 		const exit = await runRunner(cwd, {}, { PI_HOST_REAL_SDK: cwd, PI_HOST_MODEL: model, ...env });
 		assert.equal(exit.status, ENDS[model].status, exit.stderr);
-		assert.equal(capturedLines(cwd, "admission").length, ENDS[model].admissions, exit.stderr);
+		// An answering model's candidate survives validation as a result, which the review takes to admission.
+		assert.deepEqual(capturedLines(cwd, "staged"), ENDS[model].staged, exit.stderr);
+		assert.deepEqual(capturedLines(cwd, "admission"), ENDS[model].admissions, exit.stderr);
 		const [sessions] = capturedLines(cwd, "session-use");
 		assert.ok(isSessionUse(sessions), exit.stderr);
 		return {
@@ -105,6 +108,17 @@ if (process.env[CHILD] === undefined) {
 			},
 		);
 		assert.equal(child.status, 0, `${child.stdout}\n${child.stderr}`);
+	});
+
+	void test("the composer's exemption covers its own model client, not a Pi session past the factory", () => {
+		assert.equal(
+			breach(OWN_CLIENT_UNTIL_CUTOVER, { factory: 0, direct: 0, modelSession: 1 }),
+			null,
+		);
+		assert.match(
+			breach(OWN_CLIENT_UNTIL_CUTOVER, { factory: 0, direct: 1, modelSession: 1 }) ?? "",
+			/past the factory/u,
+		);
 	});
 
 	for (const model of ["answers", "refuses"] as const) {
@@ -144,7 +158,7 @@ async function dispatch(): Promise<void> {
 	for (const program of ["gateway-init.js", "gateway-run.js"]) {
 		writeFileSync(
 			path.join(sdkDirectory, program),
-			`require("node:fs").appendFileSync(${JSON.stringify(ran)}, ${JSON.stringify(`${program}\n`)});`,
+			`require("node:fs").appendFileSync(${JSON.stringify(ran)}, JSON.stringify([${JSON.stringify(program)}, ...process.argv.slice(2)]) + "\\n");`,
 		);
 	}
 	mock.module(new URL("sandbox-paths.ts", AGENT).href, {
@@ -271,11 +285,12 @@ async function dispatch(): Promise<void> {
 	void test("REVIEW's measurement runs its programs and builds no session of its own", async () => {
 		assert.equal(KINDS.REVIEW, measureReview);
 		const measured = await measure("REVIEW", measureReview);
-		// The whole path ran: both programs ran, and the measurement completed.
-		assert.deepEqual(readFileSync(ran, "utf8").trim().split("\n"), [
-			"gateway-init.js",
-			"gateway-run.js",
-		]);
+		// The whole path ran: both programs ran, the run program with the runner's command, and the measurement completed.
+		const programs: unknown[] = readFileSync(ran, "utf8")
+			.trim()
+			.split("\n")
+			.map((line): unknown => JSON.parse(line));
+		assert.deepEqual(programs, [["gateway-init.js"], ["gateway-run.js", "node", "runner.js"]]);
 		assert.deepEqual(measured.outcome, { leaseLost: false, outcome: "completed" });
 		// The measurement builds no session at all: the staged review runner opens its sessions in its own process.
 		assert.deepEqual([measured.factory, measured.direct, measured.modelSession], [0, 0, 0]);

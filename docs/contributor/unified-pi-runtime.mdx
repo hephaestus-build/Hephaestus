@@ -381,7 +381,9 @@ The descriptor holds the model and its runtime, the system prompt, the tools and
 It also holds the settings and the session manager.
 The factory adds nothing that the descriptor does not name:
 
-- It discovers no context file, skill, prompt template, theme or extension.
+- It loads no context file, skill, prompt template, theme or extension.
+  The SDK still lists the resource folders when it reloads.
+  The loader drops each path that it finds before it loads one.
 - It reads no settings file. The review runner gives it the settings that the server staged.
 - The system prompt is the descriptor's alone.
 - Cache warming is off.
@@ -429,6 +431,9 @@ The body, or an object nested at most six levels below its root, asks a model wh
 
 - A string `model` together with `messages`, `input` or `prompt`.
 - A `contents` field, as Gemini's requests carry.
+- A `messages` array whose messages each have a string `role`, also without a `model`.
+  At least one of the messages has a `content`.
+  A deployment-scoped request, such as Azure OpenAI's, names its model in the address.
 
 A lookup that only names a model, such as Ollama's `/api/show`, passes.
 A request nested deeper than six levels, or a body that is not JSON, passes too.

@@ -525,6 +525,7 @@ async function runOnRealSdk(cwd: string): Promise<void> {
 	assert.ok(proxy !== undefined && proxy !== "");
 	// The proxy accepts each practice and its staged outcome. The model submits a result, so the review runs to its
 	// admission, or with PI_HOST_MODEL=refuses it refuses each call, so the review ends as the model unreachable.
+	let stagedResults = 0;
 	mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
 		const url = input instanceof Request ? input.url : String(input);
 		assert.ok(url.startsWith(proxy), `the runner reached only the proxy, not ${url}`);
@@ -537,13 +538,19 @@ async function runOnRealSdk(cwd: string): Promise<void> {
 				(list): unknown[] => (Array.isArray(list) ? (list satisfies unknown[]) : []),
 			);
 			const outcome: unknown = outcomes[0];
+			// Whether the practice staged a result, which survived the runner's validation, or a non-result.
+			const results = field(request, "results");
+			const staged = Array.isArray(results) && results.length > 0;
+			stagedResults += staged ? 1 : 0;
+			capture("staged", staged ? "result" : "non-result");
 			return Response.json({
 				practiceSlug: field(outcome, "practiceSlug"),
 				digest: "a".repeat(64),
 			});
 		}
 		if (url.endsWith("/admit-results")) {
-			capture("admission", true);
+			// How many results the review had staged when it asked for admission.
+			capture("admission", stagedResults);
 			return Response.json({
 				contractVersion: 4,
 				admissionDigest: "a".repeat(64),

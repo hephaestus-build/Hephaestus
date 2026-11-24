@@ -135,12 +135,19 @@ class ProductFeedbackModelGatewayTest extends BaseUnitTest {
         assertThat(draft(model(protocol, null))).isEqualTo(new ProductFeedbackModelGateway.Draft(null, null));
     }
 
-    @Test
-    void shouldReadAnAnthropicRefusalAsRefused() {
-        answer(ResponseEntity.ok("{\"stop_reason\":\"refusal\",\"content\":[]}"));
+    /** Each protocol's explicit refusal, which a retry would only repeat. */
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "ANTHROPIC_MESSAGES | {\"stop_reason\":\"refusal\",\"content\":[]}",
+                "OPENAI_COMPLETIONS | {\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":null,\"refusal\":\"No.\"}}]}",
+                "OPENAI_RESPONSES | {\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"refusal\",\"refusal\":\"No.\"}]}]}",
+            })
+    void shouldReadAnExplicitRefusalAsRefused(LlmApiProtocol protocol, String answer) {
+        answer(ResponseEntity.ok(answer));
 
-        assertThat(draft(model(LlmApiProtocol.ANTHROPIC_MESSAGES, null)).failure())
-                .isEqualTo(ProductFeedbackModelGateway.Failure.REFUSED);
+        assertThat(draft(model(protocol, null)).failure()).isEqualTo(ProductFeedbackModelGateway.Failure.REFUSED);
     }
 
     @Test

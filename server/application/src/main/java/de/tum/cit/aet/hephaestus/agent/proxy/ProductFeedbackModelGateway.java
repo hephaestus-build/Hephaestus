@@ -169,6 +169,7 @@ public class ProductFeedbackModelGateway {
             case OPENAI_COMPLETIONS -> {
                 JsonNode message = answer.path("choices").path(0).path("message");
                 if (!message.isObject()) return failed(Failure.PROVIDER);
+                if (!string(message.path("refusal")).isEmpty()) return failed(Failure.REFUSED);
                 text.append(string(message.path("content")));
             }
             case OPENAI_RESPONSES -> {
@@ -176,9 +177,11 @@ public class ProductFeedbackModelGateway {
                 if (!output.isArray()) return failed(Failure.PROVIDER);
                 for (JsonNode item : output)
                     if (item.path("type").asString("").equals("message"))
-                        for (JsonNode part : item.path("content"))
-                            if (part.path("type").asString("").equals("output_text"))
-                                text.append(string(part.path("text")));
+                        for (JsonNode part : item.path("content")) {
+                            String type = part.path("type").asString("");
+                            if (type.equals("refusal")) return failed(Failure.REFUSED);
+                            if (type.equals("output_text")) text.append(string(part.path("text")));
+                        }
             }
         }
         return new Draft(text.isEmpty() ? null : text.toString(), null);

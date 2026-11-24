@@ -20,7 +20,7 @@ export const SANDBOX_SETTINGS_MANAGER_OPTIONS: SettingsManagerCreateOptions = {
 };
 
 /**
- * No discovery: a session holds only the resources its run names. The SDK's own context-file discovery climbs from the
+ * No resource from disk: a session holds only the resources its run names. The SDK's own context-file discovery climbs from the
  * working directory to `/` looking for AGENTS.md and dies on the first ancestor the sandbox's read allowlist forbids;
  * and discovery is not the channel a session's instructions should arrive on — each run hands its own over by name.
  */

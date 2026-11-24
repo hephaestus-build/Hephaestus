@@ -1,7 +1,7 @@
 // pi-session.ts — the one factory that builds every Pi session in this image (openRunSession).
 //
 // A run hands it a run descriptor: the model and its runtime, the system prompt, the tools, the kind's extensions and
-// the settings. The factory adds nothing that a run did not name. It discovers no context file, skill, prompt template,
+// the settings. The factory adds nothing that a run did not name. It loads no context file, skill, prompt template,
 // theme or extension, it reads no settings file, and the system prompt is the descriptor's alone. Only this file calls
 // `createAgentSession` (pi-session.spec.ts).
 
