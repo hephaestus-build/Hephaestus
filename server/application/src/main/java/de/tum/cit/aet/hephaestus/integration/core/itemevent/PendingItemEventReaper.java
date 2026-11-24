@@ -37,11 +37,30 @@ public class PendingItemEventReaper {
     public void sweep() {
         Instant now = clock.instant();
         repository.forgetExpiredEvidence(now, properties.sweepBatchSize());
+        expire(now);
+        repository.deleteUnreferenced(now.minus(properties.retainFor()), properties.sweepBatchSize());
+        if (reviewsEnabled()) offerDue(now, properties.sweepBatchSize());
+    }
+
+    /** Offers the work due on the scenario clock without waiting for the wall-clock sweep. */
+    @Transactional
+    public void advance(Instant instant) {
+        expire(instant);
+        if (reviewsEnabled()) offerDue(instant, Integer.MAX_VALUE);
+    }
+
+    private void expire(Instant now) {
         repository.expire(
                 now.minus(properties.pendingLapseAfter()), now, ReviewRequestReason.PENDING_DEADLINE_EXCEEDED);
-        repository.deleteUnreferenced(now.minus(properties.retainFor()), properties.sweepBatchSize());
-        if (!environment.getProperty(RuntimeRole.AGENT_ENABLED_PROPERTY, Boolean.class, false)) return;
-        for (var event : repository.claimDue(now, properties.sweepBatchSize())) {
+    }
+
+    private boolean reviewsEnabled() {
+        return environment.getProperty(RuntimeRole.AGENT_ENABLED_PROPERTY, Boolean.class, false);
+    }
+
+    private void offerDue(Instant now, int limit) {
+        var due = repository.claimDue(now, limit);
+        for (var event : due) {
             repository.attempted(event.getWorkspaceId(), event.getId(), now, now.plus(properties.pendingRetryAfter()));
             publisher.publishEvent(new ItemEventRecorded(event.getWorkspaceId(), event.getId(), event.getItemId()));
         }

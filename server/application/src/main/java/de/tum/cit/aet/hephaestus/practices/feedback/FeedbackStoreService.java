@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -36,6 +37,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -47,6 +49,13 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @ConditionalOnServerRole
 public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    public void setEvaluationObservations(EvaluationObservations observer) {
+        evaluation = observer;
+    }
+
     private final FeedbackRepository feedback;
     private final FeedbackOutcomes outcomes;
     private final FeedbackCopyRepository copies;
@@ -289,6 +298,8 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
     }
 
     public void withhold(Feedback row, FeedbackStopReason reason) {
+        if (evaluation != null)
+            evaluation.record(new EvaluationObservations.Silence(row.getWorkspaceId(), row.getId(), reason));
         policy.withhold(row, reason);
     }
 

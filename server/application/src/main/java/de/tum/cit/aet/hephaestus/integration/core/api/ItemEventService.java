@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.api;
 
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEvent;
 import de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventLedgerProperties;
@@ -17,6 +18,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,12 @@ public class ItemEventService {
     private final ApplicationEventPublisher publisher;
     private final Clock clock;
     private final ItemEventLedgerProperties properties;
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    public void setEvaluationObservations(EvaluationObservations observer) {
+        evaluation = observer;
+    }
 
     @Transactional(readOnly = true)
     public Optional<ItemEventView> find(long workspaceId, UUID eventId) {
@@ -198,6 +206,12 @@ public class ItemEventService {
         var ids = events.stream().map(Open::id).toList();
         if (repository.hold(workspaceId, itemId, ids, reason.name(), clock.instant(), until) != ids.size())
             throw new IllegalStateException("An occasion changed while its item was locked");
+        if (evaluation != null) {
+            for (Open event : events) {
+                if (event.reason() != reason)
+                    evaluation.record(new EvaluationObservations.Silence(workspaceId, event.id(), reason));
+            }
+        }
     }
 
     /** How long a quiet window stays open after its newest occasion. */
@@ -338,7 +352,7 @@ public class ItemEventService {
         if ((to == ItemEventState.WAITING || to == ItemEventState.WITHHELD || to == ItemEventState.EXPIRED)
                 && reason == null) throw new IllegalArgumentException("Event decision requires a reason");
         Instant now = clock.instant();
-        return repository.decide(
+        boolean decided = repository.decide(
                         workspaceId,
                         eventId,
                         new ItemEventRepository.Decision(
@@ -348,5 +362,8 @@ public class ItemEventService {
                                 now,
                                 to == ItemEventState.WAITING ? now.plus(properties.pendingRetryAfter()) : null))
                 == 1;
+        if (decided && evaluation != null && reason != null && to != ItemEventState.STARTED)
+            evaluation.record(new EvaluationObservations.Silence(workspaceId, eventId, reason));
+        return decided;
     }
 }

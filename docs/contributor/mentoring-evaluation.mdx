@@ -63,6 +63,28 @@ One scenario format serves the must-pass scenarios, the release cases, the conta
 A pull request runs the scenarios as tests. Every other run hands the same measure values to Ichnaea.
 [Feedback quality evaluation](./feedback-quality-evals.mdx) describes the composer decision, which already runs on Ichnaea.
 
+### Internal evaluation controls
+
+Use a fresh database and an isolated server when you enable the controlled clock.
+The server refuses provider credentials at startup. For a fake that requires a configured credential, use the literal
+`hephaestus-evaluation`. Use a separate network for the fakes and the collector.
+
+Set `hephaestus.evaluation.controlled-clock.enabled` to `true` and set
+`hephaestus.evaluation.controlled-clock.collector-url` to the collector's HTTP endpoint.
+The `prod` Spring profile keeps the controls off even when the flag is set.
+Authenticate as an instance administrator to call these routes:
+
+| Request | Body | Result |
+| --- | --- | --- |
+| `POST /internal/evaluation/clock` | `{"instant":"2030-01-01T00:00:00Z"}` | Sets the application clock and offers item events due at that time. Database leases and access token lifetimes use real time. |
+| `POST /internal/evaluation/settle` | `{"timeoutMillis":10000}` | Returns the collector watermark and future due times. If the wait expires, the response sets `settled` to `false` and lists the blocking queues and IDs. |
+
+The collector receives one JSON event per POST. It acknowledges each event with a successful HTTP status.
+Use the `sequence` to discard a repeated event if its acknowledgment was lost.
+Events carry IDs, timestamps, reasons and the SHA-256 digest of a model request, without record text or model bytes.
+If the collector has yet to acknowledge an event, the settle barrier reports its sequence as blocked.
+If a module listener fails, the barrier reports the incomplete publication ID.
+
 ### Deterministic CI
 
 Each scenario runs on the packaged server with every integration faked.

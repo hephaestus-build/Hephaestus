@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
+import de.tum.cit.aet.hephaestus.core.EvaluationWork;
 import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
@@ -323,4 +324,11 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
             """, nativeQuery = true)
     Optional<DeadRow> replay(
             @Param("workspaceId") @Nullable Long workspaceId, @Param("id") long id, @Param("actor") long actor);
+
+    @Query(value = """
+        SELECT CAST(id AS text) AS id, state, NULL AS "futureDueAt"
+          FROM provider_event WHERE state IN ('QUEUED', 'LEASED')
+           AND (workspace_id IN (:workspaceIds) OR workspace_id IS NULL)
+        """, nativeQuery = true)
+    List<EvaluationWork.Row> findEvaluationWork(@Param("workspaceIds") List<Long> workspaceIds);
 }

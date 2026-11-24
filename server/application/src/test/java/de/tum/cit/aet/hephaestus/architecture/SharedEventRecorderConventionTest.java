@@ -38,6 +38,8 @@ class SharedEventRecorderConventionTest extends HephaestusArchitectureTest {
     private static final Map<String, String> KEPT_LISTENERS = Map.of(
             "de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder",
             "the shared recorder itself",
+            "de.tum.cit.aet.hephaestus.core.evaluation.EvaluationIntegrationTest$EvaluationRunListener",
+            "holds durable module work before it queues a run, so settle must still see its incomplete publication",
             "de.tum.cit.aet.hephaestus.notification.RegistryProbeConfiguration$ProbeListener",
             "throws on demand, so the publication registry records a failed delivery",
             "de.tum.cit.aet.hephaestus.core.privacy.PersonDataRecoveryStartupIntegrationTest$Ordering",

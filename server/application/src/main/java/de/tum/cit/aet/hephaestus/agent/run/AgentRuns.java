@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.run;
 
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -25,6 +26,7 @@ import java.util.random.RandomGenerator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,6 +66,13 @@ public class AgentRuns {
     private final AgentRunRepository runs;
     private final AgentCapacityProperties capacity;
     private final MeterRegistry meters;
+
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    void observeEvaluation(EvaluationObservations observer) {
+        evaluation = observer;
+    }
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
@@ -171,6 +180,7 @@ public class AgentRuns {
         int calls = runs.settleOpenCalls(fence.runId(), fence.workspaceId(), fence.epoch());
         TransactionCallbacks.afterCommit(() -> settled(calls));
         AgentRun previous = ended(fence.run());
+        observeRun(fence, EvaluationObservations.RunState.ENDED, previous.getStopReason());
         return insert(
                 previous.getWorkspaceId(),
                 previous.getKind(),
@@ -381,6 +391,7 @@ public class AgentRuns {
         if (requeued) {
             settled(runs.settleOpenCalls(fence.runId(), fence.workspaceId(), fence.epoch()));
             wake(fence);
+            observeRun(fence, EvaluationObservations.RunState.REQUEUED, hold);
         }
         return requeued;
     }
@@ -405,6 +416,7 @@ public class AgentRuns {
         var deferred = runs.defer(fence.runId(), fence.workspaceId(), fence.epoch(), DEFER_WAIT.toSeconds());
         if (deferred.isEmpty()) return false;
         settled(runs.settleOpenCalls(fence.runId(), fence.workspaceId(), fence.epoch()));
+        observeRun(fence, EvaluationObservations.RunState.REQUEUED, reason);
         var row = deferred.get();
         TransactionCallbacks.afterCommit(() -> {
             deferred(row.getKind().toLowerCase(Locale.ROOT), reason).increment();
@@ -441,6 +453,7 @@ public class AgentRuns {
             throw new IllegalArgumentException("Only the run reaper ends work with this reason");
         if (runs.end(fence.runId(), fence.workspaceId(), fence.epoch(), reason.name()) == 1) {
             settled(runs.settleOpenCalls(fence.runId(), fence.workspaceId(), fence.epoch()));
+            observeRun(fence, EvaluationObservations.RunState.ENDED, reason);
             return EndOutcome.ENDED;
         }
         return runs.endedBy(fence.runId(), fence.workspaceId(), fence.epoch(), reason.name())
@@ -501,6 +514,13 @@ public class AgentRuns {
     public boolean cancel(AgentRunRef run) {
         if (runs.cancel(run.id(), run.workspaceId()) != 1) return false;
         settled(runs.settleOpenCallsOfRun(run.id(), run.workspaceId()));
+        if (evaluation != null)
+            evaluation.record(new EvaluationObservations.Run(
+                    run.workspaceId(),
+                    run.id(),
+                    0,
+                    EvaluationObservations.RunState.ENDED,
+                    AgentRunStopReason.CANCELLED));
         return true;
     }
 
@@ -515,6 +535,12 @@ public class AgentRuns {
         int cancelled = runs.cancelAll(runIds);
         settled(runs.settleOpenCallsOfRuns(runIds));
         return cancelled;
+    }
+
+    private void observeRun(AgentRunFence fence, EvaluationObservations.RunState state, @Nullable Enum<?> reason) {
+        if (evaluation != null)
+            evaluation.record(
+                    new EvaluationObservations.Run(fence.workspaceId(), fence.runId(), fence.epoch(), state, reason));
     }
 
     /** Counts the calls that a claim's end settled without a measurement. */
@@ -631,6 +657,13 @@ public class AgentRuns {
         Duration waited = Duration.ofNanos((long) (Math.max(0, row.getWaitedSeconds()) * 1_000_000_000));
         Timer wait = claimWait(AgentRunKind.valueOf(row.getKind()), tag(AgentRunBand.valueOf(row.getBand())));
         TransactionCallbacks.afterCommit(() -> wait.record(waited));
+        if (evaluation != null)
+            evaluation.record(new EvaluationObservations.Run(
+                    row.getWorkspaceId(),
+                    row.getId(),
+                    row.getLeaseEpoch(),
+                    EvaluationObservations.RunState.STARTED,
+                    null));
         return lease(row);
     }
 

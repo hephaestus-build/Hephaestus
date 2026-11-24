@@ -6,6 +6,7 @@ import com.nimbusds.jose.proc.JWSVerificationKeySelector;
 import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
+import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
@@ -96,7 +97,7 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
         this.admission = admission;
         this.authEventLogger = authEventLogger;
         this.cache = Objects.requireNonNull(cacheManager.getCache(CACHE_NAME));
-        this.clock = clock;
+        this.clock = ControlledClock.operationalClock(clock);
         this.metrics = metrics;
     }
 

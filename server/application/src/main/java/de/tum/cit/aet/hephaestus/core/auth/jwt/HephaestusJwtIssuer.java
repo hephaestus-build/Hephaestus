@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.jwt;
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -78,7 +79,7 @@ public class HephaestusJwtIssuer {
         this.accountRepository = accountRepository;
         this.principalFactory = principalFactory;
         this.properties = properties;
-        this.clock = clock;
+        this.clock = ControlledClock.operationalClock(clock);
         this.encoder = buildEncoder(keyService);
     }
 

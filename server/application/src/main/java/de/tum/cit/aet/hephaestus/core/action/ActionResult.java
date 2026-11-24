@@ -7,7 +7,11 @@ import org.jspecify.annotations.Nullable;
 public sealed interface ActionResult {
 
     /** The provider confirmed the effect. */
-    record Done(@Nullable String readbackRef) implements ActionResult {}
+    record Done(@Nullable String readbackRef, @Nullable String providerObjectId) implements ActionResult {
+        public Done(@Nullable String readbackRef) {
+            this(readbackRef, readbackRef);
+        }
+    }
 
     /**
      * The provider proved that it holds nothing from this attempt, and a later attempt may succeed. The action waits

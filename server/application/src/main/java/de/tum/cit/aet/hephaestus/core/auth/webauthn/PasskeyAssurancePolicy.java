@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.webauthn;
 
+import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -41,7 +42,7 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
         this.properties = properties;
         this.accounts = accounts;
         this.auth = auth;
-        this.clock = clock;
+        this.clock = ControlledClock.operationalClock(clock);
     }
 
     @Override

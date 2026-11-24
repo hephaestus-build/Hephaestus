@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.StreamOutcome;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
@@ -38,6 +39,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.slf4j.event.Level;
 import org.slf4j.spi.LoggingEventBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -113,6 +115,13 @@ class LlmProxyService {
 
     /** The proxy answered the call with an error of its own, before or without the provider. */
     static final String GATEWAY_ERROR = "gateway_error";
+
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    void setEvaluationObservations(EvaluationObservations observer) {
+        evaluation = observer;
+    }
 
     private final WebClient webClient;
     private final LlmModelResolver resolver;
@@ -216,7 +225,20 @@ class LlmProxyService {
             @Nullable Consumer<byte[]> capture) {
         accounting.recordGatewayRequest(body.length);
         // Begun first and closed last, so that nothing before the provider call can leave it open for the turn's end.
-        try (ProxyCallsInFlight.Call inFlight = callsInFlight.begin(routing.attempt())) {
+        try (var evaluationCall = evaluation == null
+                        ? null
+                        : evaluation.beginCall(
+                                EvaluationObservations.CallKind.MODEL,
+                                routing.sourceId().toString());
+                ProxyCallsInFlight.Call inFlight = callsInFlight.begin(routing.attempt())) {
+            String requestSha256 = ProvenanceDigest.sha256Hex(body);
+            if (evaluation != null)
+                evaluation.record(new EvaluationObservations.ModelCall(
+                        routing.workspaceId(),
+                        routing.attempt().runId(),
+                        routing.sourceId(),
+                        routing.modelId(),
+                        requestSha256));
             MDC.put(StructuredLogKeys.PROXY_PRINCIPAL, routing.principalDescription());
             MDC.put(StructuredLogKeys.PROXY_API_PROTOCOL, routing.apiProtocol());
             String operation = "chat";
@@ -224,7 +246,7 @@ class LlmProxyService {
                     .name("gen_ai." + operation)
                     .kind(Span.Kind.CLIENT)
                     .tag("gen_ai.operation.name", operation)
-                    .tag("hephaestus.pi_request.sha256", ProvenanceDigest.sha256Hex(body))
+                    .tag("hephaestus.pi_request.sha256", requestSha256)
                     .start();
             if (routing.attempt().sourceType() != UsageSourceType.PRODUCT_FEEDBACK_DRAFT
                     && routing.attempt().sourceType() != UsageSourceType.PROBE

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
+import de.tum.cit.aet.hephaestus.core.ControlledClock;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
@@ -75,7 +76,7 @@ public class AuthSessionService {
         this.clientSessionService = clientSessionService;
         this.sessionRevocation = sessionRevocation;
         this.properties = properties;
-        this.clock = clock;
+        this.clock = ControlledClock.operationalClock(clock);
         this.metrics = metrics;
     }
 

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
@@ -23,6 +24,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PracticeAssessments implements AssessmentPort {
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    public void setEvaluationObservations(EvaluationObservations observer) {
+        evaluation = observer;
+    }
+
     private final ResultHistoryQuery history;
     private final ReviewAssignmentQuery assignments;
     private final RegisteredItemLabels labels;
@@ -52,7 +61,7 @@ public class PracticeAssessments implements AssessmentPort {
                 workspaceId, readable.stream().map(ResultHistoryEntry::item).toList());
         return new ObservationHistory(
                 readable.stream()
-                        .map(entry -> project(entry, work.get(entry.itemId())))
+                        .map(entry -> project(workspaceId, entry, work.get(entry.itemId())))
                         .toList(),
                 own.size() - readable.size(),
                 candidates.size() > limit);
@@ -128,7 +137,9 @@ public class PracticeAssessments implements AssessmentPort {
         return entry.filter(ResultHistoryEntry::copyAuthorityComplete)
                 .filter(value -> ownObservation(value, workspaceId, accountId))
                 .map(value -> project(
-                        value, labels.labels(workspaceId, List.of(value.item())).get(value.itemId())));
+                        workspaceId,
+                        value,
+                        labels.labels(workspaceId, List.of(value.item())).get(value.itemId())));
     }
 
     private static boolean ownObservation(ResultHistoryEntry entry, long workspaceId, long accountId) {
@@ -137,7 +148,8 @@ public class PracticeAssessments implements AssessmentPort {
                 && entry.origin() != ReviewOrigin.TRIAL;
     }
 
-    private static Observation project(ResultHistoryEntry entry, @Nullable ItemLabel label) {
+    private Observation project(long workspaceId, ResultHistoryEntry entry, @Nullable ItemLabel label) {
+        if (evaluation != null) evaluation.record(new EvaluationObservations.RecordRead(workspaceId, entry.resultId()));
         return new Observation(
                 entry.resultId(),
                 entry.reviewId(),

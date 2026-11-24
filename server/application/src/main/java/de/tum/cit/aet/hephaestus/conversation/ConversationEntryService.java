@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.conversation;
 
 import de.tum.cit.aet.hephaestus.conversation.spi.TurnRuns;
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
@@ -18,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,13 @@ public class ConversationEntryService {
 
     /** The most hits {@code search_conversation} returns. */
     public static final int MAX_SEARCH_HITS = 20;
+
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    void observeEvaluation(EvaluationObservations observer) {
+        evaluation = observer;
+    }
 
     private final ConversationRepository conversations;
     private final ConversationEntryRepository entries;
@@ -122,7 +131,10 @@ public class ConversationEntryService {
 
     @Transactional(readOnly = true)
     public Optional<ConversationEntry> find(long workspaceId, UUID entryId) {
-        return entries.findByIdAndWorkspaceId(entryId, workspaceId);
+        var found = entries.findByIdAndWorkspaceId(entryId, workspaceId);
+        if (evaluation != null && found.isPresent())
+            evaluation.record(new EvaluationObservations.RecordRead(workspaceId, entryId));
+        return found;
     }
 
     /**

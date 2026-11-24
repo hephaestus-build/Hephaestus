@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerEvents;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnProgress;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
+import de.tum.cit.aet.hephaestus.core.EvaluationObservations;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -35,6 +36,7 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.modulith.NamedInterface;
 import org.springframework.modulith.events.ApplicationModuleListener;
@@ -67,6 +69,13 @@ public class ConversationTurnCompletion {
     static final String SILENCED = "Silent Mode kept Hephaestus's answer from Slack.";
     static final String SLACK_UNCERTAIN = "Slack did not confirm what Hephaestus's answer showed.";
     static final String SLACK_PARTLY = "Slack showed only part of what Hephaestus's answer showed of the feedback.";
+
+    private @Nullable EvaluationObservations evaluation;
+
+    @Autowired(required = false)
+    void observeEvaluation(EvaluationObservations observer) {
+        evaluation = observer;
+    }
 
     private final ConversationTurnService turns;
     private final DigestAdmission digests;
@@ -235,9 +244,15 @@ public class ConversationTurnCompletion {
                 NOT_SHOWN);
     }
 
+    private enum SilenceReason {
+        SILENT_MODE
+    }
+
     /** Records no shown feedback when Silent Mode keeps the complete Slack reply inside the instance. */
     @Transactional
     public void recordSilenced(long workspaceId, UUID turnId) {
+        if (evaluation != null)
+            evaluation.record(new EvaluationObservations.Silence(workspaceId, turnId, SilenceReason.SILENT_MODE));
         receiptsDue(
                 turns.require(workspaceId, turnId),
                 Set.of(),
