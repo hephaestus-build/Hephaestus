@@ -80,7 +80,7 @@ public class ConversationEntryController {
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                             schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<Void> deleteConversationEntry(WorkspaceContext workspace, @PathVariable UUID entryId) {
-        return scope.execute(account -> {
+        return scope.write(account -> {
             timeline.requireOwnedEntry(workspace.id(), account, entryId);
             entries.deleteMessage(workspace.id(), entryId);
             return ResponseEntity.noContent().build();
@@ -88,7 +88,7 @@ public class ConversationEntryController {
     }
 
     private ConversationEntryDTO vote(long workspaceId, UUID entryId, ConversationEntry.@Nullable Vote vote) {
-        return scope.execute(account -> {
+        return scope.write(account -> {
             timeline.requireOwnedEntry(workspaceId, account, entryId);
             entries.vote(workspaceId, entryId, vote);
             return timeline.entry(workspaceId, account, entryId);

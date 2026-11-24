@@ -57,7 +57,7 @@ public class ConversationQuestionController {
     public ConversationSubmissionDTO submitConversationTurn(
             WorkspaceContext workspace, @Valid @RequestBody ConversationTurnRequestDTO request) {
         long workspaceId = workspace.id();
-        return scope.execute(account -> {
+        return scope.write(account -> {
             ConversationTurnService.Submission submission = questions.ask(workspaceId, account, request);
             return new ConversationSubmissionDTO(
                     timeline.turn(workspaceId, account, submission.turn().getId()),
@@ -78,7 +78,7 @@ public class ConversationQuestionController {
         if (request.status() != ConversationTurn.Status.STOPPED) {
             throw new InvalidInputException("A turn can only be stopped.");
         }
-        return scope.execute(account -> {
+        return scope.write(account -> {
             timeline.requireOwnedTurn(workspace.id(), account, turnId);
             turns.stop(workspace.id(), turnId);
             return timeline.turn(workspace.id(), account, turnId);

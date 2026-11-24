@@ -48,7 +48,7 @@ public class ConversationController {
     @GetMapping
     @Operation(summary = "The developer's conversation: what runs now, its threads and how far it reached")
     public ConversationDTO getConversation(WorkspaceContext workspace) {
-        return scope.execute(account -> timeline.conversation(workspace.id(), account));
+        return scope.read(account -> timeline.conversation(workspace.id(), account));
     }
 
     @PutMapping("/read")
@@ -59,7 +59,7 @@ public class ConversationController {
     @ApiResponse(responseCode = "200", description = "The marker after the request: this time or a later one")
     public ConversationReadDTO markConversationRead(
             WorkspaceContext workspace, @Valid @RequestBody ConversationReadRequestDTO request) {
-        return scope.execute(
+        return scope.write(
                 account -> new ConversationReadDTO(conversations.markRead(workspace.id(), account, request.at())));
     }
 
@@ -69,7 +69,7 @@ public class ConversationController {
             WorkspaceContext workspace,
             @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(defaultValue = "" + ConversationTimeline.DEFAULT_PAGE) int size) {
-        return scope.execute(account -> timeline.entries(workspace.id(), account, cursor, size));
+        return scope.read(account -> timeline.entries(workspace.id(), account, cursor, size));
     }
 
     @GetMapping("/entries/{entryId}/thread")
@@ -87,6 +87,6 @@ public class ConversationController {
             @PathVariable UUID entryId,
             @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(defaultValue = "" + ConversationTimeline.DEFAULT_PAGE) int size) {
-        return scope.execute(account -> timeline.thread(workspace.id(), account, entryId, cursor, size));
+        return scope.read(account -> timeline.thread(workspace.id(), account, entryId, cursor, size));
     }
 }
