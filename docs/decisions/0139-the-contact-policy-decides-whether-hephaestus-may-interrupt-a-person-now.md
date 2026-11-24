@@ -166,7 +166,7 @@ Not enforced. The implementing issues add the checks below, and review of each i
 - SendRecheckTest fails when a contact queued before a pause is sent after it.
 - OneKindBatchTest fails when a background batch holds items of two contact kinds.
   It also fails when a claim takes another kind while a requested result is in the inbox.
-  It also fails when a turn ends and the next claim does not start at once.
+  It also fails when an item that no gate holds waits for a new event after a turn.
 - AppOnlyItemRouteTest fails when an item that only the app may show is routed to Slack.
 - HeldResultNotCitedTest fails when an unprompted message cites a result that a delivery experiment holds.
 - DeliveryDecisionTest fails when an unprompted decision has no row, or a model call starts before it.
