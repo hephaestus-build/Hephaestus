@@ -15,7 +15,6 @@ import { bundleMetadata, componentViolations, entryViolations, measure } from ".
  */
 const routeOnlyPackages = [
 	"@dnd-kit/core",
-	"@monaco-editor/react",
 	"@tanstack/react-table",
 	"@tanstack/table-core",
 	"mermaid",
@@ -28,7 +27,6 @@ const routeOnlyPackages = [
 
 /** Packages that only one lazy component may load, by that component's load. */
 const componentOnlyPackages = {
-	"@monaco-editor/react": "src/components/common/MonacoCodeEditor.tsx",
 	"monaco-editor": "src/components/common/MonacoCodeEditor.tsx",
 };
 
