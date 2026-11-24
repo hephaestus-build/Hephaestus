@@ -1,59 +1,390 @@
 [
-  "GET /admin/configuration-readiness",
-  "GET /admin/integration/dead-letters",
-  "GET /admin/llm/call-pools",
-  "GET /admin/llm/call-pools/models",
-  "GET /admin/release",
-  "GET /admin/settings",
-  "GET /admin/settings/public-activity",
-  "GET /auth/client/configuration",
-  "GET /auth/csrf",
-  "GET /identity-providers",
-  "GET /oauth/callback/{kind}",
-  "GET /user",
-  "GET /user/consent",
-  "GET /user/public-activity",
-  "GET /user/public-activity/workspaces/{slug}/onboarding",
-  "GET /workspaces",
-  "GET /workspaces/{workspaceSlug}",
-  "GET /workspaces/{workspaceSlug}/activity/hidden-contributors",
-  "GET /workspaces/{workspaceSlug}/integrations/dead-letters",
-  "GET /workspaces/{workspaceSlug}/practices/feedback/on-work",
-  "GET /workspaces/{workspaceSlug}/practices/items/{itemId}/own-trace",
-  "GET /workspaces/{workspaceSlug}/practices/items/{itemId}/reviews",
-  "GET /workspaces/{workspaceSlug}/practices/results",
-  "GET /workspaces/{workspaceSlug}/practices/review-context",
-  "GET /workspaces/{workspaceSlug}/public-activity",
-  "PATCH /admin/settings/silent-mode",
-  "PATCH /workspaces/{workspaceSlug}/activity/people/{userId}/public-visibility",
-  "PATCH /workspaces/{workspaceSlug}/public-activity",
-  "PATCH /workspaces/{workspaceSlug}/token",
-  "POST /admin/integration/dead-letters/{id}/replays",
-  "POST /admin/release/checks",
-  "POST /admin/research-disclosures",
-  "POST /admin/research-disclosures/removal-checks",
-  "POST /admin/research-disclosures/{datasetId}/closure",
-  "POST /admin/research-disclosures/{datasetId}/removal-receipts",
-  "POST /auth/client/logout",
-  "POST /auth/client/refresh",
-  "POST /auth/client/token",
-  "POST /browser-faults",
-  "POST /notifications/unsubscribe/{token}",
-  "POST /web-vitals",
-  "POST /workspaces/{workspaceSlug}/connections",
-  "POST /workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs",
-  "POST /workspaces/{workspaceSlug}/conversation/turns",
-  "POST /workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays",
-  "POST /workspaces/{workspaceSlug}/practice-repository/sync",
-  "POST /workspaces/{workspaceSlug}/practices/review-requests",
-  "POST /workspaces/{workspaceSlug}/practices/scans",
-  "PUT /admin/llm/call-pools/{id}",
-  "PUT /admin/llm/call-pools/{id}/models",
-  "PUT /admin/llm/models/{id}/capabilities",
-  "PUT /admin/settings/public-activity",
-  "PUT /user/consent/research",
-  "PUT /user/public-activity",
-  "PUT /workspaces/{workspaceSlug}/llm/models/{id}/capabilities",
-  "PUT /workspaces/{workspaceSlug}/practice-repository",
-  "PUT /workspaces/{workspaceSlug}/practice-repository/practices/{practiceSlug}/edited-in"
+	{
+		"operation": "GET /admin/configuration-readiness",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "GET /admin/integration/dead-letters",
+		"access": "reserved"
+	},
+	{
+		"operation": "GET /admin/llm/call-pools",
+		"access": "public",
+		"callers": [
+			"operator"
+		]
+	},
+	{
+		"operation": "GET /admin/llm/call-pools/models",
+		"access": "public",
+		"callers": [
+			"operator"
+		]
+	},
+	{
+		"operation": "GET /admin/release",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "GET /admin/settings",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "GET /admin/settings/public-activity",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "GET /auth/client/configuration",
+		"access": "public",
+		"callers": [
+			"extension"
+		]
+	},
+	{
+		"operation": "GET /auth/csrf",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "GET /identity-providers",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"extension"
+		]
+	},
+	{
+		"operation": "GET /oauth/callback/{kind}",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "GET /user",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"extension"
+		]
+	},
+	{
+		"operation": "GET /user/consent",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"extension"
+		]
+	},
+	{
+		"operation": "GET /user/public-activity",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "GET /user/public-activity/workspaces/{slug}/onboarding",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "GET /workspaces",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"extension"
+		]
+	},
+	{
+		"operation": "GET /workspaces/{workspaceSlug}",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"extension"
+		]
+	},
+	{
+		"operation": "GET /workspaces/{workspaceSlug}/activity/hidden-contributors",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "GET /workspaces/{workspaceSlug}/integrations/dead-letters",
+		"access": "reserved"
+	},
+	{
+		"operation": "GET /workspaces/{workspaceSlug}/practices/feedback/on-work",
+		"access": "public",
+		"callers": [
+			"extension"
+		]
+	},
+	{
+		"operation": "GET /workspaces/{workspaceSlug}/practices/items/{itemId}/own-trace",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"extension"
+		]
+	},
+	{
+		"operation": "GET /workspaces/{workspaceSlug}/practices/items/{itemId}/reviews",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"extension"
+		]
+	},
+	{
+		"operation": "GET /workspaces/{workspaceSlug}/practices/results",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"extension"
+		]
+	},
+	{
+		"operation": "GET /workspaces/{workspaceSlug}/practices/review-context",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"extension"
+		]
+	},
+	{
+		"operation": "GET /workspaces/{workspaceSlug}/public-activity",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "PATCH /admin/settings/silent-mode",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "PATCH /workspaces/{workspaceSlug}/activity/people/{userId}/public-visibility",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "PATCH /workspaces/{workspaceSlug}/public-activity",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "PATCH /workspaces/{workspaceSlug}/token",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "POST /admin/integration/dead-letters/{id}/replays",
+		"access": "reserved"
+	},
+	{
+		"operation": "POST /admin/release/checks",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "POST /admin/research-disclosures",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "POST /admin/research-disclosures/removal-checks",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "POST /admin/research-disclosures/{datasetId}/closure",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "POST /admin/research-disclosures/{datasetId}/removal-receipts",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "POST /auth/client/logout",
+		"access": "public",
+		"callers": [
+			"extension"
+		]
+	},
+	{
+		"operation": "POST /auth/client/refresh",
+		"access": "public",
+		"callers": [
+			"extension"
+		]
+	},
+	{
+		"operation": "POST /auth/client/token",
+		"access": "public",
+		"callers": [
+			"extension"
+		]
+	},
+	{
+		"operation": "POST /browser-faults",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "POST /notifications/unsubscribe/{token}",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "POST /web-vitals",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "POST /workspaces/{workspaceSlug}/connections",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "POST /workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "POST /workspaces/{workspaceSlug}/conversation/turns",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "POST /workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays",
+		"access": "reserved"
+	},
+	{
+		"operation": "POST /workspaces/{workspaceSlug}/practice-repository/sync",
+		"access": "public",
+		"callers": [
+			"automation"
+		]
+	},
+	{
+		"operation": "POST /workspaces/{workspaceSlug}/practices/review-requests",
+		"access": "public",
+		"callers": [
+			"webapp",
+			"extension"
+		]
+	},
+	{
+		"operation": "POST /workspaces/{workspaceSlug}/practices/scans",
+		"access": "reserved"
+	},
+	{
+		"operation": "PUT /admin/llm/call-pools/{id}",
+		"access": "reserved"
+	},
+	{
+		"operation": "PUT /admin/llm/call-pools/{id}/models",
+		"access": "reserved"
+	},
+	{
+		"operation": "PUT /admin/llm/models/{id}/capabilities",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "PUT /admin/settings/public-activity",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "PUT /user/consent/research",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "PUT /user/public-activity",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "PUT /workspaces/{workspaceSlug}/llm/models/{id}/capabilities",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "PUT /workspaces/{workspaceSlug}/practice-repository",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	},
+	{
+		"operation": "PUT /workspaces/{workspaceSlug}/practice-repository/practices/{practiceSlug}/edited-in",
+		"access": "public",
+		"callers": [
+			"webapp"
+		]
+	}
 ]

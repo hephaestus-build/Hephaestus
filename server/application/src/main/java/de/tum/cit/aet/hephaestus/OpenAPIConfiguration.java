@@ -204,10 +204,17 @@ public class OpenAPIConfiguration {
 
     private static final String COMPONENTS = "#/components/schemas/";
 
-    /** Each public operation as {@code METHOD /path}, from server/public-api-operations.json in the JAR. */
+    /** Public and reserved operations use open response enums so a later 1.x caller can accept additions. */
     static Set<String> readPublicOperations() {
         try (var in = new ClassPathResource("openapi/public-api-operations.json").getInputStream()) {
-            return Set.copyOf(JsonMapper.shared().readValue(in, new TypeReference<List<String>>() {}));
+            return JsonMapper.shared().readValue(in, new TypeReference<List<JsonNode>>() {}).stream()
+                    .filter(entry -> switch (entry.path("access").asString()) {
+                        case "public", "reserved" -> true;
+                        case "internal" -> false;
+                        default -> throw new IllegalStateException("Unknown API operation access: " + entry);
+                    })
+                    .map(entry -> entry.path("operation").asString())
+                    .collect(Collectors.toUnmodifiableSet());
         } catch (IOException e) {
             throw new UncheckedIOException("The JAR lacks openapi/public-api-operations.json", e);
         }

@@ -20,7 +20,12 @@ import {
 	refusals,
 	secretKeys,
 } from "./check-public-contract.ts";
-import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
+import {
+	API_OPERATION_REGISTRY,
+	apiOperationClassifications,
+	apiOperations,
+} from "./lib/api-operation-classification.ts";
+import { parseJson } from "./lib/json.ts";
 
 const CHART = "deploy/chart/hephaestus/values.schema.json";
 const ALERTS = "deploy/chart/hephaestus/files/hephaestus-alerts.yml";
@@ -499,28 +504,17 @@ function normalizeApiResource(resource: string) {
 }
 
 void test("the public operation list covers existing documented methods and extension SDK imports", () => {
-	const promised = asArray(
-		parseJson(readRepositoryFile("server/public-api-operations.json")),
-		"public operations",
-	).map((value) => asString(value, "public operation"));
+	const classes = apiOperationClassifications(
+		parseJson(readRepositoryFile(API_OPERATION_REGISTRY)),
+	);
+	const promised = [...classes].filter(([, item]) => item.access === "public").map(([key]) => key);
 	assert.notEqual(promised.length, 0);
-	assert.equal(new Set(promised).size, promised.length, "duplicate public operation");
-	const specification = asRecord(parse(readRepositoryFile("server/openapi.yaml")), "OpenAPI");
-	const paths = asRecord(specification.paths, "OpenAPI paths");
-	const methods = new Set(["get", "post", "put", "patch", "delete", "head", "options", "trace"]);
-	const operations = new Map<string, string>();
-	for (const [resource, raw] of Object.entries(paths)) {
-		for (const [method, value] of Object.entries(asRecord(raw, resource))) {
-			if (!methods.has(method)) {
-				continue;
-			}
-			const operation = asRecord(value, `${method} ${resource}`);
-			operations.set(
-				asString(operation.operationId, "operation ID"),
-				`${method.toUpperCase()} ${resource}`,
-			);
-		}
-	}
+	const operations = new Map(
+		[...apiOperations(parse(readRepositoryFile("server/openapi.yaml")))].map(([key, operation]) => [
+			operation.id,
+			key,
+		]),
+	);
 	for (const operation of promised) {
 		assert.ok(
 			[...operations.values()].includes(operation),
@@ -553,9 +547,10 @@ void test("the public operation list covers existing documented methods and exte
 					`${file} imports unknown SDK operation ${name}`,
 				);
 				imported.add(operation);
+				const classification = classes.get(operation);
 				assert.ok(
-					promised.includes(operation),
-					`${file} uses ${operation} outside the public promise`,
+					classification?.access === "public" && classification.callers.includes("extension"),
+					`${file} uses ${operation} without a public classification for the extension`,
 				);
 			}
 		}

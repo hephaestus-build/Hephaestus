@@ -17,6 +17,11 @@ import { parseArgs } from "node:util";
 import { readChangesets } from "@changesets/read";
 import { parse } from "yaml";
 
+import {
+	API_OPERATION_REGISTRY,
+	HTTP_METHODS,
+	apiOperationClassifications,
+} from "./lib/api-operation-classification.ts";
 import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { installPinnedBinary, toolCache } from "./lib/pinned-binary.ts";
@@ -26,7 +31,7 @@ import { compareVersions, parseVersion } from "./plan-release.ts";
 const ROOT = path.resolve(import.meta.dirname, "..");
 export const SPEC = "server/openapi.yaml";
 export const ACCEPTED_BREAKS = "server/openapi-accepted-breaks";
-export const PUBLIC_OPERATIONS = "server/public-api-operations.json";
+export const PUBLIC_OPERATIONS = API_OPERATION_REGISTRY;
 
 /**
  * oasdiff rule levels that differ from its defaults. Response enums are open, so a new value is no
@@ -198,8 +203,6 @@ function acceptedBreaksProblems(
 	return problems;
 }
 
-const HTTP_METHODS = new Set(["get", "put", "post", "delete", "options", "head", "patch", "trace"]);
-
 /** Each query, header or cookie parameter of an operation. A path variable's name is no contract. */
 function parameterLines(operation: string, parameters: readonly unknown[]): string[] {
 	return parameters.flatMap((parameter) => {
@@ -242,7 +245,9 @@ export function removedFromContract(base: string, revision: string): string[] {
 /** Each `METHOD /path` of `server/public-api-operations.json`. */
 export async function readPublicOperations(file: string): Promise<ReadonlySet<string>> {
 	return new Set(
-		asArray(parseJson(await readFile(file, "utf8")), file).map((entry) => asString(entry, file)),
+		[...apiOperationClassifications(parseJson(await readFile(file, "utf8")))]
+			.filter(([, item]) => item.access === "public")
+			.map(([operation]) => operation),
 	);
 }
 
