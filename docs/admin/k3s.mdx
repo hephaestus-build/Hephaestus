@@ -46,12 +46,18 @@ Verify the public ports from a network outside the admin VPN and the hosting pro
 Use Node.js 24.2 or later on the host and get [the firewall script](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/host-firewall.ts) from a trusted checkout.
 The script manages all UFW rules added through the UFW command line.
 It checks the saved and live UFW user rules, their chain hooks, and the default policies.
-It also reports unmanaged accepts and jumps in the kernel input and UFW before-input and after-input chains.
+It also reports unmanaged rules and jumps in the kernel input and UFW input chains.
+An early deny can prevent required traffic from reaching the UFW user rules.
 If you use custom packet filter rules or container port forwarding, check those rules separately.
 
 Use UFW to load the host rules at boot.
-If `netfilter-persistent` reloads saved snapshots, back them up and review them.
-Move any required rules to UFW, disable `netfilter-persistent`, and archive the snapshots under different names.
+If `netfilter-persistent` reloads saved snapshots, use the host console for the migration.
+Back up the saved snapshots and capture the live IPv4 and IPv6 tables with `iptables-save` and `ip6tables-save`.
+Compare each saved rule with the live rules and identify which rules UFW and k3s own.
+Move the required host rules to UFW, then disable `netfilter-persistent` and archive its snapshots.
+
+Remove the conflicting rules that remain loaded in the kernel by their full rule specification.
+Verify the UFW policy and check that k3s remains healthy.
 
 Store `host-firewall.json` in `/etc/hephaestus`. Give it root ownership and mode `0600`.
 Keep it outside your Git checkout.
@@ -75,6 +81,8 @@ Set `k3s` for a k3s host with the default Pod and Service networks, and set `htt
    It makes no changes.
 2. From the admin VPN, connect over SSH on port 22 with `ssh -o ControlMaster=no -o ControlPath=none <host>`.
    Make sure you have console access before changing the firewall.
+   During a change, the script uses UFW reset and rebuilds the declared rules.
+   Input and forwarding stay restricted to preserve VPN SSH during the reset.
    Run this command from the trusted checkout:
 
    ```bash
@@ -89,8 +97,10 @@ Set `k3s` for a k3s host with the default Pod and Service networks, and set `htt
    sudo --preserve-env=SSH_CONNECTION node scripts/host-firewall.ts --confirm /etc/hephaestus/host-firewall.json
    ```
 
-   If you do not confirm, the timer restores and checks the UFW rules, settings, and boot state from before the change.
-   If the saved policy cannot be restored, recovery drops incoming and routed traffic and permits SSH from the configured VPN.
+   The script records the checked policy in the root-owned `host-firewall-confirmed.json` file in `/etc/hephaestus`.
+   Applying a policy that already matches the host also records it as confirmed.
+   If you do not confirm a change, the timer reapplies and verifies the last confirmed policy.
+   If recovery cannot apply a confirmed policy, it drops incoming and routed traffic and permits SSH from the configured VPN.
    The emergency policy interrupts public web traffic and Pod forwarding.
    Recovery also saves the emergency policy for the next boot.
 
@@ -98,12 +108,12 @@ Set `k3s` for a k3s host with the default Pod and Service networks, and set `htt
    The retry uses the time left on the timer.
 
    If recovery fails, check the journal for `hephaestus-host-firewall-rollback.service`.
-   From the console, run `sudo node scripts/host-firewall.ts --restore-ufw` to retry with an intact snapshot.
-   If the snapshot is unavailable, verify the emergency UFW boot policy from the console before you reboot.
-   After the reboot, connect from the admin VPN and apply the corrected policy.
+   From the console, run `sudo node scripts/host-firewall.ts --restore-ufw` to retry recovery.
+   If recovery could not save the emergency policy, check the UFW boot rules from the console before rebooting.
+   Connect from the admin VPN to apply and confirm the corrected policy.
 
    Keep the host running until you confirm the change or recover the saved policy.
-   A reboot clears the timer and its snapshot.
+   A reboot clears the pending timer. The last confirmed policy remains available on disk.
 
 To monitor the host policy, install the [firewall status timer](./monitoring#check-the-host-firewall).
 

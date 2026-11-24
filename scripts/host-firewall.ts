@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
 	chmodSync,
 	chownSync,
@@ -10,7 +10,6 @@ import {
 	renameSync,
 	rmSync,
 	statSync,
-	unlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { BlockList, isIP } from "node:net";
@@ -41,7 +40,6 @@ interface Problem {
 }
 
 const families = [4, 6] as const;
-const anyAddress = { 4: "0.0.0.0/0", 6: "::/0" };
 const defaults = [
 	{ chain: "INPUT", direction: "incoming", ufw: "deny", policy: "DROP" },
 	{ chain: "OUTPUT", direction: "outgoing", ufw: "allow", policy: "ACCEPT" },
@@ -49,6 +47,7 @@ const defaults = [
 ] as const;
 const lock = "/run/hephaestus-host-firewall.lock";
 const pending = "/run/hephaestus-host-firewall.pending";
+const confirmed = "/etc/hephaestus/host-firewall-confirmed.json";
 const rollback = "hephaestus-host-firewall-rollback";
 const recoveryDirectory = "/run/hephaestus-host-firewall-recovery";
 const recoveryChain = "HEPHAESTUS-RECOVERY";
@@ -56,12 +55,10 @@ const ufw = "/usr/sbin/ufw";
 const systemctl = "/usr/bin/systemctl";
 const ufwDefaults = "/etc/default/ufw";
 const ufwFiles = {
-	defaults: ufwDefaults,
 	"user.rules": "/etc/ufw/user.rules",
 	"user6.rules": "/etc/ufw/user6.rules",
 	"ufw.conf": "/etc/ufw/ufw.conf",
 };
-const tuplePrefix = "### tuple ### ";
 
 function addressFamily(address: string, field: string): Family {
 	const family = isIP(address);
@@ -194,72 +191,6 @@ export function ufwArgs(rule: Rule): string[] {
 	];
 }
 
-function key(rule: Rule, family: Family): string {
-	return [
-		"allow",
-		rule.protocol ?? "any",
-		rule.port ?? "any",
-		anyAddress[family],
-		"any",
-		rule.source ?? anyAddress[family],
-		rule.device === undefined ? "in" : `in_${rule.device}`,
-	].join(" ");
-}
-
-export function savedRules(contents: string, family: Family): string[] {
-	const lines = contents.split("\n");
-	const start = lines.indexOf("### RULES ###");
-	const end = lines.indexOf("### END RULES ###");
-	if (start === -1 || end <= start) {
-		throw new Error(`Cannot read the saved IPv${family} UFW rules.`);
-	}
-	return lines
-		.slice(start + 1, end)
-		.filter((line) => line.startsWith(tuplePrefix))
-		.map((line) => {
-			const tokens = line
-				.slice(tuplePrefix.length)
-				.split(" ")
-				.filter((token) => !token.startsWith("comment="));
-			// UFW writes a host-length prefix in the saved tuple. Accept either representation.
-			const source = tokens[5];
-			if (source !== undefined && isIP(source)) {
-				tokens[5] = `${source}/${family === 4 ? "32" : "128"}`;
-			}
-			return tokens.join(" ");
-		});
-}
-
-export function ruleChanges(rules: Rule[], current: Record<Family, string[]>) {
-	const keep = new Set<string>();
-	const remove: number[] = [];
-	let index = 0;
-	for (const family of families) {
-		const expected = new Set(
-			rules
-				.filter((rule) => rule.family === undefined || rule.family === family)
-				.map((rule) => key(rule, family)),
-		);
-		for (const rule of current[family]) {
-			index += 1;
-			const entry = `${family}:${rule}`;
-			if (expected.has(rule) && !keep.has(entry)) {
-				keep.add(entry);
-			} else {
-				remove.push(index);
-			}
-		}
-	}
-	const add = rules.filter((rule) =>
-		families.some(
-			(family) =>
-				(rule.family === undefined || rule.family === family) &&
-				!keep.has(`${family}:${key(rule, family)}`),
-		),
-	);
-	return { add, remove: remove.toReversed() };
-}
-
 function setting(contents: string, name: string): string | undefined {
 	const entries = contents.split("\n").filter((line) => line.startsWith(`${name}=`));
 	return entries.length === 1
@@ -296,11 +227,38 @@ function unitState(
 	return run(systemctl, ["show", "--value", `--property=${property}`, unit]);
 }
 
-function saved(): Record<Family, string[]> {
-	return {
-		4: savedRules(readFileSync("/etc/ufw/user.rules", "utf8"), 4),
-		6: savedRules(readFileSync("/etc/ufw/user6.rules", "utf8"), 6),
-	};
+export function savedDrift(contents: string, family: Family, rules: Rule[]) {
+	const prefix = family === 4 ? "ufw" : "ufw6";
+	const input = `${prefix}-user-input`;
+	const hostPrefix = family === 4 ? /\/32$/u : /\/128$/u;
+	const wanted = rules
+		.filter((rule) => rule.family === undefined || rule.family === family)
+		.map((rule) =>
+			[
+				"-A",
+				input,
+				...(rule.device === undefined ? [] : ["-i", rule.device]),
+				...(rule.protocol === undefined ? [] : ["-p", rule.protocol, "--dport", String(rule.port)]),
+				...(rule.source === undefined ? [] : ["-s", rule.source.replace(hostPrefix, "")]),
+				"-j",
+				"ACCEPT",
+			].join(" "),
+		)
+		.toSorted();
+	const actual = contents
+		.split("\n")
+		.filter((line) => line.startsWith(`-A ${input} `))
+		.map((line) =>
+			line.replace(
+				/ -s (?<source>\S+)/u,
+				(_match, source: string) => ` -s ${source.replace(hostPrefix, "")}`,
+			),
+		)
+		.toSorted();
+	return (
+		actual.join("\n") !== wanted.join("\n") ||
+		contents.split("\n").some((line) => /^-A ufw6?-user-(?:forward|output) /u.test(line))
+	);
 }
 
 function liveRule(rule: Rule, chain: string): string {
@@ -317,7 +275,12 @@ function liveRule(rule: Rule, chain: string): string {
 	].join(" ");
 }
 
-export function liveDrift(lines: string[], family: Family, rules: Rule[]): string[] {
+export function liveDrift(
+	lines: string[],
+	family: Family,
+	rules: Rule[],
+	guarded = false,
+): string[] {
 	const prefix = family === 4 ? "ufw" : "ufw6";
 	const input = `${prefix}-user-input`;
 	const wanted = rules
@@ -348,13 +311,39 @@ export function liveDrift(lines: string[], family: Family, rules: Rule[]): strin
 	if (lines.some((line) => unmanagedInputRule(line, prefix, family))) {
 		problems.push(`IPv${family} has an unmanaged input rule.`);
 	}
+	if (!guarded && lines.includes(`-A INPUT -j ${recoveryChain}`)) {
+		problems.push(`IPv${family} has an active emergency firewall guard.`);
+	}
+	if (
+		deniesBefore(lines, "INPUT", `${prefix}-before-input`) ||
+		deniesBefore(lines, `${prefix}-before-input`, input)
+	) {
+		problems.push(`IPv${family} has an input deny before the required UFW rules.`);
+	}
 	return problems;
+}
+
+function deniesBefore(lines: string[], chain: string, next: string) {
+	const hook = lines.indexOf(`-A ${chain} -j ${next}`);
+	return lines.slice(0, Math.max(hook, 0)).some((line) => {
+		const rule = withoutComment(line);
+		return (
+			rule.startsWith(`-A ${chain} `) &&
+			/ -[jg] (?:DROP|REJECT|RETURN)(?: |$)/u.test(rule) &&
+			rule !== `-A ${chain} -m conntrack --ctstate INVALID -j DROP` &&
+			rule !== `-A ${chain} -m rt --rt-type 0 -j DROP`
+		);
+	});
+}
+
+function withoutComment(line: string) {
+	return line.replaceAll(/ -m comment --comment (?:"(?:[^"\\]|\\.)*"|[^"\s]+)/gu, "");
 }
 
 function unmanagedInputRule(line: string, prefix: string, family: Family) {
 	const [action, chain] = line.split(" ");
-	const uncommented = line.replaceAll(/"(?:[^"\\]|\\.)*"/gu, "");
-	const target = / -[jg] (?<jump>\S+)/u.exec(uncommented)?.groups?.jump;
+	const policyRule = withoutComment(line);
+	const target = / -[jg] (?<jump>\S+)/u.exec(policyRule)?.groups?.jump;
 	if (
 		action !== "-A" ||
 		target === undefined ||
@@ -364,7 +353,6 @@ function unmanagedInputRule(line: string, prefix: string, family: Family) {
 	}
 	if (chain === "INPUT") {
 		// kube-router marks traffic already admitted by its NetworkPolicies.
-		const policyRule = line.replaceAll(/ -m comment --comment "(?:[^"\\]|\\.)*"/gu, "");
 		if (
 			policyRule === "-A INPUT -m mark --mark 0x20000/0x20000 -j ACCEPT" ||
 			policyRule === "-A INPUT -i lo -j ACCEPT"
@@ -387,7 +375,10 @@ function unmanagedInputRule(line: string, prefix: string, family: Family) {
 	if (chain === `${prefix}-before-input`) {
 		return (
 			!["logging-deny", "not-local", "user-input"].some((name) => target === `${prefix}-${name}`) &&
-			!(target === "ACCEPT" && standardBeforeInputAccept(line.slice(`-A ${chain} `.length), family))
+			!(
+				target === "ACCEPT" &&
+				standardBeforeInputAccept(policyRule.slice(`-A ${chain} `.length), family)
+			)
 		);
 	}
 	return chain === `${prefix}-after-input` && target !== `${prefix}-skip-to-policy-input`;
@@ -453,8 +444,7 @@ export function settingsDrift(configuration: string, ufwConfig: string, unit: st
 	return problems;
 }
 
-function drift(rules: Rule[]): Problem[] {
-	const changes = ruleChanges(rules, saved());
+function drift(rules: Rule[], guarded = false): Problem[] {
 	const problems = settingsDrift(
 		readFileSync(ufwDefaults, "utf8"),
 		readFileSync(ufwFiles["ufw.conf"], "utf8"),
@@ -464,17 +454,16 @@ function drift(rules: Rule[]): Problem[] {
 	if (snapshot !== null) {
 		problems.push({ reason: "netfilter_persistent", message: snapshot });
 	}
-	if (changes.add.length > 0 || changes.remove.length > 0) {
-		problems.push({
-			reason: "saved_rules",
-			message: `Saved UFW rules differ (${changes.add.length} missing, ${changes.remove.length} extra).`,
-		});
-	}
 	for (const family of families) {
+		const file = family === 4 ? ufwFiles["user.rules"] : ufwFiles["user6.rules"];
+		if (savedDrift(readFileSync(file, "utf8"), family, rules)) {
+			problems.push({ reason: "saved_rules", message: `Saved IPv${family} UFW rules differ.` });
+		}
 		for (const message of liveDrift(
 			run(packetFilter[family], ["-w", "5", "-S"]).split("\n"),
 			family,
 			rules,
+			guarded,
 		)) {
 			problems.push({ reason: "live_rules", message });
 		}
@@ -538,191 +527,91 @@ export function requireFreshSshConnection(changedAt: number, startedAt: () => nu
 	}
 }
 
-function ensureIpv6() {
-	const contents = readFileSync(ufwDefaults, "utf8");
-	if (setting(contents, "IPV6") === "yes") {
-		return;
-	}
-	if (!["no", "yes"].includes(setting(contents, "IPV6") ?? "")) {
-		throw new Error("Expected one IPV6 setting in /etc/default/ufw.");
-	}
-	replaceFile(ufwDefaults, contents.replace(/^IPV6=.*$/mu, "IPV6=yes"), statSync(ufwDefaults));
-	// UFW needs its IPv6 chains before active rules can be changed through the CLI.
-	if (setting(readFileSync("/etc/ufw/ufw.conf", "utf8"), "ENABLED") === "yes") {
-		run(ufw, ["reload"]);
-	}
-}
-
-function bootState(state: string) {
-	if (state !== "enabled" && state !== "enabled-runtime" && state !== "disabled") {
-		throw new Error("Expected ufw.service to be enabled, enabled at runtime, or disabled.");
-	}
-	return state;
-}
-
 function replaceFile(
 	path: string,
-	contents: string | Buffer,
-	metadata: { uid: number; gid: number; mode: number },
+	contents: string,
+	metadata?: { uid: number; gid: number; mode: number },
 ) {
 	const temporary = `${path}.hephaestus-${randomUUID()}`;
 	try {
 		writeFileSync(temporary, contents, { flag: "wx", mode: 0o600 });
-		chownSync(temporary, metadata.uid, metadata.gid);
-		chmodSync(temporary, metadata.mode % 0o1000);
+		if (metadata !== undefined) {
+			chownSync(temporary, metadata.uid, metadata.gid);
+			chmodSync(temporary, metadata.mode % 0o1000);
+		}
 		renameSync(temporary, path);
 	} finally {
 		rmSync(temporary, { force: true });
 	}
 }
 
-export function filesDigest(files: typeof ufwFiles) {
-	const hash = createHash("sha256");
-	for (const path of Object.values(files)) {
-		const metadata = statSync(path);
-		const contents = readFileSync(path);
-		hash.update(
-			JSON.stringify([metadata.uid, metadata.gid, metadata.mode % 0o1000, contents.length]),
-		);
-		hash.update(contents);
-	}
-	return hash.digest("hex");
-}
-
-function savedFiles(directory: string): typeof ufwFiles {
-	return {
-		defaults: nodePath.join(directory, "defaults"),
-		"user.rules": nodePath.join(directory, "user.rules"),
-		"user6.rules": nodePath.join(directory, "user6.rules"),
-		"ufw.conf": nodePath.join(directory, "ufw.conf"),
-	};
-}
-
 const packetFilter = { 4: "/usr/sbin/iptables", 6: "/usr/sbin/ip6tables" } as const;
 
-export function managedLiveState(enabled: boolean, execute: typeof run) {
-	return families.map((family) => {
-		const chains = new Map<string, string[]>();
-		for (const line of execute(packetFilter[family], ["-w", "5", "-S"]).split("\n")) {
-			const [action, chain] = line.split(" ");
-			const jumpToUfw = / -j ufw6?-[^ ]+$/u.test(line);
-			// A disable can leave empty UFW chains. Neither those chains nor their jumps filter traffic.
-			if (!enabled && (action === "-N" || jumpToUfw)) {
-				continue;
-			}
-			if (chain !== undefined && (action === "-P" || /^ufw6?-/u.test(chain) || jumpToUfw)) {
-				const rules = chains.get(chain) ?? [];
-				rules.push(line);
-				chains.set(chain, rules);
-			}
-		}
-		return [...chains].toSorted(([left], [right]) => left.localeCompare(right));
-	});
+interface Change {
+	id: string;
+	policy: unknown;
+	started?: true;
+	changedAt?: number;
 }
 
 interface RecoveryRuntime {
 	directory: string;
 	pending: string;
-	files: typeof ufwFiles;
+	confirmed: string;
+	defaultsPath: string;
 	execute: typeof run;
-	writePolicy: (rules: Rule[]) => void;
-	drift: (rules: Rule[]) => Problem[];
+	drift: (rules: Rule[], guarded?: boolean) => Problem[];
 }
 
 const hostRecovery: RecoveryRuntime = {
 	directory: recoveryDirectory,
 	pending,
-	files: ufwFiles,
+	confirmed,
+	defaultsPath: ufwDefaults,
 	execute: run,
-	writePolicy,
 	drift,
 };
 
-function ufwUnitState(execute: typeof run) {
-	return execute(systemctl, ["show", "--value", "--property=UnitFileState", "ufw.service"]);
-}
-
-function snapshotUfw(rules: Rule[], { directory, files, execute }: RecoveryRuntime) {
-	const state = bootState(ufwUnitState(execute));
-	const snapshotDirectory = nodePath.join(directory, "snapshot");
-	mkdirSync(directory, { mode: 0o700 });
-	try {
-		mkdirSync(snapshotDirectory, { mode: 0o700 });
-		for (const [name, path] of Object.entries(files)) {
-			const backup = nodePath.join(snapshotDirectory, name);
-			const original = statSync(path);
-			copyFileSync(path, backup);
-			chownSync(backup, original.uid, original.gid);
-		}
-		writeFileSync(nodePath.join(snapshotDirectory, "ufw.service.state"), state, { mode: 0o600 });
-		// Refuse an apply if there is no known enabled state to restore.
-		const enabled = savedEnabled(readFileSync(savedFiles(snapshotDirectory)["ufw.conf"], "utf8"));
-		const expectedFiles = filesDigest(files);
-		if (filesDigest(savedFiles(snapshotDirectory)) !== expectedFiles) {
-			throw new Error("UFW files changed while taking the recovery snapshot.");
-		}
-		writeFileSync(nodePath.join(directory, "expected-files"), expectedFiles, {
-			mode: 0o600,
-		});
-		writeFileSync(
-			nodePath.join(directory, "expected-live"),
-			JSON.stringify([state, managedLiveState(enabled, execute)]),
-			{ mode: 0o600 },
-		);
-		writeFileSync(
-			nodePath.join(directory, "vpn.json"),
-			JSON.stringify(rules.filter(({ port }) => port === 22).map(({ source }) => source)),
-			{ mode: 0o600 },
-		);
-		copyFileSync(import.meta.filename, nodePath.join(directory, "host-firewall.ts"));
-	} catch (error) {
-		rmSync(directory, { recursive: true, force: true });
-		throw error;
+function readChange(file: string): Change | undefined {
+	if (!existsSync(file)) {
+		return undefined;
 	}
-}
-
-function savedEnabled(contents: string) {
-	const enabled = setting(contents, "ENABLED");
-	if (enabled !== "yes" && enabled !== "no") {
-		throw new Error("Expected ENABLED=yes or ENABLED=no in the UFW snapshot.");
+	const data: unknown = JSON.parse(readFileSync(file, "utf8"));
+	if (
+		typeof data !== "object" ||
+		data === null ||
+		!("id" in data) ||
+		typeof data.id !== "string" ||
+		!("policy" in data) ||
+		("started" in data && data.started !== true) ||
+		("changedAt" in data &&
+			(typeof data.changedAt !== "number" || !Number.isFinite(data.changedAt)))
+	) {
+		throw new Error("Invalid saved firewall policy declaration.");
 	}
-	return enabled === "yes";
+	rulesFor(data.policy);
+	return {
+		id: data.id,
+		policy: data.policy,
+		...("started" in data && data.started === true ? { started: true as const } : {}),
+		...("changedAt" in data && typeof data.changedAt === "number"
+			? { changedAt: data.changedAt }
+			: {}),
+	};
 }
 
-export function recoveryCommand(snapshotDir: string): string[] {
+function saveChange(file: string, change: Change) {
+	replaceFile(file, JSON.stringify(change));
+}
+
+export function recoveryCommand(directory: string): string[] {
 	return [
 		"/usr/bin/flock",
 		lock,
 		process.execPath,
-		nodePath.join(snapshotDir, "host-firewall.ts"),
+		nodePath.join(directory, "host-firewall.ts"),
 		"--restore-ufw",
 	];
-}
-
-export function restoreSnapshot(snapshotDir: string, files: typeof ufwFiles, execute: typeof run) {
-	const enabled = savedEnabled(readFileSync(nodePath.join(snapshotDir, "ufw.conf"), "utf8"));
-	const state = bootState(readFileSync(nodePath.join(snapshotDir, "ufw.service.state"), "utf8"));
-	const copies = Object.entries(files).map(([name, path]) => {
-		const backup = nodePath.join(snapshotDir, name);
-		return { path, bytes: readFileSync(backup), metadata: statSync(backup) };
-	});
-
-	// When reverting a first enable, remove the live IPv6 rules before restoring the old defaults.
-	if (!enabled) {
-		execute(ufw, ["--force", "disable"]);
-	}
-	for (const { path, bytes, metadata } of copies) {
-		replaceFile(path, bytes, metadata);
-	}
-	if (enabled) {
-		execute(ufw, ["reload"]);
-	}
-	if (state !== "enabled") {
-		execute(systemctl, ["disable", "ufw.service"]);
-		if (state === "enabled-runtime") {
-			execute(systemctl, ["enable", "--runtime", "ufw.service"]);
-		}
-	}
 }
 
 export function recoveryFilter(family: Family, vpn: Rule[], existing: string) {
@@ -812,105 +701,98 @@ function installRecoveryFilters(vpn: Rule[], execute: typeof run) {
 	}
 }
 
-function recoveryVpn(directory: string) {
-	try {
-		const config: unknown = JSON.parse(readFileSync(nodePath.join(directory, "vpn.json"), "utf8"));
-		return sources(config, "recovery VPN networks", true).map((rule) => ({
-			...rule,
-			port: 22,
-			protocol: "tcp" as const,
-		}));
-	} catch {
-		console.error("Recovery could not read the VPN networks. Use the host console.");
-		return [];
+function setUfwDefault(path: string, name: "IPV6" | "MANAGE_BUILTINS", value: "yes" | "no") {
+	const contents = readFileSync(path, "utf8");
+	const previous = setting(contents, name);
+	if (previous === undefined) {
+		throw new Error(`Expected one ${name} setting in the UFW defaults.`);
 	}
-}
-
-function preserveRecoveryFilters(defaultsPath: string) {
-	const configuration = readFileSync(defaultsPath, "utf8");
-	if (setting(configuration, "MANAGE_BUILTINS") === "yes") {
+	if (previous !== value) {
 		replaceFile(
-			defaultsPath,
-			configuration.replace(/^MANAGE_BUILTINS=.*$/mu, "MANAGE_BUILTINS=no"),
-			statSync(defaultsPath),
+			path,
+			contents.replace(new RegExp(`^${name}=.*$`, "mu"), `${name}=${value}`),
+			statSync(path),
 		);
 	}
 }
 
-function failClosed(runtime: RecoveryRuntime) {
-	const { directory, files, execute } = runtime;
-	const vpn = recoveryVpn(directory);
-	installRecoveryFilters(vpn, execute);
-	// Keep the restrictive live guards while UFW writes an emergency boot policy.
-	try {
-		preserveRecoveryFilters(files.defaults);
-		runtime.writePolicy(vpn);
-	} finally {
-		installRecoveryFilters(vpn, execute);
-	}
-	const problems = runtime.drift(vpn);
+function vpnRules(rules: Rule[]) {
+	return rules.filter(({ port }) => port === 22);
+}
+
+function verifyPolicy(rules: Rule[], runtime: RecoveryRuntime, guarded = false) {
+	const problems = runtime.drift(rules, guarded);
 	if (problems.length > 0) {
-		throw new Error(
-			[
-				"Could not verify the emergency UFW boot policy.",
-				...problems.map(({ message }) => message),
-			].join("\n"),
-		);
+		throw new Error(problems.map(({ message }) => message).join("\n"));
 	}
 }
 
-export function verifyRestoredPolicy(
-	expectedFiles: string,
-	expectedLive: string,
-	files: typeof ufwFiles,
-	execute: typeof run,
-) {
-	const enabled = savedEnabled(readFileSync(files["ufw.conf"], "utf8"));
-	const state = ufwUnitState(execute);
-	if (
-		filesDigest(files) !== expectedFiles ||
-		JSON.stringify([state, managedLiveState(enabled, execute)]) !== expectedLive
-	) {
-		throw new Error("The restored UFW policy differs from the saved snapshot.");
+function rebuildPolicy(rules: Rule[], runtime: RecoveryRuntime, emergency = false) {
+	const { execute, defaultsPath } = runtime;
+	const vpn = vpnRules(rules);
+	// UFW reset disables UFW temporarily. Keep blocking input and forwarding through the reset.
+	installRecoveryFilters(vpn, execute);
+	try {
+		setUfwDefault(defaultsPath, "MANAGE_BUILTINS", "no");
+		execute(ufw, ["--force", "reset"]);
+		setUfwDefault(defaultsPath, "IPV6", "yes");
+		for (const { direction, ufw: action } of defaults) {
+			execute(ufw, ["default", action, direction]);
+		}
+		for (const rule of rules) {
+			execute(ufw, ufwArgs(rule));
+		}
+		execute(ufw, ["--force", "enable"]);
+		execute(systemctl, ["enable", "ufw.service"]);
+		verifyPolicy(rules, runtime, true);
+		if (emergency) {
+			installRecoveryFilters(vpn, execute);
+		} else {
+			removeRecoveryFilter(execute);
+		}
+	} catch (error) {
+		installRecoveryFilters(vpn, execute);
+		throw error;
 	}
 }
 
 export function restoreUfw(runtime = hostRecovery) {
-	const { directory, execute, files } = runtime;
-	if (!existsSync(directory)) {
-		throw new Error("There is no UFW recovery snapshot.");
-	}
-	const snapshotDirectory = nodePath.join(directory, "snapshot");
+	let change: Change | undefined;
 	try {
-		const expectedFiles = readFileSync(nodePath.join(directory, "expected-files"), "utf8");
-		const expectedLive = readFileSync(nodePath.join(directory, "expected-live"), "utf8");
-		const snapshot = savedFiles(snapshotDirectory);
-		if (filesDigest(snapshot) !== expectedFiles) {
-			throw new Error("The saved UFW files differ from the snapshot.");
+		change = readChange(runtime.pending);
+	} catch (error) {
+		installRecoveryFilters([], runtime.execute);
+		throw new Error("Cannot read the unconfirmed policy. The emergency guards are active.", {
+			cause: error,
+		});
+	}
+	if (change === undefined || change.started !== true) {
+		return;
+	}
+	try {
+		const last = readChange(runtime.confirmed);
+		if (last === undefined) {
+			throw new Error("No previous firewall policy has been confirmed.");
 		}
-		// Keep the guard in place until the original inactive state has been verified.
-		if (!savedEnabled(readFileSync(snapshot["ufw.conf"], "utf8"))) {
-			installRecoveryFilters(recoveryVpn(directory), execute);
-			preserveRecoveryFilters(files.defaults);
+		if (last.id !== change.id) {
+			rebuildPolicy(rulesFor(last.policy), runtime);
+			console.log("Restored the last confirmed UFW policy.");
 		}
-		restoreSnapshot(snapshotDirectory, files, execute);
-		verifyRestoredPolicy(expectedFiles, expectedLive, files, execute);
-		removeRecoveryFilter(execute);
 	} catch (error) {
 		console.error(error instanceof Error ? error.message : "Could not restore UFW.");
-		failClosed(runtime);
-		throw new Error("UFW recovery applied an emergency policy. Use the host console.", {
+		rebuildPolicy(vpnRules(rulesFor(change.policy)), runtime, true);
+		throw new Error("UFW recovery applied a VPN-only emergency policy. Use the host console.", {
 			cause: error,
 		});
 	}
 	rmSync(runtime.pending, { force: true });
-	rmSync(directory, { recursive: true });
-	console.log("Restored the saved UFW policy.");
 }
 
-export function armRecovery(rules: Rule[], runtime = hostRecovery) {
-	snapshotUfw(rules, runtime);
-	// Hold the same lock in recovery so a slow UFW operation cannot race the restore.
+export function armRecovery(change: Change, runtime = hostRecovery) {
+	mkdirSync(runtime.directory, { mode: 0o700, recursive: true });
+	copyFileSync(import.meta.filename, nodePath.join(runtime.directory, "host-firewall.ts"));
+	saveChange(runtime.pending, change);
+	// Recovery uses the same lock. An unarmed change record is safe to replace on the next apply.
 	runtime.execute("/usr/bin/systemd-run", [
 		`--unit=${rollback}`,
 		"--on-active=10min",
@@ -920,7 +802,6 @@ export function armRecovery(rules: Rule[], runtime = hostRecovery) {
 		"--setenv=HEPHAESTUS_FIREWALL_LOCKED=1",
 		...recoveryCommand(runtime.directory),
 	]);
-	rmSync(runtime.pending, { force: true });
 }
 
 export function applyAction(
@@ -938,93 +819,73 @@ export function applyAction(
 	return policyMatches() ? "unchanged" : "arm";
 }
 
-function writePolicy(rules: Rule[]) {
-	ensureIpv6();
-	const changes = ruleChanges(rules, saved());
-	for (const rule of changes.add) {
-		run(ufw, ufwArgs(rule));
-	}
-	for (const index of ruleChanges(rules, saved()).remove) {
-		run(ufw, ["--force", "delete", String(index)]);
-	}
-	const configuration = readFileSync(ufwDefaults, "utf8");
-	for (const { chain, direction, policy, ufw: action } of defaults) {
-		if (setting(configuration, `DEFAULT_${chain}_POLICY`) !== policy) {
-			run(ufw, ["default", action, direction]);
-		}
-	}
-	run(ufw, ["--force", "enable"]);
-	run(systemctl, ["enable", "ufw.service"]);
-}
-
-function apply(rules: Rule[]) {
+function apply(policy: unknown, rules: Rule[]) {
 	const snapshot = snapshotDrift();
 	if (snapshot !== null) {
 		throw new Error(snapshot);
 	}
 	sshConnection(rules);
+	const waiting = unitState(`${rollback}.timer`, "SubState") === "waiting";
+	const previous = waiting ? readChange(pending) : undefined;
 	const recoveryAction = applyAction(
-		unitState(`${rollback}.timer`, "SubState") === "waiting",
-		existsSync(pending),
+		waiting,
+		previous?.changedAt !== undefined,
 		unitState(`${rollback}.service`, "ActiveState"),
 		() => drift(rules).length === 0,
 	);
-	if (recoveryAction === "retry" && !existsSync(recoveryDirectory)) {
-		throw new Error("There is no UFW recovery snapshot for the waiting timer.");
-	}
-	if (recoveryAction !== "retry" && existsSync(recoveryDirectory)) {
-		throw new Error("An unfinished UFW recovery snapshot exists. Restore it from the console.");
-	}
+	const change = { id: previous?.id ?? randomUUID(), policy };
 	if (recoveryAction === "unchanged") {
-		console.log("UFW matches the host policy.");
+		saveChange(confirmed, change);
+		console.log("UFW matches the host policy. Recorded the confirmed policy.");
 		return;
 	}
 	if (recoveryAction === "arm") {
-		armRecovery(rules);
+		armRecovery(change);
+	} else if (previous === undefined) {
+		throw new Error("The waiting recovery unit has no policy declaration.");
 	}
-	// A retry after an incomplete apply uses the original timer and its remaining time.
-	console.log("The recovery timer will restore the saved UFW policy at its next run:");
+	saveChange(pending, { ...change, started: true });
+	console.log("The recovery timer will reapply the last confirmed UFW policy at its next run:");
 	console.log(run(systemctl, ["list-timers", "--no-pager", `${rollback}.timer`]));
-	writePolicy(rules);
-
-	const problems = drift(rules);
-	if (problems.length > 0) {
-		throw new Error(problems.map(({ message }) => message).join("\n"));
-	}
+	rebuildPolicy(rules, hostRecovery);
 	if (unitState(`${rollback}.timer`, "SubState") !== "waiting") {
 		throw new Error("The recovery timer has expired.");
 	}
-	const changedAt = readFileSync("/proc/uptime", "utf8").split(" ")[0];
-	if (changedAt === undefined || !Number.isFinite(Number(changedAt))) {
+	const changedAt = Number(readFileSync("/proc/uptime", "utf8").split(" ")[0]);
+	if (!Number.isFinite(changedAt) || changedAt <= 0) {
 		throw new Error("Cannot record when the firewall changed.");
 	}
-	writeFileSync(pending, changedAt, { mode: 0o600, flag: "wx" });
+	saveChange(pending, { ...change, started: true, changedAt });
 	console.log("Open a new SSH connection and run --confirm before the recovery timer expires.");
 }
 
-function confirm(rules: Rule[]) {
-	if (!existsSync(pending)) {
-		throw new Error("There is no firewall change to confirm. Run --check or --apply.");
-	}
-	const changedAt = Number(readFileSync(pending, "utf8"));
-	requireFreshSshConnection(changedAt, () => sshConnection(rules));
-	const problems = drift(rules);
-	if (problems.length > 0 || unitState(`${rollback}.timer`, "SubState") !== "waiting") {
-		throw new Error(
-			["Cannot confirm the firewall change.", ...problems.map(({ message }) => message)].join("\n"),
-		);
-	}
-	run(systemctl, ["stop", `${rollback}.timer`]);
-	// The timer can have started the service while we still hold the lock.
+export function commitPolicy(change: Change, runtime = hostRecovery) {
+	// Publish the confirmation before trying to stop either unit. A queued unit then does no work.
+	saveChange(runtime.confirmed, { id: change.id, policy: change.policy });
 	try {
-		run(systemctl, ["stop", `${rollback}.service`]);
+		runtime.execute(systemctl, ["stop", `${rollback}.timer`]);
+		runtime.execute(systemctl, ["stop", `${rollback}.service`]);
 	} catch (error) {
-		if (unitState(`${rollback}.service`, "LoadState") !== "not-found") {
-			throw error;
-		}
+		console.error(error instanceof Error ? error.message : "Could not stop the recovery units.");
+		return;
 	}
-	unlinkSync(pending);
-	rmSync(recoveryDirectory, { recursive: true, force: true });
+	rmSync(runtime.pending, { force: true });
+}
+
+function confirm(rules: Rule[]) {
+	const change = readChange(pending);
+	if (
+		change?.changedAt === undefined ||
+		JSON.stringify(rulesFor(change.policy)) !== JSON.stringify(rules)
+	) {
+		throw new Error("There is no matching firewall change to confirm. Run --check or --apply.");
+	}
+	requireFreshSshConnection(change.changedAt, () => sshConnection(rules));
+	verifyPolicy(rules, hostRecovery);
+	if (unitState(`${rollback}.timer`, "SubState") !== "waiting") {
+		throw new Error("Cannot confirm the firewall change after the recovery timer expires.");
+	}
+	commitPolicy(change);
 	console.log("UFW matches the host policy. The new SSH connection confirmed the change.");
 }
 
@@ -1044,7 +905,7 @@ export function renderPolicyMetrics(reasons: DriftReason[], seconds: number): st
 	].join("\n");
 }
 
-function readPolicy(config: string): Rule[] {
+function readConfig(config: string): unknown {
 	const contents = readFileSync(config, "utf8");
 	let data: unknown;
 	try {
@@ -1052,7 +913,7 @@ function readPolicy(config: string): Rule[] {
 	} catch (error) {
 		throw new Error("Invalid firewall configuration JSON.", { cause: error });
 	}
-	return rulesFor(data);
+	return data;
 }
 
 function reportPolicyStatus(config: string, metrics: string) {
@@ -1061,7 +922,7 @@ function reportPolicyStatus(config: string, metrics: string) {
 	}
 	let problems: Problem[];
 	try {
-		problems = drift(readPolicy(config));
+		problems = drift(rulesFor(readConfig(config)));
 	} catch (error) {
 		problems = [
 			{
@@ -1122,7 +983,8 @@ function main() {
 		reportPolicyStatus(config, values.report);
 		return;
 	}
-	const rules = readPolicy(config);
+	const policy = readConfig(config);
+	const rules = rulesFor(policy);
 	if (values.check === true) {
 		const problems = drift(rules);
 		if (problems.length > 0) {
@@ -1130,7 +992,7 @@ function main() {
 		}
 		console.log("UFW matches the host policy.");
 	} else if (values.apply === true) {
-		apply(rules);
+		apply(policy, rules);
 	} else {
 		confirm(rules);
 	}

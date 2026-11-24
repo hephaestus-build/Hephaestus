@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -7,23 +7,19 @@ import { test } from "node:test";
 import {
 	applyAction,
 	armRecovery,
+	commitPolicy,
 	conflictingSnapshot,
-	filesDigest,
 	liveDrift,
-	managedLiveState,
 	recoveryCommand,
 	recoveryFilter,
 	renderPolicyMetrics,
 	requireFreshSshConnection,
-	restoreSnapshot,
 	restoreUfw,
-	ruleChanges,
 	rulesFor,
-	savedRules,
+	savedDrift,
 	settingsDrift,
 	sshStartedAt,
 	ufwArgs,
-	verifyRestoredPolicy,
 } from "./host-firewall.ts";
 
 const base = {
@@ -134,11 +130,11 @@ void test("a detached terminal cannot confirm a firewall change", () => {
 });
 
 void test("the recovery unit runs the saved script under the same lock as apply", () => {
-	assert.deepEqual(recoveryCommand("/run/firewall-test-snapshot"), [
+	assert.deepEqual(recoveryCommand("/run/firewall-test-recovery"), [
 		"/usr/bin/flock",
 		"/run/hephaestus-host-firewall.lock",
 		process.execPath,
-		path.join("/run/firewall-test-snapshot", "host-firewall.ts"),
+		path.join("/run/firewall-test-recovery", "host-firewall.ts"),
 		"--restore-ufw",
 	]);
 });
@@ -164,265 +160,109 @@ void test("emergency recovery puts the VPN-only guard before existing accepts", 
 	assert.match(ipv6, /^-A HEPHAESTUS-RECOVERY -s 2001:db8:1::\/64 -p tcp --dport 22 -j ACCEPT$/mu);
 });
 
-void test("inactive recovery ignores empty UFW chains but checks effective filtering", () => {
-	const defaults = "-P INPUT ACCEPT\n-P FORWARD ACCEPT\n-P OUTPUT ACCEPT";
-	const disabled = `${defaults}\n-N ufw-before-input\n-A INPUT -j ufw-before-input`;
-	assert.deepEqual(
-		managedLiveState(false, () => defaults),
-		managedLiveState(false, () => disabled),
-	);
-	assert.notDeepEqual(
-		managedLiveState(false, () => defaults),
-		managedLiveState(false, () => `${disabled}\n-A ufw-before-input -j DROP`),
-	);
-	assert.notDeepEqual(
-		managedLiveState(true, () => defaults),
-		managedLiveState(true, () => disabled),
-	);
-});
-
-for (const scenario of ["active", "inactive", "missing", "mismatch"] as const) {
-	void test(`the recovery timer follows the ${scenario} rollback sequence`, (t) => {
-		const directory = mkdtempSync(path.join(tmpdir(), "host-firewall-timer-"));
+for (const scenario of [
+	"restore",
+	"first apply",
+	"verification fails",
+	"stop fails",
+	"schedule rejected",
+] as const) {
+	void test(`recovery handles ${scenario}`, (t) => {
+		const directory = mkdtempSync(path.join(tmpdir(), "host-firewall-recovery-"));
 		t.after(() => rmSync(directory, { recursive: true, force: true }));
-		const files = {
-			defaults: path.join(directory, "defaults"),
-			"user.rules": path.join(directory, "user.rules"),
-			"user6.rules": path.join(directory, "user6.rules"),
-			"ufw.conf": path.join(directory, "ufw.conf"),
-		};
-		const recovery = path.join(directory, "recovery");
-		const initial = scenario === "inactive" ? "no" : "yes";
-		writeFileSync(files.defaults, "MANAGE_BUILTINS=no\n");
-		writeFileSync(files["user.rules"], "previous IPv4\n");
-		writeFileSync(files["user6.rules"], "previous IPv6\n");
-		writeFileSync(files["ufw.conf"], `ENABLED=${initial}\n`);
-		const pristine = "-P INPUT ACCEPT\n-P FORWARD ACCEPT\n-P OUTPUT ACCEPT";
-		const protectedDefaults = "-P INPUT DROP\n-P FORWARD DROP\n-P OUTPUT ACCEPT";
-		const disabled = `${pristine}\n-N ufw-before-input\n-A INPUT -j ufw-before-input`;
-		let liveRules = initial === "yes" ? protectedDefaults : disabled;
-		const guardHooks = new Set<string>();
+		const configured = { ...base, k3s: false, http3: false };
+		const previous = { ...configured, http3: true };
+		const change = { id: "new", policy: configured };
+		const policies: string[][] = [];
+		const guards = new Set<string>();
 		const calls: string[] = [];
-		const configured = rulesFor({ ...base, k3s: false, http3: false });
-		const vpn = configured.filter(({ port }) => port === 22);
+		let shouldReject = scenario === "schedule rejected";
 		const runtime = {
-			directory: recovery,
-			pending: path.join(directory, "pending"),
-			files,
+			directory: path.join(directory, "recovery"),
+			pending: path.join(directory, "pending.json"),
+			confirmed: path.join(directory, "confirmed.json"),
+			defaultsPath: path.join(directory, "defaults"),
 			execute(command: string, args: string[], input?: string) {
 				if (command === "/usr/bin/systemd-run") {
-					assert.ok(existsSync(path.join(recovery, "snapshot", "user6.rules")));
-					assert.deepEqual(args.slice(-5), recoveryCommand(recovery));
-					calls.push("schedule");
-				} else if (command === "/usr/bin/systemctl") {
-					return "enabled";
-				} else if (command === "/usr/sbin/ufw" && args.includes("reload")) {
-					assert.equal(readFileSync(files["user.rules"], "utf8"), "previous IPv4\n");
-					liveRules = protectedDefaults;
-					calls.push("reload");
-					if (scenario === "mismatch") {
-						writeFileSync(files["user6.rules"], "changed during reload\n");
+					assert.deepEqual(args.slice(-5), recoveryCommand(runtime.directory));
+					if (shouldReject) {
+						throw new Error("schedule rejected");
 					}
-				} else if (command === "/usr/sbin/ufw" && args.includes("disable")) {
-					assert.equal(guardHooks.size, 4);
-					liveRules = disabled;
-					calls.push("disable");
 				} else if (command.endsWith("-restore")) {
 					assert.match(input ?? "", /-P INPUT DROP/u);
-					const binary = command.slice(0, -"-restore".length);
-					guardHooks.add(`${binary}:INPUT`);
-					guardHooks.add(`${binary}:FORWARD`);
-					liveRules = protectedDefaults;
-					calls.push("guard");
+					guards.add(command.slice(0, -"-restore".length));
 				} else if (args.includes("-S")) {
-					return [
-						liveRules,
-						...(guardHooks.has(`${command}:INPUT`) ? ["-A INPUT -j HEPHAESTUS-RECOVERY"] : []),
-						...(guardHooks.has(`${command}:FORWARD`)
-							? ["-A FORWARD -j HEPHAESTUS-RECOVERY-FORWARD"]
-							: []),
-					].join("\n");
-				} else if (args.includes("-D")) {
-					guardHooks.delete(`${command}:${args[3] ?? ""}`);
-					calls.push("remove");
+					return guards.has(command)
+						? "-P INPUT DROP\n-P FORWARD DROP\n-A INPUT -j HEPHAESTUS-RECOVERY\n-A FORWARD -j HEPHAESTUS-RECOVERY-FORWARD"
+						: "";
+				} else if (args.includes("-X")) {
+					if (args.at(-1) === "HEPHAESTUS-RECOVERY-FORWARD") {
+						guards.delete(command);
+					}
+				} else if (command === "/usr/sbin/ufw" && args.includes("reset")) {
+					assert.equal(guards.size, 2);
+					policies.push([]);
+					calls.push("reset");
+				} else if (command === "/usr/sbin/ufw" && args[0] === "allow") {
+					policies.at(-1)?.push(args.join(" "));
+				} else if (args.includes("stop")) {
+					assert.deepEqual(JSON.parse(readFileSync(runtime.confirmed, "utf8")), change);
+					calls.push("stop");
+					if (args.at(-1)?.endsWith(".service") === true) {
+						throw new Error("could not stop service");
+					}
 				}
 				return "";
 			},
-			writePolicy(rules: typeof configured) {
-				assert.deepEqual(rules, vpn);
-				assert.equal(guardHooks.size, 4);
-				calls.push("persist");
-			},
-			drift() {
-				assert.equal(guardHooks.size, 4);
-				calls.push("verify emergency");
-				return [];
+			drift(rules: ReturnType<typeof rulesFor>, guarded?: boolean) {
+				assert.equal(guarded, true);
+				assert.equal(guards.size, 2);
+				assert.deepEqual(
+					policies.at(-1),
+					rules.map((rule) => ufwArgs(rule).join(" ")),
+				);
+				calls.push("verify");
+				return scenario === "verification fails" && rules.some((rule) => rule.port === 443)
+					? [{ reason: "live_rules" as const, message: "The re-applied rules differ." }]
+					: [];
 			},
 		};
-		armRecovery(configured, runtime);
-		// A rule changed before the update stopped.
-		writeFileSync(files["user.rules"], "partial update\n");
-		liveRules += "\n-A ufw-user-input -p tcp --dport 443 -j ACCEPT";
-		writeFileSync(runtime.pending, "123");
-		if (scenario === "missing" || scenario === "mismatch") {
-			if (scenario === "missing") {
-				rmSync(path.join(recovery, "snapshot"), { recursive: true });
-			}
-			assert.throws(() => restoreUfw(runtime), /applied an emergency policy/u);
+		writeFileSync(runtime.defaultsPath, "IPV6=yes\nMANAGE_BUILTINS=no\n");
+		if (scenario !== "first apply") {
+			writeFileSync(runtime.confirmed, JSON.stringify({ id: "old", policy: previous }));
+		}
+		if (scenario === "schedule rejected") {
+			assert.throws(() => armRecovery(change, runtime), /schedule rejected/u);
+			restoreUfw(runtime);
+			assert.deepEqual(calls, []);
+			shouldReject = false;
+		}
+		armRecovery(change, runtime);
+		writeFileSync(runtime.pending, JSON.stringify({ ...change, started: true }));
+		if (scenario === "stop fails") {
+			commitPolicy(change, runtime);
+			restoreUfw(runtime);
+			assert.deepEqual(calls, ["stop", "stop"]);
+			assert.ok(!existsSync(runtime.pending));
+		} else if (scenario === "first apply" || scenario === "verification fails") {
+			assert.throws(() => restoreUfw(runtime), /applied a VPN-only emergency policy/u);
 			assert.deepEqual(calls, [
-				"schedule",
-				...(scenario === "mismatch" ? ["reload"] : []),
-				"guard",
-				"guard",
-				"persist",
-				"guard",
-				"guard",
-				"verify emergency",
+				...(scenario === "verification fails" ? ["reset", "verify"] : []),
+				"reset",
+				"verify",
 			]);
-			assert.ok(existsSync(recovery));
+			assert.deepEqual(policies.at(-1), shared.slice(0, 2));
+			assert.equal(guards.size, 2);
 		} else {
 			restoreUfw(runtime);
-			assert.deepEqual(
-				calls,
-				scenario === "active"
-					? ["schedule", "reload"]
-					: ["schedule", "guard", "guard", "disable", "remove", "remove", "remove", "remove"],
-			);
-			assert.equal(guardHooks.size, 0);
-			assert.ok(!existsSync(recovery));
+			assert.deepEqual(calls, ["reset", "verify"]);
+			assert.deepEqual(policies[0], [...shared, "allow 443/udp"]);
+			assert.equal(guards.size, 0);
 			assert.ok(!existsSync(runtime.pending));
 		}
 	});
 }
 
-for (const enabled of ["yes", "no"]) {
-	void test(`recovery restores the previous files after a partial update with ENABLED=${enabled}`, (t) => {
-		const directory = mkdtempSync(path.join(tmpdir(), "host-firewall-recovery-"));
-		t.after(() => rmSync(directory, { recursive: true, force: true }));
-		const snapshot = path.join(directory, "snapshot");
-		mkdirSync(snapshot);
-		const files = {
-			defaults: path.join(directory, "defaults"),
-			"user.rules": path.join(directory, "user.rules"),
-			"user6.rules": path.join(directory, "user6.rules"),
-			"ufw.conf": path.join(directory, "ufw.conf"),
-		};
-		const expected = {
-			defaults: "IPV6=no\n",
-			"user.rules": "previous IPv4 rules\n",
-			"user6.rules": "previous IPv6 rules\n",
-			"ufw.conf": `ENABLED=${enabled}\n`,
-		};
-		for (const [name, bytes] of Object.entries(expected)) {
-			writeFileSync(path.join(snapshot, name), bytes);
-			writeFileSync(path.join(directory, name), bytes);
-		}
-		writeFileSync(
-			path.join(snapshot, "ufw.service.state"),
-			enabled === "yes" ? "enabled" : "disabled",
-		);
-		const boot = enabled === "yes" ? "enabled" : "disabled";
-		const policy = enabled === "yes" ? "-P INPUT DROP" : "-P INPUT ACCEPT";
-		const expectedFiles = filesDigest(files);
-		const expectedLive = JSON.stringify([boot, managedLiveState(enabled === "yes", () => policy)]);
-		const readRestored = (command: string) => (command === "/usr/bin/systemctl" ? boot : policy);
-		assert.throws(() => {
-			writeFileSync(files.defaults, "IPV6=yes\n");
-			writeFileSync(files["user.rules"], "changed IPv4 rules\n");
-			throw new Error("Could not change the IPv6 rules");
-		});
-
-		const assertRestored = () => {
-			for (const [name, bytes] of Object.entries(expected)) {
-				assert.equal(readFileSync(path.join(directory, name), "utf8"), bytes);
-			}
-		};
-		const commands: string[][] = [];
-		restoreSnapshot(snapshot, files, (command, args) => {
-			commands.push([command, ...args]);
-			if (args.includes("reload")) {
-				assertRestored();
-			}
-			return "";
-		});
-		assertRestored();
-		assert.doesNotThrow(() =>
-			verifyRestoredPolicy(expectedFiles, expectedLive, files, readRestored),
-		);
-		assert.throws(
-			() =>
-				verifyRestoredPolicy(expectedFiles, expectedLive, files, (command) =>
-					command === "/usr/bin/systemctl" ? boot : "-P INPUT MISMATCH",
-				),
-			/differs from the saved snapshot/u,
-		);
-		assert.deepEqual(
-			commands,
-			enabled === "yes"
-				? [["/usr/sbin/ufw", "reload"]]
-				: [
-						["/usr/sbin/ufw", "--force", "disable"],
-						["/usr/bin/systemctl", "disable", "ufw.service"],
-					],
-		);
-		writeFileSync(files["user6.rules"], "changed after reload\n");
-		assert.throws(
-			() => verifyRestoredPolicy(expectedFiles, expectedLive, files, readRestored),
-			/differs from the saved snapshot/u,
-		);
-	});
-}
-
-function ufwFile(tuples: string[]) {
-	return [
-		"### RULES ###",
-		...tuples.map((tuple) => `### tuple ### ${tuple}`),
-		"### END RULES ###",
-	].join("\n");
-}
-
-const ipv4 = [
-	"allow tcp 22 0.0.0.0/0 any 192.0.2.0/24 in comment=56504e",
-	"allow tcp 9100 0.0.0.0/0 any 198.51.100.4 in",
-	"allow tcp 80 0.0.0.0/0 any 0.0.0.0/0 in",
-	"allow tcp 443 0.0.0.0/0 any 0.0.0.0/0 in",
-];
-const ipv6 = [
-	"allow tcp 22 ::/0 any 2001:db8:1::/64 in",
-	"allow tcp 9100 ::/0 any 2001:db8:2::4 in",
-	"allow tcp 80 ::/0 any ::/0 in",
-	"allow tcp 443 ::/0 any ::/0 in",
-];
-
-void test("keeps matching saved rules, independent of order and comments", () => {
-	const rules = rulesFor({ ...base, k3s: false, http3: false });
-	assert.deepEqual(
-		ruleChanges(rules, {
-			4: savedRules(ufwFile(ipv4.toReversed()), 4),
-			6: savedRules(ufwFile(ipv6), 6),
-		}),
-		{ add: [], remove: [] },
-	);
-});
-
-void test("repairs a missing IPv6 rule and removes extra IPv4, IPv6, and routed rules by number", () => {
-	const rules = rulesFor({ ...base, k3s: false, http3: false });
-	const changes = ruleChanges(rules, {
-		4: savedRules(ufwFile([...ipv4, "allow tcp 22 0.0.0.0/0 any 0.0.0.0/0 in"]), 4),
-		6: savedRules(
-			ufwFile([
-				...ipv6.slice(0, -1),
-				"allow udp 8472 ::/0 any ::/0 in",
-				"route:allow any any ::/0 any ::/0 in_eth0!out_eth1",
-			]),
-			6,
-		),
-	});
-	assert.deepEqual(changes.add.map(ufwArgs), [["allow", "443/tcp"]]);
-	assert.deepEqual(changes.remove, [10, 9, 5]);
-});
-
-// Managed rules from Ubuntu UFW, with the private source addresses replaced.
 const k3sV4 = [
 	"-P INPUT DROP",
 	"-P FORWARD DROP",
@@ -452,6 +292,7 @@ const k3sV6 = [
 	"-A INPUT -j ufw6-before-input",
 	"-A FORWARD -j ufw6-before-forward",
 	"-A OUTPUT -j ufw6-before-output",
+	"-A ufw6-before-input -m rt --rt-type 0 -j DROP",
 	"-A ufw6-before-input -j ufw6-user-input",
 	"-A ufw6-before-forward -j ufw6-user-forward",
 	"-A ufw6-before-output -j ufw6-user-output",
@@ -499,29 +340,38 @@ void test("the check reports disabled IPv6 even when the other UFW settings matc
 	assert.deepEqual(settingsDrift(`IPV6=yes\n${expected}`, "ENABLED=yes", "enabled"), []);
 });
 
-void test("recognizes both live k3s rule sets and the saved interface tuples", () => {
+void test("recognizes both live k3s rule sets and checks saved filter rules per family", () => {
 	const rules = rulesFor({ ...base, k3s: true, http3: false });
-	const tuples4 = [
-		...ipv4,
-		"allow any any 0.0.0.0/0 any 0.0.0.0/0 in_cni0",
-		"allow any any 0.0.0.0/0 any 0.0.0.0/0 in_flannel.1",
-		"allow any any 0.0.0.0/0 any 10.42.0.0/16 in",
-		"allow any any 0.0.0.0/0 any 10.43.0.0/16 in",
+	const saved = [
+		"-A ufw-user-input -p tcp --dport 22 -s 192.0.2.0/24 -j ACCEPT",
+		"-A ufw-user-input -p tcp --dport 9100 -s 198.51.100.4 -j ACCEPT",
+		"-A ufw-user-input -p tcp --dport 80 -j ACCEPT",
+		"-A ufw-user-input -p tcp --dport 443 -j ACCEPT",
+		"-A ufw-user-input -i cni0 -j ACCEPT",
+		"-A ufw-user-input -i flannel.1 -j ACCEPT",
+		"-A ufw-user-input -s 10.42.0.0/16 -j ACCEPT",
+		"-A ufw-user-input -s 10.43.0.0/16 -j ACCEPT",
 	];
-	const tuples6 = [
-		...ipv6,
-		"allow any any ::/0 any ::/0 in_cni0",
-		"allow any any ::/0 any ::/0 in_flannel.1",
-	];
-	assert.deepEqual(
-		ruleChanges(rules, {
-			4: savedRules(ufwFile(tuples4), 4),
-			6: savedRules(ufwFile(tuples6), 6),
-		}),
-		{ add: [], remove: [] },
-	);
+	assert.equal(savedDrift(["# UFW metadata", ...saved.toReversed()].join("\n"), 4, rules), false);
+	assert.equal(savedDrift(saved.slice(1).join("\n"), 4, rules), true);
 	assert.deepEqual(liveDrift(k3sV4, 4, rules), []);
 	assert.deepEqual(liveDrift(k3sV6, 6, rules), []);
+});
+
+void test("reports denies before required input rules and allows stock invalid-packet drops", () => {
+	const rules = rulesFor({ ...base, k3s: true, http3: false });
+	const builtin = "-A INPUT -p tcp -m tcp --dport 443 -j DROP";
+	const before = "-A ufw6-before-input -p tcp -m tcp --dport 22 -j REJECT";
+	for (const deny of [builtin, before]) {
+		assert.deepEqual(liveDrift([deny, ...k3sV6], 6, rules), [
+			"IPv6 has an input deny before the required UFW rules.",
+		]);
+		assert.deepEqual(liveDrift([...k3sV6, deny], 6, rules), []);
+	}
+	assert.deepEqual(
+		liveDrift(["-A ufw6-before-input -m conntrack --ctstate INVALID -j DROP", ...k3sV6], 6, rules),
+		[],
+	);
 });
 
 void test("detects changed defaults, missing live hooks, and extra live rules", () => {

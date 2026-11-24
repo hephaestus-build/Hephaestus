@@ -215,8 +215,13 @@ This label tells the alert to expect a verdict and a check time in every success
 Scrape those targets at least every 30 seconds so the check time stays fresh.
 See [Host alert rules](./alert-rules) for the alerts.
 
-To stop reporting, remove the host from firewall policy enrollment, disable the status timer,
-and remove `hephaestus-host-firewall.prom` from the collector directory.
+To stop reporting, remove the host from firewall policy enrollment, then run these commands on the host:
+
+```bash
+sudo systemctl disable --now hephaestus-firewall-status.timer
+sudo systemctl stop hephaestus-firewall-status.service
+sudo rm /var/lib/node_exporter/hephaestus-host-firewall.prom
+```
 
 ## Open the dashboards
 
