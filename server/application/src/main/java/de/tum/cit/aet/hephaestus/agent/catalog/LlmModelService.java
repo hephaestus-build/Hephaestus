@@ -285,7 +285,7 @@ public class LlmModelService {
         if (workspaceIds.isEmpty()) {
             return;
         }
-        Set<Long> found = workspaceSummaries.findAllByIds(workspaceIds).keySet();
+        Set<Long> found = workspaceSummaries.findTeamIds(workspaceIds);
         Set<Long> unknown = new LinkedHashSet<>(workspaceIds);
         unknown.removeAll(found);
         if (!unknown.isEmpty()) {

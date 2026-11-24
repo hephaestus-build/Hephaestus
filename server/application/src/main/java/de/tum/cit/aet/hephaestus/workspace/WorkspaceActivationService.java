@@ -69,7 +69,7 @@ public class WorkspaceActivationService {
      * consumer is already running by then (it only needs workspaces to exist, not the full sync).
      */
     public void activateAllWorkspaces() {
-        List<Workspace> workspaces = workspaceRepository.findAll();
+        List<Workspace> workspaces = workspaceRepository.findAllByKind(WorkspaceKind.TEAM);
         if (workspaces.isEmpty()) {
             log.info("No workspaces found on startup; waiting for GitHub App backfill or manual provisioning.");
             return;

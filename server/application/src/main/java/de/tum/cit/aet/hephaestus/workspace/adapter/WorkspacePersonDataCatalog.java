@@ -27,7 +27,10 @@ public class WorkspacePersonDataCatalog implements PersonDataCatalog {
                         mapper,
                         "membership",
                         "membership",
-                        "t.account_id=:account",
+                        // A personal space is the owner's alone: an instance admin's preview or export does not
+                        // name it, and the erasure of its account disposes of it whole (PersonalSpaceErasureAdapter).
+                        "t.account_id=:account AND NOT EXISTS (SELECT 1 FROM workspace w"
+                                + " WHERE w.id=t.workspace_id AND w.kind='PERSONAL')",
                         "workspace_id,account_id,role,role_source,hidden,review_selected,onboarding_seen_revision,public_activity_seen,joined_at,left_at",
                         "workspace_id,account_id",
                         "",

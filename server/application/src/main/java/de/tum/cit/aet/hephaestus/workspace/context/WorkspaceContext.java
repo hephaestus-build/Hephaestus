@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.workspace.context;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceKind;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
@@ -17,6 +18,7 @@ import org.jspecify.annotations.Nullable;
  * @param installationId GitHub App installation ID (nullable; pulled from the active {@code GITHUB}
  *     connection by the resolver)
  * @param roles Set of workspace roles for the current user
+ * @param kind Whether this is a team workspace or a personal space
  */
 public record WorkspaceContext(
         Long id,
@@ -24,7 +26,20 @@ public record WorkspaceContext(
         String displayName,
         @Nullable AccountType accountType,
         @Nullable Long installationId,
-        Set<WorkspaceRole> roles) {
+        Set<WorkspaceRole> roles,
+        WorkspaceKind kind) {
+
+    /** A team workspace's context, as a provider sync builds it: only a team workspace has providers. */
+    public WorkspaceContext(
+            Long id,
+            String slug,
+            String displayName,
+            @Nullable AccountType accountType,
+            @Nullable Long installationId,
+            Set<WorkspaceRole> roles) {
+        this(id, slug, displayName, accountType, installationId, roles, WorkspaceKind.TEAM);
+    }
+
     /**
      * Builds a context from a {@link Workspace} plus a pre-resolved {@code installationId}
      * (typically pulled from {@code ConnectionService.findActiveGitHubAppConfig(...)} at the call
@@ -38,7 +53,8 @@ public record WorkspaceContext(
                 workspace.getDisplayName(),
                 workspace.getAccountType(),
                 installationId,
-                roles != null ? roles : Set.of());
+                roles != null ? roles : Set.of(),
+                workspace.getKind());
     }
 
     /**

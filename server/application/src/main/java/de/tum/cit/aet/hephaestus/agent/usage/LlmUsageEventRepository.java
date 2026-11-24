@@ -455,8 +455,8 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
             @Param("workspaceId") Long workspaceId, @Param("from") Instant from, @Param("to") Instant to);
 
     /**
-     * Instance-admin cross-tenant rollup: every workspace, including those with no spend this
-     * window. Unpaged — the row count is the instance's workspace count, and ranking by spend needs
+     * Instance-admin cross-tenant rollup: every team workspace, including those with no spend this
+     * window. A personal space is no instance admin's to see. Unpaged — the row count is the instance's workspace count, and ranking by spend needs
      * the whole month anyway.
      */
     @Query(
@@ -486,7 +486,7 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
                     + RUNS
                     + " AS events FROM workspace w LEFT JOIN llm_usage_event e ON"
                     + " e.workspace_id = w.id AND e.occurred_at >= :from AND e.occurred_at"
-                    + " < :to GROUP BY w.id, w.slug, w.display_name,"
+                    + " < :to WHERE w.kind = 'TEAM' GROUP BY w.id, w.slug, w.display_name,"
                     + " w.monthly_llm_budget_usd, w.monthly_byo_llm_budget_usd ORDER BY"
                     + " pricedTotalCostUsd DESC",
             nativeQuery = true)

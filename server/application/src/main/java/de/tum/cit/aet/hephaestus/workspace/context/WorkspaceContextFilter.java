@@ -141,7 +141,7 @@ public class WorkspaceContextFilter implements Filter {
         boolean isStatusPath = remainingPath.startsWith("/status");
 
         try {
-            var workspaceOpt = workspaceRepository.findByWorkspaceSlug(slug);
+            var workspaceOpt = workspaceRepository.findAnyKindByWorkspaceSlug(slug);
 
             if (workspaceOpt.isEmpty()) {
                 if (handleSlugRedirect(httpRequest, httpResponse, slug, remainingPath)) {
@@ -170,13 +170,25 @@ public class WorkspaceContextFilter implements Filter {
             }
 
             var viewed = UserViewContextHolder.get();
+            // A personal space admits only its owner, as themselves: before any elevation, and never in a user view,
+            // which acts as the viewed account. Everyone else gets the answer for a workspace that does not exist,
+            // and no elevation is recorded. A signed-out request goes on to ask the person to sign in.
+            if (workspace.isPersonal()
+                    && (viewed != null
+                            || SecurityUtils.getCurrentAccountId()
+                                    .filter(account -> !account.equals(workspace.getPersonalAccountId()))
+                                    .isPresent())) {
+                log.debug("Denied workspace access: reason=notPersonalOwner, workspaceId={}", workspace.getId());
+                sendWorkspaceNotFoundError(httpResponse, slug);
+                return;
+            }
             var currentUsers =
                     viewed == null ? currentAccountUsers.resolve() : currentAccountUsers.resolve(viewed.accountId());
             MembershipResolution membership = fetchUserRoles(workspace, currentUsers);
             Set<WorkspaceRole> roles = membership.roles();
 
-            // Instance admins may enter without membership, but elevation never grants ownership.
-            if (roles.isEmpty() && SecurityUtils.isSuperAdmin()) {
+            // Instance admins may enter a team workspace without membership, but elevation never grants ownership.
+            if (roles.isEmpty() && SecurityUtils.isSuperAdmin() && !workspace.isPersonal()) {
                 try {
                     passkeyAccess.requireWorkspaceAdmin(workspace.isAdminPasskeyRequired(), true, !isReadRequest);
                 } catch (ErrorResponseException challenge) {

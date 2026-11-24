@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 /** One recipient-facing API for assessing and resolving delivered feedback. */
 @WorkspaceScopedController
+@TeamOnly
 @PreAuthorize("@workspaceSecure.isMember()")
 @RequestMapping("/practices/feedback")
 @Tag(name = "Feedback Response", description = "Recipient responses to delivered practice feedback")

@@ -7,10 +7,12 @@ import de.tum.cit.aet.hephaestus.conversation.spi.ConversationSandboxCopies;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -36,8 +38,7 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
     static final int ORDER = Integer.MAX_VALUE;
 
     private static final String PERSON_WORKSPACES = """
-            SELECT workspace_id FROM membership WHERE account_id = :account
-            UNION SELECT workspace_id FROM slack_thread WHERE id = ANY(:conversations)
+            SELECT workspace_id FROM slack_thread WHERE id = ANY(:conversations)
             UNION SELECT workspace_id FROM outline_document WHERE id = ANY(:documents)
             UNION SELECT workspace_id FROM item
                 WHERE kind IN ('scm.issue', 'scm.pull_request') AND source_id = ANY(:items)
@@ -51,13 +52,15 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
     private final ConversationRedaction redaction;
     private final ConversationContextChanges contextChanges;
     private final ConversationSandboxCopies sandboxCopies;
+    private final WorkspaceMemberships memberships;
 
     ConversationToolResultCopyPersonDataStore(
             NamedParameterJdbcTemplate jdbc,
             ObjectMapper mapper,
             ConversationRedaction redaction,
             ConversationContextChanges contextChanges,
-            ConversationSandboxCopies sandboxCopies) {
+            ConversationSandboxCopies sandboxCopies,
+            WorkspaceMemberships memberships) {
         super(
                 jdbc,
                 mapper,
@@ -73,16 +76,19 @@ final class ConversationToolResultCopyPersonDataStore extends JdbcPersonDataStor
         this.redaction = redaction;
         this.contextChanges = contextChanges;
         this.sandboxCopies = sandboxCopies;
+        this.memberships = memberships;
     }
 
     @Override
     public PersonDataSelection select(PersonScope person) {
-        List<Long> workspaces =
+        var found = new TreeSet<Long>(
                 jdbc.query("""
                 SELECT person.workspace_id FROM (%s) person
                 WHERE person.workspace_id IS NOT NULL
-                ORDER BY person.workspace_id
-                """.formatted(PERSON_WORKSPACES), parameters(person, mapper), (rs, row) -> rs.getLong(1));
+                """.formatted(PERSON_WORKSPACES), parameters(person, mapper), (rs, row) -> rs.getLong(1)));
+        // A personal space has one member, so no other person's conversation there can have read this person's data.
+        if (person.accountId() != null) found.addAll(memberships.teamWorkspaceIds(person.accountId()));
+        List<Long> workspaces = List.copyOf(found);
         var copies = sandboxCopies.snapshot(Set.copyOf(workspaces));
         return new PersonDataSelection(workspaces.stream()
                 .map(workspace -> new PersonDataSelection.RowKey(Map.of(

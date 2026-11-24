@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireWorkspaceOwner;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 @WorkspaceScopedController
+@TeamOnly
 @ConditionalOnServerRole
 @RequestMapping("/passkey-policy")
 @RequiredArgsConstructor

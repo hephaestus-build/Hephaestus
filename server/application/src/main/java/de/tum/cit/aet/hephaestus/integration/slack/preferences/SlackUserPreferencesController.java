@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.preferences;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -65,6 +66,7 @@ class SlackUserPreferencesUserController extends SlackUserPreferencesController 
 @ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/slack/me/preferences")
 @PreAuthorize("@workspaceSecure.isMember()")
 @Tag(name = "Slack User Preferences", description = "Current user's Slack privacy preferences")

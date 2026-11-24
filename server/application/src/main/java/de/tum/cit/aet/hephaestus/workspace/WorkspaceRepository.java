@@ -11,6 +11,7 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
@@ -55,6 +56,7 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
         SELECT new de.tum.cit.aet.hephaestus.workspace.WorkspaceIdData(w.id)
         FROM Workspace w
         WHERE w.workspaceSlug = :slug
+          AND w.kind = de.tum.cit.aet.hephaestus.workspace.WorkspaceKind.TEAM
           AND w.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.ACTIVE
         """)
     Optional<WorkspaceIdData> findActiveIdBySlug(@Param("slug") String slug);
@@ -66,11 +68,15 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
     @Query("SELECT w FROM Workspace w WHERE w.id = :id")
     Optional<Workspace> findByIdForUpdate(@Param("id") Long id);
 
-    /** Lock by slug in one query; a separate lookup could return stale managed state on the locking read. */
+    /**
+     * Lock a team workspace by slug in one query; a separate lookup could return stale managed state on the locking
+     * read.
+     */
     @WorkspaceAgnostic("Locking read of the tenant root itself, by its own slug")
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
-    @Query("SELECT w FROM Workspace w WHERE w.workspaceSlug = :slug")
+    @Query(
+            "SELECT w FROM Workspace w WHERE w.workspaceSlug = :slug AND w.kind = de.tum.cit.aet.hephaestus.workspace.WorkspaceKind.TEAM")
     Optional<Workspace> findByWorkspaceSlugForUpdate(@Param("slug") String slug);
 
     /**
@@ -142,11 +148,28 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
         RepositorySelection getRepositorySelection();
     }
 
-    Optional<Workspace> findByAccountLoginIgnoreCase(String login);
+    @Query(
+            "SELECT w FROM Workspace w WHERE lower(w.accountLogin) = lower(:login) AND w.kind = de.tum.cit.aet.hephaestus.workspace.WorkspaceKind.TEAM")
+    Optional<Workspace> findByAccountLoginIgnoreCase(@Param("login") String login);
 
-    List<Workspace> findAllByAccountLoginIgnoreCase(String login);
+    @Query(
+            "SELECT w FROM Workspace w WHERE lower(w.accountLogin) = lower(:login) AND w.kind = de.tum.cit.aet.hephaestus.workspace.WorkspaceKind.TEAM")
+    List<Workspace> findAllByAccountLoginIgnoreCase(@Param("login") String login);
 
-    Optional<Workspace> findByWorkspaceSlug(String workspaceSlug);
+    /**
+     * The team workspace with this slug. A personal space has a slug too, but only {@link #findAnyKindByWorkspaceSlug}
+     * finds it, so no other path into a workspace reaches one.
+     */
+    @Query(
+            "SELECT w FROM Workspace w WHERE w.workspaceSlug = :slug AND w.kind = de.tum.cit.aet.hephaestus.workspace.WorkspaceKind.TEAM")
+    Optional<Workspace> findByWorkspaceSlug(@Param("slug") String workspaceSlug);
+
+    /**
+     * The workspace of any kind with this slug, for the request filter alone: it admits only the owner to a personal
+     * space. {@code WorkspaceKindArchitectureTest} keeps every other caller away.
+     */
+    @Query("SELECT w FROM Workspace w WHERE w.workspaceSlug = :slug")
+    Optional<Workspace> findAnyKindByWorkspaceSlug(@Param("slug") String workspaceSlug);
 
     boolean existsByWorkspaceSlug(String workspaceSlug);
 
@@ -183,7 +206,21 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
 
     @Query("""
         SELECT w FROM Workspace w WHERE w.workspaceSlug = :slug AND w.publicActivityEnabled = true
+            AND w.kind = de.tum.cit.aet.hephaestus.workspace.WorkspaceKind.TEAM
             AND w.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.ACTIVE
         """)
     Optional<Workspace> findPublicActivityWorkspace(@Param("slug") String slug);
+
+    boolean existsByKind(WorkspaceKind kind);
+
+    Optional<Workspace> findFirstByKindOrderByIdAsc(WorkspaceKind kind);
+
+    List<Workspace> findAllByKind(WorkspaceKind kind);
+
+    List<Workspace> findByStatusAndKind(Workspace.WorkspaceStatus status, WorkspaceKind kind);
+
+    /** Ends the account's personal space; its membership is gone first (PersonalSpaceErasureAdapter). */
+    @Modifying
+    @Query(value = "DELETE FROM workspace WHERE personal_account_id = :accountId", nativeQuery = true)
+    int deletePersonalSpace(@Param("accountId") long accountId);
 }

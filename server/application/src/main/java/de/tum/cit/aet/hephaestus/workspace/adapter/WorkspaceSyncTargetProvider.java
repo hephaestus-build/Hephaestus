@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.SyncTargetFactory;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceKind;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.metrics.WorkspaceMetrics;
@@ -620,7 +621,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     @Override
     @Transactional(readOnly = true)
     public List<SyncSession> getSyncSessions(IntegrationKind kind) {
-        List<Workspace> allWorkspaces = workspaceRepository.findAll();
+        List<Workspace> allWorkspaces = workspaceRepository.findAllByKind(WorkspaceKind.TEAM);
 
         return allWorkspaces.stream()
                 .filter(ws -> ws.getStatus() == WorkspaceStatus.ACTIVE)
@@ -652,7 +653,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     @Override
     @Transactional(readOnly = true)
     public SyncStatistics getSyncStatistics() {
-        List<Workspace> allWorkspaces = workspaceRepository.findAll();
+        List<Workspace> allWorkspaces = workspaceRepository.findAllByKind(WorkspaceKind.TEAM);
 
         int total = allWorkspaces.size();
         int skippedByStatus = (int) allWorkspaces.stream()

@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.UserViewRead;
 import de.tum.cit.aet.hephaestus.core.auth.validation.AccountId;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @WorkspaceScopedController
+@TeamOnly
 @ConditionalOnServerRole
 @RequestMapping("/user-view/users")
 @RequireInstanceAdmin

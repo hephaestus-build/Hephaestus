@@ -134,6 +134,18 @@ public class Workspace {
     @Setter(AccessLevel.NONE)
     private WorkspaceStatus status = WorkspaceStatus.ACTIVE;
 
+    /** Fixed at creation: the database refuses a change of kind or owner. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kind", nullable = false, length = 16, updatable = false)
+    @ColumnDefault("'TEAM'")
+    @Setter(AccessLevel.NONE)
+    private WorkspaceKind kind = WorkspaceKind.TEAM;
+
+    /** The account that owns a personal space; empty for a team workspace. */
+    @Column(name = "personal_account_id", unique = true, updatable = false)
+    @Setter(AccessLevel.NONE)
+    private @Nullable Long personalAccountId;
+
     // Repository Monitoring
 
     @OneToMany(
@@ -201,7 +213,13 @@ public class Workspace {
         return reviewSettings;
     }
 
-    /** The one way to build a workspace: active, and with public activity off until an admin turns it on. */
+    public boolean isPersonal() {
+        return kind == WorkspaceKind.PERSONAL;
+    }
+
+    /**
+     * The one way to build a team workspace: active, and with public activity off until an admin turns it on.
+     */
     public static Workspace create(String slug, String displayName, String accountLogin, AccountType accountType) {
         var workspace = new Workspace();
         workspace.workspaceSlug = slug;

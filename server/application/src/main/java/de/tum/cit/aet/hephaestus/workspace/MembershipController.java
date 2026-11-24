@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import de.tum.cit.aet.hephaestus.workspace.dto.AssignRoleRequestDTO;
@@ -48,6 +49,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 @Validated
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/members")
 @RequiredArgsConstructor
 public class MembershipController {

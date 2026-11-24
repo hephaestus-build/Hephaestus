@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationTurnDTO;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 /** The developer's questions to Hephaestus in a workspace: asking, and stopping a turn. */
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/conversation")
 @Tag(name = "Conversation", description = "The developer's conversation with Hephaestus")
 @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")

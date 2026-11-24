@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.practices.review.dto.CreateReviewRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewRequestOutcomeDTO;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 @ConditionalOnServerRole
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/practices/review-requests")
 @RequiredArgsConstructor
 public class ReviewRequestController {

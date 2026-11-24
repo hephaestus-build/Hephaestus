@@ -90,7 +90,6 @@ conversation de.tum.cit.aet.hephaestus.conversation.ConversationRepository reads
 conversation de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository reads agent_run of agent x8
 conversation de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository reads llm_usage_event of agent x1
 conversation de.tum.cit.aet.hephaestus.conversation.adapter.ConversationToolResultCopyPersonDataStore reads item of integration.core x1
-conversation de.tum.cit.aet.hephaestus.conversation.adapter.ConversationToolResultCopyPersonDataStore reads membership of workspace x1
 conversation de.tum.cit.aet.hephaestus.conversation.adapter.ConversationToolResultCopyPersonDataStore reads outline_document of integration.outline x1
 conversation de.tum.cit.aet.hephaestus.conversation.adapter.ConversationToolResultCopyPersonDataStore reads review_job of agent x1
 conversation de.tum.cit.aet.hephaestus.conversation.adapter.ConversationToolResultCopyPersonDataStore reads slack_thread of integration.slack x1

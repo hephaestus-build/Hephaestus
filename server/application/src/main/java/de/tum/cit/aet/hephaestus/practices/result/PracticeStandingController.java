@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.result;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingDTO;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 @ConditionalOnServerRole
 @WorkspaceScopedController
+@TeamOnly
 @PreAuthorize("@workspaceSecure.isMember()")
 @RequestMapping("/practices/standings")
 @Tag(name = "Practice Standings", description = "The current developer's standing in each practice")

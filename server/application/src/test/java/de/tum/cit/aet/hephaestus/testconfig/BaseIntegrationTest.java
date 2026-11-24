@@ -35,6 +35,7 @@ import org.springframework.test.context.TestPropertySource;
     SharedTestDoubles.class,
     AgentHandlerTestDoubles.class,
     WorkspaceEchoControllers.ScopedEchoController.class,
+    WorkspaceEchoControllers.PersonalEchoController.class,
     WorkspaceEchoControllers.WorkspaceContextEchoController.class,
     ScriptedGitHubTransport.class,
     ScriptedGitLabTransport.class,

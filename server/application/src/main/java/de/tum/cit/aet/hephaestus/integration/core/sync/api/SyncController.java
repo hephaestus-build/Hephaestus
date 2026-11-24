@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import de.tum.cit.aet.hephaestus.workspace.context.TeamOnly;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,6 +36,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 /** HTTP API for integration sync status and administration. */
 @ConditionalOnServerRole
 @WorkspaceScopedController
+@TeamOnly
 @RequestMapping("/connections")
 @RequireAtLeastWorkspaceAdmin
 @Tag(name = "Sync", description = "Integration sync observability and manual controls")

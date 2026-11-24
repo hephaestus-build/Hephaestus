@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -28,6 +29,16 @@ class WorkspaceSummaryQueryAdapter implements WorkspaceSummaryQuery {
     @Transactional(readOnly = true)
     public boolean exists(long workspaceId) {
         return workspaceRepository.existsById(workspaceId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> findTeamIds(Collection<Long> workspaceIds) {
+        if (workspaceIds.isEmpty()) return Set.of();
+        return workspaceRepository.findAllById(workspaceIds).stream()
+                .filter(workspace -> !workspace.isPersonal())
+                .map(Workspace::getId)
+                .collect(Collectors.toSet());
     }
 
     @Override

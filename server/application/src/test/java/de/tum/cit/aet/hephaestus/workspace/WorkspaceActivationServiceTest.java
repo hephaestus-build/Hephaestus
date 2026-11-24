@@ -86,7 +86,8 @@ class WorkspaceActivationServiceTest extends BaseUnitTest {
 
     @Test
     void shouldActivateHealthyWorkspacesWhenAnotherWorkspaceCredentialIsUnreadable() {
-        when(workspaceRepository.findAll()).thenReturn(List.of(workspace(5), workspace(9), workspace(12)));
+        when(workspaceRepository.findAllByKind(WorkspaceKind.TEAM))
+                .thenReturn(List.of(workspace(5), workspace(9), workspace(12)));
         when(connectionService.findActiveProviderKind(5)).thenReturn(Optional.of(IntegrationKind.GITLAB));
         when(connectionService.findActiveBearerToken(5, IntegrationKind.GITLAB))
                 .thenThrow(new CredentialUnreadableException(50, IntegrationKind.GITLAB, new IllegalStateException()));
@@ -106,7 +107,7 @@ class WorkspaceActivationServiceTest extends BaseUnitTest {
 
     @Test
     void shouldSkipPatWorkspaceWithoutTokenWhenGitHubAppWorkspaceActivates() {
-        when(workspaceRepository.findAll()).thenReturn(List.of(workspace(7), workspace(12)));
+        when(workspaceRepository.findAllByKind(WorkspaceKind.TEAM)).thenReturn(List.of(workspace(7), workspace(12)));
         when(connectionService.findActiveProviderKind(7)).thenReturn(Optional.of(IntegrationKind.GITHUB));
         when(connectionService.findActiveGitHubPatConfig(7))
                 .thenReturn(Optional.of(new ConnectionConfig.GitHubPatConfig(null, null, Set.of())));
@@ -124,7 +125,7 @@ class WorkspaceActivationServiceTest extends BaseUnitTest {
     @Test
     void shouldRunStartupSyncWithoutFullSyncWhenFullStartupSyncIsDisabled() {
         service = activationService(false, new TaskExecutorAdapter(Runnable::run));
-        when(workspaceRepository.findAll()).thenReturn(List.of(workspace(12)));
+        when(workspaceRepository.findAllByKind(WorkspaceKind.TEAM)).thenReturn(List.of(workspace(12)));
         when(connectionService.findActiveProviderKind(12)).thenReturn(Optional.of(IntegrationKind.GITHUB));
         when(connectionService.findActiveGitHubPatConfig(12)).thenReturn(Optional.empty());
 
@@ -141,7 +142,8 @@ class WorkspaceActivationServiceTest extends BaseUnitTest {
         CountDownLatch releaseGitHub = new CountDownLatch(1);
         try {
             service = activationService(true, new TaskExecutorAdapter(pool));
-            when(workspaceRepository.findAll()).thenReturn(List.of(workspace(12), workspace(9)));
+            when(workspaceRepository.findAllByKind(WorkspaceKind.TEAM))
+                    .thenReturn(List.of(workspace(12), workspace(9)));
             when(connectionService.findActiveProviderKind(12)).thenReturn(Optional.of(IntegrationKind.GITHUB));
             when(connectionService.findActiveGitHubPatConfig(12)).thenReturn(Optional.empty());
             when(connectionService.findActiveProviderKind(9)).thenReturn(Optional.of(IntegrationKind.GITLAB));

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.workspace.spi;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 
 public interface WorkspaceSummaryQuery {
@@ -24,6 +25,9 @@ public interface WorkspaceSummaryQuery {
 
     /** Keyed by id; an unknown id is absent. */
     Map<Long, WorkspaceSummary> findAllByIds(Collection<Long> workspaceIds);
+
+    /** The team workspaces among these ids. A personal space is no instance admin's to configure. */
+    Set<Long> findTeamIds(Collection<Long> workspaceIds);
 
     record WorkspaceSummary(
             long id, @NonNull String slug, @NonNull String displayName) {}

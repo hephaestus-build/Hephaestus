@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceKind;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
@@ -97,7 +98,8 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
 
     @Test
     void shouldReturnHealthyGitLabSessionsWhenAnotherWorkspaceCredentialIsUnreadable() {
-        when(workspaceRepository.findAll()).thenReturn(List.of(workspace(5), workspace(9), workspace(12)));
+        when(workspaceRepository.findAllByKind(WorkspaceKind.TEAM))
+                .thenReturn(List.of(workspace(5), workspace(9), workspace(12)));
         when(workspaceScopeFilter.isWorkspaceAllowed(any(Workspace.class))).thenReturn(true);
         when(connectionService.findActiveProviderKind(anyLong())).thenReturn(Optional.of(IntegrationKind.GITLAB));
         when(connectionService.findActiveGitLabConfig(anyLong())).thenReturn(Optional.of(GITLAB_CONFIG));
@@ -122,7 +124,8 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
 
     @Test
     void shouldReturnHealthyGitHubSessionsWhenAnotherWorkspaceCredentialIsUnreadable() {
-        when(workspaceRepository.findAll()).thenReturn(List.of(workspace(5), workspace(9), workspace(12)));
+        when(workspaceRepository.findAllByKind(WorkspaceKind.TEAM))
+                .thenReturn(List.of(workspace(5), workspace(9), workspace(12)));
         when(workspaceScopeFilter.isWorkspaceAllowed(any(Workspace.class))).thenReturn(true);
         when(connectionService.findActiveProviderKind(anyLong())).thenReturn(Optional.of(IntegrationKind.GITHUB));
         when(connectionService.findActiveGitHubAppConfig(anyLong())).thenReturn(Optional.empty());
@@ -155,7 +158,7 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
 
     @Test
     void shouldPauseAGitHubScopeWhoseCredentialWasRefused() {
-        when(workspaceRepository.findAll()).thenReturn(List.of(workspace(5), workspace(9)));
+        when(workspaceRepository.findAllByKind(WorkspaceKind.TEAM)).thenReturn(List.of(workspace(5), workspace(9)));
         when(workspaceRepository.findById(5L)).thenReturn(Optional.of(workspace(5)));
         when(workspaceScopeFilter.isWorkspaceAllowed(any(Workspace.class))).thenReturn(true);
         when(connectionService.findActiveProviderKind(anyLong())).thenReturn(Optional.of(IntegrationKind.GITHUB));

@@ -95,6 +95,8 @@ erDiagram
         BOOLEAN admin_passkey_required "NOT NULL"
         BOOLEAN public_activity_contributors_without_account "NOT NULL"
         BOOLEAN per_person_results_for_admins "NOT NULL"
+        VARCHAR(16) kind "NOT NULL"
+        BIGINT personal_account_id FK,UK
     }
 
     WorkspaceOnboardingSetting {
@@ -123,6 +125,7 @@ erDiagram
     %% Relationships
     %% One-to-One relationships
     Organization ||--|| Workspace : has
+    Account ||--|| Workspace : has
     Workspace ||--|| WorkspaceOnboardingSetting : has
 
     %% One-to-Many relationships

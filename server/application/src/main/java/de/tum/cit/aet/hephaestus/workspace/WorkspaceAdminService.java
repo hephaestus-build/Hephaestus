@@ -36,7 +36,9 @@ public class WorkspaceAdminService {
 
     @Transactional(readOnly = true)
     public List<AdminWorkspaceViewDTO> listAll() {
-        return workspaceRepository.findAll().stream().map(this::toView).toList();
+        return workspaceRepository.findAllByKind(WorkspaceKind.TEAM).stream()
+                .map(this::toView)
+                .toList();
     }
 
     /**

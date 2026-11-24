@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceKind;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceNamespaceReservation;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceProperties;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -168,7 +169,7 @@ class WorkspaceProvisioningServiceTest {
         when(identityProviders.findId(IdentityProviderType.GITHUB, "https://github.com"))
                 .thenReturn(Optional.of(Objects.requireNonNull(githubProvider.getId())));
 
-        when(workspaceRepository.count()).thenReturn(0L);
+        when(workspaceRepository.existsByKind(WorkspaceKind.TEAM)).thenReturn(false);
         when(workspaceMembershipService.accountIdForUser(admin.getId())).thenReturn(199L);
         when(workspaceMembershipRepository.findByWorkspace_IdAndId_AccountId(1L, 199L))
                 .thenReturn(Optional.empty());
@@ -233,7 +234,7 @@ class WorkspaceProvisioningServiceTest {
         User owner = new User();
         owner.setId(11L);
         when(userRepository.findByLoginAndProviderId("aet-org", 100L)).thenReturn(Optional.of(owner));
-        when(workspaceRepository.count()).thenReturn(0L);
+        when(workspaceRepository.existsByKind(WorkspaceKind.TEAM)).thenReturn(false);
         when(workspaceService.createWorkspace(anyString(), anyString(), anyString(), any(AccountType.class), anyLong()))
                 .thenReturn(workspace);
         when(workspaceRepository.save(any(Workspace.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -264,7 +265,7 @@ class WorkspaceProvisioningServiceTest {
         when(identityProviders.findId(IdentityProviderType.GITHUB, "https://github.com"))
                 .thenReturn(Optional.of(Objects.requireNonNull(githubProvider.getId())));
 
-        when(workspaceRepository.count()).thenReturn(0L);
+        when(workspaceRepository.existsByKind(WorkspaceKind.TEAM)).thenReturn(false);
         when(workspaceService.createWorkspace(anyString(), anyString(), anyString(), any(AccountType.class), anyLong()))
                 .thenReturn(workspace);
         when(workspaceRepository.save(any(Workspace.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -293,9 +294,10 @@ class WorkspaceProvisioningServiceTest {
         admin.setHtmlUrl("https://example.com/admin");
         admin.setType(User.Type.USER);
 
-        when(workspaceRepository.count()).thenReturn(1L);
+        when(workspaceRepository.existsByKind(WorkspaceKind.TEAM)).thenReturn(true);
         when(workspaceRepository.findByWorkspaceSlug("aet-org")).thenReturn(Optional.empty());
-        when(workspaceRepository.findAll()).thenReturn(List.of(workspace));
+        when(workspaceRepository.findFirstByKindOrderByIdAsc(WorkspaceKind.TEAM))
+                .thenReturn(Optional.of(workspace));
         when(userRepository.findByLogin("admin")).thenReturn(Optional.of(admin));
         when(workspaceMembershipService.accountIdForUser(admin.getId())).thenReturn(199L);
         when(workspaceMembershipRepository.findByWorkspace_IdAndId_AccountId(workspace.getId(), 199L))
