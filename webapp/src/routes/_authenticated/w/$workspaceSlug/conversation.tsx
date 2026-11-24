@@ -66,7 +66,7 @@ function ConversationPage() {
 		observer.observe(element);
 		return () => observer.disconnect();
 	}, []);
-	const livePaused = useConversationLive(workspaceSlug, true);
+	const livePaused = useConversationLive(workspaceSlug);
 	const canAsk = notice === undefined;
 
 	return (
@@ -84,7 +84,6 @@ function ConversationPage() {
 				<h2 className="sr-only">Your conversation</h2>
 				<MainConversation
 					workspaceSlug={workspaceSlug}
-					readOnly={false}
 					canAsk={canAsk}
 					livePaused={livePaused}
 					jumpTo={thread === undefined ? entry : undefined}
@@ -116,7 +115,6 @@ function ConversationPage() {
 					<ThreadConversation
 						workspaceSlug={workspaceSlug}
 						parentEntryId={thread}
-						readOnly={false}
 						canAsk={canAsk}
 						livePaused={livePaused}
 						focusComposer={threadFocus === "composer"}

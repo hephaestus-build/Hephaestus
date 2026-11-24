@@ -111,8 +111,8 @@ export const Unreadable: Story = {
 	},
 };
 
-/** Inside its own thread, or in a user view, the digest offers no reply and does not invite one. */
-export const ReadOnly: Story = {
+/** Inside its own thread, the digest offers no reply and does not invite one. */
+export const InItsThread: Story = {
 	args: { onReplyInThread: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("button", { name: /^Reply in thread/u })).toBeNull();

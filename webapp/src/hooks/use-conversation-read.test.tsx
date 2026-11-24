@@ -66,7 +66,7 @@ const confirmed = () =>
 function renderRead() {
 	return renderHook(
 		() => {
-			useMarkConversationRead(SLUG, true);
+			useMarkConversationRead(SLUG);
 			return useConversationUnread(SLUG);
 		},
 		{ wrapper },
