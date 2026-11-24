@@ -388,25 +388,40 @@ The factory adds nothing that the descriptor does not name:
 
 `pi-session-dispatch.spec.ts` checks by behaviour that every run kind opens its sessions through `openRunSession`:
 
-- It runs each in-process runner of the registry (`TURN`, `DIGEST`, `REVIEW_COMPOSE`) with the real factory.
+- It runs each in-process runner of the registry (`TURN`, `DIGEST`, `REVIEW_COMPOSE`) with the real factory and the real SDK.
   The model refuses each call, so a turn ends after its first request.
-  The spec counts the calls to the factory, each `ModelSession` built, and each Pi session that an SDK function returns outside the factory.
-  It tells a Pi session by its type, not by the name of the function that built it.
+- It counts each Pi session where it is constructed, whichever SDK function or caller builds it.
+  The count hooks the SDK's `AgentSession` construction. If an SDK update moves that step, the spec sees no session and every kind fails it.
+- A factory session is a session that a call to the factory returned. A failed factory call opens none.
+  Every other session counts as built past the factory, also one built beside a factory call that is still open.
+- It also counts each `ModelSession` built.
+- A kind must open a session through the factory. It must build no `ModelSession` and no Pi session past the factory.
+  Except for `REVIEW_COMPOSE`, the kind's session must ask the model.
 - `REVIEW`'s runner is the measurement that starts the staged review runner.
-  The spec runs the measurement's whole path in a temporary image layout, with stand-in programs, and checks that it builds no session of its own.
+  The spec runs the measurement's whole path in a temporary image layout, with stand-in programs.
+  The measurement must build no session at all, through the factory or past it.
 - The spec also runs the staged review runner through the harness of the review specs.
-  There the harness's stand-in SDK builds the session, and the spec counts the same three things.
-- A kind must open a session through the factory. It must build no `ModelSession` and no Pi session past the factory, also after its factory session.
+  The harness's stand-in SDK has only the session builder that the factory calls.
+  A runner that builds a session any other way fails its run.
+  The harness records each build and each session that the factory returned. The spec applies the same rule to them.
 - `REVIEW_COMPOSE` is the one exemption, named by its kind. It keeps its own model client until the publication cutover (CF-18). The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
-- Three fixture runners break the rule and must fail it.
-  One builds a `ModelSession`, one builds a second Pi session itself after its factory session, and one opens no session.
+- Five fixture runners break the rule and must fail it:
+  - One builds a `ModelSession`.
+  - One builds a second Pi session beside its factory session.
+  - One constructs a Pi session itself after its factory session.
+  - One runs a turn whose factory call fails.
+  - One opens no session.
 
 The server makes its own model calls only through the proxy's gateways, such as `ProductFeedbackModelGateway` for a report draft.
 `ModelEgressConfig` refuses a model request on every client built from the application's Spring builders, unless the proxy sent it.
-A model request is told by its shape, not by its address.
-Its POST body parses as JSON, whatever content type it declares. It names a model and carries what the model reads, or it carries Gemini's `contents`.
+A model request is told by its shape, not by its address: a POST whose body parses as JSON, whatever content type it declares.
+The body, or an object nested at most six levels below its root, asks a model when it has one of these:
+
+- A string `model` together with `messages`, `input` or `prompt`.
+- A `contents` field, as Gemini's requests carry.
+
 A lookup that only names a model, such as Ollama's `/api/show`, passes.
-A request that nests one, such as a batch of requests, is a model request too.
+A request nested deeper than six levels, or a body that is not JSON, passes too.
 
 A WebClient request fails while its body is written, in one part or in flushed parts.
 The endpoint can see the request line, but never the prompt.

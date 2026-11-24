@@ -44,13 +44,6 @@ function breach(kind: string, use: Use): string | null {
 	return use.factory === 0 ? `${kind} opened no session through the factory` : null;
 }
 
-/** A function that is not a class, so a call to it may return what it built. */
-function isPlainFunction(value: unknown): value is (...args: never[]) => unknown {
-	return (
-		typeof value === "function" && !/^class[\s{]/u.test(Function.prototype.toString.call(value))
-	);
-}
-
 /** A runner that ends its run without opening any session. */
 const noSession: KindRunner = async () => ({ leaseLost: false, outcome: "completed" });
 
@@ -74,9 +67,11 @@ if (process.env[CHILD] === undefined) {
 			stagePractices(cwd, [{ slug: "measured" }]);
 			const exit = await runRunner(cwd, {});
 			assert.equal(exit.status, 0, exit.stderr);
+			const returned = new Set(capturedLines(cwd, "sessions"));
+			const built = capturedLines(cwd, "built-sessions");
 			const use = {
-				factory: capturedLines(cwd, "sessions").length,
-				direct: capturedLines(cwd, "direct-sessions").length,
+				factory: returned.size,
+				direct: built.filter((session) => !returned.has(session)).length,
 				modelSession: capturedLines(cwd, "model-sessions").length,
 			};
 			assert.equal(breach("REVIEW", use), null);
@@ -118,70 +113,50 @@ async function dispatch(): Promise<void> {
 		},
 	});
 
-	let use: Use = { factory: 0, direct: 0, modelSession: 0 };
-
-	// Every Pi session that a runner builds is counted by its type, whatever SDK function built it. The factory's own
-	// build is no build past it.
-	let insideFactory = false;
+	// Every Pi session is counted where it is constructed, whichever SDK function or caller builds it: the constructor
+	// installs the session's tool hooks. A session of the factory's is one that a call to the factory returned.
+	let built: object[] = [];
+	let fromFactory = new WeakSet<object>();
 	const sdk = await import("@earendil-works/pi-coding-agent");
-	const buildsSession = (value: unknown): boolean =>
-		value instanceof sdk.AgentSession ||
-		value instanceof sdk.AgentSessionRuntime ||
-		(typeof value === "object" &&
-			value !== null &&
-			"session" in value &&
-			value.session instanceof sdk.AgentSession);
-	const note = (value: unknown): unknown => {
-		if (!insideFactory && buildsSession(value)) {
-			use.direct += 1;
-		}
-		return value;
-	};
-	const noteWhenBuilt = async (built: Promise<unknown>): Promise<unknown> => note(await built);
-	const recorded =
-		(function_: (...args: never[]) => unknown) =>
-		(...args: never[]): unknown => {
-			const built = function_(...args);
-			return built instanceof Promise ? noteWhenBuilt(built) : note(built);
-		};
-	mock.module("@earendil-works/pi-coding-agent", {
-		exports: Object.fromEntries(
-			Object.entries(sdk).map(([name, value]) => [
-				name,
-				isPlainFunction(value) ? recorded(value) : value,
-			]),
-		),
-	});
+	const sessionPrototype: object = sdk.AgentSession.prototype;
+	const installToolHooks: unknown = Reflect.get(sessionPrototype, "_installAgentToolHooks");
+	assert.ok(
+		typeof installToolHooks === "function",
+		"a Pi session installs its tool hooks as it is built",
+	);
+	Reflect.set(
+		sessionPrototype,
+		"_installAgentToolHooks",
+		function recordBuild(this: object, ...args: unknown[]) {
+			built.push(this);
+			return Reflect.apply(installToolHooks, this, args) as unknown;
+		},
+	);
 
-	// The factory opens real sessions, so a run goes on past it, and is counted.
 	const factory = await import("../../../main/resources/agent/pi-session.ts");
 	mock.module(new URL("pi-session.ts", AGENT).href, {
 		exports: {
 			...factory,
 			openRunSession: async (...args: Parameters<typeof factory.openRunSession>) => {
-				use.factory += 1;
-				insideFactory = true;
-				try {
-					return await factory.openRunSession(...args);
-				} finally {
-					insideFactory = false;
-				}
+				const opened = await factory.openRunSession(...args);
+				fromFactory.add(opened.session);
+				return opened;
 			},
 		},
 	});
 
+	let modelSessions = 0;
 	const composerModel = await import("../../../main/resources/agent/review-composer-model.ts");
 	class RecordedModelSession extends composerModel.ModelSession {
 		constructor(...args: ConstructorParameters<typeof composerModel.ModelSession>) {
 			super(...args);
-			use.modelSession += 1;
+			modelSessions += 1;
 		}
 	}
 	mock.module(new URL("review-composer-model.ts", AGENT).href, {
 		exports: { ...composerModel, ModelSession: RecordedModelSession },
 	});
 
-	const recordedSdk = await import("@earendil-works/pi-coding-agent");
 	const { KINDS } = await import("../../../main/resources/agent/driver-kinds.ts");
 	const { measureReview } = await import("../../../main/resources/agent/review-measure.ts");
 	const { contextOf } = await import("./turn-worker.ts");
@@ -190,11 +165,18 @@ async function dispatch(): Promise<void> {
 	 * Runs a kind's runner against a gateway that serves its context, a composition with nothing to compose, and a
 	 * model that refuses each call, so a turn ends after its session's first request.
 	 */
-	async function measure(kind: string, runner: KindRunner): Promise<Use & { outcome: unknown }> {
-		use = { factory: 0, direct: 0, modelSession: 0 };
+	async function measure(
+		kind: string,
+		runner: KindRunner,
+	): Promise<Use & { asked: number; outcome: unknown }> {
+		built = [];
+		fromFactory = new WeakSet();
+		modelSessions = 0;
+		let asked = 0;
 		mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
 			const url = new URL(input instanceof Request ? input.url : input);
 			if (url.pathname.startsWith("/internal/llm")) {
+				asked += 1;
 				return Response.json({ error: { message: "refused" } }, { status: 400 });
 			}
 			if (url.pathname.endsWith("/context")) {
@@ -226,7 +208,14 @@ async function dispatch(): Promise<void> {
 				gateway: { url: "http://gateway:8081", headers: { authorization: "Bearer sandbox-token" } },
 				signal: new AbortController().signal,
 			});
-			return { ...use, outcome };
+			const factorySessions = built.filter((session) => fromFactory.has(session)).length;
+			return {
+				factory: factorySessions,
+				direct: built.length - factorySessions,
+				modelSession: modelSessions,
+				asked,
+				outcome,
+			};
 		} finally {
 			mock.restoreAll();
 		}
@@ -243,12 +232,18 @@ async function dispatch(): Promise<void> {
 			"gateway-run.js",
 		]);
 		assert.deepEqual(measured.outcome, { leaseLost: false, outcome: "completed" });
-		assert.deepEqual([measured.modelSession, measured.direct], [0, 0]);
+		// The measurement builds no session at all: the staged review runner opens its sessions in its own process.
+		assert.deepEqual([measured.factory, measured.direct, measured.modelSession], [0, 0, 0]);
 	});
 
 	for (const [kind, runner] of inProcess) {
 		void test(`the registry's ${kind} runner keeps the factory rule`, async () => {
-			assert.equal(breach(kind, await measure(kind, runner)), null);
+			const measured = await measure(kind, runner);
+			assert.equal(breach(kind, measured), null);
+			if (kind !== OWN_CLIENT_UNTIL_CUTOVER) {
+				// The factory's session asked the model, so the run went on past it.
+				assert.ok(measured.asked > 0, `${kind} asked the model nothing`);
+			}
 		});
 	}
 
@@ -276,26 +271,67 @@ async function dispatch(): Promise<void> {
 
 	/** Builds a Pi session past the factory, in the spec's own folders. */
 	async function buildPastFactory(): Promise<void> {
-		const { session } = await recordedSdk.createAgentSessionFromServices({
-			services: await recordedSdk.createAgentSessionServices({ cwd: root, agentDir: root }),
-			sessionManager: recordedSdk.SessionManager.inMemory(root),
+		const { session } = await sdk.createAgentSessionFromServices({
+			services: await sdk.createAgentSessionServices({ cwd: root, agentDir: root }),
+			sessionManager: sdk.SessionManager.inMemory(root),
 		});
 		session.dispose();
 	}
 
-	/** A turn runner that, after its factory session, builds a second Pi session itself. */
-	const afterFactory: KindRunner = async (run) => {
+	/** A turn runner that builds a second Pi session itself while its factory session is open. */
+	const alongsideFactory: KindRunner = async (run) => {
 		const turn = KINDS.TURN;
 		assert.ok(turn);
-		const outcome = await turn(run);
-		await buildPastFactory();
+		const [outcome] = await Promise.all([turn(run), buildPastFactory()]);
 		return outcome;
 	};
 
-	void test("a runner that builds a Pi session past the factory breaks the rule, also after its factory session", async () => {
-		const measured = await measure("TURN", afterFactory);
+	void test("a runner that builds a Pi session past the factory breaks the rule, also beside its factory session", async () => {
+		const measured = await measure("TURN", alongsideFactory);
 		assert.equal(measured.factory, 1);
 		assert.match(breach("TURN", measured) ?? "", /past the factory/u);
+	});
+
+	/** A turn runner that, after its factory session, constructs another session from that session's parts. */
+	const constructsSession: KindRunner = async (run) => {
+		const turn = KINDS.TURN;
+		assert.ok(turn);
+		const outcome = await turn(run);
+		const [opened] = built;
+		assert.ok(opened instanceof sdk.AgentSession);
+		const own = new sdk.AgentSession({
+			agent: opened.agent,
+			sessionManager: opened.sessionManager,
+			settingsManager: opened.settingsManager,
+			resourceLoader: opened.resourceLoader,
+			modelRuntime: opened.modelRuntime,
+			cwd: root,
+		});
+		own.dispose();
+		return outcome;
+	};
+
+	void test("a runner that constructs a Pi session itself breaks the rule", async () => {
+		const measured = await measure("TURN", constructsSession);
+		assert.equal(measured.factory, 1);
+		assert.match(breach("TURN", measured) ?? "", /past the factory/u);
+	});
+
+	/** The turn runner, whose call to the factory fails before it builds a session; the turn still ends. */
+	const failedFactory: KindRunner = async (run) => {
+		mock.method(sdk.DefaultResourceLoader.prototype, "reload", async () => {
+			throw new Error("the factory failed");
+		});
+		const turn = KINDS.TURN;
+		assert.ok(turn);
+		return turn(run);
+	};
+
+	void test("a runner whose factory call fails opens no session through the factory", async () => {
+		assert.match(
+			breach("TURN", await measure("TURN", failedFactory)) ?? "",
+			/no session through the factory/u,
+		);
 	});
 
 	void test("a runner that opens no session through the factory breaks the rule", async () => {

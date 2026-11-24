@@ -581,15 +581,12 @@ if (scenario !== undefined && scenario !== "") {
 		execute: (id: string, input: unknown) => Promise<unknown>;
 	}
 	let sessionCount = 0;
-	// Whether a session is being built through the factory; a build outside it counts as built past the factory.
-	let insideFactory = false;
+	// The stand-in SDK has no other session builder, so a runner that builds a session any other way fails.
 	mockPiCodingAgent(cwd, manager, {
 		async createAgentSession(options: { customTools: CustomTool[] }) {
-			if (!insideFactory) {
-				capture("direct-sessions", true);
-			}
 			sessionCount += 1;
 			const session = sessionCount;
+			capture("built-sessions", session);
 			const handlers = new Set<(event: unknown) => void>();
 			const emit = (event: unknown) => {
 				for (const handler of handlers) {
@@ -766,6 +763,8 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 			return {
 				extensionsResult: { errors: [] },
 				session: {
+					// Which build this is: the factory's wrapper records the builds that it returned.
+					hostSession: session,
 					state: { messages: [] },
 					agent,
 					systemPrompt: "",
@@ -957,20 +956,17 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 			};
 		},
 	});
-	// The runner's sessions, counted where they open, and any model session of its own that it builds:
-	// pi-session-dispatch.spec.ts reads the counts.
+	// The sessions that the factory returned, and any model session of its own that the runner builds:
+	// pi-session-dispatch.spec.ts reads them beside every build.
 	const factory = await import("../../../main/resources/agent/pi-session.ts");
 	mock.module(new URL("../../../main/resources/agent/pi-session.ts", import.meta.url).href, {
 		exports: {
 			...factory,
 			openRunSession: async (...args: Parameters<typeof factory.openRunSession>) => {
-				capture("sessions", true);
-				insideFactory = true;
-				try {
-					return await factory.openRunSession(...args);
-				} finally {
-					insideFactory = false;
-				}
+				const opened = await factory.openRunSession(...args);
+				const session: unknown = Reflect.get(opened.session, "hostSession");
+				capture("sessions", session);
+				return opened;
 			},
 		},
 	});
