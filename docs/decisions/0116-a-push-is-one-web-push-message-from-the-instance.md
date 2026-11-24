@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-15
 **Authors:** Hephaestus maintainers
+**Amended by:** [ADR 0139](0139-the-contact-policy-decides-whether-hephaestus-may-interrupt-a-person-now.md)
 
 **Builds on:** [ADR 0098](0098-each-email-is-one-outbox-action-and-is-sent-at-most-once.md) (notification email and the outbox), [ADR 0079](0079-one-agent-system.md) (one outbox), [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) (private practice feedback has one reader)
 
