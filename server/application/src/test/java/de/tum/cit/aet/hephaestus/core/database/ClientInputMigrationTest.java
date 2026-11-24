@@ -12,6 +12,7 @@ import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -71,6 +72,40 @@ class ClientInputMigrationTest {
         assertThat(PracticeMigrationFixture.column(database, EXPIRY))
                 .as("the upgrade runs again after the rollback")
                 .containsExactly("0");
+    }
+
+    /**
+     * The application role may pass any cutoff. A future one still expires only receipts older than eight days, so a
+     * retry inside the window cannot create twice. Each call removes at most one batch, which the cleanup's own batch
+     * size relies on to tell a drained backlog from a remaining one.
+     */
+    @Test
+    void shouldExpireAtMostOneBatchOfOldReceiptsWhateverTheCutoff() {
+        var database = NativePracticeFixture.database("prod");
+        PracticeMigrationFixture.execute(
+                database, "INSERT INTO account(id,display_name) VALUES(" + ACCOUNT + ",'Receipt owner')");
+        PracticeMigrationFixture.execute(database, """
+                INSERT INTO client_input(workspace_id,account_id,idem_key,fingerprint,result_id,related_id,created_at)
+                SELECT %1$d,%2$d,gen_random_uuid(),sha256('old'::bytea),gen_random_uuid(),gen_random_uuid(),
+                       now() - interval '9 days'
+                FROM generate_series(1,1001);
+                INSERT INTO client_input(workspace_id,account_id,idem_key,fingerprint,result_id,related_id,created_at)
+                VALUES(%1$d,%2$d,gen_random_uuid(),sha256('new'::bytea),gen_random_uuid(),gen_random_uuid(),
+                       now() - interval '1 day');
+                """.formatted(WORKSPACE, ACCOUNT));
+        String future = "SELECT person_row_sweep('CLIENT_INPUT_EXPIRY', NULL, NULL, 'infinity')::text";
+
+        assertThat(PracticeMigrationFixture.column(database, future))
+                .as("one call removes one batch")
+                .containsExactly("1000");
+        assertThat(PracticeMigrationFixture.column(database, future))
+                .as("the next call removes the rest of the old receipts and keeps the fresh one")
+                .containsExactly("1");
+        assertThat(PracticeMigrationFixture.column(database, "SELECT count(*)::text FROM client_input"))
+                .containsExactly("1");
+        assertThatThrownBy(() -> PracticeMigrationFixture.column(
+                        database, "SELECT person_row_sweep('CLIENT_INPUT_EXPIRY', NULL, NULL, NULL)::text"))
+                .hasMessageContaining("CLIENT_INPUT_EXPIRY needs the cutoff");
     }
 
     private static Liquibase liquibase(TestDatabase database) throws Exception {
