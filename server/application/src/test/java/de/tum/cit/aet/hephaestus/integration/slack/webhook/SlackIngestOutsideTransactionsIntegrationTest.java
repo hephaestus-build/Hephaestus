@@ -139,9 +139,15 @@ class SlackIngestOutsideTransactionsIntegrationTest extends BaseIntegrationTest 
                 threads,
                 new SlackRosterIdentityResolver(providers, people, memberships, slack, suppression),
                 new SlackChannelErasure(
-                        mock(ProviderEventStore.class), threads, channels, conversationFeedbackErasure, messages),
+                        mock(ProviderEventStore.class),
+                        threads,
+                        channels,
+                        conversationFeedbackErasure,
+                        messages,
+                        (kind, refs) -> {}),
                 true,
-                new TransactionTemplate(transactionManager));
+                new TransactionTemplate(transactionManager),
+                (kind, refs) -> {});
         return new SlackChannelMessageHandler(
                 ingest,
                 new EventPayloadDeserializer(JsonMapper.builder().build()),

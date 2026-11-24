@@ -1,7 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,7 +17,9 @@ public final class ConnectionErasures {
 
     private ConnectionErasures() {}
 
-    public static void record(long connectionId, long workspaceId) {
+    public static void record(PrivacyJournal journal, long connectionId, long workspaceId) {
+        journal.record(
+                PrivacyJournalKind.CONNECTION_ERASED, Map.of("workspaceId", workspaceId, "connectionId", connectionId));
         TransactionCallbacks.afterCommit(() -> log.atInfo()
                 .addKeyValue("event.name", "connection.erased")
                 .addKeyValue("connection.id", connectionId)

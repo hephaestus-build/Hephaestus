@@ -108,6 +108,7 @@ class GitLabRepositoryIdentityLookupTest extends BaseUnitTest {
                 Clock.systemUTC(),
                 mock(ProviderResourceRepairs.class),
                 mock(ProviderResourceRegistrations.class),
-                new ActiveScmConnections(connections, credentials));
+                new ActiveScmConnections(connections, credentials),
+                (kind, refs) -> {});
     }
 }

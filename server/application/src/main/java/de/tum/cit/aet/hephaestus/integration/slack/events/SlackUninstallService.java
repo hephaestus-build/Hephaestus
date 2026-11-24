@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionErasures;
@@ -35,11 +36,15 @@ public class SlackUninstallService {
     private final SlackConnectionStrategy connectionStrategy;
     private final IntegrationAttentionService attention;
 
+    private final PrivacyJournal journal;
+
     public SlackUninstallService(
             SlackWorkspaceResolver workspaceResolver,
             ConnectionService connectionService,
             SlackConnectionStrategy connectionStrategy,
-            IntegrationAttentionService attention) {
+            IntegrationAttentionService attention,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.workspaceResolver = workspaceResolver;
         this.connectionService = connectionService;
         this.connectionStrategy = connectionStrategy;
@@ -55,7 +60,11 @@ public class SlackUninstallService {
         }
         long workspaceId = workspaceOpt.get();
         if (!DeliveryInbox.claim("slack.uninstall")) return;
-        connectionService.findActive(workspaceId, IntegrationKind.SLACK).ifPresent(connection -> {
+        var ref = new IntegrationRef(IntegrationKind.SLACK, workspaceId, teamId);
+        // An admin can suspend the connection after it resolved. The erase below still runs, so a suspended connection
+        // is disconnected and its erasure recorded too. A connection that a concurrent uninstall already disconnected
+        // stays as it is; its second fact is harmless.
+        connectionService.findReferenced(ref).ifPresent(connection -> {
             Connection changed = connectionService.transition(
                     connection,
                     new ConnectionService.TransitionRequest(
@@ -68,7 +77,7 @@ public class SlackUninstallService {
                             uninstallCorrelationId(teamId, eventType, eventId),
                             "Slack " + eventType + " received"));
             // The erase below removes what the connection mirrored, as a disconnect does.
-            ConnectionErasures.record(Objects.requireNonNull(changed.getId()), workspaceId);
+            ConnectionErasures.record(journal, Objects.requireNonNull(changed.getId()), workspaceId);
             if ("tokens_revoked".equalsIgnoreCase(eventType)) {
                 attention.report(
                         changed.getId(),
@@ -78,7 +87,7 @@ public class SlackUninstallService {
             }
         });
         // An uninstall erases exactly what an admin disconnect erases.
-        connectionStrategy.eraseLocalData(new IntegrationRef(IntegrationKind.SLACK, workspaceId, teamId));
+        connectionStrategy.eraseLocalData(ref);
     }
 
     private static String uninstallCorrelationId(String teamId, String eventType, String eventId) {

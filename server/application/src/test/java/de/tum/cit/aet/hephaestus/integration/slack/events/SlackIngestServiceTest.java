@@ -14,15 +14,21 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.NativeId;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService.MessageChange;
 import de.tum.cit.aet.hephaestus.integration.slack.identity.SlackRosterIdentityResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.RecordingPrivacyJournal;
+import de.tum.cit.aet.hephaestus.testconfig.RecordingPrivacyJournal.Fact;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,6 +74,8 @@ class SlackIngestServiceTest extends BaseUnitTest {
      */
     private static final Instant INGEST_AFTER = Instant.ofEpochSecond(1);
 
+    private final RecordingPrivacyJournal journal = new RecordingPrivacyJournal();
+
     private SlackIngestService service;
 
     /** Construct the service with the channel-ingest capability flag in the given state. */
@@ -85,9 +93,11 @@ class SlackIngestServiceTest extends BaseUnitTest {
                         threadRepository,
                         monitoredChannelRepository,
                         conversationFeedbackErasure,
-                        messageRepository),
+                        messageRepository,
+                        journal),
                 conversationIngestEnabled,
-                new TransactionTemplate(mock(PlatformTransactionManager.class)));
+                new TransactionTemplate(mock(PlatformTransactionManager.class)),
+                journal);
     }
 
     @BeforeEach
@@ -150,6 +160,11 @@ class SlackIngestServiceTest extends BaseUnitTest {
             assertThat(changes.getFirst().getFormattedMessage()
                             + changes.getFirst().getKeyValuePairs())
                     .doesNotContain("New words");
+            assertThat(journal.facts())
+                    .as("only the edit that replaced words")
+                    .containsExactly(new Fact(
+                            PrivacyJournalKind.SLACK_MESSAGE_CHANGED,
+                            Map.of("workspaceId", 7L, "messageId", 42L, "change", MessageChange.EDITED)));
         } finally {
             logger.detachAppender(appender);
         }
@@ -309,6 +324,23 @@ class SlackIngestServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRecordTheDeletedMessageWhenItsAuthorDeletesAStoredMessage() {
+        when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
+        when(monitoredChannelRepository.findConsentAnnouncedAt(7L, "C1")).thenReturn(Optional.of(INGEST_AFTER));
+        when(messageRepository.findIdOf(7L, "C1", "100.1")).thenReturn(Optional.of(42L));
+        when(messageRepository.findIdOf(7L, "C1", "100.2")).thenReturn(Optional.empty());
+
+        service.tombstoneMessage("T1", "C1", "100.1");
+        // A message that was never stored has no words to erase again.
+        service.tombstoneMessage("T1", "C1", "100.2");
+
+        assertThat(journal.facts())
+                .containsExactly(new Fact(
+                        PrivacyJournalKind.SLACK_MESSAGE_CHANGED,
+                        Map.of("workspaceId", 7L, "messageId", 42L, "change", MessageChange.DELETED)));
+    }
+
+    @Test
     void eraseChannel_revokesConsentErasesDerivedFeedbackAndDeletesStoredContentPromptly() {
         // The channel's thread ids are collected first (the derived practice rows are keyed by slack_thread.id).
         when(threadRepository.findIdsByWorkspaceIdAndSlackChannelId(7L, "C1")).thenReturn(List.of(11L, 22L));
@@ -338,6 +370,10 @@ class SlackIngestServiceTest extends BaseUnitTest {
         // …and the channel's raw content (messages) + thread aggregates are deleted now, not left for the sweep.
         verify(messageRepository).deleteByWorkspaceIdAndSlackChannelId(7L, "C1");
         verify(threadRepository).deleteByWorkspaceIdAndSlackChannelId(7L, "C1");
+        assertThat(journal.facts())
+                .containsExactly(new Fact(
+                        PrivacyJournalKind.SLACK_CHANNEL_ERASED,
+                        Map.of("workspaceId", 7L, "channelId", new NativeId("C1"))));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
@@ -61,6 +62,8 @@ public class ConnectionService {
     private final ProviderResourceRepairs resourceRepairs;
     private final ProviderResourceRegistrations resourceRegistrations;
 
+    private final PrivacyJournal journal;
+
     public ConnectionService(
             ConnectionRepository connectionRepository,
             ConnectionAuditRepository auditRepository,
@@ -72,7 +75,9 @@ public class ConnectionService {
             Clock clock,
             ProviderResourceRepairs resourceRepairs,
             ProviderResourceRegistrations resourceRegistrations,
-            ActiveScmConnections activeScm) {
+            ActiveScmConnections activeScm,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.connectionRepository = connectionRepository;
         this.activeScm = activeScm;
         this.clock = clock;
@@ -562,8 +567,13 @@ public class ConnectionService {
         return applyTransition(
                 connection,
                 req,
-                locked -> strategy.eraseLocalData(new IntegrationRef(
-                        locked.getKind(), locked.getWorkspace().getId(), locked.getInstanceKey(), locked.getId())),
+                locked -> {
+                    var ref = new IntegrationRef(
+                            locked.getKind(), locked.getWorkspace().getId(), locked.getInstanceKey(), locked.getId());
+                    strategy.eraseLocalData(ref);
+                    // The erasure's fact commits with the erasure, and only a transition that erased records it.
+                    ConnectionErasures.record(journal, Objects.requireNonNull(locked.getId()), ref.workspaceId());
+                },
                 /* fenceOnActiveSyncJob */ true,
                 /* retainForTeardown */ true);
     }
@@ -572,10 +582,11 @@ public class ConnectionService {
      * Disconnects for mandatory erasure without allowing a sync job to delay credential removal. {@code
      * revoke} runs with this transaction suspended, so its provider calls hold no transaction open; its
      * failure still propagates and rolls the transition back. Local data is then erased under the
-     * lifecycle lock before the connection loses its source authority or credentials.
+     * lifecycle lock before the connection loses its source authority or credentials. Without {@code erase} the
+     * connection has no local data of its own to erase, so the disconnect records no connection erasure.
      */
     @Transactional
-    public Connection disconnectForErasure(Connection connection, TransitionRequest req, Runnable erase) {
+    public Connection disconnectForErasure(Connection connection, TransitionRequest req, @Nullable Runnable erase) {
         if (req.next() != IntegrationState.UNINSTALLED) {
             throw new IllegalArgumentException("Disconnect must transition to UNINSTALLED");
         }
@@ -584,7 +595,12 @@ public class ConnectionService {
                 req,
                 locked -> {
                     resourceRegistrations.requestRemoval(locked, false);
+                    if (erase == null) return;
                     erase.run();
+                    ConnectionErasures.record(
+                            journal,
+                            Objects.requireNonNull(locked.getId()),
+                            locked.getWorkspace().getId());
                 },
                 /* fenceOnActiveSyncJob */ false, /* retainForTeardown */
                 false);
@@ -710,9 +726,6 @@ public class ConnectionService {
                     saved.getCredentialsGeneration()));
         }
         lifecycleEffects.publishLifecycleEvent(saved, current, req.next());
-        if (req.next() == IntegrationState.UNINSTALLED && beforeLocalTransition != null)
-            ConnectionErasures.record(
-                    Objects.requireNonNull(saved.getId()), saved.getWorkspace().getId());
         return saved;
     }
 

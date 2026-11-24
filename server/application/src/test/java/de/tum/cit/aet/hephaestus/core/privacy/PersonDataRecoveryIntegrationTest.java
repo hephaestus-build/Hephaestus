@@ -13,9 +13,14 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredCollectionErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredMessageDeletions;
@@ -28,15 +33,18 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.RecordingPrivacyJournal;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -155,8 +163,15 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
                  "people":[{"accountId":%d,"identities":[]}]}
                 """.formatted(administratorId, personId));
+        var journal = new RecordingPrivacyJournal();
+        var recordingService = advisedService(
+                beans.getBean(PersonDataRegistry.class),
+                beans.getBeanProvider(PersonEvidenceErasure.class)
+                        .orderedStream()
+                        .toList(),
+                journal);
         var processing = new AtomicBoolean();
-        try (var context = context(manifest, processing)) {
+        try (var context = context(manifest, processing, recordingService)) {
             context.registerBean("erasureBeforeProcessing", Runnable.class, () -> () -> {
                 Account erased = accounts.findById(personId).orElseThrow();
                 assertThat(erased.getStatus()).isEqualTo(Account.Status.DELETED);
@@ -166,6 +181,10 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
             context.refresh();
             assertThat(processing).isTrue();
         }
+        assertThat(journal.facts()).singleElement().satisfies(fact -> {
+            assertThat(fact.kind()).isEqualTo(PrivacyJournalKind.PERSON_ERASED);
+            assertThat(fact.refs()).containsEntry("accountId", personId).containsKey("identities");
+        });
         // The same recovery configuration is safe after a restart.
         try (var context = context(manifest, new AtomicBoolean())) {
             context.refresh();
@@ -255,12 +274,20 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 List.of(),
                 List.of(),
                 List.of())));
+        var journal = new RecordingPrivacyJournal();
+        var recordingService = advisedService(
+                beans.getBean(PersonDataRegistry.class),
+                beans.getBeanProvider(PersonEvidenceErasure.class)
+                        .orderedStream()
+                        .toList(),
+                journal);
         var processing = new AtomicBoolean();
-        try (var context = context(manifest, processing)) {
+        try (var context = context(manifest, processing, recordingService)) {
             context.refresh();
             assertThat(processing).isTrue();
         }
         var suppression = beans.getBean(PersonProcessingSuppression.class);
+        var exact = new ArrayList<PersonIdentity>();
         for (var identity : identities) {
             long providerId = Objects.requireNonNull(inventory
                     .findByTypeAndServerUrl(IdentityProviderType.valueOf(identity.providerType()), identity.serverUrl())
@@ -268,7 +295,16 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                     .getId());
             assertThat(suppression.isSuppressed(providerId, identity.subject(), identity.teamId()))
                     .isTrue();
+            exact.add(new PersonIdentity(providerId, identity.subject(), identity.teamId()));
         }
+        // A person without an account still leaves a fact: the erasure by native identity alone.
+        assertThat(journal.facts()).singleElement().satisfies(fact -> {
+            assertThat(fact.kind()).isEqualTo(PrivacyJournalKind.PERSON_ERASED);
+            assertThat(fact.refs()).containsOnlyKeys("identities");
+            assertThat(fact.refs().get("identities"))
+                    .asInstanceOf(InstanceOfAssertFactories.list(PersonIdentity.class))
+                    .containsExactlyInAnyOrderElementsOf(exact);
+        });
     }
 
     @Test
@@ -295,22 +331,8 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                         throw new IllegalStateException("private-display-name-canary");
                     }
                 };
-        var recoveryService = new PersonDataService(
-                resolver,
-                new PersonDataRegistry(List.of(new RecoveryStores(List.of(failing)))),
-                List.of(),
-                beans.getBean(PersonDataRequestRepository.class),
-                beans.getBean(IdentityRestrictionService.class),
-                beans.getBean(PersonDataWriteFence.class),
-                beans.getBean(PersonDataCopyFence.class),
-                beans.getBean(IssuedJwtRepository.class),
-                beans.getBean(PlatformTransactionManager.class),
-                mapper,
-                jdbc,
-                beans.getBean(MeterRegistry.class));
-        // Fault injection still needs the production transaction advice on each service operation.
-        var initialized = beans.getAutowireCapableBeanFactory().initializeBean(recoveryService, "recoveryFaultService");
-        var advisedService = PersonDataService.class.cast(initialized);
+        var advisedService = advisedService(
+                new PersonDataRegistry(List.of(new RecoveryStores(List.of(failing)))), List.of(), (kind, refs) -> {});
         Path manifest = manifest("""
                 {"version":4,"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
                  "people":[{"accountId":%d,"identities":[]}]}
@@ -326,6 +348,36 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                         Long.toString(personId)))
                 .isEqualTo("FAILED");
         assertThat(output).contains("ERASURE_INCOMPLETE").doesNotContain("private-display-name-canary");
+    }
+
+    /**
+     * A service with its own stores, and a suppression that records into the journal, with the production transaction
+     * advice on each operation.
+     */
+    private PersonDataService advisedService(
+            PersonDataRegistry registry, List<PersonEvidenceErasure> evidence, PrivacyJournal journal) {
+        var unadvised = new PersonDataService(
+                resolver,
+                registry,
+                evidence,
+                beans.getBean(PersonDataRequestRepository.class),
+                new IdentityRestrictionService(
+                        jdbc,
+                        beans.getBeanProvider(PersonSourceIdentityContributor.class)
+                                .orderedStream()
+                                .toList(),
+                        beans.getBean(PersonDataCopyFence.class),
+                        journal),
+                beans.getBean(PersonDataWriteFence.class),
+                beans.getBean(PersonDataCopyFence.class),
+                beans.getBean(IssuedJwtRepository.class),
+                beans.getBean(PlatformTransactionManager.class),
+                mapper,
+                jdbc,
+                beans.getBean(MeterRegistry.class));
+        var initialized = beans.getAutowireCapableBeanFactory()
+                .initializeBean(unadvised, "recoveryService" + System.identityHashCode(unadvised));
+        return PersonDataService.class.cast(initialized);
     }
 
     @PersonDataStores({"recovery_failing_store"})

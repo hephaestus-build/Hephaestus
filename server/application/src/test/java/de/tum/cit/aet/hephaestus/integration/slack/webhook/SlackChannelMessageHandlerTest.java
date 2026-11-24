@@ -92,9 +92,11 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                         threadRepository,
                         monitoredChannelRepository,
                         conversationFeedbackErasure,
-                        messageRepository),
+                        messageRepository,
+                        (kind, refs) -> {}),
                 true, // conversation-ingest capability on
-                new TransactionTemplate(mock(PlatformTransactionManager.class)));
+                new TransactionTemplate(mock(PlatformTransactionManager.class)),
+                (kind, refs) -> {});
         EventPayloadDeserializer deserializer =
                 new EventPayloadDeserializer(JsonMapper.builder().build());
         TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
@@ -125,9 +127,11 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                         threadRepository,
                         monitoredChannelRepository,
                         conversationFeedbackErasure,
-                        messageRepository),
+                        messageRepository,
+                        (kind, refs) -> {}),
                 false, // conversation-ingest capability OFF
-                new TransactionTemplate(mock(PlatformTransactionManager.class)));
+                new TransactionTemplate(mock(PlatformTransactionManager.class)),
+                (kind, refs) -> {});
         EventPayloadDeserializer deserializer =
                 new EventPayloadDeserializer(JsonMapper.builder().build());
         TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);

@@ -16,7 +16,10 @@ class PersonSourceOwnerInventoryTest extends BaseUnitTest {
     @Test
     void shouldRejectMissingSourceAttributionOwnersBeforeProcessingCanStart() {
         assertThatThrownBy(() -> new IdentityRestrictionService(
-                                mock(JdbcTemplate.class), List.of(), mock(PersonDataCopyFence.class))
+                                mock(JdbcTemplate.class),
+                                List.of(),
+                                mock(PersonDataCopyFence.class),
+                                (kind, refs) -> {})
                         .isSourceSuppressed(1L, "chat.thread", 1L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("attribution owner");
@@ -27,7 +30,10 @@ class PersonSourceOwnerInventoryTest extends BaseUnitTest {
         var owner = mock(PersonSourceIdentityContributor.class);
         when(owner.itemKinds()).thenReturn(Set.of("scm.issue", "scm.pull_request", "chat.thread", "docs.document"));
         assertThatThrownBy(() -> new IdentityRestrictionService(
-                        mock(JdbcTemplate.class), List.of(owner, owner), mock(PersonDataCopyFence.class)))
+                        mock(JdbcTemplate.class),
+                        List.of(owner, owner),
+                        mock(PersonDataCopyFence.class),
+                        (kind, refs) -> {}))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("exactly one");
     }

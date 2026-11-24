@@ -250,9 +250,11 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                         threadRepository,
                         monitoredChannelRepository,
                         conversationFeedbackErasure,
-                        messageRepository),
+                        messageRepository,
+                        (kind, refs) -> {}),
                 /* conversationIngestEnabled */ true,
-                new TransactionTemplate(transactionManager));
+                new TransactionTemplate(transactionManager),
+                (kind, refs) -> {});
         consentService = new SlackChannelConsentService(
                 monitoredChannelRepository,
                 consentEventRepository,

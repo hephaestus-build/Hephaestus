@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
@@ -26,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.RecordingPrivacyJournal;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Clock;
@@ -33,6 +35,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -88,6 +91,7 @@ class ConnectionServiceTest extends BaseUnitTest {
     @Mock
     private PlatformTransactionManager transactionManager;
 
+    private final RecordingPrivacyJournal journal = new RecordingPrivacyJournal();
     private CredentialBundleConverter credentialConverter;
     private ConnectionService service;
     private Workspace workspace;
@@ -120,7 +124,8 @@ class ConnectionServiceTest extends BaseUnitTest {
                 Clock.fixed(Instant.parse("2026-11-03T12:00:00Z"), ZoneOffset.UTC),
                 mock(ProviderResourceRepairs.class),
                 mock(ProviderResourceRegistrations.class),
-                new ActiveScmConnections(connectionRepository, mock(CredentialReader.class)));
+                new ActiveScmConnections(connectionRepository, mock(CredentialReader.class)),
+                journal);
         // Default: the connection is free. Only the disconnect fence ever asks.
         lenient().when(syncJobService.requestCancelForTeardown(anyLong())).thenReturn(Optional.empty());
         workspace = new Workspace();
@@ -290,6 +295,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         ArgumentCaptor<ConnectionAudit> audit = ArgumentCaptor.forClass(ConnectionAudit.class);
         verify(auditRepository).save(audit.capture());
         assertThat(audit.getValue().getToState()).isEqualTo(IntegrationState.UNINSTALLED);
+        assertThat(journal.facts()).as("a transition that erases no local data").isEmpty();
     }
 
     @Test
@@ -368,6 +374,9 @@ class ConnectionServiceTest extends BaseUnitTest {
         verify(eventPublisher)
                 .publishEvent(new ProviderTeardownRequested(
                         connection.getId(), workspace.getId(), connection.getCredentialsGeneration()));
+        assertThat(journal.facts())
+                .containsExactly(new RecordingPrivacyJournal.Fact(
+                        PrivacyJournalKind.CONNECTION_ERASED, Map.of("workspaceId", 7L, "connectionId", 55L)));
     }
 
     @Test
@@ -451,6 +460,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         verifyNoInteractions(strategy);
         verify(auditRepository, never()).save(any());
         assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);
+        assertThat(journal.facts()).isEmpty();
     }
 
     @ParameterizedTest

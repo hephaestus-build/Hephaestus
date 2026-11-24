@@ -4,8 +4,11 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountErasureContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -29,16 +32,19 @@ public class AccountPurger {
     private final AccountErasureRepository erasureRepository;
     private final List<AccountErasureContributor> erasureContributors;
     private final ObjectProvider<PersonDataService> personErasure;
+    private final PrivacyJournal journal;
 
     public AccountPurger(
             AccountRepository accountRepository,
             AccountErasureRepository erasureRepository,
             List<AccountErasureContributor> erasureContributors,
-            ObjectProvider<PersonDataService> personErasure) {
+            ObjectProvider<PersonDataService> personErasure,
+            PrivacyJournal journal) {
         this.accountRepository = accountRepository;
         this.erasureRepository = erasureRepository;
         this.erasureContributors = erasureContributors;
         this.personErasure = personErasure;
+        this.journal = journal;
     }
 
     public void purge(Long accountId) {
@@ -71,6 +77,8 @@ public class AccountPurger {
         // Rows another module owns are erased by that module, inside this transaction.
         erasureContributors.forEach(contributor -> contributor.eraseAccount(accountId));
         erasureRepository.deleteIdentities(accountId);
+        // Both a self-deletion and an administrator's erasure of a person end here.
+        journal.record(PrivacyJournalKind.ACCOUNT_ERASED, Map.of("accountId", accountId));
 
         Account account = accountRepository.findById(accountId).orElse(null);
         if (account == null) {

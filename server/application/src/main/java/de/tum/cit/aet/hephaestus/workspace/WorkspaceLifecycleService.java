@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -17,6 +19,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeGuard;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceResumeGuard;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +52,8 @@ public class WorkspaceLifecycleService {
 
     private final TransactionTemplate transactions;
 
+    private final PrivacyJournal journal;
+
     public WorkspaceLifecycleService(
             WorkspaceRepository workspaceRepository,
             MembershipRepository workspaceMembershipRepository,
@@ -58,7 +63,9 @@ public class WorkspaceLifecycleService {
             List<WorkspaceResumeGuard> resumeGuards,
             List<WorkspaceProviderRemoval> providerRemovals,
             PlatformTransactionManager transactionManager,
-            ConfigAuditPort configAudit) {
+            ConfigAuditPort configAudit,
+            PrivacyJournal journal) {
+        this.journal = journal;
         this.configAudit = configAudit;
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
@@ -203,6 +210,7 @@ public class WorkspaceLifecycleService {
         workspace.markPurged();
         Workspace purged = workspaceRepository.save(workspace);
         recordStatusChange(purged, previousStatus, WorkspaceStatus.PURGED);
+        journal.record(PrivacyJournalKind.WORKSPACE_PURGED, Map.of("workspaceId", workspaceId));
 
         // An erasure recovery manifest lists the purges after its recovery point (backup-restore.mdx), so only a
         // committed purge is recorded.

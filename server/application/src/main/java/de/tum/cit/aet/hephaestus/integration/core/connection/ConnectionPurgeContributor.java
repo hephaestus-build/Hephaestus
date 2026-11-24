@@ -63,12 +63,11 @@ public class ConnectionPurgeContributor implements WorkspacePurgeContributor {
                             "workspace-purge",
                             "workspace-" + workspaceId + "-purge-" + c.getId(),
                             "Cascade from workspace PURGE"),
-                    () -> {
-                        if (strategy != null) {
-                            strategy.eraseLocalData(
-                                    new IntegrationRef(c.getKind(), workspaceId, c.getInstanceKey(), c.getId()));
-                        }
-                    });
+                    // Without a strategy, the provider's purge contributor erases the data under this purge's fact.
+                    strategy == null
+                            ? null
+                            : () -> strategy.eraseLocalData(
+                                    new IntegrationRef(c.getKind(), workspaceId, c.getInstanceKey(), c.getId())));
         }
     }
 

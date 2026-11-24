@@ -24,12 +24,15 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionRequestedEvent;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.RecordingPrivacyJournal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +53,7 @@ class AccountServiceTest extends BaseUnitTest {
     private final Clock clock = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
 
     private final GitProviderRegistry providers = mock(GitProviderRegistry.class);
+    private final RecordingPrivacyJournal journal = new RecordingPrivacyJournal();
     private AccountService service;
 
     @BeforeEach
@@ -62,7 +66,8 @@ class AccountServiceTest extends BaseUnitTest {
                 new AuthEventLogger(auditWriter),
                 eventPublisher,
                 clock,
-                providers);
+                providers,
+                journal);
     }
 
     private static Identity link(long id, long gitProviderId) {
@@ -250,6 +255,9 @@ class AccountServiceTest extends BaseUnitTest {
         assertThat(event.getValue().actingAccountId()).isNull();
         // The purge follows the commit at once; there is no waiting period.
         verify(eventPublisher).publishEvent(new AccountDeletionRequestedEvent(2L));
+        assertThat(journal.facts())
+                .containsExactly(
+                        new RecordingPrivacyJournal.Fact(PrivacyJournalKind.ACCOUNT_ERASED, Map.of("accountId", 2L)));
     }
 
     @Test
@@ -264,6 +272,7 @@ class AccountServiceTest extends BaseUnitTest {
         verify(accountRepository, never()).save(any());
         verify(sessionRevocation, never()).revokeAccount(anyLong(), any(), any(), any());
         verifyNoInteractions(auditWriter, eventPublisher);
+        assertThat(journal.facts()).isEmpty();
     }
 
     @Test

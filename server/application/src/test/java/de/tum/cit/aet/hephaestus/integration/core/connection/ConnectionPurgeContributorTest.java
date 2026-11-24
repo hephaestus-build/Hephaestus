@@ -13,6 +13,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRegistrations;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -23,10 +24,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.CredentialReaders;
+import de.tum.cit.aet.hephaestus.testconfig.RecordingPrivacyJournal;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.lang.reflect.Field;
 import java.time.Clock;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -60,6 +63,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
     @Mock
     private ConnectionStrategy connectionStrategy;
 
+    private final RecordingPrivacyJournal journal = new RecordingPrivacyJournal();
     private CredentialBundleConverter credentialConverter;
     private ConnectionService connectionService;
     private final ProviderResourceRepairs resourceRepairs = mock(ProviderResourceRepairs.class);
@@ -80,7 +84,8 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
                 Clock.systemUTC(),
                 resourceRepairs,
                 resourceRegistrations,
-                new ActiveScmConnections(connectionRepository, mock(CredentialReader.class)));
+                new ActiveScmConnections(connectionRepository, mock(CredentialReader.class)),
+                journal);
         lenient().when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         lenient().when(connectionStrategy.kind()).thenReturn(IntegrationKind.GITHUB);
@@ -111,6 +116,10 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
         assertThat(connection.getState()).isEqualTo(IntegrationState.UNINSTALLED);
         assertThat(connection.getCredentialsEncrypted()).isNull();
         verify(syncJobService, never()).requestCancelForTeardown(anyLong());
+        assertThat(journal.facts())
+                .containsExactly(new RecordingPrivacyJournal.Fact(
+                        PrivacyJournalKind.CONNECTION_ERASED,
+                        Map.of("workspaceId", WORKSPACE_ID, "connectionId", 55L)));
     }
 
     @Test
@@ -138,6 +147,8 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
 
         assertThat(connection.getState()).isEqualTo(IntegrationState.UNINSTALLED);
         assertThat(connection.getCredentialsEncrypted()).isNull();
+        // Recovery could not disconnect it again without the strategy; the workspace purge fact covers its data.
+        assertThat(journal.facts()).isEmpty();
     }
 
     @Test
