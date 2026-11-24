@@ -875,9 +875,13 @@ An earlier piece rests on its own review's results, and no problem identity link
 A pull request gets one GitHub review with its summary and line or file threads.
 A merge request gets one GitLab bulk publication with its summary and draft notes.
 Creating private drafts does not notify the developer.
-An interrupted attempt adopts only drafts with this package's exact words, markers and positions.
-An unrelated pending draft prevents submission.
 No adapter falls back to separate public discussions after a refused position.
+
+A send that stops before its submission deletes its drafts, for example when the check before the final write refuses the piece.
+An interrupted attempt adopts only drafts with this package's exact words, markers and positions.
+After its own fence admits it, a later package deletes a Hephaestus draft that no send will submit.
+The fence proves that no other write on the work is unresolved.
+A draft that a person wrote prevents submission and is left untouched.
 
 Each copy keeps its copy marker.
 After an uncertain submission, recovery reads the provider copies.
@@ -1050,6 +1054,9 @@ Readback records found copies and proved absence without guessing.
 An admin can retry a proved absent copy after all current gates pass.
 Confirmed historical copies are never posted again.
 
+A copy that the gate refuses while its write is unresolved keeps the reason.
+If readback then proves the copy absent, the copy ends Withheld for that reason, not Failed.
+
 Readback asks one question: did this write land?
 A copy is found when a comment by Hephaestus, at the copy's place, ends with the copy's marker.
 The marker names the copy, and a copy's words never change once its write begins.
@@ -1058,7 +1065,9 @@ Readback does not compare words, so a change to the posted text or to the footer
 A copy is absent only when no comment carries its marker: no submitted review, review comment, or pull or merge request comment.
 A marker that a comment carries without matching leaves the copy unknown, never absent.
 Thus, a copy that v1.0.0-rc.1 posted in its own shape and left in doubt stays Unconfirmed until an admin acts.
-A pending review is a private draft, so its markers prove nothing, and the next attempt adopts it.
+A pending review or a draft note is a private draft, so its markers prove nothing.
+Readback deletes the package's draft before it records a copy absent.
+Thus, a submission that is still in flight cannot land after the copy is recorded absent.
 
 Current source version, scope, consent, feedback mode, delivery pause and approval are checked at egress.
 A work-state refusal does not erase the result.

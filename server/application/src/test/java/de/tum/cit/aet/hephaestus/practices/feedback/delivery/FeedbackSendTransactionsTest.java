@@ -20,7 +20,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CopyForm;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyReadback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackOutcomes;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPublicationContext;
@@ -135,14 +134,7 @@ class FeedbackSendTransactionsTest {
         transactions.receipt(
                 1, id, owner, List.of(new CopyReceipt(copyId, CopyDisposition.FAILED, null, null, null, null)));
         verify(copies, never()).recordAbsent(anyLong(), any(), any(), anyString());
-        verify(copies)
-                .recordError(
-                        1,
-                        id,
-                        copyId,
-                        FeedbackStopReason.DELIVERY_UNCONFIRMED.name(),
-                        FeedbackCopyReadback.UNKNOWN.name(),
-                        "Provider visibility is unknown.");
+        verify(copies).recordUnconfirmed(1, id, copyId, "Provider visibility is unknown.");
     }
 
     @Test

@@ -44,7 +44,8 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.stereotype.Component;
 
 /**
- * Stages a package as one pending review with its threads, then submits it once, the only notifying write.
+ * Stages a package as one pending review with its threads, then submits it once, the only notifying write. A stop
+ * before the submission deletes the pending review, so a private draft never outlives the send that staged it.
  * A lost response permits readback only. Verify copies at {@link FeedbackTarget#version}; resolved or
  * outdated threads still count.
  */
@@ -110,6 +111,8 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         long workspace = target.item().workspaceId();
         if (gitHubProvider.isRateLimitCritical(workspace) || commitOid(target) == null) return publication.notSent();
         boolean fenced = false;
+        boolean submitting = false;
+        String staged = null;
         try {
             var footer = formatter.footer(target.item());
             var pr = GitHubSummaryWriter.parseSubjectExternalId(targets.subject(target, kind()));
@@ -135,7 +138,11 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             // A refused fence started nothing: the copies stay as they were.
             if (!fence.beforeCreate(publication.copyIds(), List.of())) return CopyWriteResult.of(List.of());
             fenced = true;
+            // GitHub keeps one pending review per author. A Hephaestus draft that no send will submit would block
+            // this package: the admitted fence proves that no other write on this work is unresolved.
+            if (reviews.stale() != null && !discard(workspace, reviews.stale())) return publication.notSent();
             String pending = reviews.pending();
+            staged = pending;
             if (pending == null) {
                 var response = execute(
                         workspace,
@@ -151,6 +158,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                                 List.of()));
                 pending = response.field("addPullRequestReview.pullRequestReview.id")
                         .getValue();
+                staged = pending;
                 if (pending == null
                         || !"PENDING"
                                 .equals(response.field("addPullRequestReview.pullRequestReview.state")
@@ -163,13 +171,13 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                     continue;
                 }
                 if (gitHubProvider.isRateLimitCritical(workspace)) return publication.attempted();
-                if (!fence.beforeCreate(List.of(), List.of())) return publication.attempted();
+                if (!fence.beforeCreate(List.of(), List.of())) return discarded(workspace, pending, publication);
                 var input = buildThread(note.anchor(), postedBody(footer, note));
                 input.put("pullRequestReviewId", pending);
                 var created = execute(workspace, "AddFeedbackReviewThread", Map.of("input", input));
                 String id =
                         created.field("addPullRequestReviewThread.thread.id").getValue();
-                if (id == null) return publication.attempted();
+                if (id == null) return discarded(workspace, pending, publication);
             }
             // Re-read the entire pending review before the single notifying write. Never submit a foreign draft.
             var beforeSubmit = reviewLookup(
@@ -185,9 +193,10 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                     || publication.notes().stream().anyMatch(note -> {
                         var copy = complete.get(note.writeKey());
                         return copy == null || !copy.verified();
-                    })
-                    || !fence.beforeCreate(List.of(), List.of())) return publication.attempted();
+                    })) return publication.attempted();
+            if (!fence.beforeCreate(List.of(), List.of())) return discarded(workspace, pending, publication);
             egressGuard.requireDeliveryAllowed("github.submit-feedback-package");
+            submitting = true;
             execute(workspace, "SubmitFeedbackReview", Map.of("reviewId", pending));
             var found = findPosted(target, publication);
             return found == null ? publication.attempted() : CopyWriteResult.of(found);
@@ -195,7 +204,27 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             throw suppressed;
         } catch (RuntimeException unknown) {
             // A timeout can follow submission; only readback may establish success on the next attempt.
-            return fenced ? publication.attempted() : publication.notSent();
+            if (!fenced) return publication.notSent();
+            return submitting || staged == null ? publication.attempted() : discarded(workspace, staged, publication);
+        }
+    }
+
+    /**
+     * Ends a send that stopped before its submission. Nothing was published, so once GitHub confirms that the pending
+     * review is gone, no copy of the package exists.
+     */
+    private CopyWriteResult discarded(long workspace, String review, OnWorkPackage publication) {
+        return discard(workspace, review) ? publication.notSent() : publication.attempted();
+    }
+
+    /** Deletes one of the viewer's pending reviews with its threads. Only a pending review can be deleted. */
+    private boolean discard(long workspace, String review) {
+        try {
+            var response = execute(workspace, "DeleteFeedbackReview", Map.of("reviewId", review));
+            return review.equals(response.field("deletePullRequestReview.pullRequestReview.id")
+                    .getValue());
+        } catch (RuntimeException unknown) {
+            return false;
         }
     }
 
@@ -213,8 +242,10 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                         publication, review.submitted(), indexCopies(workspace, pr, publication.notes(), commit));
             // No submitted review holds the package. A copy is absent only if no submitted review carries its marker.
             // A marker that is there but did not match leaves the copy unknown, never absent. The threads of submitted
-            // reviews are their comments; a pending review is a private draft that the next attempt adopts.
+            // reviews are their comments. The package's pending review is a private draft that nothing submits now:
+            // absence holds only once it is deleted, so a submission still in flight can never land after it.
             if (!review.complete()) return null;
+            if (review.pending() != null && !discard(workspace, review.pending())) return null;
             var seen = review.seen();
             var unknown = new ArrayList<CopyReceipt>();
             var summary = publication.summary();
@@ -247,6 +278,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         String after = null;
         String pending = null;
         int pendingComments = 0;
+        String stale = null;
         SummaryHandle submitted = null;
         for (int page = 0; page < MAX_THREAD_PAGES; page++) {
             var variables = new HashMap<String, Object>();
@@ -275,9 +307,11 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                 boolean same = ScmFeedbackFormatter.carries(body, marker)
                         && review.get("commit") instanceof Map<?, ?> revision
                         && commit.equals(revision.get("oid"));
-                if (state.equals("PENDING")) {
-                    if (!same
-                            || pending != null
+                if (state.equals("PENDING") && !same) {
+                    if (stale != null || !staged(body, review.get("comments"))) return ReviewLookup.CONFLICT;
+                    stale = id;
+                } else if (state.equals("PENDING")) {
+                    if (pending != null
                             || !(review.get("comments") instanceof Map<?, ?> comments)
                             || !(comments.get("nodes") instanceof List<?> entries)
                             || !(comments.get("pageInfo") instanceof Map<?, ?> pageInfo)
@@ -293,16 +327,16 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                                             .map(entry -> ((Map<?, ?>) entry).get("body"))
                                             .distinct()
                                             .count()
-                                    != entries.size()) return new ReviewLookup(null, 0, null, true, Set.of(), false);
+                                    != entries.size()) return ReviewLookup.CONFLICT;
                     pending = id;
                     pendingComments = entries.size();
                 } else if (same) {
-                    if (submitted != null) return new ReviewLookup(null, 0, null, true, Set.of(), false);
+                    if (submitted != null) return ReviewLookup.CONFLICT;
                     submitted = new SummaryHandle(id, review.get("url") instanceof String url ? url : null);
-                } else if (body.contains(marker)) return new ReviewLookup(null, 0, null, true, Set.of(), false);
+                } else if (body.contains(marker)) return ReviewLookup.CONFLICT;
             }
             if (Boolean.FALSE.equals(info.get("hasNextPage")))
-                return new ReviewLookup(pending, pendingComments, submitted, false, Set.copyOf(seen), complete);
+                return new ReviewLookup(pending, pendingComments, stale, submitted, false, Set.copyOf(seen), complete);
             if (!Boolean.TRUE.equals(info.get("hasNextPage"))
                     || !(info.get("endCursor") instanceof String next)
                     || next.isBlank()
@@ -331,17 +365,37 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     }
 
     /**
-     * {@code pendingComments} counts the pending review's own comments, each a distinct expected note. {@code seen}
-     * holds the package's markers that a submitted review or its comments carry; {@code complete} says whether every
-     * such comment was read.
+     * {@code pendingComments} counts the pending review's own comments, each a distinct expected note. {@code stale}
+     * is the viewer's pending review that another package staged. {@code seen} holds the package's markers that a
+     * submitted review or its comments carry; {@code complete} says whether every such comment was read.
      */
     private record ReviewLookup(
             @Nullable String pending,
             int pendingComments,
+            @Nullable String stale,
             @Nullable SummaryHandle submitted,
             boolean conflict,
             Set<String> seen,
-            boolean complete) {}
+            boolean complete) {
+        static final ReviewLookup CONFLICT = new ReviewLookup(null, 0, null, null, true, Set.of(), false);
+    }
+
+    /**
+     * Whether a pending review of the viewer is a Hephaestus draft: its body and every comment end with Hephaestus
+     * markers. A person's draft, even under the same account, is never deleted.
+     */
+    private static boolean staged(String body, @Nullable Object comments) {
+        return ScmFeedbackFormatter.marked(body)
+                && comments instanceof Map<?, ?> connection
+                && connection.get("nodes") instanceof List<?> entries
+                && connection.get("pageInfo") instanceof Map<?, ?> pageInfo
+                && Boolean.FALSE.equals(pageInfo.get("hasNextPage"))
+                && entries.stream()
+                        .allMatch(entry -> entry instanceof Map<?, ?> comment
+                                && Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
+                                && comment.get("body") instanceof String posted
+                                && ScmFeedbackFormatter.lastDeliveryKey(posted) != null);
+    }
 
     private static boolean watch(Map<?, ?> review, String body, Set<String> watched, Set<String> seen) {
         watched.stream().filter(body::contains).forEach(seen::add);

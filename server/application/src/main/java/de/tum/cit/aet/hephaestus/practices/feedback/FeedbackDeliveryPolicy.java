@@ -60,8 +60,13 @@ public class FeedbackDeliveryPolicy {
         return check;
     }
 
+    /**
+     * Withholds the copies not yet sent. A copy whose write started stays unresolved, so only readback settles it, but
+     * it keeps the reason: if the write never reached the provider, the copy ends withheld for it.
+     */
     public void withhold(Feedback row, FeedbackStopReason reason) {
         copies.withholdPlanned(row.getWorkspaceId(), row.getId(), reason.name());
+        copies.recordRefusal(row.getWorkspaceId(), row.getId(), reason.name());
         var children = copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(row.getWorkspaceId(), row.getId());
         var projection = FeedbackSendStateMachine.project(row, children, reason);
         outcomes.update(row, projection.state(), projection.stopReason(), projection.deliveredAt());

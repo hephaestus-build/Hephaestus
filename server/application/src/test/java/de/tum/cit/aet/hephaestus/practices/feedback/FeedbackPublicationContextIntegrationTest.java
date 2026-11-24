@@ -28,9 +28,16 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateReceipt;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteFence;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteResult;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionService;
@@ -79,6 +86,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -172,6 +180,148 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         jdbc.update("UPDATE feedback_copy SET state='FAILED', readback='ABSENT' WHERE feedback_id=?", other.getId());
         newSender().send(workspace.getId(), piece);
         assertThat(provider.summaryCreates).isEqualTo(1);
+    }
+
+    @Test
+    void shouldEndWithheldForTheGateReasonAndReleaseTheWorkWhenTheFenceRefusesAfterStaging() {
+        prepare(true);
+        var staging = new StagingProvider();
+        staging.afterStaging = () -> refuse(feedbackId, FeedbackStopReason.REVIEWED_VERSION_CHANGED);
+        newSender(staging).send(workspace.getId(), feedbackId);
+
+        assertThat(staging.drafts).isEmpty();
+        assertThat(staging.published).isEmpty();
+        assertRefusedAfterStaging(FeedbackStopReason.REVIEWED_VERSION_CHANGED);
+        assertNextPackageDelivers(staging);
+    }
+
+    @Test
+    void shouldRemoveTheLeftoverDraftOnTheNextAttemptWhenTheCleanupAfterARefusalDidNotRun() {
+        prepare(true);
+        var staging = new StagingProvider();
+        staging.afterStaging = () -> refuse(feedbackId, FeedbackStopReason.RESULT_MARKED_INCORRECT);
+        staging.discardFails = true;
+        newSender(staging).send(workspace.getId(), feedbackId);
+        assertThat(staging.drafts).hasSize(2);
+        assertThat(current().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
+        assertThat(children()).allSatisfy(copy -> {
+            assertThat(copy.getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED);
+            assertThat(copy.getStopReason()).isEqualTo(FeedbackStopReason.RESULT_MARKED_INCORRECT);
+        });
+
+        staging.discardFails = false;
+        due();
+        newSender(staging).send(workspace.getId(), feedbackId);
+
+        assertThat(staging.drafts).isEmpty();
+        assertThat(staging.published).isEmpty();
+        assertRefusedAfterStaging(FeedbackStopReason.RESULT_MARKED_INCORRECT);
+        assertNextPackageDelivers(staging);
+    }
+
+    private void assertRefusedAfterStaging(FeedbackStopReason reason) {
+        assertThat(current().getState()).isEqualTo(FeedbackState.WITHHELD);
+        assertThat(current().getStopReason()).isEqualTo(reason);
+        assertThat(children()).hasSize(2).allSatisfy(copy -> {
+            assertThat(copy.getState()).isEqualTo(FeedbackCopyState.WITHHELD);
+            assertThat(copy.getStopReason()).isEqualTo(reason);
+            assertThat(copy.getReadback()).isEqualTo(FeedbackCopyReadback.ABSENT);
+            assertThat(copy.getLastError()).isNull();
+        });
+    }
+
+    private void assertNextPackageDelivers(StagingProvider staging) {
+        UUID review = review();
+        var next = publicPiece(review, "Name the missing failure case.", contextFor(review));
+        newSender(staging).send(workspace.getId(), next);
+        assertThat(feedback.findById(next).orElseThrow().getState()).isEqualTo(FeedbackState.DELIVERED);
+        assertThat(staging.published).containsOnlyKeys(FeedbackIds.copy(next, FeedbackCopyKind.SUMMARY, 0));
+        assertThat(staging.submissions).isEqualTo(1);
+    }
+
+    /** The gate refuses this piece from now on, as it would after the reason arose; it allows every other piece. */
+    private void refuse(UUID piece, FeedbackStopReason reason) {
+        doAnswer(call -> {
+                    Feedback row = call.getArgument(0);
+                    FeedbackCheckStage stage = call.getArgument(1);
+                    return row.getId().equals(piece)
+                            ? new FeedbackCheck(
+                                    stage,
+                                    false,
+                                    reason,
+                                    Instant.now(),
+                                    new FeedbackCheckFacts(0, 0, true, true, true, true, false, true, true, false))
+                            : allowed(stage);
+                })
+                .when(gate)
+                .evaluate(any(), any(), anyBoolean());
+    }
+
+    /**
+     * Stages a package as private drafts that notify nobody, then publishes it with one submission, as GitHub and
+     * GitLab do. A stop before the submission deletes the drafts; readback deletes a draft that a stop left behind.
+     */
+    private static final class StagingProvider implements LineNoteWriter {
+        final Map<UUID, String> drafts = new LinkedHashMap<>();
+        final Map<UUID, String> published = new LinkedHashMap<>();
+        int submissions;
+        boolean discardFails;
+
+        @Nullable
+        Runnable afterStaging;
+
+        @Override
+        public IntegrationKind kind() {
+            return IntegrationKind.GITHUB;
+        }
+
+        @Override
+        public CopyWriteResult postPackage(FeedbackTarget target, OnWorkPackage publication, CopyWriteFence fence) {
+            if (!fence.beforeCreate(publication.copyIds(), List.of())) return CopyWriteResult.of(List.of());
+            publication.copyIds().forEach(id -> drafts.put(id, "draft"));
+            var hook = afterStaging;
+            afterStaging = null;
+            if (hook != null) hook.run();
+            if (!fence.beforeCreate(List.of(), List.of()))
+                return discard(publication.copyIds()) ? publication.notSent() : publication.attempted();
+            submissions++;
+            publication.copyIds().forEach(id -> published.put(id, Objects.requireNonNull(drafts.remove(id))));
+            return CopyWriteResult.of(receipts(publication));
+        }
+
+        @Override
+        public @Nullable List<CopyReceipt> findPosted(FeedbackTarget target, OnWorkPackage publication) {
+            return discard(publication.copyIds()) ? receipts(publication) : null;
+        }
+
+        private boolean discard(List<UUID> ids) {
+            if (discardFails) return false;
+            ids.forEach(drafts::remove);
+            return true;
+        }
+
+        private List<CopyReceipt> receipts(OnWorkPackage publication) {
+            return publication.copyIds().stream()
+                    .filter(published::containsKey)
+                    .map(id -> new CopyReceipt(
+                            id, CopyDisposition.POSTED, id.toString(), "https://example.test/" + id, true, null))
+                    .toList();
+        }
+
+        @Override
+        public List<CopyUpdateReceipt> retract(FeedbackTarget target, List<CopyReceipt> copies) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<CopyUpdateReceipt> restore(FeedbackTarget target, List<RetractedNote> notes) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public List<CopyUpdateReceipt> editOwn(FeedbackTarget target, List<OwnedEdit> notes) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     @Test

@@ -55,6 +55,8 @@ public final class ScriptedGitLabNotes {
     private int failDraft;
     private final Map<Integer, String> heads = new ConcurrentHashMap<>();
     private final Map<Integer, String> branches = new ConcurrentHashMap<>();
+    private boolean failDelete;
+    private boolean publishOnDraftRead;
     private boolean losePublish;
     private int bulkPublications;
 
@@ -75,6 +77,15 @@ public final class ScriptedGitLabNotes {
 
     void failDraft(int call) {
         failDraft = call;
+    }
+
+    void failDelete(boolean fail) {
+        failDelete = fail;
+    }
+
+    /** The next read of the drafts finds them already published, as a publication that lands concurrently does. */
+    void publishOnNextDraftRead() {
+        publishOnDraftRead = true;
     }
 
     void losePublish(boolean lose) {
@@ -183,7 +194,7 @@ public final class ScriptedGitLabNotes {
     // GitLab's REST discussions API: a diff thread with the asked position, or an overview thread without one.
     @SuppressWarnings("unchecked")
     private Mono<ClientResponse> discuss(ScriptedGitLabRest.Call call) {
-        var pending = Pattern.compile(".*/merge_requests/(\\d+)/(draft_notes(?:/bulk_publish)?|notes)")
+        var pending = Pattern.compile(".*/merge_requests/(\\d+)/(draft_notes(?:/bulk_publish|/\\d+)?|notes)")
                 .matcher(call.path());
         if (pending.matches()) return drafts(call, Integer.parseInt(pending.group(1)), pending.group(2));
         if (call.path().endsWith("/api/v4/user"))
@@ -235,6 +246,10 @@ public final class ScriptedGitLabNotes {
     private Mono<ClientResponse> drafts(ScriptedGitLabRest.Call call, int iid, String endpoint) {
         String parent = mergeRequest(iid);
         if (HttpMethod.GET.equals(call.method())) {
+            if (endpoint.equals("draft_notes") && publishOnDraftRead) {
+                publishOnDraftRead = false;
+                publish(parent);
+            }
             if (endpoint.equals("draft_notes")) return ScriptedGitLabRest.respond(200, drafts);
             return ScriptedGitLabRest.respond(
                     200,
@@ -248,6 +263,13 @@ public final class ScriptedGitLabNotes {
                                 return row;
                             })
                             .toList());
+        }
+        if (HttpMethod.DELETE.equals(call.method())) {
+            if (failDelete) return ScriptedGitLabRest.respond(503, Map.of("message", "Draft deletion failed"));
+            long id = Long.parseLong(endpoint.substring("draft_notes/".length()));
+            return drafts.removeIf(draft -> ((Number) Objects.requireNonNull(draft.get("id"))).longValue() == id)
+                    ? ScriptedGitLabRest.respond(204, "")
+                    : ScriptedGitLabRest.respond(404, Map.of("message", "404 Not found"));
         }
         var fields = call.json();
         if (endpoint.equals("draft_notes")) {
@@ -264,6 +286,15 @@ public final class ScriptedGitLabNotes {
             return ScriptedGitLabRest.respond(201, draft);
         }
         if (!endpoint.equals("draft_notes/bulk_publish")) return Mono.error(new IllegalArgumentException(endpoint));
+        publish(parent);
+        if (fields.get("note") instanceof String summary) threads.append(parent, "gid://gitlab/Note/", summary);
+        return losePublish
+                ? Mono.error(new IllegalStateException("Response lost after bulk publication"))
+                : ScriptedGitLabRest.respond(204, "");
+    }
+
+    @SuppressWarnings("unchecked") // The fake stores the draft payloads submitted by this client.
+    private void publish(String parent) {
         bulkPublications++;
         for (var draft : drafts) {
             Object position = Objects.equals(draft.get("position"), UNPOSITIONED) ? null : draft.get("position");
@@ -274,10 +305,6 @@ public final class ScriptedGitLabNotes {
             if (position != null) positions.put(id, (Map<String, Object>) position);
         }
         drafts.clear();
-        if (fields.get("note") instanceof String summary) threads.append(parent, "gid://gitlab/Note/", summary);
-        return losePublish
-                ? Mono.error(new IllegalStateException("Response lost after bulk publication"))
-                : ScriptedGitLabRest.respond(204, "");
     }
 
     private static Map<String, Object> unpositioned() {

@@ -126,9 +126,17 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
             @Param("kind") String kind,
             @Param("threadRef") @Nullable String threadRef);
 
+    /**
+     * Records that a started write did not reach the provider. A copy that the gate refused while its write was
+     * unresolved ({@link #recordRefusal}) ends withheld for that reason; any other copy failed to be delivered.
+     */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
-        UPDATE feedback_copy SET state = 'FAILED', stop_reason = NULL, last_error = :error, readback='ABSENT'
+        UPDATE feedback_copy SET
+            state = CASE WHEN stop_reason IS NULL OR stop_reason = 'DELIVERY_UNCONFIRMED' THEN 'FAILED' ELSE 'WITHHELD' END,
+            last_error = CASE WHEN stop_reason IS NULL OR stop_reason = 'DELIVERY_UNCONFIRMED' THEN :error END,
+            stop_reason = NULLIF(stop_reason, 'DELIVERY_UNCONFIRMED'),
+            readback = 'ABSENT'
          WHERE workspace_id = :workspaceId AND feedback_id = :feedbackId AND id = :copyId
            AND state = 'WRITE_STARTED' AND external_ref IS NULL AND posted_at IS NULL
         """, nativeQuery = true)
@@ -171,6 +179,33 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
           AND (write_started_at IS NULL OR readback = 'ABSENT')
         """, nativeQuery = true)
     int retryAbsent(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
+
+    /**
+     * Records why the gate refused copies whose write started but is not confirmed. The write stays unresolved until
+     * readback settles it: a posted copy clears the reason, and an absent one ends withheld for it.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE feedback_copy SET stop_reason=:reason
+        WHERE workspace_id=:workspaceId AND feedback_id=:feedbackId AND state='WRITE_STARTED'
+          AND external_ref IS NULL AND posted_at IS NULL
+        """, nativeQuery = true)
+    int recordRefusal(
+            @Param("workspaceId") long workspaceId,
+            @Param("feedbackId") UUID feedbackId,
+            @Param("reason") String reason);
+
+    /** Records a started write whose result the provider did not confirm. It keeps a refusal the gate recorded. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE feedback_copy SET last_error=:error,readback='UNKNOWN',stop_reason=COALESCE(stop_reason,'DELIVERY_UNCONFIRMED')
+        WHERE workspace_id=:workspaceId AND feedback_id=:feedbackId AND id=:copyId AND state='WRITE_STARTED'
+        """, nativeQuery = true)
+    int recordUnconfirmed(
+            @Param("workspaceId") long workspaceId,
+            @Param("feedbackId") UUID feedbackId,
+            @Param("copyId") UUID copyId,
+            @Param("error") String error);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """

@@ -164,6 +164,11 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
     }
 
     protected Sender newSender() {
+        return newSender(provider);
+    }
+
+    /** A sender that writes packages on work through {@code notes}, and everything else through this test's provider. */
+    protected Sender newSender(LineNoteWriter notes) {
         var targets = mock(FeedbackTargetResolver.class);
         when(targets.resolve(any())).thenReturn(target);
         when(targets.resolveExisting(any())).thenReturn(target);
@@ -172,7 +177,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
                 transactions,
                 targets,
                 List.of(provider),
-                List.of(provider),
+                List.of(notes),
                 corrector,
                 new FeedbackReadbackMeters(new SimpleMeterRegistry()),
                 mock(FeedbackProviderReadback.class),

@@ -209,14 +209,7 @@ public class FeedbackSendTransactions {
                         receipt.threadRef());
             } else if (Boolean.FALSE.equals(receipt.writeMayHaveStarted())) {
                 copies.recordAbsent(workspaceId, feedbackId, copy.getId(), "Provider proved the copy was not created.");
-            } else
-                copies.recordError(
-                        workspaceId,
-                        feedbackId,
-                        copy.getId(),
-                        FeedbackStopReason.DELIVERY_UNCONFIRMED.name(),
-                        FeedbackCopyReadback.UNKNOWN.name(),
-                        "Provider visibility is unknown.");
+            } else copies.recordUnconfirmed(workspaceId, feedbackId, copy.getId(), "Provider visibility is unknown.");
         }
         if (!receipts.isEmpty()
                 && row.getComposition().hasNonNull("editOf")
@@ -336,13 +329,8 @@ public class FeedbackSendTransactions {
         copies.failUnstarted(workspaceId, feedbackId);
         for (var copy : copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, feedbackId))
             if (copy.getState() == FeedbackCopyState.WRITE_STARTED)
-                copies.recordError(
-                        workspaceId,
-                        feedbackId,
-                        copy.getId(),
-                        FeedbackStopReason.DELIVERY_UNCONFIRMED.name(),
-                        FeedbackCopyReadback.UNKNOWN.name(),
-                        "Provider call did not produce a confirmed receipt.");
+                copies.recordUnconfirmed(
+                        workspaceId, feedbackId, copy.getId(), "Provider call did not produce a confirmed receipt.");
     }
 
     private boolean owns(ActionAttempt owner) {
