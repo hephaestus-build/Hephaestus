@@ -52,8 +52,13 @@ Option 5.
 3. **A noted record** has author kind `HEPHAESTUS` and kind `PREFERENCE` or `CONTEXT`.
    - A turn writes it from the person's own messages in that workspace, with no card.
    - Code checks that each cited entry has the person as its origin. A prompt rule alone is not enough.
-   - The check covers the cited text, not only the entry. Some parts of the person's entry keep the origin of their source.
-     These are quote blocks, forwarded messages, attachments, link previews and tool output. A note that cites them is refused.
+   - The check covers the cited text, not only the entry. Some parts of the person's entry keep the origin of their source:
+     - quote blocks
+     - forwarded messages
+     - attachments
+     - link previews
+     - tool output.
+   - Code refuses a note that cites such a part.
    - It is never evidence about the person's work, and never about a third party.
    - It never supports a card or another record, and it never gets a grant.
    - It never travels. The person's **Keep** turns it into a person-authored record with author kind `PERSON`. Only then can **Take along** transfer it.
@@ -87,7 +92,7 @@ Option 5.
 
 - Good: the person says a preference once, and it holds in every workspace.
 - Good: everything that shapes an answer is in one list, and Forget works in one step.
-- Good: text that someone else wrote cannot become a note, because code checks the origin of the cited text.
+- Good: code checks the origin of the cited text. So quoted, forwarded or attached text from someone else cannot become a note.
 - Bad: code cannot tell plain text that the person pasted from their own words. Such text counts as the person's words, because the person chose to say it. The list shows the note's source, and Forget removes it.
 - Bad: a noted record can still misread the person. It stays in its workspace, it is never evidence, and the person can forget it.
 - Bad: an item that the person never keeps is gone after 400 days, also when it was useful.
