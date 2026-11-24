@@ -140,7 +140,7 @@ public class AccountExportService {
                 .filter(payload -> payload.length > 0);
     }
 
-    /** Expires READY exports whose download window has ended. */
+    /** Expires, in its own transaction, one batch of READY exports whose download window has ended. */
     @Transactional
     public int expireRetention() {
         return accountExportRepository.expireReadyBefore(Instant.now(clock));

@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.core.auth.export;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics;
@@ -28,9 +30,11 @@ class ExportRetentionSweeperTest extends BaseUnitTest {
 
     @Test
     void shouldRecordSuccessAndTheExpiredCountWhenTheSweepRuns() {
-        when(accountExportService.expireRetention()).thenReturn(4);
+        when(accountExportService.expireRetention()).thenReturn(100, 4, 0);
 
         sweeper.sweep();
+
+        verify(accountExportService, times(3)).expireRetention();
 
         assertThat(registry.get("privacy.job.completed")
                         .tags("job", "export_retention", "outcome", "success")
@@ -41,7 +45,21 @@ class ExportRetentionSweeperTest extends BaseUnitTest {
                         .tag("job", "export_retention")
                         .counter()
                         .count())
-                .isEqualTo(4);
+                .isEqualTo(104);
+    }
+
+    @Test
+    void shouldStopAfterTheLastBatchOfARunAndRecordThatWorkRemains() {
+        when(accountExportService.expireRetention()).thenReturn(100);
+
+        sweeper.sweep();
+
+        verify(accountExportService, times(ExportRetentionSweeper.MAX_BATCHES)).expireRetention();
+        assertThat(registry.get("privacy.job.completed")
+                        .tags("job", "export_retention", "outcome", "incomplete")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
     }
 
     @Test

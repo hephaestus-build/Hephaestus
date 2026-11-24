@@ -45,9 +45,9 @@ public interface AccountExportRepository extends JpaRepository<AccountExport, Lo
     boolean existsByAccountIdAndStatusIn(Long accountId, Collection<AccountExport.Status> statuses);
 
     /**
-     * Bulk-expire READY exports past their retention window: flip to EXPIRED and free the payload in
-     * one UPDATE, without loading the (large) BYTEA blobs into the persistence context. Returns the
-     * number of rows affected.
+     * Expires one batch of READY exports past their retention window: flips them to EXPIRED and frees the payload in one
+     * UPDATE, without loading the BYTEA blobs into the persistence context. The owner function takes at most 100 exports
+     * and skips one that another transaction holds. Returns the number of exports it expired.
      */
     @Query(
             value =
