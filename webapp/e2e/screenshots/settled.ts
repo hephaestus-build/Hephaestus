@@ -6,8 +6,16 @@ import { expect, type Page, type Request } from "@playwright/test";
  */
 const LOADING = '[data-slot="skeleton"], [aria-busy="true"]';
 
-/** The requests that carry the page's data. Images, fonts and scripts have their own waits. */
-const DATA = new Set(["fetch", "xhr"]);
+/**
+ * The requests that carry the page's data: reads. Images, fonts and scripts have their own waits, and
+ * a write, such as a page-experience beacon the last document sent on its way out, is not data to show.
+ */
+function isData(request: Request): boolean {
+	return (
+		(request.resourceType() === "fetch" || request.resourceType() === "xhr") &&
+		request.method() === "GET"
+	);
+}
 
 /** How long the document must stay unchanged to count as rendered. */
 const QUIET_MS = 300;
@@ -30,7 +38,7 @@ export function watchRequests(page: Page): void {
 	const state: Watched = { open: new Set(), started: 0 };
 	watched.set(page, state);
 	page.on("request", (request) => {
-		if (DATA.has(request.resourceType())) {
+		if (isData(request)) {
 			state.open.add(request);
 			state.started += 1;
 		}
@@ -57,19 +65,24 @@ export async function settled(page: Page): Promise<void> {
 	}
 	for (;;) {
 		await expect(page.locator(LOADING), "the page loads its data").toHaveCount(0, { timeout: 0 });
+		// The requests open now, not every request at once: polls that overlap must not starve the wait.
+		const waiting = [...state.open];
 		await expect
-			.poll(() => [...state.open].map((request) => `${request.method()} ${request.url()}`), {
-				message: "the page's data requests end",
-				timeout: 0,
-			})
+			.poll(
+				() =>
+					waiting
+						.filter((request) => state.open.has(request))
+						.map((request) => `${request.method()} ${request.url()}`),
+				{ message: "the page's data requests end", timeout: 0 },
+			)
 			.toEqual([]);
 		const { started } = state;
 		// A page that redirects replaces its document while it is read: wait again on the new one.
 		if (!(await rendered(page))) {
 			continue;
 		}
-		// An answer can start the next request; its content is not on the page yet.
-		if (state.started === started && state.open.size === 0) {
+		// An answer can start the next request, and a redirect can bring the next page's placeholders.
+		if (state.started === started && (await page.locator(LOADING).count()) === 0) {
 			return;
 		}
 	}
@@ -81,12 +94,12 @@ export async function settled(page: Page): Promise<void> {
  */
 async function rendered(page: Page): Promise<boolean> {
 	try {
-		// A lazy image below the fold loads only when the page scrolls to it.
+		// Synchronous: Playwright stops polling at the first promise a predicate returns, whatever it
+		// resolves to. A lazy image below the fold loads only when the page scrolls to it.
 		await page.waitForFunction(
-			async () => {
-				await document.fonts.ready;
-				return [...document.images].every((image) => image.complete || image.loading === "lazy");
-			},
+			() =>
+				document.fonts.status === "loaded" &&
+				[...document.images].every((image) => image.complete || image.loading === "lazy"),
 			undefined,
 			{ timeout: 0 },
 		);

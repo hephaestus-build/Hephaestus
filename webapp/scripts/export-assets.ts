@@ -356,11 +356,11 @@ async function captureReadmeImage(
 	);
 	// A story has no data to wait for: its fonts and eager images are what the capture needs. One bound
 	// covers both, so a font that never loads cannot hold the export.
+	// Synchronous: Playwright stops polling at the first promise a predicate returns.
 	await page.waitForFunction(
-		async () => {
-			await document.fonts.ready;
-			return [...document.images].every((image) => image.complete || image.loading === "lazy");
-		},
+		() =>
+			document.fonts.status === "loaded" &&
+			[...document.images].every((image) => image.complete || image.loading === "lazy"),
 		undefined,
 		{ timeout: 60_000 },
 	);
