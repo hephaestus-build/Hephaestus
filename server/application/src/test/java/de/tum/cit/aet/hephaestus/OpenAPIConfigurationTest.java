@@ -12,6 +12,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.Paths;
+import io.swagger.v3.oas.models.headers.Header;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.Discriminator;
@@ -314,6 +315,46 @@ class OpenAPIConfigurationTest {
         assertThat(status.getDescription()).startsWith(OPEN_ENUM_NOTE);
         assertThat(component(api, "ResultOutcome").getEnum()).isNotNull();
         assertThat(component(api, "QueueState").getEnum()).isNotNull();
+    }
+
+    @Test
+    void shouldRetainAndOpenCodesReferencedOnlyByPublicResponseHeaders() {
+        var state = new Header().schema(new Schema<>().$ref("#/components/schemas/QueueState"));
+        var preview = new Header()
+                .content(new Content()
+                        .addMediaType(
+                                "application/json",
+                                new MediaType().schema(new Schema<>().$ref("#/components/schemas/PreviewDTO"))));
+        var components = new Components()
+                .addSchemas("QueueState", enumSchema("WAITING", "DONE"))
+                .addSchemas("PreviewDTO", objectWithFields("message"))
+                .addHeaders("QueueState", state)
+                .addHeaders("Preview", preview)
+                .addResponses(
+                        "QueueStatus",
+                        new ApiResponse()
+                                .addHeaderObject("X-Queue-State", new Header().$ref("#/components/headers/QueueState"))
+                                .addHeaderObject("X-Preview", new Header().$ref("#/components/headers/Preview")));
+        var operation = new Operation()
+                .responses(new ApiResponses()
+                        .addApiResponse("200", new ApiResponse().$ref("#/components/responses/QueueStatus")));
+        var api = new OpenAPI()
+                .info(new Info())
+                .components(components)
+                .paths(new Paths().addPathItem("/admin/configuration-readiness", new PathItem().get(operation)));
+
+        new OpenAPIConfiguration().schemaCustomizer("test").customise(api);
+
+        assertThat(state.getSchema().get$ref()).isEqualTo("#/components/schemas/QueueState");
+        Schema<?> result = component(api, "QueueState");
+        assertThat(result.getEnum()).isNull();
+        List<Object> examples = List.copyOf(result.getExamples());
+        assertThat(examples).containsExactly("WAITING", "DONE");
+        var previewContent = Objects.requireNonNull(preview.getContent());
+        var previewMedia = Objects.requireNonNull(previewContent.get("application/json"));
+        Schema<?> previewSchema = Objects.requireNonNull(previewMedia.getSchema());
+        assertThat(previewSchema.get$ref()).isEqualTo("#/components/schemas/Preview");
+        assertThat(component(api, "Preview").getProperties()).containsOnlyKeys("message");
     }
 
     private static Schema<?> responseSchema(Operation operation) {

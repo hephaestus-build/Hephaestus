@@ -24,7 +24,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.Paths;
-import io.swagger.v3.oas.models.headers.Header;
 import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.IntegerSchema;
@@ -228,49 +227,11 @@ public class OpenAPIConfiguration {
         Set<Schema> closed = Collections.newSetFromMap(new IdentityHashMap<>());
         CLOSED_PUBLIC_ENUMS.stream().map(schemas::get).filter(Objects::nonNull).forEach(closed::add);
         Set<Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-        Set<ApiResponse> seenResponses = Collections.newSetFromMap(new IdentityHashMap<>());
-        Set<Header> seenHeaders = Collections.newSetFromMap(new IdentityHashMap<>());
         Deque<Schema> pending = new ArrayDeque<>();
         openApi.getPaths()
                 .forEach((path, item) -> item.readOperationsMap().forEach((method, operation) -> {
-                    if (operation.getResponses() == null || !operations.contains(method.name() + " " + path)) return;
-                    operation.getResponses().values().forEach(response -> {
-                        ApiResponse current = response;
-                        while (current != null && seenResponses.add(current)) {
-                            var content = current.getContent();
-                            if (content != null)
-                                content.values().stream()
-                                        .map(MediaType::getSchema)
-                                        .filter(Objects::nonNull)
-                                        .forEach(pending::add);
-                            if (current.getHeaders() != null) {
-                                for (Header header : current.getHeaders().values()) {
-                                    Header resolved = header;
-                                    while (resolved != null && seenHeaders.add(resolved)) {
-                                        if (resolved.getSchema() != null) pending.add(resolved.getSchema());
-                                        if (resolved.getContent() != null)
-                                            resolved.getContent().values().stream()
-                                                    .map(MediaType::getSchema)
-                                                    .filter(Objects::nonNull)
-                                                    .forEach(pending::add);
-                                        var ref = resolved.get$ref();
-                                        var headers = components == null ? null : components.getHeaders();
-                                        resolved = ref != null
-                                                        && headers != null
-                                                        && ref.startsWith("#/components/headers/")
-                                                ? headers.get(ref.substring("#/components/headers/".length()))
-                                                : null;
-                                    }
-                                }
-                            }
-                            var ref = current.get$ref();
-                            var responseSchemas = components == null ? null : components.getResponses();
-                            current =
-                                    ref != null && responseSchemas != null && ref.startsWith("#/components/responses/")
-                                            ? responseSchemas.get(ref.substring("#/components/responses/".length()))
-                                            : null;
-                        }
-                    });
+                    if (operations.contains(method.name() + " " + path))
+                        OpenApiResponseSchemas.visit(openApi, operation, pending::add);
                 }));
         while (!pending.isEmpty()) {
             Schema schema = pending.pop();
@@ -586,14 +547,7 @@ public class OpenAPIConfiguration {
                                 .filter(Objects::nonNull)
                                 .forEach(schemas::add);
                     }
-                    if (operation.getResponses() != null) {
-                        operation.getResponses().values().stream()
-                                .filter(response -> response.getContent() != null)
-                                .flatMap(response -> response.getContent().values().stream())
-                                .map(media -> media.getSchema())
-                                .filter(Objects::nonNull)
-                                .forEach(schemas::add);
-                    }
+                    OpenApiResponseSchemas.visit(openApi, operation, schemas::add);
                 }));
         return schemas;
     }
@@ -639,17 +593,8 @@ public class OpenAPIConfiguration {
 
         paths.forEach((path, pathItem) -> {
             pathItem.readOperations().forEach(operation -> {
-                if (operation.getResponses() != null) {
-                    operation.getResponses().forEach((code, response) -> {
-                        if (response.getContent() != null) {
-                            response.getContent().forEach((type, media) -> {
-                                if (media.getSchema() != null) {
-                                    normalizeSchemaReferences(media.getSchema(), schemaNames);
-                                }
-                            });
-                        }
-                    });
-                }
+                OpenApiResponseSchemas.visit(
+                        openApi, operation, schema -> normalizeSchemaReferences(schema, schemaNames));
 
                 if (operation.getRequestBody() != null
                         && operation.getRequestBody().getContent() != null) {
