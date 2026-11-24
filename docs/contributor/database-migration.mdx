@@ -431,6 +431,13 @@ A seed is two files:
 - `<name>.seed.sql` writes the legacy rows on the previous release's schema.
 - `<name>.expect.sql` names the expected disposition of each seeded row. It raises an exception when a row does not have it.
 
+The release upgrade test (`scripts/release-upgrade-test.ts`) runs each seed after the previous release stops, before the migration.
+It runs each expected disposition after the candidate migrates.
+The test starts from the release that `upgradeFromOf` in `scripts/lib/previous-release.ts` selects.
+This release can be the 1.0 baseline (`v1.0.0-rc.1`) or a later release, so a seed writes its rows on the schema of each.
+A seed also runs on the releases that already contain its change set, until the seed is removed.
+A focused migration test runs the seed and its expected disposition from both schemas.
+
 The format check (`scripts/cutover-seeds.test.ts`) refuses a seed with no expected disposition, and an expected disposition that cannot raise an exception. A comment does not count.
 `readCutoverSeeds` in `scripts/lib/cutover-seeds.ts` reads the seeds and applies the same check.
 

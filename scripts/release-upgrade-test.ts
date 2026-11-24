@@ -4,6 +4,7 @@ import { appendFileSync, readFileSync, readdirSync } from "node:fs";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { readCutoverSeeds } from "./lib/cutover-seeds.ts";
 import { applyDatabaseRoles, databaseRolePasswords } from "./lib/database-roles.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { stopEveryRoleEntries } from "./lib/migration-guide.ts";
@@ -544,10 +545,21 @@ function executeFixture(
 	name: "assert-migrated.sql" | "result-parent.sql",
 	database = "hephaestus",
 ): void {
-	const input = readFileSync(
-		new URL(`../server/application/src/test/resources/db/practice-native/${name}`, import.meta.url),
-		"utf8",
+	executeSql(
+		`Upgrade fixture ${name}`,
+		readFileSync(
+			new URL(
+				`../server/application/src/test/resources/db/practice-native/${name}`,
+				import.meta.url,
+			),
+			"utf8",
+		),
+		database,
 	);
+}
+
+/** Runs SQL in one transaction, and names it as `what` when it fails. */
+function executeSql(what: string, input: string, database = "hephaestus"): void {
 	const result = spawnSync(
 		"docker",
 		[
@@ -564,7 +576,7 @@ function executeFixture(
 		{ input, encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES },
 	);
 	if (result.status !== 0) {
-		throw new Error(`Upgrade fixture ${name} failed: ${result.stderr}`);
+		throw new Error(`${what} failed: ${result.stderr}`);
 	}
 }
 
@@ -894,6 +906,11 @@ try {
 	await assertCoreReads(api, previousSession);
 	docker("stop", "--time", "30", application);
 	docker("rm", application);
+	// The legacy rows that each conversion seed writes on the previous release's schema.
+	const seeds = readCutoverSeeds();
+	for (const seed of seeds) {
+		executeSql(`Conversion seed ${seed.name}`, seed.seed);
+	}
 	const preserved = preservedPeople();
 	const seededData = dataFingerprint(preserved);
 	for (const kind of ["account", "identity", "user", "workspace", "membership", "connection"]) {
@@ -924,6 +941,9 @@ try {
 	api = await apiOf(port);
 	const upgradedData = dataFingerprint(preserved);
 	executeFixture("assert-migrated.sql");
+	for (const seed of seeds) {
+		executeSql(`Expected disposition of conversion seed ${seed.name}`, seed.expect);
+	}
 	if (upgradedData !== seededData) {
 		throw new Error("Seeded application data changed during upgrade");
 	}

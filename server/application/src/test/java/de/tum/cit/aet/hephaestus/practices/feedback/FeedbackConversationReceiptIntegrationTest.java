@@ -90,10 +90,11 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         UUID run = UUID.randomUUID();
         jdbc.update(ConversationTurnRunRows.insert(run, workspace.getId(), conversation, "RUNNING", 1));
         jdbc.update(
-                "INSERT INTO conversation_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,"
-                        + "started_at,created_at) VALUES (?,?,?,?,'RUNNING','APP',1,?,now(),now())",
+                "INSERT INTO conversation_turn(id,workspace_id,conversation_id,account_id,request_id,status,surface,"
+                        + "attempt,run_id,started_at,created_at) VALUES (?,?,?,(SELECT account_id FROM conversation WHERE id = ?),?,'RUNNING','APP',1,?,now(),now())",
                 id,
                 workspace.getId(),
+                conversation,
                 conversation,
                 "request-" + id,
                 run);
@@ -131,10 +132,12 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                             .formatted(call.feedbackId(), call.text()));
         }
         jdbc.update(
-                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,payload,turn_id,"
-                        + "created_at) VALUES (?,?,?,1,'ANSWER','APP','Some context.',?::jsonb,?,now())",
+                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,"
+                        + "payload,turn_id,created_at) VALUES (?,?,?,(SELECT account_id FROM conversation WHERE id = ?),1,'ANSWER','APP','Some context.',?::jsonb,?,"
+                        + "now())",
                 entry,
                 workspace.getId(),
+                ledgerConversationId,
                 ledgerConversationId,
                 "{\"type\":\"message\",\"id\":\"a1\",\"message\":{\"role\":\"assistant\",\"content\":[" + content
                         + "]}}",
@@ -143,10 +146,11 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         for (Call call : calls) {
             if (call.succeeded() == null) continue;
             jdbc.update(
-                    "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,payload,turn_id,"
-                            + "created_at) VALUES (?,?,?,?,'TOOL_RESULT','APP','',?::jsonb,?,now())",
+                    "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,"
+                            + "payload,turn_id,created_at) VALUES (?,?,?,(SELECT account_id FROM conversation WHERE id = ?),?,'TOOL_RESULT','APP','',?::jsonb,?,now())",
                     UUID.randomUUID(),
                     workspace.getId(),
+                    ledgerConversationId,
                     ledgerConversationId,
                     seq++,
                     ("{\"type\":\"message\",\"id\":\"r-%s\",\"message\":{\"role\":\"toolResult\","

@@ -103,14 +103,22 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
     /** A summary of the conversation over its entries so far, written now. */
     private UUID summary(Conversation conversation) {
         UUID id = UUID.randomUUID();
-        jdbc.update("""
-                INSERT INTO conversation_entry (id, workspace_id, conversation_id, seq, kind, surface, text, payload,
-                                          created_at)
-                VALUES (?, ?, ?, ?, 'SUMMARY', 'APP', 'words-summary',
+        jdbc.update(
+                """
+                INSERT INTO conversation_entry (id, workspace_id, conversation_id, account_id, seq, kind, surface, text,
+                                          payload, created_at)
+                VALUES (?, ?, ?, ?, ?, 'SUMMARY', 'APP', 'words-summary',
                         jsonb_build_object('type', 'compaction', 'id', 'pi-' || ?, 'summary', 'words-summary',
                             'fromSeq', 1, 'toSeq', ?),
                         now())
-                """, id, conversation.getWorkspaceId(), conversation.getId(), seq + 1, id.toString(), seq);
+                """,
+                id,
+                conversation.getWorkspaceId(),
+                conversation.getId(),
+                conversation.getAccountId(),
+                seq + 1,
+                id.toString(),
+                seq);
         seq++;
         return id;
     }
@@ -120,9 +128,9 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
         UUID id = UUID.randomUUID();
         jdbc.update(
                 """
-                INSERT INTO conversation_entry (id, workspace_id, conversation_id, seq, kind, surface, text, payload,
-                                          created_at)
-                VALUES (?, ?, ?, ?, ?, 'APP', ?,
+                INSERT INTO conversation_entry (id, workspace_id, conversation_id, account_id, seq, kind, surface, text,
+                                          payload, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'APP', ?,
                         jsonb_build_object('type', 'message', 'id', 'pi-' || ?, 'message',
                             jsonb_build_object('role', CASE WHEN ? = 'TOOL_RESULT' THEN 'toolResult' ELSE 'user' END,
                                 'toolName', ?, 'toolCallId', 'call-' || ?,
@@ -132,6 +140,7 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
                 id,
                 conversation.getWorkspaceId(),
                 conversation.getId(),
+                conversation.getAccountId(),
                 ++seq,
                 kind,
                 kind.equals("TOOL_RESULT") ? "" : words,
@@ -170,16 +179,22 @@ class ConversationRetentionIntegrationTest extends AbstractWorkspaceIntegrationT
 
     @Test
     void shouldEraseABacklogLargerThanOneBatch() {
-        jdbc.update("""
-                INSERT INTO conversation_entry (id, workspace_id, conversation_id, seq, kind, surface, text, payload,
-                                          created_at)
-                SELECT gen_random_uuid(), ?, ?, s, 'USER', 'APP', 'words-backlog',
+        jdbc.update(
+                """
+                INSERT INTO conversation_entry (id, workspace_id, conversation_id, account_id, seq, kind, surface, text,
+                                          payload, created_at)
+                SELECT gen_random_uuid(), ?, ?, ?, s, 'USER', 'APP', 'words-backlog',
                        jsonb_build_object('type', 'message', 'id', 'pi-' || s, 'message',
                            jsonb_build_object('role', 'user', 'content', jsonb_build_array(
                                jsonb_build_object('type', 'text', 'text', 'words-backlog')))),
                        now() - interval '500 days'
                 FROM generate_series(?, ?) s
-                """, workspace.getId(), main.getId(), seq + 1, seq + ConversationRetentionSweeper.BATCH + 100);
+                """,
+                workspace.getId(),
+                main.getId(),
+                main.getAccountId(),
+                seq + 1,
+                seq + ConversationRetentionSweeper.BATCH + 100);
 
         conversationRetention.sweepNow();
 

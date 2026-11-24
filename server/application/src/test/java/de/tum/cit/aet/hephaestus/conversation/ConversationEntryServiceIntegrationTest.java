@@ -286,16 +286,18 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
         // PostgreSQL refuses a statement with more than 65,535 bind parameters.
         long first = entryRepository.findMaxSeqByWorkspaceIdAndConversationId(workspace.getId(), main.getId()) + 1;
         int messages = 150;
-        jdbcTemplate.update("""
-                INSERT INTO conversation_entry (id, workspace_id, conversation_id, seq, kind, surface, text, payload,
-                                          created_at)
-                SELECT gen_random_uuid(), ?, ?, s, CASE WHEN s < ? THEN 'ANSWER' ELSE 'TOOL_RESULT' END, 'APP', 'secret',
+        jdbcTemplate.update(
+                """
+                INSERT INTO conversation_entry (id, workspace_id, conversation_id, account_id, seq, kind, surface, text,
+                                          payload, created_at)
+                SELECT gen_random_uuid(), ?, ?, ?, s, CASE WHEN s < ? THEN 'ANSWER' ELSE 'TOOL_RESULT' END, 'APP',
+                       'secret',
                        jsonb_build_object('type', 'message', 'id', 'pi-' || s, 'message',
                            jsonb_build_object('role', 'toolResult', 'toolName', 'fetch_context', 'toolCallId', 'c' || s,
                                'content', jsonb_build_array(jsonb_build_object('type', 'text', 'text', 'secret')))),
                        now()
                 FROM generate_series(?, ?) s
-                """, workspace.getId(), main.getId(), first + messages, first, first + 70_000);
+                """, workspace.getId(), main.getId(), main.getAccountId(), first + messages, first, first + 70_000);
         ConversationEntry inThread =
                 entries.append(workspace.getId(), thread.getId(), ConversationLedgerFixtures.hephaestus("Secret"));
         List<UUID> named = jdbcTemplate.query(
@@ -498,14 +500,16 @@ class ConversationEntryServiceIntegrationTest extends AbstractWorkspaceIntegrati
         NamedParameterJdbcTemplate named = new NamedParameterJdbcTemplate(jdbcTemplate);
         named.update(
                 """
-                INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,search_text,created_at)
-                SELECT gen_random_uuid(), :workspaceId, :conversationId, 100000 + n, 'ANSWER', 'APP',
+                INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,
+                    search_text,created_at)
+                SELECT gen_random_uuid(), :workspaceId, :conversationId, :accountId, 100000 + n, 'ANSWER', 'APP',
                        'filler message ' || n, 'filler message ' || n, now()
                 FROM generate_series(1, 5000) AS n
                 """,
                 new MapSqlParameterSource()
                         .addValue("workspaceId", workspace.getId())
-                        .addValue("conversationId", main.getId()));
+                        .addValue("conversationId", main.getId())
+                        .addValue("accountId", main.getAccountId()));
         schemaOwner.execute("ANALYZE conversation_entry");
         String search = ConversationEntryRepository.class
                 .getMethod(

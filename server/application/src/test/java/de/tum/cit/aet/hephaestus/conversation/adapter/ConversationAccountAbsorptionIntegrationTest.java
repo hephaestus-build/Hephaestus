@@ -156,7 +156,7 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                 .getId();
         UUID absorbedLast = hephaestus(shared, absorbed, "Absorbed two").getId();
         Conversation thread = conversations.openThread(shared.getId(), absorbedFirst.getId());
-        hephaestus(shared, thread, "In the thread");
+        UUID inThread = hephaestus(shared, thread, "In the thread").getId();
         ConversationTurnService.Submission asked = turns.submit(
                 shared.getId(),
                 absorbed.getId(),
@@ -214,6 +214,23 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(claimed);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM conversation WHERE account_id = ?", Long.class, unclaimed))
                 .isZero();
+        assertThat(jdbc.queryForList(
+                        "SELECT account_id FROM conversation_entry WHERE id IN (?, ?, ?, ?, ?)",
+                        Long.class,
+                        absorbedFirst.getId(),
+                        summary,
+                        absorbedLast,
+                        asked.question().getId(),
+                        inThread))
+                .as("each merged entry and the thread's entry stay, under the claiming account")
+                .hasSize(5)
+                .containsOnly(claimed);
+        assertThat(jdbc.queryForObject(
+                        "SELECT account_id FROM conversation_turn WHERE id = ?",
+                        Long.class,
+                        asked.turn().getId()))
+                .as("the moved turn carries the claiming account")
+                .isEqualTo(claimed);
     }
 
     @Test

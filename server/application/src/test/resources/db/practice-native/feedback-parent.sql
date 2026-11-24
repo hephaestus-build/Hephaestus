@@ -25,11 +25,11 @@ INSERT INTO agent_run(id,workspace_id,kind,band,concurrency_key,state,attempt,le
 VALUES('00000000-0000-0000-0000-000000978058',978001,'TURN','INTERACTIVE',
  'conversation:00000000-0000-0000-0000-000000978051','LEASED',0,1,now()+interval '5 minutes','2026-01-01T00:00:00Z',
  180,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
-INSERT INTO conversation_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,started_at,created_at)
-VALUES('00000000-0000-0000-0000-000000978053',978001,'00000000-0000-0000-0000-000000978051','native-turn',
+INSERT INTO conversation_turn(id,workspace_id,conversation_id,account_id,request_id,status,surface,attempt,run_id,started_at,created_at)
+VALUES('00000000-0000-0000-0000-000000978053',978001,'00000000-0000-0000-0000-000000978051',978003,'native-turn',
  'RUNNING','APP',1,'00000000-0000-0000-0000-000000978058','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
-INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,payload,turn_id,created_at)
-VALUES('00000000-0000-0000-0000-000000978052',978001,'00000000-0000-0000-0000-000000978051',1,'ANSWER','APP',
+INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,payload,turn_id,created_at)
+VALUES('00000000-0000-0000-0000-000000978052',978001,'00000000-0000-0000-0000-000000978051',978003,1,'ANSWER','APP',
  'Actual shown words.',
  '{"type":"message","id":"native-answer","message":{"role":"assistant","content":[{"type":"text","text":"Actual shown words."}]}}',
  '00000000-0000-0000-0000-000000978053','2026-01-01T00:00:00Z');

@@ -63,19 +63,20 @@ class OwnerFunctionsDatabaseTest {
             VALUES ('00000000-0000-0000-0000-00000000a001', now(), now(), 11, 1),
                    ('00000000-0000-0000-0000-00000000b001', now(), now(), 12, 1),
                    ('00000000-0000-0000-0000-00000000b002', now(), now(), 12, 2);
-            INSERT INTO conversation_entry (id, conversation_id, created_at, kind, seq, surface, text, workspace_id)
+            INSERT INTO conversation_entry (id, conversation_id, created_at, kind, seq, surface, text, workspace_id,
+                                            account_id)
             VALUES ('00000000-0000-0000-0000-0000000e0001', '00000000-0000-0000-0000-00000000a001',
-                    now() - interval '366 days', 'USER', 1, 'APP', 'Ada, a year ago', 1),
+                    now() - interval '366 days', 'USER', 1, 'APP', 'Ada, a year ago', 1, 11),
                    ('00000000-0000-0000-0000-0000000e0002', '00000000-0000-0000-0000-00000000a001',
-                    now(), 'USER', 2, 'APP', 'Ada, today', 1),
+                    now(), 'USER', 2, 'APP', 'Ada, today', 1, 11),
                    ('00000000-0000-0000-0000-0000000e0003', '00000000-0000-0000-0000-00000000b001',
-                    now() - interval '365 days', 'USER', 1, 'APP', 'Bo, a year ago', 1),
+                    now() - interval '365 days', 'USER', 1, 'APP', 'Bo, a year ago', 1, 12),
                    ('00000000-0000-0000-0000-0000000e0004', '00000000-0000-0000-0000-00000000b002',
-                    now() - interval '364 days', 'USER', 1, 'APP', 'Bo elsewhere, a year ago', 2),
+                    now() - interval '364 days', 'USER', 1, 'APP', 'Bo elsewhere, a year ago', 2, 12),
                    ('00000000-0000-0000-0000-0000000e0005', '00000000-0000-0000-0000-00000000b002',
-                    now() - interval '366 days', 'USER', 2, 'APP', 'Bo elsewhere, as old as Ada', 2),
+                    now() - interval '366 days', 'USER', 2, 'APP', 'Bo elsewhere, as old as Ada', 2, 12),
                    ('00000000-0000-0000-0000-0000000e0006', '00000000-0000-0000-0000-00000000b002',
-                    now() - interval '400 days', 'USER', 3, 'APP', '', 2);
+                    now() - interval '400 days', 'USER', 3, 'APP', '', 2, 12);
             UPDATE conversation_entry SET redacted_at = now() WHERE id = '00000000-0000-0000-0000-0000000e0006';
             UPDATE conversation SET slack_team_id = 'T1', slack_user_id = 'U12', slack_channel_id = 'D12'
             WHERE id = '00000000-0000-0000-0000-00000000b001';
@@ -197,10 +198,18 @@ class OwnerFunctionsDatabaseTest {
                             (rs, row) -> rs.getObject("id") + " " + rs.getLong("account_id")))
                     .containsExactly(ADA_MAIN + " 11", BO_ELSEWHERE + " 11");
             assertThat(owner.query(
-                            "SELECT id, seq FROM conversation_entry WHERE conversation_id = ? ORDER BY seq",
-                            (rs, row) -> rs.getObject("id") + " " + rs.getLong("seq"),
+                            "SELECT id, seq, account_id FROM conversation_entry WHERE conversation_id = ? ORDER BY seq",
+                            (rs, row) -> rs.getObject("id") + " " + rs.getLong("seq") + " " + rs.getLong("account_id"),
                             ADA_MAIN))
-                    .containsExactly(ADA_OLD + " 1", ADA_NEW + " 2", BO_OLD + " 3");
+                    .as("the merged entry takes the claiming account")
+                    .containsExactly(ADA_OLD + " 1 11", ADA_NEW + " 2 11", BO_OLD + " 3 11");
+            assertThat(owner.queryForList(
+                            "SELECT account_id FROM conversation_entry WHERE conversation_id = ?",
+                            Long.class,
+                            BO_ELSEWHERE))
+                    .as("the entries of a conversation without a clash follow its account")
+                    .hasSize(3)
+                    .containsOnly(11L);
             assertThat(owner.queryForList("SELECT id FROM conversation WHERE id = ?", UUID.class, BO_MAIN))
                     .isEmpty();
             assertThat(owner.queryForObject(
@@ -389,9 +398,10 @@ class OwnerFunctionsDatabaseTest {
         TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_unprepared", SEEDED);
         try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
             jdbc(connection).execute("""
-                    INSERT INTO conversation_entry (id, conversation_id, created_at, kind, seq, surface, text, workspace_id)
+                    INSERT INTO conversation_entry (id, conversation_id, created_at, kind, seq, surface, text, workspace_id,
+                                                    account_id)
                     VALUES ('00000000-0000-0000-0000-0000000e0007', '00000000-0000-0000-0000-00000000b001', now(),
-                            'SUMMARY', 2, 'APP', 'Bo talked about tests', 1)
+                            'SUMMARY', 2, 'APP', 'Bo talked about tests', 1, 12)
                     """);
         }
 
@@ -420,9 +430,9 @@ class OwnerFunctionsDatabaseTest {
                     VALUES ('00000000-0000-0000-0000-0000000a0001', 1, 'TURN', 'INTERACTIVE',
                             'conversation:00000000-0000-0000-0000-00000000b001', 'QUEUED', 0, 0, now(), 180, now());
                     INSERT INTO conversation_turn (id, conversation_id, created_at, request_id, status, surface,
-                                                   workspace_id, run_id)
+                                                   workspace_id, run_id, account_id)
                     VALUES ('00000000-0000-0000-0000-0000000c0001', '00000000-0000-0000-0000-00000000b001', now(),
-                            'queued-question', 'QUEUED', 'APP', 1, '00000000-0000-0000-0000-0000000a0001');
+                            'queued-question', 'QUEUED', 'APP', 1, '00000000-0000-0000-0000-0000000a0001', 12);
                     """);
         }
 

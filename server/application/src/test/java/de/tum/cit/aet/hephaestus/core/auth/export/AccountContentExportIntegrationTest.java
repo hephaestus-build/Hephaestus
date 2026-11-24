@@ -151,9 +151,10 @@ class AccountContentExportIntegrationTest extends BaseIntegrationTest {
     private void entry(UUID conversation, String kind, String text, @Nullable Instant redactedAt) {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
-            INSERT INTO conversation_entry (id, workspace_id, conversation_id, seq, kind, surface, text, payload,
-                                      created_at, redacted_at)
-            VALUES (:id, :ws, :conversation, :seq, :kind, 'APP', :text,
+            INSERT INTO conversation_entry (id, workspace_id, conversation_id, account_id, seq, kind, surface, text,
+                                      payload, created_at, redacted_at)
+            VALUES (:id, :ws, :conversation, (SELECT account_id FROM conversation WHERE id = :conversation), :seq,
+                    :kind, 'APP', :text,
                     jsonb_build_object('type', 'message', 'id', 'pi-' || :id, 'message',
                         jsonb_build_object('role', CASE :kind WHEN 'USER' THEN 'user' WHEN 'ANSWER' THEN 'assistant'
                             ELSE 'toolResult' END, 'toolName', 'read', 'toolCallId', 'call-' || :id,
