@@ -62,10 +62,11 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
         Long id = persistReadyExport(Instant.now(clock).plus(Duration.ofHours(1)));
 
         assertThatThrownBy(() -> jdbc.queryForObject(
-                        "SELECT public.person_row_sweep('UNKNOWN', clock_timestamp())", Integer.class))
+                        "SELECT public.person_row_sweep('UNKNOWN', NULL, NULL, clock_timestamp())", Integer.class))
                 .isInstanceOf(DataAccessException.class);
         jdbc.queryForObject(
-                "SELECT public.person_row_sweep('EXPIRED_EXPORTS', 'infinity'::timestamptz)", Integer.class);
+                "SELECT public.person_row_sweep('EXPIRED_EXPORTS', NULL, NULL, 'infinity'::timestamptz)",
+                Integer.class);
 
         assertThat(PostgreSQLTestContainer.ownerJdbc()
                         .queryForMap(

@@ -14,7 +14,6 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public interface ConversationEntryRepository extends JpaRepository<ConversationEntry, UUID> {
@@ -402,16 +401,6 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     String COPIES_PERSON_DATA = "e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN ('read', 'bash',"
             + " 'load_context', 'fetch_context')";
 
-    /** The entries of a workspace not erased yet that were written before the cutoff, oldest first. */
-    @Query(value = """
-            SELECT e.id FROM conversation_entry e
-            WHERE e.workspace_id = :workspaceId AND e.redacted_at IS NULL AND e.created_at < :cutoff
-            ORDER BY e.created_at
-            LIMIT :limit
-            """, nativeQuery = true)
-    List<UUID> findUnredactedIdsWrittenBefore(
-            @Param("workspaceId") long workspaceId, @Param("cutoff") Instant cutoff, @Param("limit") int limit);
-
     /** The tool results of a workspace not erased yet that can copy anyone's data, written before the cutoff. */
     @Query(value = """
             SELECT e.id FROM conversation_entry e
@@ -455,10 +444,32 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
         Instant getEditedAt();
     }
 
-    /** The workspaces that hold a conversation entry not erased yet. */
-    @WorkspaceAgnostic("The conversation retention sweep finds its workspaces first and then erases in each one")
-    @Query(value = "SELECT DISTINCT workspace_id FROM conversation_entry WHERE redacted_at IS NULL", nativeQuery = true)
-    List<Long> findWorkspaceIdsWithUnredactedEntries();
+    /** An entry past its retention: its key, its workspace, its owner and when it was written. */
+    interface DueEntry {
+        UUID getId();
+
+        long getWorkspaceId();
+
+        long getAccountId();
+
+        Instant getDueAt();
+    }
+
+    /**
+     * A page of the entries of every person written before the cutoff and not erased yet, oldest first, after the entry
+     * {@code (afterDue, afterId)}. The owner function {@code mentoring_due_work} finds them whoever owns them, and
+     * returns no content.
+     */
+    @WorkspaceAgnostic("The retention sweep finds the due entries of every workspace, then erases each as its owner")
+    @Query(value = """
+            SELECT id, workspace_id AS "workspaceId", account_id AS "accountId", due_at AS "dueAt"
+            FROM public.mentoring_due_work('ENTRY_RETENTION', :cutoff, :afterDue, :afterId, :limit)
+            """, nativeQuery = true)
+    List<DueEntry> findDueForRetention(
+            @Param("cutoff") Instant cutoff,
+            @Param("afterDue") Instant afterDue,
+            @Param("afterId") UUID afterId,
+            @Param("limit") int limit);
 
     /** The person-data erasure step that redacts the entries of {@link #COPIES_PERSON_DATA}. */
     String COPIES_PERSON_DATA_STORE = "conversation_entry_tool_result_copy";
@@ -598,11 +609,6 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
             """)
     long findMaxSeqByWorkspaceIdAndConversationId(
             @Param("workspaceId") Long workspaceId, @Param("conversationId") UUID conversationId);
-
-    @Modifying
-    @Transactional
-    @Query("DELETE FROM ConversationEntry x WHERE x.workspaceId = :workspaceId")
-    int deleteByWorkspaceId(@Param("workspaceId") Long workspaceId);
 
     @Query(
             "SELECT e.id FROM ConversationEntry e WHERE e.workspaceId=:workspaceId AND e.id IN (:ids) AND e.redactedAt IS NULL")

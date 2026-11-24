@@ -39,6 +39,9 @@ public interface AccountExportRepository extends JpaRepository<AccountExport, Lo
      * one UPDATE, without loading the (large) BYTEA blobs into the persistence context. Returns the
      * number of rows affected.
      */
-    @Query(value = "SELECT public.person_row_sweep('EXPIRED_EXPORTS', :now)", nativeQuery = true)
+    @Query(
+            value =
+                    "SELECT public.person_row_sweep('EXPIRED_EXPORTS', CAST(NULL AS bigint), CAST(NULL AS bigint), :now)",
+            nativeQuery = true)
     int expireReadyBefore(@Param("now") Instant now);
 }

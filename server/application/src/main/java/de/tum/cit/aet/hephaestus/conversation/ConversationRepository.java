@@ -11,7 +11,6 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public interface ConversationRepository extends JpaRepository<Conversation, UUID> {
@@ -92,8 +91,15 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
             """)
     int clearSlackIdentitiesByWorkspaceId(@Param("workspaceId") Long workspaceId);
 
-    @Modifying
-    @Transactional
-    @Query("DELETE FROM Conversation c WHERE c.workspaceId = :workspaceId")
-    int deleteByWorkspaceId(@Param("workspaceId") Long workspaceId);
+    /**
+     * Deletes the conversations of a purged workspace, with their entries and turns, of every person, through the owner
+     * function {@code person_row_sweep}.
+     *
+     * @return how many rows it deleted
+     */
+    @Query(
+            value = "SELECT public.person_row_sweep('WORKSPACE_PURGE', :workspaceId, CAST(NULL AS bigint),"
+                    + " CAST(NULL AS timestamptz))",
+            nativeQuery = true)
+    int purgeWorkspace(@Param("workspaceId") long workspaceId);
 }

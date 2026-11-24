@@ -1,0 +1,369 @@
+package de.tum.cit.aet.hephaestus.core.database;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+
+/**
+ * The owner functions reach every person's rows while row-level security hides them from the application role. The
+ * seeded database turns row-level security on, with no policy, for the conversation tables and the account exports: the
+ * application role then reads none of their rows, as under a policy for another owner. Each test calls one function
+ * as the application role on its own copy and reads the outcome as the owner.
+ */
+@Tag("database")
+class OwnerFunctionsDatabaseTest {
+
+    private static final UUID ADA_MAIN = UUID.fromString("00000000-0000-0000-0000-00000000a001");
+    private static final UUID BO_MAIN = UUID.fromString("00000000-0000-0000-0000-00000000b001");
+    private static final UUID BO_ELSEWHERE = UUID.fromString("00000000-0000-0000-0000-00000000b002");
+    private static final UUID ADA_OLD = UUID.fromString("00000000-0000-0000-0000-0000000e0001");
+    private static final UUID ADA_NEW = UUID.fromString("00000000-0000-0000-0000-0000000e0002");
+    private static final UUID BO_OLD = UUID.fromString("00000000-0000-0000-0000-0000000e0003");
+    private static final UUID BO_ELSEWHERE_OLD = UUID.fromString("00000000-0000-0000-0000-0000000e0004");
+    private static final UUID BO_TIE = UUID.fromString("00000000-0000-0000-0000-0000000e0005");
+    private static final UUID BO_REDACTED = UUID.fromString("00000000-0000-0000-0000-0000000e0006");
+
+    /**
+     * Ada (11) and Bo (12, unclaimed) both have a main conversation in workspace 1, and Bo has one in workspace 2. Bo's
+     * main in workspace 1 is bound to a Slack DM. Four entries are a year old, two of them written at the same time; one
+     * is new, and one older entry is erased already. Each has a ready export past its expiry, and Ada has one that is still valid.
+     */
+    private static final String SEED = """
+            INSERT INTO workspace (id, account_login, account_type, display_name, slug, status)
+            VALUES (1, 'first-org', 'ORG', 'First', 'first-org', 'ACTIVE'),
+                   (2, 'second-org', 'ORG', 'Second', 'second-org', 'ACTIVE');
+            INSERT INTO account (id, display_name, status) VALUES (11, 'Ada', 'ACTIVE'), (12, 'Bo', 'UNCLAIMED');
+            INSERT INTO conversation (id, created_at, last_activity_at, account_id, workspace_id)
+            VALUES ('00000000-0000-0000-0000-00000000a001', now(), now(), 11, 1),
+                   ('00000000-0000-0000-0000-00000000b001', now(), now(), 12, 1),
+                   ('00000000-0000-0000-0000-00000000b002', now(), now(), 12, 2);
+            INSERT INTO conversation_entry (id, conversation_id, created_at, kind, seq, surface, text, workspace_id)
+            VALUES ('00000000-0000-0000-0000-0000000e0001', '00000000-0000-0000-0000-00000000a001',
+                    now() - interval '366 days', 'USER', 1, 'APP', 'Ada, a year ago', 1),
+                   ('00000000-0000-0000-0000-0000000e0002', '00000000-0000-0000-0000-00000000a001',
+                    now(), 'USER', 2, 'APP', 'Ada, today', 1),
+                   ('00000000-0000-0000-0000-0000000e0003', '00000000-0000-0000-0000-00000000b001',
+                    now() - interval '365 days', 'USER', 1, 'APP', 'Bo, a year ago', 1),
+                   ('00000000-0000-0000-0000-0000000e0004', '00000000-0000-0000-0000-00000000b002',
+                    now() - interval '364 days', 'USER', 1, 'APP', 'Bo elsewhere, a year ago', 2),
+                   ('00000000-0000-0000-0000-0000000e0005', '00000000-0000-0000-0000-00000000b002',
+                    now() - interval '366 days', 'USER', 2, 'APP', 'Bo elsewhere, as old as Ada', 2),
+                   ('00000000-0000-0000-0000-0000000e0006', '00000000-0000-0000-0000-00000000b002',
+                    now() - interval '400 days', 'USER', 3, 'APP', '', 2);
+            UPDATE conversation_entry SET redacted_at = now() WHERE id = '00000000-0000-0000-0000-0000000e0006';
+            UPDATE conversation SET slack_team_id = 'T1', slack_user_id = 'U12', slack_channel_id = 'D12'
+            WHERE id = '00000000-0000-0000-0000-00000000b001';
+            INSERT INTO account_export (id, account_id, status, expires_at, payload)
+            VALUES (21, 11, 'READY', now() - interval '1 hour', '\\x01'),
+                   (22, 12, 'READY', now() - interval '1 hour', '\\x01'),
+                   (23, 11, 'READY', now() + interval '1 hour', '\\x01');
+            ALTER TABLE conversation ENABLE ROW LEVEL SECURITY;
+            ALTER TABLE conversation_entry ENABLE ROW LEVEL SECURITY;
+            ALTER TABLE conversation_turn ENABLE ROW LEVEL SECURITY;
+            ALTER TABLE account_export ENABLE ROW LEVEL SECURITY;
+            """;
+
+    private static final TestDatabase SEEDED = seed();
+
+    private static TestDatabase seed() {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_owner_functions");
+        PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_owner_functions");
+        PostgreSQLTestContainer.migrateDatabase(PostgreSQLTestContainer.asOwner(database), "dev,prod");
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            jdbc(connection).execute(SEED);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to seed the owner function database", e);
+        }
+        return database;
+    }
+
+    @Test
+    void shouldNameTheDueEntriesOfEveryOwnerAPageAtATimeWhileRowLevelSecurityHidesTheirRows() throws SQLException {
+        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_due", SEEDED);
+        @Nullable Object firstDue;
+
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            JdbcTemplate app = jdbc(connection);
+            assertThat(app.queryForObject("SELECT count(*) FROM conversation_entry", Long.class))
+                    .as("entries the application role reads itself")
+                    .isZero();
+            String page = "SELECT * FROM public.mentoring_due_work("
+                    + "'ENTRY_RETENTION', now() - interval '30 days', ?::timestamptz, ?::uuid, 1)";
+            List<Map<String, @Nullable Object>> rows = new ArrayList<>();
+            @Nullable Object[] cursor = {null, null};
+            for (int i = 0; i < 10; i++) {
+                List<Map<String, @Nullable Object>> one = app.queryForList(page, cursor);
+                if (one.isEmpty()) {
+                    break;
+                }
+                assertThat(one).as("a page holds at most its limit").hasSize(1);
+                rows.add(one.getFirst());
+                cursor = new @Nullable Object[] {
+                    one.getFirst().get("due_at"), one.getFirst().get("id")
+                };
+            }
+            assertThat(rows.getFirst().keySet())
+                    .as("the due work names its rows and returns no content")
+                    .containsExactly("kind", "id", "workspace_id", "account_id", "due_at");
+            assertThat(rows)
+                    .as("one row a page: the two entries written at the same time fall on two pages")
+                    .extracting(row -> row.get("kind") + " " + row.get("id") + " " + row.get("workspace_id") + " "
+                            + row.get("account_id"))
+                    .containsExactly(
+                            "ENTRY_RETENTION " + ADA_OLD + " 1 11",
+                            "ENTRY_RETENTION " + BO_TIE + " 2 12",
+                            "ENTRY_RETENTION " + BO_OLD + " 1 12",
+                            "ENTRY_RETENTION " + BO_ELSEWHERE_OLD + " 2 12");
+            firstDue = rows.getFirst().get("due_at");
+        }
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            assertThat(firstDue)
+                    .as("due_at is when the entry was written")
+                    .isEqualTo(jdbc(connection)
+                            .queryForObject(
+                                    "SELECT created_at FROM conversation_entry WHERE id = ?",
+                                    Timestamp.class,
+                                    ADA_OLD));
+        }
+    }
+
+    @Test
+    void shouldPurgeTheConversationsOfEveryOwnerInTheWorkspaceOnly() throws SQLException {
+        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_purge", SEEDED);
+
+        sweepAsApplication(database, "SELECT public.person_row_sweep('WORKSPACE_PURGE', 1, NULL, NULL)");
+
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            JdbcTemplate owner = jdbc(connection);
+            assertThat(owner.queryForList("SELECT id FROM conversation ORDER BY id", UUID.class))
+                    .containsExactly(BO_ELSEWHERE);
+            assertThat(owner.queryForList("SELECT id FROM conversation_entry ORDER BY id", UUID.class))
+                    .containsExactly(BO_ELSEWHERE_OLD, BO_TIE, BO_REDACTED);
+        }
+    }
+
+    @Test
+    void shouldExpireTheReadyExportsOfEveryOwnerPastTheirExpiry() throws SQLException {
+        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_exports", SEEDED);
+
+        sweepAsApplication(database, "SELECT public.person_row_sweep('EXPIRED_EXPORTS', NULL, NULL, now())");
+
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            List<String> exports = jdbc(connection)
+                    .query(
+                            "SELECT id, status, payload IS NULL AS dropped FROM account_export ORDER BY id",
+                            (rs, row) ->
+                                    rs.getLong("id") + " " + rs.getString("status") + " " + rs.getBoolean("dropped"));
+            assertThat(exports).containsExactly("21 EXPIRED true", "22 EXPIRED true", "23 READY false");
+        }
+    }
+
+    @Test
+    void shouldMergeTheAbsorbedMainAndMoveEveryOtherConversationToTheClaimingAccount() throws SQLException {
+        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_absorb", SEEDED);
+
+        sweepAsApplication(database, "SELECT public.person_row_sweep('ACCOUNT_ABSORB', 12, 11, NULL)");
+
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            JdbcTemplate owner = jdbc(connection);
+            assertThat(owner.query(
+                            "SELECT id, account_id FROM conversation ORDER BY id",
+                            (rs, row) -> rs.getObject("id") + " " + rs.getLong("account_id")))
+                    .containsExactly(ADA_MAIN + " 11", BO_ELSEWHERE + " 11");
+            assertThat(owner.query(
+                            "SELECT id, seq FROM conversation_entry WHERE conversation_id = ? ORDER BY seq",
+                            (rs, row) -> rs.getObject("id") + " " + rs.getLong("seq"),
+                            ADA_MAIN))
+                    .containsExactly(ADA_OLD + " 1", ADA_NEW + " 2", BO_OLD + " 3");
+            assertThat(owner.queryForList("SELECT id FROM conversation WHERE id = ?", UUID.class, BO_MAIN))
+                    .isEmpty();
+            assertThat(owner.queryForObject(
+                            "SELECT slack_team_id || ' ' || slack_user_id || ' ' || slack_channel_id FROM conversation"
+                                    + " WHERE id = ?",
+                            String.class,
+                            ADA_MAIN))
+                    .as("the Slack DM moves to the claiming main, which had none")
+                    .isEqualTo("T1 U12 D12");
+        }
+    }
+
+    @Test
+    void shouldRefuseAnUnknownKindOrRule() throws SQLException {
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {
+            JdbcTemplate app = jdbc(connection);
+            assertThatThrownBy(() -> app.queryForList(
+                            "SELECT id FROM public.mentoring_due_work('SOMETHING_ELSE', now(), NULL, NULL, 1)",
+                            UUID.class))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("unknown kind SOMETHING_ELSE");
+            assertThatThrownBy(() -> app.queryForObject(
+                            "SELECT public.person_row_sweep('SOMETHING_ELSE', 1, NULL, NULL)", Long.class))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("unknown rule SOMETHING_ELSE");
+            assertThatThrownBy(() -> app.queryForList(
+                            "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION', now(), NULL, NULL, NULL)",
+                            UUID.class))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("needs a cutoff, a limit and a whole cursor or none");
+            assertThatThrownBy(() -> app.queryForList(
+                            "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION', now(), now(), NULL, 1)",
+                            UUID.class))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("needs a cutoff, a limit and a whole cursor or none");
+        }
+    }
+
+    @Test
+    void shouldRefuseToAbsorbAnAccountIntoItselfAndKeepItsConversations() throws SQLException {
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {
+            assertThatThrownBy(() -> jdbc(connection)
+                            .queryForObject(
+                                    "SELECT public.person_row_sweep('ACCOUNT_ABSORB', 12, 12, NULL)", Long.class))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("two different accounts");
+        }
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(SEEDED))) {
+            assertThat(jdbc(connection)
+                            .queryForList("SELECT id FROM conversation WHERE account_id = 12 ORDER BY id", UUID.class))
+                    .containsExactly(BO_MAIN, BO_ELSEWHERE);
+        }
+    }
+
+    @Test
+    void shouldRefuseToAbsorbAnAccountThatIsNotUnclaimedAndKeepItsConversations() throws SQLException {
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(SEEDED))) {
+            assertThatThrownBy(() -> jdbc(connection)
+                            .queryForObject(
+                                    "SELECT public.person_row_sweep('ACCOUNT_ABSORB', 11, 12, NULL)", Long.class))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("only an unclaimed account is absorbed");
+        }
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(SEEDED))) {
+            assertThat(jdbc(connection).queryForList("SELECT id FROM conversation WHERE account_id = 11", UUID.class))
+                    .containsExactly(ADA_MAIN);
+        }
+    }
+
+    @Test
+    void shouldRefuseAClashThatTheCallerDidNotPrepareAndMoveNothing() throws SQLException {
+        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_unprepared", SEEDED);
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            jdbc(connection).execute("""
+                    INSERT INTO conversation_entry (id, conversation_id, created_at, kind, seq, surface, text, workspace_id)
+                    VALUES ('00000000-0000-0000-0000-0000000e0007', '00000000-0000-0000-0000-00000000b001', now(),
+                            'SUMMARY', 2, 'APP', 'Bo talked about tests', 1)
+                    """);
+        }
+
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            assertThatThrownBy(() -> jdbc(connection)
+                            .queryForObject(
+                                    "SELECT public.person_row_sweep('ACCOUNT_ABSORB', 12, 11, NULL)", Long.class))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("is not prepared");
+        }
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            assertThat(jdbc(connection)
+                            .queryForList("SELECT id FROM conversation WHERE account_id = 12 ORDER BY id", UUID.class))
+                    .containsExactly(BO_MAIN, BO_ELSEWHERE);
+        }
+    }
+
+    @Test
+    void shouldRefuseAClashWhoseQueuedRunTheCallerDidNotMoveAndMoveNothing() throws SQLException {
+        TestDatabase database = PostgreSQLTestContainer.copyDatabase("hephaestus_owner_functions_queued", SEEDED);
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            jdbc(connection).execute("""
+                    INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key, state, attempt, lease_epoch,
+                                           available_at, start_within_seconds, created_at)
+                    VALUES ('00000000-0000-0000-0000-0000000a0001', 1, 'TURN', 'INTERACTIVE',
+                            'conversation:00000000-0000-0000-0000-00000000b001', 'QUEUED', 0, 0, now(), 180, now());
+                    INSERT INTO conversation_turn (id, conversation_id, created_at, request_id, status, surface,
+                                                   workspace_id, run_id)
+                    VALUES ('00000000-0000-0000-0000-0000000c0001', '00000000-0000-0000-0000-00000000b001', now(),
+                            'queued-question', 'QUEUED', 'APP', 1, '00000000-0000-0000-0000-0000000a0001');
+                    """);
+        }
+
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            assertThatThrownBy(() -> jdbc(connection)
+                            .queryForObject(
+                                    "SELECT public.person_row_sweep('ACCOUNT_ABSORB', 12, 11, NULL)", Long.class))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("is not prepared");
+        }
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            JdbcTemplate owner = jdbc(connection);
+            assertThat(owner.queryForObject(
+                            "SELECT conversation_id FROM conversation_turn WHERE id = '00000000-0000-0000-0000-0000000c0001'",
+                            UUID.class))
+                    .isEqualTo(BO_MAIN);
+            assertThat(owner.queryForList("SELECT id FROM conversation WHERE account_id = 12 ORDER BY id", UUID.class))
+                    .containsExactly(BO_MAIN, BO_ELSEWHERE);
+        }
+    }
+
+    @Test
+    void shouldRefuseBothFunctionsToARoleWithoutTheGrant() throws SQLException {
+        try (Connection connection = connect(SEEDED)) {
+            JdbcTemplate stranger = jdbc(connection);
+            stranger.execute("DO $$ BEGIN CREATE ROLE owner_function_stranger; EXCEPTION WHEN duplicate_object THEN"
+                    + " NULL; END $$");
+            stranger.execute("SET ROLE owner_function_stranger");
+            assertThatThrownBy(() -> stranger.queryForList(
+                            "SELECT id FROM public.mentoring_due_work('ENTRY_RETENTION', now(), NULL, NULL, 1)",
+                            UUID.class))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("permission denied");
+            assertThatThrownBy(() -> stranger.queryForObject(
+                            "SELECT public.person_row_sweep('EXPIRED_EXPORTS', NULL, NULL, now())", Long.class))
+                    .isInstanceOf(DataAccessException.class)
+                    .rootCause()
+                    .hasMessageContaining("permission denied");
+            stranger.execute("RESET ROLE");
+        }
+    }
+
+    private static void sweepAsApplication(TestDatabase database, String call) throws SQLException {
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            Long changed = jdbc(connection).queryForObject(call, Long.class);
+            assertThat(Objects.requireNonNull(changed))
+                    .as("rows the sweep changed")
+                    .isPositive();
+        }
+    }
+
+    private static Connection connect(TestDatabase database) throws SQLException {
+        return DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
+    }
+
+    private static JdbcTemplate jdbc(Connection connection) {
+        return new JdbcTemplate(new SingleConnectionDataSource(connection, true));
+    }
+}
