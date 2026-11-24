@@ -327,6 +327,8 @@ The weekly digest is a `DIGEST` run in the conversation's sandbox, with the same
 No conversation state lives in a process, so any such server serves any call of any turn.
 [Conversation runtime](./unified-pi-runtime) owns the turn lifecycle, its runner and the context of a turn.
 
+[Conversation core](./conversation-core.mdx) explains the accepted design of threads, inbox items, turns and effects that the conversation grows into.
+
 The app renders the stored messages and the partial answer from the generated client.
 
 Each account has one [Conversation](./practice-feedback-language.mdx#conversation) per workspace, with one level of threads.
@@ -361,6 +363,13 @@ Every structural view uses one legend. [Documentation guide § Structural maps i
 | How does one answer reach the app or Slack? | Turn sequence | [Conversation](#conversation) |
 | How does a run move between states? | `agent_run` lifecycle | [Agent runs](./agent-runs.mdx#states) |
 | How do the review records relate? | Core data model | [Practice review glossary](./practice-review-glossary.mdx#the-core-data-model) |
+| Where can private text go in the conversation core? | Two zones, one wall, one bridge | [Conversation core](./conversation-core.mdx#two-zones-one-wall-one-bridge) |
+| How does one input become an effect? | From ingest to commit | [Conversation core](./conversation-core.mdx#from-ingest-to-commit) |
+| Who works with Hephaestus on their work? | System context, developer view | [Conversation core](./conversation-core.mdx#who-works-with-the-conversation-core) |
+| Which part of the server carries an inbox item to an effect? | Components of the conversation core | [Conversation core](./conversation-core.mdx#components-of-the-conversation-core) |
+| Where does each turn run? | Deployment of turns | [Conversation core](./conversation-core.mdx#where-turns-run) |
+| How do an inbox item, a turn, a task and a copy on the work change state? | Lifecycles | [Conversation core](./conversation-core.mdx#lifecycles) |
+| What happens when inputs collide, a review seals, or a deadline passes? | Core sequences | [Conversation core](./conversation-core.mdx#collisions) |
 
 ## Sync-status hints across replicas
 
