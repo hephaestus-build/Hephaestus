@@ -12,7 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 public interface PracticeGroupRepository extends JpaRepository<PracticeGroup, Long> {
     List<PracticeGroup> findByWorkspaceIdOrderByPositionAscNameAsc(Long workspaceId);
 
-    List<PracticeGroup> findByWorkspaceIdAndShownToDevelopersTrueOrderByPositionAscNameAsc(Long workspaceId);
+    List<PracticeGroup> findByWorkspaceIdAndShownToPeopleTrueOrderByPositionAscNameAsc(Long workspaceId);
 
     Optional<PracticeGroup> findByWorkspaceIdAndSlug(Long workspaceId, String slug);
 

@@ -153,7 +153,7 @@ export function ProblemRow({ problem, named = true }: ProblemRowProps) {
 			<ReviewItemCell item={problem.item} linked={false} />
 			{named && (
 				<TableCell className="align-top whitespace-normal">
-					<ReviewPerson person={problem.developer} />
+					<ReviewPerson person={problem.person} />
 				</TableCell>
 			)}
 		</PracticeTableRow>

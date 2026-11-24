@@ -46,7 +46,7 @@ interface DeliveredWorkFeedbackRepository extends Repository<Feedback, UUID> {
     @Query(value = """
         SELECT f.id,COALESCE(f.delivered_at,min(c.posted_at)) AS deliveredAt
         FROM feedback f JOIN feedback_copy c ON c.feedback_id=f.id AND c.workspace_id=f.workspace_id
-        WHERE f.workspace_id=:ws AND f.developer_id=:developer AND f.item_id=:item AND f.destination='ON_WORK'
+        WHERE f.workspace_id=:ws AND f.person_account_id=:developer AND f.item_id=:item AND f.destination='ON_WORK'
           AND f.state<>'REPLACED' AND c.state='POSTED' AND c.posted_at IS NOT NULL
         GROUP BY f.id,f.delivered_at ORDER BY COALESCE(f.delivered_at,min(c.posted_at)) DESC,f.id::text DESC LIMIT 50
         """, nativeQuery = true)

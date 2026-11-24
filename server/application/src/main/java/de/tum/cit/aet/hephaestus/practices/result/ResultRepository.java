@@ -127,7 +127,7 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
         JOIN review requested_review ON requested_review.id=n.review_id AND requested_review.workspace_id=r.workspace_id
         WHERE r.workspace_id = :workspaceId AND r.practice_id = n.practice_id AND r.item_id = n.item_id
           AND r.practice_version_id = n.practice_version_id AND r.id <> n.id
-          AND r.developer_id IS NOT DISTINCT FROM n.developer_id
+          AND r.person_account_id IS NOT DISTINCT FROM n.person_account_id
           AND prior_review.kind = 'ITEM' AND prior_review.origin <> 'TRIAL'
           AND r.end_reason IS DISTINCT FROM 'OUTRANKED'
           AND (prior_review.ordered_at < requested_review.ordered_at
@@ -153,7 +153,7 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
         WHERE r.workspace_id = :workspaceId AND r.practice_id = :practiceId AND r.item_id = :itemId
           AND r.practice_version_id = :practiceVersionId
           AND ((prior_review.kind='ITEM' AND requested_review.kind='ITEM') OR r.item_version=:itemVersion)
-          AND r.developer_id IS NOT DISTINCT FROM :developerId
+          AND r.person_account_id IS NOT DISTINCT FROM :developerId
           AND r.ended_at IS NULL AND\s""" + Result.CAPTURED_PROOF_SQL + """
           AND prior_method.method IS NOT NULL
           AND prior_method.method->>'modelDigest' = requested_method.method->>'modelDigest'

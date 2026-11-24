@@ -978,7 +978,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             INSERT INTO agent_action(id,workspace_id,kind,lane_key,idempotency_key,state,payload,subject_account_id,
               max_attempts,next_attempt_at,created_at,updated_at)
             SELECT uuidv7(),f.workspace_id,'DELIVER_FEEDBACK','feedback:' || f.id,'feedback:' || f.id || ':1:POST',
-              'ADMITTED',jsonb_build_object('feedbackId',f.id),f.developer_id,8,CURRENT_TIMESTAMP + INTERVAL '1 day',
+              'ADMITTED',jsonb_build_object('feedbackId',f.id),f.person_account_id,8,CURRENT_TIMESTAMP + INTERVAL '1 day',
               CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
               FROM feedback f WHERE f.workspace_id=? AND f.id=?
             """, workspace.getId(), feedback.getId());
@@ -1267,7 +1267,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         // A trial that read the person's work: a copy of one of their reviews, ended with its membership tried.
         UUID source = jdbc.queryForObject("""
                         SELECT r.id FROM review r WHERE r.kind='ITEM' AND EXISTS (SELECT 1 FROM result x
-                         WHERE (x.review_id, x.workspace_id) = (r.id, r.workspace_id) AND x.developer_id = ?)
+                         WHERE (x.review_id, x.workspace_id) = (r.id, r.workspace_id) AND x.person_account_id = ?)
                          ORDER BY r.id LIMIT 1
                         """, UUID.class, targetAccount.getId());
         UUID trial = UUID.randomUUID();
@@ -1298,7 +1298,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                           FROM review_job j
                          WHERE EXISTS (SELECT 1 FROM result x
                                         WHERE (x.review_id, x.workspace_id) = (j.review_id, j.workspace_id)
-                                          AND x.developer_id = ?)
+                                          AND x.person_account_id = ?)
                          ORDER BY j.id LIMIT 1
                         """, targetAccount.getId())).isOne();
         // The person's personal space, which only its owner can enter.

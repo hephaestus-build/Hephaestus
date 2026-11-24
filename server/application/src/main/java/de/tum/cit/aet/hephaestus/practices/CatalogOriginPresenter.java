@@ -157,7 +157,7 @@ public class CatalogOriginPresenter {
                 group.getIcon(),
                 group.getColor(),
                 group.getPosition(),
-                group.isShownToDevelopers(),
+                group.isShownToPeople(),
                 new FeedbackModeAssignmentDTO(group.getFeedbackMode(), effective.mode(), effective.source()),
                 new CatalogOriginDTO(source, state, List.of(), null),
                 group.getCreatedAt(),

@@ -48,8 +48,8 @@ public class PracticeGroupController {
     @GetMapping
     @Operation(operationId = "listPracticeGroups")
     public List<PracticeGroupDTO> list(
-            WorkspaceContext ctx, @RequestParam(required = false) @Nullable Boolean shownToDevelopersOnly) {
-        return presenter.presentGroups(ctx.id(), groups.listGroups(ctx, shownToDevelopersOnly));
+            WorkspaceContext ctx, @RequestParam(required = false) @Nullable Boolean shownToPeopleOnly) {
+        return presenter.presentGroups(ctx.id(), groups.listGroups(ctx, shownToPeopleOnly));
     }
 
     @GetMapping("/{groupSlug}")
@@ -70,7 +70,7 @@ public class PracticeGroupController {
                 ctx,
                 input.slug(),
                 new GroupAttributes(input.name(), input.description(), input.position(), input.icon(), input.color()),
-                input.shownToDevelopers());
+                input.shownToPeople());
         return ResponseEntity.created(publicApiUrls.uri(
                         "/workspaces/{workspaceSlug}/practice-groups/{slug}", ctx.slug(), group.getSlug()))
                 .body(presenter.present(ctx.id(), group));
@@ -89,7 +89,7 @@ public class PracticeGroupController {
                         ctx,
                         groupSlug,
                         new GroupAttributes(input.name(), input.description(), null, input.icon(), input.color()),
-                        input.shownToDevelopers()));
+                        input.shownToPeople()));
     }
 
     @PatchMapping("/{groupSlug}/feedback-mode")

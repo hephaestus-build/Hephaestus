@@ -51,7 +51,7 @@ describe("review queue", () => {
 			reviewId: "r",
 			jobId: "j",
 			item: reviewItem,
-			developer: null,
+			person: null,
 			since: AS_OF,
 			progress: null,
 		} as const;

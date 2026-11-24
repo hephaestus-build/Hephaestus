@@ -54,7 +54,7 @@ export function ResultsListPage({
 }: ResultsListPageProps) {
 	const rows = results.status === "ready" ? results.rows : [];
 	// Only a developer filter makes the first row's name safe to use for that developer.
-	const filteredDeveloper = search.developerId === undefined ? undefined : rows[0]?.developer;
+	const filteredDeveloper = search.developerId === undefined ? undefined : rows[0]?.person;
 	const hasFilter = hasResultFilter(search);
 	const reset = () => onSearchChange(clearedResultFilters());
 	const byDay = search.order !== "ACTIONABILITY";

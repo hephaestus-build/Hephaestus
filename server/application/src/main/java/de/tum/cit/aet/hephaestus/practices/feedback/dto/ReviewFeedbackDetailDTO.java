@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.dto.FeedbackDecisionDTO;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDeveloperDTO;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPersonDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackLocation;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
@@ -27,7 +27,7 @@ public record ReviewFeedbackDetailDTO(
                 description = "Null for feedback on a practice page or in a conversation while the workspace"
                         + " has per-person results for admins off")
         @Nullable
-        ReviewDeveloperDTO developer,
+        ReviewPersonDTO person,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) FeedbackDestination destination,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) FeedbackState state,

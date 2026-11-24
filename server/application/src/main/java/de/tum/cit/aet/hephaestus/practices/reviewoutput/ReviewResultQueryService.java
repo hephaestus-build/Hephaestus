@@ -17,7 +17,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ProblemSummaryDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDeveloperDTO;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPersonDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewBoundResultDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewProblemDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewProblemDetailDTO;
@@ -191,7 +191,7 @@ public class ReviewResultQueryService {
                 row.practiceSlug(),
                 row.practiceName(),
                 row.group(),
-                row.developer(),
+                row.person(),
                 row.severity(),
                 row.summary(),
                 row.path(),
@@ -274,7 +274,7 @@ public class ReviewResultQueryService {
                 .orElseThrow(() -> new EntityNotFoundException("Result", id.toString()));
     }
 
-    private @Nullable ReviewDeveloperDTO developer(ResultView v) {
+    private @Nullable ReviewPersonDTO developer(ResultView v) {
         var r = v.result();
         return r.developerId() == null
                 ? null

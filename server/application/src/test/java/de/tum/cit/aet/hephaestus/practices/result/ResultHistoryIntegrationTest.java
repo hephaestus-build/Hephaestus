@@ -259,7 +259,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
                 .orElseThrow();
         var feedbackId = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at)"
+                "INSERT INTO feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,delivered_at)"
                         + " VALUES(?,?,?,?,?,'PRACTICE_PAGE','DELIVERED','Explain the purpose.',?,?)",
                 feedbackId,
                 workspace,
@@ -269,7 +269,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
                 Timestamp.from(at),
                 Timestamp.from(at));
         jdbc.update(
-                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal) VALUES(?,?,?,?,?,0)",
+                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal) VALUES(?,?,?,?,?,0)",
                 UUID.randomUUID(),
                 workspace,
                 feedbackId,

@@ -132,7 +132,7 @@ function heldScopedCount() {
 		"*/workspaces/:workspaceSlug/practices/reviews/results",
 		async ({ request }) => {
 			const url = new URL(request.url);
-			if (url.searchParams.get("size") !== "1" || url.searchParams.get("developerId") !== "7") {
+			if (url.searchParams.get("size") !== "1" || url.searchParams.get("personId") !== "7") {
 				return;
 			}
 			asked = true;
@@ -273,12 +273,12 @@ describe("practice review page titles", () => {
 		within(navigation).getByRole("link", { name: "Overview", hidden: true });
 
 		const reviews = counted.find((url) => url.pathname.endsWith("/practices/reviews"));
-		expect(reviews?.searchParams.get("developerId")).toBe("7");
+		expect(reviews?.searchParams.get("personId")).toBe("7");
 		expect(reviews?.searchParams.getAll("groupSlug").join(",")).toContain("design");
 		// The Reviews tab's own Status facet narrows its table, not its count.
 		expect(reviews?.searchParams.has("status")).toBe(false);
 		const feedback = counted.find((url) => url.pathname.endsWith("/feedback"));
-		expect(feedback?.searchParams.get("developerId")).toBe("7");
+		expect(feedback?.searchParams.get("personId")).toBe("7");
 	});
 
 	// Failed counts need their own retry; reloading the page must not be the only recovery.

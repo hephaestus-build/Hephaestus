@@ -23,7 +23,7 @@ public record PracticeGroupDTO(
         String color,
 
         int position,
-        boolean shownToDevelopers,
+        boolean shownToPeople,
         FeedbackModeAssignmentDTO feedbackMode,
         CatalogOriginDTO catalogOrigin,
         Instant createdAt,

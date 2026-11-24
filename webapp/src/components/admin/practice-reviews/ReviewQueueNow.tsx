@@ -339,8 +339,8 @@ function QueueRow({ queue, item }: { queue: ReviewQueue; item: ReviewQueueItem }
 			{/* `max-w-0` lets the cell shrink below its words, so the name truncates, not the row. */}
 			<td className={cn(QUEUE_CELL, "max-w-0 pr-4", OVERVIEW_TYPE.label)}>
 				<span className="block truncate">
-					{item.developer
-						? (firstNonBlank(item.developer.displayName, item.developer.providerLogin) ?? "")
+					{item.person
+						? (firstNonBlank(item.person.displayName, item.person.providerLogin) ?? "")
 						: ""}
 				</span>
 			</td>

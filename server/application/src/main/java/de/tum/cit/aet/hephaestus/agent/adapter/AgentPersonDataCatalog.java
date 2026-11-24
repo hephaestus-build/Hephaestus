@@ -44,9 +44,9 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
         SELECT j.id FROM review_job j JOIN review r ON (r.id,r.workspace_id)=(j.review_id,j.workspace_id)
         WHERE r.requested_by_id=:account
           OR EXISTS(SELECT 1 FROM result x WHERE (x.review_id,x.workspace_id)=(r.id,r.workspace_id)
-            AND x.developer_id=:account)
+            AND x.person_account_id=:account)
           OR EXISTS(SELECT 1 FROM feedback f WHERE (f.review_id,f.workspace_id)=(r.id,r.workspace_id)
-            AND f.developer_id=:account)
+            AND f.person_account_id=:account)
         """;
     private static final String COPYING_JOBS = """
         SELECT j.id FROM review_job j JOIN review r ON (r.id,r.workspace_id)=(j.review_id,j.workspace_id)

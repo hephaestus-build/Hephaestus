@@ -17,7 +17,7 @@ interface FeedbackPublicationRepository extends Repository<Feedback, UUID> {
     @Query(value = """
         WITH sibling AS (
           SELECT f.id FROM feedback f
-           WHERE f.workspace_id = :workspaceId AND f.item_id = :itemId AND f.developer_id IN (:developerIds)
+           WHERE f.workspace_id = :workspaceId AND f.item_id = :itemId AND f.person_account_id IN (:developerIds)
              AND f.destination = 'ON_WORK' AND f.review_id <> :reviewId
         ), said AS (
           SELECT s.id,

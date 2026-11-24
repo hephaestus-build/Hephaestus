@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDeveloperDTO;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPersonDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewQueueJob;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewQueueSnapshot;
@@ -49,8 +49,7 @@ class ReviewQueueServiceTest extends BaseUnitTest {
         when(references.developers(eq(WORKSPACE), anyCollection())).thenAnswer(call -> {
             Collection<Long> ids = call.getArgument(1);
             return ids.stream()
-                    .collect(Collectors.toMap(
-                            id -> id, id -> new ReviewDeveloperDTO(id.toString(), "Ada", null, "ada")));
+                    .collect(Collectors.toMap(id -> id, id -> new ReviewPersonDTO(id.toString(), "Ada", null, "ada")));
         });
         when(progress.progress(anyLong(), any())).thenReturn(Map.of());
     }
@@ -59,14 +58,14 @@ class ReviewQueueServiceTest extends BaseUnitTest {
     void shouldNameWhoseWorkWaitsWhilePerPersonResultsAreOn() {
         when(perPerson.shown(WORKSPACE)).thenReturn(true);
 
-        assertThat(service.queue(WORKSPACE).head().getFirst().developer()).isNotNull();
+        assertThat(service.queue(WORKSPACE).head().getFirst().person()).isNotNull();
     }
 
     @Test
     void shouldNameNobodyWhilePerPersonResultsAreOff() {
         when(perPerson.shown(WORKSPACE)).thenReturn(false);
 
-        assertThat(service.queue(WORKSPACE).head().getFirst().developer()).isNull();
+        assertThat(service.queue(WORKSPACE).head().getFirst().person()).isNull();
     }
 
     private static ItemRefDTO item() {

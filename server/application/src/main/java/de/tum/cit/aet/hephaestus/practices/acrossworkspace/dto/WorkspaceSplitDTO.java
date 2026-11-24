@@ -35,7 +35,7 @@ public record WorkspaceSplitDTO(
                         + " when counted. Null for 1 to "
                         + (SmallCounts.MINIMUM - 1))
         @Nullable
-        ShownCount developers) {
+        ShownCount people) {
     public WorkspaceSplitDTO {
         parts = List.copyOf(parts);
     }

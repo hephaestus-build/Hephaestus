@@ -123,13 +123,13 @@ describe("practice catalog cache updates", () => {
 			description: null,
 			icon: "Code",
 			color: null,
-			shownToDevelopers: false,
+			shownToPeople: false,
 		});
 
 		expect(group).toMatchObject({
 			name: "Code quality",
 			icon: "Code",
-			shownToDevelopers: false,
+			shownToPeople: false,
 			position: mockGroups[0]?.position,
 			feedbackMode: mockGroups[0]?.feedbackMode,
 		});

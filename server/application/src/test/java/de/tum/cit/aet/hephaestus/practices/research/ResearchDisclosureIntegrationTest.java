@@ -224,7 +224,7 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
     private UUID feedback(Result result, String body) {
         UUID id = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO feedback(id,workspace_id,review_id,developer_id,destination,state,body,created_at)"
+                "INSERT INTO feedback(id,workspace_id,review_id,person_account_id,destination,state,body,created_at)"
                         + " VALUES (?,?,?,?,'PRACTICE_PAGE','READY',?,?)",
                 id,
                 result.getWorkspaceId(),
@@ -233,7 +233,7 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
                 body,
                 Timestamp.from(at));
         jdbc.update(
-                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)"
+                "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal)"
                         + " VALUES (?,?,?,?,?,0)",
                 UUID.randomUUID(),
                 result.getWorkspaceId(),
@@ -292,13 +292,13 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
         assertThat(json).doesNotContain(course.workspace().getWorkspaceSlug());
         var dataset = mapper.readValue(released.bytes(), ResearchDataset.class);
         long owned = Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT count(*) FROM result WHERE workspace_id=? AND developer_id=?",
+                "SELECT count(*) FROM result WHERE workspace_id=? AND person_account_id=?",
                 Long.class,
                 workspace,
                 participant));
         long ownedProblems = Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT count(*) FROM problem p JOIN result r ON r.id=p.result_id AND r.workspace_id=p.workspace_id"
-                        + " WHERE r.workspace_id=? AND r.developer_id=?",
+                        + " WHERE r.workspace_id=? AND r.person_account_id=?",
                 Long.class,
                 workspace,
                 participant));

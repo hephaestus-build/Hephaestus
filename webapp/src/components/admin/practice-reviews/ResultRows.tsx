@@ -211,7 +211,7 @@ export function ResultRow({ result, withDay = false, named = true }: ResultRowPr
 			<ReviewItemCell item={result.item} linked={false} />
 			{named && (
 				<TableCell className="align-top whitespace-normal">
-					<ReviewPerson person={result.developer} />
+					<ReviewPerson person={result.person} />
 				</TableCell>
 			)}
 		</PracticeTableRow>

@@ -20,7 +20,7 @@ const longContent = {
 	id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
 	summary:
 		"The review keeps every boundary visible even when the result needs enough words to wrap across a narrow screen twice over",
-	developer: {
+	person: {
 		accountId: "10",
 		avatarUrl: null,
 		providerLogin: "alexandria-weekend-contributor",

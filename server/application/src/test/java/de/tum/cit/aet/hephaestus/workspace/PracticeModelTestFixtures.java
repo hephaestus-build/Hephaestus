@@ -228,7 +228,7 @@ public class PracticeModelTestFixtures {
         jdbc.update(
                 """
                 UPDATE result SET ended_at=?, end_reason=?
-                WHERE workspace_id=? AND practice_id=? AND item_id=? AND developer_id=? AND ended_at IS NULL
+                WHERE workspace_id=? AND practice_id=? AND item_id=? AND person_account_id=? AND ended_at IS NULL
                 """,
                 Timestamp.from(at),
                 ResultEndReason.REPLACED.name(),

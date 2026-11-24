@@ -26,7 +26,7 @@ public record FeedbackQueryFilter(
         @Nullable String groupSlug,
 
         @Positive @Schema(type = "string", pattern = "^[1-9][0-9]*$") @Nullable
-        Long developerId,
+        Long personId,
 
         @Nullable List<FeedbackDestination> destination,
         @Nullable List<FeedbackState> state,

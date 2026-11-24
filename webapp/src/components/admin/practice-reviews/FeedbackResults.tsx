@@ -100,7 +100,7 @@ export interface FeedbackRowProps {
 export function feedbackRowName(feedback: ReviewFeedback): string {
 	const location = definitionFor(FEEDBACK_LOCATION_DEFS, feedback.location).label.toLowerCase();
 	const on = feedback.item === null ? "" : ` on ${feedback.item.label}`;
-	const who = feedback.developer === null ? "a developer" : developerLabel(feedback.developer);
+	const who = feedback.person === null ? "a developer" : developerLabel(feedback.person);
 	return `for ${who}${on}, ${location}`;
 }
 
@@ -149,7 +149,7 @@ export function FeedbackRow({ feedback }: FeedbackRowProps) {
 				<ReviewItemCell item={feedback.item} linked={false} />
 			)}
 			<TableCell className="align-top whitespace-normal">
-				<FeedbackPerson person={feedback.developer} />
+				<FeedbackPerson person={feedback.person} />
 			</TableCell>
 			<TableCell className="align-top whitespace-normal">
 				<span className="flex min-w-0 flex-col items-start gap-1">

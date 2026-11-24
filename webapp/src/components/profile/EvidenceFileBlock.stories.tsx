@@ -112,7 +112,7 @@ export const LongLines: Story = {
 			sourceKind: "scm.pull-request.diff",
 			snippet: [
 				'SELECT r.review_id AS "reviewId", MAX(r.recorded_at) AS "reviewedAt" FROM result r JOIN practice p ON p.id = r.practice_id JOIN practice_group g ON g.id = p.practice_group_id',
-				"WHERE r.developer_id = :developerId AND p.workspace_id = :workspaceId AND g.slug = :groupSlug AND r.outcome <> 'DOES_NOT_APPLY'",
+				"WHERE r.person_account_id = :developerId AND p.workspace_id = :workspaceId AND g.slug = :groupSlug AND r.outcome <> 'DOES_NOT_APPLY'",
 			].join("\n"),
 		},
 	},

@@ -149,11 +149,13 @@ This table records only their retired names.
 | **Mark** | An admin record that an observation is incorrect or accepted. Removing the mark reverses it. | invalidation |
 | **Marked incorrect** | An observation that a workspace admin marked as wrong when made. It remains in history. | invalidated, deleted, retracted |
 | **Accepted** | An admin record that excludes an observation from open-problem lists. It does not change its outcome or cancel an incorrect mark. |  |
-| **Developer** | The person an observation concerns. Feedback based on that observation goes only to that person. | learner |
+| **Person** | The author, reviewer, or other person whose work the observation concerns. Feedback based on that observation goes only to that person. Screens about software development can say developer. | learner |
 
 Storage, API contracts, generated types, routes, search params, and component and file names call this record `Result` or `result`.
 The product calls it an observation in UI text, user-facing responses and docs.
 Do not rename those identifiers without a change that starts at the API contract.
+
+Review responses use `person`, and review filters use `personId`. Results, feedback, and feedback basis store the account ID in `person_account_id`.
 
 ### Observation outcomes
 

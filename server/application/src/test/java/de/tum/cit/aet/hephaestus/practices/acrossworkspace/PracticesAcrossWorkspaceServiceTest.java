@@ -179,11 +179,11 @@ class PracticesAcrossWorkspaceServiceTest {
                 .containsExactly(reviewed.getSlug(), off.getSlug());
         var first = row.practices().getFirst();
         assertThat(first.split().parts())
-                .extracting(WorkspaceSplitPartDTO::standing, WorkspaceSplitPartDTO::developers)
+                .extracting(WorkspaceSplitPartDTO::standing, WorkspaceSplitPartDTO::people)
                 .as("two developers are too few to show how they split")
                 .containsExactly(
                         tuple(Verdict.DEVELOPING, null), tuple(Verdict.MIXED, null), tuple(Verdict.STRENGTH, null));
-        assertThat(first.split().developers()).isNull();
+        assertThat(first.split().people()).isNull();
 
         var profile = standings.getStandingSnapshots(1L, READER, List.of(now)).getFirst();
         var reviewedProfile = Objects.requireNonNull(profile.practices().get(reviewed.getSlug()));
@@ -198,7 +198,7 @@ class PracticesAcrossWorkspaceServiceTest {
                         .summarize(List.of(group), profile)
                         .getFirst()
                         .standing());
-        assertThat(row.split().developers()).isNull();
+        assertThat(row.split().people()).isNull();
 
         // Counted: everyone whose work was reviewed, the hidden member too. Hiding is a display choice of staff.
         assertThat(overview.openFeedback().yours()).isEqualTo(2);
@@ -218,7 +218,7 @@ class PracticesAcrossWorkspaceServiceTest {
         assertThat(row.yourBasis()).isNull();
         assertThat(row.practices())
                 .allSatisfy(practice -> assertThat(practice.yourStanding()).isNull());
-        assertThat(row.split().developers()).isNull();
+        assertThat(row.split().people()).isNull();
     }
 
     @Test
@@ -226,7 +226,7 @@ class PracticesAcrossWorkspaceServiceTest {
         var overview = service.read(context);
 
         var row = overview.groups().getFirst();
-        assertThat(row.split().developers()).hasToString("0");
+        assertThat(row.split().people()).hasToString("0");
         assertThat(row.split().noneYet()).hasToString("0");
         assertThat(row.yourStanding()).isNull();
         // Two others besides the reader are too few for a typical range.
@@ -250,10 +250,10 @@ class PracticesAcrossWorkspaceServiceTest {
         var quarter = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_90);
 
         // One developer in the last 30 days is too few to count or to give a typical range.
-        assertThat(recent.developersWithAStandingInWindow()).isNull();
+        assertThat(recent.peopleWithAStandingInWindow()).isNull();
         assertThat(recent.reviewedWork().middle()).isNull();
         // Over 90 days, five developers besides the reader give one, and six with a standing show as a count.
-        assertThat(quarter.developersWithAStandingInWindow()).hasToString("6");
+        assertThat(quarter.peopleWithAStandingInWindow()).hasToString("6");
         assertThat(quarter.reviewedWork().middle()).isNotNull();
         assertThat(quarter.yourPractices()).isEqualTo(2);
         assertThat(quarter.practicesGoingWell().yours()).isEqualTo((int)
@@ -274,7 +274,7 @@ class PracticesAcrossWorkspaceServiceTest {
 
         var tiles = service.readTiles(context, PracticesAcrossWorkspaceWindow.DAYS_30);
 
-        assertThat(tiles.developersWithAStandingInWindow()).hasToString("5");
+        assertThat(tiles.peopleWithAStandingInWindow()).hasToString("5");
         var prolific =
                 standings.getStandingSnapshots(1L, PROLIFIC, List.of(now)).getFirst();
         assertThat(Objects.requireNonNull(prolific.practices().get(reviewed.getSlug()))
@@ -319,8 +319,8 @@ class PracticesAcrossWorkspaceServiceTest {
         assertThat(overview.groups())
                 .extracting(WorkspaceGroupSplitDTO::groupSlug)
                 .doesNotContain("hidden-group");
-        assertThat(overview.groups().getFirst().split().developers()).hasToString("6");
-        assertThat(tiles.developersWithAStandingInWindow()).hasToString("6");
+        assertThat(overview.groups().getFirst().split().people()).hasToString("6");
+        assertThat(tiles.peopleWithAStandingInWindow()).hasToString("6");
     }
 
     private static Set<UUID> ids(Collection<ResultFacts> rows) {

@@ -63,7 +63,7 @@ public class PracticeReviewOutputController {
             @RequestParam(defaultValue = "NEWEST") ResultSort sort,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size) {
-        perPerson.requirePersonFilterAllowed(ws.id(), filter.developerId());
+        perPerson.requirePersonFilterAllowed(ws.id(), filter.personId());
         return OffsetPageDTO.from(query.list(ws.id(), filter.toFilter(), sort, PageRequest.of(page, size)));
     }
 
@@ -83,7 +83,7 @@ public class PracticeReviewOutputController {
             @Valid @ParameterObject ReviewProblemFilterParams filter,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size) {
-        perPerson.requirePersonFilterAllowed(ws.id(), filter.developerId());
+        perPerson.requirePersonFilterAllowed(ws.id(), filter.personId());
         return OffsetPageDTO.from(query.listProblems(
                 ws.id(), filter.toResultFilter(), filter.toProblemFilter(), PageRequest.of(page, size)));
     }

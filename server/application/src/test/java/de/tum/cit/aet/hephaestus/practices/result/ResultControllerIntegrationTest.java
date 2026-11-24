@@ -88,7 +88,7 @@ class ResultControllerIntegrationTest extends BaseIntegrationTest {
         var url = "https://github.com/example/project/pull/1#issuecomment-1";
         jdbc.sql(
                         "INSERT INTO"
-                                + " feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at)"
+                                + " feedback(id,workspace_id,review_id,item_id,person_account_id,destination,state,body,created_at,delivered_at)"
                                 + " VALUES(:id,:ws,:review,:item,:developer,'ON_WORK','DELIVERED','Review this change.',:at,:at)")
                 .param("id", feedback)
                 .param("ws", ws)
@@ -97,7 +97,7 @@ class ResultControllerIntegrationTest extends BaseIntegrationTest {
                 .param("developer", scenarioAccountId)
                 .param("at", Timestamp.from(at))
                 .update();
-        jdbc.sql("INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)"
+        jdbc.sql("INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,person_account_id,ordinal)"
                         + " VALUES(:id,:ws,:feedback,:result,:developer,0)")
                 .param("id", UUID.randomUUID())
                 .param("ws", ws)

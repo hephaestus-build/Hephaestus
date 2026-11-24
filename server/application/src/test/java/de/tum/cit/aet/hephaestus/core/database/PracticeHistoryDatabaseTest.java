@@ -261,9 +261,9 @@ class PracticeHistoryDatabaseTest {
         assertThatThrownBy(() -> execute(
                         database,
                         "INSERT INTO"
-                                + " result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,developer_id,outcome,summary,evidence_version,recorded_at)"
+                                + " result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,person_account_id,outcome,summary,evidence_version,recorded_at)"
                                 + " SELECT"
-                                + " gen_random_uuid(),workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,developer_id,outcome,summary,0,recorded_at"
+                                + " gen_random_uuid(),workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,person_account_id,outcome,summary,0,recorded_at"
                                 + " FROM result WHERE id='"
                                 + RESULT + "'"))
                 .hasRootCauseInstanceOf(SQLException.class)
@@ -381,7 +381,7 @@ class PracticeHistoryDatabaseTest {
                 .containsExactly("992106");
         assertThat(column(
                         database,
-                        "SELECT f.developer_id::text || '|' || r.resolution || '|' || r.usefulness FROM"
+                        "SELECT f.person_account_id::text || '|' || r.resolution || '|' || r.usefulness FROM"
                                 + " feedback_response r JOIN feedback f ON f.id=r.feedback_id AND"
                                 + " f.workspace_id=r.workspace_id WHERE r.id='00000000-0000-0000-0000-000000992263'"))
                 .containsExactly("992106|ADDRESSED|HELPFUL");

@@ -35,5 +35,5 @@ public record UpdatePracticeGroupRequestDTO(
         String color,
 
         @JsonProperty(required = true) @JsonSetter(nulls = Nulls.FAIL)
-        boolean shownToDevelopers)
+        boolean shownToPeople)
         implements ClosedPracticeInput {}

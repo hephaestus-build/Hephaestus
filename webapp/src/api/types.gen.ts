@@ -1553,7 +1553,7 @@ export type CreatePracticeGroupRequest = {
 	icon: string | null;
 	name: string;
 	position: null | number;
-	shownToDevelopers: boolean;
+	shownToPeople: boolean;
 	slug: string;
 };
 
@@ -4499,7 +4499,7 @@ export type PracticeGroup = {
 	id: string;
 	name: string;
 	position: number;
-	shownToDevelopers: boolean;
+	shownToPeople: boolean;
 	slug: string;
 	updatedAt: Date | null;
 };
@@ -4935,13 +4935,13 @@ export type PracticesAcrossWorkspace = {
  */
 export type PracticesAcrossWorkspaceTiles = {
 	/**
-	 * Developers with a standing in the window, the developers the tiles compare. Null for 1 to 4
-	 */
-	developersWithAStandingInWindow: null | number;
-	/**
 	 * Whether at least 5 developers counted in the window have a standing read only from earlier reviews
 	 */
 	includesEarlierReviews: boolean;
+	/**
+	 * Developers with a standing in the window, the developers the tiles compare. Null for 1 to 4
+	 */
+	peopleWithAStandingInWindow: null | number;
 	/**
 	 * The reader's practices going well
 	 */
@@ -5941,10 +5941,10 @@ export type ReviewBoundResult = {
 	 */
 	capturedAt: Date | null;
 	currentness: Currentness;
-	developer: ReviewDeveloper | null;
 	id: string;
 	item: ItemRef;
 	outcome: ResultOutcome;
+	person: ReviewPerson | null;
 	practiceName: string;
 	practiceSlug: string;
 	recordedAt: Date;
@@ -6003,13 +6003,6 @@ export type ReviewDetail = {
 	usage: ReviewUsage;
 };
 
-export type ReviewDeveloper = {
-	accountId: string;
-	avatarUrl: string | null;
-	displayName: string | null;
-	providerLogin: string | null;
-};
-
 export type ReviewFeedback = {
 	bodyPreview: string | null;
 	bodyTruncated: boolean;
@@ -6017,14 +6010,14 @@ export type ReviewFeedback = {
 	createdAt: Date;
 	deliveredAt: Date | null;
 	destination: FeedbackDestination;
-	/**
-	 * Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off
-	 */
-	developer: ReviewDeveloper | null;
 	disagreedAt: Date | null;
 	id: string;
 	item: ItemRef | null;
 	location: FeedbackLocation;
+	/**
+	 * Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off
+	 */
+	person: ReviewPerson | null;
 	replacesId: string | null;
 	resultCount: number;
 	reviewId: string;
@@ -6063,14 +6056,14 @@ export type ReviewFeedbackDetail = {
 	decisions: Array<FeedbackDecision>;
 	deliveredAt: Date | null;
 	destination: FeedbackDestination;
-	/**
-	 * Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off
-	 */
-	developer: ReviewDeveloper | null;
 	disagreedAt: Date | null;
 	id: string;
 	item: ItemRef | null;
 	location: FeedbackLocation;
+	/**
+	 * Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off
+	 */
+	person: ReviewPerson | null;
 	replacesId: string | null;
 	resultCount: number;
 	reviewId: string;
@@ -6184,6 +6177,13 @@ export type ReviewOverview = {
 	to: Date;
 };
 
+export type ReviewPerson = {
+	accountId: string;
+	avatarUrl: string | null;
+	displayName: string | null;
+	providerLogin: string | null;
+};
+
 export type ReviewPractice = {
 	/**
 	 * Where the practice is edited now, which decides whether Practice setup can edit it
@@ -6218,7 +6218,6 @@ export type ReviewProblem = {
 	 */
 	capturedAt: Date | null;
 	currentness: Currentness;
-	developer: ReviewDeveloper | null;
 	disagreedAt: Date | null;
 	endLine: null | number;
 	evidenceHidden: boolean;
@@ -6227,6 +6226,7 @@ export type ReviewProblem = {
 	item: ItemRef;
 	markedIncorrectAt: Date | null;
 	path: string | null;
+	person: ReviewPerson | null;
 	practiceName: string;
 	practiceSlug: string;
 	recordedAt: Date;
@@ -6250,7 +6250,6 @@ export type ReviewProblemDetail = {
 	 */
 	capturedAt: Date | null;
 	currentness: Currentness;
-	developer: ReviewDeveloper | null;
 	disagreedAt: Date | null;
 	endLine: null | number;
 	evidenceHidden: boolean;
@@ -6259,6 +6258,7 @@ export type ReviewProblemDetail = {
 	item: ItemRef;
 	markedIncorrectAt: Date | null;
 	path: string | null;
+	person: ReviewPerson | null;
 	practiceName: string;
 	practiceSlug: string;
 	problem: Problem;
@@ -6308,10 +6308,10 @@ export type ReviewQueue = {
 };
 
 export type ReviewQueueItem = {
-	developer: ReviewDeveloper | null;
 	heldForBudget: boolean;
 	item: ItemRef;
 	jobId: string;
+	person: ReviewPerson | null;
 	progress: ReviewProgress | null;
 	reviewId: string;
 	since: Date;
@@ -6366,13 +6366,13 @@ export type ReviewResult = {
 	 */
 	capturedAt: Date | null;
 	currentness: Currentness;
-	developer: ReviewDeveloper | null;
 	feedback: ReviewFeedbackCounts;
 	id: string;
 	item: ItemRef;
 	markedIncorrectAt: Date | null;
 	origin: ReviewOrigin;
 	outcome: ResultOutcome;
+	person: ReviewPerson | null;
 	practiceName: string;
 	practiceSlug: string;
 	problemCount: number;
@@ -6402,7 +6402,6 @@ export type ReviewResultDetail = {
 	capturedAt: Date | null;
 	coverage: HostCoverage | null;
 	currentness: Currentness;
-	developer: ReviewDeveloper | null;
 	disagreements: Array<FeedbackDisagreement>;
 	endReason: ResultEndReason | null;
 	endedAt: Date | null;
@@ -6419,6 +6418,7 @@ export type ReviewResultDetail = {
 	marks: Array<ResultMark>;
 	origin: ReviewOrigin;
 	outcome: ResultOutcome;
+	person: ReviewPerson | null;
 	practiceName: string;
 	practiceSlug: string;
 	practiceVersionId: string | null;
@@ -7704,7 +7704,7 @@ export type UpdatePracticeGroupRequest = {
 	description: string | null;
 	icon: string | null;
 	name: string;
-	shownToDevelopers: boolean;
+	shownToPeople: boolean;
 };
 
 export type UpdatePracticeRequest = {
@@ -8860,10 +8860,6 @@ export type WorkspaceReviewScope = {
  */
 export type WorkspaceSplit = {
 	/**
-	 * Every developer the split counts, the parts and none yet together, the reader included when counted. Null for 1 to 4
-	 */
-	developers: null | number;
-	/**
 	 * Developers the page counts who have no verdict here. Null when the split shows only its total
 	 */
 	noneYet: null | number;
@@ -8871,6 +8867,10 @@ export type WorkspaceSplit = {
 	 * Developers at each verdict, Needs attention, Mixed feedback and Going well in that order
 	 */
 	parts: Array<WorkspaceSplitPart>;
+	/**
+	 * Every developer the split counts, the parts and none yet together, the reader included when counted. Null for 1 to 4
+	 */
+	people: null | number;
 };
 
 /**
@@ -8880,7 +8880,7 @@ export type WorkspaceSplitPart = {
 	/**
 	 * Developers at the verdict, the reader included when counted. Null when the split shows only its total
 	 */
-	developers: null | number;
+	people: null | number;
 	/**
 	 * The verdict the part counts
 	 */
@@ -18237,7 +18237,7 @@ export type ListPracticeGroupsData = {
 		workspaceSlug: string;
 	};
 	query?: {
-		shownToDevelopersOnly?: boolean;
+		shownToPeopleOnly?: boolean;
 	};
 	url: "/workspaces/{workspaceSlug}/practice-groups";
 };
@@ -20316,7 +20316,7 @@ export type ListReviewsData = {
 		kind?: ReviewKind;
 		reviewId?: string;
 		itemId?: string;
-		developerId?: number;
+		personId?: number;
 		practiceSlug?: string;
 		groupSlug?: string;
 		from?: Date;
@@ -20367,7 +20367,7 @@ export type ListReviewFeedbackData = {
 		itemKind?: string;
 		practiceSlug?: string;
 		groupSlug?: string;
-		developerId?: string;
+		personId?: string;
 		destination?: Array<FeedbackDestination>;
 		state?: Array<FeedbackState>;
 		location?: FeedbackLocation;
@@ -20421,7 +20421,7 @@ export type CountReviewFeedbackByLocationData = {
 		itemKind?: string;
 		practiceSlug?: string;
 		groupSlug?: string;
-		developerId?: string;
+		personId?: string;
 		destination?: Array<FeedbackDestination>;
 		state?: Array<FeedbackState>;
 		location?: FeedbackLocation;
@@ -20474,7 +20474,7 @@ export type CountReviewFeedbackByReasonData = {
 		itemKind?: string;
 		practiceSlug?: string;
 		groupSlug?: string;
-		developerId?: string;
+		personId?: string;
 		destination?: Array<FeedbackDestination>;
 		state?: Array<FeedbackState>;
 		location?: FeedbackLocation;
@@ -20806,7 +20806,7 @@ export type ListReviewProblemsData = {
 		itemKind?: string;
 		practiceSlug?: string;
 		groupSlug?: string;
-		developerId?: number;
+		personId?: number;
 		outcome?: Array<ResultOutcome>;
 		severity?: Array<Severity>;
 		currentness?: Currentness;
@@ -20931,7 +20931,7 @@ export type ListReviewResultsData = {
 		itemKind?: string;
 		practiceSlug?: string;
 		groupSlug?: string;
-		developerId?: number;
+		personId?: number;
 		outcome?: Array<ResultOutcome>;
 		severity?: Array<Severity>;
 		currentness?: Currentness;

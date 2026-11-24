@@ -970,7 +970,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 """
                 WITH copied AS (
                   INSERT INTO result SELECT (jsonb_populate_record(NULL::result, to_jsonb(r)
-                    || jsonb_build_object('id', ?::text, 'review_id', ?::text, 'developer_id', ?::bigint,
+                    || jsonb_build_object('id', ?::text, 'review_id', ?::text, 'person_account_id', ?::bigint,
                       'ended_at', r.recorded_at, 'end_reason', 'REPLACED'))).*
                   FROM result r WHERE r.id = ? RETURNING id)
                 INSERT INTO problem SELECT (jsonb_populate_record(NULL::problem, to_jsonb(p)

@@ -1,4 +1,4 @@
-import type { AccountRef, ReviewDeveloper } from "@/api/types.gen";
+import type { AccountRef, ReviewPerson } from "@/api/types.gen";
 import { firstNonBlank, hasText } from "@/lib/text";
 
 /**
@@ -6,7 +6,7 @@ import { firstNonBlank, hasText } from "@/lib/text";
  * does not belong here: it goes in that enum's defs module under `@/components/practice-vocabulary`,
  * so the filter dropdown, the row badge and the detail header all read one entry.
  */
-export function developerLabel(developer: ReviewDeveloper | null): string {
+export function developerLabel(developer: ReviewPerson | null): string {
 	if (!developer) {
 		return "Unavailable developer";
 	}
@@ -17,7 +17,7 @@ export function developerLabel(developer: ReviewDeveloper | null): string {
  * A review's requester as the person the result tables show, so "Started by" draws the same face and
  * name as "Developer": the account's own name and picture, else those of its first provider login.
  */
-export function requesterAsPerson(account: AccountRef): ReviewDeveloper {
+export function requesterAsPerson(account: AccountRef): ReviewPerson {
 	const identity = account.identities.find((candidate) => hasText(candidate.login));
 	return {
 		accountId: account.id,
