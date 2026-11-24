@@ -773,3 +773,15 @@ The sandbox's input archive has the same bytes on every server: entries in name 
 [PostgreSQL advisory locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS) and [Kubernetes Service session affinity](https://kubernetes.io/docs/reference/networking/virtual-ips/#session-affinity) define these platform mechanisms.
 
 Old active reviews have no checkpoint. Their first upgrade requires the one-time drain in [Upgrade to 1.0](../admin/upgrade-to-1-0.mdx#drain-legacy-reviews-before-removing-gateway-affinity).
+
+## Update — 2026-11-23: the product feedback draft has no model loop in the JVM
+
+`ModelSession` is removed. The product feedback draft stays the outbox action `DRAFT_REPORT`. Its one tool-free call is written and read by the model proxy's draft gateway (`ProductFeedbackModelGateway`), so no server code outside the proxy speaks a model protocol.
+
+Three checks hold this. [The session factory](../contributor/unified-pi-runtime.mdx#the-session-factory) in the contributor guide states the exact scope and the limits of each:
+
+- `ModelEgressConfig` guards every HTTP client that server code builds from the application's Spring builders. Such a client refuses a model request that the proxy did not send. The guard tells a model request by the shape of its JSON body, whatever content type the request declares. A vendor SDK's own transport, such as Slack's, is outside this check.
+- `ModelCallBoundaryArchTest` forbids server-built OkHttp clients, direct Reactor Netty requests, and reads of a resolved model's provider key outside the proxy.
+- `pi-session-dispatch.spec.ts` runs each run kind in the cases that the guide names. In those cases, a kind fails it when it builds a Pi session past `openRunSession` or a composer `ModelSession`. `REVIEW_COMPOSE` is exempt until CF-18.
+
+This replaces the last sentence of the update "the JVM composer is gone" of 2026-11-10.

@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProductFeedbackModelGateway;
-import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRefusal;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
@@ -25,7 +24,6 @@ import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
@@ -93,13 +91,7 @@ class DraftReportAdapterTest extends BaseUnitTest {
 
     @Test
     void shouldKeepTheAnswerWhenTheCallIsServed() {
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any()))
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
                 .thenReturn(served("{\"disposition\":\"ISSUE\"}"));
         when(drafts.answered(attempt, REPORT, 2, "{\"disposition\":\"ISSUE\"}")).thenReturn(true);
 
@@ -116,13 +108,7 @@ class DraftReportAdapterTest extends BaseUnitTest {
             now.set(started.plusSeconds(30));
             return Optional.of(new ProductFeedbackDraftCalls.DraftCall(8L, "Draft it.", "The report.", 100));
         });
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any()))
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
                 .thenReturn(served("{}"));
         when(drafts.answered(attempt, REPORT, 2, "{}")).thenReturn(true);
         var bounded = new DraftReportAdapter(drafts, calls, models, Optional.of(gateway), MAPPER, delayed, usage);
@@ -134,21 +120,14 @@ class DraftReportAdapterTest extends BaseUnitTest {
                         eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
                         eq(MODEL),
                         deadline.capture(),
-                        anyInt(),
                         any());
         assertThat(deadline.getValue()).isEqualTo(started.plus(DraftReportAdapter.CALL_TIME));
     }
 
     @Test
     void shouldDeferCapacityWithoutSpendingAnAttempt() {
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any()))
-                .thenReturn(new ProductFeedbackModelGateway.Answer(503, new byte[0], true, ProxyRefusal.CAPACITY));
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
+                .thenReturn(failed(ProductFeedbackModelGateway.Failure.NO_CAPACITY));
         when(drafts.deferred(attempt, REPORT, 2)).thenReturn(true);
         assertThat(adapter.execute(attempt)).isInstanceOf(ActionResult.Defer.class);
         verify(drafts).deferred(attempt, REPORT, 2);
@@ -162,43 +141,22 @@ class DraftReportAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldOfferTheModelNoTools() {
+    void shouldAskWithTheWaitingCall() {
         when(gateway.draft(
                         eq(attempt.id()),
                         eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
                         eq(MODEL),
                         any(),
-                        anyInt(),
-                        any()))
+                        eq(new ProductFeedbackDraftCalls.DraftCall(8L, "Draft it.", "The report.", 100))))
                 .thenReturn(served("{}"));
         when(drafts.answered(attempt, REPORT, 2, "{}")).thenReturn(true);
 
-        adapter.execute(attempt);
-
-        var body = ArgumentCaptor.forClass(byte[].class);
-        verify(gateway)
-                .draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        body.capture());
-        var request = MAPPER.readTree(new String(body.getValue(), StandardCharsets.UTF_8));
-        assertThat(request.has("tools")).isFalse();
-        assertThat(request.has("tool_choice")).isFalse();
-        assertThat(request.path("model").asString()).isEqualTo("draft-upstream");
+        assertThat(adapter.execute(attempt)).isInstanceOf(ActionResult.Done.class);
     }
 
     @Test
     void shouldGiveUpTheAttemptWhenItLostItsActionBeforeTheAnswerWasKept() {
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any()))
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
                 .thenReturn(served("{}"));
         when(drafts.answered(attempt, REPORT, 2, "{}")).thenReturn(false);
 
@@ -207,43 +165,34 @@ class DraftReportAdapterTest extends BaseUnitTest {
 
     @Test
     void shouldRetryWhenTheProviderFails() {
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any()))
-                .thenReturn(new ProductFeedbackModelGateway.Answer(503, new byte[0], true, null));
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
+                .thenReturn(failed(ProductFeedbackModelGateway.Failure.PROVIDER));
 
         assertThat(adapter.execute(attempt)).isInstanceOf(ActionResult.Retry.class);
         verify(drafts, never()).answered(any(), any(), anyInt(), anyString());
     }
 
     @Test
-    void shouldRetryWhenTheProviderLimitsTheRate() {
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any()))
-                .thenReturn(new ProductFeedbackModelGateway.Answer(429, new byte[0], true, null));
+    void shouldRetryWithoutKeepingAnAnswerThatHasNoText() {
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
+                .thenReturn(new ProductFeedbackModelGateway.Draft(null, null));
 
         assertThat(adapter.execute(attempt)).isInstanceOf(ActionResult.Retry.class);
+        verify(drafts, never()).answered(any(), any(), anyInt(), anyString());
+    }
+
+    @Test
+    void shouldCancelWhenTheActionEndedWhileTheCallWaited() {
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
+                .thenReturn(failed(ProductFeedbackModelGateway.Failure.ATTEMPT_ENDED));
+
+        assertThat(adapter.execute(attempt)).isEqualTo(new ActionResult.Cancelled(ActionStopReason.WITHDRAWN));
     }
 
     @Test
     void shouldFailWhenTheProxyRefusesTheModel() {
-        when(gateway.draft(
-                        eq(attempt.id()),
-                        eq(new ProductFeedbackDrafts.Payload(REPORT, 2)),
-                        eq(MODEL),
-                        any(),
-                        anyInt(),
-                        any()))
-                .thenReturn(new ProductFeedbackModelGateway.Answer(403, new byte[0], true, ProxyRefusal.AI_CHOICE));
+        when(gateway.draft(eq(attempt.id()), eq(new ProductFeedbackDrafts.Payload(REPORT, 2)), eq(MODEL), any(), any()))
+                .thenReturn(failed(ProductFeedbackModelGateway.Failure.AI_CHOICE));
 
         assertThat(adapter.execute(attempt)).isEqualTo(new ActionResult.Failed(ActionStopReason.NOT_CONFIGURED));
     }
@@ -253,7 +202,7 @@ class DraftReportAdapterTest extends BaseUnitTest {
         when(models.resolveInstanceModel(8L)).thenReturn(null);
 
         assertThat(adapter.execute(attempt)).isEqualTo(new ActionResult.Failed(ActionStopReason.NOT_CONFIGURED));
-        verify(gateway, never()).draft(any(), any(), any(), any(), anyInt(), any());
+        verify(gateway, never()).draft(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -261,17 +210,14 @@ class DraftReportAdapterTest extends BaseUnitTest {
         when(calls.waiting(REPORT, 2)).thenReturn(Optional.empty());
 
         assertThat(adapter.execute(attempt)).isEqualTo(new ActionResult.Cancelled(ActionStopReason.WITHDRAWN));
-        verify(gateway, never()).draft(any(), any(), any(), any(), anyInt(), any());
+        verify(gateway, never()).draft(any(), any(), any(), any(), any());
     }
 
-    private static ProductFeedbackModelGateway.Answer served(String text) {
-        var body = MAPPER.createObjectNode();
-        body.putArray("choices")
-                .addObject()
-                .putObject("message")
-                .put("role", "assistant")
-                .put("content", text);
-        return new ProductFeedbackModelGateway.Answer(
-                200, body.toString().getBytes(StandardCharsets.UTF_8), true, null);
+    private static ProductFeedbackModelGateway.Draft served(String text) {
+        return new ProductFeedbackModelGateway.Draft(text, null);
+    }
+
+    private static ProductFeedbackModelGateway.Draft failed(ProductFeedbackModelGateway.Failure failure) {
+        return new ProductFeedbackModelGateway.Draft(null, failure);
     }
 }

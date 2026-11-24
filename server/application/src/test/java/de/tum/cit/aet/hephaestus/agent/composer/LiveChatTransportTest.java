@@ -110,7 +110,7 @@ class LiveChatTransportTest {
             "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"model\":\"served-stream\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\"";
 
     @Test
-    void shouldAssembleAStreamedAnswerIntoTheBodyThatTheModelSessionReadsWhenTheEndpointStreams() throws IOException {
+    void shouldAssembleAStreamedAnswerIntoTheBodyThatTheComposerReadsWhenTheEndpointStreams() throws IOException {
         var streaming = streamingEndpoint(STREAMED_ANSWER);
         try {
             var transport = new LiveChatTransport(new LiveLlmCredentials(

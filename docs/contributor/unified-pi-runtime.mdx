@@ -373,6 +373,89 @@ The image's `driver.ts` pulls its next run from `POST /internal/agent/next` and 
 A run reconstructs its Pi session from the conversation ledger.
 [ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) owns the sandbox, claim and lease rules.
 
+### The session factory
+
+`openRunSession` in `pi-session.ts` builds every Pi session: the turns of `turn.ts` and the practice sessions of `pi-runner.ts`.
+The run gives it a run descriptor.
+The descriptor holds the model and its runtime, the system prompt, the tools and the run kind's extensions.
+It also holds the settings and the session manager.
+The factory adds nothing that the descriptor does not name:
+
+- It loads no context file, skill, prompt template, theme or extension.
+  The SDK still lists the resource folders when it reloads.
+  The loader drops each path that it finds before it loads one.
+- It reads no settings file. The review runner gives it the settings that the server staged.
+- The system prompt is the descriptor's alone.
+- Cache warming is off.
+
+`pi-session-dispatch.spec.ts` checks by behaviour that every run kind opens its sessions through `openRunSession`.
+It observes two things:
+
+- **Pi sessions.** The spec counts each Pi session where the SDK constructs it, whichever SDK function or caller builds it.
+  A factory session is a session that a call to the factory returned. A failed factory call opens none.
+  Every other session counts as built past the factory, also one built while a factory call is still open.
+- **The composer's model client.** The spec counts each construction of `ModelSession` from `review-composer-model.ts`, also from an import at run time.
+  It does not detect a model client of another type.
+
+It runs these cases:
+
+- Each in-process runner of the registry (`TURN`, `DIGEST`, `REVIEW_COMPOSE`), with the real factory and the real SDK.
+  The model refuses each call, so a turn ends after its first request.
+  `TURN` and `DIGEST` must open a factory session and ask the model. They must build no Pi session past the factory and no `ModelSession`.
+  If an SDK update stops the construction count, these two fail, because they then open no factory session.
+- `REVIEW`'s runner, which is the measurement that starts the staged review runner.
+  The spec runs the measurement's whole path in a temporary image layout, with stand-in programs.
+  The measurement must build no session at all, through the factory or past it.
+- The staged review runner, through the harness of the review specs, on the real SDK.
+  The harness stands in for the proxy's practice, staging and admission endpoints.
+  The spec runs it with two models, and the same session rule applies to both:
+  - A model that submits a result. The runner must stage its result, reach admission and exit successfully.
+  - A model that refuses each call. The runner must exit as it does when the model is unreachable, before admission.
+  The runner must open its sessions through the factory, and it must build no other Pi session and no `ModelSession`.
+- `REVIEW_COMPOSE` is the one exemption, named by its kind. It keeps its own model client until the publication cutover (CF-18). The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
+- Eight fixtures break the rule and must fail it:
+  - A runner imports `ModelSession` at run time and builds one.
+  - A turn builds a second Pi session while its factory call is open.
+  - A turn constructs a Pi session itself after its factory session.
+  - A turn's factory call fails.
+  - A runner opens no session.
+  - Three staged review runners build a second Pi session beside their factory session.
+    Then they go on with the factory's session.
+    One constructs it with an agent of its own, and one uses the SDK's services.
+    One continues a stored session through `SessionManager.continueRecent`, and the fixture checks that the SDK selected it.
+
+The server makes its own model calls only through the proxy's gateways, such as `ProductFeedbackModelGateway` for a report draft.
+`ModelEgressConfig` refuses a model request on every client built from the application's Spring builders, unless the proxy sent it.
+A model request is told by its shape, not by its address: a POST whose body parses as JSON, whatever content type it declares.
+The body, or an object nested at most six levels below its root, asks a model when it has one of these:
+
+- A string `model` together with `messages`, `input` or `prompt`.
+- A `contents` field, as Gemini's requests carry.
+- A `messages` array whose messages each have a string `role`, also without a `model`.
+  At least one of the messages has a `content`.
+  A deployment-scoped request, such as Azure OpenAI's, names its model in the address.
+
+A lookup that only names a model, such as Ollama's `/api/show`, passes.
+A request nested deeper than six levels, or a body that is not JSON, passes too.
+
+A WebClient request fails while its body is written, in one part or in flushed parts.
+The endpoint can see the request line, but never the prompt.
+
+The proxy marks its own request with an object that no other package can reach.
+Server code builds every client from the application's Spring builders. A vendor SDK's own transport, such as Slack's, is outside the guard.
+
+`ModelEgressConfigTest` sends model requests to a local endpoint with the application's client builders, also on paths that no list names, and the guard refuses each.
+The proxy's integration tests send through the guarded client, so a proxy request without its mark fails them.
+`ModelCallBoundaryArchTest` has three rules:
+
+- It fails when server code calls the constructor of `OkHttpClient` or of `OkHttpClient.Builder`.
+- It fails when server code calls the send API of Reactor Netty's client directly.
+  It also fails on a method reference to a method of that client.
+- It fails when a class outside the proxy reads the provider key of a resolved model (`ProxyCredential`).
+  A call and a method reference both count.
+
+### Isolation
+
 The model loop and its tools run in the same container.
 The SandboxTemplate and its NetworkPolicy provide the isolation boundary.
 The server keeps provider credentials and resolves each model call through the gateway.

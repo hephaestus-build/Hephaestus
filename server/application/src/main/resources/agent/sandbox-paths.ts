@@ -1,6 +1,12 @@
 // sandbox-paths.ts — the layout that a sandbox's image gives its run kinds. Its own module, so a kind imports it without
 // importing the driver, which imports every kind.
 
+/** The sandbox's /workspace volume, over the image's read-only root. */
+export const VOLUME = "/workspace";
+
+/** Where the image keeps the review programs and the Pi SDK. */
+export const PI_SDK = "/opt/pi-sdk";
+
 /**
  * Where a kind works: Pi's working directory and its agent directory. Both are on the sandbox's /workspace volume, which
  * lasts as long as the sandbox, so a conversation keeps its files from one turn to the next. The kind creates them; the

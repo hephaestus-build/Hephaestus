@@ -1,7 +1,6 @@
-// pi-agent-sandbox.ts — the sandbox trust posture every Pi session in this image runs under.
-// Shared by the practice runner (pi-runner.ts) and the conversation turn (turn.ts): both execute the
-// same vendored SDK in the same image at the same working directory, so each trust and discovery
-// option must be set the same way in both.
+// pi-agent-sandbox.ts — the sandbox trust posture every Pi session in this image runs under. The session factory
+// (pi-session.ts) applies its trust and discovery options to every session; the tool environment serves the tools of
+// the practice runner (pi-runner.ts) and the conversation turn (turn.ts).
 
 import { realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -21,13 +20,16 @@ export const SANDBOX_SETTINGS_MANAGER_OPTIONS: SettingsManagerCreateOptions = {
 };
 
 /**
- * The SDK's own context-file discovery climbs from the working directory to `/` looking for
- * AGENTS.md and dies on the first ancestor the sandbox's read allowlist forbids; and the SDK's
- * discovery is not the channel a session's instructions should arrive on — each runner hands its
- * own instructions over by name instead.
+ * No resource from disk: a session holds only the resources its run names. The SDK's own context-file discovery climbs from the
+ * working directory to `/` looking for AGENTS.md and dies on the first ancestor the sandbox's read allowlist forbids;
+ * and discovery is not the channel a session's instructions should arrive on — each run hands its own over by name.
  */
 export const SANDBOX_RESOURCE_LOADER_OPTIONS = {
 	noContextFiles: true,
+	noExtensions: true,
+	noSkills: true,
+	noPromptTemplates: true,
+	noThemes: true,
 };
 
 /**

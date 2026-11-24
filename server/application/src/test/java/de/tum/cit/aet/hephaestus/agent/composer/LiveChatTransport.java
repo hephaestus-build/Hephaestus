@@ -21,10 +21,10 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Sends a composer's chat request bytes to a live endpoint, without the proxy that fences and bills them. The composer
- * streams its calls, and {@link ModelSession} reads one body, so this transport assembles a streamed answer with the
- * server's own {@link ComposerStreamAnswer}, as the proxy does.
+ * streams its calls and reads one body, so this transport assembles a streamed answer with the server's own
+ * {@link ComposerStreamAnswer}, as the proxy does.
  */
-final class LiveChatTransport implements ModelSession.Transport {
+final class LiveChatTransport {
     private static final JsonMapper MAPPER = new JsonMapper();
     private final HttpClient client =
             HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
@@ -48,7 +48,7 @@ final class LiveChatTransport implements ModelSession.Transport {
      * Answers each of a composer's model calls with the live model, under the model's own name, and keeps every
      * answer, a failed call's too.
      */
-    Function<byte[], ModelSession.Answer> answering(String model, List<ModelSession.Answer> answers) {
+    Function<byte[], ModelAnswer> answering(String model, List<ModelAnswer> answers) {
         return body -> {
             var request = (ObjectNode) MAPPER.readTree(body);
             request.put("model", model);
@@ -72,13 +72,12 @@ final class LiveChatTransport implements ModelSession.Transport {
         return requests;
     }
 
-    @Override
-    public ModelSession.Answer call(byte[] body) {
+    ModelAnswer call(byte[] body) {
         requests++;
         return send(creds.chatCompletions(), body);
     }
 
-    private ModelSession.Answer send(URI url, byte[] body) {
+    private ModelAnswer send(URI url, byte[] body) {
         var request = HttpRequest.newBuilder(url)
                 .timeout(Duration.ofMinutes(10))
                 .header("authorization", "Bearer " + creds.apiKey())
@@ -88,24 +87,24 @@ final class LiveChatTransport implements ModelSession.Transport {
         try {
             var response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
             if (response.statusCode() != 200) {
-                return new ModelSession.Answer(response.statusCode(), response.body(), true, null);
+                return new ModelAnswer(response.statusCode(), response.body(), null);
             }
             if (!isEventStream(response)) {
                 noteServedModel(MAPPER.readTree(response.body()));
-                return new ModelSession.Answer(200, response.body(), true, null);
+                return new ModelAnswer(200, response.body(), null);
             }
             var streamed = new ComposerStreamAnswer(LlmApiProtocol.OPENAI_COMPLETIONS, MAPPER);
             streamed.accept(response.body());
             JsonNode answer = streamed.answer();
             // A stream cut before its end has no answer: the endpoint failed, as the proxy reports it.
-            if (answer == null) return new ModelSession.Answer(503, new byte[0], true, null);
+            if (answer == null) return new ModelAnswer(503, new byte[0], null);
             noteStreamedModel(response.body());
-            return new ModelSession.Answer(200, MAPPER.writeValueAsBytes(answer), true, null);
+            return new ModelAnswer(200, MAPPER.writeValueAsBytes(answer), null);
         } catch (IOException failed) {
-            return new ModelSession.Answer(503, new byte[0], true, null);
+            return new ModelAnswer(503, new byte[0], null);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            return new ModelSession.Answer(503, new byte[0], true, null);
+            return new ModelAnswer(503, new byte[0], null);
         }
     }
 

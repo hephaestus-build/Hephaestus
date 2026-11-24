@@ -22,6 +22,7 @@ import {
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 
 import {
+	type AgentSession,
 	createBashToolDefinition,
 	createFindToolDefinition,
 	createGrepToolDefinition,
@@ -138,7 +139,7 @@ export function codingAgentExports(
 				await this.loaded;
 			}
 		},
-		SettingsManager: { create: () => ({}) },
+		SettingsManager: { create: () => ({ getSettings: () => ({}) }), inMemory: () => ({}) },
 		SessionManager: { create: () => manager, inMemory: () => manager, open: () => manager },
 		ModelRuntime: {
 			async create() {
@@ -469,8 +470,251 @@ export function stagedRequest(cwd: string): Record<string, unknown> {
 	return { ...requests[0], results: outcomes("results"), nonResults: outcomes("nonResults") };
 }
 
+/** A model's whole answer as an OpenAI completions stream, from its message delta. */
+function answerStream(delta: object, finishReason: string): string {
+	return [
+		{ choices: [{ index: 0, delta: { role: "assistant", ...delta }, finish_reason: null }] },
+		{
+			choices: [{ index: 0, delta: {}, finish_reason: finishReason }],
+			usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+		},
+	]
+		.map(
+			(chunk) =>
+				`data: ${JSON.stringify({ id: "answer", object: "chat.completion.chunk", ...chunk })}\n\n`,
+		)
+		.join("")
+		.concat("data: [DONE]\n\n");
+}
+
+/** The model submits the harness's candidate, then ends its turn once the tool has answered. */
+function modelAnswer(request: unknown): string {
+	const messages = field(request, "messages");
+	const answered =
+		Array.isArray(messages) && messages.some((message) => field(message, "role") === "tool");
+	return answered
+		? answerStream({ content: "Done." }, "stop")
+		: answerStream(
+				{
+					tool_calls: [
+						{
+							index: 0,
+							id: "submit-1",
+							type: "function",
+							function: { name: "submit_result", arguments: JSON.stringify(SESSION_CANDIDATE) },
+						},
+					],
+				},
+				"tool_calls",
+			);
+}
+
+/**
+ * pi-session-dispatch.spec.ts runs the runner on the real SDK, so that every way to build a session is the real one. It
+ * counts each Pi session where the SDK constructs it, which of them a call to the factory returned, and each model
+ * session of the composer's. The counts are written as the process exits.
+ */
+async function runOnRealSdk(cwd: string): Promise<void> {
+	mkdirSync(nodePath.join(cwd, "captured"), { recursive: true });
+	const capture = (name: string, value: unknown) => {
+		appendFileSync(nodePath.join(cwd, "captured", `${name}.jsonl`), `${JSON.stringify(value)}\n`);
+	};
+	// The staged workspace has no history to derive a change from.
+	await mockChange({ writeChangeView: () => undefined });
+	const proxy = process.env.LLM_PROXY_URL;
+	assert.ok(proxy !== undefined && proxy !== "");
+	// The proxy accepts each practice and its staged outcome. The model submits a result, so the review runs to its
+	// admission, or with PI_HOST_MODEL=refuses it refuses each call, so the review ends as the model unreachable.
+	let stagedResults = 0;
+	mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
+		const url = input instanceof Request ? input.url : String(input);
+		assert.ok(url.startsWith(proxy), `the runner reached only the proxy, not ${url}`);
+		const request: unknown = typeof init?.body === "string" ? parseJson(init.body) : {};
+		if (url.endsWith("/start-practice")) {
+			return Response.json({ practiceSlug: field(request, "practiceSlug"), current: true });
+		}
+		if (url.endsWith("/stage-result")) {
+			const outcomes: unknown[] = [field(request, "results"), field(request, "nonResults")].flatMap(
+				(list): unknown[] => (Array.isArray(list) ? (list satisfies unknown[]) : []),
+			);
+			const outcome: unknown = outcomes[0];
+			// Whether the practice staged a result, which survived the runner's validation, or a non-result.
+			const results = field(request, "results");
+			const staged = Array.isArray(results) && results.length > 0;
+			stagedResults += staged ? 1 : 0;
+			capture("staged", staged ? "result" : "non-result");
+			return Response.json({
+				practiceSlug: field(outcome, "practiceSlug"),
+				digest: "a".repeat(64),
+			});
+		}
+		if (url.endsWith("/admit-results")) {
+			// How many results the review had staged when it asked for admission.
+			capture("admission", stagedResults);
+			return Response.json({
+				contractVersion: 4,
+				admissionDigest: "a".repeat(64),
+				admitted: [],
+				withheld: [],
+			});
+		}
+		capture("model-asked", true);
+		if (process.env.PI_HOST_MODEL === "refuses") {
+			return Response.json({ error: { message: "refused" } }, { status: 400 });
+		}
+		return new Response(modelAnswer(request), { headers: { "content-type": "text/event-stream" } });
+	});
+
+	const sdk = await import("@earendil-works/pi-coding-agent");
+	const built: object[] = [];
+	const returned = new WeakSet<object>();
+	const sessionPrototype: object = sdk.AgentSession.prototype;
+	const installToolHooks: unknown = Reflect.get(sessionPrototype, "_installAgentToolHooks");
+	assert.ok(
+		typeof installToolHooks === "function",
+		"a Pi session installs its tool hooks as it is built",
+	);
+	Reflect.set(
+		sessionPrototype,
+		"_installAgentToolHooks",
+		function recordBuild(this: object, ...args: unknown[]) {
+			built.push(this);
+			return Reflect.apply(installToolHooks, this, args) as unknown;
+		},
+	);
+	process.on("exit", () => {
+		const factorySessions = built.filter((session) => returned.has(session)).length;
+		capture("session-use", { factory: factorySessions, direct: built.length - factorySessions });
+	});
+
+	const factory = await import("../../../main/resources/agent/pi-session.ts");
+	mock.module(new URL("../../../main/resources/agent/pi-session.ts", import.meta.url).href, {
+		exports: {
+			...factory,
+			openRunSession: async (...args: Parameters<typeof factory.openRunSession>) => {
+				const opened = await factory.openRunSession(...args);
+				returned.add(opened.session);
+				await buildBeside(process.env.PI_HOST_BUILD_BESIDE, opened.session, args[0]);
+				return opened;
+			},
+		},
+	});
+	const composerModel = await import("../../../main/resources/agent/review-composer-model.ts");
+	mock.module(
+		new URL("../../../main/resources/agent/review-composer-model.ts", import.meta.url).href,
+		{
+			exports: {
+				...composerModel,
+				ModelSession: new Proxy(composerModel.ModelSession, {
+					construct: (target, args, newTarget) => {
+						capture("model-sessions", true);
+						const made: unknown = Reflect.construct(target, args, newTarget);
+						assert.ok(typeof made === "object" && made !== null);
+						return made;
+					},
+				}),
+			},
+		},
+	);
+
+	const { deriveChangeView } = await import("../../../main/resources/agent/pi-change-view.ts");
+	deriveChangeView(cwd);
+	const { runReviewJob } = await import("../../../main/resources/agent/pi-runner.ts");
+	await runReviewJob();
+}
+
+/** Whether a value is the constructor of a Pi session's agent. */
+function isAgentType(
+	value: unknown,
+): value is new (options: {
+	streamFn: AgentSession["agent"]["streamFunction"];
+}) => AgentSession["agent"] {
+	return typeof value === "function";
+}
+
+/** An earlier answer in the stored session that the restore fixture continues. */
+const STORED_ANSWER: AssistantMessage = {
+	role: "assistant",
+	content: [{ type: "text", text: "Earlier answer." }],
+	api: "openai-completions",
+	provider: "proxy",
+	model: "test-model",
+	usage: {
+		input: 1,
+		output: 1,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: 2,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+	},
+	stopReason: "stop",
+	timestamp: Date.now(),
+};
+
+/**
+ * A runner that also builds a second Pi session past the factory, beside its factory session, and goes on with the
+ * factory's session if that build fails.
+ */
+async function buildBeside(
+	how: string | undefined,
+	opened: AgentSession,
+	place: { cwd: string; agentDir: string },
+): Promise<void> {
+	if (how === undefined) {
+		return;
+	}
+	const sdk = await import("@earendil-works/pi-coding-agent");
+	const agentDir = nodePath.join(place.cwd, ".pi-beside");
+	const sessionDir = nodePath.join(agentDir, "sessions");
+	let restored: unknown;
+	if (how === "restore") {
+		// A stored session to continue: Pi writes a session once it holds an answer.
+		const stored = sdk.SessionManager.create(place.cwd, sessionDir);
+		stored.appendMessage({ role: "user", content: "Earlier.", timestamp: Date.now() });
+		stored.appendMessage(STORED_ANSWER);
+		restored = sdk.SessionManager.continueRecent(place.cwd, sessionDir);
+		assert.ok(restored instanceof sdk.SessionManager);
+		assert.equal(
+			restored.getSessionId(),
+			stored.getSessionId(),
+			"the SDK continues the stored session",
+		);
+	}
+	try {
+		if (how === "construct") {
+			// Its own agent, of the factory session's agent type, so the factory's session keeps its agent.
+			const agentType: unknown = opened.agent.constructor;
+			assert.ok(isAgentType(agentType));
+			new sdk.AgentSession({
+				agent: new agentType({ streamFn: opened.agent.streamFunction }),
+				sessionManager: sdk.SessionManager.inMemory(place.cwd),
+				settingsManager: opened.settingsManager,
+				resourceLoader: opened.resourceLoader,
+				modelRuntime: opened.modelRuntime,
+				cwd: place.cwd,
+			}).dispose();
+			return;
+		}
+		// "restore" continues the stored session, as a runner that resumes one would.
+		const sessionManager =
+			restored instanceof sdk.SessionManager ? restored : sdk.SessionManager.inMemory(place.cwd);
+		const { session } = await sdk.createAgentSessionFromServices({
+			services: await sdk.createAgentSessionServices({ cwd: place.cwd, agentDir }),
+			sessionManager,
+		});
+		session.dispose();
+	} catch {
+		// The review goes on with the factory's session.
+	}
+}
+
+const realSdkCwd = process.env.PI_HOST_REAL_SDK;
+if (realSdkCwd !== undefined && realSdkCwd !== "") {
+	await runOnRealSdk(realSdkCwd);
+}
+
 const scenario = process.env.PI_HOST_SCENARIO;
-if (scenario !== undefined && scenario !== "") {
+if (scenario !== undefined && scenario !== "" && (realSdkCwd === undefined || realSdkCwd === "")) {
 	const firstCompletion = process.env.PI_HOST_FIRST_COMPLETION;
 	if (firstCompletion !== undefined) {
 		const released = Promise.withResolvers<undefined>();

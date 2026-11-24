@@ -252,7 +252,7 @@ final class CompositionEvalCases {
             ComposerReplay.Basis basis,
             FeedbackDestination destination,
             UnaryOperator<JsonNode> output,
-            Function<byte[], ModelSession.Answer> model)
+            Function<byte[], ModelAnswer> model)
             throws IOException, InterruptedException {
         var requests = new ArrayList<JsonNode>();
         var answers = new ArrayList<JsonNode>();
