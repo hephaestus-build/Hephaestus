@@ -91,6 +91,21 @@ public class AgentRuns {
         return runs.countLeased(AgentRunKind.REVIEW.name()) + runs.countLeased(AgentRunKind.REVIEW_COMPOSE.name());
     }
 
+    /** Queues an instance report draft with a deadline that bounds its queue wait and every claim. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AgentRunRef enqueueReportDraft(String subject, Duration executionWindow) {
+        return insert(
+                AgentRunRef.INSTANCE_SCOPE,
+                AgentRunKind.DRAFT_REPORT,
+                AgentRunBand.BACKGROUND,
+                subject,
+                0,
+                0,
+                null,
+                Duration.ZERO,
+                executionWindow);
+    }
+
     /** Queues a new run of a subject. Claimers hear of it after the transaction commits. */
     @Transactional(propagation = Propagation.MANDATORY)
     public AgentRunRef enqueue(
@@ -374,7 +389,7 @@ public class AgentRuns {
     public enum Deferral {
         /** A lifecycle write holds the run's domain row. */
         LOCKED,
-        /** The run's model pool takes no other measuring review now. */
+        /** The model's pool has no room for the run. */
         MODEL_POOL
     }
 

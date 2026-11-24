@@ -51,8 +51,8 @@ public class AgentRun {
     @Column(name = "id", nullable = false)
     private UUID id;
 
-    @Column(name = "workspace_id", nullable = false, updatable = false)
-    private long workspaceId;
+    @Column(name = "workspace_id", updatable = false)
+    private @Nullable Long workspaceId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "kind", nullable = false, updatable = false, length = 24)
@@ -139,11 +139,12 @@ public class AgentRun {
             @Nullable Duration startWithin,
             Duration delay,
             @Nullable Duration executionWindow) {
-        if (workspaceId <= 0) throw new IllegalArgumentException("A run belongs to a workspace");
+        if (workspaceId < 0 || (workspaceId == AgentRunRef.INSTANCE_SCOPE) != (kind == AgentRunKind.DRAFT_REPORT))
+            throw new IllegalArgumentException("Only report drafts run at instance scope");
         if (concurrencyKey.isBlank() || concurrencyKey.length() > 96)
             throw new IllegalArgumentException("A run names its subject in at most 96 characters");
         this.id = id;
-        this.workspaceId = workspaceId;
+        this.workspaceId = workspaceId == AgentRunRef.INSTANCE_SCOPE ? null : workspaceId;
         this.kind = kind;
         this.band = band;
         this.concurrencyKey = concurrencyKey;
@@ -156,7 +157,11 @@ public class AgentRun {
         this.startWithinSeconds = startWithin == null ? null : Math.toIntExact(startWithin.toSeconds());
     }
 
+    public long getWorkspaceId() {
+        return workspaceId == null ? AgentRunRef.INSTANCE_SCOPE : workspaceId;
+    }
+
     public AgentRunRef ref() {
-        return new AgentRunRef(id, workspaceId);
+        return new AgentRunRef(id, getWorkspaceId());
     }
 }

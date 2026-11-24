@@ -11,7 +11,7 @@ The [configuration reference](./configuration-reference) lists every setting. Th
 ## Server role
 
 The server serves the API, receives provider webhooks, syncs provider work, and delivers feedback.
-With `sandbox.enabled`, it also runs the practice reviews and conversation turns in sandboxes, their gateway, and the LLM proxy.
+With `sandbox.enabled`, it also runs practice reviews, conversation turns and product feedback drafts in sandboxes, their gateway, and the LLM proxy.
 
 | Port | Listener | Who reaches it |
 | --- | --- | --- |
@@ -52,6 +52,17 @@ A cancel ends a review at once. Its sandbox stops at the next lease renewal.
 The server runs sandboxes only on Kubernetes, with the settings that the chart gives it.
 The server removes orphaned sandbox resources at startup and then at a fixed interval.
 Each server generates the key that signs its sandbox tokens at start. The key needs no configuration.
+
+## Report drafts
+
+With `sandbox.enabled`, a sandbox drafts a product feedback report using the instance model.
+The server dispatches draft sandboxes separately from review work, using the review sandbox template.
+Each draft has ten minutes from enqueue.
+If the deadline or a model timeout ends the run, the server routes the report without a draft.
+With the sandbox runtime off, the server routes new reports without a draft.
+
+To investigate a draft, find `agent.run.ended` with `run.kind=DRAFT_REPORT` and follow its run ID.
+The [product feedback console](./product-feedback#troubleshooting) lists the checks for repeated failures.
 
 ## Sandbox gateway
 

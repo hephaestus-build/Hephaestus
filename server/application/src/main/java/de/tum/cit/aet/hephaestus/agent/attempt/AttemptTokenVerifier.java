@@ -51,7 +51,7 @@ public class AttemptTokenVerifier {
             if (verified.getSubject() != null)
                 throw new AttemptTokenInvalidException("sandbox token contains sub claim", "claim");
             UUID sandboxId = uuidClaim(verified, AttemptTokenIssuer.SANDBOX_CLAIM);
-            Long workspaceId = longClaim(verified, "workspace_id");
+            Long workspaceId = longClaim(verified, "workspace_id", 0);
             String subjectKey =
                     verified.getClaim(AttemptTokenIssuer.SUBJECT_CLAIM).asString();
             if (sandboxId == null || workspaceId == null || subjectKey == null || subjectKey.isBlank())
@@ -141,7 +141,7 @@ public class AttemptTokenVerifier {
                 .orElseThrow(() -> new AttemptTokenInvalidException("missing or invalid attempt_kind claim", "claim"));
         UUID id = uuidClaim(verified, AttemptTokenIssuer.ID_CLAIM);
         UUID runId = uuidClaim(verified, AttemptTokenIssuer.RUN_CLAIM);
-        Long workspaceId = longClaim(verified, "workspace_id");
+        Long workspaceId = longClaim(verified, "workspace_id", 1);
         Integer epoch = intClaim(verified, AttemptTokenIssuer.EPOCH_CLAIM);
         if (id == null || workspaceId == null || epoch == null || runId == null) {
             throw new AttemptTokenInvalidException("missing or invalid attempt binding claim", "claim");
@@ -179,10 +179,10 @@ public class AttemptTokenVerifier {
         }
     }
 
-    private static @Nullable Long longClaim(DecodedJWT jwt, String name) {
+    private static @Nullable Long longClaim(DecodedJWT jwt, String name, long minimum) {
         try {
             Long value = jwt.getClaim(name).asLong();
-            if (value == null || value <= 0) return null;
+            if (value == null || value < minimum) return null;
             return value;
         } catch (RuntimeException e) {
             throw new AttemptTokenInvalidException("invalid " + name + " claim", "claim", e);

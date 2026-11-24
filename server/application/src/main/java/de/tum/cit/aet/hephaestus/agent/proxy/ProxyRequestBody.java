@@ -36,71 +36,77 @@ final class ProxyRequestBody {
     @Nullable
     private static PreparedBody prepareOpenAi(
             ObjectMapper objectMapper,
+            ObjectNode object,
+            String upstreamModelId,
+            LlmApiProtocol protocol,
+            @Nullable Long outputLimit) {
+        if (usesProviderHostedTool(object.get("tools"))
+                || object.has("web_search_options")
+                || object.has("audio")
+                || !isTextOnlyModality(object.get("modalities"))) return null;
+        object.put("model", upstreamModelId);
+        object.remove("service_tier");
+        if (outputLimit != null && OutputLimit.generative(protocol)) OutputLimit.clamp(object, protocol, outputLimit);
+        if (protocol != LlmApiProtocol.OPENAI_COMPLETIONS
+                || !object.path("stream").asBoolean(false)) {
+            return new PreparedBody(objectMapper.writeValueAsBytes(object), null);
+        }
+        byte[] asSent = objectMapper.writeValueAsBytes(object);
+        JsonNode existing = object.get("stream_options");
+        ObjectNode options =
+                existing != null && existing.isObject() ? (ObjectNode) existing : object.putObject("stream_options");
+        options.put("include_usage", true);
+        byte[] withUsage = objectMapper.writeValueAsBytes(object);
+        boolean weAddedTheFlag = !Arrays.equals(asSent, withUsage);
+        return new PreparedBody(withUsage, weAddedTheFlag ? asSent : null);
+    }
+
+    @Nullable
+    static PreparedBody prepare(
+            ObjectMapper mapper,
             byte[] body,
             String upstreamModelId,
             LlmApiProtocol protocol,
             @Nullable Long outputLimit) {
-        boolean includeStreamingUsage = protocol == LlmApiProtocol.OPENAI_COMPLETIONS;
-        if (body == null || body.length == 0) return null;
-        try {
-            JsonNode tree = objectMapper.readTree(body);
-            if (!tree.isObject()) return null;
-            ObjectNode object = (ObjectNode) tree;
-            if (!hasTextOnlyInput(object)
-                    || usesProviderHostedTool(object.get("tools"))
-                    || object.has("web_search_options")
-                    || object.has("audio")
-                    || !isTextOnlyModality(object.get("modalities"))) return null;
-            object.put("model", upstreamModelId);
-            object.remove("service_tier");
-            if (outputLimit != null && OutputLimit.generative(protocol))
-                OutputLimit.clamp(object, protocol, outputLimit);
-            if (!includeStreamingUsage || !object.path("stream").asBoolean(false)) {
-                return new PreparedBody(objectMapper.writeValueAsBytes(object), null);
-            }
-            byte[] asSent = objectMapper.writeValueAsBytes(object);
-            JsonNode existing = object.get("stream_options");
-            ObjectNode options = existing != null && existing.isObject()
-                    ? (ObjectNode) existing
-                    : object.putObject("stream_options");
-            options.put("include_usage", true);
-            byte[] withUsage = objectMapper.writeValueAsBytes(object);
-            boolean weAddedTheFlag = !Arrays.equals(asSent, withUsage);
-            return new PreparedBody(withUsage, weAddedTheFlag ? asSent : null);
-        } catch (Exception e) {
-            return null;
-        }
+        return prepare(mapper, body, upstreamModelId, protocol, outputLimit, false);
     }
 
     /**
      * @param outputLimit the call's output limit, which a generative request is clamped to ({@link OutputLimit#clamp});
      *     {@code null} for a call that writes no output
+     * @param reportDraft a tool-free instance report draft with provider storage disabled
      */
     @Nullable
     static PreparedBody prepare(
-            ObjectMapper objectMapper,
+            ObjectMapper mapper,
             byte[] body,
             String upstreamModelId,
             LlmApiProtocol protocol,
-            @Nullable Long outputLimit) {
-        if (protocol != LlmApiProtocol.ANTHROPIC_MESSAGES) {
-            return prepareOpenAi(objectMapper, body, upstreamModelId, protocol, outputLimit);
-        }
+            @Nullable Long outputLimit,
+            boolean reportDraft) {
         try {
-            JsonNode tree = objectMapper.readTree(body);
-            if (!(tree instanceof ObjectNode object)
-                    || !hasTextOnlyInput(object)
-                    || object.has("mcp_servers")
-                    || object.has("container")
-                    || usesAnthropicHostedTool(object.get("tools"))) return null;
+            JsonNode tree = mapper.readTree(body);
+            if (!(tree instanceof ObjectNode object) || !hasTextOnlyInput(object)) return null;
+            if (reportDraft && (!emptyToolList(object.get("tools")) || !emptyToolList(object.get("functions"))))
+                return null;
+            if (protocol != LlmApiProtocol.ANTHROPIC_MESSAGES) {
+                if (reportDraft) object.put("store", false);
+                return prepareOpenAi(mapper, object, upstreamModelId, protocol, outputLimit);
+            }
+            if (object.has("mcp_servers") || object.has("container") || usesAnthropicHostedTool(object.get("tools")))
+                return null;
             object.put("model", upstreamModelId);
             object.remove("service_tier");
             if (outputLimit != null && OutputLimit.generative(protocol))
                 OutputLimit.clamp(object, protocol, outputLimit);
-            return new PreparedBody(objectMapper.writeValueAsBytes(object), null);
+            return new PreparedBody(mapper.writeValueAsBytes(object), null);
         } catch (RuntimeException unreadable) {
             return null;
         }
+    }
+
+    private static boolean emptyToolList(@Nullable JsonNode list) {
+        return list == null || (list.isArray() && list.isEmpty());
     }
 
     /** Request bytes bound text tokens, but cannot bound provider-side state, images, audio or fetched files. */

@@ -47,7 +47,6 @@ class ProxyRequestPolicy {
         if (attempt.sourceType() == UsageSourceType.PROBE)
             return attempt.runId() == null
                     && attempt.number() == 0
-                    && request.actionId() == null
                     && resolver.resolveProbeCredential(new LlmModelResolver.ConnectionRef(
                                     request.connectionScope(), request.connectionId(), request.modelId(), workspaceId))
                             != null;

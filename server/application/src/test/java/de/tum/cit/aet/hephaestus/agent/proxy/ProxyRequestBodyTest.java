@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -209,5 +210,23 @@ class ProxyRequestBodyTest extends BaseUnitTest {
 
         assertThat(prepared).isNotNull();
         assertThat(OBJECT_MAPPER.readTree(prepared.body()).path(field).asLong()).isEqualTo(4096);
+    }
+
+    @Test
+    void shouldKeepAReportDraftToolFreeAndDisableProviderStorage() {
+        var protocol = LlmApiProtocol.OPENAI_COMPLETIONS;
+        var tools = """
+                {"model":"draft","tools":[{"type":"function","function":{"name":"anything"}}]}
+                """.getBytes(StandardCharsets.UTF_8);
+        assertThat(ProxyRequestBody.prepare(OBJECT_MAPPER, tools, "draft", protocol, 100L, true))
+                .isNull();
+
+        byte[] prompt = """
+                {"model":"draft","tools":[],"store":true}
+                """.getBytes(StandardCharsets.UTF_8);
+        var prepared =
+                Objects.requireNonNull(ProxyRequestBody.prepare(OBJECT_MAPPER, prompt, "draft", protocol, 100L, true));
+        assertThat(OBJECT_MAPPER.readTree(prepared.body()).path("store").asBoolean())
+                .isFalse();
     }
 }

@@ -40,7 +40,7 @@ public record AgentSandboxProperties(
 
         public String of(AgentSandboxKind kind) {
             return switch (kind) {
-                case REVIEW -> review;
+                case REVIEW, DRAFT_REPORT -> review;
                 case CONVERSATION -> conversation;
             };
         }

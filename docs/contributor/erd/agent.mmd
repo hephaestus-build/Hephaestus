@@ -11,7 +11,7 @@ erDiagram
 
     AgentRun {
         UUID id PK,UK
-        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT workspace_id FK,UK
         VARCHAR(24) kind "NOT NULL"
         VARCHAR(16) band "NOT NULL"
         VARCHAR(96) concurrency_key "NOT NULL"
@@ -32,7 +32,7 @@ erDiagram
 
     AgentSandbox {
         UUID id PK,UK
-        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT workspace_id FK,UK
         VARCHAR(96) subject_key "NOT NULL"
         VARCHAR(16) kind "NOT NULL"
         VARCHAR(63) claim_name UK "NOT NULL"
@@ -379,8 +379,9 @@ erDiagram
     LlmConnection ||--o{ LlmModel : has
     LlmCallPool ||--o{ LlmModel : has
     LlmModel ||--o{ LlmModelPrice : has
+    AgentRun ||--o{ LlmUsageEvent : run_id
     Review ||--o{ LlmUsageEvent : has
-    AgentRun ||--o{ LlmUsageEvent : has
+    AgentRun ||--o{ LlmUsageEvent : run_id
     Workspace ||--o{ LlmUsageEvent : has
     ReviewJob ||--o{ ReviewAttemptInput : reviewed
     Workspace ||--o{ ReviewAttemptInput : reviewed

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
@@ -482,11 +483,12 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldMeasureAnInstanceDraftWithoutInventingAWorkspaceOrRun() {
-        UUID call = openInstance(UUID.randomUUID(), Instant.now().plusSeconds(30));
+    void shouldMeasureAnInstanceDraftWithoutAWorkspace() {
+        var draft = openInstanceDraft();
+        UUID call = draft.call();
         assertThat(row(call))
                 .containsEntry("workspace_id", null)
-                .containsEntry("run_id", null)
+                .containsEntry("run_id", draft.lease().runId())
                 .containsEntry("call_state", "OPEN");
         var usage = new LlmUsageRecorder.CallUsage(1_000_000, 100_000, 0, 0, 0, 0);
         Boolean first = transactions.execute(tx -> recorder.complete(call, null, usage));
@@ -502,7 +504,8 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldKeepTheBoundWhenAnInstanceDraftEndsWithoutUsage() {
-        UUID call = openInstance(UUID.randomUUID(), Instant.now().plusSeconds(30));
+        var draft = openInstanceDraft();
+        UUID call = draft.call();
         transactions.executeWithoutResult(tx -> recorder.complete(call, null, null));
         assertThat(row(call))
                 .containsEntry("call_state", "ENDED")
@@ -513,9 +516,10 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldSettleAbandonedInstanceCallsAndAcceptLateMeasurementAtTheFrozenPrice() {
-        UUID call = openInstance(UUID.randomUUID(), Instant.now().minusSeconds(1));
-        recorder.recoverInstanceCalls();
+    void shouldSettleAnEndedDraftCallAndAcceptLateMeasurementAtTheFrozenPrice() {
+        var draft = openInstanceDraft();
+        UUID call = draft.call();
+        endDraft(draft);
         assertThat(row(call))
                 .containsEntry("call_state", "SETTLED")
                 .containsEntry("measurement_verification", "UNVERIFIABLE")
@@ -530,7 +534,8 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldKeepAnInstanceCallsFirstFailureWhenItsSettledUsageArrivesLate() {
-        UUID call = openInstance(UUID.randomUUID(), Instant.now().minusSeconds(1));
+        var draft = openInstanceDraft();
+        UUID call = draft.call();
         var other = leasedRun("instance-failure-other");
         var firstFailure = new ModelCallFailure("upstream_stalled", null);
         Boolean wrongScope =
@@ -538,7 +543,7 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(wrongScope).isFalse();
         assertThat(jdbc.queryForObject("SELECT failed_at FROM llm_usage_event WHERE id=?", Timestamp.class, call))
                 .isNull();
-        recorder.recoverInstanceCalls();
+        endDraft(draft);
         Boolean unmeasured = transactions.execute(tx -> recorder.complete(call, null, null, firstFailure));
         assertThat(unmeasured).isFalse();
         Instant firstTime = failedAt(call);
@@ -553,20 +558,19 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(failedAt(call)).isEqualTo(firstTime);
         assertThat(row(call))
                 .containsEntry("workspace_id", null)
-                .containsEntry("run_id", null)
+                .containsEntry("run_id", draft.lease().runId())
                 .containsEntry("call_state", "ENDED")
                 .containsEntry("input_tokens", 1_000_000L);
         assertThat((BigDecimal) row(call).get("cost_usd")).isEqualByComparingTo("2.80");
     }
 
     @Test
-    void shouldSettleOnlyTheCallsOwnedByTheEndingAction() {
-        UUID action = UUID.randomUUID();
-        UUID selected = openInstance(action, Instant.now().plusSeconds(30));
-        UUID other = openInstance(UUID.randomUUID(), Instant.now().plusSeconds(30));
-        transactions.executeWithoutResult(tx -> recorder.settleAction(action));
-        assertThat(row(selected)).containsEntry("call_state", "SETTLED");
-        assertThat(row(other)).containsEntry("call_state", "OPEN");
+    void shouldSettleOnlyTheCallOwnedByTheEndingDraft() {
+        var selected = openInstanceDraft();
+        var other = openInstanceDraft();
+        endDraft(selected);
+        assertThat(row(selected.call())).containsEntry("call_state", "SETTLED");
+        assertThat(row(other.call())).containsEntry("call_state", "OPEN");
     }
 
     @ParameterizedTest
@@ -687,24 +691,36 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 deadline))));
     }
 
-    private UUID openInstance(UUID action, Instant deadline) {
-        return Objects.requireNonNull(transactions.execute(tx -> recorder.open(new LlmUsageRecorder.OpenCall(
-                null,
-                null,
-                null,
-                "REPORT_DRAFT",
-                UsageSourceType.PRODUCT_FEEDBACK_DRAFT,
-                UUID.randomUUID(),
-                1,
-                null,
-                ModelKind.CHAT,
-                null,
-                "draft-model",
-                PRICED,
-                new BigDecimal("0.25"),
-                action,
-                deadline))));
+    private DraftCall openInstanceDraft() {
+        UUID report = UUID.randomUUID();
+        String key = "draft:" + report + ":1";
+        return Objects.requireNonNull(transactions.execute(tx -> {
+            runs.enqueueReportDraft(key, Duration.ofMinutes(1));
+            var lease = runs.claimSubject(AgentRunRef.INSTANCE_SCOPE, key, Set.of(AgentRunKind.DRAFT_REPORT))
+                    .orElseThrow();
+            UUID call = recorder.open(new LlmUsageRecorder.OpenCall(
+                    null,
+                    lease.runId(),
+                    lease.epoch(),
+                    "REPORT_DRAFT",
+                    UsageSourceType.PRODUCT_FEEDBACK_DRAFT,
+                    report,
+                    1,
+                    null,
+                    ModelKind.CHAT,
+                    null,
+                    "draft-model",
+                    PRICED,
+                    new BigDecimal("0.25")));
+            return new DraftCall(call, lease);
+        }));
     }
+
+    private void endDraft(DraftCall draft) {
+        transactions.executeWithoutResult(tx -> runs.end(draft.lease().fence(), AgentRunStopReason.CANCELLED));
+    }
+
+    private record DraftCall(UUID call, AgentRunLease lease) {}
 
     /** A run of a new workspace, leased by its first claim. */
     private AgentRunLease leasedRun(String slug) {

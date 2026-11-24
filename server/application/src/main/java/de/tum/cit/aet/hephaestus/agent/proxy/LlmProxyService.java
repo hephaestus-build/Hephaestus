@@ -167,9 +167,7 @@ class LlmProxyService {
 
     /**
      * Serves a sandbox's model call. Only a streamed call is served: a call that does not stream sends nothing until
-     * its whole answer exists, so the proxy's silence bound would cut a long but working generation. The two
-     * in-process callers, the product-feedback draft and the capability probe, are bounded far below it and call
-     * {@link #serve} directly.
+     * its whole answer exists, so the proxy's silence bound would cut a long but working generation. The capability probe is bounded below that silence limit and calls {@link #serve} directly.
      *
      * @param capture receives a copy of each chunk of a streamed answer, before the client does
      */
@@ -191,6 +189,10 @@ class LlmProxyService {
         if (body == null || body.length == 0) return ResponseEntity.badRequest().body("Request body is required");
         rejected = validateJsonObject(body);
         if (rejected != null) return rejected;
+        if (routing.attempt().sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
+                && !Objects.toString(routing.modelId(), "")
+                        .equals(incomingHeaders.getFirst(ProxyRouting.DRAFT_MODEL_HEADER)))
+            return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
         if (!requestsStream(body))
             return refusal(HttpStatus.BAD_REQUEST, ProxyRefusal.NOT_STREAMED, NOT_STREAMED_MESSAGE);
         return serve(routing, protocol, response, incomingHeaders, body, capture);
@@ -237,7 +239,9 @@ class LlmProxyService {
                 ended = Integer.toString(status);
                 span.tag("http.response.status_code", status);
                 if (status >= 400) recordSpanError(span, Integer.toString(status));
-                return result;
+                return routing.attempt().sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT && result != null
+                        ? errors.draftResponse(result, inFlight.failure())
+                        : result;
             } catch (RuntimeException e) {
                 ended = e.getClass().getSimpleName();
                 recordSpanError(span, e.getClass().getSimpleName());
@@ -488,7 +492,12 @@ class LlmProxyService {
         }
 
         PreparedBody prepared = ProxyRequestBody.prepare(
-                objectMapper, body, credential.upstreamModelId(), protocol, routing.outputLimit());
+                objectMapper,
+                body,
+                credential.upstreamModelId(),
+                protocol,
+                routing.outputLimit(),
+                attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT);
         if (prepared == null) return ResponseEntity.badRequest().body("Request body must be a JSON object");
 
         URI upstreamUri;

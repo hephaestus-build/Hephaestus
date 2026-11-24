@@ -16,6 +16,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import org.hibernate.annotations.ColumnDefault;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One live sandbox of one subject, and the owner of its {@code SandboxClaim}. Only {@link AgentSandboxes} and the
@@ -47,8 +48,8 @@ public class AgentSandbox {
     @Column(name = "id", nullable = false)
     private UUID id;
 
-    @Column(name = "workspace_id", nullable = false, updatable = false)
-    private long workspaceId;
+    @Column(name = "workspace_id", updatable = false)
+    private @Nullable Long workspaceId;
 
     @Column(name = "subject_key", nullable = false, updatable = false, length = 96)
     private String subjectKey;

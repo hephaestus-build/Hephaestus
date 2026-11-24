@@ -11,6 +11,7 @@ import com.tngtech.archunit.core.domain.JavaMethodReference;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmModelProbeGateway;
 import java.util.function.Function;
 import okhttp3.OkHttpClient;
 import org.jspecify.annotations.Nullable;
@@ -20,13 +21,14 @@ import reactor.netty.http.client.HttpClient;
 
 /**
  * The server sends a model request only through the model proxy, which fences, bills and bounds it. Every agent loop
- * runs on Pi in a sandbox; the server's own calls, such as a report draft or a capability probe, enter the proxy through
- * its gateways. The proxy's upstream sender is package-private, so the compiler keeps other code from it. A class
+ * runs on Pi in a sandbox. The capability probe is the only server-side caller of the proxy's sender. The proxy's upstream sender is package-private, so the compiler keeps other code from it. A class
  * outside the proxy that read the provider key of a resolved model could call the model past every one of those checks.
  * Connection setup still reads a stored key for its metadata lookups (`LlmConnectionProbeService`), which call no model.
  */
 class ModelCallBoundaryArchTest extends HephaestusArchitectureTest {
     private static final String PROXY = "de.tum.cit.aet.hephaestus.agent.proxy..";
+
+    private static final String PROXY_SERVICE = "de.tum.cit.aet.hephaestus.agent.proxy.LlmProxyService";
 
     /** A call and a method reference both count: either hands the key to the caller. */
     static final ArchRule ONLY_THE_PROXY_READS_A_MODEL_KEY = noClasses()
@@ -39,6 +41,20 @@ class ModelCallBoundaryArchTest extends HephaestusArchitectureTest {
                             && access.getTargetOwner().isEquivalentTo(LlmModelResolver.ProxyCredential.class)
                             && access.getName().equals("apiKey")))
             .because("only the model proxy authenticates a model call");
+
+    /** No other JVM caller can make a model call on its own routing, including report drafting. */
+    static final ArchRule ONLY_PROBES_ENTER_WITHOUT_A_RUN = noClasses()
+            .that()
+            .doNotHaveFullyQualifiedName(LlmModelProbeGateway.class.getName())
+            .and()
+            .doNotHaveFullyQualifiedName(PROXY_SERVICE)
+            .should()
+            .accessTargetWhere(DescribedPredicate.<JavaAccess<?>>describe(
+                    "the proxy's in-process model sender",
+                    access -> access instanceof JavaCodeUnitAccess<?>
+                            && access.getTargetOwner().getName().equals(PROXY_SERVICE)
+                            && access.getName().equals("serve")))
+            .because("a draft calls its model through the sandbox run credential");
 
     /** The model egress guard customizes the Spring client builders; an OkHttp client built here would be outside it. */
     static final ArchRule NO_OWN_OKHTTP_CLIENT = noClasses()
@@ -74,6 +90,12 @@ class ModelCallBoundaryArchTest extends HephaestusArchitectureTest {
     @DisplayName("only the model proxy reads a model's provider key")
     void onlyTheProxyCallsAModel() {
         ONLY_THE_PROXY_READS_A_MODEL_KEY.check(classes);
+    }
+
+    @Test
+    @DisplayName("only capability probes can enter the model proxy without a run")
+    void onlyProbesEnterWithoutARun() {
+        ONLY_PROBES_ENTER_WITHOUT_A_RUN.check(classes);
     }
 
     @Test

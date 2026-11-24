@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795541340000-1" author="hephaestus">
+        <comment>Register report drafts at instance scope. Every other run and sandbox keeps its workspace foreign key.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_run
+    ALTER COLUMN workspace_id DROP NOT NULL,
+    DROP CONSTRAINT ck_agent_run_kind,
+    ADD CONSTRAINT ck_agent_run_kind CHECK (kind IN ('REVIEW','REVIEW_COMPOSE','TURN','DIGEST','DRAFT_REPORT')),
+    ADD CONSTRAINT ck_agent_run_scope CHECK (
+        (kind = 'DRAFT_REPORT' AND workspace_id IS NULL AND deadline IS NOT NULL
+            AND concurrency_key ~ '^draft:[0-9a-f-]{36}:[1-9][0-9]*$')
+        OR (kind <> 'DRAFT_REPORT' AND workspace_id IS NOT NULL AND workspace_id > 0));
+DROP INDEX uq_agent_run_leased_subject;
+CREATE UNIQUE INDEX uq_agent_run_leased_subject ON agent_run (workspace_id, concurrency_key)
+    NULLS NOT DISTINCT WHERE state = 'LEASED';
+CREATE INDEX idx_agent_run_report ON agent_run ((split_part(concurrency_key, ':', 2))) WHERE kind = 'DRAFT_REPORT';
+
+ALTER TABLE agent_sandbox
+    ALTER COLUMN workspace_id DROP NOT NULL,
+    DROP CONSTRAINT ck_agent_sandbox_kind,
+    ADD CONSTRAINT ck_agent_sandbox_kind CHECK (kind IN ('REVIEW','CONVERSATION','DRAFT_REPORT')),
+    ADD CONSTRAINT ck_agent_sandbox_scope CHECK (
+        (kind = 'DRAFT_REPORT' AND workspace_id IS NULL AND subject_key ~ '^draft:[0-9a-f-]{36}:[1-9][0-9]*$')
+        OR (kind <> 'DRAFT_REPORT' AND workspace_id IS NOT NULL AND workspace_id > 0));
+DROP INDEX uq_agent_sandbox_live_subject;
+CREATE UNIQUE INDEX uq_agent_sandbox_live_subject ON agent_sandbox (workspace_id, subject_key)
+    NULLS NOT DISTINCT WHERE state IN ('REQUESTED', 'READY');
+
+-- Historical draft calls keep their accounting. Only run-bound draft calls can open after this cutover.
+UPDATE llm_usage_event SET call_state='SETTLED', measurement_verification='UNVERIFIABLE',
+    pricing_state='UNPRICED', cost_usd=NULL, unreported_calls=1
+ WHERE source_type='PRODUCT_FEEDBACK_DRAFT' AND call_state='OPEN';
+ALTER TABLE llm_usage_event
+    DROP CONSTRAINT ck_llm_usage_event_scope,
+    ADD CONSTRAINT ck_llm_usage_event_scope CHECK (
+        (source_type = 'PRODUCT_FEEDBACK_DRAFT' AND workspace_id IS NULL
+          AND (run_id IS NULL OR (lease_epoch IS NOT NULL AND action_id IS NULL))
+          AND funding_source = 'INSTANCE' AND model_kind = 'CHAT' AND practice_id IS NULL AND review_id IS NULL)
+        OR (source_type = 'PROBE' AND run_id IS NULL AND lease_epoch IS NULL AND action_id IS NULL
+          AND source_attempt = 0 AND model_kind = 'CHAT' AND practice_id IS NULL AND review_id IS NULL
+          AND ((workspace_id IS NULL AND funding_source = 'INSTANCE')
+            OR (workspace_id IS NOT NULL AND funding_source = 'WORKSPACE')))
+        OR (source_type NOT IN ('PRODUCT_FEEDBACK_DRAFT','PROBE') AND workspace_id IS NOT NULL)),
+    DROP CONSTRAINT ck_llm_usage_event_open_call,
+    ADD CONSTRAINT ck_llm_usage_event_open_call CHECK (call_state <> 'OPEN' OR
+        (source_type = 'PROBE' AND settle_after IS NOT NULL)
+        OR (run_id IS NOT NULL AND lease_epoch IS NOT NULL)),
+    ADD CONSTRAINT sfk_llm_usage_event_report_run FOREIGN KEY (run_id) REFERENCES agent_run (id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX uq_llm_usage_report_draft_call ON llm_usage_event (run_id, lease_epoch)
+    WHERE source_type = 'PRODUCT_FEEDBACK_DRAFT' AND run_id IS NOT NULL;
+
+CREATE FUNCTION public.guard_report_draft_call() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NOT EXISTS (SELECT 1 FROM public.agent_run
+                WHERE id=NEW.run_id AND workspace_id IS NULL AND kind='DRAFT_REPORT'
+                  AND state='LEASED' AND lease_epoch=NEW.lease_epoch
+                  AND concurrency_key='draft:' || NEW.source_id || ':' || NEW.source_attempt) THEN
+  RAISE EXCEPTION 'A report call needs its own leased draft run' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER llm_usage_report_draft_call BEFORE INSERT ON llm_usage_event
+    FOR EACH ROW WHEN (NEW.source_type='PRODUCT_FEEDBACK_DRAFT' AND NEW.call_state='OPEN')
+    EXECUTE FUNCTION public.guard_report_draft_call();
+
+-- A draft generation owns one sandbox. Revoke it at terminal state or erasure, before the claim goes.
+CREATE FUNCTION public.revoke_report_draft_sandbox() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ UPDATE public.agent_sandbox SET state='DELETING'
+  WHERE workspace_id IS NULL AND kind='DRAFT_REPORT' AND subject_key=OLD.concurrency_key
+    AND state IN ('REQUESTED','READY');
+ RETURN OLD;
+END $$;
+CREATE TRIGGER agent_run_ended_report_draft AFTER UPDATE OF state ON agent_run
+    FOR EACH ROW WHEN (OLD.kind='DRAFT_REPORT' AND OLD.state<>'ENDED' AND NEW.state='ENDED')
+    EXECUTE FUNCTION public.revoke_report_draft_sandbox();
+CREATE TRIGGER agent_run_deleted_report_draft AFTER DELETE ON agent_run
+    FOR EACH ROW WHEN (OLD.kind='DRAFT_REPORT')
+    EXECUTE FUNCTION public.revoke_report_draft_sandbox();
+
+CREATE FUNCTION public.wake_report_draft_dispatch() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ PERFORM pg_notify('agent_run', 'DRAFT_REPORT');
+ RETURN OLD;
+END $$;
+CREATE TRIGGER agent_sandbox_deleted_report_draft AFTER DELETE ON agent_sandbox
+    FOR EACH ROW WHEN (OLD.kind='DRAFT_REPORT')
+    EXECUTE FUNCTION public.wake_report_draft_dispatch();
+
+CREATE OR REPLACE FUNCTION public.settle_agent_run_calls() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ UPDATE public.llm_usage_event
+    SET call_state='SETTLED', measurement_verification='UNVERIFIABLE',
+        pricing_state='UNPRICED', cost_usd=NULL, unreported_calls=1
+  WHERE run_id=OLD.id AND workspace_id IS NOT DISTINCT FROM OLD.workspace_id AND call_state='OPEN';
+ RETURN OLD;
+END $$;
+        ]]></sql>
+        <rollback><stop>Restore the verified pre-upgrade backup. Prior servers cannot dispatch report draft runs.</stop></rollback>
+    </changeSet>
+    <changeSet id="1795541340000-2" author="hephaestus">
+        <comment>Take over pending report drafts after the old worker stops. Keep history in the usage ledger.</comment>
+        <sql splitStatements="false"><![CDATA[
+INSERT INTO agent_run (id, kind, band, concurrency_key, attempt, available_at, deadline, created_at)
+SELECT a.id, 'DRAFT_REPORT', 'BACKGROUND', a.idempotency_key, a.attempts,
+       GREATEST(clock_timestamp(), a.next_attempt_at), a.expires_at, a.created_at
+  FROM agent_action a JOIN product_feedback_filing f
+    ON a.idempotency_key = 'draft:' || f.feedback_id || ':' || f.attempt
+ WHERE a.kind='DRAFT_REPORT' AND a.state IN ('ADMITTED','EXECUTING')
+   AND a.expires_at > clock_timestamp() AND a.attempts < a.max_attempts
+   AND f.state IN ('DRAFT_QUEUED','DRAFTING','DRAFT_WAITING');
+
+UPDATE product_feedback_filing f SET state='ANSWERED', answer=NULL, drafted_at=NULL,
+    drafting_started_at=NULL, next_attempt_at=clock_timestamp(), updated_at=clock_timestamp()
+ WHERE f.state IN ('DRAFT_QUEUED','DRAFTING','DRAFT_WAITING')
+   AND NOT EXISTS (SELECT 1 FROM agent_run r WHERE r.kind='DRAFT_REPORT'
+                   AND r.concurrency_key='draft:' || f.feedback_id || ':' || f.attempt);
+
+DELETE FROM agent_action WHERE kind='DRAFT_REPORT';
+ALTER TABLE agent_action
+    DROP CONSTRAINT ck_agent_action_kind,
+    ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK',
+        'RETRACT_FEEDBACK','RESOLVE_FEEDBACK_THREAD','SLACK_POST','SLACK_NOTICE','SLACK_JOIN','SLACK_CONSENT',
+        'PUBLISH_REPORT','CLEANUP_ISSUE','TRANSFER_ISSUE')),
+    DROP CONSTRAINT ck_agent_action_workspace,
+    ADD CONSTRAINT ck_agent_action_workspace CHECK (
+        workspace_id IS NOT NULL OR kind IN ('EMAIL','FILE_ISSUE','PUBLISH_REPORT','CLEANUP_ISSUE','TRANSFER_ISSUE'));
+
+CREATE OR REPLACE FUNCTION public.detach_product_feedback_draft_usage() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ UPDATE public.llm_usage_event SET source_id = gen_random_uuid(),
+   call_state = CASE WHEN call_state='OPEN' THEN 'SETTLED' ELSE call_state END,
+   measurement_verification = CASE WHEN call_state='OPEN' THEN 'UNVERIFIABLE' ELSE measurement_verification END,
+   pricing_state = CASE WHEN call_state='OPEN' THEN 'UNPRICED' ELSE pricing_state END,
+   cost_usd = CASE WHEN call_state='OPEN' THEN NULL ELSE cost_usd END,
+   unreported_calls = CASE WHEN call_state='OPEN' THEN 1 ELSE unreported_calls END
+  WHERE source_type='PRODUCT_FEEDBACK_DRAFT' AND workspace_id IS NULL AND source_id=OLD.id;
+ DELETE FROM public.agent_run WHERE kind='DRAFT_REPORT' AND split_part(concurrency_key, ':', 2)=OLD.id::text;
+ RETURN OLD;
+END $$;
+        ]]></sql>
+        <rollback><stop>Restore the verified pre-upgrade backup. Pending draft actions were replaced by runs.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

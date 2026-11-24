@@ -50,12 +50,12 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
      */
     String HELD = """
             SELECT 1 FROM agent_run h
-             WHERE h.workspace_id = x.workspace_id AND h.concurrency_key = x.subject_key
+             WHERE (h.workspace_id = x.workspace_id OR (h.workspace_id IS NULL AND x.workspace_id IS NULL)) AND h.concurrency_key = x.subject_key
                AND h.state = 'QUEUED' AND h.hold_reason IS NOT NULL AND h.available_at > clock_timestamp()
                AND x.last_used_at <= clock_timestamp() - make_interval(secs =>""" + HELD_GRACE_SECONDS + """
             )
                AND NOT EXISTS (SELECT 1 FROM agent_run o
-                                WHERE o.workspace_id = x.workspace_id AND o.concurrency_key = x.subject_key
+                                WHERE (o.workspace_id = x.workspace_id OR (o.workspace_id IS NULL AND x.workspace_id IS NULL)) AND o.concurrency_key = x.subject_key
                                   AND o.state <> 'ENDED'
                                   AND NOT (o.state = 'QUEUED' AND o.hold_reason IS NOT NULL
                                            AND o.available_at > clock_timestamp()))
@@ -68,7 +68,7 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     }
 
     /** Spaces on both ends: a text block drops the trailing space of the {@code RETURNING} before it. */
-    String COLUMNS = " id, workspace_id AS \"workspaceId\", subject_key AS \"subjectKey\", kind,"
+    String COLUMNS = " id, COALESCE(workspace_id, 0) AS \"workspaceId\", subject_key AS \"subjectKey\", kind,"
             + " claim_name AS \"claimName\", state, shutdown_at AS \"shutdownAt\" ";
 
     /** Takes the maintenance barrier for the transaction; false while a migration runs or waits. Reads no table. */
@@ -79,7 +79,7 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     /** Requests the subject's sandbox; empty when the subject already has a live one. */
     @Query(value = """
             INSERT INTO agent_sandbox (id, workspace_id, subject_key, kind, claim_name, shutdown_at)
-            VALUES (:id, :workspaceId, :subjectKey, :kind, :claimName, :shutdownAt)
+            VALUES (:id, NULLIF(:workspaceId, 0), :subjectKey, :kind, :claimName, :shutdownAt)
             ON CONFLICT (workspace_id, subject_key) WHERE state IN ('REQUESTED', 'READY') DO NOTHING
             RETURNING""" + COLUMNS, nativeQuery = true)
     Optional<SandboxRow> request(
@@ -104,18 +104,18 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
               SELECT s.id FROM agent_sandbox s
                WHERE s.kind = 'CONVERSATION' AND s.state = 'READY'
                  AND NOT EXISTS (SELECT 1 FROM agent_run r
-                                  WHERE r.workspace_id = s.workspace_id AND r.concurrency_key = s.subject_key
+                                  WHERE (r.workspace_id = s.workspace_id OR (r.workspace_id IS NULL AND s.workspace_id IS NULL)) AND r.concurrency_key = s.subject_key
                                     AND r.state <> 'ENDED')
                ORDER BY s.last_used_at, s.created_at, s.id
                LIMIT 1 FOR UPDATE OF s SKIP LOCKED)
             UPDATE agent_sandbox s SET state = 'DELETING' FROM picked WHERE s.id = picked.id
-            RETURNING s.id, s.workspace_id AS "workspaceId", s.subject_key AS "subjectKey", s.kind,
+            RETURNING s.id, COALESCE(s.workspace_id, 0) AS "workspaceId", s.subject_key AS "subjectKey", s.kind,
                       s.claim_name AS "claimName", s.state, s.shutdown_at AS "shutdownAt"
             """, nativeQuery = true)
     Optional<SandboxRow> retireIdleConversation();
 
     @Query(value = "SELECT" + COLUMNS + """
-             FROM agent_sandbox WHERE workspace_id = :workspaceId AND subject_key = :subjectKey
+             FROM agent_sandbox WHERE (workspace_id = :workspaceId OR (workspace_id IS NULL AND :workspaceId = 0)) AND subject_key = :subjectKey
               AND state IN ('REQUESTED', 'READY')
             """, nativeQuery = true)
     Optional<SandboxRow> findLive(@Param("workspaceId") long workspaceId, @Param("subjectKey") String subjectKey);
@@ -129,7 +129,7 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
 
     @WorkspaceAgnostic("The dispatch reads a page of due runs of every workspace; each row carries its workspace")
     @Query(value = """
-            SELECT workspace_id AS "workspaceId", subject_key AS "subjectKey" FROM agent_sandbox
+            SELECT COALESCE(workspace_id, 0) AS "workspaceId", subject_key AS "subjectKey" FROM agent_sandbox
              WHERE subject_key IN (:subjectKeys) AND state IN ('REQUESTED', 'READY')
             """, nativeQuery = true)
     List<LiveSubject> findLiveSubjects(@Param("subjectKeys") Collection<String> subjectKeys);
@@ -137,7 +137,7 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     /** A sandbox's first call to the gateway: it becomes {@code READY}, while it is live and before its shutdown. */
     @Query(value = """
             UPDATE agent_sandbox SET state = 'READY', last_used_at = clock_timestamp()
-             WHERE id = :id AND workspace_id = :workspaceId AND subject_key = :subjectKey
+             WHERE id = :id AND (workspace_id = :workspaceId OR (workspace_id IS NULL AND :workspaceId = 0)) AND subject_key = :subjectKey
                AND state = 'REQUESTED' AND shutdown_at > clock_timestamp()
             RETURNING""" + COLUMNS, nativeQuery = true)
     Optional<SandboxRow> markReady(
@@ -145,7 +145,7 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
 
     /** A {@code READY} sandbox before its shutdown; a read, so a call that leases nothing is no use of the sandbox. */
     @Query(value = "SELECT" + COLUMNS + """
-             FROM agent_sandbox WHERE id = :id AND workspace_id = :workspaceId AND subject_key = :subjectKey
+             FROM agent_sandbox WHERE id = :id AND (workspace_id = :workspaceId OR (workspace_id IS NULL AND :workspaceId = 0)) AND subject_key = :subjectKey
               AND state = 'READY' AND shutdown_at > clock_timestamp()
             """, nativeQuery = true)
     Optional<SandboxRow> findReady(
@@ -156,7 +156,7 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
      * reaper skips a row that this holds.
      */
     String LIVE_ROW = "SELECT" + COLUMNS + """
-             FROM agent_sandbox WHERE id = :id AND workspace_id = :workspaceId AND subject_key = :subjectKey
+             FROM agent_sandbox WHERE id = :id AND (workspace_id = :workspaceId OR (workspace_id IS NULL AND :workspaceId = 0)) AND subject_key = :subjectKey
               AND state IN ('REQUESTED', 'READY') AND shutdown_at > clock_timestamp()
             """;
 
@@ -179,12 +179,12 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     @Query(value = """
             SELECT r.started_at AS "startedAt", NOT EXISTS (
                      SELECT 1 FROM agent_run previous
-                      WHERE previous.workspace_id = s.workspace_id AND previous.concurrency_key = s.subject_key
+                      WHERE (previous.workspace_id = s.workspace_id OR (previous.workspace_id IS NULL AND s.workspace_id IS NULL)) AND previous.concurrency_key = s.subject_key
                         AND previous.started_at >= s.created_at
                         AND (previous.id <> r.id OR r.lease_epoch > 1)) AS cold
               FROM agent_sandbox s
-              JOIN agent_run r ON r.workspace_id = s.workspace_id AND r.concurrency_key = s.subject_key
-             WHERE s.id = :sandboxId AND s.workspace_id = :workspaceId AND s.subject_key = :subjectKey
+              JOIN agent_run r ON (r.workspace_id = s.workspace_id OR (r.workspace_id IS NULL AND s.workspace_id IS NULL)) AND r.concurrency_key = s.subject_key
+             WHERE s.id = :sandboxId AND (s.workspace_id = :workspaceId OR (s.workspace_id IS NULL AND :workspaceId = 0)) AND s.subject_key = :subjectKey
                AND r.id = :runId AND r.lease_epoch = :epoch AND r.started_at IS NOT NULL
             """, nativeQuery = true)
     Optional<RunStart> findRunStart(
@@ -198,28 +198,35 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
             UPDATE agent_sandbox SET last_used_at = clock_timestamp()
-             WHERE id = :id AND workspace_id = :workspaceId AND state IN ('REQUESTED', 'READY')
+             WHERE id = :id AND (workspace_id = :workspaceId OR (workspace_id IS NULL AND :workspaceId = 0)) AND state IN ('REQUESTED', 'READY')
             """, nativeQuery = true)
     int used(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
     /** Takes back this one sandbox, if it is still live; a newer sandbox of its subject stays. */
     @Query(value = """
             UPDATE agent_sandbox SET state = 'DELETING'
-             WHERE id = :id AND workspace_id = :workspaceId AND state IN ('REQUESTED', 'READY')
+             WHERE id = :id AND (workspace_id = :workspaceId OR (workspace_id IS NULL AND :workspaceId = 0)) AND state IN ('REQUESTED', 'READY')
             RETURNING""" + COLUMNS, nativeQuery = true)
     Optional<SandboxRow> releaseSandbox(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
+
+    /** Reads the specific revoked sandbox so its claim can be removed after the revocation commits. */
+    @Query(value = "SELECT" + COLUMNS + """
+            FROM agent_sandbox WHERE id = :id AND workspace_id IS NOT DISTINCT FROM NULLIF(:workspaceId, 0)
+              AND state = 'DELETING'
+            """, nativeQuery = true)
+    Optional<SandboxRow> findDeleting(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
     /** Takes back this physical sandbox, including a deletion that must be retried. */
     @Query(value = """
             UPDATE agent_sandbox SET state = 'DELETING'
-             WHERE id = :id AND workspace_id = :workspaceId AND state IN ('REQUESTED', 'READY', 'DELETING')
+             WHERE id = :id AND (workspace_id = :workspaceId OR (workspace_id IS NULL AND :workspaceId = 0)) AND state IN ('REQUESTED', 'READY', 'DELETING')
             RETURNING""" + COLUMNS, nativeQuery = true)
     Optional<SandboxRow> releaseCopy(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
     /** Takes back the subject's live sandbox, as an erasure or a change of access does. */
     @Query(value = """
             UPDATE agent_sandbox SET state = 'DELETING'
-             WHERE workspace_id = :workspaceId AND subject_key = :subjectKey AND state IN ('REQUESTED', 'READY')
+             WHERE (workspace_id = :workspaceId OR (workspace_id IS NULL AND :workspaceId = 0)) AND subject_key = :subjectKey AND state IN ('REQUESTED', 'READY')
             RETURNING""" + COLUMNS, nativeQuery = true)
     Optional<SandboxRow> release(@Param("workspaceId") long workspaceId, @Param("subjectKey") String subjectKey);
 
@@ -234,7 +241,7 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
             UPDATE agent_sandbox SET state = 'DELETING'
-             WHERE workspace_id = :workspaceId AND kind = 'CONVERSATION' AND state IN ('REQUESTED', 'READY')
+             WHERE (workspace_id = :workspaceId OR (workspace_id IS NULL AND :workspaceId = 0)) AND kind = 'CONVERSATION' AND state IN ('REQUESTED', 'READY')
             """, nativeQuery = true)
     int revokeConversations(@Param("workspaceId") long workspaceId);
 
@@ -264,13 +271,13 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
                       OR (x.last_used_at <= clock_timestamp() - make_interval(secs =>
                               CASE WHEN x.kind = 'CONVERSATION' THEN :conversationIdleSeconds ELSE :idleSeconds END)
                           AND NOT EXISTS (SELECT 1 FROM agent_run r
-                                           WHERE r.workspace_id = x.workspace_id
+                                           WHERE (r.workspace_id = x.workspace_id OR (r.workspace_id IS NULL AND x.workspace_id IS NULL))
                                              AND r.concurrency_key = x.subject_key AND r.state <> 'ENDED'))
                       OR (x.kind <> 'CONVERSATION' AND EXISTS (""" + HELD + """
                           )))
                LIMIT :batch FOR UPDATE OF x SKIP LOCKED)
             UPDATE agent_sandbox s SET state = 'DELETING' FROM picked WHERE s.id = picked.id
-            RETURNING s.id, s.workspace_id AS "workspaceId", s.subject_key AS "subjectKey", s.kind,
+            RETURNING s.id, COALESCE(s.workspace_id, 0) AS "workspaceId", s.subject_key AS "subjectKey", s.kind,
                       s.claim_name AS "claimName", s.state, s.shutdown_at AS "shutdownAt", picked.reason
             """, nativeQuery = true)
     List<RetiredRow> retire(
@@ -287,7 +294,7 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     /** Takes back a ready sandbox whose claim is gone, if it is still ready with that claim. */
     @Query(value = """
             UPDATE agent_sandbox SET state = 'DELETING'
-             WHERE id = :id AND workspace_id = :workspaceId AND claim_name = :claimName AND state = 'READY'
+             WHERE id = :id AND (workspace_id = :workspaceId OR (workspace_id IS NULL AND :workspaceId = 0)) AND claim_name = :claimName AND state = 'READY'
             RETURNING""" + COLUMNS, nativeQuery = true)
     Optional<SandboxRow> takeBackLost(
             @Param("id") UUID id, @Param("workspaceId") long workspaceId, @Param("claimName") String claimName);
@@ -302,7 +309,7 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
     /** Deletes a sandbox whose claim is gone. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            DELETE FROM agent_sandbox WHERE id = :id AND workspace_id = :workspaceId AND state = 'DELETING'
+            DELETE FROM agent_sandbox WHERE id = :id AND (workspace_id = :workspaceId OR (workspace_id IS NULL AND :workspaceId = 0)) AND state = 'DELETING'
             """, nativeQuery = true)
     int deleteGone(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
@@ -312,8 +319,8 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
      */
     @Query(value = """
             SELECT r.id FROM agent_sandbox s
-              JOIN agent_run r ON r.workspace_id = s.workspace_id AND r.concurrency_key = s.subject_key
-             WHERE s.id = :sandboxId AND s.workspace_id = :workspaceId
+              JOIN agent_run r ON (r.workspace_id = s.workspace_id OR (r.workspace_id IS NULL AND s.workspace_id IS NULL)) AND r.concurrency_key = s.subject_key
+             WHERE s.id = :sandboxId AND (s.workspace_id = :workspaceId OR (s.workspace_id IS NULL AND :workspaceId = 0))
                AND r.started_at BETWEEN s.created_at AND s.last_used_at
              ORDER BY r.started_at DESC LIMIT 1
             """, nativeQuery = true)

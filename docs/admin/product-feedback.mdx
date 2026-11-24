@@ -30,13 +30,13 @@ A private report also leaves the instance when GitHub filing is enabled.
 6. In **Destinations**, enter the private repository in **Private repository**.
 7. Check that its installation is available and its visibility is private.
 8. Choose an instance-level chat model in **Model**.
-9. Set **Daily draft limit** for the instance.
+9. Set **Daily draft limit** for the instance. Drafting uses the sandbox runtime.
 10. After the private test in [Check that it worked](#check-that-it-worked), enter the public repository in **Public repository**.
 11. Check its installation and visibility.
 
 The default daily draft limit is 50.
 Each account also has a limit of five drafts per day.
-Failed model calls and retries count toward the draft budget.
+A report's first admitted model call counts toward the draft budget, including a failed call.
 Choose a model with an available pool and provider connection.
 Use the [routing evaluation](/contributor/product-feedback#routing-evaluation) to assess the model before public use.
 
@@ -101,7 +101,7 @@ It stays private unless a maintainer publishes it, and the checks still apply.
 ## Route reports
 
 While the model drafts a report, the console shows **Drafting**, when drafting started, and about when the report goes on without a draft.
-**The AI model is busy with other work** means that the draft waits for room in the model's pool.
+**The AI model is busy with other work** means the draft waits for room in the model's pool.
 If no draft finishes by that time, the report goes on as written and stays private.
 
 Code selects the route after the model drafts the issue:
@@ -260,7 +260,7 @@ To resume new filing, turn off **Pause** after you correct the cause.
 | Installation missing or suspended | The app cannot reach the named repository. | Restore its installation and **Issues: read and write** permission. Select **Retry**. |
 | Private destination unavailable | The repository is public, inaccessible, or has an unknown visibility. | Turn on **Pause**. Restore private visibility and app access before **Retry**. |
 | Model unavailable | The model, pool, credentials, or provider connection is unavailable. | Restore the instance model and its pool. Reports without drafts stay private. |
-| Many `no model draft finished` routes | The daily limit is reached, model output stays invalid, or the draft calls fail. | Check the count and model health. If `product_feedback_steps_total{step="draft",outcome="expired"}` rises, check the server's outbox backlog. For `outcome="not_configured"`, check the daily instance and account draft limits, then the model and its provider connection. For `outcome="attempts_exhausted"`, check provider failures. Reassess the model with the routing evaluation. |
+| Many `no model draft finished` routes | The daily limit is reached, model output stays invalid, or the draft calls fail. | Check the count and model health. If `product_feedback_steps_total{step="draft",outcome="deadline"}` rises, check the sandbox queue. For `outcome="model_unavailable"`, `outcome="model_timeout"`, or `outcome="model_failed"`, check the model, its connection and the draft limits. For `outcome="attempts_exhausted"`, check lost sandbox leases. For `outcome="sandbox_unavailable"`, check sandbox and gateway logs. See [Server runtime](./runtime-roles#report-drafts). Reassess the model with the routing evaluation. |
 | Many private routes | Read the route split by reason. The gate can be strict or reports can contain detected personal data. | Inspect synthetic evaluation results before you change the model. Keep privacy checks in place. |
 | Public report waits longer than five minutes | The hold is a minimum. Drafts, filing pace, rate limits, or reconciliation can delay it. | Check server health, model availability, and **Needs action**. |
 | GitHub write stopped | `DESTINATION_UNAVAILABLE` or `GITHUB_REFUSED` explains the stop. | Turn on **Pause** if privacy is in doubt. Correct app access or the refusal, then select **Retry**. |

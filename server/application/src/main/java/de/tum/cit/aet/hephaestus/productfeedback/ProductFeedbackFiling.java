@@ -46,7 +46,7 @@ public class ProductFeedbackFiling {
     @Column(name = "draft_admitted_at")
     private @Nullable Instant draftAdmittedAt;
 
-    /** When its current {@code draft_report} action was queued; the draft's end clears it. Null while no model drafts it. */
+    /** When its current draft run was queued. The run's end clears it. */
     @Column(name = "drafting_started_at")
     private @Nullable Instant draftingStartedAt;
 

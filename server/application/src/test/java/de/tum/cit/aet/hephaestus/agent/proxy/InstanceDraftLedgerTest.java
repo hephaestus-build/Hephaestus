@@ -3,14 +3,17 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
@@ -51,6 +54,8 @@ class InstanceDraftLedgerTest extends BaseUnitTest {
                 transactions);
         UUID report = UUID.randomUUID();
         UUID call = UUID.randomUUID();
+        UUID run = UUID.randomUUID();
+        var fence = new AgentRunFence(run, AgentRunRef.INSTANCE_SCOPE, 3);
         var route = new ProxyRouting(
                 "draft",
                 "openai-completions",
@@ -59,11 +64,9 @@ class InstanceDraftLedgerTest extends BaseUnitTest {
                 3L,
                 4L,
                 null,
-                new ProxyRouting.BilledAttempt(UsageSourceType.PRODUCT_FEEDBACK_DRAFT, report, 2, null),
+                new ProxyRouting.BilledAttempt(UsageSourceType.PRODUCT_FEEDBACK_DRAFT, report, 2, run, null, 3),
                 Instant.now().plusSeconds(30),
-                100L,
-                UUID.randomUUID());
-        when(drafts.waits(report, 2)).thenReturn(true);
+                100L);
         when(drafts.admitCall(report, 2, 4L)).thenReturn(true);
         when(admission.admitInstance(4L))
                 .thenReturn(new LlmAdmissionService.InstanceCharge("draft-model", LlmPriceSnapshot.unpricedInstance()));
@@ -73,16 +76,17 @@ class InstanceDraftLedgerTest extends BaseUnitTest {
         var opened = ArgumentCaptor.forClass(LlmUsageRecorder.OpenCall.class);
         verify(recorder).open(opened.capture());
         assertThat(opened.getValue().workspaceId()).isNull();
-        assertThat(opened.getValue().runId()).isNull();
+        assertThat(opened.getValue().runId()).isEqualTo(run);
+        assertThat(opened.getValue().leaseEpoch()).isEqualTo(3);
         assertThat(opened.getValue().model()).isEqualTo("draft-model");
-        verifyNoInteractions(runs);
+        verify(runs).requireCurrent(fence);
         var usage = new LlmUsageRecorder.CallUsage(10, 5, 3, 2, 0, 0);
         var failure = new ModelCallFailure("upstream_stalled", null);
         when(recorder.complete(call, null, usage, failure)).thenReturn(true, false);
         ledger.complete(route, call, usage, failure);
         ledger.complete(route, call, usage, failure);
         verify(drafts).count(report, 15, 5);
-        when(drafts.waits(report, 2)).thenReturn(false);
+        doThrow(new StaleRunException(fence)).when(runs).requireCurrent(fence);
         assertThatThrownBy(() -> ledger.open(route, new ProxyCallLedger.Bound(80, 100L), "draft-model", null))
                 .isInstanceOf(ProxyCallLedger.ClaimLost.class);
         verify(recorder, times(1)).open(any());

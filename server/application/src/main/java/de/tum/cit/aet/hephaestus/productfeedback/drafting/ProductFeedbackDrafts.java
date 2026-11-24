@@ -1,30 +1,39 @@
 package de.tum.cit.aet.hephaestus.productfeedback.drafting;
 
-import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
-import de.tum.cit.aet.hephaestus.core.action.ActionEnded;
+import java.time.Duration;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
-/**
- * What a draft action reports to the filing lifecycle. A {@code draft_report} action drafts one generation of a report;
- * product feedback keeps the lifecycle, the prompt and every trust decision.
- */
+/** The report state that a draft run drives. The filing owns the prompt, answer and trust decisions. */
 public interface ProductFeedbackDrafts {
 
-    /** What a {@code draft_report} action carries: the report and the generation it drafts. */
-    record Payload(UUID feedbackId, int generation) {}
+    /** A generation of a report has its own subject and sandbox credential. */
+    record Subject(UUID feedbackId, int generation) {
+        public String key() {
+            return "draft:" + feedbackId + ":" + generation;
+        }
 
-    /** Reports a claimed attempt or a capacity deferral through the filing lifecycle, while its action is held. */
-    boolean claimed(ActionAttempt attempt, UUID feedbackId, int generation);
+        public static Subject fromKey(String key) {
+            String[] fields = key.split(":", -1);
+            if (fields.length != 3 || !fields[0].equals("draft"))
+                throw new IllegalArgumentException("Invalid report draft subject");
+            return new Subject(UUID.fromString(fields[1]), Integer.parseInt(fields[2]));
+        }
+    }
 
-    boolean deferred(ActionAttempt attempt, UUID feedbackId, int generation);
+    interface Queue {
+        void enqueue(Subject subject, Duration deadline);
+    }
 
-    /**
-     * Keeps the model's answer on the report for the action's end, if the attempt still holds its action.
-     *
-     * @return false when the attempt lost its action; nothing was stored
-     */
-    boolean answered(ActionAttempt attempt, UUID feedbackId, int generation, String answer);
+    /** Takes the filing lock before a run lock. */
+    void lock(Subject subject);
 
-    /** Moves the report on when its {@code draft_report} action ended, in the transaction that ended it. */
-    void ended(ActionEnded ended);
+    /** Marks the report as drafting if it still waits for this generation. */
+    boolean claimed(Subject subject);
+
+    /** Marks a held report generation as waiting for model capacity. */
+    void deferred(Subject subject);
+
+    /** Records the result when this is still the generation that waits. */
+    void ended(Subject subject, @Nullable String answer, String reason);
 }

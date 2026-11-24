@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnAdmission;
@@ -55,8 +56,14 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     private final ConversationTurnAccess turns = mock(ConversationTurnAccess.class);
     private final AgentRuns runs = mock(AgentRuns.class);
     private final ReviewSnapshotQuery reviews = mock(ReviewSnapshotQuery.class);
-    private final ProxyRoutingService routing =
-            new ProxyRoutingService(jobs, turns, mapper, reviews, runs, Mockito.mock(ProductFeedbackDraftCalls.class));
+    private final ProxyRoutingService routing = new ProxyRoutingService(
+            jobs,
+            turns,
+            mapper,
+            reviews,
+            runs,
+            Mockito.mock(ProductFeedbackDraftCalls.class),
+            Mockito.mock(LlmModelResolver.class));
     private final ReviewJob job = new ReviewJob();
     private final Instant workDeadline = Instant.now().plusSeconds(30);
     private ProxyIdentity identity;

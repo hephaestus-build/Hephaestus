@@ -42,7 +42,7 @@ export type RunOutcome =
 	| { leaseLost: true }
 	// `cause` echoes the hand-on cause that the server answered the runner; the server decides a retry's charge from it.
 	// The review kind sends instead the failure that a review program recorded, so that the server keeps why.
-	| { leaseLost: false; outcome: "completed" | "handed_on"; cause?: string };
+	| { leaseLost: false; outcome: "completed" | "handed_on"; cause?: string; answer?: string };
 
 export type KindRunner = (run: RunContext) => Promise<RunOutcome>;
 
@@ -281,6 +281,7 @@ async function runOne(
 			body: JSON.stringify({
 				outcome: outcome.outcome,
 				cause: "cause" in outcome ? outcome.cause : undefined,
+				answer: "answer" in outcome ? outcome.answer : undefined,
 			}),
 			signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
 		});

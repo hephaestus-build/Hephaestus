@@ -1,6 +1,7 @@
 // driver-kinds.ts — the runner of each run kind that a sandbox drives, by the server's AgentRunKind name. A kind joins
 // here together with its server side (`SandboxRunKind`), so the gateway never offers a kind that no runner takes.
 
+import { draftReport } from "./draft-report.ts";
 import type { KindRunner } from "./driver.ts";
 import { composeReview } from "./review-composer.ts";
 import { measureReview } from "./review-measure.ts";
@@ -29,4 +30,5 @@ export const KINDS: Readonly<Record<string, KindRunner>> = {
 	REVIEW_COMPOSE: reviewCompose,
 	TURN: conversation,
 	DIGEST: conversation,
+	DRAFT_REPORT: draftReport,
 };

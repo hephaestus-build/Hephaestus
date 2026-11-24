@@ -9,7 +9,9 @@ public enum AgentRunKind {
     /** A turn that answers one question in a conversation ({@code TurnRunKind}); its subject is the conversation. */
     TURN,
     /** Proactive model-written text in a conversation, started by its system digest stimulus. */
-    DIGEST;
+    DIGEST,
+    /** A tool-free draft of an instance product feedback report. */
+    DRAFT_REPORT;
 
     /** Work that shares the conversation runner and its capacity. */
     public boolean conversation() {
