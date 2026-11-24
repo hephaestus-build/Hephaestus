@@ -85,7 +85,7 @@ void test("sampling takes first-attempt successful merge groups inside the windo
 void test("the pull-request cohort is the server fast tier", () => {
 	const unit = { name: "Test / App Server: Unit and architecture" };
 	assert.equal(isFastTier([unit, { name: "Quality / App Server / Gates" }]), true);
-	// Docs-only and duplicate-skipped runs have no server suites; ci:full adds the queue tier.
+	// A docs-only run has no server suites; ci:full adds the queue tier.
 	assert.equal(isFastTier([{ name: "Quality / Tooling and Docs / Gates" }]), false);
 	assert.equal(isFastTier([unit, { name: "Test / App Server: Integration (providers)" }]), false);
 	assert.equal(
