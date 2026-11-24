@@ -41,7 +41,9 @@ Option 4.
 2. **The card exists from the first queued review of the item,** except for an On request result. ADR 0137 (proposed in #4863) decides what shows of that result. "Reviewing #42" is a state of the card. Its lifecycle is in progress, open and closed. Its revision only grows.
 3. **The same card shows in four places.** These are each message that cites it, the Activity section, the practice page and the extension.
 4. **Generated prose never carries a check verdict.** It refers to a check only through a citation token. The renderer shows the admitted verdict from rows beside it.
-   - Before a visible unit leaves, the server rejects it if it names a known check without a token.
+   - Render check verdicts only from admitted citation tokens and server-owned text.
+   - Withhold a unit if any check it names lacks its own admitted token.
+   - Also withhold it if the server cannot establish that its generated prose is verdict-free.
    - A unit names a check when it holds the check's identifier or title.
    - The known checks are an exact set: the practices of the workspace. So the rule is deterministic.
    - A rejected unit is withheld, never edited. The model never writes an outcome or a delivery state as free text.
@@ -69,7 +71,9 @@ Option 4.
 Not enforced yet. The implementation adds these tests:
 
 - `CardWithoutModelTest` fails when an item card update needs a turn.
-- `KnownCheckWithoutTokenTest` fails when a unit that names a known check without a token reaches a client. It also fails when a rejected unit is edited, not withheld.
+- `KnownCheckWithoutTokenTest` fails if the server exposes or edits a rejected unit.
+  It covers a verdict without an exact check name and a verdict beside a token.
+  It also covers a wrong token and a valid server-rendered citation.
 - `PostedClaimTest` fails when a message says "posted" for a copy that was not delivered at its commit.
 
 ## Revisit trigger
