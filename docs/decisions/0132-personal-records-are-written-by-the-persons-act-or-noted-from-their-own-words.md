@@ -24,7 +24,7 @@ The real constraint is that the person can see and fix everything that shapes an
 
 - The person tells Hephaestus a fact once.
 - The person sees everything that Hephaestus keeps in mind, and can forget any item in one step.
-- Only the person's own words become memory. Other people's text never does.
+- Only the person's own words become memory. Text that code can trace to another source never does.
 - A note is never evidence about the person's work.
 - A card asks for a decision only where the decision is real.
 - Each act on a record has a reverse.
@@ -92,7 +92,7 @@ Option 5.
 
 - Good: the person says a preference once, and it holds in every workspace.
 - Good: everything that shapes an answer is in one list, and Forget works in one step.
-- Good: code checks the origin of the cited text. So quoted, forwarded or attached text from someone else cannot become a note.
+- Good: code checks the origin of the cited text. So no part of an entry that keeps another source's origin can become a note.
 - Bad: code cannot tell plain text that the person pasted from their own words. Such text counts as the person's words, because the person chose to say it. The list shows the note's source, and Forget removes it.
 - Bad: a noted record can still misread the person. It stays in its workspace, it is never evidence, and the person can forget it.
 - Bad: an item that the person never keeps is gone after 400 days, also when it was useful.
@@ -104,7 +104,7 @@ Option 5.
 Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
 - NotedRecordOriginTest fails when a noted record cites an entry whose origin is not the person.
-- NotedRecordQuotedTextTest fails when a noted record cites a quote block, a forwarded message or an attachment in the person's entry.
+- NotedRecordQuotedTextTest fails when a noted record cites any of the five parts in decision 3 that keep their source's origin.
   An example is a quoted pull request.
 - NotedRecordNeverTravelsTest fails when a noted record passes the transfer path without **Keep** and **Take along**.
 - ForgetLatchTest fails when Hephaestus notes a forgotten item again before the person says it again.
