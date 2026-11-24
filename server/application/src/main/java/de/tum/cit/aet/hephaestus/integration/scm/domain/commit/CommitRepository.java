@@ -238,6 +238,7 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
     List<String> findShasWithoutContributorsByRepositoryId(@Param("repositoryId") Long repositoryId);
 
     /** Links a commit to pull requests by PR number within the same repository. Idempotent ({@code ON CONFLICT DO NOTHING}). */
+    @WorkspaceAgnostic("Commit sync resolves the stored commit and its repository before linking mirror rows")
     @Modifying
     @Transactional
     @Query(value = """
@@ -264,6 +265,7 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
      * Idempotent: {@code ON CONFLICT DO NOTHING} skips pairs that are already
      * linked. Returns the number of rows inserted.
      */
+    @WorkspaceAgnostic("Merge request sync links mirror rows by one provider repository and its commit SHAs")
     @Modifying
     @Transactional
     @Query(value = """

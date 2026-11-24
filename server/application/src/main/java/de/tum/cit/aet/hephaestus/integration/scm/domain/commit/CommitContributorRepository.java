@@ -45,6 +45,7 @@ public interface CommitContributorRepository extends JpaRepository<CommitContrib
      * on the provider of the commit's repository, in this statement: a provider's ids and local ids share a range,
      * so the provider id must never be stored as a local id. A user who is not synced yet stores {@code NULL}.
      */
+    @WorkspaceAgnostic("The commit mirror resolves its contributor within the provider of its stored repository")
     @Modifying
     @Transactional
     @Query(value = """

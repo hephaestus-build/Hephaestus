@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.tenancy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -13,13 +14,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class WorkspaceStatementInspectorTest extends BaseUnitTest {
 
@@ -78,6 +83,75 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         inspector.inspect("");
         inspector.inspect("   ");
         verifyNoInteractions(reporter, scopedTables);
+    }
+
+    @Test
+    void shouldReportAnUnknownStatementFormBeforeReadingColumnNames() {
+        String sql = "VALUES ('workspace_id')";
+        newInspector(TenancyEnforcement.THROW).inspect(sql);
+
+        verify(reporter).report(sql, Set.of(), TenancyEnforcement.THROW);
+        verify(parseFailureCounter).increment();
+    }
+
+    @Test
+    void shouldCheckTheOuterStatementForm() {
+        String sql = "EXPLAIN SELECT title FROM practice WHERE workspace_id = ?";
+        newInspector(TenancyEnforcement.THROW).inspect(sql);
+
+        verify(reporter).report(sql, Set.of(), TenancyEnforcement.THROW);
+        verify(parseFailureCounter).increment();
+    }
+
+    @Test
+    void shouldRecognizeAStatementAfterLeadingComments() {
+        newInspector(TenancyEnforcement.THROW)
+                .inspect(
+                        "/* load practices */ -- workspace request\nSELECT title FROM practice WHERE workspace_id = ?");
+
+        verifyNoInteractions(reporter, parseFailureCounter);
+    }
+
+    @Test
+    void shouldIgnoreTableNamesInLongLiteralsAndComments() {
+        String text = "example ".repeat(1024);
+        String sql = "INSERT INTO audit_fixture (title) VALUES ('" + text + "FROM practice') /* JOIN feedback */";
+        newInspector(TenancyEnforcement.THROW).inspect(sql);
+
+        verifyNoInteractions(scopedTables, reporter, parseFailureCounter);
+    }
+
+    @Test
+    void shouldCountEveryRefusalOfAnUnrecognizedStatement() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        TenancyConfiguration configuration = new TenancyConfiguration();
+        Counter analysisFailures = configuration.tenancyParseFailureCounter(registry);
+        WorkspaceStatementInspector inspector = new WorkspaceStatementInspector(
+                scopedTables,
+                TenancyEnforcement.THROW,
+                configuration.tenancyViolationReporter(registry),
+                analysisFailures);
+
+        assertThatThrownBy(() -> inspector.inspect("VALUES (1)")).isInstanceOf(TenancyViolationException.class);
+        assertThatThrownBy(() -> inspector.inspect("VALUES (1)")).isInstanceOf(TenancyViolationException.class);
+
+        assertThat(analysisFailures.count()).isEqualTo(1);
+        assertThat(registry.get(CoreMetrics.TENANCY_VIOLATION_TOTAL)
+                        .tags("module", "tenancy", "table", "unknown", "mode", "throw")
+                        .counter()
+                        .count())
+                .isEqualTo(2);
+    }
+
+    @Test
+    void shouldReportAStatementWhenTenancyAnalysisFails() {
+        String sql = "SELECT title FROM practice";
+        when(scopedTables.isScoped("practice")).thenThrow(new IllegalStateException("Missing table mapping"));
+
+        newInspector(TenancyEnforcement.THROW).inspect(sql);
+
+        verify(reporter).report(sql, Set.of(), TenancyEnforcement.THROW);
+        verify(parseFailureCounter).increment();
     }
 
     // regex fast-path
@@ -315,13 +389,33 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
 
     @Test
     void insertOnScopedTableIsAllowed() {
-        // INSERTs cannot leak existing data across workspaces. The workspace_id (or FK
-        // chain) is placed into the row by application code, not enforced by the inspector.
-        // Result and reaction inserts emitted at Hibernate flush time are safe by construction
-        // and must not raise a TenancyViolationException.
+        // The INSERT of bound values at flush time reads no workspace rows.
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
         inspector.inspect("insert into result (id, title, practice_id) values (?, ?, ?)");
         verifyNoInteractions(reporter, scopedTables);
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "INSERT INTO audit_fixture (workspace_id, title) SELECT ?, title FROM practice",
+                "/* copy rows */ INSERT INTO audit_fixture (workspace_id, title) SELECT ?, title FROM practice",
+                "INSERT INTO audit_fixture AS target (workspace_id, title) SELECT ?, title FROM practice"
+            })
+    void shouldInspectTheReadInsideAnInsert(String sql) {
+        when(scopedTables.isScoped("practice")).thenReturn(true);
+        newInspector(TenancyEnforcement.THROW).inspect(sql);
+
+        verify(reporter).report(sql, Set.of("practice"), TenancyEnforcement.THROW);
+    }
+
+    @Test
+    void shouldInspectTheTableExpressionInsideAnInsert() {
+        String sql = "INSERT INTO audit_fixture TABLE practice";
+        when(scopedTables.isScoped("practice")).thenReturn(true);
+        newInspector(TenancyEnforcement.THROW).inspect(sql);
+
+        verify(reporter).report(sql, Set.of("practice"), TenancyEnforcement.THROW);
     }
 
     @Test

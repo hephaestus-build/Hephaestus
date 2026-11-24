@@ -116,3 +116,23 @@ Rule 6 and the endpoint sweep of rule 9 are not enforced. Code review catches th
 - [ADR 0004](0004-sql-layer-tenancy-via-statement-inspector.md#consequences) and [ADR 0077](0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md#update--2026-11-05-a-type-level-marker-opens-no-bypass): `@WorkspaceAgnostic` on a type as a bypass.
 - [ADR 0077](0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md#context): a copy of each mirror row for each workspace that monitors it.
 - [ADR 0077](0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md#context): any mention of `workspace_id` as proof for a mirror read.
+
+## Update — 2026-11-24: Unsupported SQL forms count as violations
+
+Rule 10 let an unknown form or a failed analysis run.
+The inspector now reports these conditions as violations.
+An analysis failure increments `tenancy.parse_failure.total` when the inspector analyzes the statement.
+In `throw` mode, every refusal increments `tenancy.violation.total` with `table=unknown`.
+This makes a statement that escapes the inspector's text checks visible before it can read workspace data.
+
+The supported forms start with SELECT, WITH, INSERT INTO, UPDATE or DELETE FROM, after any leading comments.
+A statement that starts with a parenthesis is outside these forms.
+Rule 5 still permits inserts of bound values.
+For a statement that starts with INSERT INTO, the inspector checks its reads without treating the target column list as proof of scope.
+
+The existing workspace-column check still has limits.
+An INSERT after WITH is checked as part of the whole statement.
+A column name in its target list or in an ON CONFLICT or RETURNING clause can satisfy the text check.
+The workspace authorization checks and the mirror's bound predicate still apply.
+
+`WorkspaceStatementInspectorTest` checks the supported forms, inserts that read a workspace table, analysis failures and the refusal counter.

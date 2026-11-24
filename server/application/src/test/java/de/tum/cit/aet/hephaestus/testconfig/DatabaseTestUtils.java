@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.testconfig;
 
 import de.tum.cit.aet.hephaestus.core.privacy.IdentityRestriction;
 import de.tum.cit.aet.hephaestus.core.privacy.IdentityRestrictionRepository;
+import de.tum.cit.aet.hephaestus.core.tenancy.TenancyBypass;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.List;
@@ -69,12 +70,15 @@ public class DatabaseTestUtils {
     @Category({"Hephaestus", "Tests"})
     static final class DatabaseCleanupEvent extends Event {}
 
+    @SuppressWarnings("try") // Closing the scope restores tenancy enforcement.
     private void truncateTables() {
         EntityManager currentEntityManager = Objects.requireNonNull(entityManager);
         currentEntityManager.flush();
         String statement = getTruncateStatement();
         if (!statement.isEmpty()) {
-            currentEntityManager.createNativeQuery(statement).executeUpdate();
+            try (var ignored = TenancyBypass.open("Clear fixture rows in the integration database")) {
+                currentEntityManager.createNativeQuery(statement).executeUpdate();
+            }
         }
         currentEntityManager.clear();
     }
