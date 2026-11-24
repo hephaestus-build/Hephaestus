@@ -399,8 +399,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                 "t.account_id = :account OR CASE WHEN t.reviewer_account_id = :account THEN true ELSE false END",
                 "CASE WHEN t.closed_at IS NOT NULL THEN t.account_id = :account OR t.reviewer_account_id = :account"
                         + " OR t.account_id = :users ELSE false END",
-                "CASE WHEN t.\"end\" IS NULL THEN t.account_id = :account OR t.reviewer_account_id = :account"
-                        + " ELSE false END")) {
+                "CASE WHEN t.\"end\" IS NOT NULL THEN t.account_id = :account OR t.reviewer_account_id = :account"
+                        + " OR t.account_id = :users ELSE false END")) {
             assertThat(unerasedColumns(
                             columns,
                             Set.of("conversation"),
