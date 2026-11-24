@@ -429,7 +429,6 @@ class FeedbackRecipientRowSecurityIntegrationTest {
         long account = ACCOUNTS.getAndIncrement();
         var recipient =
                 new Recipient(account, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
-        UUID run = UUID.randomUUID();
         UUID review = UUID.randomUUID();
         asAdministrator("""
                 INSERT INTO account (id, display_name, status) VALUES (%2$d, 'Recipient %2$d', 'ACTIVE');
@@ -440,13 +439,10 @@ class FeedbackRecipientRowSecurityIntegrationTest {
                 INSERT INTO conversation (id, workspace_id, account_id, created_at, last_activity_at)
                 VALUES ('%4$s', %1$d, %2$d, now(), now());
                 %8$s;
-                INSERT INTO conversation_turn (id, workspace_id, conversation_id, account_id, request_id, status, surface,
-                    attempt, run_id, started_at, created_at)
-                VALUES ('%5$s', %1$d, '%4$s', %2$d, 'request-%5$s', 'RUNNING', 'APP', 1, '%9$s', now(), now());
                 INSERT INTO review (id, workspace_id, item_id, kind, item_version, origin, status, ordered_at, created_at)
-                VALUES ('%10$s', %1$d, %1$d, 'ITEM', 'v1', 'REQUEST', 'RUNNING', now(), now());
+                VALUES ('%9$s', %1$d, %1$d, 'ITEM', 'v1', 'REQUEST', 'RUNNING', now(), now());
                 INSERT INTO feedback (id, workspace_id, review_id, item_id, person_account_id, destination, state, body)
-                VALUES ('%6$s', %1$d, '%10$s', %1$d, %2$d, 'CONVERSATION', 'READY', 'Discuss focused tests.');
+                VALUES ('%6$s', %1$d, '%9$s', %1$d, %2$d, 'CONVERSATION', 'READY', 'Discuss focused tests.');
                 INSERT INTO feedback_copy (id, workspace_id, feedback_id, kind, position, state, write_key)
                 VALUES ('%7$s', %1$d, '%6$s', 'CHAT_TURN', 0, 'PLANNED', '%7$s');
                 """.formatted(
@@ -457,8 +453,8 @@ class FeedbackRecipientRowSecurityIntegrationTest {
                         recipient.turn(),
                         recipient.feedback(),
                         recipient.copy(),
-                        ConversationTurnRunRows.insert(run, WORKSPACE, recipient.conversation(), "RUNNING", 1),
-                        run,
+                        ConversationTurnRunRows.insert(
+                                recipient.turn(), UUID.randomUUID(), WORKSPACE, recipient.conversation(), "RUNNING", 1),
                         review));
         return recipient;
     }
@@ -498,7 +494,9 @@ class FeedbackRecipientRowSecurityIntegrationTest {
         asAdministrator("""
                 INSERT INTO conversation_entry (id, workspace_id, conversation_id, account_id, seq, kind, surface, text,
                     created_at)
-                VALUES ('%3$s', %1$d, '%4$s', %2$d, 1, 'ANSWER', 'SLACK', 'Try a focused test.', now());
+                VALUES ('%3$s', %1$d, '%4$s', %2$d, (SELECT count(*) + 1 FROM conversation_entry
+                                                    WHERE conversation_id = '%4$s'),
+                        'ANSWER', 'SLACK', 'Try a focused test.', now());
                 UPDATE feedback SET state = 'DELIVERED', delivered_at = now() WHERE id = '%5$s';
                 DELETE FROM feedback_copy WHERE id = '%6$s';
                 INSERT INTO feedback_copy (id, workspace_id, feedback_id, kind, position, state, write_key,

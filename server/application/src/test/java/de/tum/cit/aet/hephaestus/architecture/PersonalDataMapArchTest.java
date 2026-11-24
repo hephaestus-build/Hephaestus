@@ -81,9 +81,6 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "product_feedback_cleanup",
             // What each practice script of a job did: a status, counts and model slots, no content or person.
             "review_job_script_run",
-            // A run's queue state: its kind, band, subject key, epoch and times, no content or person; an erasure
-            // deletes the runs of the jobs it deletes.
-            "agent_run",
             // A sandbox's subject key, claim name and times: a pointer to its subject, like a run's, and no content.
             "agent_sandbox",
             "commit_pull_request",
@@ -149,6 +146,20 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
 
     private record SecurityRetention(
             String adr, String purpose, String legalBasis, String deletionTrigger, String deletionProof) {}
+
+    /**
+     * Closed list of personal tables without a store of their own, whose rows go only with the rows of the store that
+     * owns them. Each names that store, the foreign key that ties the owning rows to the table's rows, and the trigger
+     * function that deletes the table's rows with the owning rows. The catalog of the owning store declares each person
+     * column of the table with {@link ErasesColumns}, and the owning store's erasure tests prove that no row stays.
+     * Every other personal table needs a store: a declaration deletes no row.
+     */
+    private static final Map<String, OwningRows> GO_WITH_OWNING_ROWS = Map.of(
+            "agent_run",
+            new OwningRows("conversation_turn", "sfk_conversation_turn_run", "forget_conversation_turn_run"));
+
+    /** The store whose rows a table goes with, its foreign key to the table, and the function that deletes the rows. */
+    private record OwningRows(String store, String key, String deletion) {}
 
     @Test
     void securityRetentionIsExplicitPersonalDataWithAnAcceptedDecisionAndDeletionProof() throws Exception {
@@ -312,9 +323,7 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         assertThat(documented)
                 .as("the implementation inventory matches the runtime declarations")
                 .containsExactlyInAnyOrderElementsOf(declared);
-        Set<String> required = tableNames();
-        required.removeAll(NOT_PERSONAL_DATA);
-        required.removeAll(SECURITY_RETENTION.keySet());
+        Set<String> required = needAStore(tableNames());
         assertThat(declared)
                 .as("every personal table must have a full contributor, not an operator path")
                 .containsAll(required);
@@ -328,6 +337,80 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         var stores = List.<PersonDataContributor>of(store("t.account_id = :account", ""));
         assertThat(withoutRuntimeStore(Set.of("conversation", "export_blob"), stores))
                 .containsExactly("export_blob");
+    }
+
+    @Test
+    void aTableWhosePersonColumnsACatalogDeclaresStillNeedsAStore() {
+        var stores = List.<PersonDataContributor>of(store("t.account_id = :account", ""));
+        assertThat(erasedColumns(stores, List.of(new DeclaresTheNoteOwner()))).contains("conversation_note.account_id");
+        Set<String> required = needAStore(Set.of("agent_run", "conversation", "conversation_note"));
+        assertThat(required)
+                .as("only GO_WITH_OWNING_ROWS lets a personal table go without a store, not a declaration")
+                .containsExactly("conversation", "conversation_note");
+        assertThat(withoutRuntimeStore(required, stores)).containsExactly("conversation_note");
+    }
+
+    /** A catalog that declares the owner column of a table whose rows no store deletes. */
+    @ErasesColumns("conversation_note.account_id")
+    private static final class DeclaresTheNoteOwner {}
+
+    @Test
+    void everyTableThatGoesWithOwningRowsNamesARegisteredStoreThatTakesItsRows() {
+        Set<String> personColumns = personColumns();
+        for (var entry : GO_WITH_OWNING_ROWS.entrySet()) {
+            String table = entry.getKey();
+            OwningRows owning = entry.getValue();
+            List<String> columns = personColumns.stream()
+                    .filter(column -> column.startsWith(table + "."))
+                    .toList();
+            assertThat(columns)
+                    .as("a table without person columns belongs in NOT_PERSONAL_DATA: %s", table)
+                    .isNotEmpty();
+            assertThat(registry.stores().stream().map(PersonDataContributor::store))
+                    .as("the owning store of %s is registered, and %s has no store of its own", table, table)
+                    .contains(owning.store())
+                    .doesNotContain(table);
+            assertThat(catalogs.stream()
+                            .filter(catalog -> stores(catalog).contains(owning.store()))
+                            .flatMap(catalog -> declared(catalog).stream()))
+                    .as("the catalog of %s declares each person column of %s erased", owning.store(), table)
+                    .containsAll(columns);
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM pg_constraint
+                    WHERE conname = ? AND contype = 'f'
+                      AND conrelid = ('public.' || ?)::regclass AND confrelid = ('public.' || ?)::regclass
+                    """, Long.class, owning.key(), owning.store(), table))
+                    .as("%s names the rows of %s by a foreign key", owning.store(), table)
+                    .isOne();
+            // An enabled row trigger that fires after each delete: tgtype has the row bit (1), not the before bit
+            // (2), and the delete bit (8). A trigger enabled for replication only does not fire on a normal delete.
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM pg_trigger g JOIN pg_proc p ON p.oid = g.tgfoid
+                    WHERE g.tgrelid = ('public.' || ?)::regclass AND p.proname = ? AND NOT g.tgisinternal
+                      AND (g.tgtype & 1) = 1 AND (g.tgtype & 2) = 0 AND (g.tgtype & 8) <> 0
+                      AND g.tgenabled IN ('O', 'A')
+                    """, Long.class, owning.store(), owning.deletion()))
+                    .as("each deletion of a row of %s deletes its rows of %s", owning.store(), table)
+                    .isOne();
+        }
+    }
+
+    /**
+     * The tables that need a store of their own: every table that is not free of personal data, retained for security,
+     * or gone with the rows of another store.
+     */
+    static Set<String> needAStore(Set<String> tables) {
+        var required = new TreeSet<>(tables);
+        required.removeAll(NOT_PERSONAL_DATA);
+        required.removeAll(SECURITY_RETENTION.keySet());
+        required.removeAll(GO_WITH_OWNING_ROWS.keySet());
+        return required;
+    }
+
+    /** The stores that a catalog declares. */
+    private static List<String> stores(Object catalog) {
+        PersonDataStores declaration = ClassUtils.getUserClass(catalog).getAnnotation(PersonDataStores.class);
+        return declaration == null ? List.of() : List.of(declaration.value());
     }
 
     /** The required tables that no store in the registry erases: a declaration alone erases nothing. */
@@ -350,12 +433,15 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
      * with the person's scope. A catalog or a store whose erasure matches otherwise declares its columns with
      * {@link ErasesColumns}. Otherwise
      * {@link #PERSON_COLUMNS_OUTSIDE_THE_CATALOG} states what erases or keeps the column. A store selected by its owner's
-     * {@code account_id} would otherwise leave a second person's reference, such as a reviewer's, in place.
+     * {@code account_id} would otherwise leave a second person's reference, such as a reviewer's, in place. A table in
+     * {@link #GO_WITH_OWNING_ROWS} is in scope too.
      */
     @Test
     void everyPersonColumnOfACataloguedTableHasAnErasureAction() throws IOException {
         var reached = erasedColumns(registry.stores(), catalogs);
-        var unerased = unerasedColumns(personColumns(), cataloguedTables(), reached);
+        var scope = cataloguedTables();
+        scope.addAll(GO_WITH_OWNING_ROWS.keySet());
+        var unerased = unerasedColumns(personColumns(), scope, reached);
         assertThat(unerased)
                 .as("person columns that no registered erasure reaches: erase them in a store, or state why")
                 .isEmpty();

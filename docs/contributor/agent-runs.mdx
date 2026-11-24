@@ -744,6 +744,35 @@ A turn's attempt number is its run's epoch.
 The constraint trigger `conversation_turn_run_agrees` refuses a commit where a turn and its run disagree:
 a queued turn needs a queued run. A running turn needs a leased run. A stopped turn needs a leased or an ended run. An ended turn needs an ended run.
 
+A turn's or digest's run also stores the owner of its conversation (`account_id`) and the position of the question or digest entry that it answers: the conversation (`conversation_id`) and the entry's `seq` (`subject_seq`).
+The submission takes them from the conversation that it holds locked, before it appends the entry.
+`ck_agent_run_owner` requires all three on a conversation run and none on a review run.
+Two foreign keys, both checked at the commit, hold the owner and the position:
+
+- The turn names its run together with the run's owner (`sfk_conversation_turn_run`).
+- The run names the entry at its position, with its workspace (`sfk_agent_run_stimulus`, on `uk_conversation_entry_position`).
+  The entry cannot go, or move to another position, conversation or workspace, while the run exists.
+  The key is `NO ACTION`, so it changes no row. A change that leaves a run without its entry fails the commit.
+
+A foreign key check reads past row-level security, so both keys hold for every role.
+A foreign key accepts any entry at the position, so the trigger checks that it is the right one:
+
+- It refuses a commit where a conversation run has no turn, also a run that was just queued.
+- It refuses a commit where the run's conversation is not the turn's, or where the entry at the run's position is not the turn's question (a `USER` entry) or digest (a `SYSTEM` `DIGEST` entry).
+- It also runs when a question or digest entry of a turn changes its position, kind, surface, turn or conversation, or goes.
+  It then reads the runs at the entry's old position through `idx_agent_run_stimulus`, an exact lookup.
+  So another entry that takes the position, which satisfies the foreign key, fails the commit.
+- Row-level security can hide a turn or an entry from the transaction. The trigger then refuses the commit, because it cannot check it.
+  So a transaction that changes a conversation run binds the run's owner first.
+  An owner function's writes are checked as the function's owner, which sees every row.
+
+Account absorption (`person_row_sweep`, `ACCOUNT_ABSORB`) moves the owner and the position with the turns, also on an ended run.
+A merged entry gets the kept conversation and a new `seq`, and its run gets both in the same statement.
+Erasure deletes a person's turns, and with them their runs, before their questions and digests.
+Runs have no person-data store of their own, so no erasure step reads the owner and the erasure preview counts no runs.
+`ConversationPersonDataCatalog` declares `agent_run.account_id` with `@ErasesColumns`.
+Only the scheduler, the worker, the LLM proxy and the sandbox read the owner. `AgentRunOwnerReadersArchTest` names their packages and the forms of a read that it finds.
+
 - **End.** The holder's end ends the turn and its run in one transaction. A repeated end reads `EndOutcome.ALREADY_ENDED`.
 - **Stop.** A queued turn's run ends at once. A running turn's run stays leased. Its deadline moves to 30 seconds later. The holder can still end the turn with what it wrote.
 - **Deadline.** A claim's deadline is the turn's work deadline plus the same 30 seconds. Past it, the reaper ends the turn: stopped, or failed for taking too long.

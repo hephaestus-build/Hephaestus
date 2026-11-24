@@ -38,9 +38,11 @@ import tools.jackson.databind.JsonNode;
 @Table(
         name = "conversation_entry",
         uniqueConstraints = {
+            // The position of an entry in its conversation, which a conversation run names its question or digest by
+            // (sfk_agent_run_stimulus). A conversation has one workspace, so the seq is unique in the conversation.
             @UniqueConstraint(
-                    name = "uk_conversation_entry_conversation_seq",
-                    columnNames = {"conversation_id", "seq"}),
+                    name = "uk_conversation_entry_position",
+                    columnNames = {"conversation_id", "seq", "workspace_id"}),
             @UniqueConstraint(
                     name = "uk_conversation_entry_conversation_slack_ts",
                     columnNames = {"conversation_id", "slack_ts"}),

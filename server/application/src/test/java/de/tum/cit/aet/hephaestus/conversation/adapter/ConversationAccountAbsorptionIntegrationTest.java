@@ -278,6 +278,19 @@ class ConversationAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                         asked.turn().getId()))
                 .as("the moved turn carries the claiming account")
                 .isEqualTo(claimed);
+        assertThat(jdbc.queryForMap(
+                        "SELECT r.account_id, r.conversation_id, q.conversation_id AS question_conversation, r.subject_seq,"
+                                + " q.seq FROM conversation_turn t"
+                                + " JOIN agent_run r ON r.id = t.run_id"
+                                + " JOIN conversation_entry q ON q.turn_id = t.id AND q.kind = 'USER' WHERE t.id = ?",
+                        asked.turn().getId()))
+                .as("the moved turn's run stores the claiming account and its question's merged position")
+                .containsEntry("account_id", claimed)
+                .containsEntry("subject_seq", 6L)
+                .containsEntry("seq", 6L)
+                .satisfies(run -> assertThat(run.get("conversation_id")).isEqualTo(run.get("question_conversation")));
+        // The test's transaction rolls back, so the turn and run checks run now rather than at a commit.
+        jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE");
     }
 
     @Test

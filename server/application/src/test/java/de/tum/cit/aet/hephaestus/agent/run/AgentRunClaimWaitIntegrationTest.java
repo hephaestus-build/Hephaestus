@@ -60,7 +60,8 @@ class AgentRunClaimWaitIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRecordTheWaitFromAvailableAtUnderTheRunsKindAndBandOnlyAfterTheCommit() {
         AgentRunRef review = enqueue(AgentRunKind.REVIEW, AgentRunBand.BATCH, "review:waited");
-        AgentRunRef turn = enqueue(AgentRunKind.TURN, AgentRunBand.INTERACTIVE, "conversation:waited");
+        String conversation = ConversationRuns.subject();
+        AgentRunRef turn = enqueue(AgentRunKind.TURN, AgentRunBand.INTERACTIVE, conversation);
         due(review, "90 seconds");
         due(turn, "12 seconds");
 
@@ -71,9 +72,10 @@ class AgentRunClaimWaitIntegrationTest extends BaseIntegrationTest {
                     .as("the claim is not committed yet")
                     .isZero();
         });
-        transactions.executeWithoutResult(
-                status -> assertThat(runs.claimSubject(workspace, "conversation:waited", Set.of(AgentRunKind.TURN)))
-                        .isPresent());
+        transactions.executeWithoutResult(status -> assertThat(
+                        runs.claimSubject(workspace, conversation, Set.of(AgentRunKind.TURN))
+                                .map(started -> ConversationRuns.started(jdbc, started)))
+                .isPresent());
 
         Timer reviews = timer(AgentRunKind.REVIEW, AgentRunBand.BATCH);
         assertThat(reviews.count()).isOne();
@@ -132,8 +134,9 @@ class AgentRunClaimWaitIntegrationTest extends BaseIntegrationTest {
     }
 
     private AgentRunRef enqueue(AgentRunKind kind, AgentRunBand band, String subject) {
-        return Objects.requireNonNull(
-                transactions.execute(status -> runs.enqueue(workspace, kind, band, subject, null)));
+        return Objects.requireNonNull(transactions.execute(status -> kind.conversation()
+                ? ConversationRuns.queue(runs, jdbc, workspace, kind, band, subject, null)
+                : runs.enqueue(workspace, kind, band, subject, null)));
     }
 
     private void due(AgentRunRef run, String ago) {

@@ -640,17 +640,8 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                 conversation,
                 feedback.getWorkspaceId(),
                 feedback.getDeveloperId());
-        UUID run = UUID.randomUUID();
-        jdbc.update(ConversationTurnRunRows.insert(run, feedback.getWorkspaceId(), conversation, "DONE", 1));
-        jdbc.update(
-                "INSERT INTO conversation_turn(id,workspace_id,conversation_id,account_id,request_id,status,surface,"
-                        + "attempt,run_id,created_at,finished_at) VALUES (?,?,?,?,?,'DONE','APP',1,?,now(),now())",
-                turn,
-                feedback.getWorkspaceId(),
-                conversation,
-                feedback.getDeveloperId(),
-                turn.toString(),
-                run);
+        jdbc.execute(ConversationTurnRunRows.insert(
+                turn, UUID.randomUUID(), feedback.getWorkspaceId(), conversation, "DONE", 1));
         var call = Map.of(
                 "type",
                 "toolCall",
@@ -662,7 +653,7 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                 Map.of("feedbackId", feedback.getId().toString(), "text", words));
         jdbc.update(
                 "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,turn_id,kind,surface,"
-                        + "text,payload,created_at) VALUES (?,?,?,?,1,?,'ANSWER','APP','',?::jsonb,now())",
+                        + "text,payload,created_at) VALUES (?,?,?,?,2,?,'ANSWER','APP','',?::jsonb,now())",
                 answer,
                 feedback.getWorkspaceId(),
                 conversation,
@@ -671,7 +662,7 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                 mapper.writeValueAsString(Map.of("message", Map.of("role", "assistant", "content", List.of(call)))));
         jdbc.update(
                 "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,turn_id,kind,surface,"
-                        + "text,payload,created_at) VALUES (?,?,?,?,2,?,'TOOL_RESULT','APP','',?::jsonb,now())",
+                        + "text,payload,created_at) VALUES (?,?,?,?,3,?,'TOOL_RESULT','APP','',?::jsonb,now())",
                 UUID.randomUUID(),
                 feedback.getWorkspaceId(),
                 conversation,

@@ -156,13 +156,16 @@ public class ConversationTurnService {
         if (turns.countQueuedByWorkspaceIdAndConversationId(workspaceId, conversationId) >= maxFollowUps) {
             throw new ConversationRejectedException(ConversationRejectedException.Reason.FOLLOW_UPS_FULL);
         }
-        UUID runId = runs.enqueue(workspaceId, conversationId);
+        // The run stores the owner and the question's position, which the locked conversation gives.
+        long questionSeq = entries.nextSeq(workspaceId, conversationId);
+        UUID runId = runs.enqueue(workspaceId, conversationId, conversation.getAccountId(), questionSeq);
         ConversationTurn turn = turns.saveAndFlush(new ConversationTurn(
                 conversation, requestId, asked.surface(), asked.pageContext(), runId, clock.instant()));
         ConversationEntry question = entryService.insert(
                 conversation,
                 ConversationEntryDraft.question(
-                        asked.surface().entrySurface(), asked.text(), turn.getId(), requestId, asked.slackTs()));
+                        asked.surface().entrySurface(), asked.text(), turn.getId(), requestId, asked.slackTs()),
+                questionSeq);
         entryService.appended(conversation, List.of(question));
         // A new question is the last of its conversation, so no other turn's reason to wait changes.
         events.publishEvent(ConversationLedgerEvents.TurnChanged.of(turn));
@@ -183,12 +186,15 @@ public class ConversationTurnService {
         if (turns.findByWorkspaceIdAndRequestId(workspaceId, request.requestId())
                         .isPresent()
                 || entries.existsByWorkspaceIdAndRequestId(workspaceId, request.requestId())) return false;
-        UUID runId = runs.enqueueDigest(workspaceId, conversationId, request.startWithin());
+        long digestSeq = entries.nextSeq(workspaceId, conversationId);
+        UUID runId = runs.enqueueDigest(
+                workspaceId, conversationId, conversation.getAccountId(), digestSeq, request.startWithin());
         ConversationTurn turn = turns.saveAndFlush(new ConversationTurn(
                 conversation, request.requestId(), ConversationTurn.Surface.SYSTEM, null, runId, clock.instant()));
         ConversationEntry stimulus = entryService.insert(
                 conversation,
-                ConversationEntryDraft.digest(request.text(), request.facts(), request.requestId(), turn.getId()));
+                ConversationEntryDraft.digest(request.text(), request.facts(), request.requestId(), turn.getId()),
+                digestSeq);
         entryService.appended(conversation, List.of(stimulus));
         events.publishEvent(ConversationLedgerEvents.TurnChanged.of(turn));
         return true;

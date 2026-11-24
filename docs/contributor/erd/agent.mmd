@@ -28,6 +28,9 @@ erDiagram
         VARCHAR(16) hold_reason
         INTEGER start_within_seconds
         TIMESTAMPTZ deferred_until
+        BIGINT account_id UK
+        UUID conversation_id FK
+        BIGINT subject_seq FK
     }
 
     AgentSandbox {
@@ -360,6 +363,7 @@ erDiagram
     }
 
     Account["Account · Core"]
+    ConversationEntry["ConversationEntry · Conversation"]
     PracticeVersion["PracticeVersion · Practices"]
     Review["Review · Practices"]
     Workspace["Workspace · Workspace (Tenancy)"]
@@ -371,6 +375,7 @@ erDiagram
     AgentRun ||--|| ReviewJob : run_id
 
     %% One-to-Many relationships
+    ConversationEntry ||--o{ AgentRun : references
     Workspace ||--o{ AgentRun : has
     Workspace ||--o{ AgentSandbox : has
     AgentRun ||--o{ ComposerTranscriptPart : has
@@ -412,6 +417,7 @@ erDiagram
     classDef referenceEntity stroke-dasharray:5 5
 
     class Account referenceEntity
+    class ConversationEntry referenceEntity
     class PracticeVersion referenceEntity
     class Review referenceEntity
     class Workspace referenceEntity

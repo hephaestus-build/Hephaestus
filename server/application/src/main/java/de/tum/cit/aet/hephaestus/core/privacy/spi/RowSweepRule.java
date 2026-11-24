@@ -19,8 +19,9 @@ public enum RowSweepRule {
     EXPIRED_EXPORTS(false),
 
     /**
-     * KR-08: moves an unclaimed account's conversations to the account that claimed it. Reads {@code account},
-     * {@code agent_run}; changes {@code conversation_entry}, {@code conversation_turn}, {@code conversation}.
+     * KR-08: moves an unclaimed account's conversations, with the owner and position that their turns' runs store, to
+     * the account that claimed it. Reads {@code account}; changes {@code conversation_entry}, {@code conversation_turn},
+     * {@code conversation}, {@code agent_run}.
      */
     ACCOUNT_ABSORB(true);
 

@@ -102,7 +102,7 @@ class PracticeV1FeedbackDigestDatabaseTest {
                     "feedbackId":"00000000-0000-0000-0000-000000978044","text":"Actual shown words."}}]}}'::jsonb
             WHERE id='00000000-0000-0000-0000-000000978052';
             INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,payload,turn_id,created_at)
-            VALUES('00000000-0000-0000-0000-000000978054',978001,'00000000-0000-0000-0000-000000978051',978003,2,
+            VALUES('00000000-0000-0000-0000-000000978054',978001,'00000000-0000-0000-0000-000000978051',978003,3,
                 'TOOL_RESULT','APP','','{"type":"message","id":"r1","message":{"role":"toolResult",
                 "toolCallId":"call-1","toolName":"show_feedback","isError":false,
                 "content":[{"type":"text","text":"Shown"}]}}'::jsonb,

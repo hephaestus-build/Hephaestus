@@ -258,6 +258,30 @@ class OwnerFunctionsDatabaseTest {
     @Test
     void shouldMergeTheAbsorbedMainAndMoveEveryOtherConversationToTheClaimingAccount() throws Exception {
         TestDatabase database = TestDatabaseCleanup.copyDatabase("hephaestus_owner_functions_absorb", SEEDED);
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
+            // Bo's oldest question in each main was answered by a turn whose run has ended.
+            jdbc(connection).execute("""
+                    INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key, state, attempt, lease_epoch,
+                                           available_at, stop_reason, created_at, ended_at, account_id,
+                                           conversation_id, subject_seq)
+                    VALUES ('00000000-0000-0000-0000-0000000a0002', 1, 'TURN', 'INTERACTIVE',
+                            'conversation:00000000-0000-0000-0000-00000000b001', 'ENDED', 0, 1, now(), 'COMPLETED',
+                            now(), now(), 12, '00000000-0000-0000-0000-00000000b001', 1),
+                           ('00000000-0000-0000-0000-0000000a0003', 2, 'TURN', 'INTERACTIVE',
+                            'conversation:00000000-0000-0000-0000-00000000b002', 'ENDED', 0, 1, now(), 'COMPLETED',
+                            now(), now(), 12, '00000000-0000-0000-0000-00000000b002', 1);
+                    INSERT INTO conversation_turn (id, conversation_id, created_at, request_id, status, surface,
+                                                   workspace_id, run_id, account_id)
+                    VALUES ('00000000-0000-0000-0000-0000000c0002', '00000000-0000-0000-0000-00000000b001', now(),
+                            'merged-question', 'DONE', 'APP', 1, '00000000-0000-0000-0000-0000000a0002', 12),
+                           ('00000000-0000-0000-0000-0000000c0003', '00000000-0000-0000-0000-00000000b002', now(),
+                            'moved-question', 'DONE', 'APP', 2, '00000000-0000-0000-0000-0000000a0003', 12);
+                    UPDATE conversation_entry SET turn_id = '00000000-0000-0000-0000-0000000c0002'
+                    WHERE id = '00000000-0000-0000-0000-0000000e0003';
+                    UPDATE conversation_entry SET turn_id = '00000000-0000-0000-0000-0000000c0003'
+                    WHERE id = '00000000-0000-0000-0000-0000000e0004';
+                    """);
+        }
 
         sweepAsApplication(database, RowSweepRule.ACCOUNT_ABSORB, 12, 11L);
 
@@ -289,6 +313,21 @@ class OwnerFunctionsDatabaseTest {
                             ADA_MAIN))
                     .as("the Slack DM moves to the claiming main, which had none")
                     .isEqualTo("T1 U12 D12");
+            assertThat(owner.query(
+                            "SELECT id, account_id, conversation_id, subject_seq FROM agent_run WHERE id IN (?, ?)"
+                                    + " ORDER BY id",
+                            (rs, row) -> rs.getObject("id") + " " + rs.getLong("account_id") + " "
+                                    + rs.getObject("conversation_id") + " " + rs.getLong("subject_seq"),
+                            UUID.fromString("00000000-0000-0000-0000-0000000a0002"),
+                            UUID.fromString("00000000-0000-0000-0000-0000000a0003")))
+                    .as("each ended run takes the claiming account, and the merged one its question's new position"
+                            + " in the kept main")
+                    .containsExactly(
+                            "00000000-0000-0000-0000-0000000a0002 11 " + ADA_MAIN + " 3",
+                            "00000000-0000-0000-0000-0000000a0003 11 " + BO_ELSEWHERE + " 1");
+            assertThat(owner.queryForObject("SELECT count(*) FROM agent_run WHERE account_id = 12", Long.class))
+                    .as("no run names the absorbed account")
+                    .isZero();
         }
     }
 
@@ -737,13 +776,19 @@ class OwnerFunctionsDatabaseTest {
         try (Connection connection = connect(PostgreSQLTestContainer.asOwner(database))) {
             jdbc(connection).execute("""
                     INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key, state, attempt, lease_epoch,
-                                           available_at, start_within_seconds, created_at)
+                                           available_at, start_within_seconds, created_at, account_id,
+                                           conversation_id, subject_seq)
                     VALUES ('00000000-0000-0000-0000-0000000a0001', 1, 'TURN', 'INTERACTIVE',
-                            'conversation:00000000-0000-0000-0000-00000000b001', 'QUEUED', 0, 0, now(), 180, now());
+                            'conversation:00000000-0000-0000-0000-00000000b001', 'QUEUED', 0, 0, now(), 180, now(),
+                            12, '00000000-0000-0000-0000-00000000b001', 2);
                     INSERT INTO conversation_turn (id, conversation_id, created_at, request_id, status, surface,
                                                    workspace_id, run_id, account_id)
                     VALUES ('00000000-0000-0000-0000-0000000c0001', '00000000-0000-0000-0000-00000000b001', now(),
                             'queued-question', 'QUEUED', 'APP', 1, '00000000-0000-0000-0000-0000000a0001', 12);
+                    INSERT INTO conversation_entry (id, conversation_id, created_at, kind, seq, surface, text,
+                                                    workspace_id, account_id, turn_id)
+                    VALUES ('00000000-0000-0000-0000-0000000e0008', '00000000-0000-0000-0000-00000000b001', now(),
+                            'USER', 2, 'APP', 'Bo, queued', 1, 12, '00000000-0000-0000-0000-0000000c0001');
                     """);
         }
 

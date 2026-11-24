@@ -91,12 +91,14 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         var queued = enqueue(other, AgentRunBand.BATCH, "review:waiting");
         var composition = Objects.requireNonNull(transactions.execute(status ->
                 runs.enqueue(other, AgentRunKind.REVIEW_COMPOSE, AgentRunBand.BATCH, "review:composing", null)));
-        enqueueTurn(workspace, "conversation:drain");
+        String drain = ConversationRuns.subject();
+        enqueueTurn(workspace, drain);
         var measureLease = claimSubject(workspace, "review:drain").orElseThrow();
         transactions.executeWithoutResult(status -> {
             assertThat(runs.claimSubject(other, "review:composing", Set.of(AgentRunKind.REVIEW_COMPOSE)))
                     .isPresent();
-            assertThat(runs.claimSubject(workspace, "conversation:drain", Set.of(AgentRunKind.TURN)))
+            assertThat(runs.claimSubject(workspace, drain, Set.of(AgentRunKind.TURN))
+                            .map(started -> ConversationRuns.started(jdbc, started)))
                     .isPresent();
         });
         assertThat(runs.leasedReviews()).isEqualTo(2);
@@ -828,16 +830,17 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldLeaseNoRunOfACappedKindBeyondItsCap() {
-        String conversation = "conversation:" + UUID.randomUUID();
-        AgentRunRef first = enqueueTurn(workspace, conversation + "-a");
-        AgentRunRef second = enqueueTurn(workspace, conversation + "-b");
+        AgentRunRef first = enqueueTurn(workspace, ConversationRuns.subject());
+        AgentRunRef second = enqueueTurn(workspace, ConversationRuns.subject());
         int leased = countLeasedTurns();
 
         AgentRunLease taken = claimCapped(leased + 1).orElseThrow();
         assertThat(List.of(first.id(), second.id())).contains(taken.runId());
         assertThat(claimCapped(leased + 1)).as("the cap is taken").isEmpty();
-        transactions.executeWithoutResult(status -> assertThat(runs.end(taken.fence(), AgentRunStopReason.COMPLETED))
-                .isEqualTo(AgentRuns.EndOutcome.ENDED));
+        transactions.executeWithoutResult(status -> {
+            ConversationRuns.completed(jdbc, taken);
+            assertThat(runs.end(taken.fence(), AgentRunStopReason.COMPLETED)).isEqualTo(AgentRuns.EndOutcome.ENDED);
+        });
         assertThat(claimCapped(leased + 1)).isPresent();
     }
 
@@ -846,8 +849,9 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         String subject = "conversation:" + UUID.randomUUID();
         enqueueTurn(workspace, subject);
 
-        AgentRunLease lease = Objects.requireNonNull(transactions.execute(
-                        status -> runs.claimSubject(workspace, subject, Set.of(AgentRunKind.TURN))))
+        AgentRunLease lease = Objects.requireNonNull(
+                        transactions.execute(status -> runs.claimSubject(workspace, subject, Set.of(AgentRunKind.TURN))
+                                .map(started -> ConversationRuns.started(jdbc, started))))
                 .orElseThrow();
 
         assertThat(Duration.between(Instant.now(), lease.leasedUntil()))
@@ -929,14 +933,15 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     }
 
     private AgentRunRef enqueueTurn(long workspaceId, String subject) {
-        AgentRunRef run = Objects.requireNonNull(transactions.execute(
-                status -> runs.enqueue(workspaceId, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject, null)));
+        AgentRunRef run = Objects.requireNonNull(transactions.execute(status -> ConversationRuns.queue(
+                runs, jdbc, workspaceId, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject, null)));
         sleep();
         return run;
     }
 
     private Optional<AgentRunLease> claimCapped(int cap) {
-        return Objects.requireNonNull(transactions.execute(status -> runs.claimCapped(AgentRunKind.TURN, cap)));
+        return Objects.requireNonNull(transactions.execute(status ->
+                runs.claimCapped(AgentRunKind.TURN, cap).map(started -> ConversationRuns.started(jdbc, started))));
     }
 
     private int countLeasedTurns() {

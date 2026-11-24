@@ -105,6 +105,15 @@ Custom SQL beside the catalog, such as a contributor's `UPDATE` or `DELETE`, is 
 Declare each column that it erases with `@ErasesColumns("table.column")` on the catalog or the store.
 A column that only a predicate or an export names has no erasure action.
 
+A personal table needs a store of its own, unless its rows go only with the rows of another store.
+A conversation run is an example: the deletion of its turn deletes it.
+A declaration alone does not exempt a table from its own store.
+Such a table has no count in the erasure preview.
+
+`PersonalDataMapArchTest.GO_WITH_OWNING_ROWS` names each such table and the store that owns its rows.
+It also names the foreign key from the owning rows and the trigger function that deletes the table's rows with them.
+The catalog of the owning store declares each person column of the table with `@ErasesColumns`, and an erasure test proves that no row stays.
+
 Otherwise `PersonalDataMapArchTest.PERSON_COLUMNS_OUTSIDE_THE_CATALOG` states what erases or keeps it.
 `PersonalDataMapArchTest` finds these columns in the migrated schema. The [personal-data map](../admin/dsms/personal-data-map) owns the stores.
 

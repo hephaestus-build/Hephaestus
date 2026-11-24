@@ -1402,6 +1402,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 .allSatisfy(row -> assertThat(row.path("reason").asString())
                         .isIn("Correction before access request", PersonErasureAllStoresFixture.CANARY));
         assertThat(counts.get("config_audit_event_membership_subject")).isEqualTo(3L);
+        assertThat(counts)
+                .as("the staff preview and its receipts count no conversation run: a count of one person's runs is a"
+                        + " view of their use of Hephaestus, and each run goes with its turn")
+                .doesNotContainKey("agent_run");
         assertThat(counts.get("conversation")).isEqualTo(2L);
         assertThat(counts.get("conversation_entry")).isEqualTo(3L);
         assertThat(counts.get(ConversationEntryRepository.COPIES_PERSON_DATA_STORE))
@@ -1473,6 +1477,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         for (var derived : targetDerived) {
             assertThat(agentJobRepository.findById(derived.jobId())).isEmpty();
         }
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_run WHERE account_id = ?", Long.class, targetAccount.getId()))
+                .as("no run names the erased person")
+                .isZero();
 
         allStores.assertNoPersonalContentOrReferences(subject, mapper);
         assertThat(jdbc.queryForList(
@@ -1513,6 +1521,12 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbc.queryForObject(
                         "SELECT kind FROM privacy_journal WHERE entry_id=?", String.class, recoveryEntry))
                 .isEqualTo("MEMBERSHIP_ENDED");
+        var steps = PersonDataStoreReceipt.read(mapper, receipt.getCompletedJson());
+        assertThat(Objects.requireNonNull(steps.get("conversation_turn")).completedAt())
+                .as("the turns, and with them their runs, go in a commit before their questions, so no stop between"
+                        + " the two steps leaves a turn without its question")
+                .isBefore(
+                        Objects.requireNonNull(steps.get("conversation_entry")).completedAt());
         // Both closures may retain only anonymised, tombstone or control rows.
         var resolvedAfter = resolver.resolve(targetAccount.getId(), frozen.identities());
         Map<String, Long> reselected = registry.counts(registry.select(resolvedAfter));

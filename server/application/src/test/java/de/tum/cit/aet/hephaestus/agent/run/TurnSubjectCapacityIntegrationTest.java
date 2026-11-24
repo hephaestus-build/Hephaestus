@@ -31,6 +31,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** The installation turn cap applies to subject pulls, without waiting on a cap lock under a shared sandbox lock. */
@@ -49,6 +50,9 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private long workspace;
     private AgentRuns capped;
@@ -104,7 +108,9 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
     }
 
     private AgentRunRef queue(String subject, AgentRunKind kind) {
-        return Objects.requireNonNull(transactions.execute(status -> runs.enqueue(
+        return Objects.requireNonNull(transactions.execute(status -> ConversationRuns.queue(
+                runs,
+                jdbc,
                 workspace,
                 kind,
                 kind == AgentRunKind.DIGEST ? AgentRunBand.BACKGROUND : AgentRunBand.INTERACTIVE,
@@ -141,22 +147,28 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
     void shouldLetAQuestionPassItsQueuedDigestAsSoonAsConversationCapacityReturns() {
         String occupied = "conversation:" + UUID.randomUUID();
         queue(occupied);
-        var held = transactions.execute(status -> capped.claimSubject(workspace, occupied, Set.of(AgentRunKind.TURN)));
+        var held = transactions.execute(status -> capped.claimSubject(workspace, occupied, Set.of(AgentRunKind.TURN))
+                .map(started -> ConversationRuns.started(jdbc, started)));
         var lease = Objects.requireNonNull(held).orElseThrow();
         String subject = "conversation:" + UUID.randomUUID();
         var digest = queue(subject, AgentRunKind.DIGEST);
-        var question = Objects.requireNonNull(transactions.execute(status ->
-                runs.enqueue(workspace, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject, Duration.ofMinutes(3))));
+        var question = Objects.requireNonNull(transactions.execute(status -> ConversationRuns.queue(
+                runs, jdbc, workspace, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject, Duration.ofMinutes(3))));
         var offered = Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST);
         assertThat(capped.due(offered, 0, Integer.MAX_VALUE))
                 .filteredOn(run -> run.run().workspaceId() == workspace)
                 .extracting(AgentRuns.DueRun::run)
                 .contains(question)
                 .doesNotContain(digest);
-        var blocked = transactions.execute(status -> capped.claimSubject(workspace, subject, offered));
+        var blocked = transactions.execute(status -> capped.claimSubject(workspace, subject, offered)
+                .map(started -> ConversationRuns.started(jdbc, started)));
         assertThat(blocked).isEmpty();
-        transactions.executeWithoutResult(status -> runs.end(lease.fence(), AgentRunStopReason.COMPLETED));
-        var claimed = transactions.execute(status -> capped.claimSubject(workspace, subject, offered));
+        transactions.executeWithoutResult(status -> {
+            ConversationRuns.completed(jdbc, lease);
+            runs.end(lease.fence(), AgentRunStopReason.COMPLETED);
+        });
+        var claimed = transactions.execute(status -> capped.claimSubject(workspace, subject, offered)
+                .map(started -> ConversationRuns.started(jdbc, started)));
         assertThat(claimed).get().extracting(AgentRunLease::runId).isEqualTo(question.id());
         assertThat(rows.findByRef(digest.id(), workspace))
                 .get()
@@ -174,10 +186,10 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             AgentRunLease claimed = Objects.requireNonNull(transactions.execute(status -> {
                 var lease = sandboxes
-                        .lease(firstSandbox, Set.of(firstKind), ignored -> true)
+                        .lease(firstSandbox, Set.of(firstKind), ConversationRuns.starts(jdbc))
                         .orElseThrow();
-                var concurrent =
-                        executor.submit(() -> sandboxes.lease(secondSandbox, Set.of(secondKind), ignored -> true));
+                var concurrent = executor.submit(
+                        () -> sandboxes.lease(secondSandbox, Set.of(secondKind), ConversationRuns.starts(jdbc)));
                 try {
                     assertThat(concurrent.get(5, TimeUnit.SECONDS)).isEmpty();
                 } catch (Exception failure) {
@@ -186,12 +198,15 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
                 return lease;
             }));
             assertThat(claimed.runId()).isEqualTo(first.id());
-            assertThat(sandboxes.lease(secondSandbox, Set.of(secondKind), ignored -> true))
+            assertThat(sandboxes.lease(secondSandbox, Set.of(secondKind), ConversationRuns.starts(jdbc)))
                     .isEmpty();
             assertThat(rows.findByRef(second.id(), workspace).orElseThrow().getState())
                     .isEqualTo(AgentRunState.QUEUED);
-            transactions.executeWithoutResult(status -> runs.end(claimed.fence(), AgentRunStopReason.COMPLETED));
-            assertThat(sandboxes.lease(secondSandbox, Set.of(secondKind), ignored -> true))
+            transactions.executeWithoutResult(status -> {
+                ConversationRuns.completed(jdbc, claimed);
+                runs.end(claimed.fence(), AgentRunStopReason.COMPLETED);
+            });
+            assertThat(sandboxes.lease(secondSandbox, Set.of(secondKind), ConversationRuns.starts(jdbc)))
                     .map(AgentRunLease::runId)
                     .contains(second.id());
         }
@@ -215,6 +230,7 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
         var finish = new CountDownLatch(1);
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var first = executor.submit(() -> owner.lease(sandbox, offered, lease -> {
+                ConversationRuns.started(jdbc, lease);
                 claimed.countDown();
                 try {
                     if (!finish.await(10, TimeUnit.SECONDS))
@@ -229,15 +245,18 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
             try {
                 assertThat(claimed.await(5, TimeUnit.SECONDS)).isTrue();
                 question = queue(subject);
-                var second = executor.submit(() -> owner.lease(sandbox, offered, ignored -> true));
+                var second = executor.submit(() -> owner.lease(sandbox, offered, ConversationRuns.starts(jdbc)));
                 assertThat(second.get(5, TimeUnit.SECONDS)).isEmpty();
             } finally {
                 finish.countDown();
             }
             var lease = first.get(5, TimeUnit.SECONDS).orElseThrow();
             assertThat(lease.runId()).isEqualTo(digest.id());
-            transactions.executeWithoutResult(status -> runs.end(lease.fence(), AgentRunStopReason.COMPLETED));
-            assertThat(owner.lease(sandbox, offered, ignored -> true))
+            transactions.executeWithoutResult(status -> {
+                ConversationRuns.completed(jdbc, lease);
+                runs.end(lease.fence(), AgentRunStopReason.COMPLETED);
+            });
+            assertThat(owner.lease(sandbox, offered, ConversationRuns.starts(jdbc)))
                     .get()
                     .extracting(AgentRunLease::runId)
                     .isEqualTo(question.id());
@@ -253,6 +272,7 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
         var finish = new CountDownLatch(1);
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var first = executor.submit(() -> sandboxes.lease(sandbox, Set.of(AgentRunKind.TURN), lease -> {
+                ConversationRuns.started(jdbc, lease);
                 claimed.countDown();
                 try {
                     if (!finish.await(10, TimeUnit.SECONDS))
@@ -265,8 +285,8 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
             }));
             try {
                 assertThat(claimed.await(5, TimeUnit.SECONDS)).isTrue();
-                var second =
-                        executor.submit(() -> sandboxes.lease(sandbox, Set.of(AgentRunKind.TURN), ignored -> true));
+                var second = executor.submit(
+                        () -> sandboxes.lease(sandbox, Set.of(AgentRunKind.TURN), ConversationRuns.starts(jdbc)));
                 assertThat(second.get(5, TimeUnit.SECONDS)).isEqualTo(Optional.empty());
             } finally {
                 finish.countDown();

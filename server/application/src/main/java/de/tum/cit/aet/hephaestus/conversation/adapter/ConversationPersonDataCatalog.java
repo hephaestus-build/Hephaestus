@@ -26,8 +26,16 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 // The conversation store deletes the person's conversations through OWN_CONVERSATIONS. An entry or a turn references
-// its conversation with the conversation's account and cascades on delete, so it goes with them.
-@ErasesColumns({"conversation.account_id", "conversation_entry.account_id", "conversation_turn.account_id"})
+// its conversation with the conversation's account and cascades on delete, so it goes with them. A conversation run
+// has no store of its own: it commits only with its turn, which names it with the run's owner
+// (sfk_conversation_turn_run), and the turn's deletion deletes it (forget_conversation_turn_run). So the turn store's
+// deletion erases every run that names the person, also an ended run, and a preview counts no run.
+@ErasesColumns({
+    "conversation.account_id",
+    "conversation_entry.account_id",
+    "conversation_turn.account_id",
+    "agent_run.account_id"
+})
 @PersonDataStores({
     ConversationEntryRepository.COPIES_PERSON_DATA_STORE,
     "conversation_entry_feedback_copy",
@@ -54,13 +62,8 @@ public class ConversationPersonDataCatalog implements PersonDataCatalog {
                 new ConversationToolResultCopyPersonDataStore(
                         jdbc, mapper, redaction, contextChanges, sandboxCopies, memberships),
                 new ConversationFeedbackCopyPersonDataStore(jdbc, mapper, redaction, copySources),
-                new ConversationEntryPersonDataStore(
-                        jdbc,
-                        mapper,
-                        "conversation_entry",
-                        "t.kind IN ('USER','ANSWER','DIGEST') AND t.conversation_id IN (" + OWN_CONVERSATIONS + ")",
-                        "id,conversation_id,seq,kind,surface,text,vote,slack_ts,created_at,edited_at,redacted_at",
-                        -110),
+                // The turns go before their questions and digests, each step in its own commit: a conversation run
+                // commits only with its turn and the entry that it answers, and a turn's run goes with the turn.
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,
@@ -70,7 +73,14 @@ public class ConversationPersonDataCatalog implements PersonDataCatalog {
                         "id,conversation_id,surface,status,attempt,page_context,created_at,started_at,finished_at",
                         "id",
                         "",
-                        -100),
+                        -120),
+                new ConversationEntryPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "conversation_entry",
+                        "t.kind IN ('USER','ANSWER','DIGEST') AND t.conversation_id IN (" + OWN_CONVERSATIONS + ")",
+                        "id,conversation_id,seq,kind,surface,text,vote,slack_ts,created_at,edited_at,redacted_at",
+                        -110),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

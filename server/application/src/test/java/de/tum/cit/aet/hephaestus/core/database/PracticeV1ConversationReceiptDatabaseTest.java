@@ -242,22 +242,25 @@ class PracticeV1ConversationReceiptDatabaseTest {
             VALUES('00000000-0000-0000-0000-000000998172',978001,'00000000-0000-0000-0000-000000998161',
                 'CHAT_TURN',0,'PLANNED','fixed-chat-key','fixed-chat-marker');
             INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,payload,turn_id,created_at)
-            VALUES('00000000-0000-0000-0000-000000998192',978001,'00000000-0000-0000-0000-000000978051',978003,2,'ANSWER','APP',
+            VALUES('00000000-0000-0000-0000-000000998192',978001,'00000000-0000-0000-0000-000000978051',978003,3,'ANSWER','APP',
                 '',NULL,'00000000-0000-0000-0000-000000978053','2026-02-01T00:00:00Z');
             INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)
             VALUES('00000000-0000-0000-0000-000000998193',978001,978007,'2026-02-01T00:00:00Z','2026-02-01T00:00:00Z');
             INSERT INTO agent_run(id,workspace_id,kind,band,concurrency_key,state,attempt,lease_epoch,leased_until,
-                available_at,start_within_seconds,created_at,started_at)
+                available_at,start_within_seconds,created_at,started_at,account_id,conversation_id,subject_seq)
             VALUES('00000000-0000-0000-0000-000000998196',978001,'TURN','INTERACTIVE',
                 'conversation:00000000-0000-0000-0000-000000998193','LEASED',0,1,now()+interval '5 minutes',
-                '2026-02-01T00:00:00Z',180,'2026-02-01T00:00:00Z','2026-02-01T00:00:00Z');
+                '2026-02-01T00:00:00Z',180,'2026-02-01T00:00:00Z','2026-02-01T00:00:00Z',978007,
+                '00000000-0000-0000-0000-000000998193',1);
             INSERT INTO conversation_turn(id,workspace_id,conversation_id,account_id,request_id,status,surface,attempt,run_id,started_at,
                 created_at)
             VALUES('00000000-0000-0000-0000-000000998195',978001,'00000000-0000-0000-0000-000000998193',978007,
                 'foreign-turn','RUNNING','APP',1,'00000000-0000-0000-0000-000000998196','2026-02-01T00:00:00Z',
                 '2026-02-01T00:00:00Z');
             INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,turn_id,created_at)
-            VALUES('00000000-0000-0000-0000-000000998194',978001,'00000000-0000-0000-0000-000000998193',978007,1,'ANSWER','APP',
+            VALUES('00000000-0000-0000-0000-000000998197',978001,'00000000-0000-0000-0000-000000998193',978007,1,'USER','APP',
+                'A question.','00000000-0000-0000-0000-000000998195','2026-02-01T00:00:00Z'),
+                ('00000000-0000-0000-0000-000000998194',978001,'00000000-0000-0000-0000-000000998193',978007,2,'ANSWER','APP',
                 'Another developer.','00000000-0000-0000-0000-000000998195','2026-02-01T00:00:00Z');
             """);
         return database;
@@ -286,7 +289,7 @@ class PracticeV1ConversationReceiptDatabaseTest {
                     "feedbackId":"00000000-0000-0000-0000-000000978044","text":"Other feedback."}}]}}'::jsonb
             WHERE id='00000000-0000-0000-0000-000000998192';
             INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,payload,turn_id,created_at)
-            VALUES('00000000-0000-0000-0000-000000998196',978001,'00000000-0000-0000-0000-000000978051',978003,3,
+            VALUES('00000000-0000-0000-0000-000000998196',978001,'00000000-0000-0000-0000-000000978051',978003,4,
                 'TOOL_RESULT','APP','','{"type":"message","id":"r1","message":{"role":"toolResult",
                 "toolCallId":"call-1","toolName":"show_feedback","isError":false,
                 "content":[{"type":"text","text":"Shown"}]}}'::jsonb,

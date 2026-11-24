@@ -25,14 +25,17 @@ class PracticeV1RetentionDatabaseTest {
             INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)
             VALUES('00000000-0000-0000-0000-000000996191',992101,992106,now(),now());
             INSERT INTO agent_run(id,workspace_id,kind,band,concurrency_key,state,attempt,lease_epoch,available_at,
-                stop_reason,created_at,ended_at)
+                stop_reason,created_at,ended_at,account_id,conversation_id,subject_seq)
             VALUES('00000000-0000-0000-0000-000000996199',992101,'TURN','INTERACTIVE',
-                'conversation:00000000-0000-0000-0000-000000996191','ENDED',0,0,now(),'COMPLETED',now(),now());
+                'conversation:00000000-0000-0000-0000-000000996191','ENDED',0,0,now(),'COMPLETED',now(),now(),992106,
+                '00000000-0000-0000-0000-000000996191',1);
             INSERT INTO conversation_turn(id,workspace_id,conversation_id,account_id,request_id,status,surface,run_id,created_at)
             VALUES('00000000-0000-0000-0000-000000996192',992101,'00000000-0000-0000-0000-000000996191',992106,
                 'retention-turn','DONE','APP','00000000-0000-0000-0000-000000996199',now());
             INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,turn_id,created_at)
-            VALUES('00000000-0000-0000-0000-000000996193',992101,'00000000-0000-0000-0000-000000996191',992106,1,
+            VALUES('00000000-0000-0000-0000-000000996195',992101,'00000000-0000-0000-0000-000000996191',992106,1,
+                'USER','APP','A question.','00000000-0000-0000-0000-000000996192',now()),
+                ('00000000-0000-0000-0000-000000996193',992101,'00000000-0000-0000-0000-000000996191',992106,2,
                 'ANSWER','APP','Hephaestus answer.','00000000-0000-0000-0000-000000996192',now());
             INSERT INTO conversation(id,workspace_id,account_id,parent_conversation_id,parent_entry_id,
                 created_at,last_activity_at)

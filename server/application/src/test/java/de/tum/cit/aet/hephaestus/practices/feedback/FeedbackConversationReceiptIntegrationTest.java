@@ -94,19 +94,10 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     /** A turn whose first attempt runs now, as a worker's claim leaves it. */
     private UUID runningTurn(UUID conversation, long account) {
         UUID id = UUID.randomUUID();
-        UUID run = UUID.randomUUID();
-        writeLedger(account, () -> {
-            jdbc.update(ConversationTurnRunRows.insert(run, workspace.getId(), conversation, "RUNNING", 1));
-            jdbc.update(
-                    "INSERT INTO conversation_turn(id,workspace_id,conversation_id,account_id,request_id,status,surface,"
-                            + "attempt,run_id,started_at,created_at) VALUES (?,?,?,?,?,'RUNNING','APP',1,?,now(),now())",
-                    id,
-                    workspace.getId(),
-                    conversation,
-                    account,
-                    "request-" + id,
-                    run);
-        });
+        writeLedger(
+                account,
+                () -> jdbc.execute(ConversationTurnRunRows.insert(
+                        id, UUID.randomUUID(), workspace.getId(), conversation, "RUNNING", 1)));
         return id;
     }
 
@@ -154,7 +145,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         }
         jdbc.update(
                 "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,"
-                        + "payload,turn_id,created_at) VALUES (?,?,?,(SELECT account_id FROM conversation WHERE id = ?),1,'ANSWER','APP','Some context.',?::jsonb,?,"
+                        + "payload,turn_id,created_at) VALUES (?,?,?,(SELECT account_id FROM conversation WHERE id = ?),2,'ANSWER','APP','Some context.',?::jsonb,?,"
                         + "now())",
                 entry,
                 workspace.getId(),
@@ -163,7 +154,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                 "{\"type\":\"message\",\"id\":\"a1\",\"message\":{\"role\":\"assistant\",\"content\":[" + content
                         + "]}}",
                 turnId);
-        int seq = 2;
+        int seq = 3;
         for (Call call : calls) {
             if (call.succeeded() == null) continue;
             jdbc.update(
@@ -270,16 +261,10 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                 () -> jdbc.update("""
                 INSERT INTO conversation_entry (id,workspace_id,conversation_id,account_id,turn_id,seq,kind,surface,text,
                     created_at)
-                VALUES (?,?,?,?,?,1,'ANSWER','APP','An answer',now())
+                VALUES (?,?,?,?,?,2,'ANSWER','APP','An answer',now())
                 """, foreignEntry, workspace.getId(), foreignConversation, other, foreignTurn));
-        UUID question = UUID.randomUUID();
-        writeLedger(
-                developerId,
-                () -> jdbc.update("""
-                INSERT INTO conversation_entry (id,workspace_id,conversation_id,account_id,turn_id,seq,kind,surface,text,
-                    created_at)
-                VALUES (?,?,?,?,?,45,'USER','APP','A question',now())
-                """, question, workspace.getId(), ledgerConversationId, developerId, turnId));
+        UUID question = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT id FROM conversation_entry WHERE turn_id = ? AND kind = 'USER'", UUID.class, turnId));
         Instant at = fence.writeStartedAt().plusSeconds(1);
 
         UUID ownEntry = answer();

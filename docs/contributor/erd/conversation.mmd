@@ -63,7 +63,7 @@ erDiagram
         TIMESTAMPTZ queued_at "NOT NULL"
         INTEGER tools_loads "NOT NULL"
         UUID run_id FK,UK "NOT NULL"
-        BIGINT account_id FK "NOT NULL"
+        BIGINT account_id FK,UK "NOT NULL"
     }
 
     Account["Account · Core"]

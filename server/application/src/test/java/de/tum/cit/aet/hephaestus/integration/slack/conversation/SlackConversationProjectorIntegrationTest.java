@@ -256,9 +256,18 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
             default -> ended.accountId();
         };
         if (change.equals("owner moved after the change")) {
-            // An absorption moves the conversation to the claiming account; its turns and messages follow it.
+            // An absorption moves the conversation to the claiming account, and its turns and messages follow it. In
+            // the
+            // same transaction it moves the runs of the turns, which store their owner.
             long claiming = accountId(persistUser("slack-outbox-claiming"));
-            jdbc.update("UPDATE conversation SET account_id = ? WHERE id = ?", claiming, main.getId());
+            transactions.executeWithoutResult(status -> {
+                jdbc.update("UPDATE conversation SET account_id = ? WHERE id = ?", claiming, main.getId());
+                jdbc.update(
+                        "UPDATE agent_run SET account_id = ? WHERE id IN"
+                                + " (SELECT run_id FROM conversation_turn WHERE conversation_id = ?)",
+                        claiming,
+                        main.getId());
+            });
         }
         var wakes = mock(ActionExecutor.class);
 

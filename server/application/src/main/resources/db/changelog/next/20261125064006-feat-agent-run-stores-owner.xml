@@ -1,0 +1,545 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795541881079-1" author="hephaestus">
+        <!-- Liquibase commits a change set before it records it. A run that stopped in between finds the whole change
+             done, as PostgreSQL commits its DDL at once, and marks it run. Each key, index and trigger is checked by the
+             whole definition that PostgreSQL prints for it, and the guard function by the hash of its printed definition.
+             Each new column has its type, and no default, identity or generation. The key on (conversation_id, seq) is
+             gone. Any other state runs the change set, which then fails loudly. A printed definition names a table or a
+             function without its schema when the search path finds it, and a regclass or a regproc as text does the
+             same. -->
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sqlCheck expectedResult="14"><![CDATA[
+                    WITH key AS (
+                        SELECT c.conrelid, c.conname,
+                               regexp_replace(pg_catalog.pg_get_constraintdef(c.oid), '\s+', ' ', 'g') AS definition
+                        FROM pg_catalog.pg_constraint c
+                        WHERE c.conrelid IN ('public.agent_run'::regclass, 'public.conversation_turn'::regclass,
+                                             'public.conversation_entry'::regclass)
+                    ),
+                    index AS (
+                        SELECT c.relname, pg_catalog.pg_get_indexdef(c.oid) AS definition
+                        FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid = i.indexrelid
+                        WHERE c.relnamespace = 'public'::regnamespace AND i.indisvalid
+                    ),
+                    owner_column AS (
+                        SELECT a.attname,
+                               pg_catalog.format_type(a.atttypid, a.atttypmod) AS type
+                        FROM pg_catalog.pg_attribute a
+                        WHERE a.attrelid = 'public.agent_run'::regclass AND NOT a.attisdropped AND NOT a.attnotnull
+                          AND NOT a.atthasdef AND a.attidentity = '' AND a.attgenerated = ''
+                    )
+                    SELECT count(*) FROM (VALUES
+                        (EXISTS (SELECT FROM owner_column WHERE attname = 'account_id' AND type = 'bigint')),
+                        (EXISTS (SELECT FROM owner_column WHERE attname = 'conversation_id' AND type = 'uuid')),
+                        (EXISTS (SELECT FROM owner_column WHERE attname = 'subject_seq' AND type = 'bigint')),
+                        (EXISTS (SELECT FROM key
+                                 WHERE conrelid = 'public.agent_run'::regclass AND conname = 'ck_agent_run_owner'
+                                   AND definition = 'CHECK ( CASE WHEN ((kind)::text = ANY ((ARRAY[''TURN''::character varying, ''DIGEST''::character varying])::text[])) THEN ((account_id IS NOT NULL) AND (conversation_id IS NOT NULL) AND (subject_seq IS NOT NULL) AND (subject_seq > 0)) ELSE ((account_id IS NULL) AND (conversation_id IS NULL) AND (subject_seq IS NULL)) END)')),
+                        (EXISTS (SELECT FROM key
+                                 WHERE conrelid = 'public.agent_run'::regclass AND conname = 'uk_agent_run_owner'
+                                   AND definition = 'UNIQUE (id, workspace_id, account_id)')),
+                        (EXISTS (SELECT FROM key
+                                 WHERE conrelid = 'public.conversation_turn'::regclass
+                                   AND conname = 'sfk_conversation_turn_run'
+                                   AND definition = pg_catalog.format('FOREIGN KEY (run_id, workspace_id, account_id) REFERENCES %s(id, workspace_id, account_id) DEFERRABLE INITIALLY DEFERRED',
+                                                                      'public.agent_run'::regclass))),
+                        (EXISTS (SELECT FROM key
+                                 WHERE conrelid = 'public.conversation_turn'::regclass
+                                   AND conname = 'uk_conversation_turn_run'
+                                   AND definition = 'UNIQUE (run_id, workspace_id, account_id)')),
+                        (EXISTS (SELECT FROM key
+                                 WHERE conrelid = 'public.conversation_entry'::regclass
+                                   AND conname = 'uk_conversation_entry_position'
+                                   AND definition = 'UNIQUE (conversation_id, seq, workspace_id)')),
+                        (NOT EXISTS (SELECT FROM key
+                                     WHERE conrelid = 'public.conversation_entry'::regclass
+                                       AND conname = 'uk_conversation_entry_conversation_seq')),
+                        (EXISTS (SELECT FROM key
+                                 WHERE conrelid = 'public.agent_run'::regclass AND conname = 'sfk_agent_run_stimulus'
+                                   AND definition = pg_catalog.format('FOREIGN KEY (workspace_id, conversation_id, subject_seq) REFERENCES %s(workspace_id, conversation_id, seq) DEFERRABLE INITIALLY DEFERRED',
+                                                                      'public.conversation_entry'::regclass))),
+                        (EXISTS (SELECT FROM index WHERE relname = 'idx_agent_run_account'
+                                   AND definition = 'CREATE INDEX idx_agent_run_account ON public.agent_run USING btree (account_id) WHERE (account_id IS NOT NULL)')),
+                        (EXISTS (SELECT FROM index WHERE relname = 'idx_agent_run_stimulus'
+                                   AND definition = 'CREATE INDEX idx_agent_run_stimulus ON public.agent_run USING btree (workspace_id, conversation_id, subject_seq) WHERE (conversation_id IS NOT NULL)')),
+                        (encode(sha256(convert_to(pg_catalog.pg_get_functiondef('public.guard_agent_run()'::regprocedure), 'UTF8')), 'hex')
+                            = '3829814d66fa959ac0cef15bc8d833613d4c03c4916d879da736122acbdb7960'),
+                        (EXISTS (SELECT FROM pg_catalog.pg_trigger g
+                                 WHERE g.tgrelid = 'public.agent_run'::regclass AND g.tgname = 'agent_run_transition'
+                                   AND NOT g.tgisinternal AND g.tgenabled IN ('O', 'A')
+                                   AND pg_catalog.pg_get_triggerdef(g.oid)
+                                       = pg_catalog.format('CREATE TRIGGER agent_run_transition AFTER UPDATE ON public.agent_run FOR EACH ROW EXECUTE FUNCTION %s()',
+                                                           'public.guard_agent_run'::regproc)))
+                    ) AS fact(holds) WHERE holds
+                ]]></sqlCheck>
+            </not>
+        </preConditions>
+        <comment>A conversation run stores its owner (account_id) and the ledger position of the question or digest entry that it answers (conversation_id and subject_seq), from its turn. A review run stores none of them. Each turn names its run with the run's owner, so the owner of a run is always the owner of its turn. Each run names the entry at its position, so the entry cannot go or move while the run exists. A turn of an account under erasure that lost its question to an erasure that stopped goes now, with its run: the erasure deletes it anyway. Any other conversation run without a turn and its question or digest stops the migration and names the count. An ended run changes only when its turn moves to another owner.</comment>
+        <sql splitStatements="false"><![CDATA[
+-- The previous release erased a person's questions and digests before the person's turns, in separate commits. An
+-- erasure that stopped between them left turns of an account under erasure without the entry that they answer. Erasure
+-- deletes these turns anyway; a turn's run goes with it.
+DELETE FROM public.conversation_turn t
+WHERE EXISTS (SELECT FROM public.account a WHERE a.id = t.account_id AND a.status IN ('DELETING', 'DELETED'))
+  AND NOT EXISTS (
+      SELECT FROM public.agent_run r
+      JOIN public.conversation_entry e
+        ON (e.turn_id, e.workspace_id, e.conversation_id) = (t.id, t.workspace_id, t.conversation_id)
+       AND ((r.kind = 'TURN' AND e.kind = 'USER') OR (r.kind = 'DIGEST' AND e.kind = 'DIGEST' AND e.surface = 'SYSTEM'))
+      WHERE (r.id, r.workspace_id) = (t.run_id, t.workspace_id));
+
+DO $$
+DECLARE
+ missing bigint;
+BEGIN
+ SELECT count(*) INTO missing FROM public.agent_run r
+ WHERE r.kind IN ('TURN', 'DIGEST') AND NOT EXISTS (
+     SELECT FROM public.conversation_turn t
+     JOIN public.conversation_entry e
+       ON (e.turn_id, e.workspace_id, e.conversation_id) = (t.id, t.workspace_id, t.conversation_id)
+      AND ((r.kind = 'TURN' AND e.kind = 'USER') OR (r.kind = 'DIGEST' AND e.kind = 'DIGEST' AND e.surface = 'SYSTEM'))
+     WHERE (t.run_id, t.workspace_id) = (r.id, r.workspace_id));
+ IF missing > 0 THEN
+  RAISE EXCEPTION '% conversation runs have no turn with its question or digest entry, so no owner can be stored', missing
+   USING ERRCODE = 'object_not_in_prerequisite_state';
+ END IF;
+END $$;
+
+ALTER TABLE public.agent_run ADD COLUMN account_id bigint, ADD COLUMN conversation_id uuid, ADD COLUMN subject_seq bigint;
+
+CREATE OR REPLACE FUNCTION public.guard_agent_run() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF ROW(NEW.id, NEW.workspace_id, NEW.kind, NEW.band, NEW.created_at, NEW.start_within_seconds)
+    IS DISTINCT FROM ROW(OLD.id, OLD.workspace_id, OLD.kind, OLD.band, OLD.created_at, OLD.start_within_seconds) THEN
+  RAISE EXCEPTION 'a run''s identity is immutable' USING ERRCODE = '55000';
+ END IF;
+ IF NEW.concurrency_key IS DISTINCT FROM OLD.concurrency_key AND NOT (OLD.state = 'QUEUED' AND NEW.state = 'QUEUED') THEN
+  RAISE EXCEPTION 'only a queued run moves to another subject' USING ERRCODE = '55000';
+ END IF;
+ -- An ended run changes only when its turn moves to another owner or ledger position: an absorbed account's
+ -- conversations move to the account that claimed it (person_row_sweep, ACCOUNT_ABSORB).
+ IF OLD.state = 'ENDED'
+    AND (ROW(NEW.account_id, NEW.conversation_id, NEW.subject_seq)
+           IS NOT DISTINCT FROM ROW(OLD.account_id, OLD.conversation_id, OLD.subject_seq)
+         OR (to_jsonb(NEW) - 'account_id' - 'conversation_id' - 'subject_seq')
+           IS DISTINCT FROM (to_jsonb(OLD) - 'account_id' - 'conversation_id' - 'subject_seq')) THEN
+  RAISE EXCEPTION 'an ended run is final' USING ERRCODE = '55000';
+ END IF;
+ IF NEW.attempt < OLD.attempt THEN
+  RAISE EXCEPTION 'a run''s spent attempts never decrease' USING ERRCODE = '23514';
+ END IF;
+ IF OLD.state = 'QUEUED' AND NEW.state = 'LEASED' THEN
+  IF NEW.lease_epoch <> OLD.lease_epoch + 1 THEN
+   RAISE EXCEPTION 'a claim takes the next epoch' USING ERRCODE = '23514';
+  END IF;
+ ELSIF NEW.lease_epoch <> OLD.lease_epoch THEN
+  RAISE EXCEPTION 'only a claim changes the epoch' USING ERRCODE = '23514';
+ END IF;
+ IF OLD.state = 'LEASED' AND NEW.state = 'LEASED' AND NEW.attempt <> OLD.attempt THEN
+  RAISE EXCEPTION 'a renewal spends no attempt' USING ERRCODE = '23514';
+ END IF;
+ IF NEW.deadline IS DISTINCT FROM OLD.deadline
+    AND NOT (NEW.deadline IS NULL AND NEW.state = 'QUEUED')
+    AND NOT (NEW.deadline IS NOT NULL AND (OLD.deadline IS NULL OR NEW.deadline < OLD.deadline)) THEN
+  RAISE EXCEPTION 'a run''s deadline only moves earlier, until a requeue clears it' USING ERRCODE = '23514';
+ END IF;
+ RETURN NEW;
+END $$;
+
+UPDATE public.agent_run r SET account_id = t.account_id, conversation_id = t.conversation_id, subject_seq = e.seq
+FROM public.conversation_turn t
+JOIN public.conversation_entry e
+  ON (e.turn_id, e.workspace_id, e.conversation_id) = (t.id, t.workspace_id, t.conversation_id)
+WHERE (t.run_id, t.workspace_id) = (r.id, r.workspace_id)
+  AND ((r.kind = 'TURN' AND e.kind = 'USER') OR (r.kind = 'DIGEST' AND e.kind = 'DIGEST' AND e.surface = 'SYSTEM'));
+
+ALTER TABLE public.agent_run ADD CONSTRAINT ck_agent_run_owner CHECK (
+    CASE WHEN kind IN ('TURN', 'DIGEST')
+         THEN account_id IS NOT NULL AND conversation_id IS NOT NULL AND subject_seq IS NOT NULL AND subject_seq > 0
+         ELSE account_id IS NULL AND conversation_id IS NULL AND subject_seq IS NULL END);
+-- Absorption reads a person's runs by their owner.
+CREATE INDEX idx_agent_run_account ON public.agent_run (account_id) WHERE account_id IS NOT NULL;
+-- A run names the entry at its position. A foreign key check reads past row-level security, so the entry cannot go,
+-- or move to another position, conversation or workspace, while the run exists, for every role. The check waits for
+-- the commit, because a turn's run is queued before its entry, and absorption moves entries and runs in separate
+-- statements. NO ACTION writes nothing: a change that leaves a run without its entry fails the commit.
+-- The foreign key needs a key with the workspace. It replaces the key on (conversation_id, seq), which holds the same
+-- fact, as a conversation has one workspace. conversation_id stays first, so the reads of one conversation's entries in
+-- seq order keep their index.
+ALTER TABLE public.conversation_entry DROP CONSTRAINT uk_conversation_entry_conversation_seq;
+ALTER TABLE public.conversation_entry ADD CONSTRAINT uk_conversation_entry_position
+    UNIQUE (conversation_id, seq, workspace_id);
+ALTER TABLE public.agent_run ADD CONSTRAINT sfk_agent_run_stimulus
+    FOREIGN KEY (workspace_id, conversation_id, subject_seq)
+    REFERENCES public.conversation_entry (workspace_id, conversation_id, seq)
+    ON UPDATE NO ACTION ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED;
+-- The foreign key's checks and the entry check of enforce_conversation_turn_run find the runs at one position.
+CREATE INDEX idx_agent_run_stimulus ON public.agent_run (workspace_id, conversation_id, subject_seq)
+    WHERE conversation_id IS NOT NULL;
+-- A turn names its run with the run's owner. A foreign key check reads past row-level security, so it holds for
+-- every role. It waits for the commit, because an absorbed account's turns and runs move in separate statements.
+ALTER TABLE public.agent_run ADD CONSTRAINT uk_agent_run_owner UNIQUE (id, workspace_id, account_id);
+ALTER TABLE public.conversation_turn DROP CONSTRAINT sfk_conversation_turn_run;
+ALTER TABLE public.conversation_turn ADD CONSTRAINT sfk_conversation_turn_run
+    FOREIGN KEY (run_id, workspace_id, account_id) REFERENCES public.agent_run (id, workspace_id, account_id)
+    DEFERRABLE INITIALLY DEFERRED;
+-- The turn's key on its run takes the owner too, so that one index serves the foreign key. The foreign key makes the
+-- owner a function of the run, so the key still keeps one turn per run.
+ALTER TABLE public.conversation_turn DROP CONSTRAINT uk_conversation_turn_run;
+ALTER TABLE public.conversation_turn ADD CONSTRAINT uk_conversation_turn_run UNIQUE (run_id, workspace_id, account_id);
+
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+ALTER TABLE public.conversation_turn DROP CONSTRAINT sfk_conversation_turn_run;
+ALTER TABLE public.conversation_turn ADD CONSTRAINT sfk_conversation_turn_run
+    FOREIGN KEY (run_id, workspace_id) REFERENCES public.agent_run (id, workspace_id);
+ALTER TABLE public.conversation_turn DROP CONSTRAINT uk_conversation_turn_run;
+ALTER TABLE public.conversation_turn ADD CONSTRAINT uk_conversation_turn_run UNIQUE (run_id, workspace_id);
+ALTER TABLE public.agent_run DROP CONSTRAINT uk_agent_run_owner;
+DROP INDEX public.idx_agent_run_stimulus;
+ALTER TABLE public.agent_run DROP CONSTRAINT sfk_agent_run_stimulus;
+ALTER TABLE public.conversation_entry ADD CONSTRAINT uk_conversation_entry_conversation_seq UNIQUE (conversation_id, seq);
+ALTER TABLE public.conversation_entry DROP CONSTRAINT uk_conversation_entry_position;
+DROP INDEX public.idx_agent_run_account;
+ALTER TABLE public.agent_run DROP CONSTRAINT ck_agent_run_owner;
+ALTER TABLE public.agent_run DROP COLUMN subject_seq, DROP COLUMN conversation_id, DROP COLUMN account_id;
+CREATE OR REPLACE FUNCTION public.guard_agent_run() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF ROW(NEW.id, NEW.workspace_id, NEW.kind, NEW.band, NEW.created_at, NEW.start_within_seconds)
+    IS DISTINCT FROM ROW(OLD.id, OLD.workspace_id, OLD.kind, OLD.band, OLD.created_at, OLD.start_within_seconds) THEN
+  RAISE EXCEPTION 'a run''s identity is immutable' USING ERRCODE = '55000';
+ END IF;
+ IF NEW.concurrency_key IS DISTINCT FROM OLD.concurrency_key AND NOT (OLD.state = 'QUEUED' AND NEW.state = 'QUEUED') THEN
+  RAISE EXCEPTION 'only a queued run moves to another subject' USING ERRCODE = '55000';
+ END IF;
+ IF OLD.state = 'ENDED' THEN
+  RAISE EXCEPTION 'an ended run is final' USING ERRCODE = '55000';
+ END IF;
+ IF NEW.attempt < OLD.attempt THEN
+  RAISE EXCEPTION 'a run''s spent attempts never decrease' USING ERRCODE = '23514';
+ END IF;
+ IF OLD.state = 'QUEUED' AND NEW.state = 'LEASED' THEN
+  IF NEW.lease_epoch <> OLD.lease_epoch + 1 THEN
+   RAISE EXCEPTION 'a claim takes the next epoch' USING ERRCODE = '23514';
+  END IF;
+ ELSIF NEW.lease_epoch <> OLD.lease_epoch THEN
+  RAISE EXCEPTION 'only a claim changes the epoch' USING ERRCODE = '23514';
+ END IF;
+ IF OLD.state = 'LEASED' AND NEW.state = 'LEASED' AND NEW.attempt <> OLD.attempt THEN
+  RAISE EXCEPTION 'a renewal spends no attempt' USING ERRCODE = '23514';
+ END IF;
+ IF NEW.deadline IS DISTINCT FROM OLD.deadline
+    AND NOT (NEW.deadline IS NULL AND NEW.state = 'QUEUED')
+    AND NOT (NEW.deadline IS NOT NULL AND (OLD.deadline IS NULL OR NEW.deadline < OLD.deadline)) THEN
+  RAISE EXCEPTION 'a run''s deadline only moves earlier, until a requeue clears it' USING ERRCODE = '23514';
+ END IF;
+ RETURN NEW;
+END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795541881079-2" author="hephaestus">
+        <comment>When each transaction commits, every conversation run has its turn, in the turn's conversation, and the entry at the run's position is the turn's question or digest. The foreign key sfk_agent_run_stimulus keeps an entry at that position. The check runs when a run is queued or changes its state or position, when a turn changes its status, run, surface or conversation, and when a question or digest entry of a turn changes its position, kind, surface, turn or conversation, or goes: another entry that takes the position satisfies the foreign key, but not this check. Row-level security can hide a turn or an entry from the transaction: the check then fails instead of passing. The function names its tables with the schema, because the owner functions fire it with a search path of pg_catalog only.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.enforce_conversation_turn_run()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+ run_workspace_id bigint;
+ checked uuid[];
+ one_run uuid;
+ run record;
+ turn record;
+BEGIN
+ IF TG_TABLE_NAME = 'agent_run' THEN
+  run_workspace_id := NEW.workspace_id;
+  checked := ARRAY[NEW.id];
+ ELSIF TG_TABLE_NAME = 'conversation_turn' THEN
+  run_workspace_id := NEW.workspace_id;
+  checked := ARRAY[NEW.run_id];
+  IF TG_OP = 'UPDATE' AND OLD.run_id IS DISTINCT FROM NEW.run_id THEN
+   checked := checked || OLD.run_id;
+  END IF;
+ ELSE
+  -- A question or digest entry changed or went. The runs that answer it store its position, and the run table has no
+  -- row-level security, so the check finds them also when the transaction cannot see their turn. idx_agent_run_stimulus
+  -- finds them by the exact position, so the work does not grow with the person's other runs or threads.
+  run_workspace_id := OLD.workspace_id;
+  SELECT array_agg(r.id) INTO checked FROM public.agent_run r
+   WHERE (r.workspace_id, r.conversation_id, r.subject_seq) = (OLD.workspace_id, OLD.conversation_id, OLD.seq);
+ END IF;
+ FOREACH one_run IN ARRAY COALESCE(checked, '{}') LOOP
+  SELECT r.id, r.kind, r.state, r.concurrency_key, r.conversation_id, r.subject_seq INTO run FROM public.agent_run r
+   WHERE (r.id, r.workspace_id) = (one_run, run_workspace_id);
+  -- A turn's run goes with its turn.
+  CONTINUE WHEN NOT FOUND;
+  SELECT t.id, t.status, t.surface, t.conversation_id INTO turn FROM public.conversation_turn t
+   WHERE (t.run_id, t.workspace_id) = (run.id, run_workspace_id);
+  IF NOT FOUND THEN
+   CONTINUE WHEN run.kind NOT IN ('TURN', 'DIGEST');
+   -- A transaction that has not bound the run's owner sees no turn under row-level security. It fails here, so that
+   -- no conversation run commits unchecked.
+   RAISE EXCEPTION 'conversation run % has no turn that this transaction can see', run.id USING ERRCODE = '23514';
+  END IF;
+  IF NOT ((run.kind = 'TURN' AND turn.surface IN ('APP', 'SLACK')) OR (run.kind = 'DIGEST' AND turn.surface = 'SYSTEM')) THEN
+   RAISE EXCEPTION 'a conversation turn needs its conversation run kind' USING ERRCODE = '23514';
+  END IF;
+  IF turn.status IN ('QUEUED', 'RUNNING') AND run.concurrency_key <> 'conversation:' || turn.conversation_id THEN
+   RAISE EXCEPTION 'a queued or running turn must use its conversation subject' USING ERRCODE = '23514';
+  END IF;
+  IF NOT ((turn.status = 'QUEUED' AND run.state = 'QUEUED')
+       OR (turn.status = 'RUNNING' AND run.state = 'LEASED')
+       OR (turn.status = 'STOPPED' AND run.state IN ('LEASED', 'ENDED'))
+       OR (turn.status IN ('DONE', 'FAILED') AND run.state = 'ENDED')) THEN
+   RAISE EXCEPTION 'a turn that is % needs a run that agrees, not one that is %', turn.status, run.state
+    USING ERRCODE = '23514';
+  END IF;
+  IF run.conversation_id IS DISTINCT FROM turn.conversation_id THEN
+   RAISE EXCEPTION 'a conversation run answers an entry of its turn''s conversation' USING ERRCODE = '23514';
+  END IF;
+  -- An entry and its turn store the account of their conversation, so an owner policy shows both or neither.
+  PERFORM FROM public.conversation_entry e
+   WHERE (e.workspace_id, e.conversation_id, e.seq) = (run_workspace_id, run.conversation_id, run.subject_seq)
+     AND e.turn_id = turn.id
+     AND ((run.kind = 'TURN' AND e.kind = 'USER') OR (run.kind = 'DIGEST' AND e.kind = 'DIGEST' AND e.surface = 'SYSTEM'));
+  IF NOT FOUND THEN
+   RAISE EXCEPTION 'the entry at a conversation run''s position is the question or digest of its turn'
+    USING ERRCODE = '23514';
+  END IF;
+ END LOOP;
+ RETURN NULL;
+END $function$;
+DROP TRIGGER conversation_turn_run_agrees ON public.conversation_turn;
+CREATE CONSTRAINT TRIGGER conversation_turn_run_agrees
+ AFTER INSERT OR UPDATE OF status, run_id, surface, conversation_id ON public.conversation_turn
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_conversation_turn_run();
+DROP TRIGGER agent_run_turn_agrees ON public.agent_run;
+CREATE CONSTRAINT TRIGGER agent_run_turn_agrees
+ AFTER INSERT OR UPDATE OF state, conversation_id, subject_seq ON public.agent_run
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.kind IN ('TURN', 'DIGEST'))
+ EXECUTE FUNCTION public.enforce_conversation_turn_run();
+DROP TRIGGER IF EXISTS conversation_entry_run_agrees ON public.conversation_entry;
+CREATE CONSTRAINT TRIGGER conversation_entry_run_agrees
+ AFTER DELETE OR UPDATE OF seq, kind, surface, turn_id, conversation_id ON public.conversation_entry
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (OLD.turn_id IS NOT NULL AND OLD.kind IN ('USER', 'DIGEST'))
+ EXECUTE FUNCTION public.enforce_conversation_turn_run();
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DROP TRIGGER conversation_entry_run_agrees ON public.conversation_entry;
+CREATE OR REPLACE FUNCTION public.enforce_conversation_turn_run()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+ paired record;
+BEGIN
+ FOR paired IN
+  SELECT t.status, t.surface, t.id, r.state, r.kind, t.workspace_id, t.conversation_id, r.concurrency_key
+   FROM public.conversation_turn t JOIN public.agent_run r ON (r.id,r.workspace_id)=(t.run_id,t.workspace_id)
+   WHERE (TG_TABLE_NAME='conversation_turn' AND t.id=NEW.id)
+      OR (TG_TABLE_NAME='agent_run' AND t.run_id=NEW.id)
+ LOOP
+  IF NOT ((paired.kind='TURN' AND paired.surface IN ('APP','SLACK'))
+       OR (paired.kind='DIGEST' AND paired.surface='SYSTEM'))
+     THEN
+   RAISE EXCEPTION 'a conversation turn needs its conversation run kind' USING ERRCODE='23514';
+  END IF;
+  IF paired.status IN ('QUEUED','RUNNING') AND paired.concurrency_key <> 'conversation:' || paired.conversation_id THEN
+   RAISE EXCEPTION 'a queued or running turn must use its conversation subject' USING ERRCODE='23514';
+  END IF;
+  IF paired.kind='DIGEST' AND NOT EXISTS(SELECT 1 FROM public.conversation_entry e
+      WHERE (e.turn_id,e.workspace_id)=(paired.id,paired.workspace_id) AND e.kind='DIGEST' AND e.surface='SYSTEM') THEN
+   RAISE EXCEPTION 'a digest run needs its real system digest stimulus' USING ERRCODE='23514';
+  END IF;
+  IF NOT ((paired.status='QUEUED' AND paired.state='QUEUED')
+       OR (paired.status='RUNNING' AND paired.state='LEASED')
+       OR (paired.status='STOPPED' AND paired.state IN ('LEASED','ENDED'))
+       OR (paired.status IN ('DONE','FAILED') AND paired.state='ENDED')) THEN
+   RAISE EXCEPTION 'a turn that is % needs a run that agrees, not one that is %', paired.status, paired.state USING ERRCODE='23514';
+  END IF;
+ END LOOP;
+ RETURN NULL;
+END $function$;
+DROP TRIGGER conversation_turn_run_agrees ON public.conversation_turn;
+CREATE CONSTRAINT TRIGGER conversation_turn_run_agrees AFTER INSERT OR UPDATE OF status, run_id, surface ON public.conversation_turn
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_conversation_turn_run();
+DROP TRIGGER agent_run_turn_agrees ON public.agent_run;
+CREATE CONSTRAINT TRIGGER agent_run_turn_agrees AFTER UPDATE OF state ON public.agent_run
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.kind IN ('TURN','DIGEST'))
+ EXECUTE FUNCTION public.enforce_conversation_turn_run();
+            ]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795541881079-3" author="hephaestus">
+        <comment>When an absorbed account's conversations move to the account that claimed it, the run of each moved turn takes the claiming account, and the run of each merged turn takes the new position of its question or digest entry in the kept conversation.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.person_row_sweep(rule text, subject_id bigint, other_id bigint, cutoff timestamp with time zone)
+    RETURNS integer
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+DECLARE
+    changed integer := 0;
+    counted integer;
+    clash record;
+    absorbed record;
+    admitted boolean;
+BEGIN
+    IF rule IN ('WORKSPACE_PURGE', 'ACCOUNT_ABSORB') THEN
+        -- Hash the supplied and expected MACs before comparing their bytes.
+        SELECT EXISTS (
+            SELECT FROM lifecycle_private.sweep_key k
+            WHERE sha256(convert_to(encode(sha256(k.outer_pad || sha256(k.inner_pad || convert_to(
+                concat_ws(':', 'person_row_sweep', rule, subject_id, COALESCE(other_id::text, '-'),
+                          pg_current_xact_id(), pg_backend_pid(), extract(epoch FROM transaction_timestamp())),
+                'UTF8'))), 'hex'), 'UTF8'))
+                = sha256(convert_to(current_setting('hephaestus.sweep_admission', true), 'UTF8'))
+        ) INTO admitted;
+    END IF;
+    IF rule = 'WORKSPACE_PURGE' THEN
+        -- subject_id is the purged workspace. A soft purge keeps the workspace row, so no cascade fires.
+        IF subject_id IS NULL THEN
+            RAISE EXCEPTION 'person_row_sweep: WORKSPACE_PURGE needs the workspace' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        IF NOT admitted THEN
+            RAISE EXCEPTION 'person_row_sweep: lifecycle admission required'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        PERFORM FROM public.workspace w
+        WHERE w.id = subject_id AND w.kind = 'TEAM' AND w.status IN ('ACTIVE', 'SUSPENDED')
+        FOR UPDATE;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'person_row_sweep: workspace is unavailable for purge'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        DELETE FROM public.conversation_entry WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+        DELETE FROM public.conversation_turn WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+        DELETE FROM public.conversation WHERE workspace_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+    ELSIF rule = 'EXPIRED_EXPORTS' THEN
+        -- cutoff is now: a ready export past its expiry loses its payload. A cutoff in the future counts as now.
+        IF cutoff IS NULL THEN
+            RAISE EXCEPTION 'person_row_sweep: EXPIRED_EXPORTS needs the cutoff' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        -- Account erasure locks the account before its exports. Skip a busy account until the next pass.
+        WITH eligible AS MATERIALIZED (
+            SELECT a.id FROM public.account a
+            WHERE a.status IN ('UNCLAIMED', 'ACTIVE', 'BLOCKED')
+              AND EXISTS (SELECT FROM public.account_export x WHERE x.account_id = a.id
+                          AND x.status = 'READY' AND x.expires_at < LEAST(cutoff, statement_timestamp()))
+            ORDER BY a.id
+            FOR SHARE OF a SKIP LOCKED
+        )
+        UPDATE public.account_export x SET status = 'EXPIRED', payload = NULL
+        FROM eligible
+        WHERE x.account_id = eligible.id AND x.status = 'READY'
+          AND x.expires_at < LEAST(cutoff, statement_timestamp());
+        GET DIAGNOSTICS changed = ROW_COUNT;
+    ELSIF rule = 'ACCOUNT_ABSORB' THEN
+        -- subject_id is the absorbed account and other_id the account that claimed it. Where both have a main
+        -- conversation in a workspace, the absorbed main's entries follow the claiming main's entries, its turns and
+        -- threads move, and it is deleted. Every other conversation of the absorbed account changes owner.
+        IF subject_id IS NULL OR other_id IS NULL OR subject_id = other_id THEN
+            RAISE EXCEPTION 'person_row_sweep: ACCOUNT_ABSORB needs two different accounts'
+                USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        IF NOT admitted THEN
+            RAISE EXCEPTION 'person_row_sweep: lifecycle admission required'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        -- Only an unclaimed account is absorbed, by an account that its verified owner signs in to. Both rows are locked
+        -- in id order, as the account service locks them, so a concurrent claim cannot change either status.
+        PERFORM FROM public.account a WHERE a.id IN (subject_id, other_id) ORDER BY a.id FOR UPDATE;
+        IF NOT EXISTS (SELECT FROM public.account a WHERE a.id = subject_id AND a.status = 'UNCLAIMED')
+           OR NOT EXISTS (SELECT FROM public.account a WHERE a.id = other_id AND a.status IN ('ACTIVE', 'BLOCKED')) THEN
+            RAISE EXCEPTION 'person_row_sweep: only an unclaimed account is absorbed, by an active or blocked account'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        FOR clash IN
+            SELECT a.workspace_id, a.id AS absorbed_id, k.id AS kept_id FROM public.conversation a
+            JOIN public.conversation k ON k.workspace_id = a.workspace_id
+                AND k.account_id = other_id AND k.parent_conversation_id IS NULL
+            WHERE a.account_id = subject_id AND a.parent_conversation_id IS NULL
+            ORDER BY a.id
+            FOR UPDATE OF a, k
+        LOOP
+            -- The caller prepares each clash first: it returns a running turn of the absorbed main to the queue, moves
+            -- the absorbed main's queued runs to the claiming main, and erases the absorbed main's summaries, which
+            -- summarize a conversation that no longer exists alone.
+            IF EXISTS (SELECT FROM public.conversation_turn t
+                       WHERE t.conversation_id = clash.absorbed_id AND t.status = 'RUNNING')
+               OR EXISTS (SELECT FROM public.agent_run r
+                          WHERE r.workspace_id = clash.workspace_id AND r.state = 'QUEUED'
+                            AND r.concurrency_key = 'conversation:' || clash.absorbed_id)
+               OR EXISTS (SELECT FROM public.conversation_entry e
+                          WHERE e.conversation_id = clash.absorbed_id AND e.kind = 'SUMMARY' AND e.redacted_at IS NULL) THEN
+                RAISE EXCEPTION 'person_row_sweep: the absorbed conversation % is not prepared', clash.absorbed_id
+                    USING ERRCODE = 'object_not_in_prerequisite_state';
+            END IF;
+            UPDATE public.conversation_entry e SET conversation_id = clash.kept_id, account_id = other_id,
+                seq = top.seq + moved.position
+            FROM (SELECT x.id, row_number() OVER (ORDER BY x.seq) AS position
+                  FROM public.conversation_entry x WHERE x.conversation_id = clash.absorbed_id) moved,
+                 (SELECT COALESCE(max(y.seq), 0) AS seq FROM public.conversation_entry y
+                  WHERE y.conversation_id = clash.kept_id) top
+            WHERE e.id = moved.id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            -- A turn's run stores the position of the turn's question or digest entry, which the merge moved to the
+            -- kept conversation. sfk_agent_run_stimulus checks at the commit that each run names its moved entry.
+            UPDATE public.agent_run r SET conversation_id = clash.kept_id, subject_seq = e.seq
+            FROM public.conversation_turn t
+            JOIN public.conversation_entry e ON (e.turn_id, e.workspace_id) = (t.id, t.workspace_id)
+                AND e.kind IN ('USER', 'DIGEST')
+            WHERE t.conversation_id = clash.absorbed_id AND (r.id, r.workspace_id) = (t.run_id, t.workspace_id);
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            UPDATE public.conversation_turn SET conversation_id = clash.kept_id, account_id = other_id
+            WHERE conversation_id = clash.absorbed_id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            UPDATE public.conversation SET parent_conversation_id = clash.kept_id
+            WHERE parent_conversation_id = clash.absorbed_id;
+            GET DIAGNOSTICS counted = ROW_COUNT;
+            changed := changed + counted;
+            SELECT c.slack_team_id, c.slack_user_id, c.slack_channel_id, c.last_activity_at, c.last_read_at
+            INTO absorbed FROM public.conversation c WHERE c.id = clash.absorbed_id;
+            DELETE FROM public.conversation WHERE id = clash.absorbed_id;
+            -- The Slack identity moves with the merge when the claiming main has none, so the DM keeps its conversation.
+            UPDATE public.conversation SET
+                slack_user_id = CASE WHEN slack_team_id IS NULL THEN absorbed.slack_user_id ELSE slack_user_id END,
+                slack_channel_id = CASE WHEN slack_team_id IS NULL THEN absorbed.slack_channel_id ELSE slack_channel_id END,
+                slack_team_id = COALESCE(slack_team_id, absorbed.slack_team_id),
+                last_activity_at = GREATEST(last_activity_at, absorbed.last_activity_at),
+                last_read_at = GREATEST(last_read_at, absorbed.last_read_at)
+            WHERE id = clash.kept_id;
+        END LOOP;
+        UPDATE public.conversation SET account_id = other_id WHERE account_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+        -- A conversation run stores the owner of its turn, so the run of every moved turn takes the claiming account.
+        UPDATE public.agent_run SET account_id = other_id WHERE account_id = subject_id;
+        GET DIAGNOSTICS counted = ROW_COUNT;
+        changed := changed + counted;
+    ELSE
+        RAISE EXCEPTION 'person_row_sweep: unknown rule %', rule USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    RETURN changed;
+END
+$$;
+        ]]></sql>
+        <rollback changeSetId="1795540920000-3" changeSetAuthor="hephaestus"
+                  changeSetPath="db/changelog/next/20261125010758-admit-owner-sweeps.xml"/>
+    </changeSet>
+</databaseChangeLog>

@@ -65,11 +65,14 @@ SELECT 'e2e0c0a0-0000-4000-8000-000000000001', 1, id, now() - interval '1 day', 
 FROM account WHERE primary_email = 'e2e@dev.invalid'
 ON CONFLICT DO NOTHING;
 -- A turn runs on an agent run; a finished turn's run has ended.
+-- The run stores the conversation's owner and the position of the question it answers.
 INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key, state, attempt, lease_epoch, start_within_seconds,
-                       stop_reason, created_at, started_at, ended_at)
+                       stop_reason, created_at, started_at, ended_at, account_id, conversation_id, subject_seq)
 VALUES ('e2e0c0a0-0000-4000-8000-000000000006', 1, 'TURN', 'INTERACTIVE',
         'conversation:e2e0c0a0-0000-4000-8000-000000000001', 'ENDED', 0, 1, 180, 'COMPLETED', now() - interval '1 day',
-        now() - interval '1 day', now() - interval '1 day')
+        now() - interval '1 day', now() - interval '1 day',
+        (SELECT account_id FROM conversation WHERE id = 'e2e0c0a0-0000-4000-8000-000000000001'),
+        'e2e0c0a0-0000-4000-8000-000000000001', 1)
 ON CONFLICT DO NOTHING;
 INSERT INTO conversation_turn (id, workspace_id, conversation_id, account_id, request_id, status, surface, run_id,
                                created_at, started_at, finished_at)

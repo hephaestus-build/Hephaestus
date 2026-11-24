@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStimulus;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
@@ -43,17 +44,28 @@ public class TurnRunsAdapter implements TurnRuns {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public UUID enqueue(long workspaceId, UUID conversationId) {
+    public UUID enqueue(long workspaceId, UUID conversationId, long accountId, long questionSeq) {
         return runs.enqueue(
-                        workspaceId, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject(conversationId), START_WAIT)
+                        workspaceId,
+                        AgentRunKind.TURN,
+                        AgentRunBand.INTERACTIVE,
+                        subject(conversationId),
+                        START_WAIT,
+                        new AgentRunStimulus(accountId, conversationId, questionSeq))
                 .id();
     }
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public UUID enqueueDigest(long workspaceId, UUID conversationId, Duration startWithin) {
+    public UUID enqueueDigest(
+            long workspaceId, UUID conversationId, long accountId, long digestSeq, Duration startWithin) {
         return runs.enqueue(
-                        workspaceId, AgentRunKind.DIGEST, AgentRunBand.BACKGROUND, subject(conversationId), startWithin)
+                        workspaceId,
+                        AgentRunKind.DIGEST,
+                        AgentRunBand.BACKGROUND,
+                        subject(conversationId),
+                        startWithin,
+                        new AgentRunStimulus(accountId, conversationId, digestSeq))
                 .id();
     }
 

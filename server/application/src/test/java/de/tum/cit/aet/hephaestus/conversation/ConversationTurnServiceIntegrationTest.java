@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.EntityManager;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -160,6 +161,47 @@ class ConversationTurnServiceIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(question.getTurnId()).isEqualTo(submission.turn().getId());
         assertThat(question.getRequestId()).isEqualTo(submission.turn().getRequestId());
         assertThat(stored(submission.turn()).getStatus()).isEqualTo(ConversationTurn.Status.QUEUED);
+    }
+
+    @Test
+    void shouldStoreTheOwnerAndThePositionOfTheStimulusOnTheRunOfEachQuestionAndDigest() {
+        entryService.append(
+                workspace.getId(), main.getId(), ConversationLedgerFixtures.hephaestus("An earlier answer"));
+        ConversationTurnService.Submission asked = ask(main, "How did my last review go?");
+        String digestRequest = "digest-" + UUID.randomUUID();
+        assertThat(turns.submitDigest(
+                        workspace.getId(),
+                        main.getId(),
+                        new ConversationTurnService.DigestRequest(
+                                digestRequest,
+                                "Write the weekly recap.",
+                                JsonNodeFactory.instance.objectNode(),
+                                Duration.ofHours(1))))
+                .isTrue();
+        ConversationTurn digest = turnRepository
+                .findByWorkspaceIdAndRequestId(workspace.getId(), digestRequest)
+                .orElseThrow();
+
+        assertThat(runOwnerAndPosition(asked.turn().getRunId()))
+                .as("the question's run, after the earlier answer")
+                .isEqualTo(account + ":" + main.getId() + ":2");
+        assertThat(asked.question().getSeq()).isEqualTo(2);
+        assertThat(runOwnerAndPosition(digest.getRunId()))
+                .as("the digest's run, after the question")
+                .isEqualTo(account + ":" + main.getId() + ":3");
+        assertThat(ConversationLedgerFixtures.turnEntries(entityManager, workspace.getId(), digest.getId()))
+                .extracting(ConversationEntry::getSeq)
+                .containsExactly(3L);
+    }
+
+    /** The owner and the position that a run stores, as {@code account:conversation:seq}. */
+    private String runOwnerAndPosition(UUID runId) {
+        return String.valueOf(entityManager
+                .createNativeQuery("SELECT account_id || ':' || conversation_id || ':' || subject_seq FROM agent_run"
+                        + " WHERE id = :id AND workspace_id = :workspaceId")
+                .setParameter("id", runId)
+                .setParameter("workspaceId", workspace.getId())
+                .getSingleResult());
     }
 
     @Test

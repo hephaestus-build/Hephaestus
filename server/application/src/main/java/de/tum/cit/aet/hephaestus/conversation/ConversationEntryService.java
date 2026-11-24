@@ -308,9 +308,15 @@ public class ConversationEntryService {
      * {@link #appended} once it appended all it appends.
      */
     ConversationEntry insert(Conversation conversation, ConversationEntryDraft draft) {
+        return insert(conversation, draft, entries.nextSeq(conversation.getWorkspaceId(), conversation.getId()));
+    }
+
+    /**
+     * Appends at {@code seq}, which {@link ConversationEntryRepository#nextSeq} gave under the same lock. A caller that
+     * must name the position before it appends, as a turn's run does, takes it first.
+     */
+    ConversationEntry insert(Conversation conversation, ConversationEntryDraft draft, long seq) {
         Instant now = clock.instant();
-        long seq = entries.findMaxSeqByWorkspaceIdAndConversationId(conversation.getWorkspaceId(), conversation.getId())
-                + 1;
         ConversationEntryDraft stored =
                 draft.kind() == ConversationEntry.Kind.SUMMARY ? withCoverage(conversation, draft) : draft;
         ConversationEntry entry = entries.saveAndFlush(new ConversationEntry(conversation, seq, stored, now));

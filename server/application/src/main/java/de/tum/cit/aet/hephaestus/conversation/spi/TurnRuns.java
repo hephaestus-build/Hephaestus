@@ -12,11 +12,17 @@ import java.util.UUID;
  */
 public interface TurnRuns {
 
-    /** Queues the run of a new turn of the conversation, and returns its id. */
-    UUID enqueue(long workspaceId, UUID conversationId);
+    /**
+     * Queues the run of a new turn of the conversation, and returns its id. The run stores the conversation's owner
+     * and the position of the question that the turn answers: the conversation and the question's {@code seq}.
+     */
+    UUID enqueue(long workspaceId, UUID conversationId, long accountId, long questionSeq);
 
-    /** Queues proactive digest work behind this conversation's current holder, in the background band. */
-    UUID enqueueDigest(long workspaceId, UUID conversationId, Duration startWithin);
+    /**
+     * Queues proactive digest work behind this conversation's current holder, in the background band. The run stores
+     * the conversation's owner and the position of the digest entry: the conversation and the entry's {@code seq}.
+     */
+    UUID enqueueDigest(long workspaceId, UUID conversationId, long accountId, long digestSeq, Duration startWithin);
 
     /**
      * Holds the run under {@code epoch} until the caller's transaction ends.

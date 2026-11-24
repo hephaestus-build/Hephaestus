@@ -773,17 +773,8 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
                 conversationId,
                 workspace.getId(),
                 developer);
-        UUID run = UUID.randomUUID();
-        jdbc.update(ConversationTurnRunRows.insert(run, workspace.getId(), conversationId, "RUNNING", 1));
-        jdbc.update(
-                "INSERT INTO conversation_turn(id,workspace_id,conversation_id,account_id,request_id,status,surface,"
-                        + "attempt,run_id,started_at,created_at) VALUES (?,?,?,?,?,'RUNNING','APP',1,?,now(),now())",
-                turnId,
-                workspace.getId(),
-                conversationId,
-                developer,
-                turnId.toString(),
-                run);
+        jdbc.execute(ConversationTurnRunRows.insert(
+                turnId, UUID.randomUUID(), workspace.getId(), conversationId, "RUNNING", 1));
         return turnId;
     }
 

@@ -323,6 +323,90 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 .isZero();
     }
 
+    /**
+     * An erasure that stops after the person's turns and before their questions leaves no run that names the person,
+     * also not the run of an ended turn: each turn's deletion deletes its run, and no store counts runs.
+     */
+    @Test
+    void shouldLeaveNoRunOfThePersonWhenTheErasureStopsBetweenTheTurnsAndTheQuestions() {
+        databaseTestUtils.cleanDatabase();
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://heph-erasure.example.test"));
+        User developer = users.saveAndFlush(TestUserFactory.createUser(84L, "developer", provider));
+        long developerId = accountFor(developer);
+        Workspace workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("ask-erasure"));
+        membership(workspace, developer);
+        Conversation main = conversations.findOrCreateMain(workspace.getId(), developerId);
+        end(ask(workspace, main, "Who reviews?"), "Alex reviews.");
+        ask(workspace, main, "And who merges?");
+        assertThat(runsOf(developerId)).as("an ended run and a running one").isEqualTo(2L);
+
+        var stops = new AtomicInteger(1);
+        PersonDataContributor betweenTurnsAndQuestions =
+                new JdbcPersonDataStore(
+                        namedJdbc,
+                        mapper,
+                        "between_step",
+                        "user",
+                        "t.id = ANY(:users)",
+                        "id,name",
+                        "id",
+                        "name=NULL",
+                        -115) {
+                    @Override
+                    public long erase(PersonDataSelection selection, PersonScope frozenScope) {
+                        long count = super.erase(selection, frozenScope);
+                        if (stops.getAndDecrement() > 0) throw new IllegalStateException("stopped between the steps");
+                        return count;
+                    }
+                };
+        List<PersonDataContributor> steps = Stream.concat(
+                        Stream.of(betweenTurnsAndQuestions),
+                        conversationCatalog.contributors().stream()
+                                .filter(store -> List.of("conversation_turn", "conversation_entry", "conversation")
+                                        .contains(store.store())))
+                .toList();
+        PersonDataService service = serviceWith(new PersonDataRegistry(List.of(new StoppedSteps(steps))));
+        var administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long adminId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        var identities = List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "84", null));
+        UUID requestId = Objects.requireNonNull(
+                        transaction().execute(status -> service.preview(adminId, null, identities)))
+                .request()
+                .getId();
+        transaction().executeWithoutResult(status -> service.requestErasure(requestId, adminId, true));
+        service.run(requestId);
+
+        assertThat(requests.findById(requestId).orElseThrow().getState()).isEqualTo(PersonDataRequest.State.FAILED);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM conversation_turn WHERE account_id = ?", Long.class, developerId))
+                .isZero();
+        assertThat(runsOf(developerId))
+                .as("no run names the person after the turns' step")
+                .isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM conversation_entry WHERE account_id = ? AND kind = 'USER'",
+                        Long.class,
+                        developerId))
+                .as("the erasure stopped before the questions")
+                .isEqualTo(2L);
+
+        transaction().executeWithoutResult(status -> service.requestErasure(requestId, adminId, true));
+        service.run(requestId);
+        assertThat(requests.findById(requestId).orElseThrow().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(runsOf(developerId)).isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM conversation WHERE account_id = ?", Long.class, developerId))
+                .isZero();
+    }
+
+    private long runsOf(long accountId) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE account_id = ?", Long.class, accountId));
+    }
+
     private static void assertErased(ThrowingCallable write) {
         assertThatThrownBy(write)
                 .isInstanceOfSatisfying(
@@ -449,9 +533,13 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 .filter(store -> store.store().equals(ConversationEntryRepository.COPIES_PERSON_DATA_STORE))
                 .findFirst()
                 .orElseThrow();
+        return serviceWith(new PersonDataRegistry(List.of(new ErasureSteps(List.of(source, toolResults)))));
+    }
+
+    private PersonDataService serviceWith(PersonDataRegistry erasureSteps) {
         return new PersonDataService(
                 new PersonDataScopeResolver(resolver, List.of(), new OwnerScope(jdbc)),
-                new PersonDataRegistry(List.of(new ErasureSteps(List.of(source, toolResults)))),
+                erasureSteps,
                 requests,
                 new PersonDataErasureHold(suppression, writeFence, copyFence),
                 tokens,
@@ -489,4 +577,7 @@ class ConversationTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
 
     @PersonDataStores({"source_step", ConversationEntryRepository.COPIES_PERSON_DATA_STORE})
     private record ErasureSteps(List<PersonDataContributor> contributors) implements PersonDataCatalog {}
+
+    @PersonDataStores({"between_step", "conversation_turn", "conversation_entry", "conversation"})
+    private record StoppedSteps(List<PersonDataContributor> contributors) implements PersonDataCatalog {}
 }

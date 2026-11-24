@@ -27,18 +27,34 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>{@code lease_epoch} counts the claims and fences every write of the holder. {@code attempt} counts the claims that
  * spent the kind's attempt budget: a lost lease, or a requeue that the holder charged.
+ *
+ * <p>A conversation run ({@link AgentRunKind#conversation()}) also stores its owner and the ledger position of the entry
+ * that it answers, its conversation and {@code seq} ({@link AgentRunStimulus}). A review run stores none of them.
+ * {@code ck_agent_run_owner} keeps that rule. Its turn names it with its owner ({@code sfk_conversation_turn_run}), and
+ * it names the entry at its position ({@code sfk_agent_run_stimulus}). When each transaction commits,
+ * {@code enforce_conversation_turn_run} requires the turn, and that entry to be the turn's question or digest.
  */
 @Entity
 @Table(
         name = "agent_run",
-        uniqueConstraints =
-                @UniqueConstraint(
-                        name = "uk_agent_run_workspace",
-                        columnNames = {"id", "workspace_id"}),
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "uk_agent_run_workspace",
+                    columnNames = {"id", "workspace_id"}),
+            // The key that a turn names its run by: the run's owner is the turn's owner.
+            @UniqueConstraint(
+                    name = "uk_agent_run_owner",
+                    columnNames = {"id", "workspace_id", "account_id"})
+        },
         indexes = {
             @Index(name = "idx_agent_run_queued", columnList = "available_at"),
             @Index(name = "idx_agent_run_leased_until", columnList = "leased_until"),
-            @Index(name = "idx_agent_run_subject", columnList = "workspace_id, concurrency_key, created_at")
+            @Index(name = "idx_agent_run_subject", columnList = "workspace_id, concurrency_key, created_at"),
+            // Absorption reads a person's runs by the owner.
+            @Index(name = "idx_agent_run_account", columnList = "account_id"),
+            // The checks of sfk_agent_run_stimulus and the entry check of enforce_conversation_turn_run read the runs
+            // at one exact position, so their work does not grow with the owner's other runs or threads.
+            @Index(name = "idx_agent_run_stimulus", columnList = "workspace_id, conversation_id, subject_seq")
         })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -127,6 +143,22 @@ public class AgentRun {
     @Column(name = "ended_at")
     private @Nullable Instant endedAt;
 
+    /**
+     * The account whose conversation the run answers. Only the scheduler, the worker, the LLM proxy and the sandbox read
+     * it ({@code AgentRunOwnerReadersArchTest}).
+     */
+    @ToString.Exclude
+    @Column(name = "account_id", updatable = false)
+    private @Nullable Long accountId;
+
+    /** The conversation of the question or digest entry that the run answers. */
+    @Column(name = "conversation_id", updatable = false)
+    private @Nullable UUID conversationId;
+
+    /** The ledger {@code seq} of the question or digest entry that the run answers. */
+    @Column(name = "subject_seq", updatable = false)
+    private @Nullable Long subjectSeq;
+
     AgentRun(
             UUID id,
             long workspaceId,
@@ -138,9 +170,12 @@ public class AgentRun {
             Instant now,
             @Nullable Duration startWithin,
             Duration delay,
-            @Nullable Duration executionWindow) {
+            @Nullable Duration executionWindow,
+            @Nullable AgentRunStimulus stimulus) {
         if (workspaceId < 0 || (workspaceId == AgentRunRef.INSTANCE_SCOPE) != (kind == AgentRunKind.DRAFT_REPORT))
             throw new IllegalArgumentException("Only report drafts run at instance scope");
+        if (kind.conversation() != (stimulus != null))
+            throw new IllegalArgumentException("A conversation run, and only a conversation run, answers a stimulus");
         if (concurrencyKey.isBlank() || concurrencyKey.length() > 96)
             throw new IllegalArgumentException("A run names its subject in at most 96 characters");
         this.id = id;
@@ -155,6 +190,9 @@ public class AgentRun {
         this.deadline = executionWindow == null ? null : this.availableAt.plus(executionWindow);
         this.createdAt = now;
         this.startWithinSeconds = startWithin == null ? null : Math.toIntExact(startWithin.toSeconds());
+        this.accountId = stimulus == null ? null : stimulus.accountId();
+        this.conversationId = stimulus == null ? null : stimulus.conversationId();
+        this.subjectSeq = stimulus == null ? null : stimulus.subjectSeq();
     }
 
     public long getWorkspaceId() {

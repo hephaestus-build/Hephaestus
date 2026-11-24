@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.ConversationRuns;
 import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
@@ -298,9 +299,9 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
     }
 
     private String queueTurn() {
-        String subject = "conversation:" + UUID.randomUUID();
-        transactions.executeWithoutResult(
-                status -> runs.enqueue(workspace, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject, null));
+        String subject = ConversationRuns.subject();
+        transactions.executeWithoutResult(status -> ConversationRuns.queue(
+                runs, jdbc, workspace, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject, null));
         return subject;
     }
 
@@ -319,7 +320,7 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
         assertThat(sandboxes.lease(
                         sandboxes.ensure(workspace, subject, AgentSandboxKind.CONVERSATION),
                         Set.of(AgentRunKind.TURN),
-                        ignored -> true))
+                        ConversationRuns.starts(jdbc)))
                 .isPresent();
     }
 
@@ -327,7 +328,7 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
     void shouldKeepARunningConversationAndWaitForPhysicalDeletionBeforeReplacingAnIdleOne() {
         String running = queueTurn();
         var active = warm(running);
-        assertThat(sandboxes.lease(active, Set.of(AgentRunKind.TURN), ignored -> true))
+        assertThat(sandboxes.lease(active, Set.of(AgentRunKind.TURN), ConversationRuns.starts(jdbc)))
                 .isPresent();
         var idle = warm("conversation:" + UUID.randomUUID());
         String next = queueTurn();

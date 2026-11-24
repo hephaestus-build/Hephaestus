@@ -61,11 +61,13 @@ class AgentRunSamplerIntegrationTest extends BaseIntegrationTest {
         AgentRunRef room = enqueue(AgentRunKind.REVIEW_COMPOSE, AgentRunBand.BACKGROUND, "review:room");
         hold(room, AgentRunHold.SANDBOX_ROOM);
         // A turn that waits 30 seconds, and a turn that a sandbox holds.
-        dueSince(enqueue(AgentRunKind.TURN, AgentRunBand.INTERACTIVE, "conversation:waits"), "30 seconds");
-        enqueue(AgentRunKind.TURN, AgentRunBand.INTERACTIVE, "conversation:leased");
-        transactions.executeWithoutResult(
-                status -> assertThat(runs.claimSubject(workspace, "conversation:leased", Set.of(AgentRunKind.TURN)))
-                        .isPresent());
+        dueSince(enqueue(AgentRunKind.TURN, AgentRunBand.INTERACTIVE, ConversationRuns.subject()), "30 seconds");
+        String leased = ConversationRuns.subject();
+        enqueue(AgentRunKind.TURN, AgentRunBand.INTERACTIVE, leased);
+        transactions.executeWithoutResult(status -> assertThat(
+                        runs.claimSubject(workspace, leased, Set.of(AgentRunKind.TURN))
+                                .map(started -> ConversationRuns.started(jdbc, started)))
+                .isPresent());
         // A run that ended leaves every gauge.
         enqueue(AgentRunKind.REVIEW, AgentRunBand.BACKGROUND, "review:ended");
         AgentRunLease finished = Objects.requireNonNull(transactions.execute(
@@ -134,8 +136,9 @@ class AgentRunSamplerIntegrationTest extends BaseIntegrationTest {
     }
 
     private AgentRunRef enqueue(AgentRunKind kind, AgentRunBand band, String subject) {
-        return Objects.requireNonNull(
-                transactions.execute(status -> runs.enqueue(workspace, kind, band, subject, null)));
+        return Objects.requireNonNull(transactions.execute(status -> kind.conversation()
+                ? ConversationRuns.queue(runs, jdbc, workspace, kind, band, subject, null)
+                : runs.enqueue(workspace, kind, band, subject, null)));
     }
 
     private void dueSince(AgentRunRef run, String interval) {

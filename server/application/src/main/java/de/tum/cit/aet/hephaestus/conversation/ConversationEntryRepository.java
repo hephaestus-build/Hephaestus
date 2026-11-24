@@ -666,6 +666,11 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     long findMaxSeqByWorkspaceIdAndConversationId(
             @Param("workspaceId") Long workspaceId, @Param("conversationId") UUID conversationId);
 
+    /** Read under the conversation lock: the sequence number that the conversation's next entry takes. */
+    default long nextSeq(Long workspaceId, UUID conversationId) {
+        return findMaxSeqByWorkspaceIdAndConversationId(workspaceId, conversationId) + 1;
+    }
+
     @Query(
             "SELECT e.id FROM ConversationEntry e WHERE e.workspaceId=:workspaceId AND e.id IN (:ids) AND e.redactedAt IS NULL")
     List<UUID> findUnredactedIds(@Param("workspaceId") long workspaceId, @Param("ids") Collection<UUID> ids);

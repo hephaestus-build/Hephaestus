@@ -112,10 +112,11 @@ public class AgentRuns {
                 0,
                 null,
                 Duration.ZERO,
-                executionWindow);
+                executionWindow,
+                null);
     }
 
-    /** Queues a new run of a subject. Claimers hear of it after the transaction commits. */
+    /** Queues a new run of a subject that no person owns, such as a review. Claimers hear of it after the commit. */
     @Transactional(propagation = Propagation.MANDATORY)
     public AgentRunRef enqueue(
             long workspaceId,
@@ -123,7 +124,22 @@ public class AgentRuns {
             AgentRunBand band,
             String concurrencyKey,
             @Nullable Duration startWithin) {
-        return insert(workspaceId, kind, band, concurrencyKey, 0, 0, startWithin);
+        return insert(workspaceId, kind, band, concurrencyKey, 0, 0, startWithin, Duration.ZERO, null, null);
+    }
+
+    /**
+     * Queues a new conversation run, which answers the {@code stimulus} of its owner. Claimers hear of it after the
+     * transaction commits.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AgentRunRef enqueue(
+            long workspaceId,
+            AgentRunKind kind,
+            AgentRunBand band,
+            String concurrencyKey,
+            @Nullable Duration startWithin,
+            AgentRunStimulus stimulus) {
+        return insert(workspaceId, kind, band, concurrencyKey, 0, 0, startWithin, Duration.ZERO, null, stimulus);
     }
 
     /**
@@ -145,7 +161,8 @@ public class AgentRuns {
                 previous.getAttempt() + (charge == Charge.SPEND ? 1 : 0),
                 startWithin(previous),
                 delay,
-                executionWindow);
+                executionWindow,
+                stimulus(previous));
     }
 
     /**
@@ -166,7 +183,8 @@ public class AgentRuns {
                 previous.getAttempt(),
                 null,
                 Duration.ZERO,
-                executionWindow);
+                executionWindow,
+                null);
     }
 
     /**
@@ -190,11 +208,22 @@ public class AgentRuns {
                 previous.getAttempt(),
                 startWithin(previous),
                 delay,
-                executionWindow);
+                executionWindow,
+                stimulus(previous));
     }
 
     private static @Nullable Duration startWithin(AgentRun previous) {
         return previous.getStartWithinSeconds() == null ? null : Duration.ofSeconds(previous.getStartWithinSeconds());
+    }
+
+    /** A continuation does the same work, so it answers the same stimulus of the same owner. */
+    private static @Nullable AgentRunStimulus stimulus(AgentRun previous) {
+        Long accountId = previous.getAccountId();
+        UUID conversationId = previous.getConversationId();
+        Long subjectSeq = previous.getSubjectSeq();
+        return accountId == null || conversationId == null || subjectSeq == null
+                ? null
+                : new AgentRunStimulus(accountId, conversationId, subjectSeq);
     }
 
     private AgentRun ended(AgentRunRef ended) {
@@ -214,20 +243,10 @@ public class AgentRuns {
             String concurrencyKey,
             int epoch,
             int spent,
-            @Nullable Duration startWithin) {
-        return insert(workspaceId, kind, band, concurrencyKey, epoch, spent, startWithin, Duration.ZERO, null);
-    }
-
-    private AgentRunRef insert(
-            long workspaceId,
-            AgentRunKind kind,
-            AgentRunBand band,
-            String concurrencyKey,
-            int epoch,
-            int spent,
             @Nullable Duration startWithin,
             Duration delay,
-            @Nullable Duration executionWindow) {
+            @Nullable Duration executionWindow,
+            @Nullable AgentRunStimulus stimulus) {
         AgentRun run = new AgentRun(
                 UUID.randomUUID(),
                 workspaceId,
@@ -239,7 +258,8 @@ public class AgentRuns {
                 runs.databaseClock(),
                 startWithin,
                 delay,
-                executionWindow);
+                executionWindow,
+                stimulus);
         runs.save(run);
         wake(kind);
         return run.ref();

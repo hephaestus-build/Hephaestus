@@ -44,10 +44,11 @@ import tools.jackson.databind.JsonNode;
             @UniqueConstraint(
                     name = "uk_conversation_turn_tenant",
                     columnNames = {"id", "workspace_id"}),
-            // A run belongs to one workspace, so this keeps one turn per run; it also indexes the run's foreign key.
+            // A run belongs to one workspace and stores one owner, which sfk_conversation_turn_run makes the turn's, so
+            // this keeps one turn per run. It also indexes that foreign key.
             @UniqueConstraint(
                     name = "uk_conversation_turn_run",
-                    columnNames = {"run_id", "workspace_id"}),
+                    columnNames = {"run_id", "workspace_id", "account_id"}),
         },
         indexes = {
             @Index(name = "idx_conversation_turn_conversation_status", columnList = "conversation_id, status"),
