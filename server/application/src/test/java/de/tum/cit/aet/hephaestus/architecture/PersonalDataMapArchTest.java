@@ -319,6 +319,30 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         assertThat(declared)
                 .as("every personal table must have a full contributor, not an operator path")
                 .containsAll(required);
+        assertThat(withoutRuntimeStore(required, registry.stores()))
+                .as("personal tables that a declaration names but no registered store erases")
+                .isEmpty();
+    }
+
+    @Test
+    void aTableThatOnlyADeclarationNamesHasNoRuntimeStore() {
+        var stores = List.<PersonDataContributor>of(store("t.account_id = :account", ""));
+        assertThat(withoutRuntimeStore(Set.of("conversation", "export_blob"), stores))
+                .containsExactly("export_blob");
+    }
+
+    /** The required tables that no store in the registry erases: a declaration alone erases nothing. */
+    private static List<String> withoutRuntimeStore(
+            Set<String> required, List<? extends PersonDataContributor> stores) {
+        var covered = new TreeSet<String>();
+        for (var store : stores) {
+            covered.add(store.store());
+            jdbcStore(store, 3).ifPresent(jdbc -> covered.add(storeField(jdbc, "table")));
+        }
+        return required.stream()
+                .filter(table -> !covered.contains(table))
+                .sorted()
+                .toList();
     }
 
     /**
@@ -354,6 +378,16 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         PersonDataContributor reviewers = store("t.reviewer_account_id = :account", "");
         assertThat(unerasedColumns(
                         columns, Set.of("conversation"), erasedColumns(List.of(owners, reviewers), List.of())))
+                .isEmpty();
+        PersonDataContributor anyReviewer =
+                store("t.account_id = :account AND t.reviewer_account_id IN (SELECT id FROM account)", "");
+        assertThat(unerasedColumns(columns, Set.of("conversation"), erasedColumns(List.of(anyReviewer), List.of())))
+                .as("a subquery that selects no part of the person's scope erases nothing")
+                .containsExactly("conversation.reviewer_account_id");
+        PersonDataContributor scopedReviewer =
+                store("t.reviewer_account_id IN (SELECT a.id FROM account a WHERE a.id = :account)", "");
+        assertThat(unerasedColumns(
+                        columns, Set.of("conversation"), erasedColumns(List.of(owners, scopedReviewer), List.of())))
                 .isEmpty();
         PersonDataContributor clearing = store("t.reviewer_account_id IN (SELECT 1)", "reviewer_account_id=NULL");
         assertThat(unerasedColumns(
@@ -396,7 +430,7 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
 
     /** A column compared with the person's scope: a scope parameter, or a set that a subquery selects. */
     private static final Pattern SCOPED = Pattern.compile(
-            "(?:\\w+\\.)?\"?(\\w+)\"?\\s*(?:=\\s*(?:ANY\\s*\\(\\s*)?:(\\w+)|IN\\s*\\(\\s*(?::(\\w+)|SELECT\\b))",
+            "(?:\\w+\\.)?\"?(\\w+)\"?\\s*(?:=\\s*(?:ANY\\s*\\(\\s*)?:(\\w+)|IN\\s*\\(\\s*(?::(\\w+)|(SELECT\\b)))",
             Pattern.CASE_INSENSITIVE);
 
     /** The parameters of a person's frozen scope ({@code JdbcPersonDataStore#parameters}). */
@@ -454,10 +488,28 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         var scoped = SCOPED.matcher(predicate);
         while (scoped.find()) {
             String parameter = scoped.group(2) != null ? scoped.group(2) : scoped.group(3);
-            if (parameter == null || SCOPE_PARAMETERS.contains(parameter))
+            // A subquery counts only when it selects by the person's scope itself, not by any row of a table.
+            boolean scopedSubquery = scoped.group(4) != null
+                    && SCOPE_PARAMETER
+                            .matcher(subquery(predicate, scoped.start(4)))
+                            .find();
+            if ((parameter != null && SCOPE_PARAMETERS.contains(parameter)) || scopedSubquery)
                 columns.add(scoped.group(1).toLowerCase(Locale.ROOT));
         }
         return columns;
+    }
+
+    private static final Pattern SCOPE_PARAMETER =
+            Pattern.compile(":(?:account|users|identities|conversations|documents|items|derivedJobs)\\b");
+
+    /** The text of a subquery that starts at {@code start}, up to its closing parenthesis. */
+    private static String subquery(String predicate, int start) {
+        int depth = 1;
+        for (int index = start; index < predicate.length(); index++) {
+            if (predicate.charAt(index) == '(') depth++;
+            if (predicate.charAt(index) == ')' && --depth == 0) return predicate.substring(start, index);
+        }
+        return predicate.substring(start);
     }
 
     private static JdbcPersonDataStore store(String predicate, String redaction) {

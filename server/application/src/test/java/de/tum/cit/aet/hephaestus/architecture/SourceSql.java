@@ -7,51 +7,17 @@ import java.util.regex.Pattern;
 
 /**
  * The SQL that a Java source file can run: its string literals and text blocks outside Java comments, with literals
- * that {@code +} joins read as one, and SQL comments removed. SQL that the code assembles from values at run time stays invisible to it.
+ * that {@code +} joins read as one. Each statement is normalized: SQL comments go, the contents of SQL string literals
+ * are blanked, and white space collapses. SQL that the code assembles from values at run time stays invisible to it.
  */
 final class SourceSql {
     private static final Pattern TEXT_BLOCK = Pattern.compile("\"\"\"(.*?)\"\"\"", Pattern.DOTALL);
     // An unrolled loop: a repeated alternation recurses once per character and overflows on a long literal.
     private static final Pattern STRING = Pattern.compile("\"([^\"\\\\\\n]*+(?:\\\\.[^\"\\\\\\n]*+)*+)\"");
     private static final Pattern JOINED = Pattern.compile("\"\\s*\\+\\s*\"");
-    private static final Pattern SQL_COMMENT = Pattern.compile("--[^\\n]*|/\\*.*?\\*/", Pattern.DOTALL);
-
     private static final Pattern QUERY_ANNOTATION = Pattern.compile("@(?:\\w+\\.)*(?:Query|NativeQuery)\\s*\\(");
 
     private SourceSql() {}
-
-    /**
-     * The source without its query annotations, whose SQL the compiled class holds whole, so that a test that reads both
-     * counts each annotation once.
-     */
-    static String withoutQueryAnnotations(String javaSource) {
-        String source = withoutJavaComments(javaSource);
-        var kept = new StringBuilder();
-        int from = 0;
-        var annotation = QUERY_ANNOTATION.matcher(source);
-        while (annotation.find(from)) {
-            kept.append(source, from, annotation.start());
-            int index = annotation.end();
-            int depth = 1;
-            while (index < source.length() && depth > 0) {
-                if (source.startsWith("\"\"\"", index)) {
-                    int end = source.indexOf("\"\"\"", index + 3);
-                    index = end < 0 ? source.length() : end + 3;
-                    continue;
-                }
-                char next = source.charAt(index);
-                if (next == '"') {
-                    index++;
-                    while (index < source.length() && source.charAt(index) != '"')
-                        index += source.charAt(index) == '\\' ? 2 : 1;
-                } else if (next == '(') depth++;
-                else if (next == ')') depth--;
-                index++;
-            }
-            from = index;
-        }
-        return kept.append(source.substring(Math.min(from, source.length()))).toString();
-    }
 
     static List<String> statements(String javaSource) {
         String source = withoutJavaComments(javaSource);
@@ -65,6 +31,66 @@ final class SourceSql {
     }
 
     /**
+     * The source without its query annotations, whose SQL the compiled class holds whole, so that a test that reads both
+     * counts each annotation once. Only an annotation in Java code counts, never text in a literal.
+     */
+    static String withoutQueryAnnotations(String javaSource) {
+        String source = withoutJavaComments(javaSource);
+        var kept = new StringBuilder();
+        int index = 0;
+        while (index < source.length()) {
+            int literal = literalEnd(source, index);
+            if (literal > index) {
+                kept.append(source, index, literal);
+                index = literal;
+                continue;
+            }
+            Matcher annotation = QUERY_ANNOTATION.matcher(source).region(index, source.length());
+            if (source.charAt(index) == '@' && annotation.lookingAt()) {
+                index = argumentsEnd(source, annotation.end());
+                continue;
+            }
+            kept.append(source.charAt(index));
+            index++;
+        }
+        return kept.toString();
+    }
+
+    /** The end of the argument list that opens before {@code start}, with literals inside it skipped whole. */
+    private static int argumentsEnd(String source, int start) {
+        int depth = 1;
+        int index = start;
+        while (index < source.length()) {
+            int literal = literalEnd(source, index);
+            if (literal > index) {
+                index = literal;
+                continue;
+            }
+            char next = source.charAt(index++);
+            if (next == '(') depth++;
+            if (next == ')' && --depth == 0) return index;
+        }
+        return source.length();
+    }
+
+    /**
+     * The end of the Java string literal, text block or character literal that starts at {@code start}, or {@code start}
+     * when none starts there.
+     */
+    private static int literalEnd(String source, int start) {
+        if (source.startsWith("\"\"\"", start)) {
+            int end = source.indexOf("\"\"\"", start + 3);
+            return end < 0 ? source.length() : end + 3;
+        }
+        char first = source.charAt(start);
+        if (first != '"' && first != '\'') return start;
+        int end = start + 1;
+        while (end < source.length() && source.charAt(end) != first && source.charAt(end) != '\n')
+            end += source.charAt(end) == '\\' ? 2 : 1;
+        return Math.min(end + 1, source.length());
+    }
+
+    /**
      * The source without its Java comments, with string literals, text blocks and character literals kept whole. A
      * comment then neither hides SQL nor holds any.
      */
@@ -72,26 +98,17 @@ final class SourceSql {
         var kept = new StringBuilder();
         int index = 0;
         while (index < source.length()) {
-            if (source.startsWith("//", index)) {
+            int literal = literalEnd(source, index);
+            if (literal > index) {
+                kept.append(source, index, literal);
+                index = literal;
+            } else if (source.startsWith("//", index)) {
                 int end = source.indexOf('\n', index);
                 index = end < 0 ? source.length() : end;
             } else if (source.startsWith("/*", index)) {
                 int end = source.indexOf("*/", index + 2);
                 index = end < 0 ? source.length() : end + 2;
                 kept.append(' ');
-            } else if (source.startsWith("\"\"\"", index)) {
-                int end = source.indexOf("\"\"\"", index + 3);
-                int stop = end < 0 ? source.length() : end + 3;
-                kept.append(source, index, stop);
-                index = stop;
-            } else if (source.charAt(index) == '"' || source.charAt(index) == '\'') {
-                char quote = source.charAt(index);
-                int end = index + 1;
-                while (end < source.length() && source.charAt(end) != quote && source.charAt(end) != '\n')
-                    end += source.charAt(end) == '\\' ? 2 : 1;
-                int stop = Math.min(end + 1, source.length());
-                kept.append(source, index, stop);
-                index = stop;
             } else {
                 kept.append(source.charAt(index));
                 index++;
@@ -100,8 +117,42 @@ final class SourceSql {
         return kept.toString();
     }
 
-    /** One SQL statement without comments, its white space collapsed, so the same query reads the same everywhere. */
+    /**
+     * One SQL statement without comments, with the contents of its string literals blanked and its white space
+     * collapsed, so the same query reads the same everywhere and a literal names no table.
+     */
     static String normalized(String sql) {
-        return SQL_COMMENT.matcher(sql).replaceAll(" ").replaceAll("\\s+", " ").strip();
+        var kept = new StringBuilder();
+        int index = 0;
+        while (index < sql.length()) {
+            if (sql.charAt(index) == '\'') {
+                int end = index + 1;
+                while (end < sql.length()
+                        && !(sql.charAt(end) == '\'' && (end + 1 >= sql.length() || sql.charAt(end + 1) != '\'')))
+                    end += sql.charAt(end) == '\'' ? 2 : 1;
+                kept.append("''");
+                index = Math.min(end + 1, sql.length());
+            } else if (sql.startsWith("--", index)) {
+                int end = sql.indexOf('\n', index);
+                index = end < 0 ? sql.length() : end;
+                kept.append(' ');
+            } else if (sql.startsWith("/*", index)) {
+                int depth = 0;
+                while (index < sql.length()) {
+                    if (sql.startsWith("/*", index)) {
+                        depth++;
+                        index += 2;
+                    } else if (sql.startsWith("*/", index)) {
+                        index += 2;
+                        if (--depth == 0) break;
+                    } else index++;
+                }
+                kept.append(' ');
+            } else {
+                kept.append(sql.charAt(index));
+                index++;
+            }
+        }
+        return kept.toString().replaceAll("\\s+", " ").strip();
     }
 }
