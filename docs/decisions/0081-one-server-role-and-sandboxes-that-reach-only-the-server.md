@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-10
 **Authors:** Felix T.J. Dietrich
+**Amended by:** [ADR 0151](0151-each-external-write-has-one-delivery-key-and-is-read-back-never-retried-blindly.md)
 
 **Supersedes:** [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md), [ADR 0006](0006-llm-proxy-on-coordinator-trust-model.md), [ADR 0009](0009-worker-runtime-substrate-wss-control-channel.md), [ADR 0025](0025-agent-job-queue-on-postgresql.md), [ADR 0036](0036-agent-runtime-runs-on-node-24.md), [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md), [ADR 0074](0074-a-reviews-width-and-count-follow-the-provider.md)
 
