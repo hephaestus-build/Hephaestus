@@ -8,6 +8,8 @@
 
 **Amends:** [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rules 1, 19 and 21. [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16. [ADR 0047](0047-the-practice-profile-has-one-reader.md), its View as user exception. [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), its smallest count.
 
+**Amended by:** [ADR 0153](0153-a-public-page-shows-instance-reach-released-once-each-half-year.md)
+
 **Builds on:** ADR 0124 (proposed in #4866)
 
 **Relates to:** ADR 0141 and ADR 0149 (proposed in #4868), research datasets and delivery experiments. ADR 0139 (proposed in #4865), delivery decisions
@@ -140,3 +142,13 @@ Not enforced. The implementing issues add the checks below, and review of each i
 - [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md#considered-options) option 3: hiding cells until the hidden cells hold enough people. Still declined. It closes the subtraction but not the inference. Decision 6 keeps "all cells or only the total".
 - [ADR 0112](0112-practices-across-the-workspace-hides-counts-of-fewer-than-3.md#considered-options) option 5: noise or rounding. Still declined.
 - [ADR 0051](0051-practices-across-the-workspace-counts-developers.md#considered-options): a smallest count of 10. Still declined. Every staff-visible aggregate uses 5, the monthly practice outcome included. One floor gives one answer for a workspace of six.
+
+## Update — 2026-11-24: decision 14 covers a public page
+
+[ADR 0153](0153-a-public-page-shows-instance-reach-released-once-each-half-year.md) extends decision 14 to the public page **Hephaestus in numbers**.
+The page shows only instance totals of reach, in fixed half-years, with floors, rounding and a dominance rule.
+Its rules hold for every reader, signed in or not.
+
+One exception applies to the page. The floor of 5 people applies to each period before any figure can appear, not to each figure. Only one figure counts people.
+Staff can read the page like anyone else. Decision 1 still holds: a staff role gives no usage counts beyond this page.
+Option 3 stays declined: the page shows no use of Hephaestus by a person or a workspace.
