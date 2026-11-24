@@ -38,6 +38,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBeans;
 class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Map<String, String> FULL_CONTEXT_ASSIGNMENTS = Map.ofEntries(
+            assignment("core.evaluation.EvaluationDigestIntegrationTest", "evaluation-digest"),
             assignment("core.evaluation.EvaluationDisabledIntegrationTest", "evaluation-disabled"),
             assignment("core.evaluation.EvaluationIntegrationTest", "evaluation-enabled"),
             assignment("agent.job.ReviewJobEventListenerIntegrationTest", "review-enqueue-atomicity"),
@@ -138,6 +139,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"));
 
     private static final Map<String, String> FULL_CONTEXT_JUSTIFICATIONS = Map.ofEntries(
+            Map.entry(
+                    "evaluation-digest",
+                    "isolated controlled clock with an agent runtime to exercise digest admission"),
             Map.entry("evaluation-disabled", "default server with a collector to prove evaluation stays off"),
             Map.entry("evaluation-enabled", "isolated server with a controlled clock, durable queues and a collector"),
             Map.entry(
@@ -298,6 +302,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                             + " controller"));
 
     private static final Set<String> SPRING_BOOT_TESTS = names(
+            "core.evaluation.EvaluationDigestIntegrationTest",
             "core.evaluation.EvaluationIntegrationTest",
             "StartupBudgetIntegrationTest",
             "AgentRuntimeOffIntegrationTest",
@@ -314,6 +319,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "integration.schema.ProductionSchemaContractIntegrationTest");
 
     private static final Set<String> DYNAMIC_PROPERTY_TESTS = names(
+            "core.evaluation.EvaluationDigestIntegrationTest",
             "core.evaluation.EvaluationDisabledIntegrationTest",
             "core.evaluation.EvaluationIntegrationTest",
             "StartupBudgetIntegrationTest",
@@ -368,6 +374,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     // Its context runs the worker's poller, which would claim the review jobs of later classes in an unsharded run.
     private static final Set<String> DIRTY_CONTEXT_TESTS = names(
+            "core.evaluation.EvaluationDigestIntegrationTest",
             "core.evaluation.EvaluationDisabledIntegrationTest",
             "core.evaluation.EvaluationIntegrationTest",
             "practices.review.ReviewEndToEndIntegrationTest");
@@ -397,6 +404,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             TestPropertySource.class);
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
+            "core.evaluation.EvaluationDigestIntegrationTest",
             "practices.repository.PracticeRepositorySyncIntegrationTest",
             "integration.scm.github.installation.adoption.GitHubInstallationAdoptionIntegrationTest",
             "observability.ScrapeContractIntegrationTest",
