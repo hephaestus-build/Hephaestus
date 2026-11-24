@@ -8234,8 +8234,27 @@ export const PracticeSchema = {
 			type: "string",
 			pattern: "^[1-9][0-9]*$",
 		},
+		identity: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/PracticeIdentity",
+					description:
+						"The identity of the current version. The upgrade and every write give each version one, so it is null only for a version written outside them",
+				},
+				{
+					type: "null",
+				},
+			],
+			description:
+				"The identity of the current version. The upgrade and every write give each version one, so it is null only for a version written outside them",
+		},
 		kind: {
 			type: "string",
+		},
+		portable: {
+			type: "boolean",
+			description:
+				"Whether the identity comes from the catalog, so it means the same in other workspaces",
 		},
 		position: {
 			type: "integer",
@@ -8257,7 +8276,9 @@ export const PracticeSchema = {
 		"feedbackMode",
 		"groupSlug",
 		"id",
+		"identity",
 		"kind",
+		"portable",
 		"position",
 		"slug",
 		"updatedAt",
@@ -8854,6 +8875,24 @@ export const PracticeGuideSchema = {
 		},
 	},
 	required: ["figures", "markdown"],
+} as const;
+
+export const PracticeIdentitySchema = {
+	type: "object",
+	description:
+		"What the practice's current version judges (ADR 0130). Two versions with one key and one comparability class judge the same thing, in any workspace.",
+	properties: {
+		comparabilityClass: {
+			type: "string",
+			description: "The comparability class. An edit that changes the judgement starts a new class",
+		},
+		key: {
+			type: "string",
+			description:
+				"The domain-qualified key: <domain>/<key> from the catalog, or local/<workspace>/<practice> for a practice of this workspace",
+		},
+	},
+	required: ["comparabilityClass", "key"],
 } as const;
 
 export const PracticeItemTypeOptionSchema = {

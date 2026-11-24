@@ -4345,7 +4345,15 @@ export type Practice = {
 	feedbackMode: FeedbackModeAssignment;
 	groupSlug: string | null;
 	id: string;
+	/**
+	 * The identity of the current version. The upgrade and every write give each version one, so it is null only for a version written outside them
+	 */
+	identity: PracticeIdentity | null;
 	kind: string;
+	/**
+	 * Whether the identity comes from the catalog, so it means the same in other workspaces
+	 */
+	portable: boolean;
 	position: number;
 	slug: string;
 	updatedAt: string | null;
@@ -4551,6 +4559,20 @@ export type PracticeGuide = {
 	 * Markdown. Shows a figure with ![description](figures/<name>.svg)
 	 */
 	markdown: string;
+};
+
+/**
+ * What the practice's current version judges (ADR 0130). Two versions with one key and one comparability class judge the same thing, in any workspace.
+ */
+export type PracticeIdentity = {
+	/**
+	 * The comparability class. An edit that changes the judgement starts a new class
+	 */
+	comparabilityClass: string;
+	/**
+	 * The domain-qualified key: <domain>/<key> from the catalog, or local/<workspace>/<practice> for a practice of this workspace
+	 */
+	key: string;
 };
 
 export type PracticeItemTypeOption = {

@@ -164,6 +164,10 @@ SELECT d.id, 20, d.id, 1, jsonb_build_object(
 FROM (VALUES (923101, 'Explain validation'), (923102, 'Keep changes focused'),
   (923103, 'E2E_UNPOSTED_PROPOSAL_PRACTICE')) AS d(id, name)
 ON CONFLICT (id) DO NOTHING;
+-- Each version has the identity that the server gives a practice of the workspace (ADR 0130).
+UPDATE practice_version
+SET identity_key = 'local/20/' || practice_id, comparability_class = review_digest
+WHERE id IN (923101, 923102, 923103) AND identity_key IS NULL;
 
 -- !4's history: an event withheld for want of a model, and two reviews that never run.
 INSERT INTO item_event (id, workspace_id, item_id, name, item_version, occurred_at, found_by, state, reason, decided_at)

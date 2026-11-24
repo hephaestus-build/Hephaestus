@@ -44,7 +44,7 @@ import tools.jackson.databind.JsonNode;
                     columnNames = {"practice_id", "number"})
         })
 @Getter
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @ToString
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class PracticeVersion {
@@ -114,6 +114,18 @@ public class PracticeVersion {
     @Column(name = "source_commit", length = 64, updatable = false)
     private @Nullable String sourceCommit;
 
+    /**
+     * The domain-qualified key of the practice (ADR 0130): {@code <domain>/<key>} from the catalog, or
+     * {@code local/<workspace>/<practice>}. Every write sets it; the column stays nullable only so that the upgrade can fill
+     * the versions that exist before it.
+     */
+    @Column(name = "identity_key", length = 160, updatable = false)
+    private @Nullable String identityKey;
+
+    /** What this version judges: versions of one key and one class judge the same thing. Set with the key. */
+    @Column(name = "comparability_class", length = 96, updatable = false)
+    private @Nullable String comparabilityClass;
+
     public String getReviewDigest() {
         return Objects.requireNonNull(
                 reviewDigest, "Persist the practice version before reading its generated digest.");
@@ -123,22 +135,17 @@ public class PracticeVersion {
         return definition.deepCopy();
     }
 
-    public PracticeVersion(Practice practice, int number, JsonNode definition, @Nullable Long createdByAccountId) {
-        this(practice, number, definition, createdByAccountId, false);
-    }
-
-    public PracticeVersion(
-            Practice practice, int number, JsonNode definition, @Nullable Long createdByAccountId, boolean tried) {
-        this(practice, number, definition, createdByAccountId, tried, null);
-    }
-
     public PracticeVersion(
             Practice practice,
             int number,
             JsonNode definition,
             @Nullable Long createdByAccountId,
             boolean tried,
-            @Nullable String sourceCommit) {
+            @Nullable String sourceCommit,
+            String identityKey,
+            String comparabilityClass) {
+        this.identityKey = Objects.requireNonNull(identityKey);
+        this.comparabilityClass = Objects.requireNonNull(comparabilityClass);
         this.tried = tried;
         this.sourceCommit = sourceCommit;
         this.practice = Objects.requireNonNull(practice);

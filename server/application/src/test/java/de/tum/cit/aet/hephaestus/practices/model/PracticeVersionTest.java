@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -19,7 +20,7 @@ class PracticeVersionTest extends BaseUnitTest {
         var practice = practice();
         var original = DefinitionTestFixtures.definition();
         var authored = (ObjectNode) mapper.valueToTree(original);
-        var version = new PracticeVersion(practice, 3, authored, 91L);
+        var version = TestEntities.version(practice, 3, authored, 91L);
         authored.put("criteria", "Later authored criteria");
         var projection = (ObjectNode) version.getDefinition();
         projection.put("criteria", "Edited read projection");
@@ -33,9 +34,9 @@ class PracticeVersionTest extends BaseUnitTest {
     void shouldPreserveMissingHistoricalFieldsWithoutBorrowingTheCurrentDefinition() {
         var practice = practice();
         var historical = mapper.createObjectNode().put("criteria", "Recorded historical criteria");
-        var version = new PracticeVersion(practice, 1, historical, null);
+        var version = TestEntities.version(practice, 1, historical, null);
         practice.setCurrentVersion(
-                new PracticeVersion(practice, 2, mapper.valueToTree(DefinitionTestFixtures.definition()), null));
+                TestEntities.version(practice, 2, mapper.valueToTree(DefinitionTestFixtures.definition()), null));
         assertThat(version.getDefinition()).isEqualTo(historical);
         assertThat(version.getDefinition().has("about")).isFalse();
         assertThat(version.getDefinition().has("reads")).isFalse();
@@ -46,9 +47,9 @@ class PracticeVersionTest extends BaseUnitTest {
     void shouldRejectAnInvalidVersionNumberOrAnInvalidRecordedDocument() {
         var practice = practice();
         var definition = mapper.valueToTree(DefinitionTestFixtures.definition());
-        assertThatThrownBy(() -> new PracticeVersion(practice, 0, definition, null))
+        assertThatThrownBy(() -> TestEntities.version(practice, 0, definition, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new PracticeVersion(practice, 1, mapper.createArrayNode(), null))
+        assertThatThrownBy(() -> TestEntities.version(practice, 1, mapper.createArrayNode(), null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

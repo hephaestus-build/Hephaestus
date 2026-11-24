@@ -7,10 +7,12 @@ import de.tum.cit.aet.hephaestus.practices.catalog.CatalogEntryState;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogService;
 import de.tum.cit.aet.hephaestus.practices.catalog.EffectiveCatalog;
+import de.tum.cit.aet.hephaestus.practices.curated.PracticeIdentities;
 import de.tum.cit.aet.hephaestus.practices.dto.CatalogOriginDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.FeedbackModeAssignmentDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeIdentityDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeVersionDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
@@ -111,6 +113,7 @@ public class CatalogOriginPresenter {
             @Nullable FeedbackMode mode,
             PracticeVersionDTO current) {
         var effective = FeedbackModeResolver.resolvePractice(practice, mode);
+        var identity = identity(practice.getCurrentVersion());
         return new PracticeDTO(
                 practice.getId().toString(),
                 practice.getSlug(),
@@ -121,8 +124,16 @@ public class CatalogOriginPresenter {
                 new FeedbackModeAssignmentDTO(practice.getFeedbackMode(), effective.mode(), effective.source()),
                 origin(practice, effectiveCatalog),
                 practice.getEditedIn(),
+                identity,
+                identity != null && PracticeIdentities.portable(identity.key()),
                 practice.getCreatedAt(),
                 practice.getUpdatedAt());
+    }
+
+    private static @Nullable PracticeIdentityDTO identity(PracticeVersion version) {
+        String key = version.getIdentityKey();
+        String comparabilityClass = version.getComparabilityClass();
+        return key == null || comparabilityClass == null ? null : new PracticeIdentityDTO(key, comparabilityClass);
     }
 
     public PracticeGroupDTO present(Long workspaceId, PracticeGroup group) {

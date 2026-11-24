@@ -83,7 +83,6 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalogLoader;
-import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.review.AbstractResultAdmissionIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
@@ -111,6 +110,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWithholdings;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -789,7 +789,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                 d.lineNotes(),
                 d.guidance()));
         var practiceRow = practiceRows.findById(scenario.practice().getId()).orElseThrow();
-        practiceRow.setCurrentVersion(versionRows.saveAndFlush(new PracticeVersion(practiceRow, 2, retained, null)));
+        practiceRow.setCurrentVersion(versionRows.saveAndFlush(TestEntities.version(practiceRow, 2, retained, null)));
         practiceRows.saveAndFlush(practiceRow);
         var pending = pending(new ReviewIntegrationData.Scenario(
                 scenario.workspace(),
@@ -879,7 +879,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                 d.lineNotes(),
                 d.guidance()));
         var row = practiceRows.findById(unsupported.getId()).orElseThrow();
-        row.setCurrentVersion(versionRows.saveAndFlush(new PracticeVersion(row, 2, retained, null)));
+        row.setCurrentVersion(versionRows.saveAndFlush(TestEntities.version(row, 2, retained, null)));
         practiceRows.saveAndFlush(row);
         admissions.assigned(pending, practiceRows.findById(row.getId()).orElseThrow());
         long ready = scenario.practice().getId();

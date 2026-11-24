@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
-import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import java.util.Objects;
@@ -38,7 +38,7 @@ class PracticeContractUpgradeIntegrationTest extends AbstractWorkspaceIntegratio
                 workspace.getId(), "owned-contract", new ItemKind("scm.pull_request"), authored, null, 0, null));
         var recorded = (ObjectNode) mapper.valueToTree(authored);
         ((ObjectNode) recorded.path("reads")).put("contract", "1.3.0");
-        var legacy = history.saveAndFlush(new PracticeVersion(practice, 2, recorded, null));
+        var legacy = history.saveAndFlush(TestEntities.version(practice, 2, recorded, null));
         var previousBytes = legacy.getDefinition();
         var previousId = Objects.requireNonNull(legacy.getId());
         assertThatThrownBy(() -> versions.append(practice, versions.definitionOf(legacy), null))

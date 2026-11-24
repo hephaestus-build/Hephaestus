@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795534872120-1" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <and>
+                    <columnExists tableName="practice_version" columnName="identity_key"/>
+                    <columnExists tableName="practice_version" columnName="comparability_class"/>
+                </and>
+            </not>
+        </preConditions>
+        <comment>A practice version records what it judges (ADR 0130): a domain-qualified key and a comparability class. Both are nullable, so the previous release can still write a version. One transaction adds both, so a run that stopped after it finds both and marks this change set as run; a table with only one of them fails here.</comment>
+        <addColumn tableName="practice_version">
+            <column name="identity_key" type="VARCHAR(160)"/>
+            <column name="comparability_class" type="VARCHAR(96)"/>
+        </addColumn>
+        <rollback>
+            <sql>ALTER TABLE practice_version DROP COLUMN IF EXISTS identity_key, DROP COLUMN IF EXISTS comparability_class</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795534872120-2" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="practice" columnName="catalog_slug"/>
+            <columnExists tableName="practice" columnName="kind"/>
+            <columnExists tableName="practice_version" columnName="review_digest"/>
+        </preConditions>
+        <comment>A version keeps its identity once set: the guard permits only the one change from NULL. Then each existing version gets its identity from the catalog of this release, copied here so that the result never depends on a later catalog. A practice adopted from a catalog practice of the same kind gets software-engineering/ and its catalog slug; any other practice gets local/ with its workspace and its own id. This catalog declares no comparability classes, so the class of each version is its review digest. Both statements can run again.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.guard_practice_version() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF (to_jsonb(NEW)-'created_by_account_id'-'name'-'review_digest'-'identity_key'-'comparability_class')
+      IS DISTINCT FROM (to_jsonb(OLD)-'created_by_account_id'-'name'-'review_digest'-'identity_key'-'comparability_class')
+    OR (NEW.created_by_account_id IS NOT NULL AND NEW.created_by_account_id IS DISTINCT FROM OLD.created_by_account_id)
+    OR (OLD.identity_key IS NOT NULL
+        AND (NEW.identity_key, NEW.comparability_class) IS DISTINCT FROM (OLD.identity_key, OLD.comparability_class)) THEN
+  RAISE EXCEPTION 'practice versions are immutable' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $$;
+
+UPDATE practice_version pv
+SET identity_key = COALESCE('software-engineering/' || catalog.slug, 'local/' || pv.workspace_id || '/' || pv.practice_id),
+    comparability_class = pv.review_digest
+FROM practice p
+LEFT JOIN (VALUES
+    ('scope-one-reviewable-change', 'scm.pull_request'),
+    ('describe-what-and-why', 'scm.pull_request'),
+    ('states-how-to-verify-the-change', 'scm.pull_request'),
+    ('ready-and-traceable-handoff', 'scm.pull_request'),
+    ('commit-subjects-explain-each-change', 'scm.pull_request'),
+    ('honours-linked-issue-acceptance-criteria', 'scm.pull_request'),
+    ('engaging-with-inline-review-comments', 'scm.pull_request'),
+    ('merged-past-unresolved-review-threads', 'scm.pull_request'),
+    ('issue-states-an-actionable-problem', 'scm.issue'),
+    ('issue-scoped-to-single-concern', 'scm.issue'),
+    ('issue-has-checkable-outcome', 'scm.issue'),
+    ('issue-points-to-relevant-context', 'scm.issue'),
+    ('leaves-useful-specific-review-comments', 'scm.pull_request_review'),
+    ('reviews-respectfully-asks-rather-than-demands', 'scm.pull_request_review'),
+    ('reviews-substantively-with-understanding', 'scm.pull_request_review'),
+    ('ships-tests-with-the-change', 'scm.pull_request'),
+    ('keeps-the-test-suite-honest', 'scm.pull_request'),
+    ('removes-duplication-instead-of-copy-pasting', 'scm.pull_request'),
+    ('keeps-functions-small-and-single-purpose', 'scm.pull_request'),
+    ('leaves-the-code-clean-with-intent-revealing-comments', 'scm.pull_request'),
+    ('logs-through-the-platform-logger', 'scm.pull_request'),
+    ('handles-errors-instead-of-swallowing-them', 'scm.pull_request'),
+    ('validates-inputs-and-edge-cases-at-the-boundary', 'scm.pull_request'),
+    ('avoids-unsafe-panics-and-chosen-crashes', 'scm.pull_request'),
+    ('validates-and-escapes-untrusted-input', 'scm.pull_request'),
+    ('avoids-insecure-defaults-and-over-broad-permissions', 'scm.pull_request'),
+    ('changes-dependencies-deliberately', 'scm.pull_request'),
+    ('records-significant-decisions-with-rationale', 'scm.pull_request'),
+    ('documents-public-api-and-behaviour-changes', 'scm.pull_request'),
+    ('change-keeps-linked-docs-consistent', 'scm.pull_request'),
+    ('published-decisions-name-the-alternatives', 'docs.document'),
+    ('commits-are-atomic-and-cohesive', 'scm.pull_request'),
+    ('excludes-generated-and-build-artifacts', 'scm.pull_request'),
+    ('breaks-large-work-into-trackable-subtasks', 'scm.issue'),
+    ('triages-the-issue-with-labels-and-ownership', 'scm.issue'),
+    ('issue-closed-with-unmet-outcome', 'scm.issue'),
+    ('closed-issue-outcome-recorded', 'scm.issue'),
+    ('links-the-change-to-its-issue', 'scm.pull_request'),
+    ('merge-confirms-the-linked-issue-outcome', 'scm.pull_request'),
+    ('defers-review-asks-into-tracked-work', 'scm.pull_request'),
+    ('merges-only-after-approval', 'scm.pull_request'),
+    ('plans-the-work-in-an-issue-first', 'scm.pull_request'),
+    ('keeps-views-free-of-networking-and-persistence', 'scm.pull_request'),
+    ('owns-state-at-the-right-level', 'scm.pull_request'),
+    ('makes-ui-accessible-by-default', 'scm.pull_request'),
+    ('uses-structured-concurrency-safely', 'scm.pull_request'),
+    ('ships-a-preview-with-each-new-view', 'scm.pull_request'),
+    ('declares-permissions-truthfully-at-point-of-use', 'scm.pull_request'),
+    ('uses-adaptive-colors-for-every-appearance', 'scm.pull_request'),
+    ('asks-answerable-questions', 'chat.thread'),
+    ('gives-actionable-answers', 'chat.thread'),
+    ('posts-clear-status-and-blocker-updates', 'chat.thread')
+) AS catalog(slug, kind) ON catalog.slug = p.catalog_slug AND catalog.kind = p.kind
+WHERE p.id = pv.practice_id AND pv.identity_key IS NULL;
+]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.guard_practice_version() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF (to_jsonb(NEW)-'created_by_account_id'-'name'-'review_digest') IS DISTINCT FROM (to_jsonb(OLD)-'created_by_account_id'-'name'-'review_digest') OR (NEW.created_by_account_id IS NOT NULL AND NEW.created_by_account_id IS DISTINCT FROM OLD.created_by_account_id) THEN RAISE EXCEPTION 'practice versions are immutable' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $$;
+]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795534872120-3" author="hephaestus">
+        <comment>A version has both or neither, in their documented forms. The check is added NOT VALID, so it holds its table lock only for a moment; the next change set validates the stored rows.</comment>
+        <sql><![CDATA[SET LOCAL lock_timeout = '5s';
+ALTER TABLE practice_version DROP CONSTRAINT IF EXISTS ck_practice_version_identity;
+ALTER TABLE practice_version ADD CONSTRAINT ck_practice_version_identity CHECK (
+    (identity_key IS NULL) = (comparability_class IS NULL)
+    AND (identity_key IS NULL
+        OR identity_key ~ '^local/[0-9]+/[0-9]+$'
+        OR (identity_key !~ '^local/' AND identity_key ~ '^[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*$'))
+    AND (comparability_class IS NULL OR comparability_class ~ '^v[0-9]+:[0-9a-f]{64}$')) NOT VALID]]></sql>
+        <rollback>
+            <sql>ALTER TABLE practice_version DROP CONSTRAINT IF EXISTS ck_practice_version_identity</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795534872120-4" author="hephaestus">
+        <comment>Validates the identity check on the stored rows without blocking reads and writes of practice_version.</comment>
+        <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE practice_version VALIDATE CONSTRAINT ck_practice_version_identity</sql>
+        <rollback>
+            <sql><![CDATA[SET LOCAL lock_timeout = '5s';
+ALTER TABLE practice_version DROP CONSTRAINT IF EXISTS ck_practice_version_identity;
+ALTER TABLE practice_version ADD CONSTRAINT ck_practice_version_identity CHECK (
+    (identity_key IS NULL) = (comparability_class IS NULL)
+    AND (identity_key IS NULL
+        OR identity_key ~ '^local/[0-9]+/[0-9]+$'
+        OR (identity_key !~ '^local/' AND identity_key ~ '^[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*$'))
+    AND (comparability_class IS NULL OR comparability_class ~ '^v[0-9]+:[0-9a-f]{64}$')) NOT VALID]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,29 @@
+---
+title: Check the practice identities after the upgrade
+description: Make sure that the upgrade gave each practice version its identity from the bundled catalog.
+page_type: how-to
+---
+
+The upgrade gives each practice version an identity and a comparability class.
+A practice adopted from a practice that ships with Hephaestus, with the same slug and item kind, gets the key of that practice.
+Any other practice, also one from an entry that does not ship with Hephaestus, gets a key that stays in its workspace.
+The migration Job fills them during the [stopped upgrade](../upgrade#stopped-schema-upgrades).
+Use this procedure to make sure that it is complete.
+
+## Before you start
+
+- The migration Job has completed.
+- You can connect to the database with the migration login.
+
+## Check that it worked
+
+1. Count the practice versions without an identity.
+
+   ```sql
+   SELECT count(*) FROM practice_version WHERE identity_key IS NULL;
+   ```
+
+The result is `0`.
+The upgrade runs with every role stopped, so no server of the previous release writes a version after the migration.
+If the result is not `0`, a server of the previous release ran on the new schema.
+Stop every role, then follow [If migration fails](../upgrade#if-migration-fails). That procedure restores the backup from before the upgrade.

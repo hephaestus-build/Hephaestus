@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogService;
+import de.tum.cit.aet.hephaestus.practices.curated.PracticeIdentities;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -35,6 +36,7 @@ class PracticeVersionRuntimeRoleContextTest extends BaseUnitTest {
             .withBean(EntityManagerFactory.class, () -> mock(EntityManagerFactory.class))
             .withBean(PracticeRepository.class, () -> mock(PracticeRepository.class))
             .withBean(PracticeDrafts.class, () -> mock(PracticeDrafts.class))
+            .withBean(PracticeIdentities.class, PracticeIdentities::new)
             .withBean(PracticeVersionRepository.class, () -> mock(PracticeVersionRepository.class))
             .withBean(PracticeDefinitionValidator.class, () -> mock(PracticeDefinitionValidator.class))
             .withBean(JsonMapper.class, () -> mapper)

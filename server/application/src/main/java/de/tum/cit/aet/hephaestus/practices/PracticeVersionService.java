@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices;
 import de.tum.cit.aet.hephaestus.core.auth.dto.AccountRefDTO;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
+import de.tum.cit.aet.hephaestus.practices.curated.PracticeIdentities;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeVersionDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeState;
@@ -28,6 +29,8 @@ public class PracticeVersionService {
     private final JsonMapper mapper;
     private final PracticeDefinitionValidator validator;
     private final PracticeDrafts drafts;
+    private final PracticeIdentities identities;
+    private final PracticeReviewDigest digests;
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
@@ -63,8 +66,17 @@ public class PracticeVersionService {
         int number = versions.findFirstByPracticeIdOrderByNumberDesc(locked.getId())
                 .map(version -> version.getNumber() + 1)
                 .orElse(1);
+        JsonNode tree = mapper.valueToTree(definition);
+        String key = identityKeyOf(locked);
         PracticeVersion version = versions.saveAndFlush(new PracticeVersion(
-                locked, number, mapper.valueToTree(definition), createdByAccountId, false, sourceCommit));
+                locked,
+                number,
+                tree,
+                createdByAccountId,
+                false,
+                sourceCommit,
+                key,
+                identities.comparabilityClass(key, digests.of(tree))));
         locked.setCurrentVersion(version);
         practice.setCurrentVersion(version);
         practices.save(locked);
@@ -94,7 +106,26 @@ public class PracticeVersionService {
         int number = versions.findFirstByPracticeIdOrderByNumberDesc(locked.getId())
                 .map(version -> version.getNumber() + 1)
                 .orElse(1);
-        return versions.saveAndFlush(new PracticeVersion(locked, number, tree, createdByAccountId, true));
+        String key = identityKeyOf(locked);
+        return versions.saveAndFlush(new PracticeVersion(
+                locked,
+                number,
+                tree,
+                createdByAccountId,
+                true,
+                null,
+                key,
+                identities.comparabilityClass(key, digests.of(tree))));
+    }
+
+    /**
+     * A practice keeps the key of its current version, so a later catalog edit cannot move it to another identity. The
+     * upgrade gave every stored version a key, with every role stopped, and every write path sets one.
+     */
+    private static String identityKeyOf(Practice practice) {
+        return Objects.requireNonNull(
+                practice.getCurrentVersion().getIdentityKey(),
+                "A practice version has its identity from the upgrade on.");
     }
 
     @Transactional
@@ -115,6 +146,7 @@ public class PracticeVersionService {
         Long versionId = (Long) Objects.requireNonNull(entityManager)
                 .createNativeQuery("SELECT nextval(pg_get_serial_sequence('practice_version'," + " 'id'))", Long.class)
                 .getSingleResult();
+        String key = identities.keyOf(request.catalogSlug(), kind.value(), workspace, practiceId);
         Objects.requireNonNull(entityManager)
                 .createNativeQuery("""
                     INSERT INTO practice(id, workspace_id, slug, kind, group_id, position, current_version_id, state)
@@ -132,8 +164,10 @@ public class PracticeVersionService {
         Objects.requireNonNull(entityManager)
                 .createNativeQuery("""
                     INSERT INTO practice_version(
-                        id, workspace_id, practice_id, number, definition, created_by_account_id, source_commit)
-                    VALUES (:id, :workspace, :practice, 1, CAST(:definition AS jsonb), :creator, :commit)
+                        id, workspace_id, practice_id, number, definition, created_by_account_id, source_commit,
+                        identity_key, comparability_class)
+                    VALUES (:id, :workspace, :practice, 1, CAST(:definition AS jsonb), :creator, :commit,
+                        :identity, :class)
                     """)
                 .setParameter("id", versionId)
                 .setParameter("workspace", workspace)
@@ -141,6 +175,8 @@ public class PracticeVersionService {
                 .setParameter("definition", mapper.writeValueAsString(definition))
                 .setParameter("creator", createdByAccountId)
                 .setParameter("commit", request.sourceCommit())
+                .setParameter("identity", key)
+                .setParameter("class", identities.comparabilityClass(key, digests.of(definition)))
                 .executeUpdate();
         // Read with drafts visible, so a new draft is found too, with its version and group loaded.
         return drafts.withDrafts(() -> practices.findByWorkspaceIdAndSlug(workspace, slug))
@@ -149,7 +185,8 @@ public class PracticeVersionService {
 
     /**
      * A practice to create with its first version. {@code sourceCommit} is the commit of the practice repository that
-     * the definition was read at, or null for a practice made in Hephaestus.
+     * the definition was read at, or null for a practice made in Hephaestus. {@code catalogSlug} names the catalog
+     * practice it was adopted from, or is null for a practice of the workspace.
      */
     public record NewPractice(
             long workspaceId,
@@ -160,7 +197,8 @@ public class PracticeVersionService {
             int position,
             @Nullable Long createdByAccountId,
             PracticeState state,
-            @Nullable String sourceCommit) {
+            @Nullable String sourceCommit,
+            @Nullable String catalogSlug) {
         public NewPractice(
                 long workspaceId,
                 String slug,
@@ -178,6 +216,7 @@ public class PracticeVersionService {
                     position,
                     createdByAccountId,
                     PracticeState.ACTIVE,
+                    null,
                     null);
         }
     }

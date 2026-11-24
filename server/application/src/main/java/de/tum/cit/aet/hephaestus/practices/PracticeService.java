@@ -141,7 +141,16 @@ public class PracticeService {
         int order = position == null ? practices.findMaxPosition(ctx.id(), groupId) + 1 : position;
         if (order < 0) throw new InvalidInputException("Use a nonnegative position.");
         Practice practice = versions.create(new PracticeVersionService.NewPractice(
-                ctx.id(), slug, kind, definition, groupId, order, creator, state, sourceCommit));
+                ctx.id(),
+                slug,
+                kind,
+                definition,
+                groupId,
+                order,
+                creator,
+                state,
+                sourceCommit,
+                catalogDocument == null ? null : slug));
         practice.setFeedbackMode(mode);
         // A practice read from a commit of the practice repository is edited there.
         if (sourceCommit != null) practice.setEditedIn(PracticeEditedIn.REPOSITORY);

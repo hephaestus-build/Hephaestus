@@ -12,9 +12,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeEditedIn;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
-import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -72,7 +72,7 @@ class PracticeGroupServiceTest extends BaseUnitTest {
         practice.setGroup(original);
         practice.setPosition(9);
         practice.setFeedbackMode(FeedbackMode.OFF);
-        var version = new PracticeVersion(
+        var version = TestEntities.version(
                 practice, 1, JsonMapper.builder().build().valueToTree(DefinitionTestFixtures.definition()), null);
         practice.setCurrentVersion(version);
         when(workspaces.findByIdForUpdate(10L)).thenReturn(Optional.of(workspace));
