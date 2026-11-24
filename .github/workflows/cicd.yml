@@ -148,8 +148,7 @@ jobs:
       images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && steps.opt_in.outputs.light != 'true' && (steps.opt_in.outputs.images == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.images != 'false' || steps.filter.outputs.kubernetes == 'true' || steps.filter.outputs.chart-upgrade == 'true' || steps.filter.outputs.sandbox-qualification == 'true')))) }}
       # A head that only moved `next/` migrations to later names after the last green head of this pull
       # request (scripts/detect-rename-only.ts). It runs Security, which holds the order guard, the server
-      # package and the Generated API replay; the other legs that read should_skip skip. Jobs that do not
-      # read it, such as Release notes and Workflow lint, still run when their filters select them.
+      # package and the Generated API replay; the rest of the fast tier is reduced, not empty.
       # ci-cd.mdx § Rename-only heads.
       rename-only: ${{ steps.rename_only.outputs.rename-only == 'true' && steps.opt_in.outputs.light == 'false' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.images == 'false' && steps.release_candidate.outputs.release-candidate != 'true' }}
       should_skip: ${{ steps.rename_only.outputs.rename-only == 'true' && steps.opt_in.outputs.light == 'false' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.images == 'false' && steps.release_candidate.outputs.release-candidate != 'true' }}
@@ -1791,8 +1790,8 @@ jobs:
           fi
 
           # A skipped release check is a missing verdict for a change to what it guards, once this run
-          # published its images. A run that publishes none (a draft, a light layer, a fork, a
-          # rename-only head) skips both on purpose.
+          # published its images. A run that publishes none (a draft, a light layer, a fork) skips both
+          # on purpose, and a rename-only head skips both through should_skip.
           if [[ "${{ needs.Docker.result == 'success' && needs.detect-changes.outputs.publishable == 'true' && needs.detect-changes.outputs.should_skip != 'true' }}" == true ]]; then
             if [[ "${{ needs.detect-changes.outputs.chart-upgrade == 'true' && needs.Chart-upgrade.result != 'success' }}" == true ]]; then
               echo "This change touches the chart or its upgrade drill and requires a successful chart upgrade; it was '${{ needs.Chart-upgrade.result }}'."

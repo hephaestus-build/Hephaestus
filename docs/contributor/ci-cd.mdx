@@ -1108,7 +1108,10 @@ A rename-only head runs `Security`, which holds the order guard, `Server package
 `CI Status Gate` fails a rename-only head unless those three legs passed.
 
 Database tests and drills wait for the merge group, which still runs every selected check.
-The other legs that read `should_skip` skip. Jobs that do not read it still run when their own filters select them, such as `Release notes` on every pull request and `Workflow lint` when CI configuration changes.
+The rest of the fast tier is reduced, not empty.
+Quality, the server tests, the browser suites and the cluster legs skip.
+`Release notes` runs on every pull request.
+When the head also changes CI configuration or the chart, `Workflow lint` still runs its Zizmor step and the server image can still build.
 
 ### Reproduce a queue-tier failure
 
