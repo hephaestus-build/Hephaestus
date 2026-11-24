@@ -32,6 +32,15 @@ class DefinerFunctionAllowlistDatabaseTest {
 
     /** Every definer function the application role may call, each a narrow job that crosses a boundary on purpose. */
     private static final Set<String> ALLOWED = Set.of(
+            "public.conversation_claimable_turn_ids(workspace bigint, ids uuid[])",
+            "public.conversation_claimable_turns()",
+            "public.conversation_entry_place(workspace bigint, entry uuid)",
+            "public.conversation_held_turn_count()",
+            "public.conversation_owner(workspace bigint, conversation uuid)",
+            "public.conversation_queued_question_count()",
+            "public.conversation_run_question_seq(workspace bigint, run uuid)",
+            "public.conversation_slack_main(workspace bigint, team text, slack_user text, channel text)",
+            "public.conversation_turn_owner(workspace bigint, turn uuid)",
             "public.maintain_auth_event_partitions()",
             "public.mentoring_due_work(work_kind text, due_before timestamp with time zone, after_due timestamp with time zone,"
                     + " after_id uuid, max_rows integer)",

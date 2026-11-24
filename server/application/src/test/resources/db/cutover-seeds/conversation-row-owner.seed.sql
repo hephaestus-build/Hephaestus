@@ -1,6 +1,7 @@
--- A conversation of the previous release with one entry. The seed runs on every release that an upgrade can start from:
--- the 1.0 baseline (v1.0.0-rc.1) names the tables mentor_*, later releases conversation_*, and a release that already
--- has the conversion stores the entry's account itself. Turns change shape across these releases, so the migration test
+-- A conversation of the previous release with one entry. The seed runs on every release that an upgrade can start from,
+-- and each branch writes to the tables that it finds: mentor_* (the 1.0 baseline v1.0.0-rc.1 up to v1.0.0-rc.8),
+-- conversation_* with no account on the entry (later releases before the conversion), or conversation_* with the
+-- entry's account (releases that have the conversion). Turns change shape across these releases, so the migration test
 -- covers them.
 INSERT INTO workspace (id, slug, display_name, account_login, account_type, status)
 VALUES (979300, 'cutover-row-owner', 'Cutover row owner', 'cutover-row-owner', 'ORG', 'ACTIVE');

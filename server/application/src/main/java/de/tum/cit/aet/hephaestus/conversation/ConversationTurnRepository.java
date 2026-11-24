@@ -205,26 +205,6 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
             @Param("workspaceId") Long workspaceId, @Param("conversationId") UUID conversationId);
 
     /**
-     * The queued turns {@code t} that a worker may start: the head of its conversation's queue, in a conversation
-     * where no host holds a turn. The queue of a conversation is in the order of its questions' {@code seq}, which a
-     * submission takes under the conversation's lock. A claim and the reason a turn waits read this one rule.
-     */
-    String CLAIMABLE = """
-            FROM conversation_turn t
-            JOIN conversation_entry question ON question.turn_id = t.id AND question.kind = 'USER'
-            WHERE t.status = 'QUEUED'
-              AND NOT EXISTS (
-                  SELECT 1 FROM conversation_turn earlier
-                  JOIN conversation_entry asked ON asked.turn_id = earlier.id AND asked.kind = 'USER'
-                  WHERE earlier.conversation_id = t.conversation_id AND earlier.status = 'QUEUED'
-                    AND asked.seq < question.seq)
-              AND NOT EXISTS (
-                  SELECT 1 FROM conversation_turn held
-                  JOIN agent_run held_run ON held_run.id = held.run_id AND held_run.state = 'LEASED'
-                  WHERE held.conversation_id = t.conversation_id)
-            """;
-
-    /**
      * Of {@code ids}, the running turns of the workspace whose current attempt has a model call that the LLM proxy
      * admitted: the proxy opens a call's row ({@code llm_usage_event}) under the turn's run and the attempt's epoch only
      * after it admitted the call. Locks nothing.
@@ -238,18 +218,23 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
                 """, nativeQuery = true)
     List<UUID> findWorkingIds(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
-    /** Of {@code ids}, the turns of the workspace that a worker may start now ({@link #CLAIMABLE}). Locks nothing. */
+    /**
+     * Of {@code ids}, the turns of the workspace that a worker may start now, read in every account
+     * ({@code conversation_claimable_turn_ids}, which owns the rule with {@link #findClaimable}). Locks nothing.
+     */
     @Query(
-            value = "SELECT t.id " + CLAIMABLE + " AND t.workspace_id = :workspaceId AND t.id IN (:ids)",
+            value = "SELECT t.id"
+                    + " FROM public.conversation_claimable_turn_ids(:workspaceId, CAST(:ids AS uuid[])) t",
             nativeQuery = true)
-    List<UUID> findClaimableIds(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
+    List<UUID> findClaimableIds(@Param("workspaceId") Long workspaceId, @Param("ids") UUID[] ids);
 
     /**
      * The turns that hold a Hephaestus slot now: those that run, and stopped ones whose host still commits their answer.
-     * Every workspace counts, because every workspace shares the workers' Hephaestus slots.
+     * Every workspace counts, because every workspace shares the workers' Hephaestus slots. Read in every account
+     * ({@code conversation_held_turn_count}).
      */
     @WorkspaceAgnostic("Every workspace shares the workers' Hephaestus slots")
-    @Query("SELECT COUNT(t) FROM ConversationTurn t WHERE " + HELD_RUN)
+    @Query(value = "SELECT public.conversation_held_turn_count()", nativeQuery = true)
     long countHeld();
 
     /** Whether a host holds the turn ({@link #HELD_RUN}). */
@@ -271,19 +256,19 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
     }
 
     /**
-     * The newest {@code limit} turns that a worker may start ({@link #CLAIMABLE}), in every workspace. Locks nothing
-     * and loads no entity.
+     * The newest hundred turns that a worker may start, in every workspace and every account
+     * ({@code conversation_claimable_turns}). Locks nothing and loads no entity. The newest come first, because a
+     * developer who just asked is the likeliest to watch. An older turn past them, which only a long outage of every
+     * worker queues, shows its new reason at its next read.
      */
     @WorkspaceAgnostic(
             "Every workspace shares the workers' Hephaestus slots, so a change of them changes every workspace's waits")
     @Query(value = """
             SELECT t.workspace_id AS workspaceId, t.conversation_id AS conversationId, t.id AS id,
                    t.surface AS surface, t.attempt AS attempt
-            """ + CLAIMABLE + """
-            ORDER BY t.created_at DESC, t.id DESC
-            LIMIT :limit
+              FROM public.conversation_claimable_turns() t
             """, nativeQuery = true)
-    List<QueuedTurn> findClaimable(@Param("limit") int limit);
+    List<QueuedTurn> findClaimable();
 
     /**
      * The database clock at the start of the transaction. A turn's start takes it, because redactions and person
@@ -298,8 +283,13 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
     @Query(value = "SELECT clock_timestamp()", nativeQuery = true)
     Instant databaseClock();
 
+    /**
+     * The queued turns of every workspace that a person asked, not the system, read in every account
+     * ({@code conversation_queued_question_count}).
+     */
     @WorkspaceAgnostic("Fleet-wide queue depth for the conversation.turn.queued gauge")
-    long countByStatusAndSurfaceNot(ConversationTurn.Status status, ConversationTurn.Surface surface);
+    @Query(value = "SELECT public.conversation_queued_question_count()", nativeQuery = true)
+    long countQueuedQuestions();
 
     /**
      * Lets this transaction commit without waiting for its WAL flush. PostgreSQL serialises the commits of every
@@ -344,12 +334,8 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
             @Param("epoch") int epoch,
             @Param("runId") UUID runId);
 
-    /** The account a turn answers. */
-    @Query("""
-            SELECT c.accountId FROM ConversationTurn t JOIN Conversation c
-              ON c.id = t.conversationId AND c.workspaceId = t.workspaceId
-            WHERE t.id = :id AND t.workspaceId = :workspaceId
-            """)
+    /** The account a turn answers, read in every account ({@code conversation_turn_owner}). */
+    @Query(value = "SELECT public.conversation_turn_owner(:workspaceId, :id)", nativeQuery = true)
     Optional<Long> findAccountIdByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
     /** Queues a notification on {@code channel}, which PostgreSQL delivers when the transaction commits. */

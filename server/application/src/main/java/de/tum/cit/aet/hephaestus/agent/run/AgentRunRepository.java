@@ -52,20 +52,19 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
         double getWaitedSeconds();
     }
 
-    /** Questions precede queued digests; each kind keeps conversation ledger order, and other subjects keep age order. */
+    /**
+     * Questions precede queued digests; each kind keeps conversation ledger order, and other subjects keep age order.
+     * The ledger position comes from {@code conversation_run_question_seq}, which reads it in every account; it is
+     * {@code NULL} for a run whose question is gone. Only a conversation run has a turn, so other kinds skip the call.
+     */
     String SUBJECT_PREDECESSOR = """
             CASE WHEN r.kind='TURN' AND s.kind='DIGEST' THEN FALSE
                  WHEN r.kind='DIGEST' AND s.kind='TURN' THEN TRUE
-                 ELSE COALESCE((SELECT earlier.seq < question.seq
-                        FROM conversation_turn earlier_turn
-                        JOIN conversation_entry earlier ON earlier.turn_id = earlier_turn.id
-                            AND earlier.workspace_id = earlier_turn.workspace_id AND earlier.kind IN ('USER','DIGEST')
-                        JOIN conversation_turn current_turn ON current_turn.run_id = r.id
-                            AND current_turn.workspace_id = r.workspace_id
-                        JOIN conversation_entry question ON question.turn_id = current_turn.id
-                            AND question.workspace_id = current_turn.workspace_id AND question.kind IN ('USER','DIGEST')
-                       WHERE earlier_turn.run_id = s.id AND earlier_turn.workspace_id = s.workspace_id),
-                     (s.created_at, s.id) < (r.created_at, r.id)) END
+                 WHEN r.kind IN ('TURN','DIGEST') AND s.kind IN ('TURN','DIGEST')
+                      THEN COALESCE(public.conversation_run_question_seq(s.workspace_id, s.id)
+                                      < public.conversation_run_question_seq(r.workspace_id, r.id),
+                          (s.created_at, s.id) < (r.created_at, r.id))
+                 ELSE (s.created_at, s.id) < (r.created_at, r.id) END
             """;
 
     /**

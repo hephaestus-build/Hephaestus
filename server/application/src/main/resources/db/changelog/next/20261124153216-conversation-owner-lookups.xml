@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795525200000-1" author="hephaestus">
+        <!-- Each statement replaces or repeats its own result, so a run that stopped before Liquibase recorded the
+             change set runs it again to the same functions. -->
+        <comment>Read the conversation facts that a caller needs before it binds one owner, or across every owner.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.conversation_owner(workspace bigint, conversation uuid) RETURNS bigint
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$ SELECT c.account_id FROM public.conversation c WHERE c.id = $2 AND c.workspace_id = $1 $$;
+
+CREATE OR REPLACE FUNCTION public.conversation_turn_owner(workspace bigint, turn uuid) RETURNS bigint
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$ SELECT t.account_id FROM public.conversation_turn t WHERE t.id = $2 AND t.workspace_id = $1 $$;
+
+-- The most recently active main conversation that is projected into this Slack DM, and its account, read in one
+-- statement: an account absorption can move the DM to another main conversation between two reads.
+CREATE OR REPLACE FUNCTION public.conversation_slack_main(workspace bigint, team text, slack_user text, channel text)
+    RETURNS TABLE (id uuid, account_id bigint)
+    LANGUAGE sql STABLE SECURITY DEFINER ROWS 1 SET search_path = pg_catalog, pg_temp
+    AS $$
+    SELECT c.id, c.account_id FROM public.conversation c
+    WHERE c.workspace_id = $1 AND c.parent_conversation_id IS NULL
+      AND c.slack_team_id = $2 AND c.slack_user_id = $3 AND c.slack_channel_id = $4
+    ORDER BY c.last_activity_at DESC, c.id
+    LIMIT 1
+    $$;
+
+-- The ledger position (seq) of the question or digest that a run answers, so that the claim orders the runs of one
+-- conversation as it asked them.
+CREATE OR REPLACE FUNCTION public.conversation_run_question_seq(workspace bigint, run uuid) RETURNS bigint
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+    SELECT question.seq FROM public.conversation_turn t
+    JOIN public.conversation_entry question ON question.turn_id = t.id AND question.workspace_id = t.workspace_id
+        AND question.kind IN ('USER', 'DIGEST')
+    WHERE t.run_id = $2 AND t.workspace_id = $1
+    $$;
+
+-- The queued turns that a worker may start: the head of its conversation's queue, in a conversation where no host
+-- holds a turn. The queue of a conversation is in the order of its questions' seq, which a submission takes under the
+-- conversation's lock. The two functions below state this rule twice, and a change changes both. Each keeps its own
+-- bound inside the function: the planner cannot inline a definer function, so a bound outside it would read the queue
+-- of every workspace.
+
+-- Of ids, the turns of the workspace that a worker may start now.
+CREATE OR REPLACE FUNCTION public.conversation_claimable_turn_ids(workspace bigint, ids uuid[])
+    RETURNS TABLE (id uuid)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+    SELECT t.id
+    FROM public.conversation_turn t
+    JOIN public.conversation_entry question ON question.turn_id = t.id AND question.kind = 'USER'
+    WHERE t.workspace_id = $1 AND t.id = ANY ($2) AND t.status = 'QUEUED'
+      AND NOT EXISTS (
+          SELECT 1 FROM public.conversation_turn earlier
+          JOIN public.conversation_entry asked ON asked.turn_id = earlier.id AND asked.kind = 'USER'
+          WHERE earlier.conversation_id = t.conversation_id AND earlier.status = 'QUEUED'
+            AND asked.seq < question.seq)
+      AND NOT EXISTS (
+          SELECT 1 FROM public.conversation_turn held
+          JOIN public.agent_run held_run ON held_run.id = held.run_id AND held_run.state = 'LEASED'
+          WHERE held.conversation_id = t.conversation_id)
+    $$;
+
+-- The newest hundred turns of every workspace that a worker may start. The bound is here, not with the caller,
+-- because the application role may call this function directly.
+CREATE OR REPLACE FUNCTION public.conversation_claimable_turns()
+    RETURNS TABLE (workspace_id bigint, conversation_id uuid, id uuid, surface text, attempt integer)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+    SELECT t.workspace_id, t.conversation_id, t.id, t.surface::text, t.attempt
+    FROM public.conversation_turn t
+    JOIN public.conversation_entry question ON question.turn_id = t.id AND question.kind = 'USER'
+    WHERE t.status = 'QUEUED'
+      AND NOT EXISTS (
+          SELECT 1 FROM public.conversation_turn earlier
+          JOIN public.conversation_entry asked ON asked.turn_id = earlier.id AND asked.kind = 'USER'
+          WHERE earlier.conversation_id = t.conversation_id AND earlier.status = 'QUEUED'
+            AND asked.seq < question.seq)
+      AND NOT EXISTS (
+          SELECT 1 FROM public.conversation_turn held
+          JOIN public.agent_run held_run ON held_run.id = held.run_id AND held_run.state = 'LEASED'
+          WHERE held.conversation_id = t.conversation_id)
+    ORDER BY t.created_at DESC, t.id DESC
+    LIMIT 100
+    $$;
+
+-- The turns that hold a Hephaestus slot now: those whose run is leased, in every workspace.
+CREATE OR REPLACE FUNCTION public.conversation_held_turn_count() RETURNS bigint
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+    SELECT count(*) FROM public.agent_run held
+    JOIN public.conversation_turn t ON t.run_id = held.id AND t.workspace_id = held.workspace_id
+    WHERE held.state = 'LEASED'
+    $$;
+
+-- The queued turns of every workspace that a person asked, not the system.
+CREATE OR REPLACE FUNCTION public.conversation_queued_question_count() RETURNS bigint
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$ SELECT count(*) FROM public.conversation_turn t WHERE t.status = 'QUEUED' AND t.surface <> 'SYSTEM' $$;
+
+-- Where an entry was shown: its conversation, that conversation's account, and its surface.
+CREATE OR REPLACE FUNCTION public.conversation_entry_place(workspace bigint, entry uuid)
+    RETURNS TABLE (conversation_id uuid, account_id bigint, surface text)
+    LANGUAGE sql STABLE SECURITY DEFINER ROWS 1 SET search_path = pg_catalog, pg_temp
+    AS $$
+    SELECT e.conversation_id, e.account_id, e.surface::text FROM public.conversation_entry e
+    WHERE e.id = $2 AND e.workspace_id = $1
+    $$;
+
+ALTER FUNCTION public.conversation_owner(bigint, uuid) OWNER TO hephaestus_owner;
+ALTER FUNCTION public.conversation_turn_owner(bigint, uuid) OWNER TO hephaestus_owner;
+ALTER FUNCTION public.conversation_slack_main(bigint, text, text, text) OWNER TO hephaestus_owner;
+ALTER FUNCTION public.conversation_run_question_seq(bigint, uuid) OWNER TO hephaestus_owner;
+ALTER FUNCTION public.conversation_claimable_turn_ids(bigint, uuid[]) OWNER TO hephaestus_owner;
+ALTER FUNCTION public.conversation_claimable_turns() OWNER TO hephaestus_owner;
+ALTER FUNCTION public.conversation_held_turn_count() OWNER TO hephaestus_owner;
+ALTER FUNCTION public.conversation_queued_question_count() OWNER TO hephaestus_owner;
+ALTER FUNCTION public.conversation_entry_place(bigint, uuid) OWNER TO hephaestus_owner;
+REVOKE ALL ON FUNCTION public.conversation_owner(bigint, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.conversation_turn_owner(bigint, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.conversation_slack_main(bigint, text, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.conversation_run_question_seq(bigint, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.conversation_claimable_turn_ids(bigint, uuid[]) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.conversation_claimable_turns() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.conversation_held_turn_count() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.conversation_queued_question_count() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.conversation_entry_place(bigint, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.conversation_owner(bigint, uuid) TO hephaestus_app;
+GRANT EXECUTE ON FUNCTION public.conversation_turn_owner(bigint, uuid) TO hephaestus_app;
+GRANT EXECUTE ON FUNCTION public.conversation_slack_main(bigint, text, text, text) TO hephaestus_app;
+GRANT EXECUTE ON FUNCTION public.conversation_run_question_seq(bigint, uuid) TO hephaestus_app;
+GRANT EXECUTE ON FUNCTION public.conversation_claimable_turn_ids(bigint, uuid[]) TO hephaestus_app;
+GRANT EXECUTE ON FUNCTION public.conversation_claimable_turns() TO hephaestus_app;
+GRANT EXECUTE ON FUNCTION public.conversation_held_turn_count() TO hephaestus_app;
+GRANT EXECUTE ON FUNCTION public.conversation_queued_question_count() TO hephaestus_app;
+GRANT EXECUTE ON FUNCTION public.conversation_entry_place(bigint, uuid) TO hephaestus_app;
+        ]]></sql>
+        <rollback>
+            <sql>DROP FUNCTION public.conversation_entry_place(bigint, uuid)</sql>
+            <sql>DROP FUNCTION public.conversation_queued_question_count()</sql>
+            <sql>DROP FUNCTION public.conversation_held_turn_count()</sql>
+            <sql>DROP FUNCTION public.conversation_claimable_turns()</sql>
+            <sql>DROP FUNCTION public.conversation_claimable_turn_ids(bigint, uuid[])</sql>
+            <sql>DROP FUNCTION public.conversation_run_question_seq(bigint, uuid)</sql>
+            <sql>DROP FUNCTION public.conversation_slack_main(bigint, text, text, text)</sql>
+            <sql>DROP FUNCTION public.conversation_turn_owner(bigint, uuid)</sql>
+            <sql>DROP FUNCTION public.conversation_owner(bigint, uuid)</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

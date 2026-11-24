@@ -218,7 +218,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldStartAQuestionAheadOfAnOlderQueuedDigest() {
         var digest = queueDigest();
         var question = ask("Answer my question before the weekly recap");
-        assertThat(turnRows.findClaimableIds(workspace.getId(), List.of(question.getId())))
+        assertThat(turnRows.findClaimableIds(workspace.getId(), new UUID[] {question.getId()}))
                 .containsExactly(question.getId());
         var run = claim();
         assertThat(run.fence().runId()).isEqualTo(question.getRunId());

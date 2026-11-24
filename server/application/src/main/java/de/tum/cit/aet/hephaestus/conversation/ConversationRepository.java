@@ -45,15 +45,15 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
     @Nullable
     Instant findLastReadAt(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
-    /** The main conversations projected into this Slack DM, most recently active first. */
-    @Query("""
-            SELECT c FROM Conversation c
-            WHERE c.workspaceId = :workspaceId AND c.parentConversationId IS NULL
-              AND c.slackTeamId = :teamId AND c.slackUserId = :userId AND c.slackChannelId = :channelId
-            ORDER BY c.lastActivityAt DESC, c.id
-            """)
-    List<Conversation> findMainsBySlackIdentity(
-            @Param("workspaceId") Long workspaceId,
+    /**
+     * The main conversation projected into this Slack DM, the most recently active one when several are, read in every
+     * account and in one statement ({@code conversation_slack_main}).
+     */
+    @Query(
+            value = "SELECT m.id FROM public.conversation_slack_main(:workspaceId, :teamId, :userId, :channelId) m",
+            nativeQuery = true)
+    Optional<UUID> findSlackMainId(
+            @Param("workspaceId") long workspaceId,
             @Param("teamId") String teamId,
             @Param("userId") String userId,
             @Param("channelId") String channelId);
@@ -69,8 +69,11 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
             nativeQuery = true)
     Optional<Conversation> lockByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
-    /** The developer's account a conversation belongs to, read without loading the conversation. */
-    @Query("SELECT c.accountId FROM Conversation c WHERE c.id = :id AND c.workspaceId = :workspaceId")
+    /**
+     * The developer's account a conversation belongs to, read in every account ({@code conversation_owner}), so a
+     * caller can read it before it binds the owner.
+     */
+    @Query(value = "SELECT public.conversation_owner(:workspaceId, :id)", nativeQuery = true)
     Optional<Long> findAccountIdByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
     /** Shares the conversation row until the transaction ends: a writer that locks the row waits. */

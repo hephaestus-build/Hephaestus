@@ -433,10 +433,16 @@ A seed is two files:
 
 The release upgrade test (`scripts/release-upgrade-test.ts`) runs each seed after the previous release stops, before the migration.
 It runs each expected disposition after the candidate migrates.
-The test starts from the release that `upgradeFromOf` in `scripts/lib/previous-release.ts` selects.
-This release can be the 1.0 baseline (`v1.0.0-rc.1`) or a later release, so a seed writes its rows on the schema of each.
-A seed also runs on the releases that already contain its change set, until the seed is removed.
-A focused migration test runs the seed and its expected disposition from both schemas.
+It also runs them on the copy of the seeded database whose interrupted migration ran again.
+The test starts from the release that `upgradeFromOf` in `scripts/lib/previous-release.ts` selects, or from the tag that a manual run names.
+It runs again from the latest published release that `latestReleaseOf` selects, if that release is a different one.
+Thus, a seed writes its rows on each of these three schema states:
+
+- The 1.0 baseline (`v1.0.0-rc.1`).
+- A later release before the change set.
+- A release that already contains the change set. The seed runs on these releases until the seed is removed.
+
+A focused migration test runs the seed and its expected disposition from each of the three schema states.
 
 The format check (`scripts/cutover-seeds.test.ts`) refuses a seed with no expected disposition, and an expected disposition that cannot raise an exception. A comment does not count.
 `readCutoverSeeds` in `scripts/lib/cutover-seeds.ts` reads the seeds and applies the same check.

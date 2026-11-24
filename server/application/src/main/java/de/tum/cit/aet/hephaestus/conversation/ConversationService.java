@@ -120,12 +120,28 @@ public class ConversationService {
         return read;
     }
 
-    /** The main conversation projected into this Slack DM, without creating or moving it. */
+    /**
+     * The main conversation projected into this Slack DM, without creating or moving it. A write that commits between
+     * the two reads can delete the found main, as an account absorption does when it moves the DM to the main it keeps,
+     * or bind the main to another DM. A main that is gone or no longer projected into this DM resolves the DM again.
+     */
     @Transactional(readOnly = true)
     public Optional<Conversation> findMainBySlack(
             long workspaceId, String teamId, String slackUserId, String channelId) {
-        return conversations.findMainsBySlackIdentity(workspaceId, teamId, slackUserId, channelId).stream()
-                .findFirst();
+        UUID gone = null;
+        while (true) {
+            UUID mainId = conversations
+                    .findSlackMainId(workspaceId, teamId, slackUserId, channelId)
+                    .orElse(null);
+            if (mainId == null || mainId.equals(gone)) return Optional.empty();
+            Optional<Conversation> main = conversations
+                    .findByIdAndWorkspaceId(mainId, workspaceId)
+                    .filter(found -> teamId.equals(found.getSlackTeamId())
+                            && slackUserId.equals(found.getSlackUserId())
+                            && channelId.equals(found.getSlackChannelId()));
+            if (main.isPresent()) return main;
+            gone = mainId;
+        }
     }
 
     /** The thread on {@code parentEntryId}, if one was opened. */

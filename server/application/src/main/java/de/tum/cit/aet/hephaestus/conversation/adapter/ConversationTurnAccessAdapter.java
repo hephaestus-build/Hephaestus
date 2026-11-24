@@ -59,7 +59,7 @@ class ConversationTurnAccessAdapter implements ConversationTurnAccess {
 
     @Override
     public long countQueuedQuestions() {
-        return turns.countByStatusAndSurfaceNot(ConversationTurn.Status.QUEUED, ConversationTurn.Surface.SYSTEM);
+        return turns.countQueuedQuestions();
     }
 
     @Override

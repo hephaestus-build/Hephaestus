@@ -4,7 +4,7 @@ import { appendFileSync, readFileSync, readdirSync } from "node:fs";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { readCutoverSeeds } from "./lib/cutover-seeds.ts";
+import { type CutoverSeed, readCutoverSeeds } from "./lib/cutover-seeds.ts";
 import { applyDatabaseRoles, databaseRolePasswords } from "./lib/database-roles.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { stopEveryRoleEntries } from "./lib/migration-guide.ts";
@@ -558,6 +558,13 @@ function executeFixture(
 	);
 }
 
+/** Runs the expected disposition of each conversion seed on a migrated database. */
+function assertSeedDispositions(seeds: CutoverSeed[], database = "hephaestus"): void {
+	for (const seed of seeds) {
+		executeSql(`Expected disposition of conversion seed ${seed.name}`, seed.expect, database);
+	}
+}
+
 /** Runs SQL in one transaction, and names it as `what` when it fails. */
 function executeSql(what: string, input: string, database = "hephaestus"): void {
 	const result = spawnSync(
@@ -800,6 +807,7 @@ async function assertPartialMigration(
 	database: string,
 	before: number,
 	pending: number,
+	seeds: CutoverSeed[],
 ): Promise<void> {
 	if (pending < 2) {
 		summarize(
@@ -858,6 +866,7 @@ async function assertPartialMigration(
 	if (completed !== pending) {
 		throw new Error(`The repeated migration applied ${completed} of ${pending} new change sets`);
 	}
+	assertSeedDispositions(seeds, database);
 	console.log("The candidate's migration completed when it ran again.");
 }
 
@@ -941,9 +950,7 @@ try {
 	api = await apiOf(port);
 	const upgradedData = dataFingerprint(preserved);
 	executeFixture("assert-migrated.sql");
-	for (const seed of seeds) {
-		executeSql(`Expected disposition of conversion seed ${seed.name}`, seed.expect);
-	}
+	assertSeedDispositions(seeds);
 	if (upgradedData !== seededData) {
 		throw new Error("Seeded application data changed during upgrade");
 	}
@@ -991,6 +998,7 @@ try {
 		PARTIAL_DATABASE,
 		previousChanges,
 		candidateChanges - previousChanges,
+		seeds,
 	);
 	await assertFreshSchemaEqualsUpgraded(candidateImage);
 	console.log("Seeded release upgrade passed.");

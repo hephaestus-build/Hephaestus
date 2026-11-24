@@ -18,20 +18,13 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * Tracks why a queued turn has not started. A turn's run ends it when it waits past its start window ({@code
  * agent_run.start_within_seconds}). A turn waits for a free conversation slot when a worker may start it
- * ({@link ConversationTurnRepository#CLAIMABLE}) and the turns that hold a Hephaestus slot are at least
+ * ({@code conversation_claimable_turn_ids}) and the turns that hold a Hephaestus slot are at least
  * {@code hephaestus.agent.capacity.turns}, the cap that the claim keeps: every slot of the deployment is taken. Both facts are rows, so the reason
  * is as fresh as the read. Otherwise the reason is not known: the turn starts at once, waits for an earlier question
  * of its conversation, or no worker runs. Without a capacity, no turn has a reason.
  */
 @Service
 public class ConversationTurnWaits {
-
-    /**
-     * The most queued turns that one change of the held slots publishes again, the newest first: a developer who just
-     * asked is the likeliest to watch. An older turn past it, which only a long outage of every worker queues, shows
-     * its new reason at its next read.
-     */
-    static final int MAX_PUBLISHED = 100;
 
     private final ConversationTurnRepository turns;
     private final ApplicationEventPublisher events;
@@ -66,7 +59,7 @@ public class ConversationTurnWaits {
         if (capacity == null || queued.isEmpty() || turns.countHeld() < capacity) {
             return Map.of();
         }
-        return turns.findClaimableIds(workspaceId, queued).stream()
+        return turns.findClaimableIds(workspaceId, queued.toArray(UUID[]::new)).stream()
                 .collect(Collectors.toMap(Function.identity(), id -> ConversationTurn.WaitingFor.CAPACITY));
     }
 
@@ -80,7 +73,7 @@ public class ConversationTurnWaits {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishWaits(SlotsChanged changed) {
-        for (ConversationTurnRepository.QueuedTurn turn : turns.findClaimable(MAX_PUBLISHED)) {
+        for (ConversationTurnRepository.QueuedTurn turn : turns.findClaimable()) {
             events.publishEvent(new ConversationLedgerEvents.TurnChanged(
                     turn.getWorkspaceId(),
                     turn.getConversationId(),

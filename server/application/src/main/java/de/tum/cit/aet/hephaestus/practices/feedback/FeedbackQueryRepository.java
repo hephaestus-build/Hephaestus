@@ -38,6 +38,10 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
             @Param("since") Instant since,
             @Param("incorrect") ResultMarkKind incorrect);
 
+    /**
+     * Each piece of the workspace with where it was delivered. A workspace admin reads every developer's pieces, so the
+     * surface of a chat copy's entry is read in every account ({@code conversation_entry_place}).
+     */
     String LOCATED = """
         WITH located AS (
           SELECT f.*,
@@ -63,12 +67,13 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
             WHEN 'scm.file' THEN holder.source_id ELSE work.repository_id END
           LEFT JOIN identity_provider provider ON provider.id=repo.provider_id
           LEFT JOIN LATERAL (SELECT e.surface FROM feedback_copy c
-            JOIN conversation_entry e ON e.id=c.conversation_entry_id AND e.workspace_id=c.workspace_id
+            CROSS JOIN LATERAL public.conversation_entry_place(c.workspace_id,c.conversation_entry_id) e
             WHERE c.workspace_id=f.workspace_id AND c.feedback_id=f.id AND c.kind='CHAT_TURN' AND c.state='POSTED'
             ORDER BY c.position,c.id LIMIT 1) conversation ON true
           WHERE f.workspace_id=:workspaceId
         )
         """;
+
     String FILTERED = LOCATED + """
         , requested AS (SELECT CAST(:filter AS jsonb) AS q), filtered AS (
           SELECT f.* FROM located f CROSS JOIN requested
@@ -98,17 +103,17 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
 
     /**
      * The conversation that each piece's first posted chat copy was shown in, to the piece's own developer. A
-     * piece without one is absent.
+     * piece without one is absent. The entry is read in every account ({@code conversation_entry_place}), because the
+     * reader may be another developer's admin.
      */
     @Query(value = """
         SELECT DISTINCT ON (c.feedback_id) c.feedback_id AS "feedbackId",e.conversation_id AS "conversationId"
         FROM feedback_copy c
-        JOIN conversation_entry e ON e.id=c.conversation_entry_id AND e.workspace_id=c.workspace_id
-        JOIN conversation mc ON mc.id=e.conversation_id AND mc.workspace_id=e.workspace_id
+        CROSS JOIN LATERAL public.conversation_entry_place(c.workspace_id,c.conversation_entry_id) e
         JOIN feedback f ON f.id=c.feedback_id AND f.workspace_id=c.workspace_id
         WHERE c.workspace_id=:workspaceId AND c.feedback_id IN (:feedbackIds)
           AND c.kind='CHAT_TURN' AND c.posted_at IS NOT NULL
-          AND mc.account_id=f.developer_id AND f.destination='CONVERSATION'
+          AND e.account_id=f.developer_id AND f.destination='CONVERSATION'
         ORDER BY c.feedback_id,c.position
         """, nativeQuery = true)
     List<FeedbackThread> threadIds(

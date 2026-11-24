@@ -36,6 +36,9 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
     @MockitoBean
     RegisteredItemLabels labels;
 
+    @Autowired
+    FeedbackQueryRepository queries;
+
     String route() {
         return "/workspaces/" + workspace.getWorkspaceSlug() + "/practices/reviews/feedback";
     }
@@ -357,8 +360,49 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
         }
     }
 
+    /**
+     * The workspace admin's review places a piece by its first posted chat copy that still has its entry: a deleted
+     * entry leaves its copy without one.
+     */
+    @Test
+    @WithAdminUser
+    void shouldLocateConversationFeedbackByItsFirstCopyThatStillHasItsEntry() {
+        var parent = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
+        UUID conversation = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)"
+                        + " VALUES (?,?,?,?,?)",
+                conversation,
+                workspace.getId(),
+                developerId,
+                Timestamp.from(AT),
+                Timestamp.from(AT));
+        postedCopy(parent, 0, null);
+        shownIn(parent, conversation, 1, "SLACK", 1);
+
+        client.get()
+                .uri(route() + "?location=SLACK")
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].id")
+                .isEqualTo(parent.getId().toString());
+        assertThat(queries.threadIds(workspace.getId(), List.of(parent.getId())))
+                .singleElement()
+                .extracting(FeedbackQueryRepository.FeedbackThread::getConversationId)
+                .isEqualTo(conversation);
+    }
+
     /** A conversation copy of {@code parent} posted in a Hephaestus message written on {@code surface}. */
     private void shownIn(Feedback parent, UUID conversation, int seq, String surface) {
+        shownIn(parent, conversation, seq, surface, 0);
+    }
+
+    private void shownIn(Feedback parent, UUID conversation, int seq, String surface, int position) {
         UUID entry = UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,"
@@ -371,19 +415,25 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
                 seq,
                 surface,
                 Timestamp.from(AT));
-        UUID id = FeedbackIds.copy(parent.getId(), FeedbackCopyKind.CHAT_TURN, 0);
+        postedCopy(parent, position, entry);
+    }
+
+    /** A posted chat copy of {@code parent} at {@code position}, shown in {@code entry}. */
+    private void postedCopy(Feedback parent, int position, @Nullable UUID entry) {
+        UUID id = FeedbackIds.copy(parent.getId(), FeedbackCopyKind.CHAT_TURN, position);
         jdbc.update(
                 "INSERT INTO feedback_copy(id,workspace_id,feedback_id,kind,position,state,write_key,write_marker,"
                         + "write_started_at,posted_at,external_ref,body,conversation_entry_id,created_at)"
-                        + " VALUES (?,?,?,'CHAT_TURN',0,'POSTED',?,?,?,?,?,'Add a focused regression test.',?,?)",
+                        + " VALUES (?,?,?,'CHAT_TURN',?,'POSTED',?,?,?,?,?,'Add a focused regression test.',?,?)",
                 id,
                 workspace.getId(),
                 parent.getId(),
+                position,
                 id.toString(),
                 FeedbackIds.writeMarker(id),
                 Timestamp.from(AT),
                 Timestamp.from(AT),
-                entry.toString(),
+                entry == null ? id.toString() : entry.toString(),
                 entry,
                 Timestamp.from(AT));
     }
