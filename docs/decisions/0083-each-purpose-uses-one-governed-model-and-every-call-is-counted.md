@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-10
 **Authors:** Felix T.J. Dietrich
+**Amended by:** [ADR 0134](0134-the-authorization-recheck-runs-at-three-boundaries-with-two-authorization-generations.md)
 
 **Supersedes:** [ADR 0026](0026-per-purpose-agent-bindings-and-llm-governance.md)
 

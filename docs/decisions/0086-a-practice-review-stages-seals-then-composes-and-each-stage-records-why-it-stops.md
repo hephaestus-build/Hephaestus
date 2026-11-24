@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-10
 **Authors:** Felix T.J. Dietrich
+**Amended by:** [ADR 0121](0121-a-composer-on-a-shared-thread-writes-feedback-on-the-work-and-cannot-read-private-data.md), [ADR 0122](0122-a-copy-on-the-work-that-misses-its-deadline-is-withheld.md), [ADR 0137](0137-on-request-is-a-feedback-mode.md)
 
 **Supersedes:** [ADR 0061](0061-review-seals-then-feedback-composes.md), [ADR 0062](0062-the-item-is-the-review-scope.md), [ADR 0063](0063-each-practice-is-staged-when-it-ends.md), [ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md)
 
