@@ -1,0 +1,47 @@
+name: Security / Public host ports
+
+on:
+  schedule:
+    - cron: "37 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: public-host-ports
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    if: github.repository == 'hephaestus-build/Hephaestus' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    steps:
+      # The external probe has both address families and holds its own fixed target list.
+      - name: Verify public ports from the external probe
+        env:
+          PROBE_HOST: ${{ secrets.PUBLIC_PORT_PROBE_HOST }}
+          PROBE_KEY: ${{ secrets.PUBLIC_PORT_PROBE_KEY }}
+          PROBE_KNOWN_HOSTS: ${{ secrets.PUBLIC_PORT_PROBE_KNOWN_HOSTS }}
+        run: |
+          if [[ -z "$PROBE_HOST" || -z "$PROBE_KEY" || -z "$PROBE_KNOWN_HOSTS" ]]; then
+            echo "The external probe connection is not configured."
+            exit 1
+          fi
+          probe_directory="$(mktemp -d)"
+          trap 'rm -rf "$probe_directory"' EXIT
+          umask 077
+          printf '%s\n' "$PROBE_KEY" > "$probe_directory/key"
+          printf '%s\n' "$PROBE_KNOWN_HOSTS" > "$probe_directory/known_hosts"
+          if ! probe_result="$(ssh -T -i "$probe_directory/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$probe_directory/known_hosts" \
+            -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+            -o ClearAllForwardings=yes -- "heph-probe@$PROBE_HOST" 2>/dev/null)"; then
+            echo "The external probe failed or could not connect."
+            exit 1
+          fi
+          if ! grep -Eq '^Public port verification passed for [1-9][0-9]* hosts on IPv4 and IPv6\.$' <<< "$probe_result"; then
+            echo "The external probe did not report a complete result."
+            exit 1
+          fi
+          grep -E '^(Public port verification passed for [1-9][0-9]* hosts on IPv4 and IPv6\.|Host [1-9][0-9]*, IPv[46]: unreachable \(expected while down\)\.)$' <<< "$probe_result"

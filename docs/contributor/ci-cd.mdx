@@ -1696,6 +1696,68 @@ This also covers job timeouts, which can prevent an in-job report step from runn
 A test checks that every scheduled workflow has a report owner.
 Manual runs and pull request runs do not enter the shared reporter.
 
+### Public host port check
+
+`Security / Public host ports` runs each hour from a dual-stack Linux probe outside the target networks.
+It checks all TCP and UDP ports on each public IPv4 and IPv6 address.
+It accepts responses on TCP 80, TCP 443, and UDP 443.
+An incomplete scan fails the check.
+A silent address also fails unless its host has an approved outage marker.
+
+UDP silence does not prove that a port is closed.
+Check the [host firewall policy](../admin/k3s#host-firewall-policy) on the host as well.
+
+Set up the probe with Node.js 24.2 or later and the host package for Nmap.
+Create a dedicated user and group named `heph-probe` with no sudo access, repository credentials, or password login.
+Give the account an executable shell for the forced command.
+Keep its home and SSH key file under root control.
+Install the probe from a trusted checkout as root:
+
+```bash
+install -d -o root -g heph-probe -m 0750 /etc/hephaestus
+install -d -o root -g root -m 0755 /usr/local/libexec/lib
+install -o root -g root -m 0644 scripts/probe-public-host-ports.ts /usr/local/libexec/
+install -o root -g root -m 0644 scripts/lib/process.ts /usr/local/libexec/lib/
+install -o root -g heph-probe -m 0750 /usr/bin/nmap /usr/local/libexec/hephaestus-probe-nmap
+setcap cap_net_raw=ep /usr/local/libexec/hephaestus-probe-nmap
+```
+
+The dedicated Nmap binary needs raw sockets to check UDP and TCP.
+Repeat the last two commands after you update Nmap.
+Place `public-hosts.json` in `/etc/hephaestus` with root ownership and mode `0640`.
+Give the `heph-probe` group read access.
+Use literal public addresses so the check covers an IPv6 address even without a DNS record:
+
+```json
+[
+  { "ipv4": "192.0.2.10", "ipv6": "2001:db8::10" }
+]
+```
+
+Set `"expectedOnline": false` on a host during an approved outage.
+The probe still checks every port on both addresses.
+It reports a silent address as unreachable and still fails if a blocked port answers.
+Remove the marker when the host returns to service.
+
+Generate a dedicated SSH key for the workflow.
+In the probe account's `authorized_keys`, give that key one forced command.
+Use the absolute path to the installed Node.js executable:
+
+```text
+restrict,command="/usr/local/bin/node /usr/local/libexec/probe-public-host-ports.ts /etc/hephaestus/public-hosts.json" ssh-ed25519 <public-key>
+```
+
+Set three Actions secrets in the repository.
+
+- `PUBLIC_PORT_PROBE_HOST` holds the probe host name.
+- `PUBLIC_PORT_PROBE_KEY` holds only the dedicated private key.
+- `PUBLIC_PORT_PROBE_KNOWN_HOSTS` holds the probe's SSH host key in `known_hosts` format. Verify it against the host's key before you save it.
+
+Dispatch `Security / Public host ports` on `main` to check the connection and the result.
+If a run fails, sign in to the probe and run the forced command as `heph-probe`.
+The command shows which address family and ports need attention.
+The public workflow log omits the target details.
+
 ### Full-verification latency
 
 The full-verification target is a six-minute median and a seven-minute p90, measured from workflow

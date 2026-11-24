@@ -178,6 +178,37 @@ Use an IPv4 address: the network policy cannot allow a host name.
 Some network plugins do not apply IP blocks to node addresses. On Cilium, set `policyCIDRMatchMode` to `nodes`.
 vmalert then also evaluates `HephaestusNodeMetricsUnavailable`, which fires when an address cannot be scraped.
 
+### Check the host firewall
+
+Use node_exporter's textfile collector to report the [host firewall policy](./k3s#host-firewall-policy).
+The report reads the firewall and writes only the metrics file.
+
+On each Linux host, create the root-owned firewall policy file as the installation guide describes.
+Set node_exporter's textfile collector directory to `/var/lib/node_exporter`.
+Install the script and units from a trusted checkout:
+
+```bash
+if [ ! -d /var/lib/node_exporter ]; then
+  sudo install -d -m 0755 /var/lib/node_exporter
+fi
+sudo install -d -m 0755 /usr/local/libexec
+sudo install -m 0644 scripts/host-firewall.ts /usr/local/libexec/
+sudo install -m 0644 deploy/host-firewall/hephaestus-firewall-status.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now hephaestus-firewall-status.timer
+sudo systemctl start hephaestus-firewall-status.service
+```
+
+Verify that the exporter serves the verdict before you rely on the alerts.
+If the exporter listens on another address, use that address:
+
+```bash
+curl -fsS http://127.0.0.1:9100/metrics | grep '^host_firewall_policy_ok '
+```
+
+The existing node scrape reads the verdict, check time, and any drift reasons.
+See [Host alert rules](./alert-rules) for the alerts.
+
 ## Open the dashboards
 
 The [monitoring stack](#run-the-monitoring-stack) serves five dashboards in the web view of VictoriaMetrics.

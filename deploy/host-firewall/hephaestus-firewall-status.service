@@ -1,0 +1,17 @@
+[Unit]
+Description=Report the host firewall policy to node_exporter
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env node /usr/local/libexec/host-firewall.ts --report /var/lib/node_exporter/hephaestus-host-firewall.prom /etc/hephaestus/host-firewall.json
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true
+ReadWritePaths=/var/lib/node_exporter
+ReadWritePaths=-/run/xtables.lock
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+RestrictSUIDSGID=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+IPAddressDeny=any

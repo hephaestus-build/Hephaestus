@@ -18,12 +18,83 @@ To upgrade, follow [Upgrade the host](#upgrade-the-host).
 - A host of 4 vCPU, 16 GiB of memory, and 150 GiB of disk, as [Profiles](./helm-chart#profiles) gives for `small.yaml`.
 - Ubuntu 24.04 with its 6.8 GA kernel on `amd64` or `arm64`. The installer refuses another OS or kernel unless you add `--allow-unqualified-host`.
 - A DNS A record for your host name that points to the public address of the host.
-- Ports 80 and 443 open from the internet, for `Let's Encrypt`, OAuth callbacks, and provider webhooks. Keep port 6443, the Kubernetes API, and port 10250, the kubelet, closed to the internet.
-- If `ufw` is active, rules that let in ports 80 and 443 and the k3s networks: `sudo ufw allow 80,443/tcp`, `sudo ufw allow from 10.42.0.0/16`, and `sudo ufw allow from 10.43.0.0/16`.
+- A host firewall that follows the [host firewall policy](#host-firewall-policy).
 - Outbound HTTPS to the destinations in [Network egress](./network-egress#one-host-on-k3s).
 - `curl`, `jq`, `openssl`, `python3`, [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3.1 or later, and Helm 4. Ubuntu includes `python3`.
 - A clock that NTP keeps synchronized, as [Clocks](./helm-chart#clocks) describes.
 - A GitHub OAuth app for sign-in, as [First steps § 1](./first-steps#1-configure-a-login-provider) describes. Its callback URL is `https://<host>/api/login/oauth2/code/github`.
+
+## Host firewall policy
+
+Allow inbound TCP traffic from the internet on ports 80 and 443.
+These ports serve HTTP, HTTPS, certificate validation, and provider webhooks.
+Allow UDP port 443 only if your public proxy serves HTTP/3.
+
+Keep the Kubernetes API (TCP 6443), the kubelet (TCP 10250), node_exporter (TCP 9100), and Flannel VXLAN (UDP 8472) off the internet.
+Allow SSH (TCP 22) only from your admin VPN.
+Allow TCP 9100 only from the host that collects node metrics.
+Set the default policy to deny inbound and routed traffic and allow outbound traffic.
+On the k3s host, allow inbound traffic on `cni0` and `flannel.1` and from the default Pod and Service networks (`10.42.0.0/16` and `10.43.0.0/16`).
+
+Enforce the public port policy for IPv4 and IPv6.
+Set the host and provider firewalls to drop packets sent to blocked ports.
+Container port forwarding can bypass host input rules.
+Verify the public ports from a network outside the admin VPN and the hosting provider's private network.
+
+### Apply or check the policy with UFW
+
+Use Node.js 24.2 or later on the host and get [the firewall script](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/host-firewall.ts) from a trusted checkout.
+The script manages all UFW rules added through the UFW command line.
+It checks the saved rules, the live UFW chains, and the default policies.
+If you use custom packet filter rules or container port forwarding, check those rules separately.
+
+Use UFW to load the host rules at boot.
+If `netfilter-persistent` reloads saved snapshots, back them up and review them.
+Move any required rules to UFW, disable `netfilter-persistent`, and archive the snapshots under different names.
+
+Store `host-firewall.json` in `/etc/hephaestus`. Give it root ownership and mode `0600`.
+Keep it outside your Git checkout.
+Replace the example addresses with your VPN networks and the two addresses of your monitoring host.
+Set `k3s` for a k3s host with the default Pod and Service networks, and set `http3` for a proxy that serves HTTP/3.
+
+```json
+{
+  "sshVpnCidrs": ["192.0.2.0/24", "2001:db8:1::/64"],
+  "monitoringAddresses": ["198.51.100.4", "2001:db8:2::4"],
+  "k3s": true,
+  "http3": false
+}
+```
+
+1. Run `sudo node scripts/host-firewall.ts --check /etc/hephaestus/host-firewall.json`.
+   The check exits with an error if the host differs from the policy.
+   It makes no changes.
+2. From the admin VPN, connect over SSH on port 22 with `ssh -o ControlMaster=no -o ControlPath=none <host>`.
+   Make sure you have console access before changing the firewall.
+   Run this command from the trusted checkout:
+
+   ```bash
+   sudo --preserve-env=SSH_CONNECTION node scripts/host-firewall.ts --apply /etc/hephaestus/host-firewall.json
+   ```
+
+3. If the script changes the firewall, open a new SSH connection with the same SSH options.
+   In this new session, verify that your site and monitoring work.
+   Stop the recovery timer within 10 minutes:
+
+   ```bash
+   sudo --preserve-env=SSH_CONNECTION node scripts/host-firewall.ts --confirm /etc/hephaestus/host-firewall.json
+   ```
+
+   The timer disables the entire UFW firewall if you do not confirm.
+   If the apply fails, correct the problem and retry before the timer expires.
+   The retry uses the time left on the timer.
+   If the timer expires, use the console to correct the configuration.
+   Connect from the admin VPN to apply it again.
+
+   Keep the host running until you confirm the change.
+   A reboot cancels the timer.
+
+To monitor the host policy, install the [firewall status timer](./monitoring#check-the-host-firewall).
 
 ## What the installer checks
 

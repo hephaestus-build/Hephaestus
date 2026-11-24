@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh the host firewall policy status
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=1min
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

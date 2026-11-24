@@ -1149,7 +1149,7 @@ groups:
   # it scrapes node-exporter (observability.stack.nodeExporters).
   - name: hephaestus-node
     rules:
-      # Without this rule, an exporter that the scraper cannot reach silences the three host rules below.
+      # Without this rule, an exporter that the scraper cannot reach silences the host rules below.
       - alert: HephaestusNodeMetricsUnavailable
         expr: up{job="node"} == 0
         for: 5m
@@ -1157,6 +1157,21 @@ groups:
           severity: warning
         annotations:
           summary: A node-exporter target cannot be scraped, so the node disk and memory alerts cannot fire for it
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusHostFirewallPolicyDrift
+        expr: host_firewall_policy_ok == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: A host firewall differs from its policy
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusHostFirewallPolicyStale
+        expr: time() - host_firewall_policy_check_timestamp_seconds > 120
+        labels:
+          severity: warning
+        annotations:
+          summary: A host firewall has reported no policy check for more than two minutes
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # The kernel's own count of OOM kills on the node, including a kill of one process in a container that keeps
       # running, which no container metric shows when cAdvisor cannot read the kernel log.
