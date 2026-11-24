@@ -6,6 +6,8 @@ import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
 import { Minimatch } from "minimatch";
 import { isMap, isSeq, parseDocument } from "yaml";
 
+import { expandExpressions, jobRuns } from "./ci-contract-support.ts";
+
 // The Kubernetes legs and the release preflight install every image under the
 // run's commit. Jobs put an image there by building it, by reusing the merge group's build on a push,
 // or by aliasing it, under conditions that differ per event. A combination where none runs fails only
@@ -614,4 +616,140 @@ void test("a docs-only eviction dispatch still has every image and its packaged 
 	assert.equal(result.consumers.Kubernetes, true);
 	assert.equal(result.packaged, true);
 	assert.ok(Object.values(result.present).every(Boolean));
+});
+
+// The platform jobs scan every image they build against the run's advisory snapshot, and fail
+// without one. So `Image advisories` must run whenever `Images` builds and scans an image, whatever
+// the detect-changes outputs and the package job's result. A rename-only head packages the server
+// but skips the snapshot, and the server image used to build anyway.
+void test("an image build scans only with the run's advisory snapshot", () => {
+	const declared = cicd.getIn(["jobs", "detect-changes", "outputs"]);
+	assert.ok(isMap(declared));
+	const names = declared.items.map((item) => String(item.key));
+	const varied = [
+		"should_skip",
+		"draft",
+		"images",
+		"publishable",
+		"queue-images-complete",
+		"release-preflight",
+		"release-images",
+		"all-images",
+		"server-image",
+		"kubernetes",
+		"agent-images",
+		"postgres-image",
+		"docker-config",
+		"any-code",
+		"head-images",
+		"unfiltered",
+		"ci-config",
+		"queue-upgrade",
+		"queue-server-image",
+	];
+	for (const name of varied) {
+		assert.ok(names.includes(name), `${name} is a detect-changes output`);
+	}
+	const images = ["server", "agent", "postgres"];
+	for (const image of images) {
+		assert.ok(cicd.hasIn(["jobs", "Docker", "with", image]), image);
+	}
+	let seed = 5075;
+	const coin = () => {
+		seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+		return seed / 2_147_483_648 < 0.5 ? "true" : "false";
+	};
+	let scans = 0;
+	const check = (event: string, chosen: Record<string, string>, packaged: string) => {
+		const outputs = { ...Object.fromEntries(names.map((name) => [name, "false"])), ...chosen };
+		const detection = { result: "success", outputs };
+		const advisories = jobRuns(cicd, "vulnerability-database", event, {
+			"detect-changes": detection,
+		});
+		const needs = {
+			"detect-changes": detection,
+			"vulnerability-database": { result: advisories ? "success" : "skipped" },
+			"server-package": { result: packaged },
+			Security: { result: "success" },
+		};
+		if (!jobRuns(cicd, "Docker", event, needs)) {
+			return false;
+		}
+		const built = images.filter(
+			(image) =>
+				expandExpressions(cicd.getIn(["jobs", "Docker", "with", image]), {
+					github: { event_name: event },
+					needs,
+				}) === "true",
+		);
+		// A complete queue run supplies every image, and a release preflight scans in its own job.
+		const scanned =
+			built.length > 0 &&
+			outputs["queue-images-complete"] !== "true" &&
+			outputs["release-preflight"] !== "true";
+		if (scanned) {
+			scans += 1;
+		}
+		assert.ok(
+			!scanned || advisories,
+			`${event}, server package ${packaged}, ${JSON.stringify(chosen)}: Images scans ${built.join(", ")} without Image advisories`,
+		);
+		return true;
+	};
+	// #5075: a rename-only push to a server pull request packages the server and skips the snapshot.
+	assert.equal(
+		check(
+			"pull_request",
+			{ should_skip: "true", images: "true", publishable: "true", "server-image": "true" },
+			"success",
+		),
+		false,
+		"a rename-only head builds no image",
+	);
+	// Free outputs are drawn; the others follow the event as their definitions in detect-changes do.
+	const pullRequest = (chosen: Record<string, string>) => {
+		const sameRepository = coin();
+		const head = sameRepository === "true" ? coin() : "false";
+		return {
+			...chosen,
+			publishable: sameRepository,
+			"head-images": head,
+			images:
+				head === "true" || (sameRepository === "true" && coin() === "true") ? "true" : "false",
+			draft: coin(),
+			should_skip: coin(),
+			unfiltered: "false",
+			"queue-images-complete": "false",
+			"queue-upgrade": "false",
+			"queue-server-image": "false",
+		};
+	};
+	const otherEvent = (event: string, chosen: Record<string, string>) => ({
+		...chosen,
+		publishable: "true",
+		images: "true",
+		"head-images": "false",
+		draft: "false",
+		should_skip: "false",
+		unfiltered: event === "push" || event === "workflow_dispatch" ? "true" : "false",
+		"queue-images-complete": event === "push" ? coin() : "false",
+		// Both follow server sources, which the server-image filter covers (or kubernetes, for the
+		// server image's startup check).
+		"queue-upgrade":
+			event === "merge_group" && chosen["server-image"] === "true" ? coin() : "false",
+		"queue-server-image":
+			event === "merge_group" && (chosen["server-image"] === "true" || chosen.kubernetes === "true")
+				? coin()
+				: "false",
+	});
+	for (let index = 0; index < 1500; index += 1) {
+		const chosen = Object.fromEntries(varied.map((name) => [name, coin()]));
+		for (const event of ["pull_request", "merge_group", "push", "workflow_dispatch"]) {
+			const outputs = event === "pull_request" ? pullRequest(chosen) : otherEvent(event, chosen);
+			for (const packaged of ["success", "skipped"]) {
+				check(event, outputs, packaged);
+			}
+		}
+	}
+	assert.ok(scans > 0, "the sample reaches image builds that scan");
 });

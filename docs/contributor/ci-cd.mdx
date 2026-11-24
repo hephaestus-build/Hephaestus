@@ -1112,7 +1112,7 @@ The rest of the fast tier is reduced, not empty.
 Quality, the server tests, the browser suites and the cluster legs skip.
 `Release notes` runs on every pull request.
 `Workflow lint` still runs its Zizmor step when the head changes CI configuration.
-A ready head that matches the server image, Kubernetes or all-images paths can still build the server image after `Server package`.
+`Images` and `Image advisories` skip too, under the same condition: the image build scans every image it builds against that snapshot.
 
 ### Reproduce a queue-tier failure
 
