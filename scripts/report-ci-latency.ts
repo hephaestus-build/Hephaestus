@@ -87,23 +87,21 @@ export function isLatencySample(jobs: readonly { name: string }[]) {
 	return !jobs.some((job) => job.name === "Release evidence preflight");
 }
 
-// Database and PostgreSQL drills can also run in the PR fast tier. These jobs cannot.
-const QUEUE_ONLY_JOBS = [
-	/^Server tests \/ Integration \((?!review\))/u,
-	/^Browser tests \/ Webapp$/u,
-	/^Browser tests \/ Extension$/u,
-];
+// A server pull request also runs the numbered shards and the database tests, and a migration
+// pull request the drills. The browser suites run only in the queue tier.
+const QUEUE_ONLY_JOBS = [/^Browser tests \/ Webapp$/u, /^Browser tests \/ Extension$/u];
 
-// The merge group's queue-tier failure classes, including database checks that also run on a
-// migration PR. ci-contract*.test.ts ties this list to the jobs that carry the tier guard.
+// The merge group's queue-tier failure classes, including checks that also run on a pull request.
+// ci-contract*.test.ts ties this list to the jobs that carry the tier guard.
 export const QUEUE_TIER_JOBS = [
 	...QUEUE_ONLY_JOBS,
+	/^Server tests \/ Integration \((?!review\))/u,
 	/^Build \/ Database migrations$/u,
 	/^Build \/ PostgreSQL drill/u,
 ];
 
 /**
- * A PR that exercised server tests without numbered integration shards or browser suites.
+ * A PR that exercised server tests without browser suites.
  * Migration-only PRs exercise review instead of Unit; their database checks stay in this cohort.
  */
 export function isFastTier(jobs: readonly { name: string }[]) {

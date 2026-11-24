@@ -87,7 +87,8 @@ void test("the pull-request cohort is the server fast tier", () => {
 	assert.equal(isFastTier([unit, { name: "Quality / App Server / Gates" }]), true);
 	// A docs-only run has no server suites; ci:full adds the queue tier.
 	assert.equal(isFastTier([{ name: "Quality / Tooling and Docs / Gates" }]), false);
-	assert.equal(isFastTier([unit, { name: "Test / App Server: Integration (providers)" }]), false);
+	// A server pull request runs the numbered shards as the merge group does.
+	assert.equal(isFastTier([unit, { name: "Test / App Server: Integration (providers)" }]), true);
 	assert.equal(
 		isFastTier([unit, { name: "Test (review) / App Server: Integration (review)" }]),
 		true,
@@ -97,22 +98,24 @@ void test("the pull-request cohort is the server fast tier", () => {
 	assert.equal(isFastTier([callerUnit]), true);
 	assert.equal(
 		isFastTier([callerUnit, { name: "Test (providers) / App Server: Integration (providers)" }]),
-		false,
+		true,
 	);
+	assert.equal(isFastTier([callerUnit, { name: "Browser tests / Webapp" }]), false);
 });
 
-void test("migration PR latency includes database checks while full-suite runs stay excluded", () => {
+void test("PR latency includes the shards and database checks while browser runs stay excluded", () => {
 	const database = [{ name: "Build / Database migrations" }, { name: "Build / PostgreSQL drills" }];
 	const review = { name: "Server tests / Integration (review)" };
 	const unit = { name: "Server tests / Unit" };
 	assert.equal(isFastTier([review, ...database]), true, "migration-only PRs have no Unit job");
 	assert.equal(isFastTier([unit, review, ...database]), true, "mixed migration/source PRs");
 	assert.equal(isFastTier(database), false, "a run that exercised no server test is not sampled");
-	for (const name of [
-		"Server tests / Integration (1 of 8)",
-		"Browser tests / Webapp",
-		"Browser tests / Extension",
-	]) {
+	assert.equal(
+		isFastTier([unit, review, ...database, { name: "Server tests / Integration (1 of 8)" }]),
+		true,
+		"a server pull request runs the numbered shards",
+	);
+	for (const name of ["Browser tests / Webapp", "Browser tests / Extension"]) {
 		assert.equal(isFastTier([review, ...database, { name }]), false, name);
 	}
 	assert.equal(

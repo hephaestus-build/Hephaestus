@@ -157,26 +157,27 @@ void describe("ci-contract: merge-queue", () => {
 				`server change, ${JSON.stringify(filter)}`,
 			);
 		}
-		// The numbered shards run where the queue tier runs, and nowhere else: a fast-tier pull
-		// request reaches the queue without them. A failed read selects them.
+		// Every pull request but a layer of a stack runs the numbered shards, as the merge group does,
+		// so a failing class shows on the pull request first. A failed read selects them.
 		const fullIntegration = String(
 			orchestrator.getIn(["jobs", "detect-changes", "outputs", "full-integration"]),
 		);
-		for (const [event, run, expected] of [
-			["pull_request", { full: "false", light: "false" }, "false"],
-			["pull_request", { full: "true", light: "false" }, "true"],
-			["pull_request", {}, "true"],
-			["pull_request", { full: "true", light: "true" }, "false"],
-			["merge_group", {}, "true"],
-			["push", {}, "true"],
-			["workflow_dispatch", {}, "true"],
+		// The rest of the queue tier stays with `ci:full` on a pull request.
+		for (const [event, run, shards, queue] of [
+			["pull_request", { full: "false", light: "false" }, "true", "false"],
+			["pull_request", { full: "true", light: "false" }, "true", "true"],
+			["pull_request", {}, "true", "true"],
+			["pull_request", { full: "true", light: "true" }, "false", "false"],
+			["merge_group", {}, "true", "true"],
+			["push", {}, "true", "true"],
+			["workflow_dispatch", {}, "true", "true"],
 		] as const) {
 			assert.equal(
 				evaluateTierOutput(fullIntegration, event, run),
-				expected,
+				shards,
 				`full integration, ${event} ${JSON.stringify(run)}`,
 			);
-			assert.equal(evaluateTierOutput(decision, event, run), expected, `queue tier, ${event}`);
+			assert.equal(evaluateTierOutput(decision, event, run), queue, `queue tier, ${event}`);
 		}
 		// Changing CI, browser specs or migrations does not promote every suite on a PR.
 		for (const filter of ["migrations", "test-config", "build-config", "e2e", "extension-e2e"]) {
@@ -385,12 +386,17 @@ void describe("ci-contract: merge-queue", () => {
 		] as const) {
 			const workflow = parseDocument(await readFile(file, "utf8"));
 			assert.equal(workflow.getIn(["on", "workflow_call", "inputs", input, "required"]), true);
+			// The database tests also run on every server pull request; the drills follow the migrations.
+			const conditions: Record<string, RegExp> = {
+				"server-database":
+					/&& \(inputs\.queue_tier == 'true' \|\| inputs\.migrations_changed == 'true' \|\| inputs\.database_tier == 'true'\)$/u,
+				"postgres-drill":
+					/&& \(inputs\.queue_tier == 'true' \|\| inputs\.migrations_changed == 'true'\)$/u,
+			};
 			for (const name of queue) {
 				assert.match(
 					String(workflow.getIn(["jobs", name, "if"])),
-					name === "server-database" || name === "postgres-drill"
-						? /&& \(inputs\.queue_tier == 'true' \|\| inputs\.migrations_changed == 'true'\)$/u
-						: new RegExp(`&& inputs\\.${input} == 'true'$`, "u"),
+					conditions[name] ?? new RegExp(`&& inputs\\.${input} == 'true'$`, "u"),
 					`${name} belongs to the queue tier`,
 				);
 			}
