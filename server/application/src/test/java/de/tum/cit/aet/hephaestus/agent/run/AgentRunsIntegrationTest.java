@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -32,6 +33,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,6 +66,9 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewComposeRunKind composeKind;
+
+    @Autowired
+    private DataSource dataSource;
 
     private long workspace;
     private long other;
@@ -942,6 +947,63 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     private @Nullable Instant deadline(UUID runId) {
         Timestamp at = jdbc.queryForObject("SELECT deadline FROM agent_run WHERE id = ?", Timestamp.class, runId);
         return at == null ? null : at.toInstant();
+    }
+
+    @Test
+    void shouldOfferAndLeaseNoRunWhileAMigrationRunsAndLeaseItOnceTheMigrationEnds() throws Exception {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:barrier");
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            assertThat(claim()).isEmpty();
+            assertThat(claimSubject(workspace, "review:barrier")).isEmpty();
+            Optional<AgentRunLease> capped = transactions.execute(status -> runs.claimCapped(AgentRunKind.REVIEW, 100));
+            assertThat(capped).isEmpty();
+            // Each in its own read-only transaction, as the dispatch and the wait read it.
+            assertThat(runs.due(Set.of(AgentRunKind.REVIEW), 0, 100))
+                    .as("no sandbox starts for the run")
+                    .isEmpty();
+            assertThat(runs.dueOf(Set.of(AgentRunKind.REVIEW), List.of(workspace), List.of("review:barrier")))
+                    .as("no waiting next wakes for the run")
+                    .isEmpty();
+            assertThat(state(run.id())).isEqualTo("QUEUED");
+        }
+
+        assertThat(claimSubject(workspace, "review:barrier"))
+                .map(AgentRunLease::runId)
+                .contains(run.id());
+    }
+
+    @Test
+    void shouldLetARunLeasedBeforeAMigrationRenewAndEndWhileTheMigrationRuns() throws Exception {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:in-flight");
+        AgentRunLease lease = claimSubject(workspace, "review:in-flight").orElseThrow();
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            transactions.executeWithoutResult(status -> {
+                assertThat(runs.renew(lease.fence())).isPresent();
+                assertThat(runs.end(lease.fence(), AgentRunStopReason.COMPLETED))
+                        .isEqualTo(AgentRuns.EndOutcome.ENDED);
+            });
+            assertThat(state(run.id())).isEqualTo("ENDED");
+        }
+    }
+
+    @Test
+    void shouldRefuseANewLeaseOfAnyStatementShapeWhileAMigrationRunsAndLetTheMigrationTakeIt() throws Exception {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:shape");
+        // Not the claim's own statement: a claim that forgot the barrier condition, written another way.
+        String lease = "UPDATE agent_run r SET state = 'LEASED', lease_epoch = (r.lease_epoch + 1),"
+                + " started_at = COALESCE(r.started_at, clock_timestamp()),"
+                + " leased_until = clock_timestamp() + interval '1 minute' WHERE r.id = ?";
+
+        try (var migration = RunningMigration.start(dataSource)) {
+            assertThatThrownBy(() -> jdbc.update(lease, run.id())).hasMessageContaining("takes no new lease");
+            assertThat(state(run.id())).isEqualTo("QUEUED");
+            assertThat(migration.update(lease, run.id()))
+                    .as("the migration's own session passes the barrier")
+                    .isOne();
+        }
+        assertThat(state(run.id())).isEqualTo("LEASED");
     }
 
     private Optional<AgentRunLease> claim() {

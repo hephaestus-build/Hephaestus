@@ -1,4 +1,3 @@
-import deepEqual from "fast-deep-equal";
 import { RotateCcw } from "lucide-react";
 import { useState } from "react";
 
@@ -23,6 +22,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { equalDraftValues } from "@/lib/equal-draft-values";
 
 import { canUseHephaestusVersion } from "./catalog-entry-state";
 import { groupVersionFields } from "./hephaestus-version-fields";
@@ -93,7 +93,7 @@ export function CatalogGroupForm(props: CatalogGroupFormProps) {
 	const formDisabled = isPending || isResetPending || isKeepPending;
 	// Compare values independent of object key order.
 	const unsavedChanges = useUnsavedChanges({
-		isDirty: !deepEqual(form, initialState(group)),
+		isDirty: !equalDraftValues(form, initialState(group)),
 		disabled: formDisabled,
 	});
 

@@ -80,7 +80,7 @@ export const Default: Story = {
 		).toHaveLength(5);
 		await expect(
 			table.getByRole("img", {
-				name: "28 developers in this workspace: 9 Needs attention, 4 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
+				name: "28 developers in this workspace: 9 Needs attention, 5 Mixed feedback, 7 Going well, 7 none yet. You are in the Needs attention part.",
 			}),
 		).toBeVisible();
 		await userEvent.click(

@@ -1,6 +1,5 @@
 import { SearchIcon, XIcon } from "lucide-react";
 import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
-import { useMediaQuery } from "usehooks-ts";
 
 import type {
 	GroupRef,
@@ -68,6 +67,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { formatNumber } from "@/lib/numbers";
 import { problemStatusOf } from "@/lib/problem-detail";
 import { nonEmpty } from "@/lib/search-params";
@@ -834,9 +834,7 @@ function MarkedFeedbackCard({
 	onArrivalShown?: () => void;
 }) {
 	const ref = useRef<HTMLDivElement>(null);
-	const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)", {
-		initializeWithValue: true,
-	});
+	const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 	const scroll = useEffectEvent(() =>
 		ref.current?.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" }),
 	);

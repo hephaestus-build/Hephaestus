@@ -12,7 +12,6 @@ const channel: SlackMonitoredChannel = {
 	slackChannelId: "C02PENDING02",
 	channelName: "team-standup",
 	consentState: "PENDING",
-	optedOutMemberCount: 0,
 	consentAnnouncedAt: null,
 	createdAt: new Date("2026-07-01T00:00:00Z"),
 };

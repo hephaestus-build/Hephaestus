@@ -155,7 +155,15 @@ public interface MembershipRepository extends JpaRepository<Membership, Membersh
         """)
     long countByWorkspace_IdAndRole(@Param("workspaceId") Long workspaceId, @Param("role") WorkspaceRole role);
 
-    long countByWorkspace_Id(Long workspaceId);
+    /** The members the workspace's member list shows: present, with an account it lists. */
+    @Query("""
+        SELECT count(m) FROM Membership m JOIN Account a ON a.id = m.id.accountId
+        WHERE m.workspace.id = :workspaceId AND m.leftAt IS NULL
+          AND a.status IN (de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.ACTIVE,
+                           de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.UNCLAIMED,
+                           de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.BLOCKED)
+        """)
+    long countViewableMembers(@Param("workspaceId") long workspaceId);
 
     @Query("""
         SELECT wm.id.accountId FROM Membership wm

@@ -1,6 +1,6 @@
 {
 	"name": "hephaestus",
-	"version": "1.0.0-rc.13",
+	"version": "1.0.0-rc.15",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -27,7 +27,6 @@
 		"@vitest/browser-playwright": "catalog:",
 		"ajv": "8.20.0",
 		"ajv-formats": "3.0.1",
-		"commander": "15.0.0",
 		"fast-xml-parser": "5.12.0",
 		"fast-xml-validator": "1.4.2",
 		"fflate": "0.8.3",

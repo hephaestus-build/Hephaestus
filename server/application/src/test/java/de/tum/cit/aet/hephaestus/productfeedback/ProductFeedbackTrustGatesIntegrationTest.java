@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbac
 import de.tum.cit.aet.hephaestus.productfeedback.adapter.ProductfeedbackPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.productfeedback.metrics.ProductFeedbackMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -49,6 +50,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -124,6 +126,9 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private DataSource dataSource;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -245,6 +250,49 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         assertThat(row.getRepositoryId()).isEqualTo(PRIVATE_REPOSITORY.id());
         assertThat(row.getRepository()).isEqualTo(PRIVATE_REPOSITORY.fullName());
         assertThat(fileActions(id)).isZero();
+        filings.deleteById(id);
+    }
+
+    @Test
+    void shouldStartNoRepositoryLookupWhileAMigrationRunsAndStartItOnceTheMigrationEnds() throws Exception {
+        UUID id = privateReportDue();
+        dueForLookup(id, true);
+        int attempt = filings.findById(id).orElseThrow().getAttempt();
+        when(issues.repository(PRIVATE_REPOSITORY.fullName())).thenReturn(Optional.of(PRIVATE_REPOSITORY));
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            filing.fileDue();
+            assertThat(filings.findById(id).orElseThrow().getAttempt())
+                    .as("no lookup lease is taken while a migration runs")
+                    .isEqualTo(attempt);
+            verify(issues, never()).repository(any());
+        }
+
+        filing.fileDue();
+        verify(issues).repository(PRIVATE_REPOSITORY.fullName());
+        filings.deleteById(id);
+    }
+
+    @Test
+    void shouldRefuseALookupLeaseOfAnyStatementShapeWhileAMigrationRunsAndLetAHandOverFinish() throws Exception {
+        UUID id = privateReportDue();
+        dueForLookup(id, true);
+
+        try (var _ = RunningMigration.start(dataSource)) {
+            // A lookup lease of any length: the attempt rises and the next attempt moves out, in the same state.
+            assertThatThrownBy(() -> jdbc.update(
+                            "UPDATE product_feedback_filing SET attempt = attempt + 1,"
+                                    + " next_attempt_at = now() + interval '45 seconds' WHERE feedback_id = ?",
+                            id))
+                    .hasMessageContaining("takes no new lease");
+            // A hand-over to a draft action also counts the attempt, and it may move the next attempt out too.
+            assertThat(jdbc.update(
+                            "UPDATE product_feedback_filing SET attempt = attempt + 1, drafting_started_at = now(),"
+                                    + " next_attempt_at = now() + interval '5 minutes' WHERE feedback_id = ?",
+                            id))
+                    .as("a hand-over that counts the attempt finishes")
+                    .isOne();
+        }
         filings.deleteById(id);
     }
 

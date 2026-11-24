@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
@@ -121,16 +122,22 @@ public class AgentSandboxes {
             throw new IllegalArgumentException("shutdownAt must not be later than the longest sandbox token");
         UUID id = UUID.randomUUID();
         String claimName = claimName(id);
-        var requested = Objects.requireNonNull(transactions.execute(status -> sandboxes
-                .findLive(workspaceId, subjectKey)
-                .map(live -> new Requested(live, false))
-                .or(() -> sandboxes
-                        .request(id, workspaceId, subjectKey, kind.name(), claimName, shutdownAt)
-                        .map(row -> new Requested(row, true)))
-                // Another replica requested it between the two statements.
-                .or(() -> sandboxes.findLive(workspaceId, subjectKey).map(live -> new Requested(live, false)))
-                .orElseThrow(
-                        () -> new IllegalStateException("The subject's sandbox was taken back as it was requested"))));
+        // The barrier stays down until the row commits: a migration that starts after it finds the sandbox requested.
+        // Its claim may then reach Kubernetes during the migration, as work that started before it, and it leases
+        // nothing until the migration ends.
+        var requested = Objects.requireNonNull(transactions.execute(status -> {
+            if (!sandboxes.maintenanceBarrierLifted()) throw new MaintenanceInProgressException();
+            return sandboxes
+                    .findLive(workspaceId, subjectKey)
+                    .map(live -> new Requested(live, false))
+                    .or(() -> sandboxes
+                            .request(id, workspaceId, subjectKey, kind.name(), claimName, shutdownAt)
+                            .map(row -> new Requested(row, true)))
+                    // Another replica requested it between the two statements.
+                    .or(() -> sandboxes.findLive(workspaceId, subjectKey).map(live -> new Requested(live, false)))
+                    .orElseThrow(() ->
+                            new IllegalStateException("The subject's sandbox was taken back as it was requested"));
+        }));
         var row = requested.row();
         if (requested.created()) {
             try {

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto;
 
+import de.tum.cit.aet.hephaestus.core.SmallCounts;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
@@ -10,13 +11,16 @@ import java.util.List;
 public record PracticesAcrossWorkspaceDTO(
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "The reader's open feedback, counted by the rule the practice profile shows it open by,"
-                        + " beside the middle half of the developers the page counts: both open now")
+                description = "The reader's open feedback, open now, counted by the rule the practice profile shows it"
+                        + " open by. It has no middle half: whether another person's card is open follows a delivery"
+                        + " rule that staff can change for one person")
         WorkspaceTileDTO openFeedback,
 
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "Whether a counted standing was read only from earlier reviews, which carry no current"
+                description = "Whether at least "
+                        + SmallCounts.MINIMUM
+                        + " counted developers have a standing read only from earlier reviews, which carry no current"
                         + " proof")
         boolean includesEarlierReviews,
 

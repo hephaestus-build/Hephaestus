@@ -29,9 +29,10 @@ public record SyncResourceStateDTO(
 
         @NonNull
         @Schema(
-                description = "Per-entity-class breakdown behind itemCount. One entry per class the integration "
-                        + "actually mirrors — 6 for an SCM repository, 1 for a Slack channel or Outline collection. "
-                        + "Never null; empty when the resource has never synced.")
+                description =
+                        "Per-entity-class breakdown behind itemCount. One entry per class the integration "
+                                + "actually mirrors — 6 for an SCM repository, 1 for an Outline collection, none for a Slack channel. "
+                                + "Never null; empty when the resource has never synced or the integration withholds its counts.")
         List<SyncResourceCountDTO> counts,
 
         @Schema(description = "Vendor-reported upstream count, if cheaply available") @Nullable

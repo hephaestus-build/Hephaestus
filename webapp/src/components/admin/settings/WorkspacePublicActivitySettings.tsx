@@ -17,7 +17,6 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/co
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { ITEM_KIND, itemKindNoun } from "@/lib/item-kinds";
-import { formatNumber } from "@/lib/numbers";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
@@ -37,8 +36,6 @@ export type WorkspacePublicActivityState =
 			refreshFailure?: RefreshFailure;
 			/** Server-computed publication status from the workspace list. */
 			live: boolean;
-			/** How many people the page leaves out, never who; undefined where the count did not load. */
-			hiddenPeople: number | undefined;
 			/** The change in flight, if any. */
 			pending: PublicActivityChange | undefined;
 	  };
@@ -166,22 +163,6 @@ function ReadySettingsBody({
 								}
 							}}
 						/>
-					)}
-					{state.enabled && state.hiddenPeople !== undefined && (
-						<Item render={<li />} variant="row">
-							<ItemContent>
-								<ItemTitle>People left out of the page</ItemTitle>
-								<ItemDescription className="line-clamp-none">
-									The page leaves out and does not count people who hid themselves, and people an
-									admin hid. People who hid themselves are counted here, never named.
-								</ItemDescription>
-							</ItemContent>
-							<ItemActions>
-								<span className="text-sm font-medium tabular-nums">
-									{formatNumber(state.hiddenPeople)}
-								</span>
-							</ItemActions>
-						</Item>
 					)}
 				</ul>
 				{state.enabled && !state.live && (

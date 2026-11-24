@@ -28,14 +28,11 @@ class PublicActivityService {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
     public PublicActivityDTO page(String slug, ActivityPeopleRangeParams range, Set<String> repositoryKeys) {
         var selected = publishedWorkspace(slug);
-        var publicPeople =
-                people.publicPeople(selected.id(), range, repositoryKeys, selected.contributorsWithoutAccount());
         return PublicActivityDTO.from(
                 selected.displayName(),
                 workspaces.scmProviderType(selected.id()),
                 selected.allowSearchEngines(),
-                publicPeople.people(),
-                publicPeople.unlistedContributors());
+                people.publicPeople(selected.id(), range, repositoryKeys, selected.contributorsWithoutAccount()));
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)

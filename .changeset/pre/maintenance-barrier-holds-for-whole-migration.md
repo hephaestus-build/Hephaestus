@@ -1,0 +1,5 @@
+---
+"hephaestus": patch
+---
+
+The maintenance barrier now lasts exactly as long as a database migration: every change set runs on the session that holds it, so it ends with the migration, also when the migration's session is killed. While it is up, servers also reserve no sync job, start no repository lookup for a product feedback filing and start no provider resource registration or removal. The database refuses a new lease on each of these and on runs, outbox actions and provider events, and an action that must run at once answers `503` with `Retry-After` before it waits on any table. A sync request during the migration gets `503`, and a reserved sync that has not started ends as cancelled. The migration logs when the barrier goes up and comes down, each server reports the gauge `maintenance_barrier_raised`, and the critical alert `HephaestusMaintenanceBarrierStuck` fires when it stays up for 30 minutes. Servers of 1.0.0-rc.14 and earlier do not check the barrier, so a stopped upgrade still stops every role ([Work during a migration](https://docs.hephaestus.build/admin/runtime-roles#work-during-a-migration)).

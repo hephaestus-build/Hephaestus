@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -15,6 +16,49 @@ import {
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const erdDirectory = path.join(repositoryRoot, "docs/contributor/erd");
+
+function runCli(...args: string[]) {
+	return spawnSync(
+		process.execPath,
+		[path.join(repositoryRoot, "scripts/generate-mermaid-erd.ts"), ...args],
+		{ encoding: "utf8" },
+	);
+}
+
+await test("the ERD CLI accepts positional arguments, overrides and dash-prefixed values", () => {
+	const result = runCli(
+		"jdbc:postgresql://localhost/catalog",
+		"positional-user",
+		"positional-password",
+		"sample-erd",
+		"--username=chosen-user",
+		"--password",
+		"--example-password",
+		"--schema",
+		"example",
+		"--dry-run",
+		"--log-level",
+		"debug",
+	);
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(
+		result.stdout,
+		/username=chosen-user, password=--\*{4}rd, output=sample-erd, schema=example/u,
+	);
+	assert.match(result.stdout, /Dry run enabled/u);
+	assert.doesNotMatch(result.stdout, /example-password/u);
+});
+
+await test("the ERD CLI prints help and rejects an invalid log level", () => {
+	const help = runCli("-h");
+	assert.equal(help.status, 0, help.stderr);
+	assert.match(help.stdout, /Usage: generate-mermaid-erd/u);
+	assert.match(help.stdout, /--include-liquibase/u);
+
+	const invalid = runCli("--log-level", "verbose");
+	assert.equal(invalid.status, 1);
+	assert.match(invalid.stderr, /Invalid log level: verbose/u);
+});
 
 const column = (name: string): ColumnInfo => ({
 	name,

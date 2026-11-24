@@ -67,7 +67,7 @@ try {
 	await rm(output, { recursive: true, force: true });
 }
 process.stdout.write(
-	"Code editor runtime: CSP, workers, syntax-only markers, typing, read-only, draft-preserving retry and model ownership passed.\n",
+	"Code editor runtime: CSP, workers, syntax-only markers, typing, undo, read-only, language changes, draft-preserving retry and disposal passed.\n",
 );
 
 async function checkEditor(browser: Browser, url: string, fault: boolean) {
@@ -118,6 +118,15 @@ async function checkEditor(browser: Browser, url: string, fault: boolean) {
 		await expect(page.getByLabel("Script draft")).toHaveText("export const answer: string = 42;");
 		await page.getByRole("button", { name: "Check TypeScript worker" }).click();
 		await expect(page.getByLabel("TypeScript diagnostics")).toHaveText("1");
+		await page.getByRole("button", { name: "Reset controlled script" }).click();
+		await editor.focus();
+		await page.keyboard.insertText("x");
+		await editor.press("ControlOrMeta+Z");
+		await expect(page.getByLabel("Script draft")).toHaveText(
+			"export const reset: number = 'wrong';",
+		);
+		await editor.press("ControlOrMeta+Z");
+		await expect(page.getByLabel("Script draft")).toHaveText("export const answer: string = 42;");
 		await editor.press("ControlOrMeta+A");
 		await editor.pressSequentially("export const answer = 42;");
 		await expect(page.getByLabel("Script draft")).toHaveText("export const answer = 42;");
@@ -144,11 +153,21 @@ async function checkEditor(browser: Browser, url: string, fault: boolean) {
 		await expect.poll(markers).not.toMatch(/^0?$/u);
 		await page.getByRole("button", { name: "Use an unresolved import" }).click();
 		await expect.poll(markers).toBe("0");
+		// Finish testing TypeScript diagnostics before changing modes. An in-flight validation
+		// from the previous language can still publish markers for this model.
+		const model = page.locator("[data-mode-id]");
+		await expect(model).toHaveAttribute("data-mode-id", "typescript");
+		await page.getByLabel("Language").selectOption("javascript");
+		await expect(model).toHaveAttribute("data-mode-id", "javascript");
+		await page.getByLabel("Language").selectOption("typescript");
+		await expect(model).toHaveAttribute("data-mode-id", "typescript");
 		await page.getByRole("button", { name: "Count models" }).click();
 		await expect(page.getByLabel("Model count")).toHaveText(fault ? "2" : "1");
+		await expect(page.getByLabel("Editor count")).toHaveText("1");
 		await page.getByRole("button", { name: "Hide editor" }).click();
 		await page.getByRole("button", { name: "Count models" }).click();
 		await expect(page.getByLabel("Model count")).toHaveText(fault ? "1" : "0");
+		await expect(page.getByLabel("Editor count")).toHaveText("0");
 		await expect(page.getByLabel("Other model")).toHaveText(fault ? "present" : "absent");
 		await expect(page.locator("html")).not.toHaveAttribute("data-code-editor-csp-violation");
 		assert.deepEqual(pageErrors, []);

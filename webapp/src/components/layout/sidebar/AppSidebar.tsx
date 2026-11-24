@@ -175,6 +175,7 @@ export function AppSidebar({
 				<NavWorkspace
 					workspaceSlug={activeWorkspace.workspaceSlug}
 					practicesEnabled={activeWorkspace.practicesEnabled}
+					readOnly={readOnly}
 				/>
 				{isAdmin && (
 					<>

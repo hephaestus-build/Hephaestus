@@ -2,7 +2,10 @@
 
 import * as z from "zod";
 
-export const zAboutRole = z.enum(["AUTHOR", "REVIEWER", "ASSIGNEE", "MERGER"]);
+/**
+ * Extensible enum: a client accepts a value that the examples do not name.
+ */
+export const zAboutRole = z.string();
 
 export const zAccountAppRole = z.enum(["USER", "APP_ADMIN"]);
 
@@ -3085,10 +3088,6 @@ export const zPublicActivityCounts = z.object({
 	pullRequestsReviewed: z.int(),
 });
 
-export const zPublicActivityHiddenCount = z.object({
-	hiddenPeople: z.int(),
-});
-
 export const zPublicActivityHighlights = z.object({
 	firstContributors: z.array(z.string()),
 });
@@ -3140,10 +3139,6 @@ export const zPublicActivity = z.object({
 	providerType: zIdentityProviderType.optional(),
 	repositories: z.array(zPublicActivityRepository),
 	to: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	unlistedContributors: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	workspaceName: z.string(),
 });
 
@@ -5019,7 +5014,7 @@ export const zSlackChannelConsentEvent = z.object({
 });
 
 /**
- * An allow-listed Slack channel with its consent state and person opt-out count
+ * An allow-listed Slack channel with its consent state
  */
 export const zSlackMonitoredChannel = z.object({
 	channelName: z.string().nullable(),
@@ -5027,7 +5022,6 @@ export const zSlackMonitoredChannel = z.object({
 	consentState: zSlackMonitoredChannelConsentState,
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.string().regex(/^[1-9][0-9]*$/),
-	optedOutMemberCount: z.int(),
 	slackChannelId: z.string(),
 	slackTeamId: z.string(),
 });
@@ -6702,7 +6696,7 @@ export const zWorkspaceSplitPart = z.object({
 });
 
 /**
- * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total. A split with a part of 1 or 2, or with every developer in one part, shows only its total
+ * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total. A split with a part of 1 to 4, or with every developer in one part, shows only its total
  */
 export const zWorkspaceSplit = z.object({
 	developers: z
@@ -6756,7 +6750,11 @@ export const zAdminWorkspaceView = z.object({
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	displayName: z.string(),
 	id: z.int(),
-	memberCount: z.int(),
+	memberCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 	ownerLogin: z.string().optional(),
 	providerType: zIdentityProviderType.optional(),
 	status: zWorkspaceStatus,

@@ -25,7 +25,8 @@ const suspendedWorkspace: AdminWorkspaceView = {
 	status: "SUSPENDED",
 	accountLogin: "ase/ios",
 	providerType: "GITLAB",
-	memberCount: 0,
+	// An instance admin cannot open a suspended workspace's member list, so 1 to 4 members are withheld.
+	memberCount: undefined,
 	createdAt: new Date("2026-03-01T00:00:00Z"),
 };
 
@@ -89,6 +90,14 @@ export const Default: Story = {
 		await expect(
 			canvas.queryByText(/^(?:ACTIVE|SUSPENDED|PURGED|GITHUB|GITLAB)$/u),
 		).not.toBeInTheDocument();
+	},
+};
+
+/** A suspended workspace with 1 to 4 members shows no count, since its member list cannot be opened. */
+export const WithheldMemberCount: Story = {
+	play: async ({ canvas }) => {
+		const suspended = canvas.getByRole("row", { name: /Intro Course/u });
+		await expect(within(suspended).getByText("Fewer than 5")).toBeVisible();
 	},
 };
 

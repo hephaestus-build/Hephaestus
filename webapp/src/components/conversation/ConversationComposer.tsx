@@ -1,6 +1,5 @@
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
 import { type ReactNode, type SubmitEvent, use, useRef, useState } from "react";
-import { useMediaQuery } from "usehooks-ts";
 
 import {
 	InputGroup,
@@ -9,6 +8,7 @@ import {
 	InputGroupTextarea,
 } from "@/components/ui/input-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { readDraft, writeDraft } from "@/lib/composer-drafts";
 import { isComposing } from "@/lib/keyboard-shortcuts";
 import { rendersContent } from "@/lib/react-node";

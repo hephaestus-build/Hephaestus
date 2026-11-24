@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!-- A change set that waits for an advisory lock that the test holds, so the test can act while it runs. -->
+    <changeSet id="stalled" author="test">
+        <sql>SELECT pg_advisory_lock(4242)</sql>
+        <rollback>SELECT 1</rollback>
+    </changeSet>
+</databaseChangeLog>

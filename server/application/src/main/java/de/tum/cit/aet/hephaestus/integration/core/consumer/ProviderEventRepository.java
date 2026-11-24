@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
+import de.tum.cit.aet.hephaestus.core.MaintenanceBarrier;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
 import java.util.List;
@@ -118,6 +119,7 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
             WITH picked AS (
               SELECT e.id FROM provider_event e
               WHERE e.state = 'QUEUED' AND e.available_at <= clock_timestamp()
+                AND\s""" + MaintenanceBarrier.LIFTED + """
                 AND (e.workspace_id IS NULL OR EXISTS (SELECT 1 FROM workspace w
                                                        WHERE w.id = e.workspace_id AND w.status = 'ACTIVE'))
                 AND NOT EXISTS (SELECT 1 FROM provider_event o

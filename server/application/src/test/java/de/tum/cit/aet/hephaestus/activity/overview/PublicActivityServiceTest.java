@@ -6,7 +6,6 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPeopleDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityPersonDetailDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkDTO;
 import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
@@ -98,8 +97,6 @@ class PublicActivityServiceTest extends BaseUnitTest {
 
     @Test
     void shouldStillResolveTheProviderForThePublishedPage() {
-        when(people.publicPeople(7L, RANGE, Set.of(), true))
-                .thenReturn(new ActivityPeopleService.PublicPeople(mock(ActivityPeopleDTO.class), 0));
         assertThatThrownBy(() -> service.page("public", RANGE, Set.of()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Workspace has multiple active SCM providers.");
