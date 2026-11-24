@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-15
 **Authors:** Hephaestus maintainers
+**Amended by:** [ADR 0135](0135-every-client-and-channel-uses-one-hephaestus-api.md)
 
 **Builds on:** [ADR 0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md) (installed clients), [ADR 0076](0076-reads-are-shaped-like-the-screen.md) (reads are shaped like the screen), [ADR 0100](0100-the-server-serves-the-web-app.md) (one API under `/api`), [ADR 0103](0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md) (the public API contract)
 

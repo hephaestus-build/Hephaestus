@@ -5,6 +5,7 @@
 **Date:** 2026-11-12
 
 **Authors:** Felix T.J. Dietrich
+**Amended by:** [ADR 0138](0138-domain-modules-own-rows-and-rules-and-agent-modules-host-runs.md)
 
 **Supersedes:** [ADR 0003](0003-spring-modulith-adoption.md)
 
