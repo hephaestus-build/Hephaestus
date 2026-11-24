@@ -59,6 +59,8 @@ Option 5.
      - link previews
      - tool output.
    - Code refuses a note that cites such a part.
+   - A separate step writes the note's text. Its model input is only the cited text that has the person as its origin.
+     So no other part of the entry can supply the note's content.
    - It is never evidence about the person's work, and never about a third party.
    - It never supports a card or another record, and it never gets a grant.
    - It never travels. The person's **Keep** turns it into a person-authored record with author kind `PERSON`. Only then can **Take along** transfer it.
@@ -106,6 +108,7 @@ Not enforced. The implementing issues add the checks below, and review of each i
 - NotedRecordOriginTest fails when a noted record cites an entry whose origin is not the person.
 - NotedRecordQuotedTextTest fails when a noted record cites any of the five parts in decision 3 that keep their source's origin.
   An example is a quoted pull request.
+- NotedRecordContentSourceTest fails when the step that writes a note gets input other than the cited text of the person.
 - NotedRecordNeverTravelsTest fails when a noted record passes the transfer path without **Keep** and **Take along**.
 - ForgetLatchTest fails when Hephaestus notes a forgotten item again before the person says it again.
 - NoteSupersedesTest fails when two active notes on one subject exist.

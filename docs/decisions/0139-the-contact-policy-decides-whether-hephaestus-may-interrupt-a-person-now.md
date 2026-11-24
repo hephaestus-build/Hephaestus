@@ -91,6 +91,11 @@ Option 6.
       So rule 3 applies to each message as a whole, at the commit and at send, on every channel.
     - Example: a Pause before the commit stops an unprompted batch. Code writes no message, and each item gets its disposition.
       A requested result is in its own batch, so it still arrives.
+    - When items of several kinds wait, a claim takes the kinds in this order:
+      1. `REQUESTED_RESULT`
+      2. `AGREED`
+      3. `UNPROMPTED`
+    - When a turn ends and items still wait, the next claim starts at once. It does not wait for a new event.
 11. **The notification text is the notice line, never the message summary.** The push payload stays ids only. On arrival, the service worker fetches the notice line with the person's session. On any failure it shows the kind's fixed text.
     - The notice line is registry copy with parameters, such as "Check ready: 1 problem on PR #42". It is never model text.
     - The fetch never refreshes a credential.
@@ -132,6 +137,7 @@ Option 6.
 - [ADR 0116](0116-a-push-is-one-web-push-message-from-the-instance.md) rule 6 keeps its payload: ids only, no text. Only what the client shows changes: it may fetch the notice line, and else shows the fixed text.
 - ADR 0116 rule 7 changes. The server keeps quiet hours for unrequested notifications. New kinds join under rule 7: the requested result, the agreed check-in and the unprompted update.
 - ADR 0120 decision 7 changes for background items only. A compatible item also has the same contact kind.
+  A claim takes requested results first, and the next claim starts when a turn ends.
 - ADR 0116 rule 7 keeps `CONVERSATION_ANSWER` and its trigger: 30 seconds after the turn ends, if the answer is unread.
 - ADR 0116 rule 8 stays. The send check now also runs the contact policy.
 - ADR 0120 (proposed in #4862) decision 4 stays. Its gates are the gates of rule 8 above.
@@ -159,6 +165,8 @@ Not enforced. The implementing issues add the checks below, and review of each i
 - ActiveNoPushTest fails when a push goes to a person who is active in that workspace.
 - SendRecheckTest fails when a contact queued before a pause is sent after it.
 - OneKindBatchTest fails when a background batch holds items of two contact kinds.
+  It also fails when a requested result waits behind another kind.
+  It also fails when a waiting item needs a new event to be claimed after a turn ends.
 - AppOnlyItemRouteTest fails when an item that only the app may show is routed to Slack.
 - HeldResultNotCitedTest fails when an unprompted message cites a result that a delivery experiment holds.
 - DeliveryDecisionTest fails when an unprompted decision has no row, or a model call starts before it.
