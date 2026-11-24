@@ -8,7 +8,7 @@ export const noNetworkidle = defineRule({
 				"A browser test waits for what proves the page is ready, never for `networkidle`. That state needs 500 ms without a request, which a poll or a held request can deny for the whole test, and then the timeout names no cause. Playwright discourages it.",
 		},
 		messages: {
-			wait: "Wait for the element or response that proves the page is ready, or for `settled(page)` from `webapp/e2e/settled.ts`, not for `networkidle`.",
+			wait: "Wait for the element or response that proves the page is ready, or for `settled(page)` from `webapp/e2e/screenshots/settled.ts`, not for `networkidle`.",
 		},
 	},
 	create(context) {
@@ -22,8 +22,11 @@ export const noNetworkidle = defineRule({
 			Literal(node) {
 				check(node, node.value);
 			},
-			TemplateElement(node) {
-				check(node, node.value.cooked ?? node.value.raw);
+			// Only a template without interpolation is the whole string.
+			TemplateLiteral(node) {
+				if (node.expressions.length === 0) {
+					check(node, node.quasis[0]?.value.cooked ?? node.quasis[0]?.value.raw);
+				}
 			},
 		};
 	},
