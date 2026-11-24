@@ -23,9 +23,11 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
  * table the owner may use, and it passes the row policies of the owner's tables unless a table forces row-level
  * security. The chart's default privileges give {@code hephaestus_app} EXECUTE on every routine that
  * {@code hephaestus_owner} creates in {@code public}, so the server may call a definer function as soon as a migration
- * adds it. This list is the guard: each
- * definer function that the application role can call is named here, owned by the owner, pins its search path and
- * keeps {@code PUBLIC} out.
+ * adds it. This list is the guard: each definer function that the application role can call is named here, owned by
+ * the owner and closed to {@code PUBLIC}. Its search path is {@code pg_catalog, pg_temp}, or
+ * {@code pg_catalog, public, pg_temp} when a trigger it fires names a table without a schema: a trigger runs with the
+ * search path of the function that fires it. {@code DatabaseRolesDatabaseTest} proves that only the owner can create an
+ * object in {@code public}.
  */
 @Tag("database")
 class DefinerFunctionAllowlistDatabaseTest {
@@ -48,6 +50,18 @@ class DefinerFunctionAllowlistDatabaseTest {
         assertOnlyListedOwnedPinnedAndClosed(INSTALLED);
     }
 
+    @Test
+    void shouldAcceptPublicBetweenTheCatalogAndTemporaryObjects() throws SQLException {
+        TestDatabase probe = PostgreSQLTestContainer.copyDatabase("hephaestus_definer_public_path", INSTALLED);
+        try (Connection connection = connect(PostgreSQLTestContainer.asOwner(probe))) {
+            jdbc(connection)
+                    .execute("ALTER FUNCTION public.maintain_auth_event_partitions()"
+                            + " SET search_path = pg_catalog, public, pg_temp");
+        }
+
+        assertOnlyListedOwnedPinnedAndClosed(probe);
+    }
+
     /**
      * Each change breaks one property; the same assertion as the installed database must refuse it, for that property.
      * The unlisted function revokes the EXECUTE that PostgreSQL gives {@code PUBLIC} by default, so only the list
@@ -61,9 +75,13 @@ class DefinerFunctionAllowlistDatabaseTest {
                         + "|CREATE FUNCTION public.definer_probe() RETURNS bigint LANGUAGE sql SECURITY DEFINER"
                         + " SET search_path = pg_catalog, pg_temp AS 'SELECT 1';"
                         + " REVOKE EXECUTE ON FUNCTION public.definer_probe() FROM PUBLIC",
-                "a wider search path|search_path|owner|pins search_path"
-                        + "|ALTER FUNCTION public.maintain_auth_event_partitions()"
-                        + " SET search_path = pg_catalog, pg_temp, public",
+                "a schema the application can write|writable_path|administrator|search path from pg_catalog to pg_temp"
+                        + "|CREATE SCHEMA scratch; GRANT USAGE ON SCHEMA scratch TO hephaestus_owner;"
+                        + " GRANT USAGE, CREATE ON SCHEMA scratch TO hephaestus_app;"
+                        + " ALTER FUNCTION public.maintain_auth_event_partitions()"
+                        + " SET search_path = pg_catalog, scratch, pg_temp",
+                "temporary objects first|temp_first|owner|search path from pg_catalog to pg_temp"
+                        + "|ALTER FUNCTION public.maintain_auth_event_partitions() SET search_path = pg_catalog, public",
                 "a grant to PUBLIC|public|owner|PUBLIC may call"
                         + "|GRANT EXECUTE ON FUNCTION public.maintain_auth_event_partitions() TO PUBLIC",
                 "another owner|owner_role|administrator|owner of"
@@ -93,7 +111,9 @@ class DefinerFunctionAllowlistDatabaseTest {
                             SELECT format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid))
                                        AS signature,
                                    pg_get_userbyid(p.proowner) AS owner,
-                                   coalesce('search_path=pg_catalog, pg_temp' = ANY(p.proconfig), false) AS pinned,
+                                   coalesce(p.proconfig && ARRAY['search_path=pg_catalog, pg_temp',
+                                                                 'search_path=pg_catalog, public, pg_temp'], false)
+                                       AS pinned,
                                    EXISTS (SELECT FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                                            WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE') AS public_calls
                             FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -113,7 +133,7 @@ class DefinerFunctionAllowlistDatabaseTest {
                 String signature = Objects.toString(row.get("signature"));
                 assertThat(row.get("owner")).as("owner of %s", signature).isEqualTo("hephaestus_owner");
                 assertThat(Boolean.TRUE.equals(row.get("pinned")))
-                        .as("%s pins search_path=pg_catalog, pg_temp", signature)
+                        .as("%s has a search path from pg_catalog to pg_temp through public at most", signature)
                         .isTrue();
                 assertThat(Boolean.TRUE.equals(row.get("public_calls")))
                         .as("PUBLIC may call %s", signature)

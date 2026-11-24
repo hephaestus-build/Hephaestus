@@ -104,11 +104,15 @@ When a migration adds a definer function, the server can call it immediately.
 Add a definer function only for a narrow job that must cross such a boundary.
 To add one:
 
-1. Set `SET search_path = pg_catalog, pg_temp` on the function.
-2. Revoke EXECUTE from `PUBLIC`, as `maintain_auth_event_partitions` does.
-3. Add its schema-qualified signature to `DefinerFunctionAllowlistDatabaseTest`.
+1. Set the search path of the function to `pg_catalog, pg_temp`.
+2. Use `pg_catalog, public, pg_temp` if a trigger that the function fires names a table without a schema.
+3. Revoke EXECUTE from `PUBLIC`, as `maintain_auth_event_partitions` does.
+4. Add its schema-qualified signature to `DefinerFunctionAllowlistDatabaseTest`.
 
-That test fails if the application role can call a definer function that the list does not name.
+A trigger runs with the search path of the function that fires it.
+`DatabaseRolesDatabaseTest` proves that only `hephaestus_owner` can create objects in `public` on an installation that the chart sets up.
+
+The allowlist test fails if the application role can call a definer function that the list does not name.
 It also fails if a listed function has another owner or another search path, or if `PUBLIC` can call it.
 
 ### Trigger timing
