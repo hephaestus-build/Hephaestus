@@ -9,6 +9,7 @@ import org.jspecify.annotations.Nullable;
  * implementation fetches with the workspace's token and gives back a directory that holds no credential and no
  * remote.
  */
+@SourceControlContract
 public interface RepositoryCheckouts {
     /** Whether this process can make checkouts: Git mirrors are enabled. */
     boolean enabled();
@@ -34,6 +35,7 @@ public interface RepositoryCheckouts {
             long workspaceId, String repository, String ref, @Nullable String base, BooleanSupplier abandoned);
 
     /** A directory with its own {@code .git} and HEAD detached at {@link #head()}; {@link #close()} deletes it. */
+    @SourceControlContract
     interface Checkout extends AutoCloseable {
         String repository();
 

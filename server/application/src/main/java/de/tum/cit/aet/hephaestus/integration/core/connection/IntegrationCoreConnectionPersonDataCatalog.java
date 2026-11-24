@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.ErasesColumns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.LiveJdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
@@ -26,6 +27,7 @@ import tools.jackson.databind.ObjectMapper;
     "item_event_evidence",
     "item_event_requester"
 })
+@ErasesColumns("provider_event.subject")
 public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCatalog {
     // Scan live inbox matches after source erasure, before the final conversation copy scrub records its receipt.
     private static final int INBOX_ERASURE_ORDER = Integer.MAX_VALUE - 1;

@@ -21,6 +21,9 @@ import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -30,6 +33,7 @@ import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
@@ -107,8 +111,10 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                 Map.of("relationship", "relationship", "conversation_entry", "conversation", "result", "practices");
         String source = """
                 class Fixture {
-                    @Query(value = "SELECT * FROM relationship WHERE id IN (SELECT 1)", nativeQuery = true)
+                    @Query(value = "SELECT * FROM relationship WHERE id IN (SELECT 1)", // an open ( in a comment
+                           nativeQuery = true)
                     List<Long> annotated();
+                    // jdbc.update("DELETE FROM conversation_entry"): a comment runs no SQL.
                     void jdbc() { jdbc.update("DELETE FROM /* rows of a person */ " + "conversation_entry WHERE id = ?", 1); }
                     String block = \"""
                             SELECT 1 FROM result r, relationship x -- a comment
@@ -156,6 +162,7 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                 .anySatisfy(detail -> assertThat(detail).contains("RunsClientSql"))
                 .anySatisfy(detail -> assertThat(detail).contains("RunsTypedNativeQuery"))
                 .anySatisfy(detail -> assertThat(detail).contains("RefersToNativeQuery"))
+                .anySatisfy(detail -> assertThat(detail).contains("RunsPlainJdbc"))
                 .noneSatisfy(detail -> assertThat(detail).contains("QueriesThroughARepository"))
                 .noneSatisfy(detail -> assertThat(detail).contains("ConstantQueries"));
         checkedSqlOnly(DescribedPredicate.describe(
@@ -193,6 +200,15 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                 .orShould()
                 .dependOnClassesThat()
                 .areAssignableTo(JdbcClient.class)
+                .orShould()
+                .dependOnClassesThat()
+                .areAssignableTo(Connection.class)
+                .orShould()
+                .dependOnClassesThat()
+                .areAssignableTo(Statement.class)
+                .orShould()
+                .dependOnClassesThat()
+                .areAssignableTo(DataSource.class)
                 .orShould(CREATE_NATIVE_QUERY)
                 .because("a query annotation is SQL that the table ownership test can read whole")
                 .allowEmptyShould(true);
@@ -284,6 +300,15 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
     private static final class RefersToNativeQuery {
         Function<String, jakarta.persistence.Query> query(EntityManager entities) {
             return entities::createNativeQuery;
+        }
+    }
+
+    @SuppressWarnings("unused") // Read by ArchUnit only.
+    private static final class RunsPlainJdbc {
+        boolean run(Connection connection, String table) throws SQLException {
+            try (var statement = connection.createStatement()) {
+                return statement.execute("SELECT * FROM " + table);
+            }
         }
     }
 

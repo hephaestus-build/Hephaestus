@@ -141,7 +141,8 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
                     || test.isInterface()
                     || test.getModifiers().contains(JavaModifier.ABSTRACT)
                     || test.getModifiers().contains(JavaModifier.PRIVATE)
-                    || test.isAnnotatedWith(Disabled.class)) continue;
+                    || test.isAnnotatedWith(Disabled.class)
+                    || overridesHarnessTests(test.reflect())) continue;
             for (Type contract : test.reflect().getGenericInterfaces()) {
                 if (contract instanceof ParameterizedType harness
                         && harness.getRawType() == IdempotentListenerIntegrationTest.class)
@@ -150,6 +151,16 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
             }
         }
         return tested;
+    }
+
+    /** Whether a test class overrides a test of the harness, which could disable or weaken it. */
+    private static boolean overridesHarnessTests(Class<?> test) {
+        var harnessTests = new TreeSet<String>();
+        for (Method method : IdempotentListenerIntegrationTest.class.getDeclaredMethods())
+            if (method.isAnnotationPresent(Test.class)) harnessTests.add(method.getName());
+        for (Class<?> type = test; type != null && type != Object.class; type = type.getSuperclass())
+            for (Method method : type.getDeclaredMethods()) if (harnessTests.contains(method.getName())) return true;
+        return false;
     }
 
     /** The pairs of a listener class and an event type that more than one of its methods handles. */
@@ -257,6 +268,27 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
         public Object stateAfter(Events<String> events) {
             return 0;
         }
+    }
+
+    /** A fixture that disables one harness test by overriding it, so it enrols no listener. */
+    static final class OverridingHarness implements IdempotentListenerIntegrationTest<TwoHandlersOfOneEvent, Typed> {
+        @Override
+        public Events<Typed> newEvents() {
+            return new Events<>(new Typed(1L, ""), new Typed(2L, ""));
+        }
+
+        @Override
+        public void deliver(Typed event) {}
+
+        @Override
+        public Object stateAfter(Events<Typed> events) {
+            return 0;
+        }
+
+        @Test
+        @Disabled("A fixture: an overridden harness test enrols no listener")
+        @Override
+        public void shouldReachTheSameStateWhenTwoEventsArriveInSwappedOrder() {}
     }
 
     /** A fixture that JUnit discovers and runs: a listener that keeps no state passes the harness. */

@@ -8,6 +8,7 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.lang.ArchRule;
 import de.tum.cit.aet.hephaestus.integration.core.events.BotCommandReceivedEvent;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckouts;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SourceControlContract;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmPullRequestItems;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,7 @@ class DomainNeutralityArchTest extends HephaestusArchitectureTest {
                         .getDetails())
                 .anySatisfy(detail -> assertThat(detail).contains("UsesAReviewCommand", "BotCommandReceivedEvent"))
                 .anySatisfy(detail -> assertThat(detail).contains("UsesANewContract", "NewSourceControlContract"))
+                .anySatisfy(detail -> assertThat(detail).contains("UsesACheckout", "RepositoryCheckouts"))
                 .anySatisfy(detail -> assertThat(detail).contains("UsesAnAdapter", "ScmPullRequestItems"))
                 .noneSatisfy(detail -> assertThat(detail).contains("NeutralClass"));
     }
@@ -76,6 +78,13 @@ class DomainNeutralityArchTest extends HephaestusArchitectureTest {
     private static final class UsesANewContract {
         long id(NewSourceControlContract contract) {
             return contract.mergeRequestId();
+        }
+    }
+
+    @SuppressWarnings("unused") // Read by ArchUnit only.
+    private static final class UsesACheckout {
+        Object checkouts(RepositoryCheckouts checkouts) {
+            return checkouts;
         }
     }
 

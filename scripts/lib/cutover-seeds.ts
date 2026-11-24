@@ -24,19 +24,56 @@ const EXPECT = ".expect.sql";
 const DOLLAR_QUOTE = /^\$(?:[A-Za-z_]\w*)?\$/u;
 const RAISE = /\bRAISE\s+EXCEPTION\b/iu;
 
-/** A piece of SQL: code, or a quoted or commented span that runs nothing by itself. */
+/** A piece of SQL: code, a comment, or a quoted span (a string or an identifier) that runs nothing by itself. */
 interface Token {
-	code: boolean;
+	kind: "code" | "comment" | "quoted";
 	text: string;
 }
 
-/** Splits SQL into code and the comments, string literals and dollar-quoted strings between it. */
+/** The end of a block comment that starts at `start`. PostgreSQL nests block comments. */
+function blockCommentEnd(sql: string, start: number): number {
+	let depth = 0;
+	let index = start;
+	while (index < sql.length) {
+		if (sql.startsWith("/*", index)) {
+			depth += 1;
+			index += 2;
+		} else if (sql.startsWith("*/", index)) {
+			depth -= 1;
+			index += 2;
+			if (depth === 0) {
+				return index;
+			}
+		} else {
+			index += 1;
+		}
+	}
+	return sql.length;
+}
+
+/** The end of a span quoted by `quote`, where a doubled quote stands for itself. */
+function quotedEnd(sql: string, start: number, quote: string): number {
+	let index = start + 1;
+	while (index < sql.length) {
+		if (sql[index] === quote) {
+			if (sql[index + 1] !== quote) {
+				return index + 1;
+			}
+			index += 2;
+		} else {
+			index += 1;
+		}
+	}
+	return sql.length;
+}
+
+/** Splits SQL into code, comments, and quoted spans: strings, dollar-quoted strings and quoted identifiers. */
 function tokenize(sql: string): Token[] {
 	const tokens: Token[] = [];
 	let code = "";
 	let index = 0;
-	const quoted = (end: number) => {
-		tokens.push({ code: true, text: code }, { code: false, text: sql.slice(index, end) });
+	const span = (kind: Token["kind"], end: number) => {
+		tokens.push({ kind: "code", text: code }, { kind, text: sql.slice(index, end) });
 		code = "";
 		index = end;
 	};
@@ -45,45 +82,40 @@ function tokenize(sql: string): Token[] {
 		const dollar = DOLLAR_QUOTE.exec(rest);
 		if (rest.startsWith("--")) {
 			const end = sql.indexOf("\n", index);
-			quoted(end === -1 ? sql.length : end);
+			span("comment", end === -1 ? sql.length : end);
 		} else if (rest.startsWith("/*")) {
-			const end = sql.indexOf("*/", index + 2);
-			quoted(end === -1 ? sql.length : end + 2);
-		} else if (rest.startsWith("'")) {
-			let end = index + 1;
-			while (end < sql.length && !(sql[end] === "'" && sql[end + 1] !== "'")) {
-				end += sql[end] === "'" ? 2 : 1;
-			}
-			quoted(Math.min(end + 1, sql.length));
+			span("comment", blockCommentEnd(sql, index));
+		} else if (rest.startsWith("'") || rest.startsWith('"')) {
+			span("quoted", quotedEnd(sql, index, rest.charAt(0)));
 		} else if (dollar) {
 			const end = sql.indexOf(dollar[0], index + dollar[0].length);
-			quoted(end === -1 ? sql.length : end + dollar[0].length);
+			span("quoted", end === -1 ? sql.length : end + dollar[0].length);
 		} else {
-			code += sql[index];
+			code += sql.charAt(index);
 			index += 1;
 		}
 	}
-	tokens.push({ code: true, text: code });
+	tokens.push({ kind: "code", text: code });
 	return tokens;
 }
 
-/** Whether a statement's code raises: RAISE EXCEPTION outside its own comments and strings. */
+/** Whether a body's code raises: RAISE EXCEPTION outside its own comments and quoted spans. */
 function raises(body: string): boolean {
-	return tokenize(body).some((token) => token.code && RAISE.test(token.text));
+	return tokenize(body).some((token) => token.kind === "code" && RAISE.test(token.text));
 }
 
-/** The statements of the SQL: they end at a semicolon in code, never at one inside a quoted span. */
+/** The statements of the SQL: they end at a semicolon in code, never at one inside a comment or a quoted span. */
 function statementsOf(sql: string): Token[][] {
 	let statement: Token[] = [];
 	const statements: Token[][] = [];
 	for (const token of tokenize(sql)) {
-		if (!token.code) {
+		if (token.kind !== "code") {
 			statement.push(token);
 			continue;
 		}
 		const parts = token.text.split(";");
 		for (const [position, part] of parts.entries()) {
-			statement.push({ code: true, text: part });
+			statement.push({ kind: "code", text: part });
 			if (position < parts.length - 1) {
 				statements.push(statement);
 				statement = [];
@@ -94,12 +126,14 @@ function statementsOf(sql: string): Token[][] {
 	return statements;
 }
 
-/** Whether the SQL holds a DO statement whose dollar-quoted body raises. */
+/** Whether the SQL holds a DO statement whose dollar-quoted body raises. Comments around the statement do not count. */
 function assertsDisposition(sql: string): boolean {
 	return statementsOf(sql).some((pieces) => {
-		const meaningful = pieces.filter((piece) => !piece.code || piece.text.trim() !== "");
+		const meaningful = pieces.filter(
+			(piece) => piece.kind === "quoted" || (piece.kind === "code" && piece.text.trim() !== ""),
+		);
 		const [head, body] = meaningful;
-		if (head?.code !== true || body?.code !== false) {
+		if (head?.kind !== "code" || body?.kind !== "quoted") {
 			return false;
 		}
 		const quote = DOLLAR_QUOTE.exec(body.text)?.[0];

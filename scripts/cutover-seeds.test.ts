@@ -94,6 +94,14 @@ const hiddenAssertions: { name: string; expect: string }[] = [
 		name: "a raise inside a string of the DO body",
 		expect: "DO $$BEGIN PERFORM $x$RAISE EXCEPTION$x$; END$$;",
 	},
+	{
+		name: "a raise inside a nested comment of the DO body",
+		expect: "DO $$BEGIN /* outer /* inner */ RAISE EXCEPTION 'left'; */ NULL; END$$;",
+	},
+	{
+		name: "a semicolon in a quoted identifier",
+		expect: 'SELECT 1 AS ";DO $$BEGIN RAISE EXCEPTION; END$$";',
+	},
 ];
 for (const { name, expect } of hiddenAssertions) {
 	await test(`an assertion behind ${name} fails the format check`, () => {
@@ -105,6 +113,18 @@ for (const { name, expect } of hiddenAssertions) {
 		);
 	});
 }
+
+await test("a comment before the assertion keeps it valid", () => {
+	withSeeds(
+		{
+			"d10.seed.sql": "INSERT INTO legacy VALUES (1);",
+			"d10.expect.sql": `-- Check the legacy rows\n${ASSERTION}`,
+		},
+		(directory) => {
+			assert.equal(readCutoverSeeds(directory).length, 1);
+		},
+	);
+});
 
 await test("an expected disposition without its seed fails the format check", () => {
 	withSeeds({ "d10.expect.sql": ASSERTION, "notes.txt": "" }, (directory) => {
