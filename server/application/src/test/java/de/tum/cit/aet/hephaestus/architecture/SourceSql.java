@@ -11,10 +11,10 @@ import java.util.regex.Pattern;
  * are blanked, and white space collapses. SQL that the code assembles from values at run time stays invisible to it.
  */
 final class SourceSql {
-    private static final Pattern TEXT_BLOCK = Pattern.compile("\"\"\"(.*?)\"\"\"", Pattern.DOTALL);
     // An unrolled loop: a repeated alternation recurses once per character and overflows on a long literal.
     private static final Pattern STRING = Pattern.compile("\"([^\"\\\\\\n]*+(?:\\\\.[^\"\\\\\\n]*+)*+)\"");
     private static final Pattern JOINED = Pattern.compile("\"\\s*\\+\\s*\"");
+    private static final Pattern DOLLAR_QUOTE = Pattern.compile("\\$(?:[A-Za-z_]\\w*)?\\$");
     private static final Pattern QUERY_ANNOTATION = Pattern.compile("@(?:\\w+\\.)*(?:Query|NativeQuery)\\s*\\(");
 
     private SourceSql() {}
@@ -22,10 +22,22 @@ final class SourceSql {
     static List<String> statements(String javaSource) {
         String source = withoutJavaComments(javaSource);
         var statements = new ArrayList<String>();
-        Matcher blocks = TEXT_BLOCK.matcher(source);
-        while (blocks.find()) statements.add(blocks.group(1));
-        Matcher strings = STRING.matcher(
-                JOINED.matcher(TEXT_BLOCK.matcher(source).replaceAll("")).replaceAll(""));
+        var outsideBlocks = new StringBuilder();
+        int index = 0;
+        while (index < source.length()) {
+            int literal = literalEnd(source, index);
+            if (literal > index && source.startsWith("\"\"\"", index)) {
+                statements.add(source.substring(index + 3, literal - 3).replace("\\\"", "\""));
+                index = literal;
+            } else if (literal > index) {
+                outsideBlocks.append(source, index, literal);
+                index = literal;
+            } else {
+                outsideBlocks.append(source.charAt(index));
+                index++;
+            }
+        }
+        Matcher strings = STRING.matcher(JOINED.matcher(outsideBlocks).replaceAll(""));
         while (strings.find()) statements.add(strings.group(1).replace("\\\"", "\""));
         return statements.stream().map(SourceSql::normalized).toList();
     }
@@ -79,8 +91,11 @@ final class SourceSql {
      */
     private static int literalEnd(String source, int start) {
         if (source.startsWith("\"\"\"", start)) {
-            int end = source.indexOf("\"\"\"", start + 3);
-            return end < 0 ? source.length() : end + 3;
+            // A text block ends at three quotes that no backslash escapes.
+            int end = start + 3;
+            while (end < source.length() && !source.startsWith("\"\"\"", end))
+                end += source.charAt(end) == '\\' ? 2 : 1;
+            return Math.min(end + 3, source.length());
         }
         char first = source.charAt(start);
         if (first != '"' && first != '\'') return start;
@@ -125,7 +140,12 @@ final class SourceSql {
         var kept = new StringBuilder();
         int index = 0;
         while (index < sql.length()) {
-            if (sql.charAt(index) == '\'') {
+            Matcher dollar = DOLLAR_QUOTE.matcher(sql).region(index, sql.length());
+            if (sql.charAt(index) == '$' && dollar.lookingAt()) {
+                int end = sql.indexOf(dollar.group(), dollar.end());
+                kept.append("''");
+                index = end < 0 ? sql.length() : end + dollar.group().length();
+            } else if (sql.charAt(index) == '\'') {
                 int end = index + 1;
                 while (end < sql.length()
                         && !(sql.charAt(end) == '\'' && (end + 1 >= sql.length() || sql.charAt(end + 1) != '\'')))

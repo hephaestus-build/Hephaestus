@@ -384,10 +384,20 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         assertThat(unerasedColumns(columns, Set.of("conversation"), erasedColumns(List.of(anyReviewer), List.of())))
                 .as("a subquery that selects no part of the person's scope erases nothing")
                 .containsExactly("conversation.reviewer_account_id");
-        PersonDataContributor scopedReviewer =
-                store("t.reviewer_account_id IN (SELECT a.id FROM account a WHERE a.id = :account)", "");
-        assertThat(unerasedColumns(
-                        columns, Set.of("conversation"), erasedColumns(List.of(owners, scopedReviewer), List.of())))
+        for (String hidden : List.of(
+                "t.account_id = :account AND t.reviewer_account_id IN (SELECT id FROM account /* :account */)",
+                "t.account_id = :account AND t.reviewer_account_id IN"
+                        + " (SELECT id FROM account ORDER BY CASE WHEN id = :account THEN 0 ELSE 1 END)",
+                "t.account_id = :account AND EXISTS (SELECT 1 FROM conversation c WHERE c.reviewer_account_id = :account)",
+                "t.account_id = :account AND t.note = 'reviewer_account_id = :account'")) {
+            assertThat(unerasedColumns(
+                            columns, Set.of("conversation"), erasedColumns(List.of(store(hidden, "")), List.of())))
+                    .as("a subquery, an EXISTS, a comment or a literal compares no column of the own rows: %s", hidden)
+                    .containsExactly("conversation.reviewer_account_id");
+        }
+        PersonDataContributor anyOfThem =
+                store("t.reviewer_account_id = ANY(:users) OR t.account_id IN (:account)", "");
+        assertThat(unerasedColumns(columns, Set.of("conversation"), erasedColumns(List.of(anyOfThem), List.of())))
                 .isEmpty();
         PersonDataContributor clearing = store("t.reviewer_account_id IN (SELECT 1)", "reviewer_account_id=NULL");
         assertThat(unerasedColumns(
@@ -428,9 +438,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
     private static final Pattern TARGET = Pattern.compile("^\\s*(?:\\w+\\.)?\"?(\\w+)\"?\\s*=");
     private static final Pattern END_OF_SET = Pattern.compile("(?i)(where|from|returning)\\b");
 
-    /** A column compared with the person's scope: a scope parameter, or a set that a subquery selects. */
+    /** A top-level comparison of a column of the store's own rows with a parameter of the person's scope. */
     private static final Pattern SCOPED = Pattern.compile(
-            "(?:\\w+\\.)?\"?(\\w+)\"?\\s*(?:=\\s*(?:ANY\\s*\\(\\s*)?:(\\w+)|IN\\s*\\(\\s*(?::(\\w+)|(SELECT\\b)))",
+            "(?<![\\w.])(?:t\\.)?\"?(\\w+)\"?\\s*(?:=\\s*(?:ANY\\s*\\(\\s*)?|IN\\s*\\(\\s*):(\\w+)",
             Pattern.CASE_INSENSITIVE);
 
     /** The parameters of a person's frozen scope ({@code JdbcPersonDataStore#parameters}). */
@@ -483,33 +493,44 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         }
     }
 
+    /**
+     * The columns of the store's own rows that its predicate compares with the person's scope at the top level. A
+     * subquery, an EXISTS or a comment proves no such comparison, so a store that matches a person that way declares its
+     * columns with {@link ErasesColumns}.
+     */
     private static Set<String> scopedColumns(String predicate) {
         var columns = new TreeSet<String>();
-        var scoped = SCOPED.matcher(predicate);
+        var scoped = SCOPED.matcher(topLevel(SourceSql.normalized(predicate)));
         while (scoped.find()) {
-            String parameter = scoped.group(2) != null ? scoped.group(2) : scoped.group(3);
-            // A subquery counts only when it selects by the person's scope itself, not by any row of a table.
-            boolean scopedSubquery = scoped.group(4) != null
-                    && SCOPE_PARAMETER
-                            .matcher(subquery(predicate, scoped.start(4)))
-                            .find();
-            if ((parameter != null && SCOPE_PARAMETERS.contains(parameter)) || scopedSubquery)
+            if (SCOPE_PARAMETERS.contains(scoped.group(2)))
                 columns.add(scoped.group(1).toLowerCase(Locale.ROOT));
         }
         return columns;
     }
 
-    private static final Pattern SCOPE_PARAMETER =
-            Pattern.compile(":(?:account|users|identities|conversations|documents|items|derivedJobs)\\b");
-
-    /** The text of a subquery that starts at {@code start}, up to its closing parenthesis. */
-    private static String subquery(String predicate, int start) {
-        int depth = 1;
-        for (int index = start; index < predicate.length(); index++) {
-            if (predicate.charAt(index) == '(') depth++;
-            if (predicate.charAt(index) == ')' && --depth == 0) return predicate.substring(start, index);
+    /** The predicate outside parentheses: a group stays only when it holds a single parameter, as in ANY(:users). */
+    private static String topLevel(String predicate) {
+        var kept = new StringBuilder();
+        int index = 0;
+        while (index < predicate.length()) {
+            char next = predicate.charAt(index);
+            if (next != '(') {
+                kept.append(next);
+                index++;
+                continue;
+            }
+            int depth = 1;
+            int end = index + 1;
+            while (end < predicate.length() && depth > 0) {
+                if (predicate.charAt(end) == '(') depth++;
+                if (predicate.charAt(end) == ')') depth--;
+                end++;
+            }
+            String group = predicate.substring(index, end);
+            kept.append(group.matches("\\(\\s*:\\w+\\s*\\)") ? group : "( )");
+            index = end;
         }
-        return predicate.substring(start);
+        return kept.toString();
     }
 
     private static JdbcPersonDataStore store(String predicate, String redaction) {

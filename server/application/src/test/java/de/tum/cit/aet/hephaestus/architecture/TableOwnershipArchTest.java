@@ -64,7 +64,7 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
 
     private static final Pattern KEYWORD =
             Pattern.compile("\\b(?:from|join|into|update|using|table)\\s+", Pattern.CASE_INSENSITIVE);
-    private static final String NAME = "(?:\"?[a-z_][a-z0-9_]*\"?\\.)?\"?([a-z_][a-z0-9_]*)\"?";
+    private static final String NAME = "(?:\"?[a-z_][a-z0-9_]*\"?\\s*\\.\\s*)?\"?([a-z_][a-z0-9_]*)\"?";
     /** One table of a list, schema-qualified and quoted or not, with its alias and the comma before the next. */
     private static final Pattern LISTED_TABLE = Pattern.compile(
             "\\s*(?:only\\s+)?" + NAME
@@ -115,6 +115,9 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                            nativeQuery = true)
                     List<Long> annotated();
                     // jdbc.update("DELETE FROM conversation_entry"): a comment runs no SQL.
+                    String escaped = \"""
+                            ends only here: \\\""" Use @Query(
+                            \""";
                     String hint = "Use @Query(";
                     void later() { jdbc.query("SELECT '--' AS separator, x.* FROM relationship x"); }
                     void jdbc() { jdbc.update("DELETE FROM /* rows of a person */ " + "conversation_entry WHERE id = ?", 1); }
@@ -139,7 +142,7 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
                 .as("constant-assembled SQL with a comment, a quoted count query, and two annotations with one text")
                 .containsExactly(
                         "practices ConstantQueries reads conversation_entry of conversation x2",
-                        "practices ConstantQueries reads relationship of relationship !mentoring x3");
+                        "practices ConstantQueries reads relationship of relationship !mentoring x4");
     }
 
     @Test
@@ -276,9 +279,12 @@ class TableOwnershipArchTest extends HephaestusArchitectureTest {
         List<Long> sameEntries();
 
         @Query(
-                value = "SELECT '--' AS separator, r.* FROM relationship r WHERE r.note <> 'FROM result'",
+                value = "SELECT '--' AS separator, r.* FROM relationship r WHERE r.note <> 'FROM conversation_entry'",
                 nativeQuery = true)
         List<Long> separated();
+
+        @Query(value = "SELECT $$--$$ AS separator, r.* FROM public . relationship r", nativeQuery = true)
+        List<Long> dollarQuoted();
     }
 
     @SuppressWarnings("unused") // Read by ArchUnit only.

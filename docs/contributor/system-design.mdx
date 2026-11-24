@@ -192,7 +192,7 @@ These tests apply the module rules:
 | Rule | Test |
 | --- | --- |
 | A module declares no dependency against the layers. | `ModulithVerificationTest` |
-| SQL in any form reads no table of another module. | `TableOwnershipArchTest` |
+| SQL reads no table of another module. The test reads string literals, joined literals and text blocks in the source, and the compiled `@Query` annotations. It also forbids SQL built at run time: plain JDBC, `JdbcClient`, `JdbcOperations` and `EntityManager.createNativeQuery`. | `TableOwnershipArchTest` |
 | No class uses an entity of another module, so no JPA association crosses a module. | `RepositoryOwnershipArchTest` |
 | Every table has an owner module, and a foreign key follows a declared module edge. | `ForeignKeyDirectionDatabaseTest` |
 | A mentoring module uses no source-control contract and no provider adapter. | `DomainNeutralityArchTest` |
@@ -212,6 +212,7 @@ Every event that crosses the boundary of a mentoring module does too.
 
 A free-form component, such as a `String` or JSON, needs `@ContentFree`: an ID, a key, a fixed code, a public URL or a configuration snapshot.
 `RegistryEventShapeArchTest` finds each listener through merged annotations and checks these events.
+A listener of an interface or a superclass receives each application record that implements it. The test checks each of these records too.
 Main's source-control domain events still carry provider text from `integration.scm` to other modules in memory. The registry does not store them.
 
 Each pair of a mentoring listener and an event that it handles needs a test that implements `IdempotentListenerIntegrationTest`.

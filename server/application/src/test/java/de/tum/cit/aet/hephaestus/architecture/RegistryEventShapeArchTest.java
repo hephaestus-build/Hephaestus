@@ -27,11 +27,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Function;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.AnnotatedElementUtils;
-import org.springframework.modulith.core.ApplicationModules;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import tools.jackson.databind.JsonNode;
 
@@ -66,10 +66,11 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
     @Test
     void shouldCarryContentOnlyByReferenceInEveryStoredEventAndEveryEventAcrossAMentoringBoundary() {
         var modules = ModulithVerificationTest.applicationModules();
+        Function<Class<?>, Optional<String>> moduleOf = type -> modules.getModuleByType(type.getName())
+                .map(module -> module.getIdentifier().toString());
+        var types = productionTypes();
         var violations = new TreeSet<String>();
-        for (Handler handler : handlers(productionTypes())) {
-            if (checked(handler, modules)) violations.addAll(freeFormComponents(handler.event()));
-        }
+        for (Handler handler : handlers(types)) violations.addAll(violations(handler, types, moduleOf));
         assertThat(violations)
                 .as("Carry an id and read the content from its owner. Mark a free-form id or code with @ContentFree")
                 .isEmpty();
@@ -87,15 +88,15 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
         assertThat(freeFormComponents(Shared.class)).isEmpty();
         assertThat(freeFormComponents(Leaky.class))
                 .containsExactly(Leaky.class.getName() + ".excerpt", Leaky.class.getName() + ".raw");
-        var modules = ModulithVerificationTest.applicationModules();
+        Function<Class<?>, Optional<String>> noModule = type -> Optional.empty();
         var composed = handlers(List.of(ComposedListener.class));
         assertThat(composed).containsExactly(new Handler(ComposedListener.class, "on", Typed.class, true));
-        assertThat(checked(composed.getFirst(), modules)).isTrue();
-        assertThat(freeFormComponents(Typed.class)).containsExactly(Typed.class.getName() + ".words");
+        assertThat(violations(composed.getFirst(), List.of(Typed.class), noModule))
+                .containsExactly(Typed.class.getName() + ".words");
         // A stored payload that belongs to no module is checked too: the registry stores the String itself.
         var stored = handlers(List.of(StoredTextListener.class)).getFirst();
-        assertThat(checked(stored, modules)).isTrue();
-        assertThat(freeFormComponents(stored.event())).containsExactly("java.lang.String is not a record of values");
+        assertThat(violations(stored, List.of(), noModule))
+                .containsExactly("java.lang.String is not a record of values");
     }
 
     @Test
@@ -115,6 +116,19 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
         assertThat(untested)
                 .as(
                         "A mentoring handler needs a test that implements IdempotentListenerIntegrationTest<Listener, Event>")
+                .isEmpty();
+    }
+
+    @Test
+    void shouldCheckATransientMentoringPayloadThatAListenerReceivesThroughASharedInterface() {
+        Function<Class<?>, Optional<String>> moduleOf =
+                type -> Optional.of(type == MentoringPayload.class ? "mentoring" : "core");
+        var handler = handlers(List.of(SharedListener.class)).getFirst();
+        assertThat(violations(handler, List.of(SharedEvent.class, MentoringPayload.class, Typed.class), moduleOf))
+                .containsExactly(MentoringPayload.class.getName() + ".text");
+        Function<Class<?>, Optional<String>> allCore = type -> Optional.of("core");
+        assertThat(violations(handler, List.of(SharedEvent.class, MentoringPayload.class), allCore))
+                .as("a transient event inside one module is no boundary crossing")
                 .isEmpty();
     }
 
@@ -198,16 +212,32 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
         return handlers;
     }
 
-    /** Whether a handler's event must carry content only by reference: the registry stores it, whatever its type. */
-    private static boolean checked(Handler handler, ApplicationModules modules) {
-        if (handler.stored()) return true;
-        var eventModule = modules.getModuleByType(handler.event().getName());
-        if (eventModule.isEmpty()) return false; // A framework event, such as ApplicationReadyEvent.
-        String event = eventModule.get().getIdentifier().toString();
-        String listener = modules.getModuleByType(handler.listener().getName())
-                .map(module -> module.getIdentifier().toString())
-                .orElse(event);
-        return !event.equals(listener) && MentoringModules.touches(event, listener);
+    /**
+     * The free-form components of each payload that a handler can receive and that must carry content only by
+     * reference. A payload is the parameter type itself, or any record of the application that a listener of an
+     * interface or a superclass receives. The registry stores every payload of a stored handler, whatever its type. A
+     * transient payload is checked when its module and the listener's differ and one of them is a mentoring module.
+     */
+    private static List<String> violations(
+            Handler handler, List<Class<?>> types, Function<Class<?>, Optional<String>> moduleOf) {
+        var violations = new ArrayList<String>();
+        var payloads = new ArrayList<Class<?>>();
+        payloads.add(handler.event());
+        for (Class<?> type : types)
+            if (type != handler.event() && type.isRecord() && handler.event().isAssignableFrom(type))
+                payloads.add(type);
+        for (Class<?> payload : payloads) {
+            boolean checked = handler.stored()
+                    && (payload == handler.event() || moduleOf.apply(payload).isPresent());
+            var payloadModule = moduleOf.apply(payload);
+            if (!checked && payloadModule.isPresent()) {
+                String listener = moduleOf.apply(handler.listener()).orElse(payloadModule.get());
+                checked = !payloadModule.get().equals(listener)
+                        && MentoringModules.touches(payloadModule.get(), listener);
+            }
+            if (checked) violations.addAll(freeFormComponents(payload));
+        }
+        return violations;
     }
 
     private static List<String> freeFormComponents(Class<?> event) {
@@ -249,6 +279,16 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
     private @interface ComposedHandler {}
 
     private record Typed(long workspaceId, String words) {}
+
+    private interface SharedEvent {}
+
+    private record MentoringPayload(long threadId, String text) implements SharedEvent {}
+
+    @SuppressWarnings("unused") // Read by reflection only.
+    private static final class SharedListener {
+        @EventListener
+        void on(SharedEvent event) {}
+    }
 
     @SuppressWarnings("unused") // Read by ArchUnit only.
     private abstract static class AbstractHarness
