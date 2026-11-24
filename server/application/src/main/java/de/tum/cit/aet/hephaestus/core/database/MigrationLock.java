@@ -9,7 +9,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
+import javax.sql.DataSource;
 import liquibase.integration.spring.SpringLiquibase;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
@@ -70,7 +72,10 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
     private final Duration timeout;
     private final boolean migrateRunMode;
     private final String migrationGuide;
-    private final Map<String, Connection> held = new ConcurrentHashMap<>();
+    private final Map<String, Migration> held = new ConcurrentHashMap<>();
+
+    /** A running migration: the session that holds the barrier, and the data source that Liquibase had before. */
+    private record Migration(SpringLiquibase liquibase, DataSource configured, Connection session) {}
 
     /** Reads the environment rather than {@code @Value}: the run mode's context has no placeholder configurer. */
     public MigrationLock(Environment environment) {
@@ -83,18 +88,20 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
     @Override
     public Object postProcessBeforeInitialization(Object bean, String beanName) {
         if (bean instanceof SpringLiquibase liquibase) {
+            DataSource configured = liquibase.getDataSource();
             Connection session;
             try {
-                session = take(liquibase);
+                session = take(configured, liquibase.getDatabaseChangeLogLockTable());
             } catch (SQLException e) {
                 throw new IllegalStateException("Could not take the database migration lock", e);
             }
-            held.put(beanName, session);
+            held.put(beanName, new Migration(liquibase, configured, session));
             log.atInfo()
                     .addKeyValue("event.name", "database.migration.barrier_raised")
                     .log("Database migration started; no server starts new work until it ends");
             // Every statement of the migration runs on the session that holds the barrier. Liquibase's own close of
-            // the connection is suppressed: the lock ends only in release().
+            // the connection is suppressed: the lock ends only in release(), which gives Liquibase back the
+            // configured data source first.
             liquibase.setDataSource(new SingleConnectionDataSource(session, true));
             if (migrateRunMode) {
                 BaselineSynchronization.run(liquibase);
@@ -105,9 +112,9 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) {
-        Connection connection = held.remove(beanName);
-        if (connection != null) {
-            release(connection, true);
+        Migration migration = held.remove(beanName);
+        if (migration != null) {
+            release(migration);
         }
         return bean;
     }
@@ -118,9 +125,9 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
      */
     @Override
     public void destroy() {
-        held.values().forEach(connection -> {
+        held.values().forEach(migration -> {
             try {
-                release(connection, true);
+                release(migration);
             } catch (IllegalStateException e) {
                 log.debug("The database migration lock ended with its connection", e);
             }
@@ -128,13 +135,12 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
         held.clear();
     }
 
-    private Connection take(SpringLiquibase liquibase) throws SQLException {
-        String lockTable = liquibase.getDatabaseChangeLogLockTable();
+    private Connection take(DataSource dataSource, @Nullable String lockTable) throws SQLException {
         String table = (lockTable == null ? "databasechangeloglock" : lockTable).toLowerCase(Locale.ROOT);
         if (!TABLE.matcher(table).matches()) {
             throw new IllegalStateException("The Liquibase lock table must be a plain table name: " + lockTable);
         }
-        Connection connection = liquibase.getDataSource().getConnection();
+        Connection connection = dataSource.getConnection();
         boolean locked = false;
         try {
             connection.setAutoCommit(true);
@@ -214,6 +220,12 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
             }
             throw e;
         }
+    }
+
+    /** The session ends after Liquibase has its configured data source back, so no caller gets the closed session. */
+    private static void release(Migration migration) {
+        migration.liquibase().setDataSource(migration.configured());
+        release(migration.session(), true);
     }
 
     /**
