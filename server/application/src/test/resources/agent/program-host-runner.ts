@@ -470,6 +470,45 @@ export function stagedRequest(cwd: string): Record<string, unknown> {
 	return { ...requests[0], results: outcomes("results"), nonResults: outcomes("nonResults") };
 }
 
+/** A model's whole answer as an OpenAI completions stream, from its message delta. */
+function answerStream(delta: object, finishReason: string): string {
+	return [
+		{ choices: [{ index: 0, delta: { role: "assistant", ...delta }, finish_reason: null }] },
+		{
+			choices: [{ index: 0, delta: {}, finish_reason: finishReason }],
+			usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+		},
+	]
+		.map(
+			(chunk) =>
+				`data: ${JSON.stringify({ id: "answer", object: "chat.completion.chunk", ...chunk })}\n\n`,
+		)
+		.join("")
+		.concat("data: [DONE]\n\n");
+}
+
+/** The model submits the harness's candidate, then ends its turn once the tool has answered. */
+function modelAnswer(request: unknown): string {
+	const messages = field(request, "messages");
+	const answered =
+		Array.isArray(messages) && messages.some((message) => field(message, "role") === "tool");
+	return answered
+		? answerStream({ content: "Done." }, "stop")
+		: answerStream(
+				{
+					tool_calls: [
+						{
+							index: 0,
+							id: "submit-1",
+							type: "function",
+							function: { name: "submit_result", arguments: JSON.stringify(SESSION_CANDIDATE) },
+						},
+					],
+				},
+				"tool_calls",
+			);
+}
+
 /**
  * pi-session-dispatch.spec.ts runs the runner on the real SDK, so that every way to build a session is the real one. It
  * counts each Pi session where the SDK constructs it, which of them a call to the factory returned, and each model
@@ -484,8 +523,8 @@ async function runOnRealSdk(cwd: string): Promise<void> {
 	await mockChange({ writeChangeView: () => undefined });
 	const proxy = process.env.LLM_PROXY_URL;
 	assert.ok(proxy !== undefined && proxy !== "");
-	// The proxy accepts each practice and its staged outcome, and the model refuses each call, so each practice session
-	// ends after its first request.
+	// The proxy accepts each practice and its staged outcome, and the model submits a result, so the review runs to its
+	// admission.
 	mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
 		const url = input instanceof Request ? input.url : String(input);
 		assert.ok(url.startsWith(proxy), `the runner reached only the proxy, not ${url}`);
@@ -504,6 +543,7 @@ async function runOnRealSdk(cwd: string): Promise<void> {
 			});
 		}
 		if (url.endsWith("/admit-results")) {
+			capture("admission", true);
 			return Response.json({
 				contractVersion: 4,
 				admissionDigest: "a".repeat(64),
@@ -512,7 +552,7 @@ async function runOnRealSdk(cwd: string): Promise<void> {
 			});
 		}
 		capture("model-asked", true);
-		return Response.json({ error: { message: "refused" } }, { status: 400 });
+		return new Response(modelAnswer(request), { headers: { "content-type": "text/event-stream" } });
 	});
 
 	const sdk = await import("@earendil-works/pi-coding-agent");
@@ -573,6 +613,34 @@ async function runOnRealSdk(cwd: string): Promise<void> {
 	await runReviewJob();
 }
 
+/** Whether a value is the constructor of a Pi session's agent. */
+function isAgentType(
+	value: unknown,
+): value is new (options: {
+	streamFn: AgentSession["agent"]["streamFunction"];
+}) => AgentSession["agent"] {
+	return typeof value === "function";
+}
+
+/** An earlier answer in the stored session that the restore fixture continues. */
+const STORED_ANSWER: AssistantMessage = {
+	role: "assistant",
+	content: [{ type: "text", text: "Earlier answer." }],
+	api: "openai-completions",
+	provider: "proxy",
+	model: "test-model",
+	usage: {
+		input: 1,
+		output: 1,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: 2,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+	},
+	stopReason: "stop",
+	timestamp: Date.now(),
+};
+
 /**
  * A runner that also builds a second Pi session past the factory, beside its factory session, and goes on with the
  * factory's session if that build fails.
@@ -587,11 +655,29 @@ async function buildBeside(
 	}
 	const sdk = await import("@earendil-works/pi-coding-agent");
 	const agentDir = nodePath.join(place.cwd, ".pi-beside");
+	const sessionDir = nodePath.join(agentDir, "sessions");
+	let restored: unknown;
+	if (how === "restore") {
+		// A stored session to continue: Pi writes a session once it holds an answer.
+		const stored = sdk.SessionManager.create(place.cwd, sessionDir);
+		stored.appendMessage({ role: "user", content: "Earlier.", timestamp: Date.now() });
+		stored.appendMessage(STORED_ANSWER);
+		restored = sdk.SessionManager.continueRecent(place.cwd, sessionDir);
+		assert.ok(restored instanceof sdk.SessionManager);
+		assert.equal(
+			restored.getSessionId(),
+			stored.getSessionId(),
+			"the SDK continues the stored session",
+		);
+	}
 	try {
 		if (how === "construct") {
+			// Its own agent, of the factory session's agent type, so the factory's session keeps its agent.
+			const agentType: unknown = opened.agent.constructor;
+			assert.ok(isAgentType(agentType));
 			new sdk.AgentSession({
-				agent: opened.agent,
-				sessionManager: opened.sessionManager,
+				agent: new agentType({ streamFn: opened.agent.streamFunction }),
+				sessionManager: sdk.SessionManager.inMemory(place.cwd),
 				settingsManager: opened.settingsManager,
 				resourceLoader: opened.resourceLoader,
 				modelRuntime: opened.modelRuntime,
@@ -599,11 +685,9 @@ async function buildBeside(
 			}).dispose();
 			return;
 		}
-		// "restore" continues the most recent stored session, as a runner that resumes one would.
+		// "restore" continues the stored session, as a runner that resumes one would.
 		const sessionManager =
-			how === "restore"
-				? sdk.SessionManager.continueRecent(place.cwd, agentDir)
-				: sdk.SessionManager.inMemory(place.cwd);
+			restored instanceof sdk.SessionManager ? restored : sdk.SessionManager.inMemory(place.cwd);
 		const { session } = await sdk.createAgentSessionFromServices({
 			services: await sdk.createAgentSessionServices({ cwd: place.cwd, agentDir }),
 			sessionManager,

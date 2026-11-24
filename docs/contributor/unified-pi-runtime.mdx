@@ -405,9 +405,10 @@ It runs these cases:
   The spec runs the measurement's whole path in a temporary image layout, with stand-in programs.
   The measurement must build no session at all, through the factory or past it.
 - The staged review runner, through the harness of the review specs, on the real SDK.
-  The harness stands in for the proxy's practice, staging and admission endpoints. The model refuses each call.
-  The runner must open a factory session that asks the model.
-  It must build no other Pi session and no `ModelSession`.
+  The harness stands in for the proxy's practice, staging and admission endpoints.
+  The model submits a result for each practice, so the review runs to its admission.
+  The runner must stage its result, reach admission and exit successfully.
+  It must open its sessions through the factory, and it must build no other Pi session and no `ModelSession`.
 - `REVIEW_COMPOSE` is the one exemption, named by its kind. It keeps its own model client until the publication cutover (CF-18). The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
 - Eight fixtures break the rule and must fail it:
   - A runner imports `ModelSession` at run time and builds one.
@@ -417,7 +418,8 @@ It runs these cases:
   - A runner opens no session.
   - Three staged review runners build a second Pi session beside their factory session.
     Then they go on with the factory's session.
-    One constructs it, one uses the SDK's services, and one continues the most recent stored session.
+    One constructs it with an agent of its own, and one uses the SDK's services.
+    One continues a stored session through `SessionManager.continueRecent`, and the fixture checks that the SDK selected it.
 
 The server makes its own model calls only through the proxy's gateways, such as `ProductFeedbackModelGateway` for a report draft.
 `ModelEgressConfig` refuses a model request on every client built from the application's Spring builders, unless the proxy sent it.

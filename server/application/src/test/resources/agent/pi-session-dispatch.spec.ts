@@ -55,8 +55,10 @@ async function stagedReview(env: Record<string, string>): Promise<Use & { asked:
 	const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-session-review-")));
 	try {
 		stagePractices(cwd, [{ slug: "measured" }]);
-		// The refused calls leave the model unreachable, so the runner ends as it does then; the counts are what matter.
 		const exit = await runRunner(cwd, {}, { PI_HOST_REAL_SDK: cwd, ...env });
+		// The review ran to its end: it staged its result, reached admission and succeeded.
+		assert.equal(exit.status, 0, exit.stderr);
+		assert.equal(capturedLines(cwd, "admission").length, 1, exit.stderr);
 		const [sessions] = capturedLines(cwd, "session-use");
 		assert.ok(isSessionUse(sessions), exit.stderr);
 		return {
@@ -97,7 +99,6 @@ if (process.env[CHILD] === undefined) {
 	void test("the review runner that REVIEW starts opens its sessions through openRunSession", async () => {
 		const staged = await stagedReview({});
 		assert.equal(breach("REVIEW", staged), null);
-		// The factory's session asked the model, so the review went on past it.
 		assert.ok(staged.asked > 0, "the review asked the model nothing");
 	});
 
@@ -105,7 +106,7 @@ if (process.env[CHILD] === undefined) {
 		void test(`a review runner that also builds a Pi session by ${how} breaks the rule, though its review goes on`, async () => {
 			const staged = await stagedReview({ PI_HOST_BUILD_BESIDE: how });
 			assert.match(breach("REVIEW", staged) ?? "", /past the factory/u);
-			// The extra session came beside the factory's, which then asked the model.
+			// The extra session came beside the factory's, which then reviewed to admission.
 			assert.ok(staged.asked > 0, "the review asked the model nothing");
 		});
 	}
