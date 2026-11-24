@@ -1,14 +1,18 @@
 package de.tum.cit.aet.hephaestus.relationship;
 
+import de.tum.cit.aet.hephaestus.relationship.MentoringFieldClass.Sink;
+import java.util.HashMap;
+import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.slf4j.spi.LoggingEventBuilder;
 
 /**
  * The one logger of the mentoring modules. A record has an event from a closed list ({@link MentoringLogEvent}) and
  * fields of the allowed classes only ({@link MentoringLogField}). A failure is recorded by its class, never by its
- * message or stack trace. {@code MentoringLogFieldArchitectureTest} checks the direct dependencies and accesses of every
- * other mentoring production class against an allowed list of packages and a list of refused types and accesses.
+ * message or stack trace. Only validated correlation fields from the caller stay in the record.
  */
 public final class MentoringLog {
 
@@ -47,8 +51,26 @@ public final class MentoringLog {
             LoggingEventBuilder record, String eventName, String message, MentoringLogField... fields) {
         LoggingEventBuilder event = record.addKeyValue("event.name", eventName);
         for (MentoringLogField field : fields) {
-            event = event.addKeyValue(field.key(), field.value());
+            event = event.addKeyValue(field.key(), field.valueFor(Sink.LOG));
         }
-        event.log(message);
+        var previous = MDC.getCopyOfContextMap();
+        try {
+            MDC.setContextMap(logContext(previous));
+            event.log(message);
+        } finally {
+            if (previous == null) MDC.clear();
+            else MDC.setContextMap(previous);
+        }
+    }
+
+    private static Map<String, String> logContext(@Nullable Map<String, String> previous) {
+        if (previous == null || previous.isEmpty()) return Map.of();
+
+        var retained = new HashMap<String, String>();
+        for (MentoringLogKey key : MentoringLogKey.values()) {
+            var value = previous.get(key.key());
+            if (value != null && key.acceptsContextValue(value)) retained.put(key.key(), value);
+        }
+        return retained;
     }
 }

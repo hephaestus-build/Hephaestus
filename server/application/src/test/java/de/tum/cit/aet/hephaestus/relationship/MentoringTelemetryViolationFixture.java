@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.relationship;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.trace.Span;
+import java.util.Formatter;
 import java.util.ResourceBundle;
 import java.util.Timer;
 import java.util.function.Consumer;
@@ -22,9 +23,9 @@ final class MentoringTelemetryViolationFixture {
 
     static void violate(String message, MeterRegistry meters) throws Exception {
         log.info("The person wrote: {}", message);
-        Span.current().setAttribute("mentoring.message", message);
+        Span.current().setAttribute("account.login", message);
         Counter.builder("mentoring.messages")
-                .tag("text", message)
+                .tag("email", message)
                 .register(meters)
                 .increment();
         Mono.just(message).log().subscribe();
@@ -34,6 +35,9 @@ final class MentoringTelemetryViolationFixture {
                 .log(System.Logger.Level.INFO, message);
         java.util.logging.Logger.getLogger("mentoring").info(message);
         IO.println(message);
+        try (var stderr = new Formatter("/dev/stderr")) {
+            stderr.format("%s", message);
+        }
         Consumer<Throwable> printTrace = Throwable::printStackTrace;
         printTrace.accept(new IllegalStateException(message));
         Thread.currentThread()

@@ -1,34 +1,56 @@
 package de.tum.cit.aet.hephaestus.relationship;
 
+import static de.tum.cit.aet.hephaestus.relationship.MentoringFieldClass.CORRELATION_HANDLE;
+import static de.tum.cit.aet.hephaestus.relationship.MentoringFieldClass.OPERATIONAL_CLASS;
+
 import java.time.Duration;
 import java.util.UUID;
+import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 
 /**
- * The closed list of fields that a mentoring record may carry, each with the one class of value it takes. None names a
- * person, so a record joins no person to a decision. A producer that needs another field adds it here, with its value
- * class: a row identifier, a count, a duration, a flag, or one enum of codes.
+ * The declared mentoring fields. Each key fixes the field's privacy class and Java value type.
  */
 public enum MentoringLogKey {
-    WORKSPACE_ID("workspace.id", Long.class),
-    RUN_ID("run.id", UUID.class),
-    RUN_EPOCH("run.epoch", Integer.class),
-    DURATION("mentoring.duration_ms", Duration.class);
+    // Use the names of the shared log context without a module dependency on observability.
+    TRACE_ID("traceId", CORRELATION_HANDLE, null, Pattern.compile("[0-9a-f]{32}")),
+    SPAN_ID("spanId", CORRELATION_HANDLE, null, Pattern.compile("[0-9a-f]{16}")),
+    WORKSPACE_ID("workspace.id", CORRELATION_HANDLE, Long.class, Pattern.compile("[0-9]{1,19}")),
+    RUN_ID("run.id", CORRELATION_HANDLE, UUID.class, Pattern.compile("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}")),
+    RUN_EPOCH("run.epoch", OPERATIONAL_CLASS, Integer.class, Pattern.compile("[0-9]{1,10}")),
+    DURATION("mentoring.duration_ms", OPERATIONAL_CLASS, Duration.class, null),
+    KIND("kind", OPERATIONAL_CLASS, MentoringLogEvent.class, null);
 
     private final String key;
-    private final Class<?> type;
+    private final MentoringFieldClass fieldClass;
+    private final @Nullable Class<?> type;
+    private final @Nullable Pattern contextFormat;
 
-    MentoringLogKey(String key, Class<?> type) {
+    MentoringLogKey(
+            String key, MentoringFieldClass fieldClass, @Nullable Class<?> type, @Nullable Pattern contextFormat) {
         this.key = key;
+        this.fieldClass = fieldClass;
         this.type = type;
+        this.contextFormat = contextFormat;
     }
 
-    /** The structured log key. */
+    /** The written field name. */
     public String key() {
         return key;
     }
 
-    /** The one class of value that the field takes. */
-    public Class<?> type() {
+    /** The explicit value type. A context-only field has no explicit value type. */
+    public @Nullable Class<?> type() {
         return type;
+    }
+
+    MentoringFieldClass fieldClass() {
+        return fieldClass;
+    }
+
+    boolean acceptsContextValue(String value) {
+        if (contextFormat == null || !contextFormat.matcher(value).matches()) return false;
+        fieldClass.requireAllowed(MentoringFieldClass.Sink.LOG);
+        return true;
     }
 }

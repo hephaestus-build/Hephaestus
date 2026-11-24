@@ -108,18 +108,20 @@ Never enable request-body debugging as a substitute for safe structured diagnost
 ## Mentoring modules
 
 The mentoring modules (`relationship`, `learning` and `mentoring`) hold a person's own words.
-Their records carry only allowed field classes: an identifier of a row, a count, a duration, a flag or a code.
-No field carries text or names a person.
-[Proposed ADR 0125](https://github.com/hephaestus-build/Hephaestus/blob/cc2f39acb1fbbb137fd4ee74f049ebf7e97d4523/docs/decisions/0125-hephaestus-is-never-a-performance-instrument.md) gives the privacy goal.
+Their emitters use the [field classes in the personal-data map](/admin/dsms/personal-data-map#mentoring-telemetry).
 
-- Log through `MentoringLog`. An event is a constant of the `MentoringLogEvent` enum, with a literal name and message. Add your events there.
-- Build each field with `MentoringLogField.of` and a key from `MentoringLogKey`.
-  Each key fixes the class of its value. A value of another class fails at once.
-  A new key needs a value class from the list above.
-  Add the key to the test's list of allowed keys too.
-- Record a failure with `MentoringLog.error`. It logs the failure's class, and neither its message nor its trace.
+- Write logs through `MentoringLog`. It keeps the validated trace, span, workspace and run context.
+  The rest of the calling thread's context stays out of the record.
+  For a failure, `MentoringLog.error` records the exception class only.
+- Start spans through `MentoringTrace`. Close the returned scope at the end of the operation.
+- Count events through `MentoringEventMetrics`. It takes a closed event kind as its only label.
+  `MentoringMetrics` owns the meter names inside the relationship module.
+  The recorder binds every label at construction. Producers can then increment those counters.
+- Declare each event name and message in `MentoringLogEvent`.
+  Declare each field in `MentoringLogKey` with its field class and Java value type.
+  Each emitter checks the class of a field before writing it.
 
-`MentoringLogFieldArchitectureTest` checks the direct dependencies and accesses of each mentoring production class except `MentoringLog`:
+`MentoringLogFieldArchitectureTest` checks the direct dependencies and accesses of mentoring producers.
 
 - A mentoring class depends only on the packages in the test's list of allowed packages.
   The list holds the mentoring modules, a few JDK packages, JSpecify and the Spring Modulith annotations.
@@ -129,11 +131,15 @@ No field carries text or names a person.
 - A mentoring class does not call or reference some JDK methods and constructors.
   These print a throwable, or create or rename a thread.
   The test lists the refused types, methods and constructors.
-- The entries of `MentoringLogKey` and their value classes equal the test's list of allowed keys.
+- Telemetry libraries are for the emitters.
+  The rule rejects direct library calls that put free text in a log, span or metric.
 
 To use a new package in a mentoring class, add it to the list of allowed packages.
 First, look in the package for a method that writes its argument to a log, a console, a meter or a span.
 If the package has one, add that type to the refused types.
+
+The runtime owner supplies `MentoringTrace` with the application's Micrometer tracer.
+It supplies `MentoringEventMetrics` with the shared meter registry.
 
 The test has limits, so review each value at its source:
 
@@ -145,8 +151,6 @@ The test has limits, so review each value at its source:
   The default JDK handler can also print an uncaught exception that escapes a thread.
   At a mentoring boundary, throw an exception whose message is fixed text.
   Do not attach a failure that carries a person's words as its cause.
-
-Mentoring meters come with a later change. Until then, Micrometer is not an allowed package.
 
 ## Scope and restore correlation
 
