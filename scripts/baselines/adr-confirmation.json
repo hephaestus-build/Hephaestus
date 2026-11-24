@@ -36,12 +36,6 @@
 		"removeWhen": "Name an existing executable check in Confirmation."
 	},
 	{
-		"id": "docs/decisions/0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md: Confirmation names no existing executable check",
-		"owner": "ADR-QUALITY",
-		"reason": "The accepted decision has no resolvable confirmation for this reference.",
-		"removeWhen": "Name an existing executable check in Confirmation."
-	},
-	{
 		"id": "docs/decisions/0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md: Confirmation names no existing executable check",
 		"owner": "ADR-QUALITY",
 		"reason": "The accepted decision has no resolvable confirmation for this reference.",

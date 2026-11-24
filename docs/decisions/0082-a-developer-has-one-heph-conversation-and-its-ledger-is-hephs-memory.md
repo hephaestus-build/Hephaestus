@@ -1,6 +1,6 @@
 # ADR 0082: A developer has one Heph conversation, and its ledger is Heph's memory
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0131](0131-a-person-has-one-conversation-in-each-workspace-and-its-answers-stream.md)
 **Date:** 2026-11-10
 **Authors:** Felix T.J. Dietrich
 
