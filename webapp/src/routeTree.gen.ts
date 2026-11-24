@@ -18,6 +18,7 @@ import { Route as ImprintRouteImport } from './routes/imprint'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
+import { Route as UsageRouteImport } from './routes/usage'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedIntegrationsRouteImport } from './routes/_authenticated/integrations'
 import { Route as AuthenticatedProductFeedbackRouteImport } from './routes/_authenticated/product-feedback'
@@ -127,6 +128,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
 const UnsubscribeRoute = UnsubscribeRouteImport.update({
   id: '/unsubscribe',
   path: '/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UsageRoute = UsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
@@ -525,6 +531,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/usage': typeof UsageRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/integrations': typeof AuthenticatedIntegrationsRoute
   '/product-feedback': typeof AuthenticatedProductFeedbackRoute
@@ -601,6 +608,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/usage': typeof UsageRoute
   '/integrations': typeof AuthenticatedIntegrationsRoute
   '/product-feedback': typeof AuthenticatedProductFeedbackRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -671,6 +679,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/usage': typeof UsageRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/integrations': typeof AuthenticatedIntegrationsRoute
   '/_authenticated/product-feedback': typeof AuthenticatedProductFeedbackRoute
@@ -749,6 +758,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/privacy'
     | '/unsubscribe'
+    | '/usage'
     | '/admin'
     | '/integrations'
     | '/product-feedback'
@@ -825,6 +835,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/privacy'
     | '/unsubscribe'
+    | '/usage'
     | '/integrations'
     | '/product-feedback'
     | '/settings'
@@ -894,6 +905,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/privacy'
     | '/unsubscribe'
+    | '/usage'
     | '/_authenticated/admin'
     | '/_authenticated/integrations'
     | '/_authenticated/product-feedback'
@@ -972,6 +984,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PrivacyRoute: typeof PrivacyRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
+  UsageRoute: typeof UsageRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthErrorRoute: typeof AuthErrorRoute
   WWorkspaceSlugLoginRoute: typeof WWorkspaceSlugLoginRoute
@@ -1042,6 +1055,13 @@ declare module '@tanstack/react-router' {
       path: '/unsubscribe'
       fullPath: '/unsubscribe'
       preLoaderRoute: typeof UnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/usage': {
+      id: '/usage'
+      path: '/usage'
+      fullPath: '/usage'
+      preLoaderRoute: typeof UsageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin': {
@@ -1783,6 +1803,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PrivacyRoute: PrivacyRoute,
   UnsubscribeRoute: UnsubscribeRoute,
+  UsageRoute: UsageRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthErrorRoute: AuthErrorRoute,
   WWorkspaceSlugLoginRoute: WWorkspaceSlugLoginRoute,

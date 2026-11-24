@@ -2,18 +2,24 @@ import type { QueryClient } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import {
 	adminGetInstanceSettingsQueryKey,
 	getPublicActivityPolicyQueryKey,
 } from "@/api/@tanstack/react-query.gen";
+import { setPublicUsagePublished } from "@/hooks/use-public-usage-published";
 import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt, loadRouteCode } from "@/test/router-harness";
 
 beforeAll(async () => loadRouteCode("/admin/settings", "/admin/users"), ROUTE_RENDER_WAIT.timeout);
+
+// The footer flag lives as long as the document; each test starts from a page that the server wrote with it off.
+afterEach(() => {
+	setPublicUsagePublished(false);
+});
 
 const settings = (revision: number) => ({
 	silentModeEngaged: true,
@@ -308,6 +314,154 @@ describe("instance settings route", () => {
 			expect(puts).toHaveLength(1);
 		} finally {
 			accepted.resolve();
+		}
+	});
+
+	it("asks before it publishes Hephaestus in numbers, and keeps the saved choice beside a failed refresh", async () => {
+		const user = userEvent.setup();
+		const puts: unknown[] = [];
+		let reads = 0;
+		server.use(
+			http.get("*/admin/settings", () => HttpResponse.json(settings(1))),
+			// The first read finds the page off; every read after the change fails.
+			http.get(
+				"*/admin/settings/public-usage",
+				() => {
+					reads += 1;
+					return HttpResponse.json({
+						allowed: false,
+						withdrawals: [],
+						withdrawalsUnreadable: false,
+					});
+				},
+				{ once: true },
+			),
+			http.get("*/admin/settings/public-usage", () => {
+				reads += 1;
+				return HttpResponse.json({ status: 503, title: "Service Unavailable" }, { status: 503 });
+			}),
+			http.put("*/admin/settings/public-usage", async ({ request }) => {
+				puts.push(await request.json());
+				return HttpResponse.json({ allowed: true, withdrawals: [], withdrawalsUnreadable: false });
+			}),
+		);
+		renderRouteAt("/admin/settings");
+
+		await user.click(
+			await screen.findByRole(
+				"switch",
+				{ name: "Publish Hephaestus in numbers" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		expect(puts).toStrictEqual([]);
+		await user.click(await screen.findByRole("button", { name: "Publish figures" }));
+
+		await waitFor(() => expect(puts).toStrictEqual([{ allowed: true }]));
+		await screen.findByText("This setting may be out of date");
+		expect(reads).toBeGreaterThan(1);
+		const published = screen.getByRole("switch", { name: "Publish Hephaestus in numbers" });
+		expect(published.getAttribute("aria-checked")).toBe("true");
+	});
+
+	it("links Hephaestus in numbers in the footer after a confirmed change, also after every query reads again, without reading the figures", async () => {
+		const user = userEvent.setup();
+		const figureReads: string[] = [];
+		server.use(
+			http.get("*/admin/settings", () => HttpResponse.json(settings(1))),
+			http.get(
+				"*/admin/settings/public-usage",
+				() => HttpResponse.json({ allowed: false, withdrawals: [], withdrawalsUnreadable: false }),
+				{ once: true },
+			),
+			http.get("*/admin/settings/public-usage", () =>
+				HttpResponse.json({ allowed: true, withdrawals: [], withdrawalsUnreadable: false }),
+			),
+			http.put("*/admin/settings/public-usage", () =>
+				HttpResponse.json({ allowed: true, withdrawals: [], withdrawalsUnreadable: false }),
+			),
+			http.get("*/public/usage", ({ request }) => {
+				figureReads.push(request.url);
+				return HttpResponse.json({ periods: [] });
+			}),
+		);
+		const queryClient = renderRouteAt("/admin/settings");
+
+		await user.click(
+			await screen.findByRole(
+				"switch",
+				{ name: "Publish Hephaestus in numbers" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		expect(screen.queryByRole("link", { name: "Hephaestus in numbers" })).toBeNull();
+		await user.click(await screen.findByRole("button", { name: "Publish figures" }));
+		await screen.findByRole("link", { name: "Hephaestus in numbers" });
+
+		// Passkey changes and session recovery read every query again; the confirmed answer stays.
+		await act(async () => queryClient.invalidateQueries());
+		expect(screen.getByRole("link", { name: "Hephaestus in numbers" }).getAttribute("href")).toBe(
+			"/usage",
+		);
+		expect(figureReads).toStrictEqual([]);
+	});
+
+	it("lets an admin turn Hephaestus in numbers off again while the read after a change is still open", async () => {
+		const user = userEvent.setup();
+		const puts: unknown[] = [];
+		const refresh = deferred();
+		const refreshStarted = deferred();
+		server.use(
+			http.get("*/admin/settings", () => HttpResponse.json(settings(1))),
+			http.get(
+				"*/admin/settings/public-usage",
+				() => HttpResponse.json({ allowed: false, withdrawals: [], withdrawalsUnreadable: false }),
+				{ once: true },
+			),
+			// The read after the change answers only when the test lets it.
+			http.get("*/admin/settings/public-usage", async () => {
+				refreshStarted.resolve();
+				await refresh.promise;
+				return HttpResponse.json({ allowed: false, withdrawals: [], withdrawalsUnreadable: false });
+			}),
+			http.put(
+				"*/admin/settings/public-usage",
+				async ({ request }) => {
+					puts.push(await request.json());
+					return HttpResponse.json({
+						allowed: true,
+						withdrawals: [],
+						withdrawalsUnreadable: false,
+					});
+				},
+				{ once: true },
+			),
+			http.put("*/admin/settings/public-usage", async ({ request }) => {
+				puts.push(await request.json());
+				return HttpResponse.json({ allowed: false, withdrawals: [], withdrawalsUnreadable: false });
+			}),
+		);
+		renderRouteAt("/admin/settings");
+
+		await user.click(
+			await screen.findByRole(
+				"switch",
+				{ name: "Publish Hephaestus in numbers" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		await user.click(await screen.findByRole("button", { name: "Publish figures" }));
+		const published = screen.getByRole("switch", { name: "Publish Hephaestus in numbers" });
+		await waitFor(() => expect(published.getAttribute("aria-checked")).toBe("true"));
+
+		try {
+			// The read after the change is open while the admin turns publication off again.
+			await refreshStarted.promise;
+			await user.click(published);
+			await waitFor(() => expect(puts).toStrictEqual([{ allowed: true }, { allowed: false }]));
+			await waitFor(() => expect(published.getAttribute("aria-checked")).toBe("false"));
+		} finally {
+			refresh.resolve();
 		}
 	});
 

@@ -47,6 +47,7 @@ describe("workspace URL rewrites", () => {
 		"/verify-passkey?returnTo=%2Fw%2Facme%2Fadmin",
 		"/workspaces/new",
 		"/integrations",
+		"/usage?period=2025-10",
 		"/w/other/activity",
 	])("keeps %s on the apex", (path) => {
 		expect(rewrite("input", path)).toBe(`${tenant}${path}`);

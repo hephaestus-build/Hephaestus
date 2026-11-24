@@ -21,6 +21,7 @@ export async function useFixtureApi(
 		deploymentEnvironment: "local",
 		commit: "",
 		browserFaultReports: false,
+		publicUsage: false,
 	};
 	const element = `<script type="application/json" id="hephaestus-config">${JSON.stringify(record).replaceAll("<", String.raw`\u003c`)}</script>`;
 	await context.route(

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Settings2 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { definitionFor } from "@/components/common/status-def";
 import { usePasskeySettings } from "@/hooks/use-passkey-settings";
 import { toast } from "@/lib/toast";
@@ -13,8 +13,12 @@ import {
 	adminSendTestEmailMutation,
 	getPublicActivityPolicyOptions,
 	getPublicActivityPolicyQueryKey,
+	getPublicUsagePolicyOptions,
+	getPublicUsagePolicyQueryKey,
+	getPublicUsageQueryKey,
 	listWorkspacesQueryKey,
 	updatePublicActivityPolicyMutation,
+	updatePublicUsagePolicyMutation,
 } from "@/api/@tanstack/react-query.gen";
 import { EMAIL_TEST_OUTCOME_DEFS } from "@/components/admin/instance/email-test-outcome-defs";
 import { InstanceEmailCard } from "@/components/admin/instance/InstanceEmailCard";
@@ -22,6 +26,10 @@ import {
 	InstancePublicActivityCard,
 	type InstancePublicActivityState,
 } from "@/components/admin/instance/InstancePublicActivityCard";
+import {
+	InstancePublicUsageCard,
+	type InstancePublicUsageState,
+} from "@/components/admin/instance/InstancePublicUsageCard";
 import { SilentModeCard } from "@/components/admin/instance/SilentModeCard";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { QueryErrorAlert, queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
@@ -30,6 +38,7 @@ import { PageLayout } from "@/components/layout/PageLayout";
 import { PasskeySettings } from "@/components/settings/PasskeySettings";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
+import { setPublicUsagePublished } from "@/hooks/use-public-usage-published";
 import { instanceAdminHead } from "@/lib/page-title";
 import {
 	problemDetailOf,
@@ -144,6 +153,70 @@ function WorkspaceSettingsPage() {
 		publicActivity = { status: "error", error: policyQuery.error, onRetry: retryPolicy };
 	}
 
+	const usagePolicyOptions = getPublicUsagePolicyOptions();
+	const usagePolicyQuery = useQuery(usagePolicyOptions);
+	useQueryReadRefusal(
+		usagePolicyOptions.queryKey,
+		usagePolicyQuery.isError,
+		usagePolicyQuery.error,
+	);
+	const usagePolicyMutation = useMutation({
+		...updatePublicUsagePolicyMutation(),
+		onSuccess: (data) => {
+			// The answer of the write is the confirmed setting, even if the read after it fails. The switch is free
+			// again as soon as the write settles; the read after it runs in the background.
+			queryClient.setQueryData(getPublicUsagePolicyQueryKey(), data);
+			setPublicUsagePublished(data.allowed);
+			toast.success(data.allowed ? "Hephaestus in numbers is on" : "Hephaestus in numbers is off", {
+				description: "Reload the page after 5 minutes to see the change.",
+			});
+			void queryClient.invalidateQueries({ queryKey: getPublicUsageQueryKey() });
+			void queryClient.invalidateQueries({ queryKey: getPublicUsagePolicyQueryKey() });
+		},
+		onError: (error) => {
+			const stepUp = stepUpChallengeOf(error);
+			if (stepUp) {
+				setChallenge(stepUp);
+				return;
+			}
+			void queryClient.invalidateQueries({ queryKey: getPublicUsagePolicyQueryKey() });
+			toast.error(problemDetailOf(error, "We could not change Hephaestus in numbers. Try again."));
+		},
+	});
+	const retryUsagePolicy = () => {
+		void usagePolicyQuery.refetch();
+	};
+	const usagePolicy =
+		usagePolicyQuery.isError && !queryErrorIsRetryable(usagePolicyQuery.error)
+			? undefined
+			: usagePolicyQuery.data;
+	// A read of the policy is a newer answer than the page load: the footer link follows it.
+	const usagePolicyAllowed = usagePolicyQuery.isSuccess ? usagePolicyQuery.data.allowed : undefined;
+	useEffect(() => {
+		if (usagePolicyAllowed !== undefined) {
+			setPublicUsagePublished(usagePolicyAllowed);
+		}
+	}, [usagePolicyAllowed]);
+	let publicUsage: InstancePublicUsageState = { status: "loading" };
+	if (usagePolicy !== undefined) {
+		publicUsage = {
+			status: "ready",
+			allowed: usagePolicy.allowed,
+			pending: usagePolicyMutation.isPending,
+			withdrawals: usagePolicy.withdrawals,
+			withdrawalsUnreadable: usagePolicy.withdrawalsUnreadable,
+			refreshFailure: usagePolicyQuery.isError
+				? {
+						error: usagePolicyQuery.error,
+						pending: usagePolicyQuery.isFetching,
+						onRetry: retryUsagePolicy,
+					}
+				: undefined,
+		};
+	} else if (usagePolicyQuery.isError) {
+		publicUsage = { status: "error", error: usagePolicyQuery.error, onRetry: retryUsagePolicy };
+	}
+
 	const settings =
 		settingsQuery.isError && !queryErrorIsRetryable(settingsQuery.error)
 			? undefined
@@ -203,6 +276,10 @@ function WorkspaceSettingsPage() {
 				<InstancePublicActivityCard
 					state={publicActivity}
 					onAllowedChange={(allowed) => policyMutation.mutate({ body: { allowed } })}
+				/>
+				<InstancePublicUsageCard
+					state={publicUsage}
+					onAllowedChange={(allowed) => usagePolicyMutation.mutate({ body: { allowed } })}
 				/>
 				<InstanceEmailCard
 					isPending={testEmailMutation.isPending}
