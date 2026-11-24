@@ -361,10 +361,12 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
     private void shownIn(Feedback parent, UUID conversation, int seq, String surface) {
         UUID entry = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,created_at)"
-                        + " VALUES (?,?,?,?,'ANSWER',?,'Add a focused regression test.',?)",
+                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,"
+                        + "created_at) VALUES (?,?,?,(SELECT account_id FROM conversation WHERE id = ?),?,'ANSWER',?,"
+                        + "'Add a focused regression test.',?)",
                 entry,
                 workspace.getId(),
+                conversation,
                 conversation,
                 seq,
                 surface,

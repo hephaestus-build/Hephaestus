@@ -24,8 +24,9 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-// The conversation store deletes the person's conversations through OWN_CONVERSATIONS.
-@ErasesColumns("conversation.account_id")
+// The conversation store deletes the person's conversations through OWN_CONVERSATIONS. An entry or a turn references
+// its conversation with the conversation's account and cascades on delete, so it goes with them.
+@ErasesColumns({"conversation.account_id", "conversation_entry.account_id", "conversation_turn.account_id"})
 @PersonDataStores({
     ConversationEntryRepository.COPIES_PERSON_DATA_STORE,
     "conversation_entry_feedback_copy",

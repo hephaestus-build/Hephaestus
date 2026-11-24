@@ -652,10 +652,11 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                     scenario.workspace().getId(),
                     scenario.account().getId());
             jdbc.update(
-                    "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,created_at) VALUES (?,?,?,1,'ANSWER','APP',?,now())",
+                    "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,created_at) VALUES (?,?,?,?,1,'ANSWER','APP',?,now())",
                     message,
                     scenario.workspace().getId(),
                     conversation,
+                    scenario.account().getId(),
                     body);
         }
         jdbc.update(

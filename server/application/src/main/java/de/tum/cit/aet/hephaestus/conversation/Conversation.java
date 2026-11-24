@@ -27,8 +27,10 @@ import org.springframework.data.domain.Persistable;
  * <p>The developer is an account: one per person (ADR 0056). The partial unique index
  * {@code ux_conversation_main} allows one main conversation per {@code (workspace_id, account_id)};
  * {@code parent_entry_id} is unique, so a parent entry has at most one thread. The Slack identity triple is set on the
- * main conversation only, all or none ({@code chk_conversation_slack}). {@code (id, workspace_id)} is the key
- * every ledger and feedback-copy foreign key uses, so a row of one workspace never points into another.
+ * main conversation only, all or none ({@code chk_conversation_slack}). Entries and turns refer to their conversation
+ * by {@code (id, workspace_id, account_id)} ({@code uk_conversation_owner}), so they keep its workspace and account,
+ * also when the account changes. Every other foreign key to a conversation uses {@code (id, workspace_id)}, so a row
+ * of one workspace never points into another.
  */
 @Entity
 @Table(
@@ -40,6 +42,9 @@ import org.springframework.data.domain.Persistable;
             @UniqueConstraint(
                     name = "uk_conversation_tenant",
                     columnNames = {"id", "workspace_id"}),
+            @UniqueConstraint(
+                    name = "uk_conversation_owner",
+                    columnNames = {"id", "workspace_id", "account_id"}),
         },
         indexes = {
             @Index(name = "idx_conversation_workspace_account", columnList = "workspace_id, account_id"),

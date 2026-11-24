@@ -1083,11 +1083,12 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 workspace.getId(),
                 developerId);
         jdbc.update(
-                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,created_at)"
-                        + " VALUES (?,?,?,1,'ANSWER','APP','Try a focused test.',now())",
+                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,"
+                        + "created_at) VALUES (?,?,?,?,1,'ANSWER','APP','Try a focused test.',now())",
                 answer,
                 workspace.getId(),
-                conversation);
+                conversation,
+                developerId);
         UUID id = FeedbackIds.copy(row.getId(), FeedbackCopyKind.CHAT_TURN, 0);
         copies.saveAndFlush(FeedbackCopy.builder()
                 .id(id)

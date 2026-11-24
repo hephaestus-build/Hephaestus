@@ -108,6 +108,10 @@ public class ConversationEntry implements Persistable<UUID> {
     @Column(name = "conversation_id", nullable = false)
     private UUID conversationId;
 
+    /** The conversation's account. The database keeps it equal to the conversation's, also when that one moves. */
+    @Column(name = "account_id", nullable = false, updatable = false)
+    private Long accountId;
+
     @Column(name = "seq", nullable = false)
     private long seq;
 
@@ -171,6 +175,7 @@ public class ConversationEntry implements Persistable<UUID> {
         this.id = TimeOrderedIds.next();
         this.workspaceId = conversation.getWorkspaceId();
         this.conversationId = conversation.getId();
+        this.accountId = conversation.getAccountId();
         this.seq = seq;
         this.turnId = draft.turnId();
         this.requestId = draft.requestId();

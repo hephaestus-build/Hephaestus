@@ -643,11 +643,12 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
         UUID run = UUID.randomUUID();
         jdbc.update(ConversationTurnRunRows.insert(run, feedback.getWorkspaceId(), conversation, "DONE", 1));
         jdbc.update(
-                "INSERT INTO conversation_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,"
-                        + "created_at,finished_at) VALUES (?,?,?,?,'DONE','APP',1,?,now(),now())",
+                "INSERT INTO conversation_turn(id,workspace_id,conversation_id,account_id,request_id,status,surface,"
+                        + "attempt,run_id,created_at,finished_at) VALUES (?,?,?,?,?,'DONE','APP',1,?,now(),now())",
                 turn,
                 feedback.getWorkspaceId(),
                 conversation,
+                feedback.getDeveloperId(),
                 turn.toString(),
                 run);
         var call = Map.of(
@@ -660,19 +661,21 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                 "arguments",
                 Map.of("feedbackId", feedback.getId().toString(), "text", words));
         jdbc.update(
-                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,turn_id,kind,surface,text,payload,"
-                        + "created_at) VALUES (?,?,?,1,?,'ANSWER','APP','',?::jsonb,now())",
+                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,turn_id,kind,surface,"
+                        + "text,payload,created_at) VALUES (?,?,?,?,1,?,'ANSWER','APP','',?::jsonb,now())",
                 answer,
                 feedback.getWorkspaceId(),
                 conversation,
+                feedback.getDeveloperId(),
                 turn,
                 mapper.writeValueAsString(Map.of("message", Map.of("role", "assistant", "content", List.of(call)))));
         jdbc.update(
-                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,turn_id,kind,surface,text,payload,"
-                        + "created_at) VALUES (?,?,?,2,?,'TOOL_RESULT','APP','',?::jsonb,now())",
+                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,turn_id,kind,surface,"
+                        + "text,payload,created_at) VALUES (?,?,?,?,2,?,'TOOL_RESULT','APP','',?::jsonb,now())",
                 UUID.randomUUID(),
                 feedback.getWorkspaceId(),
                 conversation,
+                feedback.getDeveloperId(),
                 turn,
                 mapper.writeValueAsString(Map.of(
                         "message",

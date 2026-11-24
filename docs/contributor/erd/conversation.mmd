@@ -18,7 +18,7 @@ erDiagram
         VARCHAR(32) slack_channel_id
         VARCHAR(32) slack_team_id
         VARCHAR(32) slack_user_id
-        BIGINT account_id FK "NOT NULL"
+        BIGINT account_id FK,UK "NOT NULL"
         BIGINT workspace_id FK,UK "NOT NULL"
         TIMESTAMPTZ last_read_at
     }
@@ -40,6 +40,7 @@ erDiagram
         UUID turn_id FK
         VARCHAR(16) vote
         BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT account_id FK "NOT NULL"
     }
 
     ConversationTurn {
@@ -62,6 +63,7 @@ erDiagram
         TIMESTAMPTZ queued_at "NOT NULL"
         INTEGER tools_loads "NOT NULL"
         UUID run_id FK,UK "NOT NULL"
+        BIGINT account_id FK "NOT NULL"
     }
 
     Account["Account · Core"]

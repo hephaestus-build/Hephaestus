@@ -71,16 +71,20 @@ VALUES ('e2e0c0a0-0000-4000-8000-000000000006', 1, 'TURN', 'INTERACTIVE',
         'conversation:e2e0c0a0-0000-4000-8000-000000000001', 'ENDED', 0, 1, 180, 'COMPLETED', now() - interval '1 day',
         now() - interval '1 day', now() - interval '1 day')
 ON CONFLICT DO NOTHING;
-INSERT INTO conversation_turn (id, workspace_id, conversation_id, request_id, status, surface, run_id, created_at, started_at,
-                         finished_at)
+INSERT INTO conversation_turn (id, workspace_id, conversation_id, account_id, request_id, status, surface, run_id,
+                               created_at, started_at, finished_at)
 VALUES ('e2e0c0a0-0000-4000-8000-000000000004', 1, 'e2e0c0a0-0000-4000-8000-000000000001',
+        (SELECT account_id FROM conversation WHERE id = 'e2e0c0a0-0000-4000-8000-000000000001'),
         'e2e0c0a0-0000-4000-8000-000000000005', 'DONE', 'APP', 'e2e0c0a0-0000-4000-8000-000000000006',
         now() - interval '1 day', now() - interval '1 day', now() - interval '1 day')
 ON CONFLICT DO NOTHING;
-INSERT INTO conversation_entry (id, workspace_id, conversation_id, seq, kind, surface, text, turn_id, created_at)
-VALUES ('e2e0c0a0-0000-4000-8000-000000000002', 1, 'e2e0c0a0-0000-4000-8000-000000000001', 1, 'USER', 'APP',
+INSERT INTO conversation_entry (id, workspace_id, conversation_id, account_id, seq, kind, surface, text, turn_id,
+                                created_at)
+VALUES ('e2e0c0a0-0000-4000-8000-000000000002', 1, 'e2e0c0a0-0000-4000-8000-000000000001',
+        (SELECT account_id FROM conversation WHERE id = 'e2e0c0a0-0000-4000-8000-000000000001'), 1, 'USER', 'APP',
         'How do I keep my pull requests small?', 'e2e0c0a0-0000-4000-8000-000000000004', now() - interval '1 day'),
-       ('e2e0c0a0-0000-4000-8000-000000000003', 1, 'e2e0c0a0-0000-4000-8000-000000000001', 2, 'ANSWER', 'APP',
+       ('e2e0c0a0-0000-4000-8000-000000000003', 1, 'e2e0c0a0-0000-4000-8000-000000000001',
+        (SELECT account_id FROM conversation WHERE id = 'e2e0c0a0-0000-4000-8000-000000000001'), 2, 'ANSWER', 'APP',
         'Split the work by behaviour: one pull request per change a reviewer can judge on its own.',
         'e2e0c0a0-0000-4000-8000-000000000004', now() - interval '1 day')
 ON CONFLICT DO NOTHING;
