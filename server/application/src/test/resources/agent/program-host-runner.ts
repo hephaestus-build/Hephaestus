@@ -581,8 +581,13 @@ if (scenario !== undefined && scenario !== "") {
 		execute: (id: string, input: unknown) => Promise<unknown>;
 	}
 	let sessionCount = 0;
+	// Whether a session is being built through the factory; a build outside it counts as built past the factory.
+	let insideFactory = false;
 	mockPiCodingAgent(cwd, manager, {
 		async createAgentSession(options: { customTools: CustomTool[] }) {
+			if (!insideFactory) {
+				capture("direct-sessions", true);
+			}
 			sessionCount += 1;
 			const session = sessionCount;
 			const handlers = new Set<(event: unknown) => void>();
@@ -952,6 +957,40 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 			};
 		},
 	});
+	// The runner's sessions, counted where they open, and any model session of its own that it builds:
+	// pi-session-dispatch.spec.ts reads the counts.
+	const factory = await import("../../../main/resources/agent/pi-session.ts");
+	mock.module(new URL("../../../main/resources/agent/pi-session.ts", import.meta.url).href, {
+		exports: {
+			...factory,
+			openRunSession: async (...args: Parameters<typeof factory.openRunSession>) => {
+				capture("sessions", true);
+				insideFactory = true;
+				try {
+					return await factory.openRunSession(...args);
+				} finally {
+					insideFactory = false;
+				}
+			},
+		},
+	});
+	const composerModel = await import("../../../main/resources/agent/review-composer-model.ts");
+	mock.module(
+		new URL("../../../main/resources/agent/review-composer-model.ts", import.meta.url).href,
+		{
+			exports: {
+				...composerModel,
+				ModelSession: new Proxy(composerModel.ModelSession, {
+					construct: (target, args, newTarget) => {
+						capture("model-sessions", true);
+						const built: unknown = Reflect.construct(target, args, newTarget);
+						assert.ok(typeof built === "object" && built !== null);
+						return built;
+					},
+				}),
+			},
+		},
+	);
 	const { deriveChangeView } = await import("../../../main/resources/agent/pi-change-view.ts");
 	deriveChangeView(cwd);
 	const { runReviewJob } = await import("../../../main/resources/agent/pi-runner.ts");

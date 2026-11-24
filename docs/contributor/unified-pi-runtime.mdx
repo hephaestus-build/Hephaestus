@@ -386,25 +386,38 @@ The factory adds nothing that the descriptor does not name:
 - The system prompt is the descriptor's alone.
 - Cache warming is off.
 
-`pi-session.spec.ts` fails when an agent source other than `pi-session.ts` imports a session builder of the SDK as a value.
-It also finds a builder under another name, through a namespace import or through a dynamic import. A builder reached by a computed member name escapes it.
-It also fails when a run kind in `driver-kinds.ts` does not name how it opens its sessions.
+`pi-session-dispatch.spec.ts` checks by behaviour that every run kind opens its sessions through `openRunSession`:
 
-`pi-session-dispatch.spec.ts` runs the registry's `TURN` and `DIGEST` runners with a recording factory, and each must open its session through it.
-`REVIEW` runs as a separate process that the server stages, so only the source scan covers it.
-`REVIEW_COMPOSE` keeps its own model client until the publication cutover.
-The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
+- It runs each in-process runner of the registry (`TURN`, `DIGEST`, `REVIEW_COMPOSE`).
+  A recording factory, a recording `ModelSession` and a recording SDK session builder count what each runner builds.
+- `REVIEW`'s runner is the measurement that starts the staged review runner.
+  The spec runs the measurement in the same way and checks that it builds no session of its own.
+  It runs the staged review runner through the harness of the review specs.
+  There the factory opens real sessions, and the spec counts the same three things.
+- A kind must open a session through the factory. It must build no `ModelSession` and no Pi session past the factory.
+- In-process, the recording factory ends a run at its first call.
+  A build after that call is not counted there.
+- `REVIEW_COMPOSE` is the one exemption, named by its kind. It keeps its own model client until the publication cutover (CF-18). The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
+- Three fixture runners break the rule and must fail it.
+  One builds a `ModelSession`, one builds a Pi session itself, and one opens no session.
 
 The server makes its own model calls only through the proxy's gateways, such as `ProductFeedbackModelGateway` for a report draft.
-`ModelEgressConfig` refuses a POST to a known inference path on every client built from the application's Spring builders, unless the proxy sent it.
+`ModelEgressConfig` refuses a model request on every client built from the application's Spring builders, unless the proxy sent it.
+A model request is told by its shape, not by its address.
+Its POST body is JSON that names a model and carries what the model reads, or that carries Gemini's `contents`.
+A lookup that only names a model, such as Ollama's `/api/show`, passes.
+A request that nests one, such as a batch of requests, is a model request too.
+
+A WebClient request fails while its body is written, in one part or in flushed parts.
+The endpoint can see the request line, but never the prompt.
+
 The proxy marks its own request with an object that no other package can reach.
 Server code builds every client from the application's Spring builders. A vendor SDK's own transport, such as Slack's, is outside the guard.
-A model request is a POST to an inference path, such as a chat completion, a message or an embedding.
 
-`ModelEgressConfigTest` sends such a request to a local model endpoint with the application's client builder, and the guard refuses it.
+`ModelEgressConfigTest` sends model requests to a local endpoint with the application's client builders, also on paths that no list names, and the guard refuses each.
 The proxy's integration tests send through the guarded client, so a proxy request without its mark fails them.
-`ModelCallBoundaryArchTest` fails when server code builds an OkHttp client of its own or sends a request with Reactor Netty's client directly.
-It also fails when a class outside the proxy reads the provider key of a resolved model (`ProxyCredential`).
+`ModelCallBoundaryArchTest` fails when server code builds an OkHttp client or sends a request with Reactor Netty's client directly, by a call or a method reference.
+It also fails when a class outside the proxy reads the provider key of a resolved model (`ProxyCredential`), by a call or a method reference.
 
 ### Isolation
 

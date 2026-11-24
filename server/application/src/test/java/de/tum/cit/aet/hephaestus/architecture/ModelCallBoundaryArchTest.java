@@ -4,12 +4,13 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.AccessTarget;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaCodeUnitAccess;
+import com.tngtech.archunit.core.domain.JavaMethodReference;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
-import java.util.Set;
 import java.util.function.Function;
 import okhttp3.OkHttpClient;
 import org.jspecify.annotations.Nullable;
@@ -47,9 +48,6 @@ class ModelCallBoundaryArchTest extends HephaestusArchitectureTest {
             .callConstructor(OkHttpClient.Builder.class)
             .because("the model egress guard sees only clients built from the application's Spring builders");
 
-    private static final Set<String> REACTOR_SENDS =
-            Set.of("get", "post", "put", "patch", "delete", "head", "options", "request", "websocket");
-
     /**
      * Reactor Netty's client sends a request with no Spring builder, so the egress guard never sees it. Server code may
      * configure one as a connector for a WebClient, but not send with it.
@@ -57,11 +55,20 @@ class ModelCallBoundaryArchTest extends HephaestusArchitectureTest {
     static final ArchRule NO_DIRECT_REACTOR_NETTY_REQUEST = noClasses()
             .should()
             .accessTargetWhere(DescribedPredicate.<JavaAccess<?>>describe(
-                    "a request sent with Reactor Netty's client",
-                    access -> access instanceof JavaCodeUnitAccess<?>
-                            && access.getTargetOwner().isAssignableTo(HttpClient.class)
-                            && REACTOR_SENDS.contains(access.getName())))
+                    "a request sent with Reactor Netty's client", access -> sendsWithReactorNetty(access)))
             .because("the model egress guard sees only requests sent through the application's Spring clients");
+
+    /**
+     * A call whose target returns Reactor Netty's send API, or any method reference to Reactor Netty's client: a
+     * reference carries no return type to read, and a connector is configured by call, never by reference.
+     */
+    private static boolean sendsWithReactorNetty(JavaAccess<?> access) {
+        if (access instanceof JavaMethodReference)
+            return access.getTargetOwner().isAssignableTo(HttpClient.class);
+        return access.getTarget() instanceof AccessTarget.CodeUnitAccessTarget unit
+                && (unit.getRawReturnType().isAssignableTo(HttpClient.ResponseReceiver.class)
+                        || unit.getRawReturnType().isAssignableTo(HttpClient.WebsocketReceiver.class));
+    }
 
     @Test
     @DisplayName("only the model proxy reads a model's provider key")

@@ -135,7 +135,6 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -1897,8 +1896,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** A client as the application builds it, with the model egress guard, so each test also proves the proxy's mark. */
     private static WebClient guardedClient() {
-        return WebClient.builder()
-                .filter(ExchangeFilterFunction.ofRequestProcessor(ModelEgressConfig::admit))
-                .build();
+        return WebClient.builder().filter(ModelEgressConfig.webClientGuard()).build();
     }
 }
