@@ -1,7 +1,10 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.VisibilityClass;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -16,6 +19,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -73,6 +77,16 @@ public class RepositoryToMonitor {
 
     @Nullable
     private Instant repositoryVisibilityConfirmedAt;
+
+    /** Who on the provider can see this resource, as far as Hephaestus has proven it. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "visibility_class", nullable = false, length = 16)
+    @ColumnDefault("'UNPROVEN'")
+    private VisibilityClass visibilityClass = VisibilityClass.UNPROVEN;
+
+    /** When Hephaestus last proved this resource's readers on the provider. */
+    @Column(name = "readers_synced_at")
+    private @Nullable Instant readersSyncedAt;
 
     private Instant labelsSyncedAt;
     private Instant milestonesSyncedAt;

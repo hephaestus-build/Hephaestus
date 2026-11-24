@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.outline.domain;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.VisibilityClass;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -108,6 +109,16 @@ public class OutlineCollection {
     /** When the last clean pass finished; {@code NULLS FIRST} ordering makes never-synced collections go first. */
     @Column(name = "documents_synced_at")
     private @Nullable Instant documentsSyncedAt;
+
+    /** Who on the provider can see this resource, as far as Hephaestus has proven it. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "visibility_class", nullable = false, length = 16)
+    @ColumnDefault("'UNPROVEN'")
+    private VisibilityClass visibilityClass = VisibilityClass.UNPROVEN;
+
+    /** When Hephaestus last proved this resource's readers on the provider. */
+    @Column(name = "readers_synced_at")
+    private @Nullable Instant readersSyncedAt;
 
     /** Last sync failure for this collection (admin-visible); cleared on the next clean pass. */
     @Column(name = "last_sync_error", length = 2048)

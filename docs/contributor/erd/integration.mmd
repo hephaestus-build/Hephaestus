@@ -367,6 +367,8 @@ erDiagram
         INTEGER exports_skipped_for_budget
         VARCHAR(2048) description
         BIGINT version "NOT NULL"
+        TIMESTAMPTZ readers_synced_at
+        VARCHAR(16) visibility_class "NOT NULL"
     }
 
     OutlineDocument {
@@ -598,6 +600,8 @@ erDiagram
         TIMESTAMPTZ history_checked_at
         UUID consent_announcement_id
         TIMESTAMPTZ ingest_after
+        TIMESTAMPTZ readers_synced_at
+        VARCHAR(16) visibility_class "NOT NULL"
     }
 
     SlackParticipantConsent {
