@@ -54,11 +54,22 @@ public class ConversationSlackMessages {
      */
     @Transactional(readOnly = true)
     public Optional<SlackTurn> slackTurn(long workspaceId, UUID turnId) {
-        Optional<ConversationTurn> found = turns.findByIdAndWorkspaceId(turnId, workspaceId);
-        if (found.isEmpty() || found.get().getSurface() != ConversationTurn.Surface.SLACK) {
+        return turns.findByIdAndWorkspaceId(turnId, workspaceId).flatMap(turn -> slackTurn(workspaceId, turn));
+    }
+
+    /** The account's Slack turn, as {@link #slackTurn(long, UUID)}; empty when the turn belongs to another account. */
+    @Transactional(readOnly = true)
+    public Optional<SlackTurn> slackTurn(long workspaceId, long accountId, UUID turnId) {
+        return turns.findByIdAndWorkspaceId(turnId, workspaceId)
+                .filter(turn -> turn.getAccountId() == accountId)
+                .flatMap(turn -> slackTurn(workspaceId, turn));
+    }
+
+    private Optional<SlackTurn> slackTurn(long workspaceId, ConversationTurn turn) {
+        if (turn.getSurface() != ConversationTurn.Surface.SLACK) {
             return Optional.empty();
         }
-        ConversationTurn turn = found.get();
+        UUID turnId = turn.getId();
         Optional<Conversation> conversation =
                 conversations.findByIdAndWorkspaceId(turn.getConversationId(), workspaceId);
         if (conversation.isEmpty()) {

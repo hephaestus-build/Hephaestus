@@ -57,7 +57,7 @@ class SlackConversationProjectorSubscriptionTest extends BaseUnitTest {
         var question = mock(ConversationEntry.class);
         var questionId = UUID.randomUUID();
         when(question.getId()).thenReturn(questionId);
-        when(messages.slackTurn(1L, turnId))
+        when(messages.slackTurn(1L, 2L, turnId))
                 .thenReturn(Optional.of(new ConversationSlackMessages.SlackTurn(
                         mock(ConversationTurn.class), 2L, "D1", null, question, List.of(), false)));
         when(replies.forQuestion(1L, questionId)).thenReturn(Optional.of(actionId));

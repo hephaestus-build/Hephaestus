@@ -235,6 +235,36 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         verify(wakes).runNow(action(asked));
     }
 
+    /**
+     * A change that names no account, as a payload without one reads, or that names another account than the turn's,
+     * as after an absorption, wakes no post. Polling claims it.
+     */
+    @ParameterizedTest(name = "no account: {0}")
+    @ValueSource(booleans = {true, false})
+    void shouldWakeNoPostWhenTheChangeNamesNoAccountOrAnother(boolean noAccount) {
+        var asked = ask(main, ConversationTurn.Surface.SLACK);
+        var running = claims.claim(asked.turn());
+        end(running, "Your reviews are quick.");
+        var ended = event(asked.turn());
+        long named = noAccount ? 0 : ended.accountId() + 1;
+        var wakes = mock(ActionExecutor.class);
+
+        new SlackConversationProjector(messages, replies, wakes, owners, transactionManager)
+                .turnChanged(new ConversationLedgerEvents.TurnChanged(
+                        ended.workspaceId(),
+                        ended.conversationId(),
+                        named,
+                        ended.turnId(),
+                        ended.status(),
+                        ended.surface(),
+                        ended.attempt()));
+
+        verifyNoInteractions(wakes);
+        assertThat(replies.forQuestion(workspace.getId(), asked.question().getId()))
+                .as("the post stays for the executor's poll")
+                .isPresent();
+    }
+
     @Test
     void shouldSendNoPartialAnswerAndPostTheCompleteAnswerOnlyOnce() {
         var asked = ask(main, ConversationTurn.Surface.SLACK);
