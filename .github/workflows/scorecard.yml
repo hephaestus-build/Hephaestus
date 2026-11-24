@@ -16,8 +16,32 @@ concurrency:
 permissions: read-all
 
 jobs:
+  # The action names its image by tag. This job proves the tag is still the pinned digest and that
+  # the digest pulls for linux/amd64, so a broken pin fails here by name. Workflow lint runs the same
+  # check on every pull request that changes CI configuration. It is a separate job because OpenSSF
+  # accepts only allowlisted actions in the job that publishes.
+  image:
+    name: Pinned Scorecard image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      # Renovate moves this pin and the action commit in one pull request (renovate.json).
+      SCORECARD_IMAGE: ghcr.io/ossf/scorecard-action:v2.5.0@sha256:1e1481c65fc2407d3fd6ab18a23c741eb4d1c0d9359ebafc4b3ab13aa61d8627
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - name: Verify the pinned image
+        run: node scripts/check-scorecard-image.ts
+
   analysis:
     name: Supply-chain posture
+    needs: [image]
     runs-on: ubuntu-latest
     # OpenSSF publishing is limited to the default branch.
     if: github.event.repository.default_branch == github.ref_name
@@ -33,7 +57,7 @@ jobs:
           persist-credentials: false
 
       - name: Run OpenSSF Scorecard
-        uses: ossf/scorecard-action@23f22cd43608bae7a1f1fa2603d7314dee9538a5 # v2.6.0
+        uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
         with:
           results_file: results.sarif
           results_format: sarif

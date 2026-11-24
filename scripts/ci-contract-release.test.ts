@@ -1090,6 +1090,33 @@ void describe("ci-contract: release", () => {
 	});
 });
 
+// deploy-pages finds the site by listing the run's artifacts, and right after an upload in the same
+// job the listing can still lack it. GitHub's own Pages workflow uploads in one job and deploys in the next.
+void test("GitHub Pages deploys the site in a job after the one that uploads it", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cd-docs.yml", "utf8"));
+	const jobs = workflow.getIn(["jobs"]);
+	assert.ok(isMap(jobs));
+	const uses = (name: string) => {
+		const steps = workflow.getIn(["jobs", name, "steps"]);
+		assert.ok(isSeq(steps), name);
+		return steps.items.map((item) => {
+			const action: unknown = isMap(item) ? item.get("uses") : undefined;
+			return typeof action === "string" ? action : "";
+		});
+	};
+	const names = jobs.items.map((item) => String(item.key));
+	const uploaders = names.filter((name) =>
+		uses(name).some((action) => action.startsWith("actions/upload-pages-artifact@")),
+	);
+	const deployers = names.filter((name) =>
+		uses(name).some((action) => action.startsWith("actions/deploy-pages@")),
+	);
+	assert.deepEqual(uploaders, ["assemble"]);
+	assert.deepEqual(deployers, ["deploy"]);
+	assert.deepEqual(uses("deploy").length, 1, "the deploy job only deploys");
+	assert.ok(needsOf(workflow, "deploy").includes("assemble"));
+});
+
 void test("the site root publishes whichever folder the release tag's own docs build wrote", async () => {
 	const workflow = parseDocument(await readFile(".github/workflows/cd-docs.yml", "utf8"));
 	const jobPath = ["jobs", "build-release"];

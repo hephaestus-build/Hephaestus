@@ -1646,6 +1646,7 @@ public action pinned to a commit from `raw.githubusercontent.com`, without crede
 It checks that action's inputs and outputs, and fails when the file is unavailable.
 Thus, this check needs network access. Nothing it reads is stored in the repository.
 `vp run test:tooling` runs the validator's own tests.
+The job also verifies the pinned Scorecard image ([Scorecard image](./supply-chain-security.mdx#scorecard-image)).
 
 Pull request policy runs cancel earlier runs only when a new commit arrives.
 An edit therefore cannot replace a successful policy check on the same head with a cancelled check.
