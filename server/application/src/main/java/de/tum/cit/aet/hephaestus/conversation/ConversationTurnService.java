@@ -236,6 +236,7 @@ public class ConversationTurnService {
         var frames = progress.frames(
                 workspaceId,
                 running.getConversationId(),
+                running.getAccountId(),
                 turnId,
                 ConversationTurn.Surface.valueOf(running.getSurface()),
                 attempt,

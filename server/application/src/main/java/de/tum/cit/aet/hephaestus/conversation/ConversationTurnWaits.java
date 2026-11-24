@@ -84,6 +84,7 @@ public class ConversationTurnWaits {
             events.publishEvent(new ConversationLedgerEvents.TurnChanged(
                     turn.getWorkspaceId(),
                     turn.getConversationId(),
+                    turn.getAccountId(),
                     turn.getId(),
                     ConversationTurn.Status.QUEUED,
                     ConversationTurn.Surface.valueOf(turn.getSurface()),

@@ -94,6 +94,7 @@ class SlackConversationProjectorSubscriptionTest extends BaseUnitTest {
                                 .turnChanged(new ConversationLedgerEvents.TurnChanged(
                                         1L,
                                         UUID.randomUUID(),
+                                        2L,
                                         turnId,
                                         ConversationTurn.Status.DONE,
                                         ConversationTurn.Surface.SLACK,

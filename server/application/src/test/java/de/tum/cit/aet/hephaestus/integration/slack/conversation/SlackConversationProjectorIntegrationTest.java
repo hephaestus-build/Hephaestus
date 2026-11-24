@@ -160,6 +160,7 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
         projector.turnChanged(new ConversationLedgerEvents.TurnChanged(
                 workspace.getId(),
                 now.getConversationId(),
+                now.getAccountId(),
                 now.getId(),
                 now.getStatus(),
                 now.getSurface(),

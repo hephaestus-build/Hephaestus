@@ -642,6 +642,11 @@ The browser authenticates the stream with its cookie, and a native client with `
   The account must still be an active, visible member of the workspace.
   If it is not, the server closes the stream without the content.
   Each server checks its own streams, so a removed member gets no more content on any server.
+- Each notification names the account whose conversation changed.
+  A server reads the change only when that account has a stream open on it.
+- Each snapshot and each read of a change runs in a read-only transaction.
+  That transaction binds the account of the stream with `OwnerScope.ofJob` ([Person-owned tables](/contributor/workspace-context#person-owned-tables)).
+  The read then returns only rows of that account.
 
 The stream has no replay log and ignores `Last-Event-ID`.
 The snapshot on each connect is the resume.

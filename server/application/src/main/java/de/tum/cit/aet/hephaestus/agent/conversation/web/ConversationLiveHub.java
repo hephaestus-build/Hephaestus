@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationReadDTO;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,6 +36,9 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -44,10 +49,12 @@ import tools.jackson.databind.ObjectMapper;
  * § Live updates). Changes arrive with ids only, through the replica's one {@link ConversationLedgerNotifications}
  * connection. One reader thread loads each change once and hands the same event to every stream of its developer in
  * the order it read them, so a stream never receives an older state after a newer one. A stream that falls too far
- * behind, or missed notifications, gets a new snapshot instead.
+ * behind, or missed notifications, gets a new snapshot instead. Each read is of one developer's own rows, with the
+ * stream's account bound as the owner of its transaction, and only for a developer who has a stream open here.
  */
 @Component
 @ConditionalOnServerRole
+@OwnerScope.StoredOwnerOperation
 public class ConversationLiveHub implements ConversationLedgerNotifications.Listener, SmartLifecycle {
 
     static final String SNAPSHOT = "snapshot";
@@ -68,6 +75,8 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     private final ConversationLedgerNotifications notifications;
     private final ConversationTimeline timeline;
     private final AccountMembershipQuery memberships;
+    private final OwnerScope owners;
+    private final TransactionOperations transactions;
     private final ObjectMapper mapper;
     private final Supplier<SseEmitter> emitters;
     private final int queueCapacity;
@@ -90,15 +99,28 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
             ConversationLedgerNotifications notifications,
             ConversationTimeline timeline,
             AccountMembershipQuery memberships,
+            OwnerScope owners,
+            PlatformTransactionManager transactionManager,
             ObjectMapper mapper,
             MeterRegistry meters) {
-        this(notifications, timeline, memberships, mapper, meters, () -> new SseEmitter(TIMEOUT_MS), QUEUE_CAPACITY);
+        this(
+                notifications,
+                timeline,
+                memberships,
+                owners,
+                readOnly(transactionManager),
+                mapper,
+                meters,
+                () -> new SseEmitter(TIMEOUT_MS),
+                QUEUE_CAPACITY);
     }
 
     ConversationLiveHub(
             ConversationLedgerNotifications notifications,
             ConversationTimeline timeline,
             AccountMembershipQuery memberships,
+            OwnerScope owners,
+            TransactionOperations transactions,
             ObjectMapper mapper,
             MeterRegistry meters,
             Supplier<SseEmitter> emitters,
@@ -106,12 +128,20 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
         this.notifications = notifications;
         this.timeline = timeline;
         this.memberships = memberships;
+        this.owners = owners;
+        this.transactions = transactions;
         this.mapper = mapper;
         this.emitters = emitters;
         this.queueCapacity = queueCapacity;
         Gauge.builder(AgentMetrics.CONVERSATION_LIVE_STREAMS, streams, ConversationLiveHub::count)
                 .description("Live Hephaestus streams open on this server")
                 .register(meters);
+    }
+
+    private static TransactionTemplate readOnly(PlatformTransactionManager manager) {
+        TransactionTemplate template = new TransactionTemplate(manager);
+        template.setReadOnly(true);
+        return template;
     }
 
     private record Developer(long workspaceId, long accountId) {}
@@ -122,7 +152,8 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
     /**
      * Opens a stream of the account's conversation in a workspace.
      *
-     * @param accountId the account that opens the stream, whose membership every delivery checks again
+     * @param accountId the account that opens the stream: the owner of every read for it, and whose membership every
+     *     delivery checks again
      */
     public SseEmitter subscribe(long workspaceId, long accountId) {
         if (listening.compareAndSet(false, true)) {
@@ -154,26 +185,30 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
 
     @Override
     public void turnChanged(ConversationLedgerEvents.TurnChanged change) {
-        if (watches(change.workspaceId())) {
-            read(() -> timeline.liveTurn(change.workspaceId(), change.turnId())
-                    .ifPresent(turn -> fanOut(change.workspaceId(), turn.accountId(), TURN, turn.value())));
+        long workspaceId = change.workspaceId();
+        long accountId = change.accountId();
+        if (watches(workspaceId, accountId)) {
+            read(() -> owned(accountId, () -> timeline.liveTurn(workspaceId, accountId, change.turnId()))
+                    .ifPresent(turn -> fanOut(workspaceId, accountId, TURN, turn)));
         }
     }
 
     @Override
     public void entryChanged(ConversationLedgerEvents.EntryChanged change) {
-        if (watches(change.workspaceId())) {
+        long workspaceId = change.workspaceId();
+        long accountId = change.accountId();
+        if (watches(workspaceId, accountId)) {
             change.entryIds()
-                    .forEach(entryId -> read(() -> timeline.liveEntry(change.workspaceId(), entryId)
-                            .ifPresent(
-                                    entry -> fanOut(change.workspaceId(), entry.accountId(), ENTRY, entry.value()))));
+                    .forEach(entryId ->
+                            read(() -> owned(accountId, () -> timeline.liveEntry(workspaceId, accountId, entryId))
+                                    .ifPresent(entry -> fanOut(workspaceId, accountId, ENTRY, entry))));
         }
     }
 
     /** Another device of the developer moved the read marker. */
     @Override
     public void readChanged(ConversationLedgerEvents.ReadChanged change) {
-        if (watches(change.workspaceId())) {
+        if (watches(change.workspaceId(), change.accountId())) {
             read(() -> fanOut(
                     change.workspaceId(), change.accountId(), READ, new ConversationReadDTO(change.lastReadAt())));
         }
@@ -198,8 +233,17 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
                 }));
     }
 
-    private boolean watches(long workspaceId) {
-        return streams.keySet().stream().anyMatch(developer -> developer.workspaceId() == workspaceId);
+    /** Whether the developer has a stream open on this replica: only then is their change read. */
+    private boolean watches(long workspaceId, long accountId) {
+        return streams.containsKey(new Developer(workspaceId, accountId));
+    }
+
+    /** A read of the developer's own rows, in a transaction whose owner is the developer. */
+    private <T> T owned(long accountId, Supplier<T> read) {
+        return Objects.requireNonNull(transactions.execute(status -> {
+            owners.ofJob(accountId);
+            return read.get();
+        }));
     }
 
     private List<Stream> allStreams() {
@@ -226,7 +270,13 @@ public class ConversationLiveHub implements ConversationLedgerNotifications.List
 
     private void snapshot(Stream stream) {
         if (!stream.closed.get() && admitted(stream)) {
-            send(stream, event(SNAPSHOT, timeline.conversation(stream.workspaceId, stream.accountId)));
+            send(
+                    stream,
+                    event(
+                            SNAPSHOT,
+                            owned(
+                                    stream.accountId,
+                                    () -> timeline.conversation(stream.workspaceId, stream.accountId))));
         }
     }
 

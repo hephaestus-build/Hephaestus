@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.web.ConversationLiveHub;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -56,6 +57,9 @@ class ConversationLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private static final String TURN = "turn";
     private static final String READ = "read";
 
+    /** The hub's one reader thread, which reads every snapshot and change for the streams. */
+    private static final String READER = "conversation-live-reader";
+
     @Autowired
     private WebTestClient client;
 
@@ -79,6 +83,9 @@ class ConversationLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private ConversationLiveHub hub;
+
+    @Autowired
+    private SqlStatementCounter statements;
 
     private User developer;
     private User colleague;
@@ -321,6 +328,81 @@ class ConversationLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .contains("\"id\":\"" + own.turn().getConversationId() + "\"");
         } finally {
             second.subscription().dispose();
+        }
+    }
+
+    /**
+     * The snapshot on open, after a resync and on a reconnect reads the developer's rows with their account bound as
+     * the owner of its transaction, as the conversation tables' owner policy needs.
+     */
+    @Test
+    void shouldReadEverySnapshotWithTheDevelopersAccountBoundWhenTheStreamOpensResyncsOrReconnects() {
+        ConversationTurnService.Submission own = submit(developer, "Whose rows are these?");
+        String turnId = own.turn().getId().toString();
+
+        var measured = statements.measureOwnersOn(READER, () -> {
+            Stream first = open();
+            try {
+                await().atMost(WAIT).until(() -> first.has(SNAPSHOT, turnId));
+                hub.resync();
+                await().atMost(WAIT)
+                        .until(() -> first.events().stream()
+                                        .filter(event -> SNAPSHOT.equals(event.event())
+                                                && event.data() != null
+                                                && event.data().contains(turnId))
+                                        .count()
+                                >= 2);
+            } finally {
+                first.subscription().dispose();
+            }
+            Stream second = open("snapshot-1");
+            try {
+                await().atMost(WAIT).until(() -> second.has(SNAPSHOT, turnId));
+            } finally {
+                second.subscription().dispose();
+            }
+            return own;
+        });
+
+        assertThat(ConversationStatements.of(measured))
+                .as("the snapshots' reads of the conversation tables")
+                .isNotEmpty()
+                .extracting(SqlStatementCounter.Prepared::owner)
+                .doesNotContainNull()
+                .contains(accountId(developer));
+    }
+
+    /**
+     * A change is read with its developer's account bound as the owner, and only for a developer with a stream open on
+     * this server: a colleague's change, with no stream of theirs here, is not read at all.
+     */
+    @Test
+    void shouldReadOnlyTheStreamingDevelopersChangesWithTheirAccountBoundWhenTheLedgerChanges() {
+        Stream stream = open();
+        try {
+            await().atMost(WAIT).until(() -> stream.has(SNAPSHOT, "\"activeTurns\":[]"));
+            awaitListening();
+
+            var measured = statements.measureOwnersOn(READER, () -> {
+                submit(colleague, "A colleague's question");
+                ConversationTurnService.Submission own = submit(developer, "My question");
+                // The ledger delivers in commit order and the reader reads in that order: the colleague's change
+                // was handled before the developer's arrives.
+                await().atMost(WAIT)
+                        .until(() -> stream.has(ENTRY, own.question().getId().toString())
+                                && stream.has(TURN, own.turn().getId().toString()));
+                return own;
+            });
+
+            assertThat(ConversationStatements.of(measured))
+                    .as("the live reads of the conversation tables")
+                    .isNotEmpty()
+                    .extracting(SqlStatementCounter.Prepared::owner)
+                    .doesNotContainNull()
+                    .contains(accountId(developer))
+                    .doesNotContain(accountId(colleague));
+        } finally {
+            stream.subscription().dispose();
         }
     }
 

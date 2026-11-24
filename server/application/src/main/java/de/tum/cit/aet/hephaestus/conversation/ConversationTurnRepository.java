@@ -263,6 +263,8 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
 
         UUID getConversationId();
 
+        Long getAccountId();
+
         UUID getId();
 
         String getSurface();
@@ -277,8 +279,8 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
     @WorkspaceAgnostic(
             "Every workspace shares the workers' Hephaestus slots, so a change of them changes every workspace's waits")
     @Query(value = """
-            SELECT t.workspace_id AS workspaceId, t.conversation_id AS conversationId, t.id AS id,
-                   t.surface AS surface, t.attempt AS attempt
+            SELECT t.workspace_id AS workspaceId, t.conversation_id AS conversationId, t.account_id AS accountId,
+                   t.id AS id, t.surface AS surface, t.attempt AS attempt
             """ + CLAIMABLE + """
             ORDER BY t.created_at DESC, t.id DESC
             LIMIT :limit
@@ -320,6 +322,8 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
 
         UUID getConversationId();
 
+        Long getAccountId();
+
         String getSurface();
     }
 
@@ -331,8 +335,8 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
      */
     @WorkspaceAgnostic("The worker holds the attempt's claim; the statement returns the turn's workspace")
     @Query(value = """
-            SELECT t.workspace_id AS workspaceId, t.conversation_id AS conversationId, t.surface AS surface,
-                   t.started_at AS startedAt
+            SELECT t.workspace_id AS workspaceId, t.conversation_id AS conversationId, t.account_id AS accountId,
+                   t.surface AS surface, t.started_at AS startedAt
               FROM conversation_turn t
             """ + LIVE_CLAIM + """
              WHERE t.workspace_id = :workspaceId AND t.id = :id AND t.attempt = :epoch AND t.run_id = :runId

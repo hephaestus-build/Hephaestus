@@ -162,6 +162,7 @@ public class ConversationTurnProgress {
                 ? Optional.of(new ConversationLedgerEvents.TurnChanged(
                         frame.workspaceId(),
                         frame.conversationId(),
+                        frame.accountId(),
                         frame.turnId(),
                         ConversationTurn.Status.RUNNING,
                         frame.surface(),
@@ -249,6 +250,7 @@ public class ConversationTurnProgress {
     List<ConversationLedgerEvents.ProgressChanged> frames(
             long workspaceId,
             UUID conversationId,
+            long accountId,
             UUID turnId,
             ConversationTurn.Surface surface,
             int attempt,
@@ -265,6 +267,7 @@ public class ConversationTurnProgress {
             frames.add(new ConversationLedgerEvents.ProgressChanged(
                     workspaceId,
                     conversationId,
+                    accountId,
                     turnId,
                     surface,
                     attempt,
