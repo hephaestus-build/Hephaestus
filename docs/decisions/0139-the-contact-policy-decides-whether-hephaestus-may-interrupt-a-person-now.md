@@ -87,6 +87,10 @@ Option 6.
    - A requested result and an agreed check-in are never held.
 9. **Quiet hours are kept by the server,** 22:00 to 08:00 by default. They delay only the notification. The message in the conversation never waits.
 10. **At most one notification for each committed message.** A background turn that takes several results writes one message, so they become one notification. Code decides the notification at commit, as an effect.
+    - The commit applies rule 3 to each item of the batch. An example is an unprompted item under a Pause.
+      An item that rule 3 stops is not in the message or its notification. It gets its disposition.
+      A requested result in the same batch still arrives.
+    - If rule 3 stops every item, no message is written.
 11. **The notification text is the notice line, never the message summary.** The push payload stays ids only. On arrival, the service worker fetches the notice line with the person's session. On any failure it shows the kind's fixed text.
     - The notice line is registry copy with parameters, such as "Check ready: 1 problem on PR #42". It is never model text.
     - The fetch never refreshes a credential.
@@ -153,6 +157,8 @@ Not enforced. The implementing issues add the checks below, and review of each i
 - UnpromptedSlotsTest fails when Sometimes sends 2 unprompted notifications in a day, or Often sends 2 within 3 hours.
 - ActiveNoPushTest fails when a push goes to a person who is active in that workspace.
 - SendRecheckTest fails when a contact queued before a pause is sent after it.
+- MixedBatchPauseTest fails when a Pause before the commit drops a requested result from a batch.
+  It also fails when an unprompted item gets into the message or its notification.
 - AppOnlyItemRouteTest fails when an item that only the app may show is routed to Slack.
 - HeldResultNotCitedTest fails when an unprompted message cites a result that a delivery experiment holds.
 - DeliveryDecisionTest fails when an unprompted decision has no row, or a model call starts before it.

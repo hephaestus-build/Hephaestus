@@ -52,6 +52,8 @@ Option 5.
 3. **A noted record** has author kind `HEPHAESTUS` and kind `PREFERENCE` or `CONTEXT`.
    - A turn writes it from the person's own messages in that workspace, with no card.
    - Code checks that each cited entry has the person as its origin. A prompt rule alone is not enough.
+   - The check covers the cited text, not only the entry. Some parts of the person's entry keep the origin of their source.
+     These are quote blocks, forwarded messages, attachments, link previews and tool output. A note that cites them is refused.
    - It is never evidence about the person's work, and never about a third party.
    - It never supports a card or another record, and it never gets a grant.
    - It never travels. The person's **Keep** turns it into a person-authored record with author kind `PERSON`. Only then can **Take along** transfer it.
@@ -85,7 +87,8 @@ Option 5.
 
 - Good: the person says a preference once, and it holds in every workspace.
 - Good: everything that shapes an answer is in one list, and Forget works in one step.
-- Good: text that someone else wrote cannot become a note, because code checks the origin of each cited entry.
+- Good: text that someone else wrote cannot become a note, because code checks the origin of the cited text.
+- Bad: code cannot tell plain text that the person pasted from their own words. Such text counts as the person's words, because the person chose to say it. The list shows the note's source, and Forget removes it.
 - Bad: a noted record can still misread the person. It stays in its workspace, it is never evidence, and the person can forget it.
 - Bad: an item that the person never keeps is gone after 400 days, also when it was useful.
 - Bad: a fact that the person states in Slack becomes a note in the team workspace of that Slack team. The export notice of ADR 0123 (proposed in #4862) says so.
@@ -96,6 +99,8 @@ Option 5.
 Not enforced. The implementing issues add the checks below, and review of each implementing pull request catches a missing one. They are:
 
 - NotedRecordOriginTest fails when a noted record cites an entry whose origin is not the person.
+- NotedRecordQuotedTextTest fails when a noted record cites a quote block, a forwarded message or an attachment in the person's entry.
+  An example is a quoted pull request.
 - NotedRecordNeverTravelsTest fails when a noted record passes the transfer path without **Keep** and **Take along**.
 - ForgetLatchTest fails when Hephaestus notes a forgotten item again before the person says it again.
 - NoteSupersedesTest fails when two active notes on one subject exist.
