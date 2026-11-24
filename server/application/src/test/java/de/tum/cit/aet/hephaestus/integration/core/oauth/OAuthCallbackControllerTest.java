@@ -11,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
@@ -381,6 +382,24 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 .contains("status=error")
                 .contains("reason=finalize_failed")
                 .contains("kind=SLACK");
+        verify(callbackService, never()).completeConnection(any(), any(), any());
+    }
+
+    @Test
+    void shouldAnswerThatHephaestusIsUpdatingWhenAMigrationKeptTheExchangeFromStarting() {
+        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
+        when(oauthStateService.consume("s")).thenReturn(binding);
+        Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
+        when(callbackService.findAttemptConnection(any())).thenReturn(pending);
+
+        slackStrategy.throwOnFinalize = new MaintenanceInProgressException();
+
+        ResponseEntity<?> response = controller.handleCallback(
+                "slack", "s", null, Map.of("code", "c", "state", "s"), jsonRequest(), servletResponse);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        ProblemDetail body = (ProblemDetail) response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.getProperties()).containsEntry("callbackError", "maintenance");
         verify(callbackService, never()).completeConnection(any(), any(), any());
     }
 

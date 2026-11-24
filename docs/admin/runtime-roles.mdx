@@ -92,36 +92,86 @@ A migration that takes longer needs the [database maintenance](./maintenance#dat
 ### One migration at a time
 
 Every migration holds a PostgreSQL advisory lock while it runs.
+The migration runs every change set on the session that holds the lock.
 The lock lives in the database session, so the migration needs a direct or session-pooled connection.
 A proxy that pools by transaction can leave the lock on a server connection.
 A second migration waits until the first ends, and logs `database.migration.lock_awaited`.
 After 10 minutes, the waiting process stops.
 
-PostgreSQL releases the lock when the process stops, also when the process is killed.
+PostgreSQL releases the lock when the session ends.
+If the process stops or is killed, the session ends at once, and the migration ends with it.
 The run mode also releases the Liquibase lock that a killed run left, and logs `database.migration.lock_released` with the holder and the time of that lock.
 
 ### Work during a migration
 
-While a migration holds its lock, the servers claim no queued work.
-They claim no practice review, conversation turn, outbox action or provider event, and start no sandbox for one.
-A sandbox that asks for its next run gets none.
-A request that must send an outbox action at once, such as a test email, gets `503`. Try it again after the migration.
+The migration lock is also the maintenance barrier.
+The migration logs `database.migration.barrier_raised` when it takes the lock, and `database.migration.barrier_lifted` when it releases it.
+Each server shows in the gauge `maintenance_barrier_raised` whether a migration holds the barrier or waits for it ([Maintenance barrier metric](./metrics#maintenance-barrier-metric)).
+
+While the barrier is up, a server of a release later than 1.0.0-rc.14 starts no new work of these kinds:
+
+- It claims no practice review, conversation turn, outbox action or provider event, and reserves no sync job.
+- It starts no repository lookup for product feedback, and no registration or removal of a provider resource.
+- It requests no sandbox. A sandbox that asks for its next run gets none.
+- A request that must send an outbox action at once gets `503` with `Retry-After: 60`, and sends nothing.
+  A test email and a move of a report's issue are such requests. Try them again after the migration.
+
+The database also refuses a new lease that such a server tries to take while the barrier is up.
 
 The rest keeps running:
 
 - Work that started before the migration renews its lease and finishes.
 - The servers still queue new work, and provider events still arrive. They wait until the migration ends.
+- A sync request during the migration gets `503`, and a scheduled sync tries again at its next run.
+- A sync job that a server reserved before the migration, and that has not started, ends as cancelled.
+  Its reason is *Hephaestus was updating its database*. A sync that already runs finishes.
+  A change set can also hold the sync table. Then the sync ends as cancelled, with the reason *Hephaestus could not start this sync because its database was busy*.
+  The next scheduled sync runs as usual.
+- A sandbox that a server requested just before the migration can still start during it. It claims nothing until the migration ends.
+- Jobs that hold no lease still run, because each of their writes is one transaction.
+  Item event processing, privacy jobs and the follow-up of product feedback issues are such jobs.
+  Provider reads without a sync job are such jobs too.
+  The provider reads include the history backfill and the targeted Slack and Outline refreshes.
 - Queued work that waits past its start window still ends. A conversation turn waits at most 3 minutes, so a longer migration ends the waiting turns as not started.
 
 During a long migration, alerts on waiting work can fire, such as `HephaestusInteractiveRunWaiting`, `HephaestusOutboxStalled` and `HephaestusProviderEventsWaiting`.
 
-When the lock ends, the servers claim the waiting work again.
+When the barrier comes down, the servers start the waiting work again.
 This is also true when the migration fails or is killed.
-A migration starts only after the claims in progress end. A claim takes milliseconds.
 
-The lock does not stop the queueing of work, scheduled jobs or the lease reaper.
-Servers of 1.0.0-rc.14 and earlier do not check the lock at all.
+A migration waits in PostgreSQL's lock queue for the starts in progress, and no new start begins while it waits.
+A start holds the barrier only for the transaction that records it, so this wait takes milliseconds.
+The migration waits at most 10 minutes in total, as for another migration.
+
+A server of 1.0.0-rc.14 or earlier does not check the barrier.
+It claims work during the migration until the change set that adds the barrier's database triggers commits.
+After that, the claims that the triggers cover fail with the PostgreSQL error `55P03` and fill its log.
+The triggers cover runs, outbox actions, provider events, syncs, product feedback lookups and provider resource registrations and removals.
 Thus, a stopped upgrade still stops every role.
+
+#### If the barrier stays up after the migration
+
+The barrier stays up while the migration's session lives in PostgreSQL.
+If the migration's host loses power or its network, PostgreSQL ends the session only when it detects the lost connection.
+Until then, the servers start none of the guarded work.
+The TCP keepalive settings of PostgreSQL bound this time: `tcp_keepalives_idle`, `tcp_keepalives_interval` and `tcp_keepalives_count`.
+With `60`, `10` and `6`, PostgreSQL ends a lost session within about 2 minutes.
+Set them on an external PostgreSQL that leaves them at the operating system's default of 2 hours.
+
+To find the session that holds the barrier, connect to the Hephaestus database and run:
+
+```sql
+SELECT a.pid, a.client_addr, a.backend_start, a.state, a.query
+FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+WHERE l.locktype = 'advisory' AND l.granted AND l.mode = 'ExclusiveLock' AND l.objsubid = 2
+  AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())
+  AND l.classid = hashtext('hephaestus')::oid AND l.objid = hashtext('database-migration')::oid;
+```
+
+The query returns only the migration's session. A server's start holds the lock in shared mode for a moment, and the query leaves it out.
+
+Make sure that no migration Job or process still runs.
+Then end the session with `SELECT pg_terminate_backend(<pid>);`. Its open change set rolls back, and the next migration runs it again.
 
 ### Rollouts and rollback
 

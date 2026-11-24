@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection.repair;
 
+import de.tum.cit.aet.hephaestus.core.exception.MaintenanceInProgressException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
@@ -46,6 +47,8 @@ public class ProviderOAuthExchangeRepairs implements OAuthExchangeRepair {
     public UUID begin(IntegrationRef owner) {
         if (owner.kind() != IntegrationKind.SLACK || owner.connectionId() == null)
             throw new IllegalArgumentException("A Slack exchange needs its bound connection");
+        // The exchange calls Slack across transactions, so none starts during a migration.
+        if (!repairs.maintenanceBarrierLifted()) throw new MaintenanceInProgressException();
         var resource = new Resource(
                 IntegrationKind.SLACK,
                 "https://slack.com",

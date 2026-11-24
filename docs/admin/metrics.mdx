@@ -478,6 +478,20 @@ The gauge never reports a backup that the server did not see:
 - A backup Job that waits `Pending` never succeeds, so the age grows.
 - Without backups, the server reports no age.
 
+## Maintenance barrier metric
+
+The server role reads every 15 seconds whether a database migration holds the maintenance barrier or waits for it ([Work during a migration](./runtime-roles#work-during-a-migration)).
+A scrape does not query the database.
+
+| Prometheus name              | Type  | Meaning                                                                    |
+| ---------------------------- | ----- | -------------------------------------------------------------------------- |
+| `maintenance_barrier_raised` | Gauge | `1` while a migration holds or waits for the barrier, so the server starts none of the guarded work, else `0` |
+
+Before the first read, and after a read that failed, the gauge is `NaN`.
+A gauge value is up to 15 seconds old, and a migration that waits for the barrier also reads `1`.
+If a fresh sample still reads `1` after the migration Job ended, check whether PostgreSQL still keeps the migration's session.
+[If the barrier stays up after the migration](./runtime-roles#if-the-barrier-stays-up-after-the-migration) tells how.
+
 ## WAL archive metrics
 
 The server role reads `pg_stat_archiver` and `archive_mode` from the database every 30 seconds.

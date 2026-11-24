@@ -988,6 +988,24 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    @Test
+    void shouldRefuseANewLeaseOfAnyStatementShapeWhileAMigrationRunsAndLetTheMigrationTakeIt() throws Exception {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:shape");
+        // Not the claim's own statement: a claim that forgot the barrier condition, written another way.
+        String lease = "UPDATE agent_run r SET state = 'LEASED', lease_epoch = (r.lease_epoch + 1),"
+                + " started_at = COALESCE(r.started_at, clock_timestamp()),"
+                + " leased_until = clock_timestamp() + interval '1 minute' WHERE r.id = ?";
+
+        try (var migration = RunningMigration.start(dataSource)) {
+            assertThatThrownBy(() -> jdbc.update(lease, run.id())).hasMessageContaining("takes no new lease");
+            assertThat(state(run.id())).isEqualTo("QUEUED");
+            assertThat(migration.update(lease, run.id()))
+                    .as("the migration's own session passes the barrier")
+                    .isOne();
+        }
+        assertThat(state(run.id())).isEqualTo("LEASED");
+    }
+
     private Optional<AgentRunLease> claim() {
         return Objects.requireNonNull(
                 transactions.execute(status -> runs.claim(Set.of(AgentRunKind.REVIEW), List.of())));

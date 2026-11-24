@@ -9,19 +9,23 @@ import de.tum.cit.aet.hephaestus.core.settings.InstanceSettings;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult.Outcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
+import java.sql.Connection;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -41,6 +45,9 @@ class EmailAdminControllerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private InstanceSettingsService instanceSettingsService;
+
+    @Autowired
+    private DataSource dataSource;
 
     @BeforeEach
     void releaseSilentMode() {
@@ -89,6 +96,40 @@ class EmailAdminControllerIntegrationTest extends BaseIntegrationTest {
         assertThat(response.messageId()).endsWith("@hephaestus.test>");
         assertThat(mailSender.sent()).hasSize(1);
         assertThat(mailSender.sent().getFirst().getSubject()).isEqualTo("Test email from Hephaestus");
+    }
+
+    @Test
+    void shouldAnswerThatHephaestusIsUpdatingWhileAMigrationRunsAndHoldsTheOutboxTable() throws Exception {
+        try (var _ = RunningMigration.start(dataSource);
+                Connection ddl = dataSource.getConnection();
+                var statement = ddl.createStatement()) {
+            // A change set that rewrites the outbox holds its table: the refusal must not wait for it.
+            ddl.setAutoCommit(false);
+            statement.execute("LOCK TABLE agent_action IN ACCESS EXCLUSIVE MODE");
+            try {
+                webTestClient
+                        .post()
+                        .uri("/admin/email/test")
+                        .headers(asInstanceAdmin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .bodyValue(Map.of("to", "ops@hephaestus.test"))
+                        .exchange()
+                        .expectStatus()
+                        .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+                        .expectHeader()
+                        .valueEquals(HttpHeaders.RETRY_AFTER, "60")
+                        .expectHeader()
+                        .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                        .expectBody()
+                        .jsonPath("$.status")
+                        .isEqualTo(503)
+                        .jsonPath("$.title")
+                        .isEqualTo("Hephaestus is updating");
+            } finally {
+                ddl.rollback();
+            }
+        }
+        assertThat(mailSender.sent()).isEmpty();
     }
 
     @Test

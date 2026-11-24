@@ -9,10 +9,14 @@ import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.MyProductFeedbackDTO
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.ProductFeedbackSharingDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackSharingDTO;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -76,6 +80,15 @@ public class MyProductFeedbackController {
     @Operation(
             operationId = "makeMyProductFeedbackPrivate",
             summary = "Move the report's public issue to the private repository")
+    @ApiResponse(responseCode = "200", description = "The issue moved to the private repository")
+    @ApiResponse(
+            responseCode = "503",
+            description = "A database migration runs, so the issue did not move. Retry after the Retry-After seconds,"
+                    + " or GitHub did not confirm the move and Hephaestus checks it again.",
+            content =
+                    @Content(
+                            mediaType = "application/problem+json",
+                            schema = @Schema(implementation = ProblemDetail.class)))
     public MyProductFeedbackDTO makePrivate(@PathVariable UUID feedbackId) {
         return reports.makePrivate(CurrentAccount.requireId(), feedbackId);
     }

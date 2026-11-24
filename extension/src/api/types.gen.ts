@@ -9293,6 +9293,10 @@ export type AdminSendTestEmailErrors = {
 	 */
 	400: ProblemDetail;
 	/**
+	 * A database migration runs, so nothing was sent. Retry after the Retry-After seconds.
+	 */
+	503: ProblemDetail;
+	/**
 	 * A problem. Its type names the kind.
 	 */
 	"4XX": ProblemDetail;
@@ -12999,6 +13003,10 @@ export type MakeMyProductFeedbackPrivateData = {
 
 export type MakeMyProductFeedbackPrivateErrors = {
 	/**
+	 * A database migration runs, so the issue did not move. Retry after the Retry-After seconds, or GitHub did not confirm the move and Hephaestus checks it again.
+	 */
+	503: ProblemDetail;
+	/**
 	 * A problem. Its type names the kind.
 	 */
 	"4XX": ProblemDetail;
@@ -13013,7 +13021,7 @@ export type MakeMyProductFeedbackPrivateError =
 
 export type MakeMyProductFeedbackPrivateResponses = {
 	/**
-	 * OK
+	 * The issue moved to the private repository
 	 */
 	200: MyProductFeedback;
 };

@@ -29,6 +29,7 @@ public final class CoreMetrics {
     public static final String DATABASE_SIZE = "database.size.bytes";
     public static final String DATABASE_VOLUME_CAPACITY = "database.volume.capacity.bytes";
     public static final String DATABASE_SIZE_SAMPLER_FAILURES = "database.size.sampler.failures";
+    public static final String MAINTENANCE_BARRIER_RAISED = "maintenance.barrier.raised";
     public static final String MCP_AUTH_REFUSALS = "mcp.auth.refusals";
     public static final String MCP_TOOL_CALLS = "mcp.tool.calls";
     public static final String PERSON_DATA_ERASURE_FAILURES = "person.data.erasure.failures";
