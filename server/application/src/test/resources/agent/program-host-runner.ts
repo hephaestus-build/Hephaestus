@@ -523,8 +523,8 @@ async function runOnRealSdk(cwd: string): Promise<void> {
 	await mockChange({ writeChangeView: () => undefined });
 	const proxy = process.env.LLM_PROXY_URL;
 	assert.ok(proxy !== undefined && proxy !== "");
-	// The proxy accepts each practice and its staged outcome, and the model submits a result, so the review runs to its
-	// admission.
+	// The proxy accepts each practice and its staged outcome. The model submits a result, so the review runs to its
+	// admission, or with PI_HOST_MODEL=refuses it refuses each call, so the review ends as the model unreachable.
 	mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
 		const url = input instanceof Request ? input.url : String(input);
 		assert.ok(url.startsWith(proxy), `the runner reached only the proxy, not ${url}`);
@@ -552,6 +552,9 @@ async function runOnRealSdk(cwd: string): Promise<void> {
 			});
 		}
 		capture("model-asked", true);
+		if (process.env.PI_HOST_MODEL === "refuses") {
+			return Response.json({ error: { message: "refused" } }, { status: 400 });
+		}
 		return new Response(modelAnswer(request), { headers: { "content-type": "text/event-stream" } });
 	});
 

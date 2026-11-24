@@ -406,9 +406,10 @@ It runs these cases:
   The measurement must build no session at all, through the factory or past it.
 - The staged review runner, through the harness of the review specs, on the real SDK.
   The harness stands in for the proxy's practice, staging and admission endpoints.
-  The model submits a result for each practice, so the review runs to its admission.
-  The runner must stage its result, reach admission and exit successfully.
-  It must open its sessions through the factory, and it must build no other Pi session and no `ModelSession`.
+  The spec runs it with two models, and the same session rule applies to both:
+  - A model that submits a result. The runner must stage its result, reach admission and exit successfully.
+  - A model that refuses each call. The runner must exit as it does when the model is unreachable, before admission.
+  The runner must open its sessions through the factory, and it must build no other Pi session and no `ModelSession`.
 - `REVIEW_COMPOSE` is the one exemption, named by its kind. It keeps its own model client until the publication cutover (CF-18). The proxy's composer fence (`ComposerTranscript`) checks each request against that client's conversation.
 - Eight fixtures break the rule and must fail it:
   - A runner imports `ModelSession` at run time and builds one.
