@@ -13,6 +13,7 @@ on:
       - "CI / Profile"
       - "CI / Server clean-build reference"
       - "Docs / Practice guidance links"
+      - "Release / Host watch"
       - "Release / Seeded upgrade"
       - "Repo / Delivery metrics"
       - "Security / OpenSSF Scorecard"
@@ -49,8 +50,9 @@ jobs:
               jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
                 ...context.repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100,
               });
+              // scripts/scheduled-failures.test.ts keeps this list equal to their failure() steps.
               const reporters = ['Report a failed rescan', 'Notify vulnerability response tracking',
-                'Notify maintainers when the rescan is unavailable'];
+                'Report a failed deployed rescan', 'Notify maintainers when the rescan is unavailable'];
               const failed = jobs.filter(job => ['failure', 'timed_out'].includes(job.conclusion));
               const handled = jobs.some(job => job.name === 'Report a failure' && job.conclusion === 'success')
                 || (failed.length > 0 && failed.every(job => job.steps?.some(step =>

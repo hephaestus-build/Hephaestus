@@ -981,6 +981,15 @@ groups:
   # exporter these series do not exist, and the rules stay silent.
   - name: hephaestus-postgresql
     rules:
+      # The exporter runs, but PostgreSQL refuses or does not answer it: every role that needs the database is down.
+      - alert: HephaestusPostgresDown
+        expr: max by (namespace) (pg_up{job="postgresql"}) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: PostgreSQL has not answered its exporter for 5 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # PostgreSQL broke a deadlock by cancelling one of the transactions, which the role then retried or failed.
       - alert: HephaestusDatabaseDeadlocks
         expr: sum by (namespace, datname) (increase(pg_stat_database_deadlocks{job="postgresql"}[15m])) > 0

@@ -120,6 +120,38 @@ await test("every role verifies the bundled PostgreSQL at its Service name with 
 	);
 });
 
+await test("every exec probe outlasts the command it runs", () => {
+	// A probe that times out kills only its shell. The orphaned pg_isready then exits under
+	// PostgreSQL's PID 1 init. pg_isready gives up after 3 s, so 10 s lets it answer on its own.
+	const resources = rendered([
+		...layersFor("small"),
+		sandboxLayer,
+		backupsOn,
+		{ networkPolicy: { kubernetesApi } },
+	]);
+	const probes = workloads(resources).flatMap((resource) =>
+		containers(resource).flatMap((entry) =>
+			["startupProbe", "livenessProbe", "readinessProbe"]
+				.filter((kind) => get(entry, kind, "exec") !== undefined)
+				.map((kind) => ({
+					probe: `${String(componentOf(resource))}/${String(get(entry, "name"))}/${kind}`,
+					timeoutSeconds: get(entry, kind, "timeoutSeconds"),
+				})),
+		),
+	);
+	assert.deepEqual(
+		probes.map(({ probe }) => probe),
+		[
+			"postgresql/postgresql/startupProbe",
+			"postgresql/postgresql/livenessProbe",
+			"postgresql/postgresql/readinessProbe",
+		],
+	);
+	for (const { probe, timeoutSeconds } of probes) {
+		assert.equal(timeoutSeconds, 10, probe);
+	}
+});
+
 const checksum = (layers: readonly Layer[]) =>
 	get(
 		workload(rendered(layers), "postgresql"),

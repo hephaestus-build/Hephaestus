@@ -336,6 +336,7 @@ export default defineConfig({
 			"test:server:mutation": run("node scripts/run-security-mutations.ts"),
 			"test:postgres-restore": run("node scripts/postgres-backup-restore-test.ts"),
 			"test:postgres-pitr": run("node scripts/postgres-pitr-test.ts"),
+			"test:postgres-init": run("node scripts/postgres-init-test.ts"),
 
 			// Webapp
 			// `vp check` is format plus lint; the format half is `gate:webapp-format`, so one failure

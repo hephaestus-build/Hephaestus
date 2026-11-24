@@ -2938,6 +2938,28 @@ tests:
         alertname: HephaestusDatabaseDeadlocks
         exp_alerts: []
 
+  - name: PostgreSQL that does not answer its exporter for 5 minutes is down
+    interval: 1m
+    input_series:
+      - series: 'pg_up{job="postgresql",namespace="hephaestus",instance="10.42.0.222:9187"}'
+        values: "1x2 0x10 1x5"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: HephaestusPostgresDown
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: HephaestusPostgresDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: hephaestus
+            exp_annotations:
+              summary: PostgreSQL has not answered its exporter for 5 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 14m
+        alertname: HephaestusPostgresDown
+        exp_alerts: []
+
   - name: existing deadlock totals and counter resets stay quiet until a new deadlock
     interval: 1m
     input_series:

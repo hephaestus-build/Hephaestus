@@ -8,7 +8,12 @@ import { fileURLToPath } from "node:url";
 
 import { isMap, isSeq, parseDocument } from "yaml";
 
-import { automaticPromotion, supersedingBuild, unchangedSummary } from "./automatic-promotion.ts";
+import {
+	automaticPromotion,
+	channelChangedAt,
+	supersedingBuild,
+	unchangedSummary,
+} from "./automatic-promotion.ts";
 import { parseChannel } from "./reconcile-deployment.ts";
 
 const current = "a".repeat(40);
@@ -32,8 +37,19 @@ await test("a held or current request says what the channel stays on, and that n
 	assert.equal(held.title, "Staging is held");
 	assert.match(
 		held.text,
-		new RegExp(`frozen on ${current}, so ${next.slice(0, 10)} was not promoted`, "u"),
+		new RegExp(
+			`frozen on ${current} since a time that deploy-state did not report, so ${next.slice(0, 10)} was not promoted`,
+			"u",
+		),
 	);
+	const dated = unchangedSummary(
+		{ outcome: "held", release: current },
+		"Staging",
+		next,
+		new Date("2026-11-17T21:47:12Z"),
+		new Date("2026-11-24T18:00:00Z"),
+	);
+	assert.match(dated.text, /frozen on a+ since 2026-11-17T21:47:12\.000Z \(164 h\), so /u);
 	assert.match(
 		held.text,
 		/Nothing was published or deployed\. A promotion without freeze lifts the hold\./u,
@@ -315,7 +331,7 @@ await test("the CLI fails closed for invalid channels but honors a valid hold wi
 	assert.equal(readFileSync(outputFile, "utf8"), "apply=false\noutcome=held\n");
 	assert.match(
 		held.stdout,
-		/^::notice title=Staging is held::The Staging channel is frozen on v1\.2\.3/mu,
+		/^::warning title=Staging is held::The Staging channel is frozen on v1\.2\.3/mu,
 	);
 	assert.match(
 		readFileSync(summaryFile, "utf8"),
@@ -363,5 +379,25 @@ await test("a held request publishes, signs, deploys and reports nothing, and fi
 	assert.match(
 		String(workflow.getIn(["jobs", "report-failure", "if"])),
 		/^\$\{\{ failure\(\) && inputs\.automatic \}\}$/u,
+	);
+});
+
+await test("a hold starts at the channel's last deploy-state commit, and an unreadable history has no start", async () => {
+	assert.deepEqual(
+		await channelChangedAt(async () => [
+			{ commit: { committer: { date: "2026-11-17T21:47:12Z" } } },
+		]),
+		new Date("2026-11-17T21:47:12Z"),
+	);
+	assert.equal(await channelChangedAt(async () => []), undefined);
+	assert.equal(
+		await channelChangedAt(async () => [{ commit: { committer: { date: "soon" } } }]),
+		undefined,
+	);
+	assert.equal(
+		await channelChangedAt(async () => {
+			throw new Error("HTTP 502");
+		}),
+		undefined,
 	);
 });

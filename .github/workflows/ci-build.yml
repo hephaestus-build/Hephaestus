@@ -292,6 +292,9 @@ jobs:
         env:
           HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
         run: node scripts/postgres-pitr-test.ts --target-image hephaestus-postgres:ci
+      - name: Run the PostgreSQL init drill
+        if: ${{ !cancelled() && steps.backup_restore.outcome != 'skipped' }}
+        run: node scripts/postgres-init-test.ts --target-image hephaestus-postgres:ci
 
   fail-fast-server-api:
     name: Stop the merge group early

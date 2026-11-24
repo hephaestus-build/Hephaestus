@@ -1,0 +1,52 @@
+name: Release / Host watch
+
+# Checks from outside what users and continuous staging depend on: the API of each host answers, and
+# Staging is not frozen for longer than a day. A failed check fails the run; CI / Scheduled failures
+# then notifies the maintainers. docs/admin/production-operations-runbook.mdx § Host watch has the response.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  api:
+    name: The API of each host answers
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - name: Probe each host's API readiness
+        env:
+          HOSTS: hephaestus.build staging.hephaestus.build
+        run: node scripts/watch-hosts.ts api
+
+  freeze:
+    name: Staging follows main
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - name: Check how long the Staging channel is frozen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/watch-hosts.ts freeze
