@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSlackMessages;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSlackReplies;
+import de.tum.cit.aet.hephaestus.conversation.ConversationStatements;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnClaims;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
@@ -33,12 +34,14 @@ import de.tum.cit.aet.hephaestus.core.action.ActionPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
+import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -58,6 +61,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -102,6 +106,15 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
     @Autowired
     private TransactionTemplate transactions;
 
+    @Autowired
+    private OwnerScope owners;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private SqlStatementCounter statements;
+
     private final SlackMessageService slack = mock(SlackMessageService.class);
     private Workspace workspace;
     private Conversation main;
@@ -129,7 +142,7 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
                 mapper,
                 workspaceSummaries);
         executor = ActionTestSupport.withAdapter(context, adapter);
-        projector = new SlackConversationProjector(messages, replies, executor);
+        projector = new SlackConversationProjector(messages, replies, executor, owners, transactionManager);
     }
 
     private ConversationTurnService.Submission ask(Conversation conversation, ConversationTurn.Surface surface) {
@@ -156,15 +169,20 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     private void changed(ConversationTurn turn) {
+        projector.turnChanged(event(turn));
+    }
+
+    /** The change that the ledger publishes for the turn as it stands now. */
+    private ConversationLedgerEvents.TurnChanged event(ConversationTurn turn) {
         var now = turns.require(workspace.getId(), turn.getId());
-        projector.turnChanged(new ConversationLedgerEvents.TurnChanged(
+        return new ConversationLedgerEvents.TurnChanged(
                 workspace.getId(),
                 now.getConversationId(),
                 now.getAccountId(),
                 now.getId(),
                 now.getStatus(),
                 now.getSurface(),
-                now.getAttempt()));
+                now.getAttempt());
     }
 
     private String key(ConversationTurnService.Submission asked) {
@@ -187,6 +205,34 @@ class SlackConversationProjectorIntegrationTest extends AbstractWorkspaceIntegra
     private void posts() {
         when(slack.postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any()))
                 .thenReturn(new SlackMessageService.Posted("D9", "200.1"));
+    }
+
+    /**
+     * The projector reads the ended turn with the developer's account bound as the owner of a read-only transaction,
+     * as the conversation tables' owner policy needs, and wakes the outbox for its post.
+     */
+    @Test
+    void shouldReadTheEndedTurnAsItsDeveloperInAReadOnlyTransactionWhenASlackTurnEnds() {
+        var asked = ask(main, ConversationTurn.Surface.SLACK);
+        var running = claims.claim(asked.turn());
+        end(running, "Your reviews are quick.");
+        var wakes = mock(ActionExecutor.class);
+        var reading = new SlackConversationProjector(messages, replies, wakes, owners, transactionManager);
+        var ended = event(asked.turn());
+
+        var measured = statements.measureOwners(() -> {
+            reading.turnChanged(ended);
+            return asked;
+        });
+
+        assertThat(ConversationStatements.of(measured))
+                .as("the projector's reads of the conversation tables")
+                .isNotEmpty()
+                .allSatisfy(statement -> {
+                    assertThat(statement.owner()).as(statement.sql()).isEqualTo(account);
+                    assertThat(statement.readOnly()).as(statement.sql()).isTrue();
+                });
+        verify(wakes).runNow(action(asked));
     }
 
     @Test

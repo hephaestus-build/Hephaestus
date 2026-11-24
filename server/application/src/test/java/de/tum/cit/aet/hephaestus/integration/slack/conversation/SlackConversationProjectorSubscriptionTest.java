@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationSlackMessages;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSlackReplies;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.util.List;
@@ -30,6 +31,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.scheduling.annotation.AsyncAnnotationBeanPostProcessor;
+import org.springframework.transaction.PlatformTransactionManager;
 
 class SlackConversationProjectorSubscriptionTest extends BaseUnitTest {
 
@@ -75,7 +77,12 @@ class SlackConversationProjectorSubscriptionTest extends BaseUnitTest {
                     .withBean(ConversationLedgerNotifications.class, () -> notifications)
                     .withBean(
                             SlackConversationProjector.class,
-                            () -> new SlackConversationProjector(messages, replies, executor))
+                            () -> new SlackConversationProjector(
+                                    messages,
+                                    replies,
+                                    executor,
+                                    mock(OwnerScope.class),
+                                    mock(PlatformTransactionManager.class)))
                     .withBean(AsyncAnnotationBeanPostProcessor.class, () -> {
                         var advice = new AsyncAnnotationBeanPostProcessor();
                         advice.setProxyTargetClass(true);

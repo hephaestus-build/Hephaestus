@@ -6,9 +6,12 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationSlackMessages;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSlackReplies;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import lombok.RequiredArgsConstructor;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
@@ -16,16 +19,37 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
-/** Wakes the one outbox executor for a completed answer; Slack never sees a partial model answer. */
+/**
+ * Wakes the one outbox executor for a completed answer; Slack never sees a partial model answer. It reads the turn as
+ * the account that the change names, in a read-only transaction, and wakes the executor after that transaction.
+ */
 @Component
 @ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
-@RequiredArgsConstructor
+@OwnerScope.StoredOwnerOperation
 public class SlackConversationProjector implements ConversationLedgerNotifications.Listener {
     private final ConversationSlackMessages messages;
     private final ConversationSlackReplies replies;
     private final ActionExecutor executor;
+    private final OwnerScope owners;
+    private final TransactionTemplate reads;
+
+    public SlackConversationProjector(
+            ConversationSlackMessages messages,
+            ConversationSlackReplies replies,
+            ActionExecutor executor,
+            OwnerScope owners,
+            PlatformTransactionManager transactions) {
+        this.messages = messages;
+        this.replies = replies;
+        this.executor = executor;
+        this.owners = owners;
+        this.reads = new TransactionTemplate(transactions);
+        reads.setReadOnly(true);
+    }
 
     /**
      * Subscribes the projector to the ledger once the application is ready. The subscription is background work: the
@@ -48,10 +72,13 @@ public class SlackConversationProjector implements ConversationLedgerNotificatio
     public void turnChanged(ConversationLedgerEvents.TurnChanged change) {
         if (change.surface() != ConversationTurn.Surface.SLACK
                 || !change.status().isTerminal()) return;
-        messages.slackTurn(change.workspaceId(), change.turnId())
-                .flatMap(turn -> replies.forQuestion(
-                        change.workspaceId(), turn.question().getId()))
-                .ifPresent(executor::runNow);
+        Optional<UUID> post = Objects.requireNonNull(reads.execute(status -> {
+            owners.ofJob(change.accountId());
+            return messages.slackTurn(change.workspaceId(), change.turnId())
+                    .flatMap(turn -> replies.forQuestion(
+                            change.workspaceId(), turn.question().getId()));
+        }));
+        post.ifPresent(executor::runNow);
     }
 
     @Override
