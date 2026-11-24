@@ -31,6 +31,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIf;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.modulith.events.ApplicationModuleListener;
@@ -154,12 +155,13 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
     private static Set<String> harnessTests(JavaClasses scope) {
         Set<String> tested = new TreeSet<>();
         for (var test : scope) {
-            // JUnit runs the harness only in a concrete, visible and enabled test class.
+            // JUnit runs the harness only in a concrete and visible test class. A harness test that a condition
+            // can switch off, such as @DisabledIf or @EnabledOnOs, proves nothing when the condition holds.
             if (inProduction(test)
                     || test.isInterface()
                     || test.getModifiers().contains(JavaModifier.ABSTRACT)
                     || test.getModifiers().contains(JavaModifier.PRIVATE)
-                    || test.isAnnotatedWith(Disabled.class)
+                    || hasExecutionCondition(test.reflect())
                     || overridesHarnessTests(test.reflect())) continue;
             for (Type contract : test.reflect().getGenericInterfaces()) {
                 if (contract instanceof ParameterizedType harness
@@ -169,6 +171,15 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
             }
         }
         return tested;
+    }
+
+    /** Whether a JUnit annotation can switch off the tests of a class: {@link Disabled} or any execution condition. */
+    private static boolean hasExecutionCondition(Class<?> test) {
+        for (var annotation : test.getAnnotations()) {
+            Class<?> type = annotation.annotationType();
+            if (type == Disabled.class || type.getPackageName().equals(DisabledIf.class.getPackageName())) return true;
+        }
+        return false;
     }
 
     /** Whether a test class overrides a test of the harness, which could disable or weaken it. */
@@ -308,8 +319,13 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
     private abstract static class AbstractHarness
             implements IdempotentListenerIntegrationTest<TwoHandlersOfOneEvent, Typed> {}
 
-    @Disabled("A fixture: a disabled test enrols no listener")
+    /** A fixture that a condition switches off, so it enrols no listener. */
+    @DisabledIf("switchedOff")
     static final class DisabledHarness implements IdempotentListenerIntegrationTest<StoredTextListener, String> {
+        static boolean switchedOff() {
+            return true;
+        }
+
         @Override
         public Events<String> newEvents() {
             return new Events<>("a", "b");
@@ -340,7 +356,6 @@ class RegistryEventShapeArchTest extends HephaestusArchitectureTest {
         }
 
         @Test
-        @Disabled("A fixture: an overridden harness test enrols no listener")
         @Override
         public void shouldReachTheSameStateWhenTwoEventsArriveInSwappedOrder() {}
     }
