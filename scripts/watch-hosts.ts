@@ -1,3 +1,4 @@
+import { appendFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import {
@@ -13,8 +14,8 @@ import { parseChannel, type Channel } from "./reconcile-deployment.ts";
 
 /**
  * Release / Host watch: checks from outside each host what a user and continuous staging depend on.
- * Each check keeps one issue: the first failure opens it and notifies the maintainers, and the next
- * pass closes it. The hosts' own Alertmanager reaches no one unless its site configuration names a
+ * Each host's server and the Staging freeze keep one issue each: the first failing verdict opens
+ * it and notifies the maintainers, and the next passing verdict closes it. The hosts' own Alertmanager reaches no one unless its site configuration names a
  * receiver.
  */
 
@@ -66,6 +67,9 @@ export async function apiAnswers(
 	return { ok: false, last };
 }
 
+/** What the freeze check concluded. Only `frozen` alerts; `undated` leaves an open issue as it is. */
+export type FreezeVerdict = "following" | "held" | "frozen" | "undated";
+
 /**
  * A hold alerts once it is older than freezeAlertHours. Without a date from deploy-state it only
  * warns: continuous staging already shows every held run as a warning.
@@ -74,67 +78,111 @@ export function freezeVerdict(
 	channel: Channel,
 	since: Date | undefined,
 	now: Date,
-): { alert: boolean; text: string } {
+): { verdict: FreezeVerdict; text: string } {
 	if (channel.freeze !== true) {
-		return { alert: false, text: `Staging follows main; it is on ${channel.release}.` };
+		return { verdict: "following", text: `Staging follows main; it is on ${channel.release}.` };
 	}
 	const hours = heldHours(since, now);
 	if (since === undefined || hours === undefined) {
 		return {
-			alert: false,
+			verdict: "undated",
 			text: `Staging is frozen on ${channel.release}, and deploy-state did not say since when.`,
 		};
 	}
 	return {
-		alert: hours >= freezeAlertHours,
+		verdict: hours >= freezeAlertHours ? "frozen" : "held",
 		text: `Staging is frozen on ${channel.release} since ${since.toISOString()} (${hours} h). Continuous staging deploys nothing until a promotion without freeze.`,
 	};
 }
 
-type HostWatchCheck = "api" | "freeze";
+/** One problem that the watch tracks with its own issue: a host's server, or the Staging freeze. */
+export interface Subject {
+	key: string;
+	title: string;
+	text: string;
+}
 
-/** The one issue each check keeps, found again by the marker that starts its body. */
-export const hostWatchIssues = {
-	api: {
-		marker: "<!-- hephaestus:host-watch:api -->",
-		title: "Host watch: a host's server is not ready",
-		text: "the server of a host stopped reporting ready from outside.",
-	},
-	freeze: {
-		marker: "<!-- hephaestus:host-watch:freeze -->",
-		title: "Host watch: Staging has been frozen for more than a day",
-		text: "the Staging channel has been frozen for 24 hours or more, so continuous staging deploys nothing.",
-	},
-} satisfies Record<HostWatchCheck, { marker: string; title: string; text: string }>;
+export const apiSubject = (host: string): Subject => ({
+	key: `api:${host}`,
+	title: `Host watch: the server of ${host} is not ready`,
+	text: `the server of ${host} stopped reporting ready from outside.`,
+});
+export const freezeSubject: Subject = {
+	key: "freeze",
+	title: "Host watch: Staging has been frozen for more than a day",
+	text: "the Staging channel has been frozen for 24 hours or more, so continuous staging deploys nothing.",
+};
+export const markerOf = (subject: Subject) => `<!-- hephaestus:host-watch:${subject.key} -->`;
+
+type IssueAction =
+	| { subject: Subject; kind: "open" }
+	| { subject: Subject; kind: "close"; number: number };
 
 /**
- * What the report does for each check: open its issue on the first failure, close it on the first
- * pass. A failure with the issue open notifies no one again, and a cancelled or skipped check
- * changes nothing.
+ * What the report does for each subject: open its issue on the first failing verdict, and close it
+ * on the first passing one. A failing verdict with the issue open notifies no one again. A subject
+ * with no conclusion, such as an undated freeze, leaves its issue as it is.
  */
-type IssueAction =
-	| { check: HostWatchCheck; kind: "open" }
-	| { check: HostWatchCheck; kind: "close"; number: number };
-
 export function issueActions(
-	results: Record<HostWatchCheck, string>,
-	openIssue: (check: HostWatchCheck) => number | undefined,
+	verdicts: { subject: Subject; failing: boolean | undefined }[],
+	openIssue: (subject: Subject) => number | undefined,
 ): IssueAction[] {
-	return (["api", "freeze"] as const).flatMap((check): IssueAction[] => {
-		const number = openIssue(check);
-		if (results[check] === "failure" && number === undefined) {
-			return [{ check, kind: "open" }];
+	return verdicts.flatMap(({ subject, failing }): IssueAction[] => {
+		const number = openIssue(subject);
+		if (failing === true && number === undefined) {
+			return [{ subject, kind: "open" }];
 		}
-		if (results[check] === "success" && number !== undefined) {
-			return [{ check, kind: "close", number }];
+		if (failing === false && number !== undefined) {
+			return [{ subject, kind: "close", number }];
 		}
 		return [];
 	});
 }
 
+/**
+ * The verdicts that the check jobs passed on. A check that ended without one (it crashed, timed out
+ * or was cancelled) concluded nothing about the hosts, so the report refuses: its own failure is
+ * what CI / Scheduled failures reports.
+ */
+export function reportVerdicts(
+	apiVerdicts: string,
+	freeze: string,
+): { subject: Subject; failing: boolean | undefined }[] {
+	const parsed: unknown = apiVerdicts === "" ? undefined : JSON.parse(apiVerdicts);
+	if (!isRecord(parsed) || Object.keys(parsed).length === 0) {
+		throw new Error("The server check ended without a verdict for any host");
+	}
+	const hosts = Object.entries(parsed).map(([host, verdict]) => {
+		if (verdict !== "ready" && verdict !== "down") {
+			throw new Error(`The server check gave ${host} no verdict`);
+		}
+		return { subject: apiSubject(host), failing: verdict === "down" };
+	});
+	if (!isFreezeVerdict(freeze)) {
+		throw new Error("The freeze check ended without a verdict");
+	}
+	return [...hosts, { subject: freezeSubject, failing: freezeFailing[freeze] }];
+}
+
+const freezeFailing: Record<FreezeVerdict, boolean | undefined> = {
+	following: false,
+	held: false,
+	frozen: true,
+	undated: undefined,
+};
+const isFreezeVerdict = (value: string): value is FreezeVerdict =>
+	Object.hasOwn(freezeFailing, value);
+
 /** One GitHub CLI call, bounded so that a stalled request cannot hold the run until its timeout. */
 const gh = async (args: string[]) => output("gh", args, { signal: AbortSignal.timeout(60_000) });
 
+/** A check's verdict for the report job: a step output, read through the job's outputs. */
+async function writeOutput(name: string, value: string): Promise<void> {
+	await appendFile(requiredEnv(process.env, "GITHUB_OUTPUT"), `${name}=${value}\n`);
+}
+
+// Each check ends successfully once it has a verdict: the report turns verdicts into issues, and
+// the error annotations show a failing verdict in the run.
 if (import.meta.main) {
 	const check = process.argv[2];
 	if (check === "api") {
@@ -149,7 +197,12 @@ if (import.meta.main) {
 					: `::error title=${host} server down::https://${host}/readyz did not report the server ready in 3 tries over 40 s (last: ${result.last}).`,
 			);
 		}
-		process.exitCode = results.every(({ result }) => result.ok) ? 0 : 1;
+		await writeOutput(
+			"verdicts",
+			JSON.stringify(
+				Object.fromEntries(results.map(({ host, result }) => [host, result.ok ? "ready" : "down"])),
+			),
+		);
 	} else if (check === "freeze") {
 		const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
 		const file = "channels/staging.json";
@@ -169,12 +222,18 @@ if (import.meta.main) {
 			channel.freeze === true
 				? await channelChangedAt(channelCommits(repository, file))
 				: undefined;
-		const { alert, text } = freezeVerdict(channel, since, new Date());
-		console.log(alert ? `::error title=Staging frozen too long::${text}` : `::notice::${text}`);
-		process.exitCode = alert ? 1 : 0;
+		const { verdict, text } = freezeVerdict(channel, since, new Date());
+		console.log(
+			verdict === "frozen" ? `::error title=Staging frozen too long::${text}` : `::notice::${text}`,
+		);
+		await writeOutput("verdict", verdict);
 	} else if (check === "report") {
 		const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
 		const runUrl = requiredEnv(process.env, "RUN_URL");
+		const verdicts = reportVerdicts(
+			process.env.API_VERDICTS ?? "",
+			process.env.FREEZE_VERDICT ?? "",
+		);
 		const listed = await gh([
 			"api",
 			"--paginate",
@@ -186,21 +245,13 @@ if (import.meta.main) {
 			.split("\n")
 			.filter((line) => line.trim() !== "")
 			.map((line) => asRecord(parseJson(line), "issue"));
-		const actions = issueActions(
-			{
-				api: requiredEnv(process.env, "API_RESULT"),
-				freeze: requiredEnv(process.env, "FREEZE_RESULT"),
-			},
-			(name) => {
-				const found = open.find(
-					(issue) =>
-						typeof issue.body === "string" && issue.body.startsWith(hostWatchIssues[name].marker),
-				);
-				return typeof found?.number === "number" ? found.number : undefined;
-			},
-		);
+		const actions = issueActions(verdicts, (subject) => {
+			const found = open.find(
+				(issue) => typeof issue.body === "string" && issue.body.startsWith(markerOf(subject)),
+			);
+			return typeof found?.number === "number" ? found.number : undefined;
+		});
 		for (const action of actions) {
-			const issue = hostWatchIssues[action.check];
 			if (action.kind === "open") {
 				await gh([
 					"issue",
@@ -208,9 +259,9 @@ if (import.meta.main) {
 					"-R",
 					repository,
 					"--title",
-					issue.title,
+					action.subject.title,
 					"--body",
-					`${issue.marker}\n@hephaestus-build/maintainer: ${issue.text} First failed run: ${runUrl}. This issue closes itself when the check passes again. Response: docs/contributor/release-management.mdx § Host watch.`,
+					`${markerOf(action.subject)}\n@hephaestus-build/maintainer: ${action.subject.text} First failed run: ${runUrl}. This issue closes itself when the check passes again. Response: docs/contributor/release-management.mdx § Host watch.`,
 				]);
 			} else {
 				await gh([
@@ -223,7 +274,7 @@ if (import.meta.main) {
 					`The check passed again: ${runUrl}.`,
 				]);
 			}
-			console.log(`${action.kind} ${action.check}`);
+			console.log(`${action.kind} ${action.subject.key}`);
 		}
 	} else {
 		throw new Error("usage: watch-hosts.ts api|freeze|report");

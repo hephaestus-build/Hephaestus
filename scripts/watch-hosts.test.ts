@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseChannel } from "./reconcile-deployment.ts";
-import { apiAnswers, freezeVerdict, issueActions } from "./watch-hosts.ts";
+import {
+	apiAnswers,
+	apiSubject,
+	freezeSubject,
+	freezeVerdict,
+	issueActions,
+	reportVerdicts,
+} from "./watch-hosts.ts";
 
 const reply = (status: number, body: string) => ({ status, text: async () => body });
 
@@ -54,37 +61,59 @@ await test("the server is ready when one readiness request returns its health bo
 	assert.equal(calls, 3);
 });
 
-await test("a freeze alerts after 24 h, and an undated freeze only warns", () => {
+await test("a freeze alerts after 24 h, and an undated freeze concludes nothing", () => {
 	const now = new Date("2026-11-24T18:00:00Z");
 	const frozen = parseChannel({ release: "v1.0.0-rc.10", freeze: true });
-	assert.equal(freezeVerdict(frozen, new Date("2026-11-24T00:00:00Z"), now).alert, false);
+	assert.equal(freezeVerdict(frozen, new Date("2026-11-24T00:00:00Z"), now).verdict, "held");
 	const old = freezeVerdict(frozen, new Date("2026-11-17T21:47:12Z"), now);
-	assert.equal(old.alert, true);
+	assert.equal(old.verdict, "frozen");
 	assert.match(old.text, /frozen on v1\.0\.0-rc\.10 since 2026-11-17T21:47:12\.000Z \(164 h\)/u);
-	assert.equal(freezeVerdict(frozen, undefined, now).alert, false);
-	const following = parseChannel({ release: "v1.0.0-rc.10" });
-	assert.equal(freezeVerdict(following, undefined, now).alert, false);
+	assert.equal(freezeVerdict(frozen, undefined, now).verdict, "undated");
+	assert.equal(
+		freezeVerdict(parseChannel({ release: "v1.0.0-rc.10" }), undefined, now).verdict,
+		"following",
+	);
 });
 
-const none = () => undefined;
+const production = apiSubject("hephaestus.build");
+const staging = apiSubject("staging.hephaestus.build");
 
-await test("a check notifies once when it starts failing and closes its issue when it passes", () => {
-	assert.deepEqual(issueActions({ api: "failure", freeze: "success" }, none), [
-		{ check: "api", kind: "open" },
-	]);
-	// Every later failed run finds the issue open and notifies no one.
+await test("each host and the freeze notify once when they start failing, and close their issue when they pass", () => {
 	assert.deepEqual(
-		issueActions({ api: "failure", freeze: "success" }, (check) =>
-			check === "api" ? 7 : undefined,
+		issueActions([{ subject: production, failing: true }], () => undefined),
+		[{ subject: production, kind: "open" }],
+	);
+	// A deliberately stopped production keeps its issue open; staging going down still notifies.
+	const open = (subject: { key: string }) => (subject.key === production.key ? 7 : undefined);
+	assert.deepEqual(
+		issueActions(
+			[
+				{ subject: production, failing: true },
+				{ subject: staging, failing: true },
+			],
+			open,
 		),
+		[{ subject: staging, kind: "open" }],
+	);
+	assert.deepEqual(issueActions([{ subject: production, failing: false }], open), [
+		{ subject: production, kind: "close", number: 7 },
+	]);
+	// An undated freeze neither closes nor opens the freeze issue.
+	assert.deepEqual(
+		issueActions([{ subject: freezeSubject, failing: undefined }], () => 9),
 		[],
 	);
-	assert.deepEqual(
-		issueActions({ api: "success", freeze: "failure" }, (check) => (check === "api" ? 7 : 8)),
-		[{ check: "api", kind: "close", number: 7 }],
-	);
-	assert.deepEqual(
-		issueActions({ api: "cancelled", freeze: "skipped" }, () => 9),
-		[],
-	);
+});
+
+await test("a check that ended without a verdict fails the report instead of becoming a claim", () => {
+	const both = JSON.stringify({ "hephaestus.build": "down", "staging.hephaestus.build": "ready" });
+	assert.deepEqual(reportVerdicts(both, "undated"), [
+		{ subject: production, failing: true },
+		{ subject: staging, failing: false },
+		{ subject: freezeSubject, failing: undefined },
+	]);
+	// A crashed, timed-out or cancelled check job passes on an empty output.
+	assert.throws(() => reportVerdicts("", "following"), /without a verdict for any host/u);
+	assert.throws(() => reportVerdicts(both, ""), /freeze check ended without a verdict/u);
+	assert.throws(() => reportVerdicts('{"hephaestus.build":"maybe"}', "held"), /no verdict/u);
 });
