@@ -279,6 +279,48 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAcceptTheReviewedHeadOfAMergedRequestAfterSourceBranchDeletion() {
+        provider.head(42, "c".repeat(40));
+        provider.merge(42);
+        provider.deleteBranch(42);
+
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.CURRENT);
+    }
+
+    @Test
+    void shouldReportTheMissingSourceBranchOfAnOpenRequest() {
+        provider.head(42, "c".repeat(40));
+        provider.deleteBranch(42);
+
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.SOURCE_BRANCH_MISSING);
+    }
+
+    @Test
+    void shouldAcceptTheReviewedHeadWhenMergeAndBranchDeletionHappenDuringTheCheck() {
+        provider.head(42, "c".repeat(40));
+        provider.mergeAndDeleteOnBranchRead(42);
+
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.CURRENT);
+    }
+
+    @Test
+    void shouldReportAMergedRequestWithADifferentDiffHeadAsMoved() {
+        provider.head(42, "d".repeat(40));
+        provider.merge(42);
+        provider.deleteBranch(42);
+
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.MOVED);
+    }
+
+    @Test
+    void shouldKeepTheOpenRequestHeadUnknownWhenTheSourceRepositoryIsUnreadable() {
+        provider.head(42, "c".repeat(40));
+        provider.hideSourceRepository(42);
+
+        assertThat(writer.liveHead(TARGET)).isEqualTo(LiveHead.UNKNOWN);
+    }
+
+    @Test
     void shouldNotReadTheHeadWhileTheRateLimitIsCritical() {
         provider.head(42, "c".repeat(40));
         when(provider.provider().isRateLimitCritical(1L)).thenReturn(true);
