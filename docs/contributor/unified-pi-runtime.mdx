@@ -68,7 +68,7 @@ If both accounts have a main conversation in a workspace, it merges them:
 
 ## Turn lifecycle
 
-1. The server writes the question entry and a `QUEUED` turn in one transaction (`ConversationTurnService.submit`). The client `requestId` makes a repeat return the same rows. [Personal data](#personal-data) tells when the server refuses the write.
+1. The server writes the question entry and a `QUEUED` turn in one transaction (`ConversationTurnService.submit`). The client's `Idempotency-Key` makes a repeat return the same rows (`ClientInputs`, [Conversation mutation matrix](./mentoring-framework#conversation-mutation-matrix)). [Personal data](#personal-data) tells when the server refuses the write.
 2. The conversation sandbox driver claims its next run with `POST /internal/agent/next` ([Turn assignment](#turn-assignment)). The server claims the first queued turn of a conversation that has no running turn (`ConversationTurnStarter.startClaimed`). The order in a conversation is the `seq` of the questions, which the server gives under the lock of the conversation. The clock of a server does not decide it. The turn becomes `RUNNING` with a lease.
 3. The server admits the turn (`ConversationAdmission.admit`) and freezes the model and price in `conversation_turn.admission`. A refusal ends the turn `FAILED` with the refusal text.
 4. The server answers the pull with the run and epoch. The driver uses its sandbox credential to read context and run Pi. While Pi works, the driver reports the partial answer. Each call of the attempt can reach a different server.

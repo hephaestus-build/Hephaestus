@@ -18,7 +18,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * The create receipts and their expiry rule: the change sets install the table, its purge trigger and the sweep
- * branch, and their rollback leaves the owner function exactly as the conversation owner change set left it.
+ * branch, and their rollback leaves the owner function exactly as the owner sweep admission change set left it.
  */
 @Tag("database")
 class ClientInputMigrationTest {
@@ -62,7 +62,7 @@ class ClientInputMigrationTest {
                     .as("the table, its purge trigger and the trigger function are gone")
                     .containsExactly("true");
             assertThat(PracticeMigrationFixture.column(database, SWEEP))
-                    .as("the owner function is the one the conversation owner change set installed")
+                    .as("the owner function is the one the owner sweep admission change set installed")
                     .containsExactlyElementsOf(sweepBefore);
             assertThatThrownBy(() -> PracticeMigrationFixture.column(database, EXPIRY))
                     .hasMessageContaining("unknown rule CLIENT_INPUT_EXPIRY");
@@ -106,6 +106,48 @@ class ClientInputMigrationTest {
         assertThatThrownBy(() -> PracticeMigrationFixture.column(
                         database, "SELECT person_row_sweep('CLIENT_INPUT_EXPIRY', NULL, NULL, NULL)::text"))
                 .hasMessageContaining("CLIENT_INPUT_EXPIRY needs the cutoff");
+    }
+
+    /**
+     * A receipt that another transaction holds, as an erasure or a purge does, is skipped rather than waited on; the
+     * next call removes it once the holder commits.
+     */
+    @Test
+    void shouldSkipAReceiptThatAnotherTransactionHolds() throws Exception {
+        var database = NativePracticeFixture.database("prod");
+        PracticeMigrationFixture.execute(
+                database, "INSERT INTO account(id,display_name) VALUES(" + ACCOUNT + ",'Receipt owner')");
+        UUID held = UUID.randomUUID();
+        UUID free = UUID.randomUUID();
+        PracticeMigrationFixture.execute(database, """
+                INSERT INTO client_input(workspace_id,account_id,idem_key,fingerprint,result_id,related_id,created_at)
+                VALUES(%1$d,%2$d,'%3$s',sha256('held'::bytea),gen_random_uuid(),gen_random_uuid(),now() - interval '9 days'),
+                      (%1$d,%2$d,'%4$s',sha256('free'::bytea),gen_random_uuid(),gen_random_uuid(),now() - interval '9 days');
+                """.formatted(WORKSPACE, ACCOUNT, held, free));
+
+        try (var holder = DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
+                var sweeper =
+                        DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password())) {
+            holder.setAutoCommit(false);
+            try (var lock = holder.prepareStatement("SELECT 1 FROM client_input WHERE idem_key = ? FOR UPDATE")) {
+                lock.setObject(1, held);
+                lock.executeQuery().close();
+            }
+            try (var statement = sweeper.createStatement()) {
+                statement.execute("SET lock_timeout = '2s'");
+                try (var result = statement.executeQuery(EXPIRY)) {
+                    assertThat(result.next()).isTrue();
+                    assertThat(result.getString(1))
+                            .as("the free receipt goes, the held one is skipped")
+                            .isEqualTo("1");
+                }
+            }
+            holder.commit();
+        }
+
+        assertThat(PracticeMigrationFixture.column(database, EXPIRY))
+                .as("the next call removes the receipt once its holder committed")
+                .containsExactly("1");
     }
 
     private static Liquibase liquibase(TestDatabase database) throws Exception {
