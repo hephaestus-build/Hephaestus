@@ -75,11 +75,13 @@ public class AgentRunController {
      * Ends the run, or hands it on. A run that this claim already ended answers as ended. A sandbox whose network
      * policy did not hold ends its run as {@code unisolated}: the run is handed on and the sandbox taken back in one
      * transaction, also when the run had moved on already, because the sandbox is unsafe whatever its run.
+     * A report draft that hands on also returns its sandbox, so the slot can serve another report.
      */
     @PostMapping("/end")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void end(SandboxRun run, @Valid @RequestBody End request) {
         var kind = kind(run);
+        boolean draft = run.kind() == AgentRunKind.DRAFT_REPORT;
         boolean unisolated = UNISOLATED.equals(request.outcome());
         var outcome = unisolated
                 ? SandboxRunKind.Outcome.HANDED_ON
@@ -90,9 +92,12 @@ public class AgentRunController {
         boolean held = Boolean.TRUE.equals(transactions.execute(status -> {
             kind.beforeWrite(run.sandbox());
             if (unisolated) sandboxes.revoke(run.sandbox(), AgentSandboxes.Revocation.UNISOLATED);
-            return kind.end(run, outcome, request.cause(), request.answer());
+            boolean ended = kind.end(run, outcome, request.cause(), request.answer());
+            if (ended && draft && outcome == SandboxRunKind.Outcome.HANDED_ON && !unisolated)
+                sandboxes.revoke(run.sandbox(), AgentSandboxes.Revocation.DRAFT_REQUEUED);
+            return ended;
         }));
-        if (run.kind() == AgentRunKind.DRAFT_REPORT) sandboxes.deleteRevoked(run.sandbox());
+        if (draft) sandboxes.deleteRevoked(run.sandbox());
         if (!held) throw new StaleRunException(run.fence());
     }
 

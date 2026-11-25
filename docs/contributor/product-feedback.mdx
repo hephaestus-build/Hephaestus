@@ -37,7 +37,7 @@ flowchart LR
 
 The drafting API and the other product feedback services load on every server. The run kind that dispatches drafts needs the agent runtime.
 The server refreshes issue snapshots, files issues, polls follow-up, processes `/publish`, transfers issues, and performs external cleanup.
-One sandbox serves each draft generation. The sandbox calls the model through the LLM proxy.
+Each draft attempt runs in a sandbox and calls the model through the LLM proxy.
 
 The `productfeedback.drafting` contract has these operations:
 
@@ -78,11 +78,13 @@ It sends the call through its permits and its egress guard, as it does for a rev
 After capacity is granted, admission locks the destination settings and reserves the daily allowance before provider work.
 The proxy reads the current limits.
 A reservation covers its retries. A limit of zero stops them.
+If the instance or reporter reaches the daily limit, the draft ends with `quota_exhausted`.
 
 The proxy opens at most one billed call per lease epoch.
-Pi asks for a fresh lease after a temporary provider failure. The run gets up to two retries within its original deadline.
+Pi asks for a fresh lease after a temporary provider failure, including a provider that stops sending data.
+The run gets up to two retries within its original deadline.
 If the model pool is full, the run waits for capacity without using a retry.
-A model silence timeout ends the run even if time remains.
+A draft that returns its lease releases the sandbox while it waits.
 
 The run's end moves the report to `ANSWERED` if it still waits for that generation.
 A completed run keeps the model's answer. If the model fails or the deadline passes, the report goes on without a draft.

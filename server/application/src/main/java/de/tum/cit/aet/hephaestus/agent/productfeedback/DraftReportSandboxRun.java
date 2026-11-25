@@ -146,7 +146,10 @@ class DraftReportSandboxRun implements SandboxRunKind, ProductFeedbackDrafts.Que
             detail = "model_timeout";
         } else {
             reason = AgentRunStopReason.FAILED;
-            detail = "invalid_context".equals(cause) ? "invalid_context" : "model_failed";
+            detail = switch (cause) {
+                case "invalid_context", "quota_exhausted" -> cause;
+                case null, default -> "model_failed";
+            };
         }
         var ended = runs.end(run.fence(), reason);
         if (ended == AgentRuns.EndOutcome.ENDED) {

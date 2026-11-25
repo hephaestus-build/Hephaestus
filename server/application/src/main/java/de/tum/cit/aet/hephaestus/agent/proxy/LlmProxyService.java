@@ -580,7 +580,7 @@ class LlmProxyService {
                 String reason = attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
                         ? "The report draft allowance is unavailable."
                         : budgetReachedMessage(routing.connectionScope());
-                return refusal(spendingRefusal, ProxyRefusal.BUDGET, reason);
+                return refusal(spendingRefusal, held.refusal, reason);
             } catch (RuntimeException failure) {
                 // The call never reached its provider, so the provider's health takes no failure from it.
                 permit.released();
@@ -734,17 +734,20 @@ class LlmProxyService {
                 ProxyStallErrors.judge(upstream, permit);
             }
             Bounds bounds = exchange.bounds();
-            if (bounds != null && upstream.streamOutcome() == StreamOutcome.UPSTREAM_IDLE) {
+            if (bounds != null && ended == StreamOutcome.UPSTREAM_IDLE) {
                 accounting.recordUpstreamStalled(routing.apiProtocol());
                 String stall = STREAM_STALLED.formatted(bounds.idle().toSeconds());
                 if (!routing.conversationTurn())
                     log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
                 if (response != null) errors.writeStallFrame(response, protocol, stall);
+            } else if (ended == StreamOutcome.TIMED_OUT
+                    && attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
+                    && response != null) {
+                errors.writeDraftDeadlineFrame(response, protocol);
             }
-            var outcome = upstream.streamOutcome();
-            if (outcome != null)
+            if (ended != null)
                 return settleStream(
-                        routing, attempt, row, span, upstream.status(), outcome, tap, call, poolPermit, protocol);
+                        routing, attempt, row, span, upstream.status(), ended, tap, call, poolPermit, protocol);
             boolean served = upstream.status() >= 200 && upstream.status() < 300;
             if (!served) {
                 call.failed(new ModelCallFailure(UPSTREAM_STATUS, upstream.status()));

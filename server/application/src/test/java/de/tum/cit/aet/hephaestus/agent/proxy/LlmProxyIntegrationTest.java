@@ -694,10 +694,11 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         response,
                         (incoming, outgoing) -> result.set(proxy.proxy(request, response, headers, body)));
                 if (dailyLimit == 0) {
-                    assertThat(Objects.requireNonNull(result.get())
-                                    .getStatusCode()
-                                    .value())
-                            .isEqualTo(429);
+                    var refused = Objects.requireNonNull(result.get());
+                    assertThat(refused.getStatusCode().value()).isEqualTo(429);
+                    assertThat(refused.getHeaders().getFirst(LlmProxyService.REFUSAL_HEADER))
+                            .isEqualTo("DRAFT_QUOTA");
+                    assertThat(refused.getBody()).asString().contains("draft_quota:");
                     assertThat(upstream.getRequestCount()).isZero();
                     assertThat(meterRegistry
                                     .find(AgentMetrics.LLM_BUDGET_BLOCKED)

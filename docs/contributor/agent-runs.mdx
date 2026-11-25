@@ -102,7 +102,9 @@ A deferral spends no attempt and keeps the run's `available_at`, so the run gaug
 No claim takes it before `deferred_until`, 5 seconds later.
 
 The wait does not grow, so the runs that wait for one pool try it at the same rate.
-Among the runs that a claim can take, a deferred run keeps its age in the claim order.
+Reviews and conversations keep their age in the claim order while deferred.
+When a report draft returns its lease, the server releases its sandbox slot for another report.
+The draft's next attempt joins the queue in order of when that attempt became due.
 
 `agent_run_deferred_total` counts each deferral by kind and reason, and each writes `agent.run.deferred`.
 `deferred_until` matters only while the run is queued, and the claim and every end clear it.

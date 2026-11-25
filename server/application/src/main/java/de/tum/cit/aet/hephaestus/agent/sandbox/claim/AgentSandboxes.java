@@ -84,7 +84,9 @@ public class AgentSandboxes {
     /** Why the server takes a live sandbox back before the reaper would. */
     public enum Revocation {
         /** Its network policy did not hold in time, so its driver ran nothing (isolation gate G6). */
-        UNISOLATED;
+        UNISOLATED,
+        /** A report draft returned its lease and waits for its next attempt. */
+        DRAFT_REQUEUED;
 
         /** The reason as the event and the counter name it. */
         public String value() {
@@ -336,7 +338,10 @@ public class AgentSandboxes {
         sandboxes.releaseSandbox(sandbox.id(), sandbox.workspaceId()).ifPresent(row -> {
             meters.counter(AgentMetrics.AGENT_SANDBOX_REVOKED, "reason", reason.value())
                     .increment();
-            SandboxEvents.event(log.atWarn(), "agent.sandbox.taken_back", row)
+            SandboxEvents.event(
+                            reason == Revocation.UNISOLATED ? log.atWarn() : log.atInfo(),
+                            "agent.sandbox.taken_back",
+                            row)
                     .addKeyValue("sandbox.reason", reason.value())
                     .log("Sandbox revoked; its claim is deleted next");
         });

@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
+import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls.Admission;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.Serial;
 import java.math.BigDecimal;
@@ -63,13 +64,20 @@ class ProxyCallLedger {
         }
     }
 
-    /** The call's upper bound does not fit under its purse's monthly cap, so the call must not start. */
+    /** A budget refusal, with a separate reason for a report that reached its daily draft limit. */
     static final class BudgetHeld extends RuntimeException {
         @Serial
         private static final long serialVersionUID = 1L;
 
+        final ProxyRefusal refusal;
+
         BudgetHeld() {
-            super("The call's upper bound does not fit under its purse's monthly cap");
+            this(ProxyRefusal.BUDGET);
+        }
+
+        BudgetHeld(ProxyRefusal refusal) {
+            super("The model call was refused by its budget");
+            this.refusal = refusal;
         }
     }
 
@@ -162,7 +170,10 @@ class ProxyCallLedger {
         try {
             return Objects.requireNonNull(ownTransaction.execute(status -> {
                 // The destination and filing precede the run lock, as in a claim and its end.
-                if (!drafts.admitCall(attempt.sourceId(), attempt.number(), modelId)) throw new BudgetHeld();
+                var admitted = drafts.admitCall(attempt.sourceId(), attempt.number(), modelId);
+                if (admitted != Admission.ADMITTED)
+                    throw new BudgetHeld(
+                            admitted == Admission.QUOTA_EXHAUSTED ? ProxyRefusal.DRAFT_QUOTA : ProxyRefusal.BUDGET);
                 runs.requireCurrent(new AgentRunFence(runId, AgentRunRef.INSTANCE_SCOPE, attempt.epoch()));
                 if (recorder.hasReportDraftCall(runId, attempt.epoch())) throw new BudgetHeld();
                 var charge = admission.admitInstance(modelId);

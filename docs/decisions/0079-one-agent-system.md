@@ -778,6 +778,8 @@ Old active reviews have no checkpoint. Their first upgrade requires the one-time
 
 ## Update — 2026-11-23: the product feedback draft has no model loop in the JVM
 
+Decision 2 of [ADR 0145](./0145-pi-runs-every-agent-loop-behind-the-pi-runtime-interface.md) supersedes the outbox path described in this update.
+
 `ModelSession` is removed. The product feedback draft stays the outbox action `DRAFT_REPORT`. Its one tool-free call is written and read by the model proxy's draft gateway (`ProductFeedbackModelGateway`), so no server code outside the proxy speaks a model protocol.
 
 Three checks hold this. [The session factory](../contributor/unified-pi-runtime.mdx#the-session-factory) in the contributor guide states the exact scope and the limits of each:

@@ -73,7 +73,7 @@ class DraftingService implements ProductFeedbackDrafts, ProductFeedbackDraftCall
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean admitCall(UUID feedbackId, int generation, long modelId) {
+    public Admission admitCall(UUID feedbackId, int generation, long modelId) {
         var destination = destinations.locked();
         var filing =
                 filings.lock(feedbackId).filter(row -> waits(row, generation)).orElse(null);
@@ -81,7 +81,7 @@ class DraftingService implements ProductFeedbackDrafts, ProductFeedbackDraftCall
         if (filing == null
                 || report == null
                 || !filing.isFileDisclosed()
-                || !Objects.equals(destination.getLlmModelId(), modelId)) return false;
+                || !Objects.equals(destination.getLlmModelId(), modelId)) return Admission.INELIGIBLE;
         Instant now = clock.instant();
         Instant day = now.truncatedTo(ChronoUnit.DAYS);
         boolean reserved = filing.getDraftAdmittedAt() != null
@@ -94,9 +94,9 @@ class DraftingService implements ProductFeedbackDrafts, ProductFeedbackDraftCall
                         : instanceUsed >= destination.getDailyDraftLimit())
                 || (reserved
                         ? accountUsed > FileIssueQueue.ACCOUNT_DAILY_DRAFTS
-                        : accountUsed >= FileIssueQueue.ACCOUNT_DAILY_DRAFTS)) return false;
+                        : accountUsed >= FileIssueQueue.ACCOUNT_DAILY_DRAFTS)) return Admission.QUOTA_EXHAUSTED;
         filing.setDraftAdmittedAt(now);
-        return true;
+        return Admission.ADMITTED;
     }
 
     @Override

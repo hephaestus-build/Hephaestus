@@ -108,11 +108,15 @@ export const draftReport: KindRunner = async ({ assignment, gateway, signal }) =
 			if (error?.includes("draft_capacity:") === true) {
 				return { leaseLost: false, outcome: "handed_on", cause: "model_capacity" };
 			}
-			if (error?.includes("upstream_stalled:") === true) {
+			if (error?.includes("draft_deadline:") === true) {
 				return { leaseLost: false, outcome: "completed", cause: "model_timeout" };
+			}
+			if (error?.includes("draft_quota:") === true) {
+				return { leaseLost: false, outcome: "completed", cause: "quota_exhausted" };
 			}
 			if (
 				error?.includes("draft_unavailable:") === true ||
+				error?.includes("upstream_stalled:") === true ||
 				error?.includes("upstream_paused:") === true
 			) {
 				return { leaseLost: false, outcome: "handed_on", cause: "model_unavailable" };
