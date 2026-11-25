@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -215,6 +216,16 @@ class LearningBundleSchemaTest extends BaseUnitTest {
                                 .add("c3a5e7f9-2b4d-4a6c-8e0f-1b3d5f7a9c02")
                                 .add("c3a5e7f9-2b4d-4a6c-8e0f-1b3d5f7a9c02"),
                         "uniqueItems",
+                        "/records/0/goalIds"),
+                refused(
+                        "more goal links than the format allows",
+                        b -> {
+                            var goalIds = record(b, 0).putArray("goalIds");
+                            for (int i = 0; i < 21; i++) {
+                                goalIds.add(String.format(Locale.ROOT, "00000000-0000-4000-8000-%012d", i));
+                            }
+                        },
+                        "maxItems",
                         "/records/0/goalIds"),
                 refused(
                         "a goal linked to a goal",
